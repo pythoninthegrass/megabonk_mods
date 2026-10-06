@@ -6,8 +6,9 @@
 # ///
 
 """
-Downloads a pinned MelonLoader release, verifies its checksum, and extracts
-it into the resolved Megabonk game directory. On macOS (CrossOver), also
+Downloads a pinned MelonLoader release (the Linux build on Linux, the Windows
+build elsewhere), verifies its checksum, and extracts it into the resolved
+Megabonk game directory. On macOS (CrossOver), also
 applies the Wine DLL override MelonLoader's installer normally sets for you
 (version.dll -> native,builtin) so Il2Cpp hooking works under Wine.
 
@@ -39,19 +40,30 @@ CROSSOVER_WINE_CANDIDATES = [
     Path("/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine"),
 ]
 
-MELONLOADER_VERSION = "0.7.3"
-MELONLOADER_URL = (
-    f"https://github.com/LavaGang/MelonLoader/releases/download/"
-    f"v{MELONLOADER_VERSION}/MelonLoader.x64.zip"
+# Every pin below is overridable via the environment or .env (env > .env > default).
+MELONLOADER_VERSION = config("MELONLOADER_VERSION", default="0.7.3")
+RELEASE_URL_TEMPLATE = (
+    "https://github.com/LavaGang/MelonLoader/releases/download/v{version}/{asset}"
 )
-# Overridable via MELONLOADER_SHA256 in the environment or .env, e.g. to pin
-# a different release without editing this file - see env > .env > default.
-MELONLOADER_SHA256 = config(
-    "MELONLOADER_SHA256",
-    default="5b2b2f3d1cd42b59ec886c5bdc2663edae87a0097a4f4a8f58c0965a99dda416",
-)
+ASSET_WINDOWS = "MelonLoader.x64.zip"
+ASSET_LINUX = "MelonLoader.Linux.x64.zip"
+DEFAULT_SHA256_WINDOWS = "5b2b2f3d1cd42b59ec886c5bdc2663edae87a0097a4f4a8f58c0965a99dda416"
+DEFAULT_SHA256_LINUX = "519f25639cde796a749ea0670daedfa251a45d0217608ac6e12c1bc6aa9e114f"
 
 VERSION_MARKER_NAME = "MegabonkLevels.melonloader_version"
+
+
+def release_asset(system: str, version: str = MELONLOADER_VERSION) -> tuple[str, str]:
+    """Returns the (url, sha256) of the release archive for the given platform.system() value."""
+    if system == "Linux":
+        suffix, asset, sha = "LINUX", ASSET_LINUX, DEFAULT_SHA256_LINUX
+    else:
+        suffix, asset, sha = "WINDOWS", ASSET_WINDOWS, DEFAULT_SHA256_WINDOWS
+    url = config(
+        f"MELONLOADER_URL_{suffix}",
+        default=RELEASE_URL_TEMPLATE.format(version=version, asset=asset),
+    )
+    return url, config(f"MELONLOADER_SHA256_{suffix}", default=sha)
 
 
 def _version_marker_path(game: Path) -> Path:
@@ -75,9 +87,9 @@ def _verify_sha256(data: bytes, expected: str) -> None:
     digest = hashlib.sha256(data).hexdigest()
     if not expected:
         print(
-            f"warning: MELONLOADER_SHA256 is not pinned yet, skipping verification. "
-            f"Downloaded archive sha256: {digest} - pin this in tools/install_melonloader.py "
-            f"once you've confirmed it against a trusted source.",
+            f"warning: the archive sha256 is not pinned, skipping verification. "
+            f"Downloaded archive sha256: {digest} - pin it via MELONLOADER_SHA256_WINDOWS or "
+            f"MELONLOADER_SHA256_LINUX once you've confirmed it against a trusted source.",
             file=sys.stderr,
         )
         return
@@ -137,8 +149,9 @@ def install(version: str = MELONLOADER_VERSION, game: Path | None = None) -> Non
         print(f"MelonLoader {version} already installed at {game}")
     else:
         print(f"Downloading MelonLoader {version}...")
-        data = _download(MELONLOADER_URL)
-        _verify_sha256(data, MELONLOADER_SHA256)
+        url, sha256 = release_asset(platform.system(), version)
+        data = _download(url)
+        _verify_sha256(data, sha256)
 
         game.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(io.BytesIO(data)) as archive:

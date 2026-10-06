@@ -14,6 +14,7 @@ network or a real game install.
 Usage: uv run tools/test_install_melonloader.py
 """
 
+import os
 import sys
 import tempfile
 import traceback
@@ -71,6 +72,35 @@ def test_lookup_bottle_name_finds_drive_c_parent_dirname() -> None:
 def test_lookup_bottle_name_none_when_absent() -> None:
     game = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Megabonk")
     assert im._lookup_bottle_name(game) is None
+
+
+def test_release_asset_linux_uses_linux_zip_and_sha() -> None:
+    url, sha = im.release_asset("Linux", "0.7.3")
+    assert url.endswith("/v0.7.3/MelonLoader.Linux.x64.zip")
+    assert sha == im.DEFAULT_SHA256_LINUX
+
+
+def test_release_asset_darwin_and_windows_use_windows_zip_and_sha() -> None:
+    for system in ("Darwin", "Windows"):
+        url, sha = im.release_asset(system, "0.7.3")
+        assert url.endswith("/v0.7.3/MelonLoader.x64.zip")
+        assert sha == im.DEFAULT_SHA256_WINDOWS
+
+
+def test_release_asset_sha_overridable_via_env() -> None:
+    os.environ["MELONLOADER_SHA256_LINUX"] = "cafe"
+    try:
+        assert im.release_asset("Linux", "0.7.3")[1] == "cafe"
+    finally:
+        del os.environ["MELONLOADER_SHA256_LINUX"]
+
+
+def test_release_asset_url_overridable_via_env() -> None:
+    os.environ["MELONLOADER_URL_LINUX"] = "https://example.invalid/ml.zip"
+    try:
+        assert im.release_asset("Linux", "0.7.3")[0] == "https://example.invalid/ml.zip"
+    finally:
+        del os.environ["MELONLOADER_URL_LINUX"]
 
 
 def main() -> int:
