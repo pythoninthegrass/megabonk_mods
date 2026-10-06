@@ -11,6 +11,19 @@ This file provides guidance to AI agents when working with code in this reposito
 - websites/binary_ninja
 - websites/taskfile_dev
 
+## Linux and Flatpak Steam caveats
+
+Megabonk ships a native Linux build (`Megabonk.x86_64`), so there is no Proton or Wine prefix and the CrossOver `version.dll` override does not apply. `compatdata/3405340` stays an empty directory.
+
+- MelonLoader loads through `LD_PRELOAD`, set in the game's Steam launch options. Reference the library by filename only and add the game directory to `LD_LIBRARY_PATH`: `DOTNET_ROOT="<dotnet6>" LD_LIBRARY_PATH="<game dir>:$LD_LIBRARY_PATH" LD_PRELOAD="MelonLoader.Bootstrap.so:$LD_PRELOAD" %command%`.
+- Il2Cpp MelonLoader needs a .NET 6 runtime. A newer runtime on the host (the repo's mise toolchain provides .NET 10) is not enough. Install 6.0 with `dotnet-install.sh --runtime dotnet --channel 6.0 --install-dir <dir> --no-path` and point `DOTNET_ROOT` at it.
+- Flatpak Steam only sees the paths granted to it (`flatpak override --show com.valvesoftware.Steam`). Put the .NET 6 install under a granted path such as the Steam library root, not under `$HOME` or a mise directory.
+- Steam rewrites `userdata/<id>/config/localconfig.vdf` while it runs. To set launch options without the UI, shut Steam down first (`flatpak run com.valvesoftware.Steam -shutdown`), edit `LaunchOptions` under the app id (3405340), then start Steam again. Keep a backup of the file.
+- Starting Steam from a non-graphical shell fails with "Unable to open X11 display" under KDE Wayland. Pass `DISPLAY=:0` and `XAUTHORITY` set to the `/run/user/<uid>/xauth_*` file named in the `Xwayland` command line (`pgrep -a Xwayland`).
+- Do not use `pkill -f` with a pattern that also appears in the calling shell's own command line; it kills that shell. Use `pkill -x Megabonk.x86_64`.
+- `task game:run` falls back to `flatpak run com.valvesoftware.Steam steam://rungameid/3405340` when no native `steam` binary exists, and defaults `DISPLAY` and `XAUTHORITY` itself.
+- The first launch with MelonLoader runs the Il2Cpp assembly generator (Cpp2IL, Il2CppInterop) and takes about 30 seconds. Check `MelonLoader/Latest.log` in the game directory for `Assembly Generation Successful!` and the `Mods loaded` line.
+
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 <!-- backlog.md-instructions-version: 1.48.0 -->
 

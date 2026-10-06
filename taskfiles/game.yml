@@ -21,13 +21,27 @@ tasks:
       Usage: task game:run
 
       Platform-guarded: opens the CrossOver bottle's Steam app on macOS
-      (Steam then launches the game); runs the game exe directly on
-      Windows/Linux.
+      (Steam then launches the game); on Linux uses the native `steam`
+      binary when present, otherwise the Flatpak Steam, defaulting DISPLAY
+      and XAUTHORITY so it also works from a non-graphical shell (KDE
+      Wayland); runs `steam` directly on Windows.
     cmds:
       - cmd: open -a "CrossOver" --args steam://rungameid/3405340
         platforms: [darwin]
+      - cmd: |
+          export DISPLAY="${DISPLAY:-:0}"
+          if [ -z "${XAUTHORITY:-}" ]; then
+            auth="$(ls /run/user/$(id -u)/xauth_* 2>/dev/null | head -n 1 || true)"
+            if [ -n "$auth" ]; then export XAUTHORITY="$auth"; fi
+          fi
+          if command -v steam >/dev/null 2>&1; then
+            steam steam://rungameid/3405340
+          else
+            flatpak run com.valvesoftware.Steam steam://rungameid/3405340
+          fi
+        platforms: [linux]
       - cmd: steam steam://rungameid/3405340
-        platforms: [linux, windows]
+        platforms: [windows]
 
   log:
     desc: "Tail MelonLoader's Latest.log from the resolved game directory"
