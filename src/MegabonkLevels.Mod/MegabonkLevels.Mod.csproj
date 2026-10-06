@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MegabonkLevels</RootNamespace>
+    <AssemblyName>MegabonkLevels.Mod</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="MelonLoader">
+      <HintPath>$(MelonLoaderFolder)/MelonLoader.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(MelonLoaderFolder)/0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Deploy the built DLL + PDB into the game's Mods folder on every build -->
+  <Target Name="CopyOutputToModsFolder" AfterTargets="Build">
+    <ItemGroup>
+      <BuiltArtifacts Include="$(TargetPath)" />
+      <BuiltArtifacts Include="$(TargetDir)$(TargetName).pdb" />
+    </ItemGroup>
+    <Copy SourceFiles="@(BuiltArtifacts)" DestinationFolder="$(ModInstanceFolder)" />
+  </Target>
+
+</Project>

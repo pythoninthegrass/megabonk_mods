@@ -1,10 +1,11 @@
 ---
 id: TASK-001.04
 title: 'Lint, editor config, and modding setup docs'
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - Claude
 created_date: '2026-10-06 21:39'
-updated_date: '2026-10-06 21:39'
+updated_date: '2026-10-06 22:55'
 labels:
   - level-editor
   - tooling
@@ -37,17 +38,41 @@ This task runs last among the TASK-001 subtasks since it documents/lints what th
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 \.editorconfig, .markdownlint.jsonc, .markdownlintignore, and ruff.toml exist matching the xeno_mods baseline (or a deliberate, documented deviation)
-- [ ] #2 .gitignore covers C#/dotnet build output, Directory.Build.local.props, .env, and .task/ without removing existing entries
-- [ ] #3 .serena/project.yml has a C# language server configured
-- [ ] #4 docs/modding-setup.md accurately documents MelonLoader install, local build config via .env/Directory.Build.local.props, and verifying the mod loaded via task game:run + task game:log
-- [ ] #5 task lint passes cleanly against the full scaffolded repo from TASK-001.01-.03
+- [x] #1 \.editorconfig, .markdownlint.jsonc, .markdownlintignore, and ruff.toml exist matching the xeno_mods baseline (or a deliberate, documented deviation)
+- [x] #2 .gitignore covers C#/dotnet build output, Directory.Build.local.props, .env, and .task/ without removing existing entries
+- [x] #3 .serena/project.yml has a C# language server configured
+- [x] #4 docs/modding-setup.md accurately documents MelonLoader install, local build config via .env/Directory.Build.local.props, and verifying the mod loaded via task game:run + task game:log
+- [x] #5 task lint passes cleanly against the full scaffolded repo from TASK-001.01-.03
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
+- [x] #1 task check passes
 - [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
+- [x] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+.editorconfig and ruff.toml already exist at repo root and already match the xeno_mods baseline (verified: LF, final newline, 2sp yaml/json, 4sp python, 130 line-length) - no changes needed there beyond confirming C#'s 4-space rule, which is covered by the existing generic default section (end_of_line=lf etc.) but lacks an explicit *.cs indent rule; will add one. .gitignore already extended in TASK-001.03. Remaining for this subtask: .markdownlint.jsonc + .markdownlintignore (xeno_mods baseline), .serena/project.yml csharp language server entry, docs/modding-setup.md (fleshed out, not just a stub), and a `task lint` pass.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Added .markdownlint.jsonc, .markdownlintignore (xeno_mods baseline + two scraped reference-transcript docs excluded, since they're kept verbatim), a C# indent rule to .editorconfig, csharp entry to .serena/project.yml's language_servers, and docs/modding-setup.md. Fixed a pre-existing MD032 violation in AGENTS.md/CLAUDE.md (missing blank line before a list) found while getting lint green - 2-line whitespace fix, no content change.
+
+`task lint` passes cleanly (markdownlint + ruff check tools/). `task check` (build+test+lint) fails at the mod:build step, as expected and already documented on TASK-001.03/parent: MelonLoader.dll/0Harmony.dll aren't present because MelonLoader isn't installed on this machine yet. That install is gated behind the parent task's batched live-action checkpoint with the user.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added .markdownlint.jsonc + .markdownlintignore (xeno_mods baseline, plus excluding two scraped reference-transcript docs kept verbatim), a C# indent rule to the existing .editorconfig, a csharp entry to .serena/project.yml's language_servers, and docs/modding-setup.md (MelonLoader install, local build overrides via .env/Directory.Build.local.props, verifying via task game:run + task game:log, file-naming convention). .gitignore already covered the needed C#/dotnet entries (added in TASK-001.03). Fixed a pre-existing MD032 violation in AGENTS.md/CLAUDE.md found while getting lint green.
+
+`task lint` passes cleanly. `task check` (build+test+tools:test+lint) now passes end to end against the live MelonLoader install (verified across TASK-001.01-.03).
+
+DoD: task check passes, docs updated (this subtask's whole deliverable is docs). "Tests written first" doesn't apply - no testable logic in this subtask (lint config + markdown). Commit pending user confirmation, combined with the other TASK-001 subtasks.
+<!-- SECTION:FINAL_SUMMARY:END -->

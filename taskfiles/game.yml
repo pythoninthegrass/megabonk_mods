@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+tasks:
+  melonloader:install:
+    desc: "Install the pinned MelonLoader release into the resolved game directory (idempotent)"
+    summary: |
+      Usage: task game:melonloader:install
+
+      No task-level status: check - tools/install_melonloader.py does its
+      own idempotency check on the download/extract step internally, but
+      still needs to run every time to retry the CrossOver Wine DLL
+      override, which isn't tracked by the version marker.
+    cmds:
+      - uv run tools/install_melonloader.py
+
+  run:
+    desc: "Launch Megabonk"
+    summary: |
+      Usage: task game:run
+
+      Platform-guarded: opens the CrossOver bottle's Steam app on macOS
+      (Steam then launches the game); runs the game exe directly on
+      Windows/Linux.
+    cmds:
+      - cmd: open -a "CrossOver" --args steam://rungameid/3405340
+        platforms: [darwin]
+      - cmd: steam steam://rungameid/3405340
+        platforms: [linux, windows]
+
+  log:
+    desc: "Tail MelonLoader's Latest.log from the resolved game directory"
+    cmds:
+      - tail -f "$(uv run tools/game_paths.py | python3 -c 'import json, sys; print(json.load(sys.stdin)["latest_log_path"])')"

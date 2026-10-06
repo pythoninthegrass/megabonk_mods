@@ -3,3 +3,14 @@
 .tools/
 CLAUDE.md
 
+# dotnet build output
+bin/
+obj/
+
+# per-machine overrides
+Directory.Build.local.props
+.env
+
+# go-task checksum cache
+.task/
+
