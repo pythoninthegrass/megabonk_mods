@@ -1,9 +1,10 @@
 ---
 id: TASK-003
 title: Level format and editing core
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06 21:40'
+updated_date: '2026-10-07 20:43'
 labels:
   - level-editor
 dependencies:
@@ -55,3 +56,19 @@ Everything in this task is TDD: write a failing test, confirm it fails, implemen
 - [ ] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Work through the five subtasks in order (.01-.05), each with its own TDD plan recorded on the subtask. High-level approach:
+
+- .01 Level file schema: level-root type + System.Text.Json + schemaVersion migration mechanism. Decide project layout here (see below).
+- .02 Edit operation types: tile height/slope/add/remove + object place/move/remove, as pure data types referencing catalogId or genId.
+- .03 Undo/redo stack over an in-memory level-state model built by replaying edits.
+- .04 Reachability validator: BFS over the tile grid using the chain/slope rule (height diff 0, or 1 via a slope facing that direction).
+- .05 Catalog ID parsing/validation, including the reserved `bundle:<pack>/<asset>` namespace for TASK-007.
+
+Project layout decision (recorded here, detailed in docs/level-format.md): keep the Unity-free core in `src/MegabonkLevels.Mod` alongside the existing TASK-002 files (generation_report.cs, generation_hash.cs, placeholder_logic.cs), compile-linked into tests/MegabonkLevels.Tests per the pattern already proven there. A separate MegabonkLevels.Core project would duplicate the MSBuild plumbing (Directory.Build.props deploy target, MelonLoader/Il2Cpp HintPaths) for no isolation benefit, since the Unity-free boundary is already enforced by simply not referencing Unity/Il2Cpp types in these files — the existing compile-link into the net10.0 xunit project is itself proof the boundary holds.
+
+Each subtask file naming follows existing convention: lowercase_snake_case.cs in src/MegabonkLevels.Mod, compile-linked by relative path into tests/MegabonkLevels.Tests.csproj.
+<!-- SECTION:PLAN:END -->
