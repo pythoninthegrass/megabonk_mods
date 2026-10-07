@@ -37,6 +37,10 @@
       <HintPath>$(Il2CppAssembliesFolder)/UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Unity.AI.Navigation">
+      <HintPath>$(Il2CppAssembliesFolder)/Unity.AI.Navigation.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
 
   <!-- Deploy the built DLL + PDB into the game's Mods folder on every build -->

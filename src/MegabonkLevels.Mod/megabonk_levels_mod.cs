@@ -13,6 +13,8 @@ public class MegabonkLevelsMod : MelonMod
         LoggerInstance.Msg("MegabonkLevels mod initialized.");
         GenerationPatch.Install(LoggerInstance);
         SeedForcePatch.Install(LoggerInstance);
+        GridShapePatch.Install(LoggerInstance);
+        NavMeshPatch.Install(LoggerInstance);
     }
 
     public override void OnUpdate()
