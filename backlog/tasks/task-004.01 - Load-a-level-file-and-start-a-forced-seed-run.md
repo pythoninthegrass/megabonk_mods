@@ -1,7 +1,7 @@
 ---
 id: TASK-004.01
 title: Load a level file and start a forced-seed run
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-06 21:42'
 updated_date: '2026-10-07 22:59'
@@ -40,7 +40,7 @@ For this subtask, a hardcoded/manually-placed test level file (no edits, or triv
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
