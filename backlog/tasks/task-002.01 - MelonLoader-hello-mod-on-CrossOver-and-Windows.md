@@ -4,7 +4,7 @@ title: 'MelonLoader hello-mod on Linux, CrossOver, and Windows'
 status: In Progress
 assignee: []
 created_date: '2026-10-06 21:40'
-updated_date: '2026-10-07 15:09'
+updated_date: '2026-10-07 15:47'
 labels:
   - level-editor
 dependencies: []
@@ -68,4 +68,8 @@ Linux isolation results: with Mods empty (0 mods) MelonLoader 0.7.3 crashes iden
 Caveats (task stays In Progress): (1) Linux acceptance criteria #2 and #3 are blocked upstream: MelonLoader 0.7.3 segfaults on this native Linux build (Unity 2023.2.22f1) with or without the mod, so Linux cannot be verified until MelonLoader is fixed or the 0.8.0-ci build (PR #1180) is tried. (2) The Steam launch option (DOTNET_ROOT, LD_LIBRARY_PATH, LD_PRELOAD=MelonLoader.Bootstrap.so) is set on the Linux host in localconfig.vdf, so Megabonk crashes on every launch there until it is removed (backup: localconfig.vdf.bak-megabonk). (3) The Linux host also has a .NET 6 runtime at /media/steam/dotnet6 and a gitignored Directory.Build.local.props. (4) CrossOver/macOS and Windows have not been run yet; Windows stays the reference platform, so Linux and CrossOver differences are recorded as known gaps, not mod bugs. (5) The backlog filename still says CrossOver-and-Windows after the retitle.
 
 Update: the Steam launch option was removed from the Linux host (localconfig.vdf, backup localconfig.vdf.bak-before-revert), so Megabonk launches vanilla and stays up; caveat (2) above no longer applies. MelonLoader 0.7.3, the deployed mod DLL and /media/steam/dotnet6 remain on disk but are inert without LD_PRELOAD. Re-enable by adding the LaunchOptions string from AGENTS.md with Steam shut down.
+
+Windows result (dockurr/windows VM on the Linux host, Steam copy of Megabonk, MelonLoader 0.7.3 x64 from MelonLoader.x64.zip, same mod DLL built once on Linux): MelonLoader loaded, ran Il2Cpp assembly generation (about 40 s, 105 assemblies), logged 'Melon Assembly loaded: .\Mods\MegabonkLevels.Mod.dll', '1 Mod loaded', then '[MegabonkLevels] MegabonkLevels mod initialized.' from OnInitializeMelon, and the game kept running. Satisfies the init-message part of AC #2 for Windows only; AC #2 stays open for CrossOver/macOS and Linux. The Windows log also shows '[WARNING] [Il2CppInterop] Class::Init signatures have been exhausted, using a substitute!' followed by normal startup, so that warning is benign and is not the cause of the Linux segfault, which happens right after it on Linux.
+
+Windows VM caveats: the container renders in software (Windows logged a failed D3D11 video device) and the game is extremely sluggish, so it is not viable for playthroughs. Startup took over a minute between 'Mods loaded' and the Il2Cpp support module. AC #3 (Harmony patch logging mapSeed and tile count at A_GenerationComplete) needs a run to start map generation, so verifying it on Windows needs a native Windows install or CrossOver instead of this VM. Windows steps used: files staged in the shared folder, extracted into the game root, mod moved into Mods, SSH key-only access for later commands (see CLAUDE.local.md).
 <!-- SECTION:NOTES:END -->
