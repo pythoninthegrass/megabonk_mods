@@ -35,3 +35,36 @@ Since there is no real version 2 to migrate from/to yet, the mechanism itself is
 ## Round-trip (AC#4)
 
 `LevelFileSerializer.Serialize`/`Deserialize` round-trip a `LevelFile` through `System.Text.Json`; `level_file_tests.cs`'s `RoundTrip_SerializeThenDeserialize_ProducesEqualLevel` covers this. `LevelFile` overrides `Equals`/`GetHashCode` to compare `Edits` by sequence (the default record-struct equality would otherwise compare the `IReadOnlyList<EditOp>` reference, which differs after a deserialize produces a new list instance).
+
+## Edit operation types (TASK-003.02)
+
+`src/MegabonkLevels.Mod/edit_operations.cs` defines the seven typed edit operations that replace `EditOp`'s placeholder payload shape, each a Unity-free `readonly record struct` with a validating constructor plus a `ToEditOp()`/static `FromEditOp(EditOp)` pair that (de)serializes the op's fields to/from `EditOp.Payload` (a `System.Text.Json` camelCase JSON string) and, for object ops that reference an existing object, `EditOp.Target`:
+
+| op type | `EditOp.OpType` | fields | `EditOp.Target` |
+| --- | --- | --- | --- |
+| `SetTileHeight` | `tile.setHeight` | `X, Z, Height` | unused (`""`) |
+| `SetTileSlope` | `tile.setSlope` | `X, Z, Direction` (`SlopeDirection`: `None, North, South, East, West`) | unused (`""`) |
+| `AddTile` | `tile.add` | `X, Z, Height` | unused (`""`) |
+| `RemoveTile` | `tile.remove` | `X, Z` | unused (`""`) |
+| `PlaceObject` | `object.place` | `CatalogId, Position, Rotation, Scale` (`Vector3Data`) | unused (`""`) |
+| `MoveObject` | `object.move` | `Target` (`ObjectTarget`), `NewTransform` (`TransformData`) | `Target.Serialize()` |
+| `RemoveObject` | `object.remove` | `Target` (`ObjectTarget`) | `Target.Serialize()` |
+
+Tile ops identify the tile by grid coordinates carried in the payload, so they have no need of `EditOp.Target`; object ops that mutate an *existing* object carry their target there instead, so an op can be filtered/routed by `EditOp.Target` alone without deserializing the payload.
+
+### `ObjectTarget`: genId vs. placement id
+
+`MoveObject`/`RemoveObject` reference an existing object through `ObjectTarget`, which distinguishes two kinds:
+
+- **`GenId`** — an opaque string identifying a generator-spawned object, per TASK-002.03's proposed `{category}:{sequentialIndex}` scheme (format not yet implemented by that task; treated here as an opaque non-blank string).
+- **`PlacementId`** — a non-negative `int` identifying an object the editor itself placed via a `PlaceObject` op, scoped to the edit list (e.g. assigned incrementally by the future edit stack in TASK-003.03 as `PlaceObject` ops are appended). `PlaceObject` itself carries no target — its identity is assigned by whatever appends it to the edits list, not by this op.
+
+`ObjectTarget.Serialize()`/`Parse()` encode these onto `EditOp.Target` as `gen:<genId>` or `placement:<id>`.
+
+### Validation convention
+
+Every op type's constructor throws on invalid input — `ArgumentException` for logical/format errors (e.g. a blank `catalogId`, a non-positive scale component, an undefined `SlopeDirection`), or its `ArgumentOutOfRangeException` subclass for out-of-range numeric input (negative tile coordinates, a negative placement id). Catching `ArgumentException` covers both. There is no `Result`/error-code type: construction failure here always means the caller passed data that can never be valid, not a recoverable runtime condition. `catalogId`'s check is a placeholder (non-null/non-whitespace only) pending TASK-003.05's real format.
+
+### JSON round-trip inside `LevelFile.Edits`
+
+`tests/MegabonkLevels.Tests/edit_operations_tests.cs` covers valid/invalid construction and `ToEditOp`/`FromEditOp` round-trips for every op type individually, plus `EditOperationsInLevelFileTests.AllSevenOpTypes_RoundTripInsideLevelFileEditsArray`, which builds a `LevelFile` whose `Edits` contains one of each op type, round-trips the whole file through `LevelFileSerializer`, and recovers every original op from the deserialized `EditOp`s — proving the typed ops are compatible with TASK-003.01's schema and migration mechanism without any change to `LevelFile` or `SchemaMigrator`.

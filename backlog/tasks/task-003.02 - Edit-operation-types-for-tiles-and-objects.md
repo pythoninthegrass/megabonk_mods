@@ -1,9 +1,10 @@
 ---
 id: TASK-003.02
 title: Edit operation types for tiles and objects
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-06 21:41'
+updated_date: '2026-10-07 20:55'
 labels:
   - level-editor
 dependencies:
@@ -32,17 +33,33 @@ TDD throughout: tests for valid construction, invalid construction (and what exc
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 All seven edit operation types (SetTileHeight, SetTileSlope, AddTile, RemoveTile, PlaceObject, MoveObject, RemoveObject) are implemented as pure data types with no Unity dependencies
-- [ ] #2 Each op type has unit tests covering valid construction and at least one invalid-construction case
-- [ ] #3 A consistent validation/error-reporting convention is used across all op types and documented
-- [ ] #4 Object operations correctly distinguish genId targets from editor-assigned placement IDs
-- [ ] #5 Every op type round-trips through JSON serialization inside the level schema's edits array from TASK-003.01
+- [x] #1 All seven edit operation types (SetTileHeight, SetTileSlope, AddTile, RemoveTile, PlaceObject, MoveObject, RemoveObject) are implemented as pure data types with no Unity dependencies
+- [x] #2 Each op type has unit tests covering valid construction and at least one invalid-construction case
+- [x] #3 A consistent validation/error-reporting convention is used across all op types and documented
+- [x] #4 Object operations correctly distinguish genId targets from editor-assigned placement IDs
+- [x] #5 Every op type round-trips through JSON serialization inside the level schema's edits array from TASK-003.01
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implemented in src/MegabonkLevels.Mod/edit_operations.cs, compile-linked into tests/MegabonkLevels.Tests.csproj alongside the TASK-003.01 files.
+
+Seven op types (SetTileHeight, SetTileSlope, AddTile, RemoveTile, PlaceObject, MoveObject, RemoveObject) as Unity-free `readonly record struct`s, each with a validating constructor and a ToEditOp()/static FromEditOp(EditOp) pair that (de)serializes to/from EditOp.Payload (System.Text.Json camelCase) and, for object ops referencing an existing object, EditOp.Target.
+
+ObjectTarget distinguishes GenId (opaque string, TASK-002.03's {category}:{sequentialIndex} scheme) from PlacementId (non-negative int scoped to the edit list, assigned by whatever appends a PlaceObject op), serialized onto EditOp.Target as gen:<id> / placement:<id>.
+
+Validation convention: ArgumentException for logical/format errors, ArgumentOutOfRangeException (its subclass) for out-of-range numeric input — documented in docs/level-format.md. catalogId validation is a non-blank placeholder pending TASK-003.05.
+
+38/38 tests pass (tests/MegabonkLevels.Tests/edit_operations_tests.cs): per-op valid/invalid construction + round-trip, plus a combined test building a LevelFile with all seven op types in Edits, round-tripping through LevelFileSerializer, and recovering every original op.
+
+docs/level-format.md updated with the op table, ObjectTarget scheme, validation convention, and test coverage summary.
+<!-- SECTION:NOTES:END -->

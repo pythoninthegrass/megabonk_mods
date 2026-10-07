@@ -20,6 +20,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/level_file.cs" Link="level_file.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_file_migration.cs" Link="level_file_migration.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_file_serialization.cs" Link="level_file_serialization.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/edit_operations.cs" Link="edit_operations.cs" />
   </ItemGroup>
 
   <ItemGroup>
