@@ -1,10 +1,10 @@
 ---
 id: TASK-003
 title: Level format and editing core
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-06 21:40'
-updated_date: '2026-10-07 20:43'
+updated_date: '2026-10-07 21:50'
 labels:
   - level-editor
 dependencies:
@@ -40,21 +40,21 @@ Everything in this task is TDD: write a failing test, confirm it fails, implemen
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A level file schema is implemented with round-trip serialize/deserialize tests and at least one documented migration path from schema version 1 to a hypothetical version 2
-- [ ] #2 All edit operation types (tile height/slope/add/remove, object place/move/remove) are implemented as pure data types with unit tests covering valid and invalid construction
-- [ ] #3 The edit stack supports apply, undo, and redo with tests covering multi-step sequences, undo-past-the-start, and redo-after-a-new-edit-invalidates-the-redo-stack
-- [ ] #4 The reachability validator correctly identifies unreachable tiles and spawn-to-boss-portal connectivity on hand-built test grids, including a deliberate cliff-between-chains case and a case fixed by a slope
-- [ ] #5 Catalog ID parsing validates the reserved namespaces (including bundle: for future use) and rejects malformed IDs, with unit tests
-- [ ] #6 docs/level-format.md documents the schema, versioning/migration approach, and every edit operation
-- [ ] #7 The entire core library builds and its test suite runs without Unity, Megabonk, or MelonLoader present, verified by running `task mod:test` in an environment with the game not running
+- [x] #1 A level file schema is implemented with round-trip serialize/deserialize tests and at least one documented migration path from schema version 1 to a hypothetical version 2
+- [x] #2 All edit operation types (tile height/slope/add/remove, object place/move/remove) are implemented as pure data types with unit tests covering valid and invalid construction
+- [x] #3 The edit stack supports apply, undo, and redo with tests covering multi-step sequences, undo-past-the-start, and redo-after-a-new-edit-invalidates-the-redo-stack
+- [x] #4 The reachability validator correctly identifies unreachable tiles and spawn-to-boss-portal connectivity on hand-built test grids, including a deliberate cliff-between-chains case and a case fixed by a slope
+- [x] #5 Catalog ID parsing validates the reserved namespaces (including bundle: for future use) and rejects malformed IDs, with unit tests
+- [x] #6 docs/level-format.md documents the schema, versioning/migration approach, and every edit operation
+- [x] #7 The entire core library builds and its test suite runs without Unity, Megabonk, or MelonLoader present, verified by running `task mod:test` in an environment with the game not running
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -72,3 +72,13 @@ Project layout decision (recorded here, detailed in docs/level-format.md): keep 
 
 Each subtask file naming follows existing convention: lowercase_snake_case.cs in src/MegabonkLevels.Mod, compile-linked by relative path into tests/MegabonkLevels.Tests.csproj.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+All five subtasks complete: level file schema + migration (.01), typed edit operations (.02), undo/redo edit stack (.03), reachability validator (.04), catalogId parsing/validation (.05).
+
+Verified: `task check` passes clean (net6.0 Mod build, 93/93 xunit tests on net10.0 with no Unity/Megabonk/MelonLoader present, tools tests, markdownlint, ruff). docs/level-format.md documents the schema, versioning/migration mechanism, all seven edit operation types, the undo/redo EditStack, the ReachabilityValidator's chain/slope rule, and the catalogId grammar.
+
+The Unity-free core now provides the full "seed + edits" model TASK-004 (runtime playback) and TASK-005 (editor UI) build on.
+<!-- SECTION:FINAL_SUMMARY:END -->
