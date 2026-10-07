@@ -4,7 +4,7 @@ title: 'MelonLoader hello-mod on Linux, CrossOver, and Windows'
 status: In Progress
 assignee: []
 created_date: '2026-10-06 21:40'
-updated_date: '2026-10-07 15:05'
+updated_date: '2026-10-07 15:09'
 labels:
   - level-editor
 dependencies: []
@@ -66,4 +66,6 @@ Linux friction (blocker for AC #2/#3 on Linux): MelonLoader 0.7.3 loads the mod 
 Linux isolation results: with Mods empty (0 mods) MelonLoader 0.7.3 crashes identically (signal 11 after 'Support Module Loaded'), so the mod is not the cause; vanilla launch without LD_PRELOAD runs fine. Other releases: 0.7.2 starts, the game survives, but MelonLoader writes an empty Latest.log and never loads (not working); 0.7.1 fails at init with DllNotFoundException for kernel32.dll (WindowsUnhandledQuit); 0.7.3 is the only release that reaches Il2Cpp init on Linux and then segfaults. Upstream: LavaGang/MelonLoader#1119 (native Linux Il2Cpp crash with the same 'Class::Init signatures have been exhausted' warning on The Long Dark) was closed in March 2026 with fixes that shipped in 0.7.3, yet this game (Unity 2023.2.22f1) still crashes, so it is likely a separate cause. The latest alpha-development CI build (0.7.3-ci.2480, April 2026) predates the 0.7.3 release; the only newer line is the unmerged PR #1180 'Use Il2CppInterop v2' (0.8.0-ci). Linux is currently blocked on an upstream MelonLoader fix; candidates are the 0.8.0-ci build or reporting the crash upstream.
 
 Caveats (task stays In Progress): (1) Linux acceptance criteria #2 and #3 are blocked upstream: MelonLoader 0.7.3 segfaults on this native Linux build (Unity 2023.2.22f1) with or without the mod, so Linux cannot be verified until MelonLoader is fixed or the 0.8.0-ci build (PR #1180) is tried. (2) The Steam launch option (DOTNET_ROOT, LD_LIBRARY_PATH, LD_PRELOAD=MelonLoader.Bootstrap.so) is set on the Linux host in localconfig.vdf, so Megabonk crashes on every launch there until it is removed (backup: localconfig.vdf.bak-megabonk). (3) The Linux host also has a .NET 6 runtime at /media/steam/dotnet6 and a gitignored Directory.Build.local.props. (4) CrossOver/macOS and Windows have not been run yet; Windows stays the reference platform, so Linux and CrossOver differences are recorded as known gaps, not mod bugs. (5) The backlog filename still says CrossOver-and-Windows after the retitle.
+
+Update: the Steam launch option was removed from the Linux host (localconfig.vdf, backup localconfig.vdf.bak-before-revert), so Megabonk launches vanilla and stays up; caveat (2) above no longer applies. MelonLoader 0.7.3, the deployed mod DLL and /media/steam/dotnet6 remain on disk but are inert without LD_PRELOAD. Re-enable by adding the LaunchOptions string from AGENTS.md with Steam shut down.
 <!-- SECTION:NOTES:END -->
