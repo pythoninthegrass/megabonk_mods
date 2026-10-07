@@ -9,16 +9,20 @@ public enum SeedForceMode
     Off,
     DebugSeed,
     MapSeedOnly,
+    LevelSeed,
 }
 
-// F9-cycled determinism test harness for TASK-002.02: forces generation through one candidate
-// seed field at a time so which field (if either) actually drives ProceduralTileGeneration can be
-// confirmed by direct testing rather than assumed from dump.cs field names.
+// F9-cycled determinism test harness for TASK-002.02 (DebugSeed/MapSeedOnly, confirmed debugSeed is
+// the field that actually controls Tiles-map generation — see docs/map-generation-determinism.md),
+// extended for TASK-004.01 with LevelSeed: forces a specific level file's recorded seed for exactly
+// the generation(s) that follow LevelLoader starting a run, via the same debugSeed/useDebugSeed hook.
 public static class SeedForcePatch
 {
     public const int FixedSeed = 20261007;
 
     public static SeedForceMode Mode { get; private set; } = SeedForceMode.Off;
+
+    public static int LevelSeedValue { get; private set; }
 
     private static MelonLogger.Instance _logger;
 
@@ -38,6 +42,13 @@ public static class SeedForcePatch
         _logger?.Msg($"SeedForcePatch mode -> {Mode} (fixedSeed={FixedSeed})");
     }
 
+    public static void ForceLevelSeed(int seed)
+    {
+        LevelSeedValue = seed;
+        Mode = SeedForceMode.LevelSeed;
+        _logger?.Msg($"SeedForcePatch mode -> {Mode} (levelSeed={seed})");
+    }
+
     [HarmonyPatch(typeof(ProceduralTileGeneration), nameof(ProceduralTileGeneration.Generate))]
     private static class GeneratePrefix
     {
@@ -51,6 +62,10 @@ public static class SeedForcePatch
                     break;
                 case SeedForceMode.MapSeedOnly:
                     MapGenerationController.mapSeed = FixedSeed;
+                    break;
+                case SeedForceMode.LevelSeed:
+                    __instance.debugSeed = LevelSeedValue;
+                    useDebugSeed = true;
                     break;
             }
         }
