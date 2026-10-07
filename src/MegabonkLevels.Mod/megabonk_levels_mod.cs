@@ -10,5 +10,6 @@ public class MegabonkLevelsMod : MelonMod
     public override void OnInitializeMelon()
     {
         LoggerInstance.Msg("MegabonkLevels mod initialized.");
+        GenerationPatch.Install(LoggerInstance);
     }
 }
