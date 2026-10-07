@@ -1,9 +1,18 @@
 namespace MegabonkLevels;
 
-public readonly record struct GenerationSnapshot(int MapSeed, int TileCount, int FlatTileCount, int FillTileCount);
+public readonly record struct GenerationSnapshot(
+    int MapSeed,
+    int DebugSeed,
+    string MapName,
+    int MapType,
+    int TileCount,
+    int FlatTileCount,
+    int FillTileCount,
+    int NodeCount,
+    string Hash);
 
 public static class GenerationReport
 {
     public static string Format(GenerationSnapshot snapshot) =>
-        $"A_GenerationComplete: mapSeed={snapshot.MapSeed} tiles={snapshot.TileCount} flatTiles={snapshot.FlatTileCount} fillTiles={snapshot.FillTileCount}";
+        $"A_GenerationComplete: map={snapshot.MapName} mapType={snapshot.MapType} mapSeed={snapshot.MapSeed} debugSeed={snapshot.DebugSeed} tiles={snapshot.TileCount} flatTiles={snapshot.FlatTileCount} fillTiles={snapshot.FillTileCount} nodes={snapshot.NodeCount} hash={snapshot.Hash}";
 }

@@ -1,4 +1,5 @@
 using MelonLoader;
+using UnityEngine;
 
 [assembly: MelonInfo(typeof(MegabonkLevels.MegabonkLevelsMod), "MegabonkLevels", "0.0.1", "pythoninthegrass")]
 [assembly: MelonGame("", "Megabonk")]
@@ -11,5 +12,14 @@ public class MegabonkLevelsMod : MelonMod
     {
         LoggerInstance.Msg("MegabonkLevels mod initialized.");
         GenerationPatch.Install(LoggerInstance);
+        SeedForcePatch.Install(LoggerInstance);
+    }
+
+    public override void OnUpdate()
+    {
+        if (Input.GetKeyDown(KeyCode.F9))
+        {
+            SeedForcePatch.CycleMode();
+        }
     }
 }

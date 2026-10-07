@@ -1,0 +1,57 @@
+# Map generation determinism (TASK-002.02)
+
+This records the seed-determinism spike for the "seed + edits" level save format (see TASK-002 parent). The core question: does `MapGenerationController`'s generation reproduce an identical layout given the same map, stage, and seed? If not, the save format has to store a full layout snapshot instead.
+
+## Method
+
+The mod (`src/MegabonkLevels.Mod/`) hooks `MapGenerationController.A_GenerationComplete` and, on every fire, builds a `GenerationSnapshot`:
+
+- Collects every distinct `GameObject` (deduplicated by `GetInstanceID()`) across `ProceduralTileGeneration.tiles`, `.flatTiles`, and `.fillTiles`.
+- For each, records its **world** position, rotation, and scale (`generation_patch.cs:ToRecord`) — world transforms, not local, because these lists don't all share one stable parent.
+- Sorts the records by a quantized grid key (round to the nearest 0.01 unit) so hierarchy/list iteration order never affects the result, then formats each as `name|x,y,z|qx,qy,qz,qw|sx,sy,sz` and SHA-256-hashes the concatenated, newline-joined text (`generation_hash.cs:GenerationHash.Compute`).
+- Logs `map=<name> mapType=<EMapType int> mapSeed=<MapGenerationController.mapSeed> debugSeed=<ProceduralTileGeneration.debugSeed> tiles=<n> flatTiles=<n> fillTiles=<n> nodes=<records.Count> hash=<sha256 hex>` to `MelonLoader/Latest.log` (`generation_report.cs`).
+
+An initial attempt instead walked the Transform hierarchy under `ProceduralTileGeneration.newRoot` — that root was empty (`nodes=0`, hash of empty input) by the time `A_GenerationComplete` fires, so it was abandoned for the GameObject-list approach above, which is what's documented and shipped.
+
+**Forcing a seed** (`seed_force_patch.cs`): an F9 hotkey (`MegabonkLevelsMod.OnUpdate`) cycles `SeedForcePatch.Mode` through `Off → DebugSeed → MapSeedOnly → Off`. A Harmony prefix on `ProceduralTileGeneration.Generate` applies the active mode immediately before the call:
+
+- `DebugSeed`: sets `__instance.debugSeed = 20261007` and forces the `useDebugSeed` parameter to `true`.
+- `MapSeedOnly`: sets the static `MapGenerationController.mapSeed = 20261007` and leaves `useDebugSeed`/`debugSeed` untouched.
+
+## Results
+
+Tested on CrossOver/macOS (the only platform with a working, playable MelonLoader install — see TASK-002.01), game build 1.0.69, with `SeedForcePatch.Mode = DebugSeed` active throughout (set once via F9, held across restarts).
+
+### Forest (`MapForest`, `mapType=0` / `EMapType.Tiles`)
+
+| run | mapSeed | debugSeed | tiles/flat/fill | nodes | hash |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 1073930310 | 20261007 | 225/160/203 | 428 | `0F5D88E2C673F1BA929868626D21FB06A2ECF014298975352EF3EF28634665CB` |
+| 2 | 1701581358 | 20261007 | 225/160/203 | 428 | `0F5D88E2C673F1BA929868626D21FB06A2ECF014298975352EF3EF28634665CB` |
+| 3 | 111760902 | 20261007 | 225/160/203 | 428 | `0F5D88E2C673F1BA929868626D21FB06A2ECF014298975352EF3EF28634665CB` |
+
+Identical hash across three separate full generations (restarting the run each time). `mapSeed` differed every time while `debugSeed` stayed at our forced value and the layout never changed.
+
+**Conclusion: Forest/Tiles generation is fully deterministic given the same `debugSeed` with `useDebugSeed=true`, and `mapSeed` has no effect on the resulting layout** — it's a separately, independently randomized value exposed for some other purpose (display/save bookkeeping), not the generation seed. This directly answers AC #4: `debugSeed` (not `mapSeed`) is the field that actually controls tile-based generation, confirmed by forcing it to a constant and observing reproducible output while `mapSeed` varied freely.
+
+### Desert (`MapDesert`, `mapType=1` / `EMapType.ProceduralMesh`)
+
+| run | mapSeed | debugSeed | tiles/flat/fill | nodes | hash |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 690394152 | 1952838951 | 400/292/417 | 817 | `692987B28DBC32CF22A58EED963FC8FD85F98C211DBEF66CE0A08370CBDB3546` |
+| 2 | 648929461 | 1952838951 | 400/292/417 | 817 | `692987B28DBC32CF22A58EED963FC8FD85F98C211DBEF66CE0A08370CBDB3546` |
+
+Identical hash across two full generations — Desert is also reproducible. But note `debugSeed` here is **1952838951, not our forced 20261007**: the `DebugSeed` force (Harmony prefix on `ProceduralTileGeneration.Generate`) did not take effect for this map type, yet the result was still reproducible both times with the same (uncontrolled) value. This means one of two things, not yet distinguished:
+
+1. `ProceduralMesh` maps route generation through a different call path that doesn't honor the `useDebugSeed`/`debugSeed` parameters our patch targets (the `MapGenerationController.proceduralMapMeshGenerator`/`MapGenerator` field is a plausible candidate for the actual noise/mesh generator, separate from `ProceduralTileGeneration`), or
+2. the value `1952838951` is an authored/baked default on this stage's data rather than something rolled at runtime, which would make it stable across runs incidentally rather than because our seed-forcing worked.
+
+Either way: **Desert/ProceduralMesh is empirically deterministic across the two runs tested, but the mod cannot yet control or vary its seed on demand** the way it can for Forest/Tiles. This is an open follow-up, not a blocker for the "seed + edits" decision below, since determinism itself held.
+
+## Fallback decision (for TASK-003)
+
+Determinism holds for both map types tested (one `Tiles`, one `ProceduralMesh`), so **"seed + edits" stays the save format — a full-layout snapshot is not required.** However:
+
+- For `Tiles` maps, the mod must force `useDebugSeed=true` and a chosen `debugSeed` value (via the same Harmony prefix approach used here) whenever it generates a map it intends to save/reproduce, and persist that `debugSeed` (not `MapGenerationController.mapSeed`, which is disconnected from the actual generation and will not reproduce anything).
+- For `ProceduralMesh` maps, the actual seed-controlling field/mechanism is still unidentified. TASK-003 (or a short follow-up spike) needs to find the real seed source — likely on `MapGenerationController.proceduralMapMeshGenerator` (type `MapGenerator`) — before the mod can guarantee a chosen, reproducible seed for these maps. Until then, treat `ProceduralMesh` maps as "reproducible in practice so far, but not yet controllable," and re-run this same hashing method against whatever field is tried next.
+- Only two (map, stage) combinations were tested, both on each map's default/first stage. If a later task finds per-stage variation (e.g. a stage-specific `MapParameters` override) worth checking, re-run with a second stage of the same map using this same mod build.

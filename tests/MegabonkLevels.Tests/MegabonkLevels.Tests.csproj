@@ -16,6 +16,7 @@
   <ItemGroup>
     <Compile Include="../../src/MegabonkLevels.Mod/placeholder_logic.cs" Link="placeholder_logic.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/generation_report.cs" Link="generation_report.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/generation_hash.cs" Link="generation_hash.cs" />
   </ItemGroup>
 
   <ItemGroup>
