@@ -1,9 +1,10 @@
 ---
 id: TASK-002.01
-title: MelonLoader hello-mod on CrossOver and Windows
-status: To Do
+title: 'MelonLoader hello-mod on Linux, CrossOver, and Windows'
+status: In Progress
 assignee: []
 created_date: '2026-10-06 21:40'
+updated_date: '2026-10-07 15:05'
 labels:
   - level-editor
 dependencies: []
@@ -18,19 +19,21 @@ ordinal: 7000
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Read parent TASK-002 first for full context.
 
-Using TASK-001's scaffold (`task game:melonloader:install`, `src/MegabonkLevels.Mod`, `task mod:build`/deploy, `task game:run`, `task game:log`): install MelonLoader into the Megabonk install on the CrossOver/macOS bottle, build and deploy the placeholder mod, launch the game, and confirm in `MelonLoader/Latest.log` that the mod initialized. Add a Harmony patch (postfix) on `MapGenerationController`'s method that raises `A_GenerationComplete` (or a subscriber to that static Action, whichever Il2CppInterop exposes more cleanly — confirm which once you have real Il2Cpp-interop assemblies from the install step) that logs the current `mapSeed` and a count of spawned tiles.
+Using TASK-001's scaffold (`task game:melonloader:install`, `src/MegabonkLevels.Mod`, `task mod:build`/deploy, `task game:run`, `task game:log`): install MelonLoader into the Megabonk install on each platform, build and deploy the placeholder mod, launch the game, and confirm in `MelonLoader/Latest.log` that the mod initialized. Add a Harmony patch (postfix) on `MapGenerationController`'s method that raises `A_GenerationComplete` (or a subscriber to that static Action, whichever Il2CppInterop exposes more cleanly — confirm which once you have real Il2Cpp-interop assemblies from the install step) that logs the current `mapSeed` and a count of spawned tiles.
 
-Repeat the same build (no code changes) on a Windows install of Megabonk and confirm identical behavior in its `MelonLoader/Latest.log`.
+Platforms: the native Linux build (AlmaLinux host with Flatpak Steam), CrossOver/macOS, and Windows. Build once and deploy the same mod DLL with no code changes; confirm identical behavior in each platform's `MelonLoader/Latest.log`.
 
-Record any CrossOver/Wine-specific friction (DLL override quirks, path translation issues, crashes specific to Wine) separately from genuine MelonLoader/game issues, since Windows is the reference platform per TASK-002's framing — if CrossOver behaves differently, that's noted as a known gap, not treated as a mod bug to chase.
+Linux specifics: Megabonk ships a native Linux build, so there is no Proton/Wine prefix and the Windows MelonLoader archive does not apply. `task game:melonloader:install` fetches `MelonLoader.Linux.x64.zip`; MelonLoader loads through `LD_PRELOAD=MelonLoader.Bootstrap.so` in the Steam launch options and needs a .NET 6 runtime reachable through `DOTNET_ROOT`. See the Linux and Flatpak Steam caveats in AGENTS.md. MelonLoader 0.7.3 and the generated Il2Cpp assemblies are already in place on the Linux host. The csproj defaults to the macOS CrossOver path, so each machine needs a gitignored `src/MegabonkLevels.Mod/Directory.Build.local.props` overriding `GameFolder` before `task mod:build` deploys to `Mods`.
+
+Record any platform-specific friction (CrossOver DLL override quirks and path translation, Linux launch-option and Flatpak sandbox issues, crashes specific to one platform) separately from genuine MelonLoader/game issues, since Windows is the reference platform per TASK-002's framing — if CrossOver or Linux behaves differently, that's noted as a known gap, not treated as a mod bug to chase.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 MelonLoader is installed via task game:melonloader:install on both a CrossOver/macOS Megabonk install and a Windows Megabonk install
-- [ ] #2 The placeholder mod, built once and deployed via task mod:build, loads on both platforms and logs a message on MelonLoader initialization visible in Latest.log
-- [ ] #3 A Harmony patch or Action subscriber fires when MapGenerationController reaches A_GenerationComplete and logs the active mapSeed plus a spawned-tile count, on both platforms
-- [ ] #4 Any CrossOver/Wine-specific friction encountered is documented separately from platform-agnostic findings
+- [ ] #1 MelonLoader is installed via task game:melonloader:install on a Linux (native build), a CrossOver/macOS, and a Windows Megabonk install
+- [ ] #2 The placeholder mod, built once and deployed via task mod:build, loads on all three platforms and logs a message on MelonLoader initialization visible in Latest.log
+- [ ] #3 A Harmony patch or Action subscriber fires when MapGenerationController reaches A_GenerationComplete and logs the active mapSeed plus a spawned-tile count, on all three platforms
+- [ ] #4 Any platform-specific friction (CrossOver/Wine, Linux/Flatpak) encountered is documented separately from platform-agnostic findings
 <!-- AC:END -->
 
 ## Definition of Done
@@ -40,3 +43,27 @@ Record any CrossOver/Wine-specific friction (DLL override quirks, path translati
 - [ ] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Linux build path: add gitignored src/MegabonkLevels.Mod/Directory.Build.local.props setting GameFolder to /media/steam/steamapps/common/Megabonk (BottleFolder unused on Linux).
+2. Confirm task mod:build works with the mise .NET SDK (net6 target) and deploys the DLL to the game's Mods folder; fix the build if not.
+3. Launch with task game:run and confirm MegabonkLevelsMod init message in MelonLoader/Latest.log on Linux (AC #1/#2 for Linux).
+4. Inspect the generated Il2Cpp assemblies for MapGenerationController and A_GenerationComplete, choose Harmony postfix vs Action subscriber, write the patch with tests first for any pure logic, and verify the logged mapSeed and tile count on Linux.
+5. Repeat the same build on CrossOver/macOS and Windows; record friction per platform separately.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Linux prerequisites verified: MelonLoader 0.7.3 Linux build loads, Il2CppAssemblies generated, MelonLoader.dll and 0Harmony.dll present under MelonLoader/net6. Scope extended to Linux at the user's request.
+
+Linux build path fixed: Directory.Build.props now imports Directory.Build.local.props first and makes every default conditional, so a single GameFolder override in the gitignored local props feeds MelonLoaderFolder, Il2CppAssembliesFolder and ModInstanceFolder. Previously the local import came last, so derived paths stayed on the macOS bottle. With GameFolder=/media/steam/steamapps/common/Megabonk, task mod:build succeeds and deploys MegabonkLevels.Mod.dll and .pdb to Mods; task check passes.
+
+Linux friction (blocker for AC #2/#3 on Linux): MelonLoader 0.7.3 loads the mod assembly (Latest.log shows 'Melon Assembly loaded' and '1 Mod loaded') but the game segfaults (signal 11, addr 0x9, PlayerMain) about a second later, right after '[WARNING] [Il2CppInterop] Class::Init signatures have been exhausted, using a substitute!' and 'Support Module Loaded: .../Il2Cpp.dll'. OnInitializeMelon never logs. The identical crash happens with 0 mods loaded (Player-prev.log, 18:16 run), so it is a MelonLoader/Il2CppInterop issue with this game build (Unity 2023.2.22f1, game 1.0.69, native Linux), not the mod. Player.log lives in ~/.var/app/com.valvesoftware.Steam/.config/unity3d/Ved/Megabonk/. Next: try a newer MelonLoader nightly or other 0.7.x build via the MELONLOADER_VERSION/URL/SHA overrides, or record Linux as a known gap per TASK-002's framing.
+
+Linux isolation results: with Mods empty (0 mods) MelonLoader 0.7.3 crashes identically (signal 11 after 'Support Module Loaded'), so the mod is not the cause; vanilla launch without LD_PRELOAD runs fine. Other releases: 0.7.2 starts, the game survives, but MelonLoader writes an empty Latest.log and never loads (not working); 0.7.1 fails at init with DllNotFoundException for kernel32.dll (WindowsUnhandledQuit); 0.7.3 is the only release that reaches Il2Cpp init on Linux and then segfaults. Upstream: LavaGang/MelonLoader#1119 (native Linux Il2Cpp crash with the same 'Class::Init signatures have been exhausted' warning on The Long Dark) was closed in March 2026 with fixes that shipped in 0.7.3, yet this game (Unity 2023.2.22f1) still crashes, so it is likely a separate cause. The latest alpha-development CI build (0.7.3-ci.2480, April 2026) predates the 0.7.3 release; the only newer line is the unmerged PR #1180 'Use Il2CppInterop v2' (0.8.0-ci). Linux is currently blocked on an upstream MelonLoader fix; candidates are the 0.8.0-ci build or reporting the crash upstream.
+
+Caveats (task stays In Progress): (1) Linux acceptance criteria #2 and #3 are blocked upstream: MelonLoader 0.7.3 segfaults on this native Linux build (Unity 2023.2.22f1) with or without the mod, so Linux cannot be verified until MelonLoader is fixed or the 0.8.0-ci build (PR #1180) is tried. (2) The Steam launch option (DOTNET_ROOT, LD_LIBRARY_PATH, LD_PRELOAD=MelonLoader.Bootstrap.so) is set on the Linux host in localconfig.vdf, so Megabonk crashes on every launch there until it is removed (backup: localconfig.vdf.bak-megabonk). (3) The Linux host also has a .NET 6 runtime at /media/steam/dotnet6 and a gitignored Directory.Build.local.props. (4) CrossOver/macOS and Windows have not been run yet; Windows stays the reference platform, so Linux and CrossOver differences are recorded as known gaps, not mod bugs. (5) The backlog filename still says CrossOver-and-Windows after the retitle.
+<!-- SECTION:NOTES:END -->
