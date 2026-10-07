@@ -4,7 +4,7 @@ title: 'MelonLoader hello-mod on Linux, CrossOver, and Windows'
 status: Done
 assignee: []
 created_date: '2026-10-06 21:40'
-updated_date: '2026-10-07 19:31'
+updated_date: '2026-10-07 19:32'
 labels:
   - level-editor
 dependencies: []
@@ -41,7 +41,7 @@ Record any platform-specific friction (CrossOver DLL override quirks and path tr
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
