@@ -10,9 +10,9 @@ namespace MegabonkLevels;
 
 public class MegabonkLevelsMod : MelonMod
 {
-    // TASK-004.01: hardcoded test level file, manually placed in the Mods folder alongside the mod
-    // DLL — see docs/level-format.md for the sample and how to deploy it. Edit application (loading
-    // an arbitrary, user-chosen path) is TASK-004.02's job.
+    // Hardcoded test level file, manually placed in the Mods folder alongside the mod DLL — see
+    // docs/level-format.md for the sample and how to deploy it. Loading an arbitrary, user-chosen path
+    // is not implemented.
     private const string TestLevelFileName = "megabonklevels-test-level.mblevel.json";
 
     public override void OnInitializeMelon()
@@ -22,6 +22,7 @@ public class MegabonkLevelsMod : MelonMod
         SeedForcePatch.Install(LoggerInstance);
         GridShapePatch.Install(LoggerInstance);
         NavMeshPatch.Install(LoggerInstance);
+        LiveEditPatch.Install(LoggerInstance);
         SceneTransitionProbe.Install(LoggerInstance);
     }
 

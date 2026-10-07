@@ -57,27 +57,26 @@ Runtime confirmation (Harmony postfix on `Unity.AI.Navigation.NavMeshSurface.Bui
 
 **Gotcha — do not Harmony-patch `RsgController.Generate`:** an attempt to add a Harmony prefix/postfix on `RsgController.Generate(int, EDungeonType, out float)` to log crypt generation caused a `NullReferenceException` inside the IL2CppInterop native→managed trampoline on every crypt entry, hanging the game at a black screen, reproduced twice. The crash fired *before* the prefix's own log line, with a try/catch-wrapped postfix, ruling out the patch body itself — it's the Harmony detour/trampoline on that specific signature (the `out float` parameter combined with the `EDungeonType` enum is the likely culprit, unconfirmed). Removing that one patch (keeping only the `NavMeshSurface.BuildNavMesh` hook) fixed it; the crypt loads normally. **Don't Harmony-patch this method** — call into `RsgController` instance members directly instead if a future task needs to trigger regeneration.
 
-## 4. Proposed `genId` scheme
+## 4. `genId` scheme
 
-Tiles-map generation is fully deterministic given a fixed `debugSeed` (see [map-generation-determinism.md](map-generation-determinism.md)). Combined with the confirmation here that `tiles`/`flatTiles`/`fillTiles` and the spawner lists are built in a fixed, repeatable order every run, each generated object can be assigned a stable id of the form:
+Tiles-map generation is fully deterministic given a fixed `debugSeed` (see [map-generation-determinism.md](map-generation-determinism.md)), and the live index built at `A_GenerationComplete` has the same categories and counts on repeat loads of the same level (Forest, seed 20261007: 225 tiles, 160 flat, 203 fill, 39 tile objects, 1474 indexed in total). Each generated object gets a stable id:
 
 ```text
-{category}:{sequentialIndexWithinCategory}
+{category}:{sequentialIndexWithinCategory, 4 digits, zero-based}
 ```
 
-Per-run, build this by iterating each source **in the exact order the game populates it** (not after any sorting — the determinism check's hash sort is only for comparison, not identity) and assigning a zero-based counter per category:
+Sources are walked in the order the game populated them, never sorted. Where each category lives in the live scene (`GeneratedMap`):
 
 | category | source | example id |
 | --- | --- | --- |
-| `tile` | `ProceduralTileGeneration.tiles` (or `proceduralTiles[x][y]` grid-walk order, equivalent) | `tile:0042` |
+| `tile` | `ProceduralTileGeneration.tiles` | `tile:0042` |
 | `flatTile` | `ProceduralTileGeneration.flatTiles` | `flatTile:0017` |
 | `fillTile` | `ProceduralTileGeneration.fillTiles` | `fillTile:0203` |
-| `randomObject:{spawnerName}` | `RandomObjectPlacer.randomObjects[i]` spawns, keyed by the `RandomMapObject`'s prefab/spawner name so different object types (trees, rocks, etc.) don't share a counter | `randomObject:Tree:0003` |
-| `tileObject` | `GenerateTileObjects.Generate()` (boss spawners, map-specific prop placement) | `tileObject:0001` |
-| `chest` | `SpawnInteractables.SpawnChests()` (46/stage) | `chest:0012` |
-| `shrine` | `SpawnInteractables.SpawnShrines()` (14/stage) | `shrine:0003` |
-| `rail` | `SpawnInteractables.SpawnRails()` | `rail:0001` |
+| `tileObject` | children of `GenerateTileObjects.tileObjectsParent` (`TileObjectsParent`), in sibling order | `tileObject:0001` |
+| `object:{prefabName}` | scene-root GameObjects named `<prefab>(Clone)` that come after the `TileObjectsParent` root, grouped by name in root order | `object:Tree0:0003`, `object:Chest:0000` |
 
-Since generation order is deterministic for a given (`stage`, `debugSeed`), the same `genId` refers to the same conceptual spawn ("the 3rd tree this run generated") across repeat generations with that seed — exactly what a future edit-application layer needs. This is a proposal, not yet implemented; `RandomMapObject`'s exact prefab-name field should be confirmed when an indexer is built, since only the type shape, not its field names, was confirmed here via static analysis.
+The `object:` category covers everything `RandomObjectPlacer` and `SpawnInteractables` spawn: trees, bushes, rocks, logs, pots, chests, shrines, the boss spawner and the player spawn portal. `RandomObjectPlacer` and `SpawnInteractables` have no children and expose no result list; their output is parented to the scene root, so the root order is the only record of spawn order. The prefab name is the cloned GameObject's name (no `RandomMapObject` name field exists). The index is a snapshot taken at `A_GenerationComplete`; objects the game creates later (enemies, projectiles, pickups) are not in it.
 
-**Caveat:** this scheme is only confirmed viable for `Tiles`-type maps (Forest, Graveyard), where determinism was tested. `ProceduralMesh` maps (Desert) don't have a confirmed-controllable seed yet (see §1), so a `genId` scheme for Desert's object placement is unverified and out of scope here.
+A tile's world position is `origin + (x, z) * scaledTileWidth` with Y at `posY * scaledTileHeight` (Forest: grid cell (0,0) at world (-280, -280), `posY=1` at Y=20). `PlayerSpawnPortal` in the Forest test seed sits at (120, 0, 0), i.e. grid cell (10, 7).
+
+**Caveat:** only confirmed for `Tiles`-type maps (Forest, Graveyard). `ProceduralMesh` maps (Desert) have no confirmed-controllable seed yet (see §1), so the scheme is unverified there.
