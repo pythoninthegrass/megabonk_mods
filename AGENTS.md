@@ -2,15 +2,6 @@
 
 This file provides guidance to AI agents when working with code in this repository.
 
-## Context7 Libraries
-
-- astral-sh/docs
-- j178/prek
-- jdx/mise
-- mrlesk/backlog.md
-- websites/binary_ninja
-- websites/taskfile_dev
-
 ## Linux and Flatpak Steam caveats
 
 Megabonk ships a native Linux build (`Megabonk.x86_64`), so there is no Proton or Wine prefix and the CrossOver `version.dll` override does not apply. `compatdata/3405340` stays an empty directory.
@@ -23,6 +14,15 @@ Megabonk ships a native Linux build (`Megabonk.x86_64`), so there is no Proton o
 - Do not use `pkill -f` with a pattern that also appears in the calling shell's own command line; it kills that shell. Use `pkill -x Megabonk.x86_64`.
 - `task game:run` falls back to `flatpak run com.valvesoftware.Steam steam://rungameid/3405340` when no native `steam` binary exists, and defaults `DISPLAY` and `XAUTHORITY` itself.
 - The first launch with MelonLoader runs the Il2Cpp assembly generator (Cpp2IL, Il2CppInterop) and takes about 30 seconds. Check `MelonLoader/Latest.log` in the game directory for `Assembly Generation Successful!` and the `Mods loaded` line.
+
+## Context7 Libraries
+
+- astral-sh/docs
+- j178/prek
+- jdx/mise
+- mrlesk/backlog.md
+- websites/binary_ninja
+- websites/taskfile_dev
 
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 <!-- backlog.md-instructions-version: 1.48.0 -->
