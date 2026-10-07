@@ -5,7 +5,7 @@ status: Done
 assignee:
   - pythoninthegrass
 created_date: '2026-10-06 21:40'
-updated_date: '2026-10-07 20:39'
+updated_date: '2026-10-07 20:40'
 labels:
   - level-editor
 dependencies:
@@ -45,7 +45,7 @@ Write all of this to a docs/ file (e.g. docs/runtime-map-structure.md) with conc
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
