@@ -63,7 +63,42 @@ Tile ops identify the tile by grid coordinates carried in the payload, so they h
 
 ### Validation convention
 
-Every op type's constructor throws on invalid input — `ArgumentException` for logical/format errors (e.g. a blank `catalogId`, a non-positive scale component, an undefined `SlopeDirection`), or its `ArgumentOutOfRangeException` subclass for out-of-range numeric input (negative tile coordinates, a negative placement id). Catching `ArgumentException` covers both. There is no `Result`/error-code type: construction failure here always means the caller passed data that can never be valid, not a recoverable runtime condition. `catalogId`'s check is currently a placeholder (non-null/non-whitespace only), pending the real catalog ID format (including a reserved `bundle:<pack>/<asset>` namespace for future custom-asset packs).
+Every op type's constructor throws on invalid input — `ArgumentException` for logical/format errors (e.g. a malformed `catalogId`, a non-positive scale component, an undefined `SlopeDirection`), or its `ArgumentOutOfRangeException` subclass for out-of-range numeric input (negative tile coordinates, a negative placement id). Catching `ArgumentException` covers both. There is no `Result`/error-code type: construction failure here always means the caller passed data that can never be valid, not a recoverable runtime condition. `PlaceObject.CatalogId` stays a plain `string` in the schema (no JSON shape change) but its constructor now validates it with `CatalogId.Parse` (below) instead of a non-blank-only placeholder.
+
+### `catalogId` format
+
+`src/MegabonkLevels.Mod/catalog_id.cs` defines `CatalogId`, a purely syntactic parser/validator for the strings `PlaceObject` uses to reference a placeable prefab. It does not know which map/stage/category names are real — that catalog-building concern belongs to whatever populates the editor's object palette (TASK-004/TASK-005) — it only enforces the grammar below.
+
+Two namespaces, distinguished by a `bundle:` prefix:
+
+| namespace | form | example |
+| --- | --- | --- |
+| `GameAsset` (default) | `segment/segment{/segment...}` (>= 2 segments, no prefix) | `interactable/chest` |
+| `Bundle` | `bundle:segment/segment{/segment...}` (>= 2 segments after the prefix) | `bundle:mypack/props/rock` |
+
+Rules, checked in this order by `CatalogId.TryParse`/`Parse`:
+
+1. The raw string must not be null/empty/whitespace-only.
+2. If it starts with `bundle:`, the namespace is `Bundle` and the rest is parsed as segments. Otherwise, if it contains a `:` anywhere, it's rejected as an unknown namespace prefix — `:` is reserved exclusively for the `bundle:` prefix, so a game-asset id must never contain one.
+3. The (post-prefix) body is split on `/`. Every segment must be non-empty (catches a leading/trailing/doubled `/`) and match `^[A-Za-z0-9_-]+$` (letters, digits, `_`, `-` only).
+4. At least 2 segments are required in both namespaces.
+
+`Bundle` is reserved for TASK-007's custom AssetBundle packs — nothing produces these ids yet, but the grammar accepts them now so TASK-007 doesn't need to revisit this validator.
+
+**Game-asset segment shapes**, cross-checked against TASK-002's confirmed catalog organization (`DataManager.Instance.maps[] : MapData` → `stages[] : StageData` → `randomMapObjects[] : RandomMapObject` → `.prefabs[] : GameObject[]`; `StageData.stageTilePrefabs : StageTilePrefabs` with `flatTilePrefabs[]`/`mapSpecificTilesPrefabs[]`; `MapData.shrines[]`, map-scoped not stage-scoped; `SpawnInteractables`'s singular `chest`/`chestFree` fields and `rails[]`) rather than invented independently:
+
+| shape | example | source |
+| --- | --- | --- |
+| `{map}/stage{N}/randomMapObjects/{objectIndex}/{prefabIndex}` | `forest/stage0/randomMapObjects/2/0` | `StageData.randomMapObjects[2].prefabs[0]` |
+| `{map}/stage{N}/stageTilePrefabs/flat/{index}` | `desert/stage1/stageTilePrefabs/flat/3` | `StageData.stageTilePrefabs.flatTilePrefabs[3]` |
+| `{map}/stage{N}/stageTilePrefabs/specific/{index}` | `graveyard/stage2/stageTilePrefabs/specific/1` | `StageData.stageTilePrefabs.mapSpecificTilesPrefabs[1]` |
+| `{map}/shrines/{index}` | `forest/shrines/5` | `MapData.shrines[5]` |
+| `interactable/chest`, `interactable/chestFree` | — | `SpawnInteractables.chest` / `.chestFree` (singular fields) |
+| `interactable/rail/{index}` | `interactable/rail/2` | `SpawnInteractables.rails[2]` |
+
+**Prefabs have no name field.** `RandomMapObject.prefabs`, `StageTilePrefabs`'s arrays, `MapData.shrines`, and `SpawnInteractables.rails` are all plain `GameObject[]` with nothing resembling a human-readable name — only an array index. The final segment of a game-asset id is therefore typically numeric, not a descriptive name; a `Tree_03`-style segment would have to come from a future name lookup this task doesn't build, not from the game's own data.
+
+`tests/MegabonkLevels.Tests/catalog_id_tests.cs` covers valid ids in both namespaces (including every shape above) and a table-driven set of malformed inputs (empty/whitespace, unknown namespace prefix, empty segment from a leading/trailing/doubled `/`, invalid characters, too few segments), each asserted against its specific failure reason.
 
 ### JSON round-trip inside `LevelFile.Edits`
 

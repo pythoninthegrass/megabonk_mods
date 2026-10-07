@@ -17,14 +17,9 @@ internal static class EditOpValidation
         }
     }
 
-    // Placeholder until TASK-003.05 defines the real catalogId format (including the reserved
-    // bundle:<pack>/<asset> namespace) — revisit this check once that lands.
     public static void RequireNonBlankCatalogId(string catalogId)
     {
-        if (string.IsNullOrWhiteSpace(catalogId))
-        {
-            throw new ArgumentException("catalogId must not be null or whitespace.", nameof(catalogId));
-        }
+        CatalogId.Parse(catalogId);
     }
 
     public static void RequirePositiveScale(Vector3Data scale)

@@ -124,7 +124,7 @@ public class RemoveTileTests
 public class PlaceObjectTests
 {
     private static PlaceObject SampleOp() => new(
-        CatalogId: "prefab:rock_small",
+        CatalogId: "props/rock_small",
         Position: new Vector3Data(1, 0, 3),
         Rotation: new Vector3Data(0, 90, 0),
         Scale: new Vector3Data(1, 1, 1));
@@ -145,9 +145,14 @@ public class PlaceObjectTests
             "   ", new Vector3Data(1, 0, 3), new Vector3Data(0, 90, 0), new Vector3Data(1, 1, 1)));
 
     [Fact]
+    public void MalformedCatalogId_Throws() =>
+        Assert.Throws<ArgumentException>(() => new PlaceObject(
+            "unknownns:rock_small", new Vector3Data(1, 0, 3), new Vector3Data(0, 90, 0), new Vector3Data(1, 1, 1)));
+
+    [Fact]
     public void ZeroScale_Throws() =>
         Assert.Throws<ArgumentException>(() => new PlaceObject(
-            "prefab:rock_small", new Vector3Data(1, 0, 3), new Vector3Data(0, 90, 0), new Vector3Data(0, 1, 1)));
+            "props/rock_small", new Vector3Data(1, 0, 3), new Vector3Data(0, 90, 0), new Vector3Data(0, 1, 1)));
 }
 
 public class MoveObjectTests
@@ -229,7 +234,7 @@ public class EditOperationsInLevelFileTests
                 new SetTileSlope(0, 1, SlopeDirection.North).ToEditOp(),
                 new AddTile(1, 0, 0).ToEditOp(),
                 new RemoveTile(1, 1).ToEditOp(),
-                new PlaceObject("prefab:rock_small", new Vector3Data(1, 0, 3), new Vector3Data(0, 90, 0), new Vector3Data(1, 1, 1)).ToEditOp(),
+                new PlaceObject("props/rock_small", new Vector3Data(1, 0, 3), new Vector3Data(0, 90, 0), new Vector3Data(1, 1, 1)).ToEditOp(),
                 new MoveObject(ObjectTarget.FromGenId("tile:42"), new TransformData(new Vector3Data(2, 0, 2), default, new Vector3Data(1, 1, 1))).ToEditOp(),
                 new RemoveObject(ObjectTarget.FromPlacementId(0)).ToEditOp(),
             ]);
@@ -243,7 +248,7 @@ public class EditOperationsInLevelFileTests
         Assert.Equal(new AddTile(1, 0, 0), AddTile.FromEditOp(restored.Edits[2]));
         Assert.Equal(new RemoveTile(1, 1), RemoveTile.FromEditOp(restored.Edits[3]));
         Assert.Equal(
-            new PlaceObject("prefab:rock_small", new Vector3Data(1, 0, 3), new Vector3Data(0, 90, 0), new Vector3Data(1, 1, 1)),
+            new PlaceObject("props/rock_small", new Vector3Data(1, 0, 3), new Vector3Data(0, 90, 0), new Vector3Data(1, 1, 1)),
             PlaceObject.FromEditOp(restored.Edits[4]));
         Assert.Equal(
             new MoveObject(ObjectTarget.FromGenId("tile:42"), new TransformData(new Vector3Data(2, 0, 2), default, new Vector3Data(1, 1, 1))),

@@ -112,7 +112,7 @@ public class EditStackTileTests
 public class EditStackObjectTests
 {
     private static PlaceObject SamplePlacement() => new(
-        CatalogId: "prefab:rock_small",
+        CatalogId: "props/rock_small",
         Position: new Vector3Data(1, 0, 3),
         Rotation: new Vector3Data(0, 90, 0),
         Scale: new Vector3Data(1, 1, 1));
@@ -128,7 +128,7 @@ public class EditStackObjectTests
         var record = stack.State.GetObject(target);
         Assert.NotNull(record);
         Assert.False(record!.Value.Removed);
-        Assert.Equal("prefab:rock_small", record.Value.CatalogId);
+        Assert.Equal("props/rock_small", record.Value.CatalogId);
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public class EditStackObjectTests
 
         var restored = stack.State.GetObject(target);
         Assert.Equal(originalTransform, restored!.Value.Transform);
-        Assert.Equal("prefab:rock_small", restored.Value.CatalogId);
+        Assert.Equal("props/rock_small", restored.Value.CatalogId);
     }
 
     [Fact]
