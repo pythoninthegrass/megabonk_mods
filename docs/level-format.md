@@ -67,7 +67,7 @@ Every op type's constructor throws on invalid input — `ArgumentException` for 
 
 ### `catalogId` format
 
-`src/MegabonkLevels.Mod/catalog_id.cs` defines `CatalogId`, a purely syntactic parser/validator for the strings `PlaceObject` uses to reference a placeable prefab. It does not know which map/stage/category names are real — that catalog-building concern belongs to whatever populates the editor's object palette (TASK-004/TASK-005) — it only enforces the grammar below.
+`src/MegabonkLevels.Mod/catalog_id.cs` defines `CatalogId`, a purely syntactic parser/validator for the strings `PlaceObject` uses to reference a placeable prefab. It does not know which map/stage/category names are real — that catalog-building concern belongs to whatever populates the editor's object palette — it only enforces the grammar below.
 
 Two namespaces, distinguished by a `bundle:` prefix:
 
@@ -83,9 +83,9 @@ Rules, checked in this order by `CatalogId.TryParse`/`Parse`:
 3. The (post-prefix) body is split on `/`. Every segment must be non-empty (catches a leading/trailing/doubled `/`) and match `^[A-Za-z0-9_-]+$` (letters, digits, `_`, `-` only).
 4. At least 2 segments are required in both namespaces.
 
-`Bundle` is reserved for TASK-007's custom AssetBundle packs — nothing produces these ids yet, but the grammar accepts them now so TASK-007 doesn't need to revisit this validator.
+`Bundle` is reserved for future custom AssetBundle packs — nothing produces these ids yet, but the grammar accepts them now so a future pack-loading feature doesn't need to revisit this validator.
 
-**Game-asset segment shapes**, cross-checked against TASK-002's confirmed catalog organization (`DataManager.Instance.maps[] : MapData` → `stages[] : StageData` → `randomMapObjects[] : RandomMapObject` → `.prefabs[] : GameObject[]`; `StageData.stageTilePrefabs : StageTilePrefabs` with `flatTilePrefabs[]`/`mapSpecificTilesPrefabs[]`; `MapData.shrines[]`, map-scoped not stage-scoped; `SpawnInteractables`'s singular `chest`/`chestFree` fields and `rails[]`) rather than invented independently:
+**Game-asset segment shapes**, cross-checked against the confirmed runtime catalog organization (`DataManager.Instance.maps[] : MapData` → `stages[] : StageData` → `randomMapObjects[] : RandomMapObject` → `.prefabs[] : GameObject[]`; `StageData.stageTilePrefabs : StageTilePrefabs` with `flatTilePrefabs[]`/`mapSpecificTilesPrefabs[]`; `MapData.shrines[]`, map-scoped not stage-scoped; `SpawnInteractables`'s singular `chest`/`chestFree` fields and `rails[]`) rather than invented independently:
 
 | shape | example | source |
 | --- | --- | --- |
@@ -136,14 +136,14 @@ A tile's `Height` is the game's `ProceduralTile.posY`, and a slope is a separate
 `src/MegabonkLevels.Mod/level_loader_patch.cs` (`LevelLoaderPatch.LoadAndStart`) reads a `.mblevel.json` file with this schema's own `LevelFileSerializer.DeserializeWithMigration` (no separate reader — reusing the exact same reader this doc already describes) and starts a real run matching it:
 
 1. Resolve the `MapData` whose `eMap` matches the file's `map` via `Resources.FindObjectsOfTypeAll<MapData>()` (ScriptableObject assets aren't reachable through a normal scene search), then index into `mapData.stages[stageIndex]` for the `StageData`.
-2. Force the seed through `SeedForcePatch.ForceLevelSeed(level.Seed)` — a `LevelSeed` mode added to the existing F9 test-harness patch (`seed_force_patch.cs`) from TASK-002.02, so there is exactly one Harmony prefix on `ProceduralTileGeneration.Generate` forcing `debugSeed`/`useDebugSeed` rather than two competing ones. This is the field TASK-002.02 confirmed actually controls Tiles-map generation; `MapGenerationController.mapSeed` is never touched.
+2. Force the seed through `SeedForcePatch.ForceLevelSeed(level.Seed)` — a `LevelSeed` mode added to the existing F9 test-harness patch (`seed_force_patch.cs`), so there is exactly one Harmony prefix on `ProceduralTileGeneration.Generate` forcing `debugSeed`/`useDebugSeed` rather than two competing ones. This is the field confirmed to actually control Tiles-map generation; `MapGenerationController.mapSeed` is never touched.
 3. Build a `RunConfig { mapData, stageData, mapTierIndex = level.Tier }` and start the run with `MapController.StartNewMap(runConfig)`.
 
 `MapController.StartNewMap(RunConfig)` is confirmed live to be the right entry point: a `SceneTransitionProbe` Harmony postfix on it fired when a normal, manual map-select-and-confirm playthrough started a Forest run, immediately followed by `A_GenerationComplete`. The original hypothesis, `MapController.TestMap(RunConfig)`, does *not* start a run — calling it only sets `MapController.currentMap`/`currentStage`/`runConfig`; `MapController.IsMainMenu()` stays `true` before and after the call, and no generation follows. `TestMap` is exposed for a different purpose than reusing the normal in-run flow and must not be used here.
 
-A hardcoded hotkey (F6, `MegabonkLevelsMod.OnUpdate`) loads a fixed file name (`megabonklevels-test-level.mblevel.json`) from MelonLoader's `Mods` directory (`MelonEnvironment.ModsDirectory`) — a manually-placed test file is sufficient; loading an arbitrary user-chosen path is not implemented. F10 was tried first and rejected: it collides with the game's own built-in debug console, which also toggles on F10 independently of mod code. `levels/example-forest.mblevel.json` in this repo is that test file's content (Forest, stage 0, tier 0, `debugSeed=20261007` — the exact seed TASK-002.02 confirmed reproducible across three separate Forest generations — no edits); copy it into the game's `Mods` folder under the hotkey's expected name to use it.
+A hardcoded hotkey (F6, `MegabonkLevelsMod.OnUpdate`) loads a fixed file name (`megabonklevels-test-level.mblevel.json`) from MelonLoader's `Mods` directory (`MelonEnvironment.ModsDirectory`) — a manually-placed test file is sufficient; loading an arbitrary user-chosen path is not implemented. F10 was tried first and rejected: it collides with the game's own built-in debug console, which also toggles on F10 independently of mod code. `levels/example-forest.mblevel.json` in this repo is that test file's content (Forest, stage 0, tier 0, `debugSeed=20261007` — confirmed reproducible across three separate Forest generations — no edits); copy it into the game's `Mods` folder under the hotkey's expected name to use it.
 
-**Reproducibility check (no new code needed):** `GenerationPatch` (TASK-002.02) already logs a SHA-256 hash of every spawned tile/object's transform on every `A_GenerationComplete`, regardless of what triggered generation. Pressing F6 from the main menu, waiting for generation to finish, and repeating a couple more times and diffing the `hash=` values in `Latest.log` is the verification that the forced seed actually reproduces the same map — confirmed live across three separate loads, all producing the identical hash despite each run's irrelevant random `mapSeed` differing.
+**Reproducibility check (no new code needed):** `GenerationPatch` already logs a SHA-256 hash of every spawned tile/object's transform on every `A_GenerationComplete`, regardless of what triggered generation. Pressing F6 from the main menu, waiting for generation to finish, and repeating a couple more times and diffing the `hash=` values in `Latest.log` is the verification that the forced seed actually reproduces the same map — confirmed live across three separate loads, all producing the identical hash despite each run's irrelevant random `mapSeed` differing.
 
 **Harmony patch safety note:** before adding a Harmony patch target, check that its RVA in `.tools/il2cpp_dump/dump.cs` is unique (`grep -c "RVA: 0x<addr> "`). `MapMenu.StartMap`'s RVA was shared by 1,453 other methods — a linker-folded trivial/empty-body address — and patching it crashed the game immediately by intercepting every one of those unrelated call sites. Also never patch a core Unity engine method (e.g. `UnityEngine.SceneManagement.SceneManager.LoadScene`) rather than game code; those are native icalls IL2CPP interop can't safely hook the way it hooks the game's own compiled methods.
 
@@ -177,4 +177,44 @@ A custom or edited level's scores and progress must never reach Steam: the game 
 | `SteamAchievementsManager.TryUnlockAchievement` | `Assets.Scripts.Steam` | the only public write entry point — the unlock check and the upload queueing both happen inside it |
 | `SteamStatsManager.OnStatUpdated` (private) | `Assets.Scripts.Steam` | the bridge subscribed to `MyStats.A_StatUpdated` that caches a local stat change for Steam upload; blocking it here leaves the game's own local progression (`MyStats`/`RunStats`) untouched and only suppresses the Steam-bound copy |
 
-Live-verified on the CrossOver reference platform: loading the test level file logs `CustomLevelState: run starting, IsActive=True` immediately after `LevelLoader: starting ...`, and an idle, invulnerable run (`scripts/run.py invulnerable`) suppressed over 200 `SteamStatsManager.OnStatUpdated` calls in under a minute with no errors or exceptions. The leaderboard and achievement prefixes were not exercised live in this pass — those fire on rarer events (run completion, specific achievement thresholds) that TASK-004.05's full playthrough verification is better placed to hit — but are structurally identical guards confirmed to compile against the real game assembly.
+Live-verified on the CrossOver reference platform: loading the test level file logs `CustomLevelState: run starting, IsActive=True` immediately after `LevelLoader: starting ...`, and an idle, invulnerable run (`scripts/run.py invulnerable`) suppressed over 200 `SteamStatsManager.OnStatUpdated` calls in under a minute with no errors or exceptions. The leaderboard and achievement prefixes were not exercised live in this pass — those fire on rarer events (run completion, specific achievement thresholds) that a full playthrough is better placed to hit — but are structurally identical guards confirmed to compile against the real game assembly.
+
+## Regression check: the full-playthrough test level
+
+`levels/task-004-05-regression.mblevel.json` is a hand-written Forest level (seed `20261007`, a debugSeed confirmed reproducible) that exercises all six edit op types in one file, as an integration acceptance check for the whole live-editing pipeline. Re-run it after a game update, or after a future editor UI starts producing real edit lists, to confirm the live-application pipeline still works end to end.
+
+| cell / target | op(s) | effect |
+| --- | --- | --- |
+| (10,5) | `SetTileHeight` -> 1 | a flat tile raised one level, exercising a height change with no prefab swap |
+| (9,7) | `SetTileSlope` -> East | the tile replaced with the `TileSlope` prefab, yaw 90 |
+| (11,7) | `RemoveTile` then `AddTile` -> height 1 | the only way to exercise `AddTile` on a truly empty cell (the live grid is dense, so a cell must be vacated first); ends as a raised flat tile |
+| (13,7) | `RemoveTile` | left removed — a real hole with the kill floor armed under it |
+| world (80, 0, 80) | `PlaceObject` `interactable/chest` | a chest placed independent of any tile edit |
+| `gen:object:Tree0:0010` | `RemoveObject` | deletes one generator-spawned tree |
+
+(11,7)/(9,7)/(13,7) reuse coordinates already playtested clean as a scratch level (enemies crossed the raised and sloped tiles without sticking, and were killed by the kill floor after falling into the hole).
+
+**Observed during a full playthrough:** the removed cell (13,7) sits on a path the Forest stage boss happens to roam, and in one run the boss wandered into the hole and was killed by the kill floor. The boss portal still activated normally and the run continued — the early death did not block anything. This is useful confirmation that the kill floor handles a boss-tier actor correctly (see "Kill floor" above). Separately, tier 1 has no win/finish screen by the game's own design, so "a complete run" on this level means reaching and activating the boss portal, not beating the game.
+
+### Re-running the automated part
+
+```sh
+uv run scripts/run.py enable   # once; relaunch the game after
+uv run scripts/run.py load levels/task-004-05-regression.mblevel.json
+```
+
+Then check `MelonLoader/Latest.log` for:
+
+- `LiveEdit: applied 7 edit(s)` with no `WARNING` lines about the edits themselves, immediately followed by `FillRegeneration`, `CollisionRebuild` and `KillFloor: armed` with no errors.
+- No `error`/`exception` lines for the rest of the session.
+- `SteamWriteGuard: suppressed ...` lines appearing (and no unsuppressed `QueueLeaderboardUpload`/`UploadLeaderboardScore`/`TryUnlockAchievement` lines) once `run.py invulnerable` lets the run continue — `CustomLevelState: run starting, IsActive=True` confirms the guard is armed for this run.
+
+`run.py freeze` plus `run.py camera X Y Z --rot 90 0 0` pointed at each cell's own logged world position (printed by the `LiveEdit:` lines above) gives a screenshot of that specific edit; a low altitude (50-60 units) and an angled rotation (e.g. `35 335 0`) shows the raised/removed tiles' cliff walls, since a straight-down shot alone doesn't show elevation.
+
+### Human playthrough
+
+The harness cannot press keys or move the player (see "Not covered" above), so the actual spawn-to-boss-portal run needs a person at the controls: load the level, play normally, and confirm enemies path across the raised, sloped and added tiles and into the removed cell without getting stuck, the chest and the missing tree are visibly correct, and the run completes with no crash. Turning on `run.py cells on` and `run.py heartbeat on` beforehand logs enemy cell transitions and kill-floor activity during the run for a written record.
+
+### Verification status
+
+Verified on the CrossOver reference platform: automated checks (load, edit application, screenshots of each edit, idle-invulnerable survival with enemies approaching the edited cells) and a full human playthrough from spawn to the boss portal both passed. All six edit op types applied cleanly and were visually confirmed; enemies, including the stage boss, crossed and interacted with the edited terrain without getting stuck; the boss portal activated normally; and the run produced zero errors or exceptions and zero unsuppressed leaderboard/achievement/stats calls across the whole session (thousands of stats writes suppressed).
