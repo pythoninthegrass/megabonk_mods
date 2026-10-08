@@ -22,9 +22,7 @@ import game_paths as gp
 
 def test_default_macos_bottle_path_when_nothing_set() -> None:
     game = gp.game_dir(env_file_values={})
-    assert str(game).endswith(
-        "CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk"
-    )
+    assert str(game).endswith("CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk")
 
 
 def test_env_file_bottle_override() -> None:
@@ -67,11 +65,7 @@ def test_parse_env_file_skips_comments_and_blanks() -> None:
 
 
 def main() -> int:
-    tests = [
-        (n, f)
-        for n, f in sorted(globals().items())
-        if n.startswith("test_") and callable(f)
-    ]
+    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     failed = 0
     for name, fn in tests:
         try:

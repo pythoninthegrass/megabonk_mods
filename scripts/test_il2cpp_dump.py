@@ -64,11 +64,7 @@ def test_run_dump_raises_when_dumper_missing() -> None:
 
 
 def main() -> int:
-    tests = [
-        (n, f)
-        for n, f in sorted(globals().items())
-        if n.startswith("test_") and callable(f)
-    ]
+    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     failed = 0
     for name, fn in tests:
         try:

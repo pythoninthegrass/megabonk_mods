@@ -104,11 +104,7 @@ def test_release_asset_url_overridable_via_env() -> None:
 
 
 def main() -> int:
-    tests = [
-        (n, f)
-        for n, f in sorted(globals().items())
-        if n.startswith("test_") and callable(f)
-    ]
+    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     failed = 0
     for name, fn in tests:
         try:

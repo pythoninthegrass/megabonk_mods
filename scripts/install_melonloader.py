@@ -42,9 +42,7 @@ CROSSOVER_WINE_CANDIDATES = [
 
 # Every pin below is overridable via the environment or .env (env > .env > default).
 MELONLOADER_VERSION = config("MELONLOADER_VERSION", default="0.7.3")
-RELEASE_URL_TEMPLATE = (
-    "https://github.com/LavaGang/MelonLoader/releases/download/v{version}/{asset}"
-)
+RELEASE_URL_TEMPLATE = "https://github.com/LavaGang/MelonLoader/releases/download/v{version}/{asset}"
 ASSET_WINDOWS = "MelonLoader.x64.zip"
 ASSET_LINUX = "MelonLoader.Linux.x64.zip"
 DEFAULT_SHA256_WINDOWS = "5b2b2f3d1cd42b59ec886c5bdc2663edae87a0097a4f4a8f58c0965a99dda416"

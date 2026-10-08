@@ -66,9 +66,7 @@ def run_dump(
     dumper_dll: Path = DUMPER_DLL,
 ) -> None:
     if not dumper_dll.is_file():
-        raise FileNotFoundError(
-            f"Il2CppDumper.dll not found at {dumper_dll}; download it into .tools/Il2CppDumper/ first"
-        )
+        raise FileNotFoundError(f"Il2CppDumper.dll not found at {dumper_dll}; download it into .tools/Il2CppDumper/ first")
 
     game_assembly = game_assembly_path(game)
     global_metadata = global_metadata_path(game)
