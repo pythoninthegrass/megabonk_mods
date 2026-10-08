@@ -15,6 +15,10 @@ Megabonk ships a native Linux build (`Megabonk.x86_64`), so there is no Proton o
 - `task game:run` falls back to `flatpak run com.valvesoftware.Steam steam://rungameid/3405340` when no native `steam` binary exists, and defaults `DISPLAY` and `XAUTHORITY` itself.
 - The first launch with MelonLoader runs the Il2Cpp assembly generator (Cpp2IL, Il2CppInterop) and takes about 30 seconds. Check `MelonLoader/Latest.log` in the game directory for `Assembly Generation Successful!` and the `Mods loaded` line.
 
+## Verifying changes in the running game
+
+The mod has a development harness that loads a level, captures the game's rendered frame, and quits, without keyboard or mouse input. Enable it once with `uv run scripts/run.py enable`, launch the game, then run `uv run scripts/run.py cycle <level> <out.png>` and read the PNG. See `docs/development.md` for the commands, launch steps, and caveats.
+
 ## Writing docs/*.md
 
 Document the content itself — the schema, the rule, the API, the gotcha — not which task or AC introduced it. Don't cite `TASK-###` IDs, acceptance-criteria numbers, or phrasing like "per the final TASK-002.03 runtime finding"; that provenance is already tracked in Backlog and `git log`/`git blame`, and it rots as tasks close and get archived. Exception: a genuinely open, unresolved question (e.g. "this assumption is unconfirmed, revisit once real data is available") belongs in the doc as a TODO, but phrase it about the open question itself, not the task number that will close it.
