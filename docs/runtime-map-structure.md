@@ -122,3 +122,11 @@ World side:
 - `MinimapMesh` (`meshRenderer`, `meshFilter`; `Set(Mesh, Color fogColor)`) is the map drawn for those cameras, centred on the origin with bounds of 600x600 in x and z.
 - The player marker is `MinimapCamera.playerIcon`, the object `Player/MinimapIcon`, which moves with the player and is drawn by the minimap camera like any other layer-14 object (`MinimapPlayerIcon`, `MinimapIcon`).
 - Enemy markers are icon objects made by `AddEnemyMinimapIcon(Enemy, Material, float)` from `enemyIconPrefab` and tracked in `enemyIconDictionary` (`Dictionary<Enemy, GameObject>`), updated by `UpdateEnemyMinimapIcons`. Boss and portal arrows are `Assets.Scripts.Camera.MinimapArrow` objects (`target`, `Set(Transform, Color)`) tracked in `arrowDict`. Pickups, chests and shrines carry their own `minimapIcon` object.
+
+## Minimap coordinate mapping
+
+The HUD minimap camera is orthographic with size 110, so the view spans 220 world units across the 256-pixel render texture (about 1.16 pixels per unit), and the circular mask crops it to the same diameter. Its position tracks the player's x and z exactly (a player at (120, 1.92, 3) had the camera at (120, 1000.93, 3)), so the player icon is always at the centre of the minimap. The camera looks straight down and is rotated about the vertical axis; in the default dynamic orientation (`MinimapCamera.staticOrientation` false) the yaw presumably follows the game camera (observed: 180, with `S` at the top) and the `N`/`S`/`E`/`W` letters turn with it, and a static orientation presumably uses `staticRotation`.
+
+For a world point `p` and the player at `q`, the offset from the minimap centre is `((p.x - q.x), (p.z - q.z))` rotated by the camera yaw and scaled by `128 / 110` render-texture pixels per world unit. The mapping is therefore recoverable in both directions, but the minimap is a local view: it never shows where on the map the player is, only what is within 110 units. A position or grid cell readout cannot be read off the minimap itself and has to come from the player's transform.
+
+The second `MinimapCamera` on `MapCamera` (orthographic size 300, 1024x1024, at (0, 1000, 0) with rotation (90, 0, 0)) is not player-centred: one world unit is 1024 / 600 pixels and world (0, 0) is the centre of the texture. Where that texture is displayed in the HUD was not located.
