@@ -44,18 +44,28 @@ public static class LiveEditPatch
         var index = BuildIndex(controller);
         logger.Msg($"LiveEdit: indexed {index.Count} objects: {SummarizeCategories(index)}");
 
-        if (edits == null || edits.Count == 0)
-        {
-            return;
-        }
-
         var tileGen = controller.proceduralTileGeneration;
-        if (tileGen?.proceduralTiles == null)
+        if (edits == null || tileGen?.proceduralTiles == null)
         {
-            logger.Warning("LiveEdit: map has no tile grid (not a Tiles map); edits not applied");
+            if (edits != null && edits.Count > 0)
+            {
+                logger.Warning("LiveEdit: map has no tile grid (not a Tiles map); edits not applied");
+            }
+
+            KillFloorWatcher.Disarm();
             return;
         }
 
+        if (edits.Count > 0)
+        {
+            ApplyEdits(logger, controller, index, edits);
+        }
+
+        KillFloorWatcher.Arm(tileGen, logger);
+    }
+
+    private static void ApplyEdits(MelonLogger.Instance logger, MapGenerationController controller, Dictionary<string, GameObject> index, IReadOnlyList<EditOp> edits)
+    {
         IReadOnlyList<LiveAction> plan;
         try
         {
@@ -81,6 +91,15 @@ public static class LiveEditPatch
         }
 
         logger.Msg($"LiveEdit: applied {plan.Count} edit(s)");
+
+        if (LiveEditPlan.ChangesTerrain(plan))
+        {
+            var tileGen = controller.proceduralTileGeneration;
+            var tileWidth = (tileGen.currentMapParameters ?? tileGen.currentStage?.mapParameters).scaledTileWidth;
+            var touched = plan.Where(a => a.Kind == LiveActionKind.SetTile).Select(a => (a.X, a.Z));
+            FillRegeneration.Regenerate(tileGen, tileWidth, touched, logger);
+            CollisionRebuild.Replace(tileGen, logger);
+        }
     }
 
     private static Dictionary<string, GameObject> BuildIndex(MapGenerationController controller)
@@ -242,6 +261,8 @@ public static class LiveEditPatch
             if (live != null)
             {
                 _tileGen.tiles.Remove(live.gameObject);
+                _tileGen.flatTiles.Remove(live.gameObject);
+                live.gameObject.SetActive(false);
                 UnityEngine.Object.Destroy(live.gameObject);
             }
 
@@ -265,6 +286,9 @@ public static class LiveEditPatch
                 return;
             }
 
+            _tileGen.tiles.Remove(tile.gameObject);
+            _tileGen.flatTiles.Remove(tile.gameObject);
+            tile.gameObject.SetActive(false);
             UnityEngine.Object.Destroy(tile.gameObject);
             _tileGen.proceduralTiles[action.X][action.Z] = null;
             _logger.Msg($"LiveEdit: removed tile ({action.X},{action.Z})");

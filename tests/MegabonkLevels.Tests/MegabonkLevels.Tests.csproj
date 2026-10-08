@@ -30,6 +30,8 @@
     <Compile Include="../../src/MegabonkLevels.Mod/catalog_route.cs" Link="catalog_route.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/live_edit_plan.cs" Link="live_edit_plan.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/tile_placement.cs" Link="tile_placement.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/kill_floor.cs" Link="kill_floor.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/fill_edge_plan.cs" Link="fill_edge_plan.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/harness_command.cs" Link="harness_command.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/png_encoder.cs" Link="png_encoder.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/character_override.cs" Link="character_override.cs" />

@@ -89,4 +89,33 @@ public class LiveEditPlanTests
     {
         Assert.Throws<ArgumentException>(() => LiveEditPlan.Build(new[] { new EditOp("bogus", "", "{}") }));
     }
+
+    [Fact]
+    public void ChangesTerrain_NoActions_IsFalse()
+    {
+        Assert.False(LiveEditPlan.ChangesTerrain(LiveEditPlan.Build(Array.Empty<EditOp>())));
+    }
+
+    [Fact]
+    public void ChangesTerrain_ObjectOnlyEdits_IsFalse()
+    {
+        var plan = LiveEditPlan.Build(new[] { new PlaceObject("forest/shrines/0", SomeTransform.Position, SomeTransform.Rotation, SomeTransform.Scale).ToEditOp() });
+
+        Assert.False(LiveEditPlan.ChangesTerrain(plan));
+    }
+
+    [Theory]
+    [MemberData(nameof(TerrainEdits))]
+    public void ChangesTerrain_TileEdit_IsTrue(EditOp op)
+    {
+        Assert.True(LiveEditPlan.ChangesTerrain(LiveEditPlan.Build(new[] { op })));
+    }
+
+    public static IEnumerable<object[]> TerrainEdits()
+    {
+        yield return new object[] { new SetTileHeight(2, 3, 4).ToEditOp() };
+        yield return new object[] { new SetTileSlope(2, 3, SlopeDirection.East).ToEditOp() };
+        yield return new object[] { new AddTile(1, 1, 2).ToEditOp() };
+        yield return new object[] { new RemoveTile(1, 1).ToEditOp() };
+    }
 }

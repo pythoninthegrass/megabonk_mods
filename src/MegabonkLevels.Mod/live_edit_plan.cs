@@ -42,6 +42,20 @@ public static class LiveEditPlan
         return actions;
     }
 
+    // True when any action moves, adds or removes a tile, so the baked ground collision no longer matches the visuals.
+    public static bool ChangesTerrain(IReadOnlyList<LiveAction> plan)
+    {
+        foreach (var action in plan)
+        {
+            if (action.Kind is LiveActionKind.SetTile or LiveActionKind.RemoveTile)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static LiveAction ToAction(EditOp op, LevelState state, ref int nextPlacementId)
     {
         switch (op.OpType)

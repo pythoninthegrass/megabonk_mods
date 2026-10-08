@@ -33,6 +33,10 @@
       <HintPath>$(Il2CppAssembliesFolder)/UnityEngine.CoreModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(Il2CppAssembliesFolder)/UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="UnityEngine.InputLegacyModule">
       <HintPath>$(Il2CppAssembliesFolder)/UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>False</Private>
