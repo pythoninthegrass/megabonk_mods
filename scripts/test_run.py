@@ -140,6 +140,16 @@ def test_parse_args_invulnerable_and_vulnerable_subcommands() -> None:
     assert run.parse_args(["vulnerable"]).action == "vulnerable"
 
 
+def test_build_command_heartbeat_on_and_off_have_no_payload() -> None:
+    assert run.build_command("heartbeat-on") == {"command": "heartbeat-on"}
+    assert run.build_command("heartbeat-off") == {"command": "heartbeat-off"}
+
+
+def test_parse_args_heartbeat_on_and_off_subcommands() -> None:
+    assert run.parse_args(["heartbeat-on"]).action == "heartbeat-on"
+    assert run.parse_args(["heartbeat-off"]).action == "heartbeat-off"
+
+
 def test_parse_args_cycle_accepts_invulnerable_flag() -> None:
     assert run.parse_args(["cycle", "a.json", "o.png", "--invulnerable"]).invulnerable is True
     assert run.parse_args(["cycle", "a.json", "o.png"]).invulnerable is False

@@ -17,6 +17,7 @@ public static class KillFloorWatcher
     private const float CheckIntervalSeconds = 0.25f;
     private const float RetryKillAfterSeconds = 2f;
     private const float HeartbeatSeconds = 5f;
+    private const string HeartbeatVariable = "MEGABONK_KILL_FLOOR_HEARTBEAT";
     private const string DamageSource = "KillFloor";
 
     private static MelonLogger.Instance _logger;
@@ -24,6 +25,7 @@ public static class KillFloorWatcher
     private static float _floorY;
     private static float _nextCheck;
     private static bool _playerKilled;
+    private static bool _heartbeatEnabled = EnvFlag.IsSet(HeartbeatVariable);
     private static float _nextHeartbeat;
     private static float _lowestEnemyY = float.PositiveInfinity;
     private static float _lowestBossY = float.PositiveInfinity;
@@ -39,6 +41,18 @@ public static class KillFloorWatcher
         _playerKilled = false;
         _armed = !float.IsNegativeInfinity(_floorY);
         logger.Msg(_armed ? $"KillFloor: armed at y={_floorY} (catch floor y={catchFloorY})" : "KillFloor: no tiles, not armed");
+        if (_armed && _heartbeatEnabled)
+        {
+            logger.Msg("KillFloor: heartbeat on");
+        }
+    }
+
+    // The environment variable sets the starting state; the harness commands change it while the game runs.
+    public static void SetHeartbeat(bool enabled, MelonLogger.Instance logger)
+    {
+        _heartbeatEnabled = enabled;
+        _nextHeartbeat = 0f;
+        logger.Msg($"KillFloor: heartbeat {(enabled ? "on" : "off")}");
     }
 
     public static void Disarm()
@@ -94,7 +108,10 @@ public static class KillFloorWatcher
             }
         }
 
-        LogHeartbeat(manager, actors);
+        if (_heartbeatEnabled)
+        {
+            LogHeartbeat(manager, actors);
+        }
 
         var candidates = actors.Select(a => (a.Key, LowestPoint(a.Value)));
         foreach (var (id, attempt) in _enemyKills.Select(candidates, _floorY, Time.unscaledTime))

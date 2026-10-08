@@ -15,6 +15,8 @@ public enum HarnessCommandKind
     CameraClear,
     Invulnerable,
     Vulnerable,
+    HeartbeatOn,
+    HeartbeatOff,
 }
 
 // World-space camera position and euler rotation in degrees.
@@ -71,6 +73,14 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return true;
             case "vulnerable":
                 command = new HarnessCommand(HarnessCommandKind.Vulnerable, null);
+                error = null;
+                return true;
+            case "heartbeat-on":
+                command = new HarnessCommand(HarnessCommandKind.HeartbeatOn, null);
+                error = null;
+                return true;
+            case "heartbeat-off":
+                command = new HarnessCommand(HarnessCommandKind.HeartbeatOff, null);
                 error = null;
                 return true;
             case "camera-clear":
