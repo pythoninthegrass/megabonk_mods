@@ -44,4 +44,31 @@ public class KillFloorTests
     {
         Assert.Equal(expected, KillFloor.ShouldKill(y, floorY));
     }
+
+    [Fact]
+    public void LowestPoint_NoCollider_IsThePivot()
+    {
+        Assert.Equal(-66f, KillFloor.LowestPoint(pivotY: -66f, colliderMinY: null));
+    }
+
+    [Fact]
+    public void LowestPoint_ColliderBelowThePivot_IsTheColliderBottom()
+    {
+        Assert.Equal(-80f, KillFloor.LowestPoint(pivotY: -66.5f, colliderMinY: -80f));
+    }
+
+    [Fact]
+    public void LowestPoint_ColliderAboveThePivot_IsThePivot()
+    {
+        Assert.Equal(-66f, KillFloor.LowestPoint(pivotY: -66f, colliderMinY: -10f));
+    }
+
+    [Fact]
+    public void LowestPoint_TallActorStandingOnTheCatchFloor_CountsAsFallen()
+    {
+        var floor = KillFloor.FloorY(new[] { -2 }, tileHeight: 20f, margin: 40f, catchFloorY: -80f);
+
+        Assert.False(KillFloor.ShouldKill(-66.5f, floor));
+        Assert.True(KillFloor.ShouldKill(KillFloor.LowestPoint(-66.5f, -80f), floor));
+    }
 }

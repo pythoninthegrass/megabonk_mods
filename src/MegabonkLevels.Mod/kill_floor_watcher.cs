@@ -15,6 +15,8 @@ public static class KillFloorWatcher
 {
     private const float MarginBelowLowestTile = 40f;
     private const float CheckIntervalSeconds = 0.25f;
+    private const float RetryKillAfterSeconds = 2f;
+    private const float HeartbeatSeconds = 5f;
     private const string DamageSource = "KillFloor";
 
     private static MelonLogger.Instance _logger;
@@ -22,6 +24,10 @@ public static class KillFloorWatcher
     private static float _floorY;
     private static float _nextCheck;
     private static bool _playerKilled;
+    private static float _nextHeartbeat;
+    private static float _lowestEnemyY = float.PositiveInfinity;
+    private static float _lowestBossY = float.PositiveInfinity;
+    private static readonly KillTracker _enemyKills = new(RetryKillAfterSeconds);
 
     public static void Arm(ProceduralTileGeneration tileGen, MelonLogger.Instance logger)
     {
@@ -73,19 +79,81 @@ public static class KillFloorWatcher
             return;
         }
 
-        var fallen = new List<Enemy>();
+        var actors = new Dictionary<uint, Enemy>();
         foreach (var enemy in manager.enemies.Values)
         {
-            if (enemy != null && KillFloor.ShouldKill(enemy.transform.position.y, _floorY))
+            AddActor(actors, enemy);
+        }
+
+        // Stage bosses are kept in their own list and were not found in `enemies` in testing.
+        if (manager.stageBosses != null)
+        {
+            foreach (var boss in manager.stageBosses)
             {
-                fallen.Add(enemy);
+                AddActor(actors, boss);
             }
         }
 
-        foreach (var enemy in fallen)
+        LogHeartbeat(manager, actors);
+
+        var candidates = actors.Select(a => (a.Key, LowestPoint(a.Value)));
+        foreach (var (id, attempt) in _enemyKills.Select(candidates, _floorY, Time.unscaledTime))
         {
-            _logger.Msg($"KillFloor: enemy '{enemy.name}' fell to y={enemy.transform.position.y}, killing");
+            var enemy = actors[id];
+            var position = enemy.transform.position;
+            var lowest = LowestPoint(enemy);
+            var stillPresent = attempt > 1 ? $" (still present, attempt {attempt})" : string.Empty;
+            _logger.Msg($"KillFloor: enemy '{enemy.name}' id={id} fell to ({position.x}, {position.y}, {position.z}) lowest={lowest}, killing{stillPresent}");
             enemy.Kill(DamageSource);
+        }
+    }
+
+    // Once every few seconds, reports how many actors the watcher sees and the lowest height each group reached since
+    // the last report, so a boss that never shows up in a kill line can be told apart from one that never fell.
+    private static void LogHeartbeat(EnemyManager manager, Dictionary<uint, Enemy> actors)
+    {
+        foreach (var enemy in manager.enemies.Values)
+        {
+            if (enemy != null)
+            {
+                _lowestEnemyY = Mathf.Min(_lowestEnemyY, LowestPoint(enemy));
+            }
+        }
+
+        var bosses = manager.stageBosses;
+        var bossReport = new List<string>();
+        if (bosses != null)
+        {
+            foreach (var boss in bosses.ToArray().Where(b => b != null))
+            {
+                _lowestBossY = Mathf.Min(_lowestBossY, LowestPoint(boss));
+                bossReport.Add($"'{boss.name}' id={boss.id} y={boss.transform.position.y} lowest={LowestPoint(boss)} inEnemies={manager.enemies.ContainsKey(boss.id)}");
+            }
+        }
+
+        if (Time.unscaledTime < _nextHeartbeat)
+        {
+            return;
+        }
+
+        _nextHeartbeat = Time.unscaledTime + HeartbeatSeconds;
+        _logger.Msg($"KillFloor: watch enemies={manager.enemies.Count} stageBosses={bosses?.Count ?? -1} lowestEnemyY={_lowestEnemyY} lowestBossY={_lowestBossY} bosses=[{string.Join("; ", bossReport)}]");
+        _lowestEnemyY = float.PositiveInfinity;
+        _lowestBossY = float.PositiveInfinity;
+    }
+
+    private static float LowestPoint(Enemy enemy)
+    {
+        var collider = enemy.collider;
+        float? colliderMinY = collider != null && collider.enabled ? collider.bounds.min.y : null;
+        return KillFloor.LowestPoint(enemy.transform.position.y, colliderMinY);
+    }
+
+    private static void AddActor(Dictionary<uint, Enemy> actors, Enemy enemy)
+    {
+        if (enemy != null)
+        {
+            actors[enemy.id] = enemy;
         }
     }
 

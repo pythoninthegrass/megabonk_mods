@@ -23,5 +23,10 @@ public static class KillFloor
 
     public static bool ShouldKill(float y, float floorY) => y < floorY;
 
+    // An actor's pivot can sit well above its feet, so a tall one standing on the catch floor never has a pivot below
+    // the kill floor; the collider bottom is what has actually fallen.
+    public static float LowestPoint(float pivotY, float? colliderMinY) =>
+        colliderMinY.HasValue ? Math.Min(pivotY, colliderMinY.Value) : pivotY;
+
     private const float CatchFloorClearance = 8f;
 }
