@@ -199,27 +199,62 @@ public static class LiveEditPatch
             return x < grid.Length && grid[x] != null && z < grid[x].Length ? grid[x][z] : null;
         }
 
+        private bool InGrid(int x, int z)
+        {
+            var grid = _tileGen.proceduralTiles;
+            return x >= 0 && x < grid.Length && grid[x] != null && z >= 0 && z < grid[x].Length;
+        }
+
         private void SetTile(LiveAction action)
         {
-            var tile = TileAt(action.X, action.Z);
-            var state = action.Tile.Value;
-            if (tile == null)
+            var (x, z) = (action.X, action.Z);
+            if (!InGrid(x, z))
             {
-                _logger.Warning($"LiveEdit: no live tile at ({action.X},{action.Z}); adding tiles is not supported yet");
+                _logger.Warning($"LiveEdit: ({x},{z}) is outside the {_tileGen.proceduralTiles.Length}-wide tile grid; adding tiles beyond the grid is not supported");
                 return;
             }
 
-            var before = tile.transform.position;
-            var y = state.Height * _mapParameters.scaledTileHeight;
-            tile.transform.position = new Vector3(before.x, y, before.z);
-            tile.posY = state.Height;
-            _logger.Msg($"LiveEdit: tile ({action.X},{action.Z}) height {before.y} -> {y} (level {state.Height})");
+            var state = action.Tile.Value;
+            var live = TileAt(x, z);
+            var liveSlope = live == null || live.isFlat
+                ? SlopeDirection.None
+                : TilePlacement.SlopeFromVector(Mathf.RoundToInt(live.dir.x), Mathf.RoundToInt(live.dir.z));
+            var kind = TilePlacement.Decide(live != null, liveSlope, state);
 
-            if (state.Slope != SlopeDirection.None)
+            if (kind == TilePlacementKind.MoveOnly)
             {
-                _logger.Warning($"LiveEdit: tile ({action.X},{action.Z}) slope {state.Slope} not applied; slope edits are not supported yet");
+                var before = live.transform.position;
+                var y = state.Height * _mapParameters.scaledTileHeight;
+                live.transform.position = new Vector3(before.x, y, before.z);
+                live.posY = state.Height;
+                _logger.Msg($"LiveEdit: tile ({x},{z}) height {before.y} -> {y} (level {state.Height})");
+                return;
             }
+
+            var slope = kind is TilePlacementKind.AddSlope or TilePlacementKind.ReplaceWithSlope;
+            var direction = slope
+                ? ToDirection(TilePlacement.UphillVector(state.Slope))
+                : live != null ? live.dir : Vector3.forward;
+            var prefab = slope ? _tileGen.slopeTile : _tileGen.flatTile;
+            var created = _tileGen.InstantiateTile(new Vector2Int(x, z), state.Height, prefab, direction, direction);
+            var tile = created.GetComponent<ProceduralTile>();
+
+            if (live != null)
+            {
+                _tileGen.tiles.Remove(live.gameObject);
+                UnityEngine.Object.Destroy(live.gameObject);
+            }
+
+            if (!_tileGen.tiles.Contains(created))
+            {
+                _tileGen.tiles.Add(created);
+            }
+
+            _tileGen.proceduralTiles[x][z] = tile;
+            _logger.Msg($"LiveEdit: {kind} at ({x},{z}) prefab '{prefab.name}' level {state.Height} slope {state.Slope} -> {created.transform.position} euler {created.transform.eulerAngles}");
         }
+
+        private static Vector3 ToDirection((int Dx, int Dz) step) => new(step.Dx, 0, step.Dz);
 
         private void RemoveTile(LiveAction action)
         {

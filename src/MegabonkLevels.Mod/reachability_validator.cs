@@ -21,16 +21,10 @@ public sealed class ReachabilityResult
     public bool IsReachable((int X, int Z) tile) => Reachable.Contains(tile);
 }
 
-// BFS reachability over LevelState's tile grid using the "chain/slope rule" from the AlexK maze-chain
-// reference (see TASK-003's description): two adjacent tiles at equal height are always connected; a
-// 1-unit height difference is only connected where a slope bridges it.
-//
-// TODO(TASK-003.04): slope ownership/direction is an assumption, not yet confirmed against real game
-// data. TASK-002.03 confirmed the tile grid's shape and spacing but not which tile "owns" a slope at a
-// given height step or which way SlopeDirection points relative to travel direction. This implementation
-// assumes a slope's SlopeDirection is set on the HIGHER of the two tiles and points downhill, toward the
-// lower neighbor (i.e. it names the direction you'd walk off the ramp, not the direction you climbed to
-// reach it). Revisit this once real runtime slope data is available.
+// BFS reachability over LevelState's tile grid. A flat tile has one height on all four edges. A slope tile
+// at height h spans h at its downhill edge to h + 1 at its uphill edge (SlopeDirection names the uphill side,
+// matching the game's ProceduralTile.dir) and has no connection through its two side edges. Two adjacent
+// tiles are connected when the heights of the edges that face each other are equal.
 public static class ReachabilityValidator
 {
     private static readonly (int Dx, int Dz, SlopeDirection Dir)[] Neighbors =
@@ -80,27 +74,28 @@ public static class ReachabilityValidator
         return new ReachabilityResult(reachable, unreachable);
     }
 
-    // directionFromTo is the direction of travel from `from` to `to`. Legal when heights match, or when
-    // the two differ by exactly one and the higher tile's slope points downhill toward the lower one —
-    // see the ownership/direction TODO on this class.
+    // directionFromTo is the direction of travel from `from` to `to`.
     private static bool CanTraverse(TileState from, TileState to, SlopeDirection directionFromTo)
     {
-        if (from.Height == to.Height)
+        var leaving = EdgeHeight(from, directionFromTo);
+        var entering = EdgeHeight(to, Opposite(directionFromTo));
+        return leaving is not null && leaving == entering;
+    }
+
+    // Height of the tile's edge on the given side, or null where a slope's side edge connects to nothing.
+    private static int? EdgeHeight(TileState tile, SlopeDirection side)
+    {
+        if (tile.Slope == SlopeDirection.None)
         {
-            return true;
+            return tile.Height;
         }
 
-        if (to.Height == from.Height + 1)
+        if (side == tile.Slope)
         {
-            return to.Slope == Opposite(directionFromTo);
+            return tile.Height + 1;
         }
 
-        if (from.Height == to.Height + 1)
-        {
-            return from.Slope == directionFromTo;
-        }
-
-        return false;
+        return side == Opposite(tile.Slope) ? tile.Height : null;
     }
 
     private static SlopeDirection Opposite(SlopeDirection direction) => direction switch

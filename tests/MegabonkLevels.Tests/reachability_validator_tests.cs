@@ -29,22 +29,77 @@ public class ReachabilityValidatorTests
         Assert.True(result.IsReachable((2, 2)));
     }
 
+    // A slope tile at height h spans h at its downhill edge to h + 1 at its uphill edge (SlopeDirection).
     [Fact]
     public void Validate_SlopeAssistedSingleStepClimb_BothTilesReachableFromEachOther()
     {
         var stack = new EditStack(new LevelState());
         stack.Apply(new AddTile(0, 0, 0).ToEditOp());
-        stack.Apply(new AddTile(0, 1, 1).ToEditOp());
-        stack.Apply(new SetTileSlope(0, 1, SlopeDirection.South).ToEditOp());
+        stack.Apply(new AddTile(0, 1, 0).ToEditOp());
+        stack.Apply(new SetTileSlope(0, 1, SlopeDirection.North).ToEditOp());
+        stack.Apply(new AddTile(0, 2, 1).ToEditOp());
         var state = stack.State;
 
         var fromLow = ReachabilityValidator.Validate(state, (0, 0));
-        var fromHigh = ReachabilityValidator.Validate(state, (0, 1));
+        var fromHigh = ReachabilityValidator.Validate(state, (0, 2));
 
-        Assert.True(fromLow.IsReachable((0, 1)));
+        Assert.True(fromLow.IsReachable((0, 2)));
         Assert.True(fromHigh.IsReachable((0, 0)));
         Assert.Empty(fromLow.Unreachable);
         Assert.Empty(fromHigh.Unreachable);
+    }
+
+    [Fact]
+    public void Validate_SlopeEntered_FromSide_IsNotConnected()
+    {
+        var stack = new EditStack(new LevelState());
+        stack.Apply(new AddTile(0, 0, 0).ToEditOp());
+        stack.Apply(new AddTile(0, 1, 0).ToEditOp());
+        stack.Apply(new SetTileSlope(0, 1, SlopeDirection.East).ToEditOp());
+        var state = stack.State;
+
+        Assert.False(ReachabilityValidator.Validate(state, (0, 0)).IsReachable((0, 1)));
+    }
+
+    [Fact]
+    public void Validate_FlatTileAtUphillEdgeHeightOnly_ConnectsUphillSide()
+    {
+        var stack = new EditStack(new LevelState());
+        stack.Apply(new AddTile(0, 0, 0).ToEditOp());
+        stack.Apply(new AddTile(0, 1, 0).ToEditOp());
+        stack.Apply(new SetTileSlope(0, 1, SlopeDirection.North).ToEditOp());
+        stack.Apply(new AddTile(0, 2, 0).ToEditOp());
+        var state = stack.State;
+
+        var result = ReachabilityValidator.Validate(state, (0, 0));
+
+        Assert.True(result.IsReachable((0, 1)));
+        Assert.False(result.IsReachable((0, 2)));
+    }
+
+    [Fact]
+    public void Validate_FlatTileAboveDownhillEdge_IsNotConnected()
+    {
+        var stack = new EditStack(new LevelState());
+        stack.Apply(new AddTile(0, 0, 1).ToEditOp());
+        stack.Apply(new AddTile(0, 1, 0).ToEditOp());
+        stack.Apply(new SetTileSlope(0, 1, SlopeDirection.North).ToEditOp());
+        var state = stack.State;
+
+        Assert.False(ReachabilityValidator.Validate(state, (0, 0)).IsReachable((0, 1)));
+    }
+
+    [Fact]
+    public void Validate_OpposedSlopesMeetingAtTheirUphillEdges_Connect()
+    {
+        var stack = new EditStack(new LevelState());
+        stack.Apply(new AddTile(0, 0, 0).ToEditOp());
+        stack.Apply(new SetTileSlope(0, 0, SlopeDirection.North).ToEditOp());
+        stack.Apply(new AddTile(0, 1, 0).ToEditOp());
+        stack.Apply(new SetTileSlope(0, 1, SlopeDirection.South).ToEditOp());
+        var state = stack.State;
+
+        Assert.True(ReachabilityValidator.Validate(state, (0, 0)).IsReachable((0, 1)));
     }
 
     [Fact]
@@ -73,20 +128,21 @@ public class ReachabilityValidatorTests
     }
 
     [Fact]
-    public void Validate_CliffFixedBySlope_FullyReachable()
+    public void Validate_CliffFixedBySlopeChain_FullyReachable()
     {
         var stack = new EditStack(new LevelState());
         stack.Apply(new AddTile(0, 0, 0).ToEditOp());
-        stack.Apply(new AddTile(0, 1, 1).ToEditOp());
-        stack.Apply(new SetTileSlope(0, 1, SlopeDirection.South).ToEditOp());
-        stack.Apply(new AddTile(0, 2, 2).ToEditOp());
-        stack.Apply(new SetTileSlope(0, 2, SlopeDirection.South).ToEditOp());
+        stack.Apply(new AddTile(0, 1, 0).ToEditOp());
+        stack.Apply(new SetTileSlope(0, 1, SlopeDirection.North).ToEditOp());
+        stack.Apply(new AddTile(0, 2, 1).ToEditOp());
+        stack.Apply(new SetTileSlope(0, 2, SlopeDirection.North).ToEditOp());
+        stack.Apply(new AddTile(0, 3, 2).ToEditOp());
         var state = stack.State;
 
         var result = ReachabilityValidator.Validate(state, (0, 0));
 
         Assert.Empty(result.Unreachable);
-        Assert.True(result.IsReachable((0, 2)));
+        Assert.True(result.IsReachable((0, 3)));
     }
 
     [Fact]
