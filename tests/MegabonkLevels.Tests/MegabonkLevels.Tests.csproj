@@ -38,6 +38,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/png_encoder.cs" Link="png_encoder.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/character_override.cs" Link="character_override.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/position_readout.cs" Link="position_readout.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/nearby_enemy_selector.cs" Link="nearby_enemy_selector.cs" />
   </ItemGroup>
 
   <ItemGroup>

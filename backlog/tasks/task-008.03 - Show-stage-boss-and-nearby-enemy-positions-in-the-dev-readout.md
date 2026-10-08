@@ -1,9 +1,10 @@
 ---
 id: TASK-008.03
 title: Show stage boss and nearby enemy positions in the dev readout
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-08 05:14'
+updated_date: '2026-10-08 06:14'
 labels:
   - level-editor
 dependencies:
@@ -23,11 +24,13 @@ Extend the dev-only on-screen readout from TASK-008.02 (player world position, g
 <!-- AC:BEGIN -->
 - [ ] #1 The readout shows the stage boss's world position, grid cell and whether it is below the kill floor, in a level where a stage boss exists, and shows nothing for it otherwise
 - [ ] #2 The readout lists a bounded number of enemies chosen by a documented rule (for example nearest to the player plus any below the kill floor), each with world position and grid cell, and the on-screen text stays readable with hundreds of live enemies
-- [ ] #3 The selection rule (which enemies to show, in what order, capped at how many) is pure logic with unit tests written before the implementation
+- [x] #3 The selection rule (which enemies to show, in what order, capped at how many) is pure logic with unit tests written before the implementation
 - [ ] #4 The readout adds no per-frame allocation or cost that is noticeable in the running game with a full wave of enemies
 - [ ] #5 Verified in the running game with a screenshot that shows the boss and enemy lines, and the boss line matches the boss's observed position
 - [ ] #6 docs/development.md documents the added lines and the selection rule
 <!-- AC:END -->
+
+
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

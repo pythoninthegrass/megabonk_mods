@@ -23,15 +23,29 @@ public static class PositionReadout
 
     public static string Format(float x, float y, float z, GridCell cell, int level, float floorY)
     {
-        var cellText = $"cell ({cell.X},{cell.Z}){(cell.InGrid ? string.Empty : " outside")}";
-        var text = $"{cellText} h{level}  pos ({Whole(x)}, {Whole(y)}, {Whole(z)})";
+        var text = Describe(x, y, z, cell, level);
         if (float.IsNegativeInfinity(floorY))
         {
             return text;
         }
 
         text += $"  floor {Whole(floorY)}";
-        return KillFloor.ShouldKill(y, floorY) ? text + "  BELOW FLOOR" : text;
+        return KillFloor.ShouldKill(y, floorY) ? text + BelowFloorFlag : text;
+    }
+
+    // One line for a boss or enemy: the floor height is already on the player's line, so only the flag is added.
+    public static string FormatActor(string label, float x, float y, float z, GridCell cell, int level, float floorY)
+    {
+        var text = $"{label} {Describe(x, y, z, cell, level)}";
+        return KillFloor.ShouldKill(y, floorY) ? text + BelowFloorFlag : text;
+    }
+
+    private const string BelowFloorFlag = "  BELOW FLOOR";
+
+    private static string Describe(float x, float y, float z, GridCell cell, int level)
+    {
+        var cellText = $"cell ({cell.X},{cell.Z}){(cell.InGrid ? string.Empty : " outside")}";
+        return $"{cellText} h{level}  pos ({Whole(x)}, {Whole(y)}, {Whole(z)})";
     }
 
     // Casting to int drops the sign of a negative zero, which would otherwise print as "-0".

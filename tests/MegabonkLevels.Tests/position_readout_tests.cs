@@ -109,4 +109,36 @@ public class PositionReadoutTests
 
         Assert.Contains("pos (0, 2, 0)", text);
     }
+
+    [Fact]
+    public void FormatActor_ShowsLabelCellLevelAndPositionWithoutTheFloor()
+    {
+        var text = PositionReadout.FormatActor("boss", 240f, 22f, 0f, new GridCell(13, 7, true), 1, -72f);
+
+        Assert.Equal("boss cell (13,7) h1  pos (240, 22, 0)", text);
+    }
+
+    [Fact]
+    public void FormatActor_BelowTheFloor_AppendsTheFlag()
+    {
+        var text = PositionReadout.FormatActor("enemy 12", 0f, -80f, 0f, new GridCell(7, 7, true), -4, -72f);
+
+        Assert.Equal("enemy 12 cell (7,7) h-4  pos (0, -80, 0)  BELOW FLOOR", text);
+    }
+
+    [Fact]
+    public void FormatActor_OutsideTheGrid_MarksTheCell()
+    {
+        var text = PositionReadout.FormatActor("boss", -320f, 22f, 0f, new GridCell(-1, 7, false), 1, -72f);
+
+        Assert.StartsWith("boss cell (-1,7) outside h1", text);
+    }
+
+    [Fact]
+    public void FormatActor_NoFloor_NeverFlags()
+    {
+        var text = PositionReadout.FormatActor("boss", 0f, -5000f, 0f, new GridCell(7, 7, true), -250, float.NegativeInfinity);
+
+        Assert.DoesNotContain("BELOW", text);
+    }
 }
