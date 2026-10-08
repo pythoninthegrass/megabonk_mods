@@ -5,13 +5,14 @@ status: In Progress
 assignee:
   - Claude
 created_date: '2026-10-06 21:42'
-updated_date: '2026-10-08 04:29'
+updated_date: '2026-10-08 04:33'
 labels:
   - level-editor
 dependencies:
   - TASK-004.02
   - TASK-004.08
   - TASK-004.09
+  - TASK-004.10
 modified_files:
   - src/MegabonkLevels.Mod/live_edit_patch.cs
   - src/MegabonkLevels.Mod/live_edit_plan.cs
@@ -94,6 +95,8 @@ Scope added by Lance after 6a (sky seen under the (9,7) slope and through the (1
 8. [done] Fill and collision. `FillEdgePlan` (pure, tests first) lists the edges to regenerate; `FillRegeneration` destroys the fill pieces on those edges and calls `FillHole` both ways by reflection; `CollisionRebuild` re-attaches each live piece's prefab collider mesh, runs `MeshColliderCombiner.CombineMeshes`, and swaps `tileGen.collider`. `LiveEditPlan.ChangesTerrain` (tests first) gates both.
 9. [done] Kill floor. `KillFloor` (pure, tests first) and `KillFloorWatcher`: floor is the lowest live tile level times `scaledTileHeight` minus 40, clamped to at least 8 above the game's own catch floor (`WorldCollider`, y=-80); checked every 0.25 s in mod-loaded Tiles maps; kills the player through `PlayerHealth.KillPlayer()` and enemies through `Enemy.Kill("KillFloor")`. Verified for the player; enemy kills not observed in game.
 10. [done] Re-ran the scratch level: no sky through (9,7), slope has side walls, ground rays match the edits. Docs updated in level-format.md and runtime-map-structure.md.
+
+Step 6b is now tracked by TASK-004.10 (harness player invulnerability command). Once it lands: load a scratch level with added, raised and sloped tiles plus a removed one, enable invulnerability, let enemies chase for a while, and read the log and screenshots for AC #2 (enemies reach added/raised/sloped tiles) and AC #3 (enemies do not walk into the removed cell, or are killed by the kill floor if they do). Check the kill-floor enemy path in the same run, since no enemy kill has been observed in game yet.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
