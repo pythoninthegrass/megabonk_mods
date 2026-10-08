@@ -26,7 +26,7 @@ Extend the dev-only on-screen readout from TASK-008.02 (player world position, g
 - [x] #2 The readout lists a bounded number of enemies chosen by a documented rule (for example nearest to the player plus any below the kill floor), each with world position and grid cell, and the on-screen text stays readable with hundreds of live enemies
 - [x] #3 The selection rule (which enemies to show, in what order, capped at how many) is pure logic with unit tests written before the implementation
 - [x] #4 The readout adds no per-frame allocation or cost that is noticeable in the running game with a full wave of enemies
-- [ ] #5 Verified in the running game with a screenshot that shows the boss and enemy lines, and the boss line matches the boss's observed position
+- [x] #5 Verified in the running game with a screenshot that shows the boss and enemy lines, and the boss line matches the boss's observed position
 - [ ] #6 docs/development.md documents the added lines and the selection rule
 <!-- AC:END -->
 
@@ -36,6 +36,8 @@ Extend the dev-only on-screen readout from TASK-008.02 (player world position, g
 The stage boss is read from EnemyManager.stageBosses and skipped when enemies is walked; in the test it was also present in enemies (inEnemies=True), so the earlier missing log lines were not a visibility problem in the list itself. No boss exists until the boss spawner fires, so the readout shows no boss line before that.
 
 AC4 measurement (temporary Stopwatch and GC.GetAllocatedBytesForCurrentThread around the refresh, since removed): with about 400 enemies alive a refresh took 0.6 to 1.4 ms and allocated 3 to 5 KB of managed memory. The refresh runs 4 times a second and the text is rebuilt 10 times a second, so nothing runs or allocates on every frame; with 5 enemies a refresh took 0.23 ms. Frame rate was not measured with a profiler, only that the game stayed responsive.
+
+AC5 evidence: the game's boss spawner needs player input, so a temporary scratch probe (since removed, never committed) called EnemyManager.SpawnBoss(Ent1, StageBoss) next to the player on the example level; Lil Bark appeared with its health bar and stageBosses=1. With gameplay frozen the screenshot read 'boss 5 cell (11,7) h1 pos (157, 16, 3)' and the kill-floor heartbeat logged the same boss id=5 at y=15.94; the minimap marker sat on the matching side of the player. A real boss spawned by the boss portal and a boss below the floor were not exercised.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
