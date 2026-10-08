@@ -1,14 +1,25 @@
 ---
 id: TASK-004.06
 title: 'Scriptable dev harness: command channel and in-game screenshots'
-status: In Progress
+status: Done
 assignee:
   - Claude
 created_date: '2026-10-08 02:13'
-updated_date: '2026-10-08 02:36'
+updated_date: '2026-10-08 02:39'
 labels:
   - level-editor
 dependencies: []
+modified_files:
+  - scripts/run.py
+  - scripts/test_run.py
+  - src/MegabonkLevels.Mod/dev_harness.cs
+  - src/MegabonkLevels.Mod/harness_command.cs
+  - src/MegabonkLevels.Mod/png_encoder.cs
+  - src/MegabonkLevels.Mod/megabonk_levels_mod.cs
+  - tests/MegabonkLevels.Tests/harness_command_tests.cs
+  - tests/MegabonkLevels.Tests/png_encoder_tests.cs
+  - docs/development.md
+  - taskfiles/game.yml
 parent_task_id: TASK-004
 priority: medium
 ordinal: 37000
@@ -54,6 +65,12 @@ Out of scope, deliberately deferred to a future task because each needs reverse-
 <!-- SECTION:NOTES:BEGIN -->
 Verified on macOS/CrossOver by launching Megabonk.exe directly in the Steam bottle with SteamAppId set: cycle (load, screenshot, quit) exits 0, the PNG is a valid 2560x1440 frame of the forest level, quit is logged, bad/unknown/path-less commands are rejected with warnings, and the 2-edit test level logs 'LiveEdit: applied 2 edit(s)'. ScreenCapture.CaptureScreenshot and ImageConversion.EncodeToPNG fail in Il2CppInterop, so screenshots use Texture2D.ReadPixels plus a managed PNG encoder. Scripts moved from tools/ into scripts/ at the user's request.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added a development-only file-drop harness to the mod and a scripts/run.py driver. The mod polls <game dir>/harness/commands (only when harness/enabled exists at launch) and runs load-level, screenshot, and quit commands, moving each file to done/ or rejected/; bad commands log a warning and change nothing. Screenshots use Texture2D.ReadPixels plus a managed PNG encoder, because ScreenCapture.CaptureScreenshot and ImageConversion.EncodeToPNG fail in Il2CppInterop. run.py replaces the boilerplate, keeps the PEP 723 header and python-decouple, and resolves the game dir from env vars or a relative .env. tools/ was consolidated into scripts/ and docs/development.md documents the commands and CrossOver caveats (direct launch needs SteamAppId; the game sees host paths under Z:). Verified end to end on macOS/CrossOver; character selection split out to TASK-004.07.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
