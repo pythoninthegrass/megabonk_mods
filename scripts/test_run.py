@@ -140,9 +140,9 @@ def test_parse_args_invulnerable_and_vulnerable_subcommands() -> None:
     assert run.parse_args(["vulnerable"]).action == "vulnerable"
 
 
-def test_build_command_heartbeat_on_and_off_have_no_payload() -> None:
-    assert run.build_command("heartbeat-on") == {"command": "heartbeat-on"}
-    assert run.build_command("heartbeat-off") == {"command": "heartbeat-off"}
+def test_build_heartbeat_command_carries_the_enabled_flag() -> None:
+    assert run.build_heartbeat_command(True) == {"command": "heartbeat", "enabled": True}
+    assert run.build_heartbeat_command(False) == {"command": "heartbeat", "enabled": False}
 
 
 def test_parse_args_heartbeat_takes_on_or_off() -> None:
@@ -160,8 +160,8 @@ def test_parse_args_heartbeat_rejects_other_states_and_a_missing_state() -> None
 
 
 def test_heartbeat_payload_maps_the_state_to_the_wire_command() -> None:
-    assert run.heartbeat_payload(run.parse_args(["heartbeat", "on"])) == {"command": "heartbeat-on"}
-    assert run.heartbeat_payload(run.parse_args(["heartbeat", "off"])) == {"command": "heartbeat-off"}
+    assert run.heartbeat_payload(run.parse_args(["heartbeat", "on"])) == {"command": "heartbeat", "enabled": True}
+    assert run.heartbeat_payload(run.parse_args(["heartbeat", "off"])) == {"command": "heartbeat", "enabled": False}
 
 
 def test_parse_args_cycle_accepts_invulnerable_flag() -> None:

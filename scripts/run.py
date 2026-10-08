@@ -112,6 +112,10 @@ def build_command(command: str, path: str | None = None) -> dict[str, str]:
     return payload
 
 
+def build_heartbeat_command(enabled: bool) -> dict[str, object]:
+    return {"command": "heartbeat", "enabled": enabled}
+
+
 def build_camera_command(position: tuple[float, ...], rotation: tuple[float, ...]) -> dict[str, object]:
     return {"command": "camera", "position": list(position), "rotation": list(rotation)}
 
@@ -284,7 +288,7 @@ def camera_payload(args: argparse.Namespace) -> dict[str, object]:
 
 
 def heartbeat_payload(args: argparse.Namespace) -> dict[str, object]:
-    return build_command(f"heartbeat-{args.state}")
+    return build_heartbeat_command(args.state == "on")
 
 
 def prepare_frame(harness: Path, args: argparse.Namespace) -> bool:

@@ -39,8 +39,6 @@ public class HarnessCommandTests
     [InlineData("camera-clear", HarnessCommandKind.CameraClear)]
     [InlineData("invulnerable", HarnessCommandKind.Invulnerable)]
     [InlineData("vulnerable", HarnessCommandKind.Vulnerable)]
-    [InlineData("heartbeat-on", HarnessCommandKind.HeartbeatOn)]
-    [InlineData("heartbeat-off", HarnessCommandKind.HeartbeatOff)]
     public void TryParse_ArglessCommands_NeedNoPath(string name, HarnessCommandKind expected)
     {
         var ok = HarnessCommand.TryParse($$"""{"command":"{{name}}"}""", out var command, out var error);
@@ -49,6 +47,33 @@ public class HarnessCommandTests
         Assert.Null(error);
         Assert.Equal(expected, command.Kind);
         Assert.Null(command.Path);
+    }
+
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public void TryParse_Heartbeat_ReadsTheEnabledFlag(string enabled, bool expected)
+    {
+        var ok = HarnessCommand.TryParse($$"""{"command":"heartbeat","enabled":{{enabled}}}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.Heartbeat, command.Kind);
+        Assert.Equal(expected, command.Enabled);
+        Assert.Null(command.Path);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"heartbeat"}""")]
+    [InlineData("""{"command":"heartbeat","enabled":"yes"}""")]
+    [InlineData("""{"command":"heartbeat","enabled":1}""")]
+    [InlineData("""{"command":"heartbeat","enabled":null}""")]
+    public void TryParse_Heartbeat_MissingOrNonBooleanEnabled_IsRejected(string json)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains("enabled", error);
     }
 
     [Fact]

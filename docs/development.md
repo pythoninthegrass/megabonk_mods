@@ -27,8 +27,7 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Resume gameplay | `{"command":"resume"}` | `run.py resume` |
 | Make the player survive enemy damage | `{"command":"invulnerable"}` | `run.py invulnerable` |
 | Restore normal player damage | `{"command":"vulnerable"}` | `run.py vulnerable` |
-| Start the kill-floor heartbeat | `{"command":"heartbeat-on"}` | `run.py heartbeat on` |
-| Stop the kill-floor heartbeat | `{"command":"heartbeat-off"}` | `run.py heartbeat off` |
+| Start or stop the kill-floor heartbeat | `{"command":"heartbeat","enabled":true}` | `run.py heartbeat <on\|off>` |
 | Hold the camera at a pose | `{"command":"camera","position":[x,y,z],"rotation":[rx,ry,rz]}` | `run.py camera X Y Z --rot RX RY RZ` |
 | Return the camera to the game | `{"command":"camera-clear"}` | `run.py camera --clear` |
 | Quit the game | `{"command":"quit"}` | `run.py quit` |

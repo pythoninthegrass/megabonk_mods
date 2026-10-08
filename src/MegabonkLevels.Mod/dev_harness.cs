@@ -122,11 +122,8 @@ public static class DevHarness
             case HarnessCommandKind.Vulnerable:
                 PlayerInvulnerability.Set(false, _logger);
                 break;
-            case HarnessCommandKind.HeartbeatOn:
-                KillFloorWatcher.SetHeartbeat(true, _logger);
-                break;
-            case HarnessCommandKind.HeartbeatOff:
-                KillFloorWatcher.SetHeartbeat(false, _logger);
+            case HarnessCommandKind.Heartbeat:
+                KillFloorWatcher.SetHeartbeat(command.Enabled, _logger);
                 break;
             case HarnessCommandKind.Quit:
                 _logger.Msg("DevHarness: quit requested, calling Application.Quit.");

@@ -15,15 +15,14 @@ public enum HarnessCommandKind
     CameraClear,
     Invulnerable,
     Vulnerable,
-    HeartbeatOn,
-    HeartbeatOff,
+    Heartbeat,
 }
 
 // World-space camera position and euler rotation in degrees.
 public readonly record struct CameraPose(float X, float Y, float Z, float Rx, float Ry, float Rz);
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false)
 {
     // Returns false with a human-readable error instead of throwing, so a bad file can never crash the game.
     public static bool TryParse(string json, out HarnessCommand command, out string error)
@@ -75,18 +74,12 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 command = new HarnessCommand(HarnessCommandKind.Vulnerable, null);
                 error = null;
                 return true;
-            case "heartbeat-on":
-                command = new HarnessCommand(HarnessCommandKind.HeartbeatOn, null);
-                error = null;
-                return true;
-            case "heartbeat-off":
-                command = new HarnessCommand(HarnessCommandKind.HeartbeatOff, null);
-                error = null;
-                return true;
             case "camera-clear":
                 command = new HarnessCommand(HarnessCommandKind.CameraClear, null);
                 error = null;
                 return true;
+            case "heartbeat":
+                return TryParseHeartbeat(root, out command, out error);
             case "camera":
                 return TryParseCamera(root, out command, out error);
             case "load-level":
@@ -97,6 +90,21 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 error = $"unknown command '{name}'";
                 return false;
         }
+    }
+
+    private static bool TryParseHeartbeat(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        if (!root.TryGetPropertyValue("enabled", out var node) || node is not JsonValue value || !value.TryGetValue(out bool enabled))
+        {
+            error = "missing boolean field 'enabled'";
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.Heartbeat, null, Enabled: enabled);
+        error = null;
+        return true;
     }
 
     private static bool TryParseCamera(JsonObject root, out HarnessCommand command, out string error)
