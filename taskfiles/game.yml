@@ -47,3 +47,12 @@ tasks:
     desc: "Tail MelonLoader's Latest.log from the resolved game directory"
     cmds:
       - tail -f "$(uv run scripts/game_paths.py | python3 -c 'import json, sys; print(json.load(sys.stdin)["latest_log_path"])')"
+
+  harness:
+    desc: "Drive the dev harness in the running game (enable, disable, load, screenshot, quit, cycle)"
+    summary: |
+      Usage: task game:harness -- cycle levels/example-forest.mblevel.json out.png
+
+      Wraps scripts/run.py; see docs/development.md.
+    cmds:
+      - uv run scripts/run.py {{.CLI_ARGS}}

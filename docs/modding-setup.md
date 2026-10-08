@@ -35,3 +35,5 @@ task game:log     # tails MelonLoader's Latest.log
 ```
 
 A successful load logs an `OnInitializeMelon` message from `MegabonkLevelsMod` in `Latest.log`.
+
+To exercise a level without driving the game with key presses, see [development.md](development.md).
