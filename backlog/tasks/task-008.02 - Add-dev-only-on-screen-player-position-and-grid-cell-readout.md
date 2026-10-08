@@ -1,10 +1,10 @@
 ---
 id: TASK-008.02
 title: Add dev-only on-screen player position and grid cell readout
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-08 05:14'
-updated_date: '2026-10-08 06:13'
+updated_date: '2026-10-08 06:14'
 labels:
   - level-editor
 dependencies: []
@@ -26,7 +26,7 @@ Add a text readout, drawn only when the dev harness is enabled, that shows the p
 - [x] #3 The readout is not drawn when the harness is disabled or in a vanilla level
 - [x] #4 The world-to-cell conversion is pure logic with unit tests written before the implementation, including cells at the grid edges and positions outside the grid
 - [x] #5 Verified in the running game with a screenshot that shows the readout, and the cell shown matches the position of a known edited cell in a scratch level
-- [ ] #6 docs/development.md documents the readout
+- [x] #6 docs/development.md documents the readout
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -39,10 +39,16 @@ The label is a TextMeshProUGUI cloned from a minimap direction letter, so OnGUI 
 AC5 evidence: on the unedited example level the readout showed 'cell (10,7) h0 pos (120, 2, 3) floor -72' at the spawn, matching the spawn portal cell (10,7). On a scratch level removing tiles (7,7) and (10,7) it showed 'cell (10,7) h-3 pos (120, -61, 3)' and 'cell (7,7) h-3 pos (0, -60, 0)' while the player fell through the holes, and the position changed between screenshots. The BELOW FLOOR flag was not seen on screen: the kill floor kills the player within 0.25 s of crossing it, so the flag is covered by unit tests only.
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added a dev-only label under the game's minimap showing the player's cell, height level, world position and kill-floor height. The cell conversion and text format are pure logic with unit tests written first. Verified in the running game; BELOW FLOOR is covered by unit tests only. Documented in docs/development.md.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->

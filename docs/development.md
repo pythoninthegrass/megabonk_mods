@@ -119,6 +119,25 @@ It is off by default, because it adds a line every 5 seconds. Turn it on with `r
 
 The kill line itself always carries the actor's id, world position and `lowest` point, with `(still present, attempt N)` appended when an actor stays in the game after a kill.
 
+## Position readout
+
+With the harness enabled, a mod-loaded level draws one line of yellow text under the game's minimap that follows the player, for example:
+
+```text
+cell (13,7) h1  pos (240, 22, 0)  floor -72
+```
+
+`cell (x,z)` is the tile grid cell the player is over, `h` is the player's height divided by the tile height step and rounded, `pos` is the world position rounded to whole units, and `floor` is the kill-floor height. The line ends with `BELOW FLOOR` when the player is below the floor, and `outside` follows the cell when the player is outside the tile grid (the cell indices are then not clamped). The grid size and spacing are read from the live tile grid and `MapParameters` when the level is armed, so it is not tied to the 15x15 Forest map. The line is refreshed ten times a second.
+
+It is drawn only when the harness is enabled and the level is mod-loaded, which is when the kill floor arms; a vanilla level or a disabled harness draws nothing. The label is a copy of one of the minimap's own direction letters, parented to the minimap root and anchored below it. If the minimap does not exist yet it logs `PositionLabel: no minimap found, readout not drawn` once and retries on the next tick; the log line `PositionLabel: created under the minimap` marks the first draw. The conversion and the text format are pure logic in `position_readout.cs`.
+
+Verified in the running game: the unedited example level read `cell (10,7)` at the spawn, and on a level with tiles (7,7) and (10,7) removed the readout followed the player down through each hole at the matching cell.
+
+Caveats:
+
+- The kill floor kills the player within a quarter of a second of crossing the floor, so `BELOW FLOOR` is on screen only for those few frames and was not captured in the running game.
+- Cell and level come from the player's transform, not from the tile under the player, so on a slope or while falling `h` is an approximation.
+
 ## Not covered
 
 The harness does not skip the level-up dialog, move the player, or press menu buttons. Use `freeze` to stop an idle player dying during a screenshot, or `invulnerable` when enemies must keep moving.
