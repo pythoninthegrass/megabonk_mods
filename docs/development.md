@@ -27,8 +27,8 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Resume gameplay | `{"command":"resume"}` | `run.py resume` |
 | Make the player survive enemy damage | `{"command":"invulnerable"}` | `run.py invulnerable` |
 | Restore normal player damage | `{"command":"vulnerable"}` | `run.py vulnerable` |
-| Start the kill-floor heartbeat | `{"command":"heartbeat-on"}` | `run.py heartbeat-on` |
-| Stop the kill-floor heartbeat | `{"command":"heartbeat-off"}` | `run.py heartbeat-off` |
+| Start the kill-floor heartbeat | `{"command":"heartbeat-on"}` | `run.py heartbeat on` |
+| Stop the kill-floor heartbeat | `{"command":"heartbeat-off"}` | `run.py heartbeat off` |
 | Hold the camera at a pose | `{"command":"camera","position":[x,y,z],"rotation":[rx,ry,rz]}` | `run.py camera X Y Z --rot RX RY RZ` |
 | Return the camera to the game | `{"command":"camera-clear"}` | `run.py camera --clear` |
 | Quit the game | `{"command":"quit"}` | `run.py quit` |
@@ -116,7 +116,7 @@ KillFloor: watch enemies=26 stageBosses=1 lowestEnemyY=-69.03 lowestBossY=-66.47
 
 `enemies` is the size of `EnemyManager.enemies` and `stageBosses` the size of the manager's stage boss list. `lowestEnemyY` and `lowestBossY` are the lowest point (pivot or collider bottom, whichever is lower) any enemy or boss reached since the previous heartbeat, and each boss entry gives its id, pivot `y`, current `lowest` point, and whether it is also in `enemies`. A boss is only identified by id, because it has the same `Enemy1(Clone)` name as every other enemy.
 
-It is off by default, because it adds a line every 5 seconds. Turn it on with `run.py heartbeat-on` and off with `run.py heartbeat-off`; both log `KillFloor: heartbeat on` or `off` and apply at once, including to a level that is already running. To start with it on, set `MEGABONK_KILL_FLOOR_HEARTBEAT` to `1` or `true` in the environment of the game process, for example in the `.env` that the taskfile reads or in front of the launch command. The variable is read once when the mod loads, and a later command overrides it. Verified in the game that the variable reaches the process under CrossOver.
+It is off by default, because it adds a line every 5 seconds. Turn it on with `run.py heartbeat on` and off with `run.py heartbeat off`; both log `KillFloor: heartbeat on` or `off` and apply at once, including to a level that is already running. To start with it on, set `MEGABONK_KILL_FLOOR_HEARTBEAT` to `1` or `true` in the environment of the game process, for example in the `.env` that the taskfile reads or in front of the launch command. The variable is read once when the mod loads, and a later command overrides it. Verified in the game that the variable reaches the process under CrossOver.
 
 The kill line itself always carries the actor's id, world position and `lowest` point, with `(still present, attempt N)` appended when an actor stays in the game after a kill.
 

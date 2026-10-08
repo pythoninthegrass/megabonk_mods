@@ -145,9 +145,23 @@ def test_build_command_heartbeat_on_and_off_have_no_payload() -> None:
     assert run.build_command("heartbeat-off") == {"command": "heartbeat-off"}
 
 
-def test_parse_args_heartbeat_on_and_off_subcommands() -> None:
-    assert run.parse_args(["heartbeat-on"]).action == "heartbeat-on"
-    assert run.parse_args(["heartbeat-off"]).action == "heartbeat-off"
+def test_parse_args_heartbeat_takes_on_or_off() -> None:
+    assert run.parse_args(["heartbeat", "on"]).state == "on"
+    assert run.parse_args(["heartbeat", "off"]).state == "off"
+
+
+def test_parse_args_heartbeat_rejects_other_states_and_a_missing_state() -> None:
+    for argv in (["heartbeat"], ["heartbeat", "maybe"]):
+        try:
+            run.parse_args(argv)
+        except SystemExit:
+            continue
+        raise AssertionError(f"{argv} should have been rejected")
+
+
+def test_heartbeat_payload_maps_the_state_to_the_wire_command() -> None:
+    assert run.heartbeat_payload(run.parse_args(["heartbeat", "on"])) == {"command": "heartbeat-on"}
+    assert run.heartbeat_payload(run.parse_args(["heartbeat", "off"])) == {"command": "heartbeat-off"}
 
 
 def test_parse_args_cycle_accepts_invulnerable_flag() -> None:

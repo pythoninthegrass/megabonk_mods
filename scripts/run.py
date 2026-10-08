@@ -24,8 +24,7 @@ Usage:
     run.py resume                  Unpause gameplay through MyTime.Unpause
     run.py invulnerable            Make the player survive enemy damage
     run.py vulnerable              Restore normal player damage
-    run.py heartbeat-on            Log kill-floor actor counts and lowest heights every 5 seconds
-    run.py heartbeat-off           Stop the kill-floor heartbeat
+    run.py heartbeat <on|off>      Start or stop the kill-floor heartbeat (actor counts and lowest heights every 5 seconds)
     run.py camera X Y Z --rot RX RY RZ  Hold the camera at a world pose (euler degrees)
     run.py camera --clear          Return the camera to the game
     run.py quit                    Quit the game and wait for the process to exit
@@ -250,8 +249,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("resume")
     sub.add_parser("invulnerable")
     sub.add_parser("vulnerable")
-    sub.add_parser("heartbeat-on")
-    sub.add_parser("heartbeat-off")
+    heartbeat = sub.add_parser("heartbeat")
+    heartbeat.add_argument("state", choices=["on", "off"])
     camera = sub.add_parser("camera")
     camera.add_argument("position", type=float, nargs="*", help="X Y Z in world units")
     camera.add_argument("--rot", type=float, nargs=3, metavar=("RX", "RY", "RZ"), help="euler degrees")
@@ -282,6 +281,10 @@ def camera_payload(args: argparse.Namespace) -> dict[str, object]:
     if len(args.position) != 3 or args.rot is None:
         raise SystemExit("camera: give X Y Z and --rot RX RY RZ, or --clear")
     return build_camera_command(tuple(args.position), tuple(args.rot))
+
+
+def heartbeat_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_command(f"heartbeat-{args.state}")
 
 
 def prepare_frame(harness: Path, args: argparse.Namespace) -> bool:
@@ -315,8 +318,10 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_screenshot(harness, args.out, args.timeout)
         case "quit":
             ok = quit_game(harness, args.timeout)
-        case "freeze" | "resume" | "invulnerable" | "vulnerable" | "heartbeat-on" | "heartbeat-off":
+        case "freeze" | "resume" | "invulnerable" | "vulnerable":
             ok = send(harness, build_command(args.action), args.timeout)
+        case "heartbeat":
+            ok = send(harness, heartbeat_payload(args), args.timeout)
         case "camera":
             ok = send(harness, camera_payload(args), args.timeout)
         case "cycle":
