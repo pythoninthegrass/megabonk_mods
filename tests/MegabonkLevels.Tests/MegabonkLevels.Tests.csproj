@@ -41,6 +41,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/nearby_enemy_selector.cs" Link="nearby_enemy_selector.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/actor_kind.cs" Link="actor_kind.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/cell_change_tracker.cs" Link="cell_change_tracker.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/custom_level_state.cs" Link="custom_level_state.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -53,6 +53,7 @@ public static class LevelLoaderPatch
 
         SeedForcePatch.ForceLevelSeed(level.Seed);
         LiveEditPatch.SetPendingEdits(level.Edits);
+        CustomLevelState.MarkPendingStart();
 
         var runConfig = new RunConfig
         {
