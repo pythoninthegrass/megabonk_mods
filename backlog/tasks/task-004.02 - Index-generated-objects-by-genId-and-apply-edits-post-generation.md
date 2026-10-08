@@ -1,11 +1,11 @@
 ---
 id: TASK-004.02
 title: Index generated objects by genId and apply edits post-generation
-status: In Progress
+status: Done
 assignee:
   - '@pythoninthegrass'
 created_date: '2026-10-06 21:42'
-updated_date: '2026-10-07 23:28'
+updated_date: '2026-10-08 02:08'
 labels:
   - level-editor
 dependencies:
@@ -31,10 +31,10 @@ This is the core "apply the edit list to the live game" logic — reuse TASK-003
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 Every spawned tile/object after generation completes is assigned a genId per TASK-002.03's scheme and indexed for lookup
-- [ ] #2 At least one tile height/slope edit from a loaded level file is applied and visibly changes the real, running map
-- [ ] #3 At least one object add and one object remove/move edit from a loaded level file is applied and visibly changes the real, running map
+- [x] #2 At least one tile height/slope edit from a loaded level file is applied and visibly changes the real, running map
+- [x] #3 At least one object add and one object remove/move edit from a loaded level file is applied and visibly changes the real, running map
 - [x] #4 Tile spacing/size used when instantiating/moving tiles is read from StageData.mapParameters at runtime, never a hardcoded constant
-- [ ] #5 catalogId-referenced prefabs are resolved against the real game's prefab catalog (DataManager.Instance.maps -> stages -> ...), not a hand-maintained duplicate list
+- [x] #5 catalogId-referenced prefabs are resolved against the real game's prefab catalog (DataManager.Instance.maps -> stages -> ...), not a hand-maintained duplicate list
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -62,7 +62,15 @@ Verified live on macOS/CrossOver (Forest, seed 20261007, game 1.0.69). MelonLoad
 NOT verified: a clear screenshot of the edits in the running map. Driving the game with osascript key presses (no reliable mouse input, level-up dialog, idle player dying within ~20s, death-cam) made the visual check unreliable, so AC #2 and #3 are left unchecked pending a visual confirmation by Lance. AC #5 left unchecked: only the interactable/chest route was exercised live; the DataManager.Instance.maps -> stages -> randomMapObjects/stageTilePrefabs/shrines routes compile and are unit-tested for parsing but were not run live.
 
 Not supported yet (logged as warnings): non-None slope edits, AddTile on a cell with no live tile. Height edits do not adjust neighbouring wall/fill pieces. Edit-stack ops RemoveTile has no representation in LevelState (it just deletes the record), so LiveEditPlan emits it directly from the op.
+
+Visual confirmation of tile, object remove/move and chest place edits in the running map was done by Lance on the CrossOver install. AC #5 verified live: forest/shrines/0 resolved to ChallengeShrine and forest/stage0/randomMapObjects/0/0 to Tree0 via DataManager.Instance.maps, both spawned (applied 2 edit(s), no warnings).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added live application of level-file edits to the running game. On A_GenerationComplete, LiveEditPatch indexes every spawned tile/object by genId ({category}:{NNNN}: tile, flatTile, fillTile, tileObject from TileObjectsParent, and object:{prefab} for the scene-root X(Clone) objects the random-object and interactable spawners create), then applies the loaded file's edits via LiveEditPlan, which replays them through EditStack/LevelState. Tile height edits move the tile to height * MapParameters.scaledTileHeight (read at runtime); object place resolves catalogId through CatalogRoute into DataManager.Instance.maps -> stages -> prefab arrays (or SpawnInteractables for chest/rail); move/remove resolve gen: and placement: targets against the live index. Unit-tested pure core: GenIdAssigner, CatalogRoute, LiveEditPlan (122 tests passing; task check passes). Verified live on macOS/CrossOver (Forest, seed 20261007): 1474 objects indexed with identical counts across loads, all edit types applied and visually confirmed, shrine and random-object catalog routes resolved. Known limits (logged as warnings, documented in docs/level-format.md): non-None slope edits and AddTile on a cell with no live tile are not applied; a height change does not adjust neighbouring wall/fill pieces; Tiles-type maps only; bundle: catalogIds rejected. Also installed MelonLoader 0.7.3 into the Mac's CrossOver Megabonk, which had none.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
