@@ -4,15 +4,16 @@ title: End-to-end playthrough verification on an edited level
 status: To Do
 assignee: []
 created_date: '2026-10-06 21:42'
+updated_date: '2026-10-08 02:13'
 labels:
   - level-editor
 dependencies:
   - TASK-004.02
   - TASK-004.03
   - TASK-004.04
+  - TASK-004.06
 parent_task_id: TASK-004
 priority: medium
-type: chore
 ordinal: 21000
 ---
 
