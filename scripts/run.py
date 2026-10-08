@@ -20,8 +20,13 @@ Usage:
     run.py disable                 Remove the harness marker
     run.py load <level>            Load a level file and start it
     run.py screenshot <out.png>    Save the game's rendered frame
+    run.py freeze                  Pause gameplay through MyTime.Pause
+    run.py resume                  Unpause gameplay through MyTime.Unpause
+    run.py camera X Y Z --rot RX RY RZ  Hold the camera at a world pose (euler degrees)
+    run.py camera --clear          Return the camera to the game
     run.py quit                    Quit the game and wait for the process to exit
     run.py cycle <level> <out.png> Load, wait --settle seconds, screenshot, quit
+                                   [--freeze] [--camera X Y Z RX RY RZ] apply before the screenshot
 
 Game directory resolution: process environment, then the nearest .env walking up from the current
 directory or this script, then the macOS CrossOver / Windows Steam default. Keys: MEGABONK_GAME_DIR,
@@ -103,7 +108,11 @@ def build_command(command: str, path: str | None = None) -> dict[str, str]:
     return payload
 
 
-def write_command(commands_dir: Path, payload: dict[str, str]) -> Path:
+def build_camera_command(position: tuple[float, ...], rotation: tuple[float, ...]) -> dict[str, object]:
+    return {"command": "camera", "position": list(position), "rotation": list(rotation)}
+
+
+def write_command(commands_dir: Path, payload: dict[str, object]) -> Path:
     name = f"{time.time_ns()}-{payload['command']}.json"
     target = commands_dir / name
     staging = target.with_suffix(".tmp")
@@ -206,7 +215,7 @@ def quit_game(harness: Path, timeout: float) -> bool:
     return True
 
 
-def send(harness: Path, payload: dict[str, str], timeout: float) -> bool:
+def send(harness: Path, payload: dict[str, object], timeout: float) -> bool:
     sent = write_command(harness / "commands", payload)
     outcome = wait_for_outcome(harness, sent.name, timeout)
     print(f"{payload['command']}: {outcome}")
@@ -232,6 +241,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("enable")
     sub.add_parser("disable")
     sub.add_parser("quit")
+    sub.add_parser("freeze")
+    sub.add_parser("resume")
+    camera = sub.add_parser("camera")
+    camera.add_argument("position", type=float, nargs="*", help="X Y Z in world units")
+    camera.add_argument("--rot", type=float, nargs=3, metavar=("RX", "RY", "RZ"), help="euler degrees")
+    camera.add_argument("--clear", action="store_true", help="return the camera to the game")
     load = sub.add_parser("load")
     load.add_argument("level", type=Path)
     shot = sub.add_parser("screenshot")
@@ -239,8 +254,34 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     cycle = sub.add_parser("cycle")
     cycle.add_argument("level", type=Path)
     cycle.add_argument("out", type=Path)
+    cycle.add_argument("--freeze", action="store_true", help="freeze gameplay before the screenshot")
+    cycle.add_argument(
+        "--camera",
+        type=float,
+        nargs=6,
+        metavar=("X", "Y", "Z", "RX", "RY", "RZ"),
+        help="hold the camera at this pose for the screenshot",
+    )
     cycle.add_argument("--settle", type=float, default=5.0, help="seconds between load and screenshot")
     return parser.parse_args(argv)
+
+
+def camera_payload(args: argparse.Namespace) -> dict[str, object]:
+    if args.clear:
+        return build_command("camera-clear")
+    if len(args.position) != 3 or args.rot is None:
+        raise SystemExit("camera: give X Y Z and --rot RX RY RZ, or --clear")
+    return build_camera_command(tuple(args.position), tuple(args.rot))
+
+
+def prepare_frame(harness: Path, args: argparse.Namespace) -> bool:
+    """Apply the cycle's --freeze and --camera flags before the screenshot."""
+    if args.freeze and not send(harness, build_command("freeze"), args.timeout):
+        return False
+    if args.camera:
+        payload = build_camera_command(tuple(args.camera[:3]), tuple(args.camera[3:]))
+        return send(harness, payload, args.timeout)
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -264,10 +305,16 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_screenshot(harness, args.out, args.timeout)
         case "quit":
             ok = quit_game(harness, args.timeout)
+        case "freeze" | "resume":
+            ok = send(harness, build_command(args.action), args.timeout)
+        case "camera":
+            ok = send(harness, camera_payload(args), args.timeout)
         case "cycle":
             ok = send(harness, build_command("load-level", to_game_path(args.level.resolve())), args.timeout)
             if ok:
                 time.sleep(args.settle)
+                ok = prepare_frame(harness, args)
+            if ok:
                 ok = send_screenshot(harness, args.out, args.timeout)
             if ok:
                 ok = quit_game(harness, args.timeout)

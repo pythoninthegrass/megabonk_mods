@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Linq;
+using Il2CppAssets.Scripts.Utility;
 using MelonLoader;
 using MelonLoader.Utils;
 using UnityEngine;
@@ -98,6 +99,22 @@ public static class DevHarness
             case HarnessCommandKind.Screenshot:
                 _logger.Msg($"DevHarness: screenshot '{command.Path}'.");
                 MelonCoroutines.Start(CaptureAtEndOfFrame(command.Path));
+                break;
+            case HarnessCommandKind.Freeze:
+                MyTime.Pause();
+                _logger.Msg($"DevHarness: freeze, MyTime.paused={MyTime.paused}.");
+                break;
+            case HarnessCommandKind.Resume:
+                MyTime.Unpause();
+                _logger.Msg($"DevHarness: resume, MyTime.paused={MyTime.paused}.");
+                break;
+            case HarnessCommandKind.Camera:
+                CameraOverride.Set(command.Pose);
+                _logger.Msg($"DevHarness: camera override {command.Pose}.");
+                break;
+            case HarnessCommandKind.CameraClear:
+                CameraOverride.Clear();
+                _logger.Msg("DevHarness: camera override cleared.");
                 break;
             case HarnessCommandKind.Quit:
                 _logger.Msg("DevHarness: quit requested, calling Application.Quit.");

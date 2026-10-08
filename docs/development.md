@@ -23,9 +23,13 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | --- | --- | --- |
 | Load a level and start the run | `{"command":"load-level","path":"<file>"}` | `run.py load <level>` |
 | Save the rendered frame as a PNG | `{"command":"screenshot","path":"<file>"}` | `run.py screenshot <out.png>` |
+| Freeze gameplay | `{"command":"freeze"}` | `run.py freeze` |
+| Resume gameplay | `{"command":"resume"}` | `run.py resume` |
+| Hold the camera at a pose | `{"command":"camera","position":[x,y,z],"rotation":[rx,ry,rz]}` | `run.py camera X Y Z --rot RX RY RZ` |
+| Return the camera to the game | `{"command":"camera-clear"}` | `run.py camera --clear` |
 | Quit the game | `{"command":"quit"}` | `run.py quit` |
 
-`run.py cycle <level> <out.png>` runs load, waits `--settle` seconds (default 5), takes the screenshot, then quits. `--timeout` (before the subcommand, default 15 seconds) sets how long to wait for each command and for the PNG to appear. The exit code is 0 only if every step succeeded, 1 if a step failed or timed out, and 2 if the harness is not enabled (`run.py` prints `harness not enabled at <dir>; run 'run.py enable' and relaunch the game`).
+`run.py cycle <level> <out.png>` runs load, waits `--settle` seconds (default 5), takes the screenshot, then quits. `--freeze` freezes gameplay and `--camera X Y Z RX RY RZ` poses the camera after the settle wait and before the screenshot. `--timeout` (before the subcommand, default 15 seconds) sets how long to wait for each command and for the PNG to appear. The exit code is 0 only if every step succeeded, 1 if a step failed or timed out, and 2 if the harness is not enabled (`run.py` prints `harness not enabled at <dir>; run 'run.py enable' and relaunch the game`).
 
 An unknown command, malformed JSON, or a missing or empty `path` logs `DevHarness: rejected '<file>': <reason>` and moves the file to `rejected/` without touching game state. A command that parses but fails while running logs an error and the game keeps running.
 
@@ -61,9 +65,33 @@ Caveats:
 - The screenshot is the game's own frame at the game's render resolution, not a capture of the host screen.
 - Localhost networking was not tested; the file-drop channel needs only `System.IO`.
 
+## Freezing gameplay
+
+`freeze` calls `MyTime.Pause()` and `resume` calls `MyTime.Unpause()`, the game's own time path, and each logs `MyTime.paused`. This is not `PauseUi.Pause()`, so no pause window appears in the frame. While frozen the run timer, enemies and the player stop, so an idle player cannot die. The harness still polls (MelonLoader's `OnUpdate` does not use the game's clock) and the screen still renders: clouds, grass and particles keep moving between two frozen screenshots, while the HUD timer, enemies and player do not.
+
+Caveats:
+
+- Freezing stops enemies as well, so it suits screenshots only and cannot stand in for a playthrough.
+- Freeze after the settle wait, not before it: a level-up dialog that is already open stays open.
+- Resuming continues the run from where it stopped.
+
+## Camera pose
+
+`camera` holds the camera at a world-space position and euler rotation in degrees (Unity convention: `rotation` `[90,0,0]` looks straight down). The game recomputes the camera each frame, so the mod stores the pose and re-applies it to `PlayerCamera.Instance.camera.transform` from `OnLateUpdate`, after the game's own update. Verified in the running game: the pose held for more than 6 seconds of live gameplay and while frozen.
+
+On Forest, cell (x, z) is at world `(-280 + 40x, 20 * height, -280 + 40z)`, from `MapParameters.scaledTileWidth` and `scaledTileHeight`.
+
+`camera-clear` restores the camera's local position and rotation saved when the override first applied. The game never rewrites that transform itself, so without the restore the camera would stay at the posed view.
+
+Caveats:
+
+- Fog hides the map from far above: at y=400 the frame is a flat blue field, at y=150 the map is washed out, and at y=60 it is clear. Pose within roughly 150 units of the ground.
+- The player keeps playing under the override, so combine it with `freeze` for a still scene.
+- The camera pose changes the picture only; it does not keep the player alive for an enemy playthrough.
+
 ## Not covered
 
-The harness does not make the player invulnerable, skip the level-up dialog, move the player or camera, or press menu buttons. An idle player can die or be blocked by the level-up dialog, so keep the settle time short.
+The harness does not make the player invulnerable, skip the level-up dialog, move the player, or press menu buttons. Use `freeze` to stop an idle player dying; without it keep the settle time short.
 
 ## Character selection
 

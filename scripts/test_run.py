@@ -125,6 +125,33 @@ def test_is_png_checks_signature() -> None:
         assert not run.is_png(Path(tmp) / "missing.png")
 
 
+def test_build_command_freeze_and_resume_have_no_payload() -> None:
+    assert run.build_command("freeze") == {"command": "freeze"}
+    assert run.build_command("resume") == {"command": "resume"}
+
+
+def test_build_camera_command_carries_position_and_rotation() -> None:
+    assert run.build_camera_command((1.0, 200.0, -3.0), (90.0, 0.0, 45.5)) == {
+        "command": "camera",
+        "position": [1.0, 200.0, -3.0],
+        "rotation": [90.0, 0.0, 45.5],
+    }
+
+
+def test_parse_args_camera_pose_and_clear() -> None:
+    args = run.parse_args(["camera", "1", "2", "3", "--rot", "90", "0", "0"])
+    assert (args.action, args.position, args.rot) == ("camera", [1.0, 2.0, 3.0], [90.0, 0.0, 0.0])
+    assert run.parse_args(["camera", "--clear"]).clear is True
+
+
+def test_parse_args_cycle_accepts_freeze_and_camera_flags() -> None:
+    args = run.parse_args(["cycle", "a.json", "o.png", "--freeze", "--camera", "0", "300", "0", "90", "0", "0"])
+    assert args.freeze is True
+    assert args.camera == [0.0, 300.0, 0.0, 90.0, 0.0, 0.0]
+    plain = run.parse_args(["cycle", "a.json", "o.png"])
+    assert plain.freeze is False and plain.camera is None
+
+
 PS_LISTING = """\
  6308 C:\\windows\\system32\\winemenubuilder.exe -w -u C:\\users\\crossover\\Start Menu\\Programs\\Steam\\Megabonk.url
 87328 /Applications/CrossOver.app/lib/wine/winewrapper.exe --run -- /Users/lance/Steam/common/Megabonk/Megabonk.exe

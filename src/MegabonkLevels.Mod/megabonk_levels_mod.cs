@@ -27,6 +27,11 @@ public class MegabonkLevelsMod : MelonMod
         DevHarness.Install(LoggerInstance);
     }
 
+    public override void OnLateUpdate()
+    {
+        CameraOverride.Apply();
+    }
+
     public override void OnUpdate()
     {
         DevHarness.Poll();

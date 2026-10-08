@@ -33,6 +33,46 @@ public class HarnessCommandTests
         Assert.Null(command.Path);
     }
 
+    [Theory]
+    [InlineData("freeze", HarnessCommandKind.Freeze)]
+    [InlineData("resume", HarnessCommandKind.Resume)]
+    [InlineData("camera-clear", HarnessCommandKind.CameraClear)]
+    public void TryParse_ArglessCommands_NeedNoPath(string name, HarnessCommandKind expected)
+    {
+        var ok = HarnessCommand.TryParse($$"""{"command":"{{name}}"}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(expected, command.Kind);
+        Assert.Null(command.Path);
+    }
+
+    [Fact]
+    public void TryParse_Camera_ReturnsPositionAndEulerRotation()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"camera","position":[1.5,200,-3],"rotation":[90,0,45.5]}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.Camera, command.Kind);
+        Assert.Equal(new CameraPose(1.5f, 200f, -3f, 90f, 0f, 45.5f), command.Pose);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"camera"}""", "position")]
+    [InlineData("""{"command":"camera","position":[1,2,3]}""", "rotation")]
+    [InlineData("""{"command":"camera","position":[1,2],"rotation":[0,0,0]}""", "position")]
+    [InlineData("""{"command":"camera","position":[1,2,3],"rotation":[0,0,0,0]}""", "rotation")]
+    [InlineData("""{"command":"camera","position":[1,"a",3],"rotation":[0,0,0]}""", "position")]
+    [InlineData("""{"command":"camera","position":"1,2,3","rotation":[0,0,0]}""", "position")]
+    public void TryParse_CameraWithoutUsableVectors_FailsNamingTheField(string json, string expectedFragment)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains(expectedFragment, error);
+    }
+
     [Fact]
     public void TryParse_IgnoresUnknownFields()
     {
