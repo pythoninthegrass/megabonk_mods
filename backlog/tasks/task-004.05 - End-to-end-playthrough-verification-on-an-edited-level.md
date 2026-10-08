@@ -4,7 +4,7 @@ title: End-to-end playthrough verification on an edited level
 status: To Do
 assignee: []
 created_date: '2026-10-06 21:42'
-updated_date: '2026-10-08 02:13'
+updated_date: '2026-10-08 04:34'
 labels:
   - level-editor
 dependencies:
@@ -12,6 +12,9 @@ dependencies:
   - TASK-004.03
   - TASK-004.04
   - TASK-004.06
+  - TASK-004.08
+  - TASK-004.09
+  - TASK-004.10
 parent_task_id: TASK-004
 priority: medium
 ordinal: 21000
@@ -20,7 +23,7 @@ ordinal: 21000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Read parent TASK-004 first for full context. Depends on TASK-004.02 (edit application), TASK-004.03 (navmesh rebuild), and TASK-004.04 (upload guard) all being complete.
+Read parent TASK-004 first for full context. Depends on TASK-004.02 (edit application), TASK-004.03 (slope and added-tile edits, collision and wall rebuild, kill floor, enemy pathing check), and TASK-004.04 (upload guard) all being complete.
 
 Hand-write (or script) a non-trivial `.mblevel.json` test level file exercising at least: one tile height change, one tile slope change, one added tile, one removed tile, one placed object (chest or decorative prop), and one removed generator-spawned object. Load it in the game and play a complete run from spawn to the boss portal, confirming:
 
@@ -30,6 +33,12 @@ Hand-write (or script) a non-trivial `.mblevel.json` test level file exercising 
 - No errors or crashes occur across the full run.
 
 This is the integration acceptance gate for the entire TASK-004 parent — write up the test level file and the verification steps/results in docs/ so it can be re-run as a regression check after future changes (e.g. a game update, or TASK-005's editor UI changes).
+
+## Tools and behaviour already in place (from the other TASK-004 subtasks)
+
+Dev harness (docs/development.md, driven by scripts/run.py): `load`, `screenshot`, `quit`, `cycle`; `freeze` / `resume` (TASK-004.08) to hold the scene still for screenshots; `camera X Y Z --rot RX RY RZ` / `camera --clear` (TASK-004.09) to pose a view of the edited cells (cell (x, z) is at world (-280 + 40x, 20 * height, -280 + 40z) on Forest; use a camera height of about 60-100 looking straight down because fog washes the map out above about 150); and the player invulnerability command from TASK-004.10 so enemies chase a living player. The harness cannot press keys or walk the player, so a spawn-to-boss-portal run still needs a human at the controls; use the harness for the repeatable parts (edits visible, no errors in the log, a scripted survival run).
+
+After tile edits the mod rebuilds the baked ground collision, regenerates the wall and fill pieces on edited tiles' edges, and arms a kill floor (docs/runtime-map-structure.md: "Ground collision after edits", "Walls after edits", "Kill floor"). A tile removed in the test level is therefore a real hole, walls around a removed cell are left as generated, and falling below the lowest tile ends the run, so plan the route and the removed tile accordingly. Reference scratch levels used so far: Forest seed 20261007 with edits at (9,7) slope East, (11,7) added at height 1, (12,7) slope North, (13,7) removed.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
