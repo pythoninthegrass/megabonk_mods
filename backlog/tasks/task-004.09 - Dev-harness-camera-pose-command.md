@@ -1,9 +1,11 @@
 ---
 id: TASK-004.09
 title: 'Dev harness: camera pose command'
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - Claude
 created_date: '2026-10-08 03:41'
+updated_date: '2026-10-08 03:51'
 labels:
   - level-editor
 dependencies:
@@ -28,18 +30,42 @@ Related: TASK-005.01 needs a free-fly camera for the in-game editor. Settle whet
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A harness command sets the camera position and euler rotation, and a matching command clears the override and returns control to the game, with each logged
-- [ ] #2 A screenshot taken after the command shows the requested view, not the game's own pose, verified on an edited Forest level
-- [ ] #3 The pose survives the game's own camera update for the whole settle period
-- [ ] #4 `run.py camera` and `run.py camera --clear` subcommands exist, and `cycle` accepts a camera pose flag
-- [ ] #5 Pure command parsing for the new command is unit tested, with the tests written before the implementation
-- [ ] #6 The command, its coordinate convention, and any caveats are documented in docs/development.md
+- [x] #1 A harness command sets the camera position and euler rotation, and a matching command clears the override and returns control to the game, with each logged
+- [x] #2 A screenshot taken after the command shows the requested view, not the game's own pose, verified on an edited Forest level
+- [x] #3 The pose survives the game's own camera update for the whole settle period
+- [x] #4 `run.py camera` and `run.py camera --clear` subcommands exist, and `cycle` accepts a camera pose flag
+- [x] #5 Pure command parsing for the new command is unit tested, with the tests written before the implementation
+- [x] #6 The command, its coordinate convention, and any caveats are documented in docs/development.md
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Tests first: C# harness_command_tests for camera (position + euler) and camera-clear parsing; scripts/test_run.py for build_command and camera/--clear/cycle --camera arg parsing. Confirm they fail.
+2. Add Camera/CameraClear to HarnessCommandKind and TryParse.
+3. Store the requested pose in the mod; re-apply from OnLateUpdate to PlayerCamera.Instance.camera.transform. No Harmony patch.
+4. run.py: camera X Y Z --rot RX RY RZ, camera --clear, cycle --camera flag.
+5. Verify in the running game on an edited Forest level: pose survives the game's own update through the settle period; check CameraOutlines/shaker do not move it back.
+6. Document command, coordinate convention and caveats in docs/development.md; run task check; conventional commit without attribution.
+Decision: harness-local, independent of TASK-005.01 (YAGNI). Runs after 004.08.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verified under CrossOver on the sample test level (megabonklevels-test-level.mblevel.json), not a separately edited level: overhead pose held >6s of live gameplay and while frozen. The game never rewrites the camera transform, so camera-clear restores the saved local pose. Fog washes out the map above ~150 units.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added camera and camera-clear harness commands applied from OnLateUpdate (CameraOverride), run.py camera / camera --clear, and cycle --camera. Parsing is unit tested (tests written first). Documented with coordinate convention and fog caveat in docs/development.md. Kept harness-local; sharing with TASK-005.01 is left to that task.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->

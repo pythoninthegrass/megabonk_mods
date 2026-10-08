@@ -1,9 +1,11 @@
 ---
 id: TASK-004.08
 title: 'Dev harness: freeze gameplay command'
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - Claude
 created_date: '2026-10-08 03:41'
+updated_date: '2026-10-08 03:51'
 labels:
   - level-editor
 dependencies:
@@ -25,18 +27,42 @@ Related: TASK-005.01 needs to freeze gameplay for the in-game editor. Settle whe
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A harness command freezes gameplay through the game's own time/pause logic, and a matching command resumes it, with each logged
-- [ ] #2 While frozen, enemies, spawners and the run timer stop and the player cannot die, with no pause menu in the screenshot
-- [ ] #3 The harness keeps polling and screenshots still render while frozen, verified in the running game
-- [ ] #4 `run.py freeze` and `run.py resume` subcommands exist, and `cycle` accepts a flag that freezes before the screenshot
-- [ ] #5 Pure command parsing for the new commands is unit tested, with the tests written before the implementation
-- [ ] #6 The commands and any pause caveats (dialogs, whether `A_Pause` fires) are documented in docs/development.md
+- [x] #1 A harness command freezes gameplay through the game's own time/pause logic, and a matching command resumes it, with each logged
+- [x] #2 While frozen, enemies, spawners and the run timer stop and the player cannot die, with no pause menu in the screenshot
+- [x] #3 The harness keeps polling and screenshots still render while frozen, verified in the running game
+- [x] #4 `run.py freeze` and `run.py resume` subcommands exist, and `cycle` accepts a flag that freezes before the screenshot
+- [x] #5 Pure command parsing for the new commands is unit tested, with the tests written before the implementation
+- [x] #6 The commands and any pause caveats (dialogs, whether `A_Pause` fires) are documented in docs/development.md
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Tests first: C# harness_command_tests for freeze/resume parsing; scripts/test_run.py for build_command and cycle --freeze arg parsing. Confirm they fail.
+2. Add Freeze/Resume to HarnessCommandKind and HarnessCommand.TryParse.
+3. DevHarness.Execute: Freeze calls MyTime.Pause(), Resume calls MyTime.Unpause(), each logged. No Harmony patch.
+4. run.py: freeze and resume subcommands; cycle --freeze freezes before the screenshot.
+5. Verify in the running game under CrossOver: A_Pause behaviour, enemies/spawners/run timer stop, harness still polls and renders while frozen.
+6. Document commands and caveats in docs/development.md; run task check; conventional commit without attribution.
+Decision: harness-local, independent of TASK-005.01 (YAGNI); sharing is left to 005.01.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+MyTime.Pause()/Unpause() set MyTime.paused (logged True/False). Verified under CrossOver: HUD run timer, enemy and player identical across two screenshots 4s apart, harness polled and rendered while frozen, no pause window.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added freeze/resume harness commands that call MyTime.Pause/Unpause, run.py freeze/resume subcommands, and cycle --freeze. Parsing is unit tested (tests written first). Documented in docs/development.md. Kept harness-local; sharing with TASK-005.01 is left to that task.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
