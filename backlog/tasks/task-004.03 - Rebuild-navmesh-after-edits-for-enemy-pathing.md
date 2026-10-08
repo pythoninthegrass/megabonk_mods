@@ -1,14 +1,17 @@
 ---
 id: TASK-004.03
 title: 'Support slope and added-tile edits live, and rebuild navigation after edits'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - Claude
 created_date: '2026-10-06 21:42'
-updated_date: '2026-10-08 02:14'
+updated_date: '2026-10-08 03:44'
 labels:
   - level-editor
 dependencies:
   - TASK-004.02
+  - TASK-004.08
+  - TASK-004.09
 parent_task_id: TASK-004
 priority: high
 ordinal: 19000
@@ -46,7 +49,16 @@ Verify with a real playthrough: edit a level to add a new path, or let enemies n
 - [ ] #8 Pure logic introduced for slope and added-tile handling is unit tested, with the tests written before the implementation
 <!-- AC:END -->
 
+## Implementation Plan
 
+<!-- SECTION:PLAN:BEGIN -->
+1. Observe live slope tiles (temporary harness log: prefab name, dir, parentDir, rotation, posY, neighbour heights) on a Forest seed via scripts/run.py on macOS CrossOver; derive SlopeDirection -> dir mapping and check against reachability_validator's assumption.
+2. Write failing unit tests first for a Unity-free helper (SlopeDirection -> direction vector, cell+height -> world position from scaledTileWidth/scaledTileHeight) and for LiveEditPlan classifying SetTile as add/replace/move against live occupancy.
+3. Implement: slope via ProceduralTileGeneration.InstantiateTile with slopeTile (swap proceduralTiles cell + tiles list, destroy old); AddTile on empty cell via flatTile; slope back to None swaps to flatTile. AddTile outside the grid stays out of scope.
+4. Wall/fill neighbours: document as known limit unless observed gaps are severe (FillHoles/FillEdges are private, whole-grid, and would duplicate entries and break genId index).
+5. Navigation: open maps bake no navmesh and enemies use Rigidbody chase, so no rebuild expected. AC #1 and #3 closed as not applicable and documented under AC #4 (approved by Lance); verify physically that enemies traverse edited/added tiles. Document in docs/runtime-map-structure.md.
+6. Verify in game on macOS CrossOver with run.py cycle screenshots for slope/add/remove, then a playthrough with enemies. Update docs/level-format.md known limits.
+<!-- SECTION:PLAN:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
