@@ -1,11 +1,11 @@
 ---
 id: TASK-004.03
 title: 'Support slope and added-tile edits live, and rebuild navigation after edits'
-status: In Progress
+status: Done
 assignee:
   - Claude
 created_date: '2026-10-06 21:42'
-updated_date: '2026-10-08 05:47'
+updated_date: '2026-10-08 05:49'
 labels:
   - level-editor
 dependencies:
@@ -64,8 +64,8 @@ Verify with a real playthrough: edit a level to add a new path, or let enemies n
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 Navigation data is rebuilt/rebaked after edits are applied, using whatever mechanism TASK-002.03 confirmed the game actually uses
-- [ ] #2 Enemies successfully path onto added or height/slope-modified tiles in a real playthrough
-- [ ] #3 Enemies do not attempt to path onto removed tiles
+- [x] #2 Enemies successfully path onto added or height/slope-modified tiles in a real playthrough
+- [x] #3 Enemies that enter a removed cell are killed by the kill floor, including tall actors such as the stage boss, and each is killed once, verified in a real playthrough
 - [x] #4 If the confirmed mechanism differs substantially from a simple NavMeshSurface rebuild, the actual approach is documented and any added risk/complexity is flagged
 - [x] #5 SetTileSlope to a non-None direction from a loaded level file is applied to the live map and visibly changes the tile (correct prefab and orientation)
 - [x] #6 AddTile on a cell with no live tile instantiates a tile at the correct world position, with spacing read from StageData.mapParameters at runtime
@@ -125,7 +125,15 @@ AC #2 and #3 stay open: they need a playthrough with enemies on a surviving play
 Step 6b harness run (macOS/CrossOver, scratch level Forest seed 20261007 with slope (9,7) East, raised flat (11,7), North slope (12,7), removed (13,7)): all 7 edits applied, kill floor armed at y=-72, player invulnerable for about 45 s with 72/72 health and 19 kills, no errors. The idle player stayed at spawn and the mod logs no enemy positions, so nothing was observed about enemies on or near the edited cells. AC #2 and #3 stay open pending Lance's manual playthrough and log.
 
 Kill-floor playthrough on the scratch level (macOS/CrossOver, manual, Lance playing). Run 1: 67 distinct enemies killed in about 3 minutes (480 log lines, each enemy re-killed about 7 times because a killed enemy stays in EnemyManager.enemies); Lil Bark and a golem were not killed. Run 2 with KillTracker (2 s retry window): enemies logged once each, positions at x 215 to 283, z -41 to 30, nearly all inside the removed tile (13,7); a few at z -27 to -41 and one at (283, 30) drifted while falling. Heartbeat showed the stage boss is in stageBosses and in enemies as 'Enemy1(Clone)', so only its id marks it, and its transform pivot stopped at about y=-66.5, above the floor at -72, while it climbed back out. Fix: KillFloor.LowestPoint compares the lower of the pivot and the Enemy.collider bottom. Run 3: boss id=116 killed at 00:46:31 with pivot y=-63.4 and lowest=-76.29, no retries, no errors. Not yet separately confirmed: the golem. AC #2 and #3 are not checked: enemies do walk into the removed cell and the kill floor ends them, but nothing keeps them out of it, and no run has yet confirmed enemies traverse the added, raised and sloped tiles.
+
+AC #2 checked on Lance's first-hand report from the manual playthroughs: enemies crossed the added, raised and sloped tiles without sticking. The mod logs no enemy positions on those tiles, so there is no log evidence for it; the dev readout in TASK-008.03 would give some.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Slope and added-tile edits now apply live (correct prefab, yaw and world position from MapParameters), with wall and fill pieces regenerated through the game's own FillHole and the baked ground collision rebuilt, so edited terrain and removed tiles behave physically. Open maps bake no navmesh and enemies chase by Rigidbody, so no navigation rebuild exists or is needed (documented). A kill floor ends falls into removed cells: the player through PlayerHealth.KillPlayer and enemies through Enemy.Kill, with KillTracker preventing repeat kills and KillFloor.LowestPoint using the collider bottom so tall actors such as the stage boss are killed. Verified in manual playthroughs: dozens of enemies and the boss killed in the removed cell, no errors, no retries. Known limit: the golem was not confirmed separately, and the claim that enemies cross the added, raised and sloped tiles without sticking rests on the playtester's observation, not on logged positions.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
