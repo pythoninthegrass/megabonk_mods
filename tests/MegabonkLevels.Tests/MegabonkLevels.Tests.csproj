@@ -39,6 +39,8 @@
     <Compile Include="../../src/MegabonkLevels.Mod/character_override.cs" Link="character_override.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/position_readout.cs" Link="position_readout.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/nearby_enemy_selector.cs" Link="nearby_enemy_selector.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/actor_kind.cs" Link="actor_kind.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/cell_change_tracker.cs" Link="cell_change_tracker.cs" />
   </ItemGroup>
 
   <ItemGroup>

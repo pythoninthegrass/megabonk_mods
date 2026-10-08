@@ -28,6 +28,7 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Make the player survive enemy damage | `{"command":"invulnerable"}` | `run.py invulnerable` |
 | Restore normal player damage | `{"command":"vulnerable"}` | `run.py vulnerable` |
 | Start or stop the kill-floor heartbeat | `{"command":"heartbeat","enabled":true}` | `run.py heartbeat <on\|off>` |
+| Start or stop the cell-change log | `{"command":"cells","enabled":true}` | `run.py cells <on\|off>` |
 | Hold the camera at a pose | `{"command":"camera","position":[x,y,z],"rotation":[rx,ry,rz]}` | `run.py camera X Y Z --rot RX RY RZ` |
 | Return the camera to the game | `{"command":"camera-clear"}` | `run.py camera --clear` |
 | Quit the game | `{"command":"quit"}` | `run.py quit` |
@@ -59,6 +60,18 @@ uv run scripts/run.py quit
 `quit` sends the quit command and then blocks until the game process has exited, so the next launch can follow immediately. It prints `quit: game exited` and exits 0. It exits 1 if the command is not accepted or the process is still alive after `--timeout` seconds (default 15), and it prints the remaining pids. If no game process is running it prints `quit: game not running` and exits 0, so it is safe to run before every launch. `run.py cycle` ends with the same quit-and-wait step.
 
 Process detection uses the standard library only: `ps -axo pid=,command=` on macOS and Linux, `tasklist` on Windows (not exercised on a Windows host). A process counts as the game only when its command line starts with the game executable, `...\Megabonk.exe` under Wine or `Megabonk.x86_64` natively. Helpers that mention the executable, such as `winewrapper.exe`, `UnityCrashHandler64.exe`, `winemenubuilder.exe` and a shell running the launch command, are ignored. If `quit` times out because the game is hung, end it by the pid it printed.
+
+### Launching from an automated session
+
+`task game:run` (the `steam://rungameid` URI) is unreliable when nothing is interactively focused on the Steam client: in testing, repeated calls from a script left Steam running with no new game process and no new line in `gameprocess_log.txt`. A direct launch bypassing Steam's URL handler was reliable instead:
+
+```sh
+"/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/cxstart" --bottle Steam --workdir "C:\Program Files (x86)\Steam\steamapps\common\Megabonk" "C:\Program Files (x86)\Steam\steamapps\common\Megabonk\Megabonk.exe"
+```
+
+This also bypasses Steam's own session attach, so `load-level` can fail once right after a cold launch with the `Steamworks is not initialized` error below; immediately retrying the same `run.py load` succeeds, since it is a one-time race rather than a hard requirement for the `SteamAppId`/`SteamGameId` env vars above.
+
+To know when the mod is ready for commands, poll `MelonLoader/Latest.log` for the line `DevHarness: enabled` rather than for the process existing: MelonLoader takes several seconds to load after the process starts, and `Latest.log` is not truncated until that point, so an early read can see a stale line from the previous run. Run that poll as a background job (`run_in_background`, or `Monitor` as a self-ending loop) and wait for its own completion notice instead of a foreground `sleep`, which this harness blocks.
 
 Caveats:
 
@@ -121,37 +134,52 @@ The kill line itself always carries the actor's id, world position and `lowest` 
 
 ## Position readout
 
-With the harness enabled, a mod-loaded level draws one line of yellow text under the game's minimap that follows the player, for example:
+With the harness enabled, a mod-loaded level draws monospace (`RobotoMono`) yellow text anchored under the game's minimap, left-aligned within a box whose right edge sits under the minimap's right edge (the minimap itself is flush with the screen's own top-right corner, so anchoring under its left edge instead would run new lines straight off-screen). The player's own line is labelled `me:`:
 
 ```text
-cell (13,7) h1  pos (240, 22, 0)  floor -72
+me:        pos(120, 2, 3) floor -72
+enemy: 4   pos(125, 2, -10)
 ```
 
-`cell (x,z)` is the tile grid cell the player is over, `h` is the player's height divided by the tile height step and rounded, `pos` is the world position rounded to whole units, and `floor` is the kill-floor height. The line ends with `BELOW FLOOR` when the player is below the floor, and `outside` follows the cell when the player is outside the tile grid (the cell indices are then not clamped). The grid size and spacing are read from the live tile grid and `MapParameters` when the level is armed, so it is not tied to the 15x15 Forest map. The line is refreshed ten times a second.
+Every line shares the same columns (label, id, then `pos(x, y, z)`), but the column widths are computed each refresh from what is actually on screen that refresh (`PositionReadout.Render`), not a fixed guess: the label column is as wide as the longest label shown (at least `me:`), the id column at least 3 digits (wider only if an id needs more, so ids don't jitter the column within a normal run), and each of x/y/z is as wide as that coordinate's widest current value. A value wider than its column still prints in full, only pushing what comes after it on that line; lines share these widths so the `pos` column lines up between them. `pos` itself is the world position rounded to whole units. `floor` on the player's line is the kill-floor height, and `BELOW FLOOR` is appended when an actor's position is below it (the kill floor uses the lower of the position and the collider bottom, so an actor can be killed a moment before its line is flagged). Boss-tier lines also carry the enemy's type name, directly after the position or the `BELOW FLOOR` flag with a single space — it is not column-aligned across lines, since reserving width for it on every line left large dead space when only one boss-tier actor was shown. The player's line is refreshed ten times a second, the actor lines four times a second.
 
-It is drawn only when the harness is enabled and the level is mod-loaded, which is when the kill floor arms; a vanilla level or a disabled harness draws nothing. The label is a copy of one of the minimap's own direction letters, parented to the minimap root and anchored below it. If the minimap does not exist yet it logs `PositionLabel: no minimap found, readout not drawn` once and retries on the next tick; the log line `PositionLabel: created under the minimap` marks the first draw. The conversion and the text format are pure logic in `position_readout.cs`.
+It is drawn only when the harness is enabled and the level is mod-loaded, which is when the kill floor arms; a vanilla level or a disabled harness draws nothing. The label is a copy of one of the minimap's own direction letters, parented to the minimap root; its box is resized every refresh to the actual rendered text (`GetPreferredValues`), so it hugs the minimap instead of carrying a fixed width. If the minimap does not exist yet it logs `PositionLabel: no minimap found, readout not drawn` once and retries on the next tick; the log line `PositionLabel: created under the minimap` marks the first draw. The conversion and the text format are pure logic in `position_readout.cs`.
 
-Below the player line the readout lists the stage boss and up to five enemies, one line each, refreshed four times a second:
+### Enemy kinds
+
+Actors are classified by the game's own `EEnemyFlag` bits (`Elite=1, Boss=2, StageBoss=4, Challenge=8, SummonerMiniboss=16, FinalBoss=32`), read through `Enemy`'s public `IsElite()`/`IsBoss()`/`IsStageBoss()`/`IsFinalBoss()` methods (the raw field is private) and reduced by `ActorKinds.Of` in `actor_kind.cs`, most severe first: a final boss is never also shown as a stage boss, a stage boss or miniboss never as a plain elite. A stone golem and the other miniboss types (`MinibossGolemSand`, `MinibossScorpion`, `MinibossPig`, …) are spawned through `EnemyManager.SpawnBoss` with the `Boss` bit, the same bit a one-off boss carries, so `IsBoss()` alone is enough to classify them as `miniboss`; `EEnemyFlag.SummonerMiniboss` has no public getter and was not observed set on a spawned miniboss.
+
+| Kind | Label | Always listed | Shows the enemy type |
+| --- | --- | --- | --- |
+| Final boss | `final boss:` | yes | yes |
+| Stage boss | `boss:` | yes | yes |
+| Miniboss | `miniboss:` | yes | yes |
+| Elite | `elite:` | up to 3, nearest/below-floor first | no |
+| Ordinary enemy | `enemy:` | up to 3, nearest/below-floor first | no |
+
+Final bosses, stage bosses and minibosses are always listed (read from `EnemyManager.stageBosses` first, then any other boss-tier actor found walking `EnemyManager.enemies`, deduplicated by id); boss-tier lines append the enemy's `EnemyData.enemyName` (e.g. `MinibossGolem`) after the position. Elites and ordinary enemies each go through their own `NearbyEnemySelector` (`nearby_enemy_selector.cs`): below the kill floor first, then the rest ordered by horizontal distance (x and z) to the player, ties by lower id, capped at 3 each. With hundreds of enemies alive the readout stays bounded (boss tier plus at most 6 more lines).
+
+The selectors reuse fixed buffers, so a refresh allocates only the few strings it shows. With about 400 enemies a refresh took 0.6 to 1.4 ms and allocated 3 to 5 KB, four times a second; nothing runs on every frame.
+
+Verified in the running game: the player's `pos` tracked the player through a level with tiles removed, and a miniboss spawned by a scratch probe calling the game's own `SummonerController.EventMiniboss` showed `miniboss … MinibossGolem` with `IsBoss()` true. A boss spawned by the boss portal, a final boss, and elites were not exercised.
+
+### Cell-change log
+
+The grid cell, height level and `outside` text are not drawn on screen; a harness-gated toggle logs them instead, mirroring the kill-floor heartbeat. Off by default, turned on with `run.py cells on` and off with `run.py cells off` (both log `PositionLabel: cell log on` or `off` and apply at once), or started on with `MEGABONK_CELL_LOG` set to `1` or `true` in the game process's environment (read once at mod load; a later command overrides it).
+
+When on, it logs one line per actor whenever that actor's cell or height level changes (not every tick): the player under the name `me`, and every boss-tier actor under its label, id and type name:
 
 ```text
-cell (10,7) h0  pos (120, 2, 3)  floor -72
-boss 5 cell (11,7) h1  pos (157, 16, 3)
-enemy 4 cell (10,7) h0  pos (125, 2, -10)
-enemy 6 cell (10,7) h0  pos (107, 3, -14)  BELOW FLOOR
+PositionLabel: me cell (10,7) h0 pos (120, 2, 3)
+PositionLabel: miniboss 41 MinibossGolem cell (11,7) h1 pos (157, 16, 3)
 ```
 
-- The boss line has the boss's id and is read from `EnemyManager.stageBosses`, then skipped when the enemy dictionary is walked so it is not listed twice. There is one line per stage boss and none when the list is empty, which is the case until the boss spawner fires.
-- The enemy lines follow one rule (`NearbyEnemySelector`): enemies whose position is below the kill floor come first, then the rest, each group ordered by horizontal distance (x and z) to the player, ties by lower id, capped at five. With hundreds of enemies alive the readout is still at most seven lines.
-- Each boss and enemy line has the same cell, `h` and `pos` as the player line, and `BELOW FLOOR` when its position is below the floor. The kill floor itself uses the lower of the position and the collider bottom, so an actor can be killed a moment before its line is flagged.
-
-The selector reuses fixed buffers, so a refresh allocates only the few strings it shows. With about 400 enemies a refresh took 0.6 to 1.4 ms and allocated 3 to 5 KB, four times a second; nothing runs on every frame.
-
-Verified in the running game: the unedited example level read `cell (10,7)` at the spawn, and on a level with tiles (7,7) and (10,7) removed the readout followed the player down through each hole at the matching cell. The boss line was checked with a stage boss spawned next to the player and gameplay frozen: its position matched the boss's `y` in the kill-floor heartbeat. A boss spawned by the boss portal and a boss below the floor were not exercised.
+`outside` follows the cell when the position is outside the tile grid, as before. The grid size and spacing are read from the live tile grid and `MapParameters` when the level is armed, so it is not tied to the 15x15 Forest map. Change tracking is pure logic in `cell_change_tracker.cs`.
 
 Caveats:
 
 - The kill floor kills the player within a quarter of a second of crossing the floor, so `BELOW FLOOR` is on screen only for those few frames and was not captured in the running game.
-- Cell and level come from the player's transform, not from the tile under the player, so on a slope or while falling `h` is an approximation.
+- Cell and height level come from an actor's transform, not from the tile under it, so on a slope or while falling they are an approximation.
 
 ## Not covered
 

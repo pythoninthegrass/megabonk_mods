@@ -164,6 +164,30 @@ def test_heartbeat_payload_maps_the_state_to_the_wire_command() -> None:
     assert run.heartbeat_payload(run.parse_args(["heartbeat", "off"])) == {"command": "heartbeat", "enabled": False}
 
 
+def test_build_cells_command_carries_the_enabled_flag() -> None:
+    assert run.build_cells_command(True) == {"command": "cells", "enabled": True}
+    assert run.build_cells_command(False) == {"command": "cells", "enabled": False}
+
+
+def test_parse_args_cells_takes_on_or_off() -> None:
+    assert run.parse_args(["cells", "on"]).state == "on"
+    assert run.parse_args(["cells", "off"]).state == "off"
+
+
+def test_parse_args_cells_rejects_other_states_and_a_missing_state() -> None:
+    for argv in (["cells"], ["cells", "maybe"]):
+        try:
+            run.parse_args(argv)
+        except SystemExit:
+            continue
+        raise AssertionError(f"{argv} should have been rejected")
+
+
+def test_cells_payload_maps_the_state_to_the_wire_command() -> None:
+    assert run.cells_payload(run.parse_args(["cells", "on"])) == {"command": "cells", "enabled": True}
+    assert run.cells_payload(run.parse_args(["cells", "off"])) == {"command": "cells", "enabled": False}
+
+
 def test_parse_args_cycle_accepts_invulnerable_flag() -> None:
     assert run.parse_args(["cycle", "a.json", "o.png", "--invulnerable"]).invulnerable is True
     assert run.parse_args(["cycle", "a.json", "o.png"]).invulnerable is False

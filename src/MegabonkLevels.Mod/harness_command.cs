@@ -16,6 +16,7 @@ public enum HarnessCommandKind
     Invulnerable,
     Vulnerable,
     Heartbeat,
+    Cells,
 }
 
 // World-space camera position and euler rotation in degrees.
@@ -80,6 +81,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return true;
             case "heartbeat":
                 return TryParseHeartbeat(root, out command, out error);
+            case "cells":
+                return TryParseCells(root, out command, out error);
             case "camera":
                 return TryParseCamera(root, out command, out error);
             case "load-level":
@@ -103,6 +106,21 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.Heartbeat, null, Enabled: enabled);
+        error = null;
+        return true;
+    }
+
+    private static bool TryParseCells(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        if (!root.TryGetPropertyValue("enabled", out var node) || node is not JsonValue value || !value.TryGetValue(out bool enabled))
+        {
+            error = "missing boolean field 'enabled'";
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.Cells, null, Enabled: enabled);
         error = null;
         return true;
     }

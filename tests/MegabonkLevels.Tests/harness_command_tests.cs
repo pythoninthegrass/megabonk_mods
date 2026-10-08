@@ -76,6 +76,33 @@ public class HarnessCommandTests
         Assert.Contains("enabled", error);
     }
 
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public void TryParse_Cells_ReadsTheEnabledFlag(string enabled, bool expected)
+    {
+        var ok = HarnessCommand.TryParse($$"""{"command":"cells","enabled":{{enabled}}}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.Cells, command.Kind);
+        Assert.Equal(expected, command.Enabled);
+        Assert.Null(command.Path);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"cells"}""")]
+    [InlineData("""{"command":"cells","enabled":"yes"}""")]
+    [InlineData("""{"command":"cells","enabled":1}""")]
+    [InlineData("""{"command":"cells","enabled":null}""")]
+    public void TryParse_Cells_MissingOrNonBooleanEnabled_IsRejected(string json)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains("enabled", error);
+    }
+
     [Fact]
     public void TryParse_Camera_ReturnsPositionAndEulerRotation()
     {

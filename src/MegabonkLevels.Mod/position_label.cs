@@ -1,4 +1,4 @@
-using System.Text;
+using System.Collections.Generic;
 using Il2Cpp;
 using Il2CppAssets.Scripts.Actors.Enemies;
 using Il2CppAssets.Scripts.Actors.Player;
@@ -9,15 +9,18 @@ using UnityEngine;
 
 namespace MegabonkLevels;
 
-// Dev-only text under the game's minimap that shows the player's world position, grid cell and kill-floor height,
-// followed by the stage boss and a few enemies chosen by NearbyEnemySelector.
-// Drawn only when the dev harness is enabled and the level is mod-loaded (the kill floor is armed); see docs/development.md.
+// See "Position readout" in docs/development.md.
 public static class PositionLabel
 {
     private const float UpdateIntervalSeconds = 0.1f;
     private const float ActorIntervalSeconds = 0.25f;
     private const float FontSize = 20f;
-    private const int MaxEnemyLines = 5;
+    private const float WidthMargin = 20f;
+    private const float RightOffsetX = 0f;
+    private const string MonoFontName = "RobotoMono";
+    private const int MaxEliteLines = 3;
+    private const int MaxEnemyLines = 3;
+    private const string CellLogVariable = "MEGABONK_CELL_LOG";
 
     private static MelonLogger.Instance _logger;
     private static bool _armed;
@@ -30,9 +33,11 @@ public static class PositionLabel
     private static bool _warnedNoMinimap;
     private static float _nextUpdate;
     private static float _nextActorUpdate;
-    private static readonly NearbyEnemySelector Selector = new(MaxEnemyLines);
-    private static readonly StringBuilder ActorText = new();
-    private static string _actorLines = string.Empty;
+    private static readonly NearbyEnemySelector EliteSelector = new(MaxEliteLines);
+    private static readonly NearbyEnemySelector EnemySelector = new(MaxEnemyLines);
+    private static readonly List<ReadoutActor> Actors = new();
+    private static bool _cellLogEnabled = EnvFlag.IsSet(CellLogVariable);
+    private static readonly CellChangeTracker CellLog = new();
 
     public static void Arm(int gridWidth, int gridDepth, float spacing, float tileHeight, float floorY, MelonLogger.Instance logger)
     {
@@ -43,8 +48,9 @@ public static class PositionLabel
         _tileHeight = tileHeight;
         _floorY = floorY;
         _warnedNoMinimap = false;
-        _actorLines = string.Empty;
+        Actors.Clear();
         _nextActorUpdate = 0f;
+        CellLog.Reset();
         _armed = DevHarness.Enabled;
     }
 
@@ -52,6 +58,13 @@ public static class PositionLabel
     {
         _armed = false;
         Hide();
+    }
+
+    public static void SetCellLog(bool enabled, MelonLogger.Instance logger)
+    {
+        _cellLogEnabled = enabled;
+        CellLog.Reset();
+        logger.Msg($"PositionLabel: cell log {(enabled ? "on" : "off")}");
     }
 
     public static void Tick()
@@ -68,34 +81,35 @@ public static class PositionLabel
             return;
         }
 
-        // A destroyed label is Unity-null: the HUD, and the minimap under it, is rebuilt for each run.
         if (_label == null && !TryCreate())
         {
             return;
         }
 
         var position = player.transform.position;
-        var cell = PositionReadout.CellOf(position.x, position.z, _gridWidth, _gridDepth, _spacing);
-        var level = PositionReadout.LevelOf(position.y, _tileHeight);
+        if (_cellLogEnabled)
+        {
+            LogCellChange(CellChangeTracker.PlayerId, "me", position);
+        }
+
         if (Time.unscaledTime >= _nextActorUpdate)
         {
             _nextActorUpdate = Time.unscaledTime + ActorIntervalSeconds;
-            RefreshActorLines(position);
+            RefreshActors(position);
         }
 
-        var playerLine = PositionReadout.Format(position.x, position.y, position.z, cell, level, _floorY);
-        _label.text = _actorLines.Length == 0 ? playerLine : playerLine + "\n" + _actorLines;
+        var text = PositionReadout.Render(position.x, position.y, position.z, _floorY, Actors);
+        var preferred = _label.GetPreferredValues(text);
+        _label.rectTransform.sizeDelta = new Vector2(preferred.x + WidthMargin, preferred.y);
+        _label.text = text;
     }
 
-    // The stage boss is kept in its own list on the manager and is not reliably in `enemies`, so it is read from there
-    // and skipped when the enemy dictionary is walked.
-    private static void RefreshActorLines(Vector3 player)
+    private static void RefreshActors(Vector3 player)
     {
-        ActorText.Clear();
+        Actors.Clear();
         var manager = EnemyManager.Instance;
         if (manager?.enemies == null)
         {
-            _actorLines = string.Empty;
             return;
         }
 
@@ -105,28 +119,61 @@ public static class PositionLabel
             var boss = bosses[i];
             if (boss != null)
             {
-                AppendActor($"boss {boss.id}", boss.transform.position);
+                AddBossTier(boss);
             }
         }
 
-        Selector.Begin(player.x, player.z, _floorY);
+        EliteSelector.Begin(player.x, player.z, _floorY);
+        EnemySelector.Begin(player.x, player.z, _floorY);
         foreach (var enemy in manager.enemies.Values)
         {
-            if (enemy != null && !IsBoss(bosses, enemy.id))
+            if (enemy == null || IsBoss(bosses, enemy.id))
             {
-                var position = enemy.transform.position;
-                Selector.Offer(new ActorPosition(enemy.id, position.x, position.y, position.z));
+                continue;
             }
+
+            var kind = ActorKinds.Of(RawFlags(enemy));
+            if (ActorKinds.IsBossTier(kind))
+            {
+                AddBossTier(enemy);
+                continue;
+            }
+
+            var position = enemy.transform.position;
+            var actor = new ActorPosition(enemy.id, position.x, position.y, position.z);
+            (kind == ActorKind.Elite ? EliteSelector : EnemySelector).Offer(actor);
         }
 
-        for (var i = 0; i < Selector.Count; i++)
+        for (var i = 0; i < EliteSelector.Count; i++)
         {
-            var actor = Selector[i];
-            AppendActor($"enemy {actor.Id}", new Vector3(actor.X, actor.Y, actor.Z));
+            var actor = EliteSelector[i];
+            Actors.Add(new ReadoutActor(ActorKinds.Label(ActorKind.Elite), actor.Id, actor.X, actor.Y, actor.Z));
         }
 
-        _actorLines = ActorText.ToString();
+        for (var i = 0; i < EnemySelector.Count; i++)
+        {
+            var actor = EnemySelector[i];
+            Actors.Add(new ReadoutActor(ActorKinds.Label(ActorKind.Enemy), actor.Id, actor.X, actor.Y, actor.Z));
+        }
     }
+
+    private static void AddBossTier(Enemy enemy)
+    {
+        var kind = ActorKinds.Of(RawFlags(enemy));
+        var position = enemy.transform.position;
+        var typeName = enemy.enemyData != null ? enemy.enemyData.enemyName.ToString() : null;
+        var label = ActorKinds.Label(kind);
+        Actors.Add(new ReadoutActor(label, enemy.id, position.x, position.y, position.z, typeName));
+        if (_cellLogEnabled)
+        {
+            LogCellChange(enemy.id, $"{label} {enemy.id}" + (typeName != null ? $" {typeName}" : string.Empty), position);
+        }
+    }
+
+    // The raw EEnemyFlag bits are a private field; this rebuilds them from Enemy's public Is*() methods in the
+    // order ActorKinds.Of expects (see docs/development.md, "Enemy kinds").
+    private static int RawFlags(Enemy enemy) =>
+        (enemy.IsElite() ? 1 : 0) | (enemy.IsBoss() ? 2 : 0) | (enemy.IsStageBoss() ? 4 : 0) | (enemy.IsFinalBoss() ? 32 : 0);
 
     private static bool IsBoss(Il2CppSystem.Collections.Generic.List<Enemy> bosses, uint id)
     {
@@ -141,16 +188,14 @@ public static class PositionLabel
         return false;
     }
 
-    private static void AppendActor(string label, Vector3 position)
+    private static void LogCellChange(uint id, string name, Vector3 position)
     {
         var cell = PositionReadout.CellOf(position.x, position.z, _gridWidth, _gridDepth, _spacing);
         var level = PositionReadout.LevelOf(position.y, _tileHeight);
-        if (ActorText.Length > 0)
+        if (CellLog.Changed(id, cell, level))
         {
-            ActorText.Append('\n');
+            _logger.Msg($"PositionLabel: {PositionReadout.FormatCellLog(name, position.x, position.y, position.z, cell, level)}");
         }
-
-        ActorText.Append(PositionReadout.FormatActor(label, position.x, position.y, position.z, cell, level, _floorY));
     }
 
     private static void Hide()
@@ -190,21 +235,43 @@ public static class PositionLabel
             return false;
         }
 
-        // Anchored to the minimap's bottom-right corner and right-aligned so the text grows into the screen.
         var rect = copy.GetComponent<RectTransform>();
         rect.anchorMin = rect.anchorMax = new Vector2(1f, 0f);
         rect.pivot = new Vector2(1f, 1f);
-        rect.anchoredPosition = new Vector2(0f, -34f);
-        rect.sizeDelta = new Vector2(700f, 200f);
+        rect.anchoredPosition = new Vector2(RightOffsetX, -34f);
         rect.localRotation = Quaternion.identity;
         rect.localScale = Vector3.one;
-        label.alignment = TextAlignmentOptions.TopRight;
+        label.alignment = TextAlignmentOptions.TopLeft;
         label.enableWordWrapping = false;
         label.overflowMode = TextOverflowModes.Overflow;
         label.fontSize = FontSize;
         label.color = Color.yellow;
+
+        var monoFont = FindFontAsset(MonoFontName);
+        if (monoFont != null)
+        {
+            label.font = monoFont;
+        }
+        else
+        {
+            _logger.Warning($"PositionLabel: font asset '{MonoFontName}' not found, columns will not line up exactly");
+        }
+
         _label = label;
         _logger.Msg("PositionLabel: created under the minimap");
         return true;
+    }
+
+    private static TMP_FontAsset FindFontAsset(string assetName)
+    {
+        foreach (var asset in Resources.FindObjectsOfTypeAll<TMP_FontAsset>())
+        {
+            if (asset != null && asset.name == assetName)
+            {
+                return asset;
+            }
+        }
+
+        return null;
     }
 }
