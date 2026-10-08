@@ -125,6 +125,46 @@ def test_is_png_checks_signature() -> None:
         assert not run.is_png(Path(tmp) / "missing.png")
 
 
+PS_LISTING = """\
+ 6308 C:\\windows\\system32\\winemenubuilder.exe -w -u C:\\users\\crossover\\Start Menu\\Programs\\Steam\\Megabonk.url
+87328 /Applications/CrossOver.app/lib/wine/winewrapper.exe --run -- /Users/lance/Steam/common/Megabonk/Megabonk.exe
+87663 C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\Megabonk.exe
+87667 C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\UnityCrashHandler64.exe --attach 1580
+90001 bash -c cd /x && wine --cx-app Megabonk.exe
+"""
+
+
+def test_find_game_pids_matches_only_the_game_executable() -> None:
+    assert run.find_game_pids(PS_LISTING) == [87663]
+
+
+def test_find_game_pids_matches_native_linux_build() -> None:
+    listing = (
+        "  500 /media/steam/steamapps/common/Megabonk/Megabonk.x86_64 -screen-fullscreen 0\n  501 bash -c pkill Megabonk.x86_64\n"
+    )
+    assert run.find_game_pids(listing) == [500]
+
+
+def test_find_game_pids_empty_when_not_running() -> None:
+    assert run.find_game_pids("  1 /sbin/launchd\n") == []
+
+
+def test_find_game_pids_tasklist_reads_csv_rows() -> None:
+    out = '"Megabonk.exe","4242","Console","1","1,024 K"\nINFO: No tasks are running which match the specified criteria.\n'
+    assert run.find_game_pids_tasklist(out) == [4242]
+    assert run.find_game_pids_tasklist("INFO: No tasks are running which match the specified criteria.\n") == []
+
+
+def test_wait_for_exit_true_once_probe_reports_no_pids() -> None:
+    probes = iter([[1], [1], []])
+    assert run.wait_for_exit(lambda: next(probes), timeout=5, sleep=lambda _: None)
+
+
+def test_wait_for_exit_false_when_game_outlives_timeout() -> None:
+    clock = iter(range(100))
+    assert not run.wait_for_exit(lambda: [1], timeout=3, sleep=lambda _: None, now=lambda: next(clock))
+
+
 def main() -> int:
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     failed = 0

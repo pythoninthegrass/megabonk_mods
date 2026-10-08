@@ -20,7 +20,7 @@ Usage:
     run.py disable                 Remove the harness marker
     run.py load <level>            Load a level file and start it
     run.py screenshot <out.png>    Save the game's rendered frame
-    run.py quit                    Quit the game
+    run.py quit                    Quit the game and wait for the process to exit
     run.py cycle <level> <out.png> Load, wait --settle seconds, screenshot, quit
 
 Game directory resolution: process environment, then the nearest .env walking up from the current
@@ -29,9 +29,12 @@ MEGABONK_BOTTLE.
 """
 
 import argparse
+import csv
 import json
 import os
 import platform
+import re
+import subprocess
 import sys
 import time
 from collections.abc import Callable
@@ -43,6 +46,10 @@ DEFAULT_GAME_SUBPATH = "Program Files (x86)/Steam/steamapps/common/Megabonk"
 DEFAULT_GAME_DIR_WINDOWS = r"C:\Program Files (x86)\Steam\steamapps\common\Megabonk"
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 POLL_SECONDS = 0.1
+# Anchored to the start of the command so wrappers, shells and helpers that merely mention the executable
+# (winewrapper, `bash -c ... Megabonk.exe`, UnityCrashHandler64.exe) never match.
+GAME_COMMAND = re.compile(r"^(?:[A-Za-z]:\\(?:.*\\)?Megabonk\.exe|(?:\S*/)?Megabonk\.x86_64)(?:\s|$)")
+GAME_IMAGE_WINDOWS = "Megabonk.exe"
 
 Lookup = Callable[[str], str | None]
 
@@ -143,6 +150,62 @@ def wait_for_png(path: Path, timeout: float) -> bool:
     return True
 
 
+def find_game_pids(ps_listing: str) -> list[int]:
+    """Pids whose command is the game executable, from `ps -axo pid=,command=` output."""
+    pids = []
+    for line in ps_listing.splitlines():
+        pid, _, command = line.strip().partition(" ")
+        if pid.isdigit() and GAME_COMMAND.match(command.strip()):
+            pids.append(int(pid))
+    return pids
+
+
+def find_game_pids_tasklist(tasklist_csv: str) -> list[int]:
+    """Pids from `tasklist /FO CSV /NH` output; non-CSV status lines are ignored."""
+    return [
+        int(row[1])
+        for row in csv.reader(tasklist_csv.splitlines())
+        if len(row) > 1 and row[0].lower() == GAME_IMAGE_WINDOWS.lower() and row[1].isdigit()
+    ]
+
+
+def running_game_pids(system: str | None = None) -> list[int]:
+    system = system or platform.system()
+    if system == "Windows":
+        cmd = ["tasklist", "/FI", f"IMAGENAME eq {GAME_IMAGE_WINDOWS}", "/NH", "/FO", "CSV"]
+        return find_game_pids_tasklist(subprocess.run(cmd, capture_output=True, text=True, check=True).stdout)
+    cmd = ["ps", "-axo", "pid=,command="]
+    return find_game_pids(subprocess.run(cmd, capture_output=True, text=True, check=True).stdout)
+
+
+def wait_for_exit(
+    probe: Callable[[], list[int]] = running_game_pids,
+    timeout: float = 15.0,
+    sleep: Callable[[float], None] = time.sleep,
+    now: Callable[[], float] = time.monotonic,
+) -> bool:
+    deadline = now() + timeout
+    while probe():
+        if now() >= deadline:
+            return False
+        sleep(POLL_SECONDS)
+    return True
+
+
+def quit_game(harness: Path, timeout: float) -> bool:
+    """Ask the game to quit and block until its process is gone; a game that is not running counts as quit."""
+    if not running_game_pids():
+        print("quit: game not running")
+        return True
+    if not send(harness, build_command("quit"), timeout):
+        return False
+    if not wait_for_exit(timeout=timeout):
+        print(f"quit: game still running after {timeout}s (pids {running_game_pids()})", file=sys.stderr)
+        return False
+    print("quit: game exited")
+    return True
+
+
 def send(harness: Path, payload: dict[str, str], timeout: float) -> bool:
     sent = write_command(harness / "commands", payload)
     outcome = wait_for_outcome(harness, sent.name, timeout)
@@ -200,14 +263,14 @@ def main(argv: list[str] | None = None) -> int:
         case "screenshot":
             ok = send_screenshot(harness, args.out, args.timeout)
         case "quit":
-            ok = send(harness, build_command("quit"), args.timeout)
+            ok = quit_game(harness, args.timeout)
         case "cycle":
             ok = send(harness, build_command("load-level", to_game_path(args.level.resolve())), args.timeout)
             if ok:
                 time.sleep(args.settle)
                 ok = send_screenshot(harness, args.out, args.timeout)
             if ok:
-                ok = send(harness, build_command("quit"), args.timeout)
+                ok = quit_game(harness, args.timeout)
     return 0 if ok else 1
 
 

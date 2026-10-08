@@ -41,6 +41,18 @@ SteamAppId=3405340 SteamGameId=3405340 \
   /Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine --bottle Steam --cx-app Megabonk.exe
 ```
 
+### Relaunching
+
+Quit the previous launch before starting a new one. A second instance fights the first over the log file and the harness command folder, and a rebuilt mod DLL is only picked up on a fresh launch.
+
+```sh
+uv run scripts/run.py quit
+```
+
+`quit` sends the quit command and then blocks until the game process has exited, so the next launch can follow immediately. It prints `quit: game exited` and exits 0. It exits 1 if the command is not accepted or the process is still alive after `--timeout` seconds (default 15), and it prints the remaining pids. If no game process is running it prints `quit: game not running` and exits 0, so it is safe to run before every launch. `run.py cycle` ends with the same quit-and-wait step.
+
+Process detection uses the standard library only: `ps -axo pid=,command=` on macOS and Linux, `tasklist` on Windows (not exercised on a Windows host). A process counts as the game only when its command line starts with the game executable, `...\Megabonk.exe` under Wine or `Megabonk.x86_64` natively. Helpers that mention the executable, such as `winewrapper.exe`, `UnityCrashHandler64.exe`, `winemenubuilder.exe` and a shell running the launch command, are ignored. If `quit` times out because the game is hung, end it by the pid it printed.
+
 Caveats:
 
 - `load-level` needs Steamworks, because the loader reads the app build id. A direct launch without `SteamAppId` fails with `Steamworks is not initialized`.
