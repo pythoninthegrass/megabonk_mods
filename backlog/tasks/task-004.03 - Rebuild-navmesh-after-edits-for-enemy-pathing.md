@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - Claude
 created_date: '2026-10-06 21:42'
-updated_date: '2026-10-08 04:33'
+updated_date: '2026-10-08 05:47'
 labels:
   - level-editor
 dependencies:
@@ -121,6 +121,10 @@ Fill: FillRegeneration destroys fill pieces on every edge of an edited occupied 
 Kill floor: KillFloor (pure, 7 tests written first) and KillFloorWatcher. The game already has a catch floor, a WorldCollider at y=-80 (mesh bounds read 1x1x1, so its transform y is used); the kill floor is the lowest tile level minus 40, clamped to at least 8 above it. Two bugs found by running it: GameObject.Find picked a boundary wall named WorldCollider (armed at y=10 and killed the player at spawn), then collider.bounds was degenerate. Verified with a level that removes all tiles but one: 'armed at y=-40', 'player fell to y=-48.49, killing', death screen. Enemy kills were not observed in game (the player died before any enemy spawned), and the kill floor is armed only for mod-loaded Tiles maps.
 
 AC #2 and #3 stay open: they need a playthrough with enemies on a surviving player. Nothing stops enemies pathing into a hole; the kill floor only ends their fall. Unconfirmed: what the vanilla game does at its own catch floor (PlayerMovement.TeleportPlayerBackToBounds exists, no caller in the dump). The (12,7) North slope orientation is still not isolated in a frame.
+
+Step 6b harness run (macOS/CrossOver, scratch level Forest seed 20261007 with slope (9,7) East, raised flat (11,7), North slope (12,7), removed (13,7)): all 7 edits applied, kill floor armed at y=-72, player invulnerable for about 45 s with 72/72 health and 19 kills, no errors. The idle player stayed at spawn and the mod logs no enemy positions, so nothing was observed about enemies on or near the edited cells. AC #2 and #3 stay open pending Lance's manual playthrough and log.
+
+Kill-floor playthrough on the scratch level (macOS/CrossOver, manual, Lance playing). Run 1: 67 distinct enemies killed in about 3 minutes (480 log lines, each enemy re-killed about 7 times because a killed enemy stays in EnemyManager.enemies); Lil Bark and a golem were not killed. Run 2 with KillTracker (2 s retry window): enemies logged once each, positions at x 215 to 283, z -41 to 30, nearly all inside the removed tile (13,7); a few at z -27 to -41 and one at (283, 30) drifted while falling. Heartbeat showed the stage boss is in stageBosses and in enemies as 'Enemy1(Clone)', so only its id marks it, and its transform pivot stopped at about y=-66.5, above the floor at -72, while it climbed back out. Fix: KillFloor.LowestPoint compares the lower of the pivot and the Enemy.collider bottom. Run 3: boss id=116 killed at 00:46:31 with pivot y=-63.4 and lowest=-76.29, no retries, no errors. Not yet separately confirmed: the golem. AC #2 and #3 are not checked: enemies do walk into the removed cell and the kill floor ends them, but nothing keeps them out of it, and no run has yet confirmed enemies traverse the added, raised and sloped tiles.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
