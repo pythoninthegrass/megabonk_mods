@@ -37,6 +37,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/harness_command.cs" Link="harness_command.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/png_encoder.cs" Link="png_encoder.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/character_override.cs" Link="character_override.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/position_readout.cs" Link="position_readout.cs" />
   </ItemGroup>
 
   <ItemGroup>
