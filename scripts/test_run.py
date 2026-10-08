@@ -130,6 +130,21 @@ def test_build_command_freeze_and_resume_have_no_payload() -> None:
     assert run.build_command("resume") == {"command": "resume"}
 
 
+def test_build_command_invulnerable_and_vulnerable_have_no_payload() -> None:
+    assert run.build_command("invulnerable") == {"command": "invulnerable"}
+    assert run.build_command("vulnerable") == {"command": "vulnerable"}
+
+
+def test_parse_args_invulnerable_and_vulnerable_subcommands() -> None:
+    assert run.parse_args(["invulnerable"]).action == "invulnerable"
+    assert run.parse_args(["vulnerable"]).action == "vulnerable"
+
+
+def test_parse_args_cycle_accepts_invulnerable_flag() -> None:
+    assert run.parse_args(["cycle", "a.json", "o.png", "--invulnerable"]).invulnerable is True
+    assert run.parse_args(["cycle", "a.json", "o.png"]).invulnerable is False
+
+
 def test_build_camera_command_carries_position_and_rotation() -> None:
     assert run.build_camera_command((1.0, 200.0, -3.0), (90.0, 0.0, 45.5)) == {
         "command": "camera",

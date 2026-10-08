@@ -22,10 +22,13 @@ Usage:
     run.py screenshot <out.png>    Save the game's rendered frame
     run.py freeze                  Pause gameplay through MyTime.Pause
     run.py resume                  Unpause gameplay through MyTime.Unpause
+    run.py invulnerable            Make the player survive enemy damage
+    run.py vulnerable              Restore normal player damage
     run.py camera X Y Z --rot RX RY RZ  Hold the camera at a world pose (euler degrees)
     run.py camera --clear          Return the camera to the game
     run.py quit                    Quit the game and wait for the process to exit
     run.py cycle <level> <out.png> Load, wait --settle seconds, screenshot, quit
+                                   [--invulnerable] applies before the settle wait
                                    [--freeze] [--camera X Y Z RX RY RZ] apply before the screenshot
 
 Game directory resolution: process environment, then the nearest .env walking up from the current
@@ -243,6 +246,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("quit")
     sub.add_parser("freeze")
     sub.add_parser("resume")
+    sub.add_parser("invulnerable")
+    sub.add_parser("vulnerable")
     camera = sub.add_parser("camera")
     camera.add_argument("position", type=float, nargs="*", help="X Y Z in world units")
     camera.add_argument("--rot", type=float, nargs=3, metavar=("RX", "RY", "RZ"), help="euler degrees")
@@ -254,6 +259,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     cycle = sub.add_parser("cycle")
     cycle.add_argument("level", type=Path)
     cycle.add_argument("out", type=Path)
+    cycle.add_argument("--invulnerable", action="store_true", help="make the player invulnerable before the settle wait")
     cycle.add_argument("--freeze", action="store_true", help="freeze gameplay before the screenshot")
     cycle.add_argument(
         "--camera",
@@ -305,12 +311,14 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_screenshot(harness, args.out, args.timeout)
         case "quit":
             ok = quit_game(harness, args.timeout)
-        case "freeze" | "resume":
+        case "freeze" | "resume" | "invulnerable" | "vulnerable":
             ok = send(harness, build_command(args.action), args.timeout)
         case "camera":
             ok = send(harness, camera_payload(args), args.timeout)
         case "cycle":
             ok = send(harness, build_command("load-level", to_game_path(args.level.resolve())), args.timeout)
+            if ok and args.invulnerable:
+                ok = send(harness, build_command("invulnerable"), args.timeout)
             if ok:
                 time.sleep(args.settle)
                 ok = prepare_frame(harness, args)

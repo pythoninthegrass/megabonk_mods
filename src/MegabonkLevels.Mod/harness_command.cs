@@ -13,6 +13,8 @@ public enum HarnessCommandKind
     Resume,
     Camera,
     CameraClear,
+    Invulnerable,
+    Vulnerable,
 }
 
 // World-space camera position and euler rotation in degrees.
@@ -61,6 +63,14 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return true;
             case "resume":
                 command = new HarnessCommand(HarnessCommandKind.Resume, null);
+                error = null;
+                return true;
+            case "invulnerable":
+                command = new HarnessCommand(HarnessCommandKind.Invulnerable, null);
+                error = null;
+                return true;
+            case "vulnerable":
+                command = new HarnessCommand(HarnessCommandKind.Vulnerable, null);
                 error = null;
                 return true;
             case "camera-clear":

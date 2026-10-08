@@ -25,11 +25,13 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Save the rendered frame as a PNG | `{"command":"screenshot","path":"<file>"}` | `run.py screenshot <out.png>` |
 | Freeze gameplay | `{"command":"freeze"}` | `run.py freeze` |
 | Resume gameplay | `{"command":"resume"}` | `run.py resume` |
+| Make the player survive enemy damage | `{"command":"invulnerable"}` | `run.py invulnerable` |
+| Restore normal player damage | `{"command":"vulnerable"}` | `run.py vulnerable` |
 | Hold the camera at a pose | `{"command":"camera","position":[x,y,z],"rotation":[rx,ry,rz]}` | `run.py camera X Y Z --rot RX RY RZ` |
 | Return the camera to the game | `{"command":"camera-clear"}` | `run.py camera --clear` |
 | Quit the game | `{"command":"quit"}` | `run.py quit` |
 
-`run.py cycle <level> <out.png>` runs load, waits `--settle` seconds (default 5), takes the screenshot, then quits. `--freeze` freezes gameplay and `--camera X Y Z RX RY RZ` poses the camera after the settle wait and before the screenshot. `--timeout` (before the subcommand, default 15 seconds) sets how long to wait for each command and for the PNG to appear. The exit code is 0 only if every step succeeded, 1 if a step failed or timed out, and 2 if the harness is not enabled (`run.py` prints `harness not enabled at <dir>; run 'run.py enable' and relaunch the game`).
+`run.py cycle <level> <out.png>` runs load, waits `--settle` seconds (default 5), takes the screenshot, then quits. `--invulnerable` makes the player invulnerable right after the load, before the settle wait. `--freeze` freezes gameplay and `--camera X Y Z RX RY RZ` poses the camera after the settle wait and before the screenshot. `--timeout` (before the subcommand, default 15 seconds) sets how long to wait for each command and for the PNG to appear. The exit code is 0 only if every step succeeded, 1 if a step failed or timed out, and 2 if the harness is not enabled (`run.py` prints `harness not enabled at <dir>; run 'run.py enable' and relaunch the game`).
 
 An unknown command, malformed JSON, or a missing or empty `path` logs `DevHarness: rejected '<file>': <reason>` and moves the file to `rejected/` without touching game state. A command that parses but fails while running logs an error and the game keeps running.
 
@@ -87,11 +89,24 @@ Caveats:
 
 - Fog hides the map from far above: at y=400 the frame is a flat blue field, at y=150 the map is washed out, and at y=60 it is clear. Pose within roughly 150 units of the ground.
 - The player keeps playing under the override, so combine it with `freeze` for a still scene.
-- The camera pose changes the picture only; it does not keep the player alive for an enemy playthrough.
+- The camera pose changes the picture only; use `invulnerable` to keep the player alive for an enemy playthrough.
+
+## Player invulnerability
+
+`invulnerable` gives the player 20 stacks of the game's own Mirror item (`EItem.Mirror`) and sets the item's `cooldown` and `minCooldown` to 0. Mirror stops a hit through `PlayerHealth.A_CheckStopDamage` and normally waits out a cooldown before it can stop the next one; with no cooldown it stops every hit. `vulnerable` removes the item and restores the Mirror amount the player had before. Each command logs `DevHarness: player invulnerable, Mirror amount=20.` or the `vulnerable` equivalent. Issuing the same command twice logs `already invulnerable` or `already vulnerable` and changes nothing. A new run builds a new inventory, so send `invulnerable` again after each `load`.
+
+Verified in the running game on a mod-loaded Forest level: an idle player kept full HP and shield for 47 seconds of game time while kills went from 6 to 51. Setting only the stacks, with the default cooldown, was not enough: HP fell to 36/72 within 40 seconds.
+
+Caveats:
+
+- It is not a god mode. Damage that does not go through `A_CheckStopDamage` is still applied, and stronger enemies such as mini bosses can still kill the player. Which damage sources bypass Mirror was not enumerated.
+- Mirror reflects damage back at the attacker, so enemies take damage from hitting the player.
+- A surviving, idle player can still reach the level-up dialog, which pauses play and puts a window in the frame. `freeze` after the settle wait does not close it, so keep the settle time short or take the screenshot before the first level-up.
+- The kill floor still wins. `KillFloorWatcher` ends a fall through `PlayerHealth.KillPlayer()`, which does not pass through the damage check. Verified with a level that removes every tile but one: the invulnerable player logged `KillFloor: player fell to y=-49.8, killing` and the run ended on the death screen.
 
 ## Not covered
 
-The harness does not make the player invulnerable, skip the level-up dialog, move the player, or press menu buttons. Use `freeze` to stop an idle player dying; without it keep the settle time short.
+The harness does not skip the level-up dialog, move the player, or press menu buttons. Use `freeze` to stop an idle player dying during a screenshot, or `invulnerable` when enemies must keep moving.
 
 ## Character selection
 
