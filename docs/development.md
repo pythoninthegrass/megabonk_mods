@@ -131,7 +131,22 @@ cell (13,7) h1  pos (240, 22, 0)  floor -72
 
 It is drawn only when the harness is enabled and the level is mod-loaded, which is when the kill floor arms; a vanilla level or a disabled harness draws nothing. The label is a copy of one of the minimap's own direction letters, parented to the minimap root and anchored below it. If the minimap does not exist yet it logs `PositionLabel: no minimap found, readout not drawn` once and retries on the next tick; the log line `PositionLabel: created under the minimap` marks the first draw. The conversion and the text format are pure logic in `position_readout.cs`.
 
-Verified in the running game: the unedited example level read `cell (10,7)` at the spawn, and on a level with tiles (7,7) and (10,7) removed the readout followed the player down through each hole at the matching cell.
+Below the player line the readout lists the stage boss and up to five enemies, one line each, refreshed four times a second:
+
+```text
+cell (10,7) h0  pos (120, 2, 3)  floor -72
+boss 5 cell (11,7) h1  pos (157, 16, 3)
+enemy 4 cell (10,7) h0  pos (125, 2, -10)
+enemy 6 cell (10,7) h0  pos (107, 3, -14)  BELOW FLOOR
+```
+
+- The boss line has the boss's id and is read from `EnemyManager.stageBosses`, then skipped when the enemy dictionary is walked so it is not listed twice. There is one line per stage boss and none when the list is empty, which is the case until the boss spawner fires.
+- The enemy lines follow one rule (`NearbyEnemySelector`): enemies whose position is below the kill floor come first, then the rest, each group ordered by horizontal distance (x and z) to the player, ties by lower id, capped at five. With hundreds of enemies alive the readout is still at most seven lines.
+- Each boss and enemy line has the same cell, `h` and `pos` as the player line, and `BELOW FLOOR` when its position is below the floor. The kill floor itself uses the lower of the position and the collider bottom, so an actor can be killed a moment before its line is flagged.
+
+The selector reuses fixed buffers, so a refresh allocates only the few strings it shows. With about 400 enemies a refresh took 0.6 to 1.4 ms and allocated 3 to 5 KB, four times a second; nothing runs on every frame.
+
+Verified in the running game: the unedited example level read `cell (10,7)` at the spawn, and on a level with tiles (7,7) and (10,7) removed the readout followed the player down through each hole at the matching cell. The boss line was checked with a stage boss spawned next to the player and gameplay frozen: its position matched the boss's `y` in the kill-floor heartbeat. A boss spawned by the boss portal and a boss below the floor were not exercised.
 
 Caveats:
 

@@ -1,9 +1,10 @@
 ---
 id: TASK-008
 title: Show player position in game while developing levels
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-08 05:13'
+updated_date: '2026-10-08 06:21'
 labels:
   - level-editor
 dependencies: []

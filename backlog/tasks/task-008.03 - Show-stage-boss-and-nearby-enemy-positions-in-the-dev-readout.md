@@ -1,7 +1,7 @@
 ---
 id: TASK-008.03
 title: Show stage boss and nearby enemy positions in the dev readout
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-08 05:14'
 updated_date: '2026-10-08 06:20'
@@ -27,7 +27,7 @@ Extend the dev-only on-screen readout from TASK-008.02 (player world position, g
 - [x] #3 The selection rule (which enemies to show, in what order, capped at how many) is pure logic with unit tests written before the implementation
 - [x] #4 The readout adds no per-frame allocation or cost that is noticeable in the running game with a full wave of enemies
 - [x] #5 Verified in the running game with a screenshot that shows the boss and enemy lines, and the boss line matches the boss's observed position
-- [ ] #6 docs/development.md documents the added lines and the selection rule
+- [x] #6 docs/development.md documents the added lines and the selection rule
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -40,10 +40,16 @@ AC4 measurement (temporary Stopwatch and GC.GetAllocatedBytesForCurrentThread ar
 AC5 evidence: the game's boss spawner needs player input, so a temporary scratch probe (since removed, never committed) called EnemyManager.SpawnBoss(Ent1, StageBoss) next to the player on the example level; Lil Bark appeared with its health bar and stageBosses=1. With gameplay frozen the screenshot read 'boss 5 cell (11,7) h1 pos (157, 16, 3)' and the kill-floor heartbeat logged the same boss id=5 at y=15.94; the minimap marker sat on the matching side of the player. A real boss spawned by the boss portal and a boss below the floor were not exercised.
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+The dev readout now lists the stage boss (from EnemyManager.stageBosses) and up to five enemies chosen by NearbyEnemySelector: below the kill floor first, then nearest to the player. Selection and line format are pure logic with unit tests written first. Verified in the running game with a boss spawned by a scratch probe and with about 400 enemies; documented in docs/development.md.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
