@@ -1,11 +1,11 @@
 ---
 id: TASK-004.04
 title: 'Leaderboard, achievement, and stats guard for custom levels'
-status: In Progress
+status: Done
 assignee:
   - pythoninthegrass
 created_date: '2026-10-06 21:42'
-updated_date: '2026-10-08 22:02'
+updated_date: '2026-10-08 22:03'
 labels:
   - level-editor
 dependencies:
