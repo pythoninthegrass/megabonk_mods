@@ -6,12 +6,12 @@
 # ///
 
 """
-Self-test for tools/il2cpp_dump.py.
+Self-test for scripts/il2cpp_dump.py.
 
 Covers path derivation and command construction without invoking dotnet or
 touching a real game install.
 
-Usage: uv run tools/test_il2cpp_dump.py
+Usage: uv run scripts/test_il2cpp_dump.py
 """
 
 import sys

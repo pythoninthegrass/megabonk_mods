@@ -19,12 +19,12 @@ This downloads the pinned MelonLoader release, verifies its checksum, and extrac
 
 ## Pointing a build at your own Megabonk install
 
-Path resolution precedence (see `tools/game_paths.py`): process environment variable > `.env` file > built-in default.
+Path resolution precedence (see `scripts/game_paths.py`): process environment variable > `.env` file > built-in default.
 
 1. Copy `.env.example` to `.env` and set `MEGABONK_BOTTLE` (macOS CrossOver bottle) or `MEGABONK_GAME_DIR` (direct game directory override, any platform) if your install isn't at the default location.
 2. For MSBuild-time overrides instead (or in addition), copy `src/MegabonkLevels.Mod/Directory.Build.props`'s properties into a `src/MegabonkLevels.Mod/Directory.Build.local.props` file (gitignored) and override `BottleFolder`/`GameFolder`/`ModInstanceFolder` there.
 
-Run `uv run tools/game_paths.py` at any point to see the paths actually resolved.
+Run `uv run scripts/game_paths.py` at any point to see the paths actually resolved.
 
 ## Running and verifying the mod
 

@@ -12,7 +12,7 @@ Resolves the Megabonk install directory and the paths derived from it
 Precedence: process env > .env file in the repo root > built-in default.
 Defaults assume a Steam install, CrossOver bottle on macOS.
 
-Usage: uv run tools/game_paths.py
+Usage: uv run scripts/game_paths.py
 """
 
 import json

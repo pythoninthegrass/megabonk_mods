@@ -10,10 +10,10 @@ tasks:
 
       Runs Il2CppDumper's net7 build under the mise-managed dotnet 10 SDK
       with DOTNET_ROLL_FORWARD=LatestMajor (there is no standalone net7
-      runtime on this machine). See tools/il2cpp_dump.py.
+      runtime on this machine). See scripts/il2cpp_dump.py.
     deps: [_install-dotnet]
     cmds:
-      - uv run tools/il2cpp_dump.py
+      - uv run scripts/il2cpp_dump.py
 
   _install-dotnet:
     internal: true

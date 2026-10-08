@@ -28,21 +28,21 @@ tasks:
       - task: mod:build
 
   test:
-    desc: "Run the mod's unit tests and the Python tooling self-tests"
+    desc: "Run the mod's unit tests and the Python script self-tests"
     cmds:
       - task: mod:test
-      - task: tools:test
+      - task: scripts:test
 
-  tools:test:
-    desc: "Run every tools/test_*.py self-test via uv"
+  scripts:test:
+    desc: "Run every scripts/test_*.py self-test via uv"
     cmds:
-      - for f in tools/test_*.py; do uv run "$f"; done
+      - for f in scripts/test_*.py; do uv run "$f"; done
 
   lint:
     desc: "markdownlint + ruff over the repo"
     cmds:
       - markdownlint -c .markdownlint.jsonc .
-      - ruff check tools/
+      - ruff check scripts/
 
   check:
     desc: "Build, test, and lint in sequence; non-zero exit on any failure"

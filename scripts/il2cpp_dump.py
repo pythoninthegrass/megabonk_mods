@@ -14,7 +14,7 @@ with roll-forward, since the system has no standalone net7 runtime.
       <GameAssembly.dll> <global-metadata.dat> <outdir>
   (with DOTNET_ROLL_FORWARD=LatestMajor in the environment)
 
-Usage: uv run tools/il2cpp_dump.py
+Usage: uv run scripts/il2cpp_dump.py
 """
 
 import os

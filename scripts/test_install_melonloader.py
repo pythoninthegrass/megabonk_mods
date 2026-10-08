@@ -6,12 +6,12 @@
 # ///
 
 """
-Self-test for tools/install_melonloader.py.
+Self-test for scripts/install_melonloader.py.
 
 Covers idempotency checking and checksum verification without touching the
 network or a real game install.
 
-Usage: uv run tools/test_install_melonloader.py
+Usage: uv run scripts/test_install_melonloader.py
 """
 
 import os

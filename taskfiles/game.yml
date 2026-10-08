@@ -8,12 +8,12 @@ tasks:
     summary: |
       Usage: task game:melonloader:install
 
-      No task-level status: check - tools/install_melonloader.py does its
+      No task-level status: check - scripts/install_melonloader.py does its
       own idempotency check on the download/extract step internally, but
       still needs to run every time to retry the CrossOver Wine DLL
       override, which isn't tracked by the version marker.
     cmds:
-      - uv run tools/install_melonloader.py
+      - uv run scripts/install_melonloader.py
 
   run:
     desc: "Launch Megabonk"
@@ -46,4 +46,4 @@ tasks:
   log:
     desc: "Tail MelonLoader's Latest.log from the resolved game directory"
     cmds:
-      - tail -f "$(uv run tools/game_paths.py | python3 -c 'import json, sys; print(json.load(sys.stdin)["latest_log_path"])')"
+      - tail -f "$(uv run scripts/game_paths.py | python3 -c 'import json, sys; print(json.load(sys.stdin)["latest_log_path"])')"

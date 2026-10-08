@@ -6,9 +6,9 @@
 # ///
 
 """
-Self-test for tools/game_paths.py.
+Self-test for scripts/game_paths.py.
 
-Usage: uv run tools/test_game_paths.py
+Usage: uv run scripts/test_game_paths.py
 """
 
 import sys

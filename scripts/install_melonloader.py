@@ -16,8 +16,8 @@ Idempotent: install() skips the download/extract when the pinned version is
 already present.
 
 Usage:
-  uv run tools/install_melonloader.py --check   # prints whether the pinned version is installed
-  uv run tools/install_melonloader.py           # installs if not already present
+  uv run scripts/install_melonloader.py --check   # prints whether the pinned version is installed
+  uv run scripts/install_melonloader.py           # installs if not already present
 """
 
 import argparse
