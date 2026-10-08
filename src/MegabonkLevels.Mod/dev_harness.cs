@@ -22,6 +22,8 @@ public static class DevHarness
     private static bool _enabled;
     private static float _nextPoll;
 
+    public static bool Enabled => _enabled;
+
     public static void Install(MelonLogger.Instance logger)
     {
         var root = Path.Combine(MelonEnvironment.GameRootDirectory, "harness");

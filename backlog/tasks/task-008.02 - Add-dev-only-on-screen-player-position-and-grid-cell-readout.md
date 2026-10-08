@@ -4,7 +4,7 @@ title: Add dev-only on-screen player position and grid cell readout
 status: In Progress
 assignee: []
 created_date: '2026-10-08 05:14'
-updated_date: '2026-10-08 06:08'
+updated_date: '2026-10-08 06:13'
 labels:
   - level-editor
 dependencies: []
@@ -21,15 +21,21 @@ Add a text readout, drawn only when the dev harness is enabled, that shows the p
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 With the harness enabled, the readout shows the player's world x, y, z and grid cell in a mod-loaded level and updates as the player moves
-- [ ] #2 The readout shows the kill-floor height and marks when the player is below it
-- [ ] #3 The readout is not drawn when the harness is disabled or in a vanilla level
+- [x] #1 With the harness enabled, the readout shows the player's world x, y, z and grid cell in a mod-loaded level and updates as the player moves
+- [x] #2 The readout shows the kill-floor height and marks when the player is below it
+- [x] #3 The readout is not drawn when the harness is disabled or in a vanilla level
 - [x] #4 The world-to-cell conversion is pure logic with unit tests written before the implementation, including cells at the grid edges and positions outside the grid
 - [ ] #5 Verified in the running game with a screenshot that shows the readout, and the cell shown matches the position of a known edited cell in a scratch level
 - [ ] #6 docs/development.md documents the readout
 <!-- AC:END -->
 
+## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
+AC3 is enforced in code (the label is armed only when the harness is enabled and the kill floor is armed by a mod-loaded level; a vanilla level reaches Disarm). It was not observed in the running game: with the harness disabled no command can load a level, and menu navigation is not scripted.
+
+The label is a TextMeshProUGUI cloned from a minimap direction letter, so OnGUI was not needed.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

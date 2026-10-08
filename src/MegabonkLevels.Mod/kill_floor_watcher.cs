@@ -40,6 +40,16 @@ public static class KillFloorWatcher
         _logger = logger;
         _playerKilled = false;
         _armed = !float.IsNegativeInfinity(_floorY);
+        if (_armed)
+        {
+            var columns = tileGen.proceduralTiles;
+            PositionLabel.Arm(columns.Length, columns[0].Length, mapParameters.scaledTileWidth, mapParameters.scaledTileHeight, _floorY, logger);
+        }
+        else
+        {
+            PositionLabel.Disarm();
+        }
+
         logger.Msg(_armed ? $"KillFloor: armed at y={_floorY} (catch floor y={catchFloorY})" : "KillFloor: no tiles, not armed");
         if (_armed && _heartbeatEnabled)
         {
@@ -58,6 +68,7 @@ public static class KillFloorWatcher
     public static void Disarm()
     {
         _armed = false;
+        PositionLabel.Disarm();
     }
 
     public static void Tick()
