@@ -61,6 +61,12 @@ public static class LevelLoaderPatch
             mapTierIndex = level.Tier,
         };
 
+        var characterWarning = CharacterOverride.TryApply(id => CharacterMenu.selectedCharacter = (ECharacter)id);
+        if (characterWarning != null)
+        {
+            logger.Warning(characterWarning);
+        }
+
         logger.Msg($"LevelLoader: starting '{path}' map={level.Map} stage={level.StageIndex} tier={level.Tier} seed={level.Seed}");
 
         try
