@@ -242,7 +242,7 @@ public static class LiveEditPatch
             var spawned = UnityEngine.Object.Instantiate(prefab, ToVector(t.Position), Quaternion.Euler(ToVector(t.Rotation)));
             spawned.transform.localScale = ToVector(t.Scale);
             _placed[action.Target.PlacementId] = spawned;
-            _logger.Msg($"LiveEdit: spawned '{action.CatalogId}' as placement:{action.Target.PlacementId} at {spawned.transform.position}");
+            _logger.Msg($"LiveEdit: spawned '{action.CatalogId}' (prefab '{prefab.name}') as placement:{action.Target.PlacementId} at {spawned.transform.position}");
         }
 
         private void MoveObject(LiveAction action)
