@@ -24,10 +24,13 @@ public class MegabonkLevelsMod : MelonMod
         NavMeshPatch.Install(LoggerInstance);
         LiveEditPatch.Install(LoggerInstance);
         SceneTransitionProbe.Install(LoggerInstance);
+        DevHarness.Install(LoggerInstance);
     }
 
     public override void OnUpdate()
     {
+        DevHarness.Poll();
+
         if (Input.GetKeyDown(KeyCode.F9))
         {
             SeedForcePatch.CycleMode();
