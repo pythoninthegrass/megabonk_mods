@@ -106,3 +106,19 @@ The `object:` category covers everything `RandomObjectPlacer` and `SpawnInteract
 A tile's world position is `origin + (x, z) * scaledTileWidth` with Y at `posY * scaledTileHeight` (Forest: grid cell (0,0) at world (-280, -280), `posY=1` at Y=20). `PlayerSpawnPortal` in the Forest test seed sits at (120, 0, 0), i.e. grid cell (10, 7).
 
 **Caveat:** only confirmed for `Tiles`-type maps (Forest, Graveyard). `ProceduralMesh` maps (Desert) have no confirmed-controllable seed yet (see §1), so the scheme is unverified there.
+
+## Minimap components
+
+The HUD minimap is a camera rendered to a texture and shown in a circular mask. Confirmed against the IL2CPP dump and by dumping the live hierarchy in a mod-loaded Forest level.
+
+UI side, under `GameUI/GameUI/HUD/Minimap` (a `RawImage` with the `MinimapUi` component, 175x175 canvas units, anchored to the top-right corner):
+
+- `MapRenderer` (`RawImage` with a `Mask`, circle sprite `256Circle`) holds `RenderTexture` (`RawImage` showing the 256x256 render texture `MinimapTexture`) and `Jammer` (`RawImage`, `MinimapJammed`, `MinimapUi.jammer`).
+- `Border` (`RawImage`, `MinimapBorder`) holds four `TextMeshProUGUI` direction letters `N`, `S`, `E` and `W`, exposed as `MinimapUi.directionLetters`. `MinimapUi` rotates them as the camera yaw changes (`OnRotationUpdated`), and its scale follows the `minimap_size` setting.
+
+World side:
+
+- `MinimapCamera` (namespace `Assets.Scripts.Camera`) exists twice. The one on `Player/MinimapCamera` drives the HUD minimap: orthographic, size 110, rendering into the 256x256 `MinimapTexture`, culling mask 16384 (layer 14). Its `minimapCamera` follows the player at a fixed height (about y=1000) and looks straight down, so the player is always at the centre. The one on `MapCamera` is orthographic size 300 into a 1024x1024 texture at (0, 1000, 0), so it covers the whole 600x600 map; it is presumably the full-map view.
+- `MinimapMesh` (`meshRenderer`, `meshFilter`; `Set(Mesh, Color fogColor)`) is the map drawn for those cameras, centred on the origin with bounds of 600x600 in x and z.
+- The player marker is `MinimapCamera.playerIcon`, the object `Player/MinimapIcon`, which moves with the player and is drawn by the minimap camera like any other layer-14 object (`MinimapPlayerIcon`, `MinimapIcon`).
+- Enemy markers are icon objects made by `AddEnemyMinimapIcon(Enemy, Material, float)` from `enemyIconPrefab` and tracked in `enemyIconDictionary` (`Dictionary<Enemy, GameObject>`), updated by `UpdateEnemyMinimapIcons`. Boss and portal arrows are `Assets.Scripts.Camera.MinimapArrow` objects (`target`, `Set(Transform, Color)`) tracked in `arrowDict`. Pickups, chests and shrines carry their own `minimapIcon` object.

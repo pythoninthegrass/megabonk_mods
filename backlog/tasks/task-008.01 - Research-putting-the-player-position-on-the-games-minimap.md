@@ -1,9 +1,10 @@
 ---
 id: TASK-008.01
 title: Research putting the player position on the game's minimap
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-08 05:14'
+updated_date: '2026-10-08 06:07'
 labels:
   - level-editor
 dependencies: []
@@ -20,11 +21,13 @@ Decide whether the game's own minimap can show the player's world position or gr
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The minimap's component types, the objects that draw it and its player/enemy markers are identified from the dump and confirmed in the running game
+- [x] #1 The minimap's component types, the objects that draw it and its player/enemy markers are identified from the dump and confirmed in the running game
 - [ ] #2 The mapping between world coordinates and minimap coordinates is documented, or documented as not recoverable
 - [ ] #3 A written verdict states whether adding a text label for position or cell on the minimap is viable, with an estimate of the added code and the risk of breaking on a game update
 - [ ] #4 Findings are written into docs without citing task IDs
 <!-- AC:END -->
+
+
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
