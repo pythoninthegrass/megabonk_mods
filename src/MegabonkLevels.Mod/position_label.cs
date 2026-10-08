@@ -1,17 +1,23 @@
+using System.Text;
 using Il2Cpp;
+using Il2CppAssets.Scripts.Actors.Enemies;
 using Il2CppAssets.Scripts.Actors.Player;
+using Il2CppAssets.Scripts.Managers;
 using Il2CppTMPro;
 using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
 
-// Dev-only text under the game's minimap that shows the player's world position, grid cell and kill-floor height.
+// Dev-only text under the game's minimap that shows the player's world position, grid cell and kill-floor height,
+// followed by the stage boss and a few enemies chosen by NearbyEnemySelector.
 // Drawn only when the dev harness is enabled and the level is mod-loaded (the kill floor is armed); see docs/development.md.
 public static class PositionLabel
 {
     private const float UpdateIntervalSeconds = 0.1f;
+    private const float ActorIntervalSeconds = 0.25f;
     private const float FontSize = 20f;
+    private const int MaxEnemyLines = 5;
 
     private static MelonLogger.Instance _logger;
     private static bool _armed;
@@ -23,6 +29,10 @@ public static class PositionLabel
     private static TextMeshProUGUI _label;
     private static bool _warnedNoMinimap;
     private static float _nextUpdate;
+    private static float _nextActorUpdate;
+    private static readonly NearbyEnemySelector Selector = new(MaxEnemyLines);
+    private static readonly StringBuilder ActorText = new();
+    private static string _actorLines = string.Empty;
 
     public static void Arm(int gridWidth, int gridDepth, float spacing, float tileHeight, float floorY, MelonLogger.Instance logger)
     {
@@ -33,6 +43,8 @@ public static class PositionLabel
         _tileHeight = tileHeight;
         _floorY = floorY;
         _warnedNoMinimap = false;
+        _actorLines = string.Empty;
+        _nextActorUpdate = 0f;
         _armed = DevHarness.Enabled;
     }
 
@@ -65,7 +77,80 @@ public static class PositionLabel
         var position = player.transform.position;
         var cell = PositionReadout.CellOf(position.x, position.z, _gridWidth, _gridDepth, _spacing);
         var level = PositionReadout.LevelOf(position.y, _tileHeight);
-        _label.text = PositionReadout.Format(position.x, position.y, position.z, cell, level, _floorY);
+        if (Time.unscaledTime >= _nextActorUpdate)
+        {
+            _nextActorUpdate = Time.unscaledTime + ActorIntervalSeconds;
+            RefreshActorLines(position);
+        }
+
+        var playerLine = PositionReadout.Format(position.x, position.y, position.z, cell, level, _floorY);
+        _label.text = _actorLines.Length == 0 ? playerLine : playerLine + "\n" + _actorLines;
+    }
+
+    // The stage boss is kept in its own list on the manager and is not reliably in `enemies`, so it is read from there
+    // and skipped when the enemy dictionary is walked.
+    private static void RefreshActorLines(Vector3 player)
+    {
+        ActorText.Clear();
+        var manager = EnemyManager.Instance;
+        if (manager?.enemies == null)
+        {
+            _actorLines = string.Empty;
+            return;
+        }
+
+        var bosses = manager.stageBosses;
+        for (var i = 0; bosses != null && i < bosses.Count; i++)
+        {
+            var boss = bosses[i];
+            if (boss != null)
+            {
+                AppendActor($"boss {boss.id}", boss.transform.position);
+            }
+        }
+
+        Selector.Begin(player.x, player.z, _floorY);
+        foreach (var enemy in manager.enemies.Values)
+        {
+            if (enemy != null && !IsBoss(bosses, enemy.id))
+            {
+                var position = enemy.transform.position;
+                Selector.Offer(new ActorPosition(enemy.id, position.x, position.y, position.z));
+            }
+        }
+
+        for (var i = 0; i < Selector.Count; i++)
+        {
+            var actor = Selector[i];
+            AppendActor($"enemy {actor.Id}", new Vector3(actor.X, actor.Y, actor.Z));
+        }
+
+        _actorLines = ActorText.ToString();
+    }
+
+    private static bool IsBoss(Il2CppSystem.Collections.Generic.List<Enemy> bosses, uint id)
+    {
+        for (var i = 0; bosses != null && i < bosses.Count; i++)
+        {
+            if (bosses[i] != null && bosses[i].id == id)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void AppendActor(string label, Vector3 position)
+    {
+        var cell = PositionReadout.CellOf(position.x, position.z, _gridWidth, _gridDepth, _spacing);
+        var level = PositionReadout.LevelOf(position.y, _tileHeight);
+        if (ActorText.Length > 0)
+        {
+            ActorText.Append('\n');
+        }
+
+        ActorText.Append(PositionReadout.FormatActor(label, position.x, position.y, position.z, cell, level, _floorY));
     }
 
     private static void Hide()
@@ -110,7 +195,7 @@ public static class PositionLabel
         rect.anchorMin = rect.anchorMax = new Vector2(1f, 0f);
         rect.pivot = new Vector2(1f, 1f);
         rect.anchoredPosition = new Vector2(0f, -34f);
-        rect.sizeDelta = new Vector2(700f, 28f);
+        rect.sizeDelta = new Vector2(700f, 200f);
         rect.localRotation = Quaternion.identity;
         rect.localScale = Vector3.one;
         label.alignment = TextAlignmentOptions.TopRight;
