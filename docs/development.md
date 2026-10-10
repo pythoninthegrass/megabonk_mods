@@ -244,3 +244,22 @@ The entries come from the game's own prefab catalog, walked by `CatalogPrefabs` 
 Entries have no thumbnail. Each row shows the prefab's GameObject name, falling back to a label such as `Random object 1/0` when the name is blank. Rendering prefabs to textures was left out because it needs an off-screen camera and lighting per prefab for little gain over the name.
 
 Clicking a row selects it, scrolling the wheel over the panel scrolls the list, and the panel title shows the current selection. Clicks and scrolling are read from Unity's `Input` directly instead of through a UGUI `EventSystem`, so the game's Rewired input module is untouched. The selection is `EditorPalette.Selection.Current`, a `CatalogId`, with a `Changed` event; the placement tool reads it from there. The palette is rebuilt each time editor mode is entered, so it follows the map; a selection that is not in the new map's entries is cleared. Building logs `EditorPalette: built <n> entries for <map>`.
+
+## Tile tools
+
+While editor mode is active a toolbar at the top centre of the screen shows four tile tools and the targeted tile. The digit keys 1 to 4 select Raise, Lower, Slope and Remove; Raise is selected the first time editor mode is entered, and the choice persists across entries.
+
+The targeted tile is the one under the mouse pointer. A ray from the camera through the pointer is cast against the baked ground collision (`ProceduralTileGeneration.collider`, see "Ground collision after edits" in [runtime-map-structure.md](runtime-map-structure.md)) only, so enemies, props and the player never block it. The hit point is stepped 0.01 units into the surface before it is converted to a cell with `PositionReadout.CellOf`, so a hit on a side wall targets the tile the wall belongs to. A yellow outline traces the targeted tile's top surface, following the ramp on a slope. Nothing is targeted while the pointer is over the palette, outside the grid, or over a removed cell.
+
+A left click applies the selected tool to the targeted tile:
+
+| Tool | Edit |
+| --- | --- |
+| Raise | `SetTileHeight` one level higher |
+| Lower | `SetTileHeight` one level lower; nothing at the lowest level the generator produced on the map (Forest seed 20261007 runs from -3 to 2) |
+| Slope | `SetTileSlope` to the next of North, East, South, West, flat |
+| Remove | `RemoveTile` |
+
+The op goes through `LiveEditPatch.ApplyLive`, which runs it through a `LiveEditPlanner` (an `EditStack` on the generated grid plus every edit so far, including a loaded level file's) and applies the resulting action with the same applier, fill regeneration and collision rebuild a level file uses at load. Each click logs `EditorTileTools: <tool> (x,z) -> <opType>`. There is no tool to add a tile: a removed cell has no collision to aim at, and undo will restore it. Removing a tile does not yet build walls around the hole, so the sky shows past the neighbours' edges; this is open for both editor and level-file removals.
+
+The tools work in any `Tiles`-map run, not only mod-loaded levels, but the kill floor is armed only on mod-loaded levels; in a vanilla run a fall through a removed tile lands on the game's own catch floor. Pure logic lives in `tile_tool.cs` (what each tool emits, the toolbar text) and `tile_outline.cs` (the outline corners).

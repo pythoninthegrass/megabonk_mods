@@ -17,7 +17,6 @@ public static class EditorPalette
     private const float HeaderHeight = 22f;
     private const float FontSize = 16f;
     private const float ScrollPixelsPerNotch = 40f;
-    private const string FontName = "RobotoMono";
 
     private static readonly Color PanelColor = new(0f, 0f, 0f, 0.75f);
     private static readonly Color RowColor = new(1f, 1f, 1f, 0.06f);
@@ -151,14 +150,10 @@ public static class EditorPalette
 
     private static void BuildCanvas(IReadOnlyList<PaletteEntry> entries)
     {
-        _root = new GameObject("MegabonkLevelsPalette");
-        Object.DontDestroyOnLoad(_root);
-        var canvas = _root.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 1000;
+        _root = EditorUi.NewCanvas("MegabonkLevelsPalette");
 
-        var font = PositionLabel.FindFontAsset(FontName);
-        _panel = NewRect("Panel", _root.transform);
+        var font = PositionLabel.FindFontAsset(EditorUi.FontName);
+        _panel = EditorUi.NewRect("Panel", _root.transform);
         _panel.anchorMin = new Vector2(0f, 0f);
         _panel.anchorMax = new Vector2(0f, 1f);
         _panel.pivot = new Vector2(0f, 0.5f);
@@ -166,18 +161,18 @@ public static class EditorPalette
         _panel.anchoredPosition = Vector2.zero;
         _panel.gameObject.AddComponent<Image>().color = PanelColor;
 
-        var titleRect = NewRect("Title", _panel);
-        Stretch(titleRect, TitleHeight);
-        _title = NewLabel(titleRect, font, TextAlignmentOptions.TopLeft);
+        var titleRect = EditorUi.NewRect("Title", _panel);
+        EditorUi.Stretch(titleRect, TitleHeight);
+        _title = EditorUi.NewLabel(titleRect, font, TextAlignmentOptions.TopLeft, FontSize);
 
-        _viewport = NewRect("Viewport", _panel);
+        _viewport = EditorUi.NewRect("Viewport", _panel);
         _viewport.anchorMin = Vector2.zero;
         _viewport.anchorMax = Vector2.one;
         _viewport.offsetMin = Vector2.zero;
         _viewport.offsetMax = new Vector2(0f, -TitleHeight);
         _viewport.gameObject.AddComponent<RectMask2D>();
 
-        _content = NewRect("Content", _viewport);
+        _content = EditorUi.NewRect("Content", _viewport);
         _content.anchorMin = new Vector2(0f, 1f);
         _content.anchorMax = new Vector2(1f, 1f);
         _content.pivot = new Vector2(0f, 1f);
@@ -213,7 +208,7 @@ public static class EditorPalette
 
     private static void AddRow(TMP_FontAsset font, string text, CatalogId? id, float height, ref float y)
     {
-        var rect = NewRect(id.HasValue ? "Entry" : "Header", _content);
+        var rect = EditorUi.NewRect(id.HasValue ? "Entry" : "Header", _content);
         rect.anchorMin = new Vector2(0f, 1f);
         rect.anchorMax = new Vector2(1f, 1f);
         rect.pivot = new Vector2(0f, 1f);
@@ -228,12 +223,12 @@ public static class EditorPalette
             row.Background.color = RowColor;
         }
 
-        var labelRect = NewRect("Label", rect);
+        var labelRect = EditorUi.NewRect("Label", rect);
         labelRect.anchorMin = Vector2.zero;
         labelRect.anchorMax = Vector2.one;
         labelRect.offsetMin = new Vector2(8f, 0f);
         labelRect.offsetMax = new Vector2(-8f, 0f);
-        var label = NewLabel(labelRect, font, TextAlignmentOptions.MidlineLeft);
+        var label = EditorUi.NewLabel(labelRect, font, TextAlignmentOptions.MidlineLeft, FontSize);
         label.text = id.HasValue ? text : $"<color=#d0b050>{text}</color>";
         _rows.Add(row);
     }
@@ -286,38 +281,5 @@ public static class EditorPalette
 
             _title.text = $"{_mapLabel} palette\nselected: {name}";
         }
-    }
-
-    private static RectTransform NewRect(string name, Transform parent)
-    {
-        var go = new GameObject(name);
-        go.transform.SetParent(parent, false);
-        return go.AddComponent<RectTransform>();
-    }
-
-    private static void Stretch(RectTransform rect, float height)
-    {
-        rect.anchorMin = new Vector2(0f, 1f);
-        rect.anchorMax = new Vector2(1f, 1f);
-        rect.pivot = new Vector2(0f, 1f);
-        rect.offsetMin = new Vector2(8f, -height);
-        rect.offsetMax = new Vector2(-8f, 0f);
-    }
-
-    private static TextMeshProUGUI NewLabel(RectTransform rect, TMP_FontAsset font, TextAlignmentOptions alignment)
-    {
-        var label = rect.gameObject.AddComponent<TextMeshProUGUI>();
-        if (font != null)
-        {
-            label.font = font;
-        }
-
-        label.fontSize = FontSize;
-        label.alignment = alignment;
-        label.enableWordWrapping = false;
-        label.overflowMode = TextOverflowModes.Ellipsis;
-        label.color = Color.white;
-        label.raycastTarget = false;
-        return label;
     }
 }

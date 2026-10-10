@@ -14,6 +14,16 @@
     {
       "opType": "tile.setSlope",
       "target": "",
+      "payload": "{\"x\":10,\"z\":5,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":7,\"height\":0}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
       "payload": "{\"x\":9,\"z\":7,\"direction\":3}"
     },
     {

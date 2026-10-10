@@ -27,16 +27,14 @@ public readonly record struct LiveAction(
 // state, monotonic placement ids) stay in one place, and flattens them into ordered live actions.
 public static class LiveEditPlan
 {
-    public static IReadOnlyList<LiveAction> Build(IReadOnlyList<EditOp> edits)
+    // baseline is the generated grid; edits replay on a copy of it, so an untouched cell keeps its generated height and slope.
+    public static IReadOnlyList<LiveAction> Build(IReadOnlyList<EditOp> edits, LevelState baseline)
     {
-        var stack = new EditStack(new LevelState());
+        var planner = new LiveEditPlanner(baseline);
         var actions = new List<LiveAction>();
-        var nextPlacementId = 0;
-
         foreach (var op in edits)
         {
-            stack.Apply(op);
-            actions.Add(ToAction(op, stack.State, ref nextPlacementId));
+            actions.Add(planner.Apply(op));
         }
 
         return actions;
@@ -56,7 +54,7 @@ public static class LiveEditPlan
         return false;
     }
 
-    private static LiveAction ToAction(EditOp op, LevelState state, ref int nextPlacementId)
+    internal static LiveAction ToAction(EditOp op, LevelState state, ref int nextPlacementId)
     {
         switch (op.OpType)
         {
@@ -104,4 +102,24 @@ public static class LiveEditPlan
 
     private static LiveAction SetTile(int x, int z, LevelState state) =>
         new(LiveActionKind.SetTile, x, z, state.GetTile(x, z), default, "", null);
+}
+
+// Plans one op at a time on top of a copy of the baseline, for edits made while the level is running.
+public sealed class LiveEditPlanner
+{
+    private readonly EditStack _stack;
+    private int _nextPlacementId;
+
+    public LiveEditPlanner(LevelState baseline)
+    {
+        _stack = new EditStack(LevelState.FromTiles(baseline.Tiles));
+    }
+
+    public LevelState State => _stack.State;
+
+    public LiveAction Apply(EditOp op)
+    {
+        _stack.Apply(op);
+        return LiveEditPlan.ToAction(op, _stack.State, ref _nextPlacementId);
+    }
 }

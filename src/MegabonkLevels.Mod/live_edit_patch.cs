@@ -8,6 +8,9 @@ using UnityEngine;
 
 namespace MegabonkLevels;
 
+// LowestLevel is the lowest tile level the generator produced, the floor for the editor's Lower tool.
+public readonly record struct LiveGrid(int Width, int Depth, float Spacing, float TileHeight, int LowestLevel);
+
 // On A_GenerationComplete, indexes the live spawned tiles/objects by genId and, when a level file
 // started the run, applies that file's edits through LiveEditPlan. See docs/runtime-map-structure.md
 // for the genId scheme and where each category lives in the scene.
@@ -17,6 +20,7 @@ public static class LiveEditPatch
     private const string TileObjectsParentName = "TileObjectsParent";
 
     private static IReadOnlyList<EditOp> _pendingEdits;
+    private static Session _session;
 
     // Set by LevelLoaderPatch right before it starts a run, consumed (and cleared) by the next
     // generation so a later vanilla run is never edited.
@@ -30,10 +34,44 @@ public static class LiveEditPatch
         MapGenerationController.A_GenerationComplete += (Il2CppSystem.Action)(() => OnGenerationComplete(logger));
     }
 
+    public static LiveGrid? Grid => _session?.Grid;
+
+    // The tile's current state: the generated grid with every applied edit on top, null for an empty cell.
+    public static TileState? TileAt(int x, int z) => _session?.Planner.State.GetTile(x, z);
+
+    // The baked ground collision, replaced after every terrain edit.
+    public static MeshCollider GroundCollider() => _session?.TileGen.collider?.GetComponent<MeshCollider>();
+
+    // Applies one edit to the running level the same way a level file's edits are applied at load.
+    public static bool ApplyLive(EditOp op)
+    {
+        var session = _session;
+        if (session == null)
+        {
+            return false;
+        }
+
+        LiveAction action;
+        try
+        {
+            action = session.Planner.Apply(op);
+        }
+        catch (ArgumentException ex)
+        {
+            session.Logger.Error($"LiveEdit: invalid edit {op.OpType}: {ex.Message}");
+            return false;
+        }
+
+        var plan = new[] { action };
+        ApplyPlan(session, plan);
+        return true;
+    }
+
     private static void OnGenerationComplete(MelonLogger.Instance logger)
     {
         var edits = _pendingEdits;
         _pendingEdits = null;
+        _session = null;
 
         var controller = UnityEngine.Object.FindObjectOfType<MapGenerationController>();
         if (controller == null)
@@ -45,7 +83,7 @@ public static class LiveEditPatch
         logger.Msg($"LiveEdit: indexed {index.Count} objects: {SummarizeCategories(index)}");
 
         var tileGen = controller.proceduralTileGeneration;
-        if (edits == null || tileGen?.proceduralTiles == null)
+        if (tileGen?.proceduralTiles == null)
         {
             if (edits != null && edits.Count > 0)
             {
@@ -56,51 +94,92 @@ public static class LiveEditPatch
             return;
         }
 
-        if (edits.Count > 0)
+        var baseline = SnapshotGrid(tileGen);
+        var session = new Session(logger, controller, index, baseline);
+        if (edits != null && edits.Count > 0)
         {
-            ApplyEdits(logger, controller, index, edits);
+            ApplyEdits(session, baseline, edits);
+        }
+
+        _session = session;
+        if (edits == null)
+        {
+            KillFloorWatcher.Disarm();
+            return;
         }
 
         KillFloorWatcher.Arm(tileGen, logger);
     }
 
-    private static void ApplyEdits(MelonLogger.Instance logger, MapGenerationController controller, Dictionary<string, GameObject> index, IReadOnlyList<EditOp> edits)
+    private static void ApplyEdits(Session session, LevelState baseline, IReadOnlyList<EditOp> edits)
     {
         IReadOnlyList<LiveAction> plan;
         try
         {
-            plan = LiveEditPlan.Build(edits);
+            plan = LiveEditPlan.Build(edits, baseline);
         }
         catch (ArgumentException ex)
         {
-            logger.Error($"LiveEdit: invalid edit list: {ex.Message}");
+            session.Logger.Error($"LiveEdit: invalid edit list: {ex.Message}");
             return;
         }
 
-        var applier = new Applier(logger, controller, index);
+        foreach (var op in edits)
+        {
+            session.Planner.Apply(op);
+        }
+
+        ApplyPlan(session, plan);
+    }
+
+    private static void ApplyPlan(Session session, IReadOnlyList<LiveAction> plan)
+    {
         foreach (var action in plan)
         {
             try
             {
-                applier.Apply(action);
+                session.Applier.Apply(action);
             }
             catch (Exception ex)
             {
-                logger.Error($"LiveEdit: {action.Kind} failed: {ex}");
+                session.Logger.Error($"LiveEdit: {action.Kind} failed: {ex}");
             }
         }
 
-        logger.Msg($"LiveEdit: applied {plan.Count} edit(s)");
+        session.Logger.Msg($"LiveEdit: applied {plan.Count} edit(s)");
 
         if (LiveEditPlan.ChangesTerrain(plan))
         {
-            var tileGen = controller.proceduralTileGeneration;
-            var tileWidth = (tileGen.currentMapParameters ?? tileGen.currentStage?.mapParameters).scaledTileWidth;
             var touched = plan.Where(a => a.Kind == LiveActionKind.SetTile).Select(a => (a.X, a.Z));
-            FillRegeneration.Regenerate(tileGen, tileWidth, touched, logger);
-            CollisionRebuild.Replace(tileGen, logger);
+            FillRegeneration.Regenerate(session.TileGen, session.Grid.Spacing, touched, session.Logger);
+            CollisionRebuild.Replace(session.TileGen, session.Logger);
         }
     }
+
+    // The generated grid before any edit, read from the live tiles.
+    private static LevelState SnapshotGrid(ProceduralTileGeneration tileGen)
+    {
+        var tiles = new Dictionary<(int X, int Z), TileState>();
+        var grid = tileGen.proceduralTiles;
+        for (var x = 0; x < grid.Length; x++)
+        {
+            for (var z = 0; grid[x] != null && z < grid[x].Length; z++)
+            {
+                var tile = grid[x][z];
+                if (tile != null)
+                {
+                    tiles[(x, z)] = new TileState(tile.posY, SlopeOf(tile));
+                }
+            }
+        }
+
+        return LevelState.FromTiles(tiles);
+    }
+
+    private static SlopeDirection SlopeOf(ProceduralTile tile) =>
+        tile == null || tile.isFlat
+            ? SlopeDirection.None
+            : TilePlacement.SlopeFromVector(Mathf.RoundToInt(tile.dir.x), Mathf.RoundToInt(tile.dir.z));
 
     private static Dictionary<string, GameObject> BuildIndex(MapGenerationController controller)
     {
@@ -172,6 +251,28 @@ public static class LiveEditPatch
         return result;
     }
 
+    // Everything needed to keep editing the level generated last: the planner holds the generated grid plus every edit.
+    private sealed class Session
+    {
+        public readonly MelonLogger.Instance Logger;
+        public readonly ProceduralTileGeneration TileGen;
+        public readonly LiveGrid Grid;
+        public readonly Applier Applier;
+        public readonly LiveEditPlanner Planner;
+
+        public Session(MelonLogger.Instance logger, MapGenerationController controller, Dictionary<string, GameObject> index, LevelState baseline)
+        {
+            Logger = logger;
+            TileGen = controller.proceduralTileGeneration;
+            var columns = TileGen.proceduralTiles;
+            var mapParameters = TileGen.currentMapParameters ?? TileGen.currentStage?.mapParameters;
+            var lowestLevel = baseline.Tiles.Count == 0 ? 0 : baseline.Tiles.Values.Min(t => t.Height);
+            Grid = new LiveGrid(columns.Length, columns[0].Length, mapParameters.scaledTileWidth, mapParameters.scaledTileHeight, lowestLevel);
+            Applier = new Applier(logger, controller, index);
+            Planner = new LiveEditPlanner(baseline);
+        }
+    }
+
     private sealed class Applier
     {
         private readonly MelonLogger.Instance _logger;
@@ -235,10 +336,7 @@ public static class LiveEditPatch
 
             var state = action.Tile.Value;
             var live = TileAt(x, z);
-            var liveSlope = live == null || live.isFlat
-                ? SlopeDirection.None
-                : TilePlacement.SlopeFromVector(Mathf.RoundToInt(live.dir.x), Mathf.RoundToInt(live.dir.z));
-            var kind = TilePlacement.Decide(live != null, liveSlope, state);
+            var kind = TilePlacement.Decide(live != null, SlopeOf(live), state);
 
             if (kind == TilePlacementKind.MoveOnly)
             {

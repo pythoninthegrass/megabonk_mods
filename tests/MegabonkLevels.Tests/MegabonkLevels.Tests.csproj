@@ -47,6 +47,8 @@
     <Compile Include="../../src/MegabonkLevels.Mod/palette_entry.cs" Link="palette_entry.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/palette_catalog_builder.cs" Link="palette_catalog_builder.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/palette_selection.cs" Link="palette_selection.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/tile_tool.cs" Link="tile_tool.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/tile_outline.cs" Link="tile_outline.cs" />
   </ItemGroup>
 
   <ItemGroup>

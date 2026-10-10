@@ -5,16 +5,82 @@ public class LiveEditPlanTests
     private static readonly TransformData SomeTransform =
         new(new Vector3Data(1, 2, 3), new Vector3Data(0, 90, 0), new Vector3Data(1, 1, 1));
 
+    private static IReadOnlyList<LiveAction> Build(params EditOp[] edits) => LiveEditPlan.Build(edits, new LevelState());
+
+    private static LevelState Baseline(params ((int X, int Z) Cell, TileState Tile)[] tiles) =>
+        LevelState.FromTiles(tiles.Select(t => new KeyValuePair<(int X, int Z), TileState>(t.Cell, t.Tile)));
+
+    [Fact]
+    public void Build_SetTileHeightOnBaselineSlope_KeepsTheSlope()
+    {
+        var baseline = Baseline(((2, 3), new TileState(1, SlopeDirection.West)));
+
+        var plan = LiveEditPlan.Build(new[] { new SetTileHeight(2, 3, 2).ToEditOp() }, baseline);
+
+        Assert.Equal(new TileState(2, SlopeDirection.West), plan[0].Tile);
+    }
+
+    [Fact]
+    public void Build_SetTileSlopeOnBaselineTile_KeepsTheHeight()
+    {
+        var baseline = Baseline(((2, 3), new TileState(3, SlopeDirection.None)));
+
+        var plan = LiveEditPlan.Build(new[] { new SetTileSlope(2, 3, SlopeDirection.North).ToEditOp() }, baseline);
+
+        Assert.Equal(new TileState(3, SlopeDirection.North), plan[0].Tile);
+    }
+
+    [Fact]
+    public void Build_RemoveThenAddOnBaselineTile_AddsAFlatTileAtTheNewHeight()
+    {
+        var baseline = Baseline(((2, 3), new TileState(3, SlopeDirection.East)));
+
+        var plan = LiveEditPlan.Build(new[] { new RemoveTile(2, 3).ToEditOp(), new AddTile(2, 3, 1).ToEditOp() }, baseline);
+
+        Assert.Equal(LiveActionKind.RemoveTile, plan[0].Kind);
+        Assert.Equal(new TileState(1, SlopeDirection.None), plan[1].Tile);
+    }
+
+    [Fact]
+    public void Build_DoesNotMutateTheBaseline()
+    {
+        var baseline = Baseline(((2, 3), new TileState(3, SlopeDirection.None)));
+
+        LiveEditPlan.Build(new[] { new SetTileHeight(2, 3, 5).ToEditOp(), new RemoveTile(2, 3).ToEditOp() }, baseline);
+
+        Assert.Equal(new TileState(3, SlopeDirection.None), baseline.GetTile(2, 3));
+    }
+
+    [Fact]
+    public void Planner_AppliedOneByOne_MatchesBuild()
+    {
+        var baseline = Baseline(((2, 3), new TileState(1, SlopeDirection.South)));
+        var place = new PlaceObject("forest/shrines/0", SomeTransform.Position, SomeTransform.Rotation, SomeTransform.Scale);
+        var edits = new[]
+        {
+            new SetTileHeight(2, 3, 2).ToEditOp(),
+            place.ToEditOp(),
+            new SetTileSlope(2, 3, SlopeDirection.None).ToEditOp(),
+            place.ToEditOp(),
+        };
+
+        var planner = new LiveEditPlanner(baseline);
+        var incremental = edits.Select(planner.Apply).ToList();
+
+        Assert.Equal(LiveEditPlan.Build(edits, baseline), incremental);
+        Assert.Equal(new TileState(2, SlopeDirection.None), planner.State.GetTile(2, 3));
+    }
+
     [Fact]
     public void Build_NoEdits_ReturnsEmptyPlan()
     {
-        Assert.Empty(LiveEditPlan.Build(Array.Empty<EditOp>()));
+        Assert.Empty(Build());
     }
 
     [Fact]
     public void Build_SetTileHeight_EmitsSetTileWithResultingState()
     {
-        var plan = LiveEditPlan.Build(new[] { new SetTileHeight(2, 3, 4).ToEditOp() });
+        var plan = Build(new[] { new SetTileHeight(2, 3, 4).ToEditOp() });
 
         var action = Assert.Single(plan);
         Assert.Equal(LiveActionKind.SetTile, action.Kind);
@@ -25,7 +91,7 @@ public class LiveEditPlanTests
     [Fact]
     public void Build_HeightThenSlope_SlopeActionCarriesEarlierHeight()
     {
-        var plan = LiveEditPlan.Build(new[]
+        var plan = Build(new[]
         {
             new SetTileHeight(2, 3, 4).ToEditOp(),
             new SetTileSlope(2, 3, SlopeDirection.East).ToEditOp(),
@@ -37,7 +103,7 @@ public class LiveEditPlanTests
     [Fact]
     public void Build_AddTile_EmitsSetTile()
     {
-        var plan = LiveEditPlan.Build(new[] { new AddTile(1, 1, 2).ToEditOp() });
+        var plan = Build(new[] { new AddTile(1, 1, 2).ToEditOp() });
 
         Assert.Equal(LiveActionKind.SetTile, plan[0].Kind);
         Assert.Equal(new TileState(2, SlopeDirection.None), plan[0].Tile);
@@ -46,7 +112,7 @@ public class LiveEditPlanTests
     [Fact]
     public void Build_RemoveTile_EmitsRemoveTile()
     {
-        var plan = LiveEditPlan.Build(new[] { new RemoveTile(5, 6).ToEditOp() });
+        var plan = Build(new[] { new RemoveTile(5, 6).ToEditOp() });
 
         Assert.Equal(LiveActionKind.RemoveTile, plan[0].Kind);
         Assert.Equal((5, 6), (plan[0].X, plan[0].Z));
@@ -57,7 +123,7 @@ public class LiveEditPlanTests
     {
         var place = new PlaceObject("forest/shrines/0", SomeTransform.Position, SomeTransform.Rotation, SomeTransform.Scale);
 
-        var plan = LiveEditPlan.Build(new[] { place.ToEditOp(), place.ToEditOp() });
+        var plan = Build(new[] { place.ToEditOp(), place.ToEditOp() });
 
         Assert.Equal(LiveActionKind.SpawnObject, plan[0].Kind);
         Assert.Equal("forest/shrines/0", plan[0].CatalogId);
@@ -71,7 +137,7 @@ public class LiveEditPlanTests
     {
         var target = ObjectTarget.FromGenId("chest:0003");
 
-        var plan = LiveEditPlan.Build(new[]
+        var plan = Build(new[]
         {
             new MoveObject(target, SomeTransform).ToEditOp(),
             new RemoveObject(target).ToEditOp(),
@@ -87,19 +153,19 @@ public class LiveEditPlanTests
     [Fact]
     public void Build_UnknownOpType_Throws()
     {
-        Assert.Throws<ArgumentException>(() => LiveEditPlan.Build(new[] { new EditOp("bogus", "", "{}") }));
+        Assert.Throws<ArgumentException>(() => Build(new[] { new EditOp("bogus", "", "{}") }));
     }
 
     [Fact]
     public void ChangesTerrain_NoActions_IsFalse()
     {
-        Assert.False(LiveEditPlan.ChangesTerrain(LiveEditPlan.Build(Array.Empty<EditOp>())));
+        Assert.False(LiveEditPlan.ChangesTerrain(Build()));
     }
 
     [Fact]
     public void ChangesTerrain_ObjectOnlyEdits_IsFalse()
     {
-        var plan = LiveEditPlan.Build(new[] { new PlaceObject("forest/shrines/0", SomeTransform.Position, SomeTransform.Rotation, SomeTransform.Scale).ToEditOp() });
+        var plan = Build(new[] { new PlaceObject("forest/shrines/0", SomeTransform.Position, SomeTransform.Rotation, SomeTransform.Scale).ToEditOp() });
 
         Assert.False(LiveEditPlan.ChangesTerrain(plan));
     }
@@ -108,7 +174,7 @@ public class LiveEditPlanTests
     [MemberData(nameof(TerrainEdits))]
     public void ChangesTerrain_TileEdit_IsTrue(EditOp op)
     {
-        Assert.True(LiveEditPlan.ChangesTerrain(LiveEditPlan.Build(new[] { op })));
+        Assert.True(LiveEditPlan.ChangesTerrain(Build(new[] { op })));
     }
 
     public static IEnumerable<object[]> TerrainEdits()

@@ -38,6 +38,7 @@ public static class EditorMode
         if (_session.Active)
         {
             EditorPalette.Tick();
+            EditorTileTools.Tick();
             Fly();
         }
     }
@@ -75,6 +76,7 @@ public static class EditorMode
         _pose = new CameraPose(position.x, position.y, position.z, NormalizePitch(rotation.x), rotation.y, rotation.z);
         CameraOverride.Set(_pose);
         EditorPalette.OnEditorEntered(logger);
+        EditorTileTools.OnEditorEntered(logger);
         logger.Msg($"EditorMode: entered, MyTime.paused={MyTime.paused}.");
     }
 
@@ -88,6 +90,7 @@ public static class EditorMode
         _looking = false;
         CameraOverride.Clear();
         EditorPalette.OnEditorExited();
+        EditorTileTools.OnEditorExited();
         if (shouldUnpause)
         {
             MyTime.Unpause();

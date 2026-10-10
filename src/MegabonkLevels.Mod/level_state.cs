@@ -21,6 +21,17 @@ public sealed class LevelState
     public IReadOnlyDictionary<(int X, int Z), TileState> Tiles => _tiles;
     public IReadOnlyDictionary<ObjectTarget, ObjectState> Objects => _objects;
 
+    public static LevelState FromTiles(IEnumerable<KeyValuePair<(int X, int Z), TileState>> tiles)
+    {
+        var state = new LevelState();
+        foreach (var (cell, tile) in tiles)
+        {
+            state._tiles[cell] = tile;
+        }
+
+        return state;
+    }
+
     public TileState? GetTile(int x, int z) => _tiles.TryGetValue((x, z), out var tile) ? tile : null;
 
     public ObjectState? GetObject(ObjectTarget target) => _objects.TryGetValue(target, out var obj) ? obj : null;

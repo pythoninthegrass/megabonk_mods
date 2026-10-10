@@ -52,6 +52,8 @@ Since there is no real version 2 to migrate from/to yet, the mechanism itself is
 
 Tile ops identify the tile by grid coordinates carried in the payload, so they have no need of `EditOp.Target`; object ops that mutate an *existing* object carry their target there instead, so an op can be filtered/routed by `EditOp.Target` alone without deserializing the payload.
 
+Tile ops apply on top of the generated grid, not an empty one. At generation the mod snapshots every live tile's height and slope into a baseline `LevelState`, and `LiveEditPlan.Build(edits, baseline)` replays the edits on a copy of it. `SetTileHeight` therefore keeps a cell's generated slope, and `SetTileSlope` keeps its generated height. Generation is deterministic for a seed, so the same file produces the same baseline, and a level loads exactly as it looked when it was edited. `AddTile` always places a flat tile. An `EditStack` built on an empty `LevelState` still falls back to height 0 and no slope for a cell it has no record of.
+
 ### `ObjectTarget`: genId vs. placement id
 
 `MoveObject`/`RemoveObject` reference an existing object through `ObjectTarget`, which distinguishes two kinds:
@@ -185,12 +187,14 @@ Live-verified on the CrossOver reference platform: loading the test level file l
 
 | cell / target | op(s) | effect |
 | --- | --- | --- |
-| (10,5) | `SetTileHeight` -> 1 | a flat tile raised one level, exercising a height change with no prefab swap |
-| (9,7) | `SetTileSlope` -> East | the tile replaced with the `TileSlope` prefab, yaw 90 |
+| (10,5) | `SetTileHeight` -> 1, then `SetTileSlope` -> None | the generated West slope at level 0 raised one level and flattened (`TileGround` replaces `TileSlope`) |
+| (9,7) | `SetTileHeight` -> 0, then `SetTileSlope` -> East | the generated North slope at level -1 raised to level 0 and turned East, yaw 90 |
 | (11,7) | `RemoveTile` then `AddTile` -> height 1 | the only way to exercise `AddTile` on a truly empty cell (the live grid is dense, so a cell must be vacated first); ends as a raised flat tile |
 | (13,7) | `RemoveTile` | left removed — a real hole with the kill floor armed under it |
 | world (80, 0, 80) | `PlaceObject` `interactable/chest` | a chest placed independent of any tile edit |
 | `gen:object:Tree0:0010` | `RemoveObject` | deletes one generator-spawned tree |
+
+Tile ops replay on the generated grid (see "Edit operation types"), so the explicit `SetTileSlope` -> None and `SetTileHeight` -> 0 pin both cells to the shape the playthrough below was verified on.
 
 (11,7)/(9,7)/(13,7) reuse coordinates already playtested clean as a scratch level (enemies crossed the raised and sloped tiles without sticking, and were killed by the kill floor after falling into the hole).
 
@@ -205,7 +209,7 @@ uv run scripts/run.py load levels/task-004-05-regression.mblevel.json
 
 Then check `MelonLoader/Latest.log` for:
 
-- `LiveEdit: applied 7 edit(s)` with no `WARNING` lines about the edits themselves, immediately followed by `FillRegeneration`, `CollisionRebuild` and `KillFloor: armed` with no errors.
+- `LiveEdit: applied 9 edit(s)` with no `WARNING` lines about the edits themselves, immediately followed by `FillRegeneration`, `CollisionRebuild` and `KillFloor: armed` with no errors.
 - No `error`/`exception` lines for the rest of the session.
 - `SteamWriteGuard: suppressed ...` lines appearing (and no unsuppressed `QueueLeaderboardUpload`/`UploadLeaderboardScore`/`TryUnlockAchievement` lines) once `run.py invulnerable` lets the run continue — `CustomLevelState: run starting, IsActive=True` confirms the guard is armed for this run.
 
