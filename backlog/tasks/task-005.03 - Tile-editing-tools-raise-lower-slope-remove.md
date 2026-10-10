@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-10-06 21:43'
-updated_date: '2026-10-10 06:41'
+updated_date: '2026-10-10 06:43'
 labels:
   - level-editor
 dependencies:
@@ -68,6 +68,8 @@ Revisions after in-game testing (Lance, 2026-10-10): generated Forest heights ru
 2026-10-10: Pure logic (LevelState.FromTiles, LiveEditPlanner + baseline Build, TileTools incl. ToolbarText, TileOutline) written test-first; 395 tests pass, task check green. Live side: LiveEditPatch keeps a Session (applier, planner on generated baseline) per Tiles generation and exposes ApplyLive/TileAt/Grid/GroundCollider; ApplyPlan shares fill regeneration + collision rebuild between load and live edits. EditorUi holds the UGUI helpers moved out of EditorPalette. EditorTileTools draws the toolbar and a LineRenderer outline. Docs updated (development.md Tile tools, level-format.md baseline semantics, runtime-map-structure.md). In-game verification pending.
 
 2026-10-10 in-game: regression level loads with (9,7) East slope at level 0 at (80,0,0) and (10,5) flat at level 1, matching the pre-change result; FillRegeneration/CollisionRebuild/KillFloor clean. Toolbar renders and the raycast targets the correct cell and state; highlight shader Sprites/Default. Lance drove raise, lower, slope cycling and remove by mouse and reported it looks good, with one problem: removing the (9,7) slope leaves sky visible under it because FillEdgePlan skips removed cells (TASK-004.11). A removed cell is untargetable by design until undo (TASK-005.05). Forest palette: 75 entries.
+
+2026-10-10 (Lance): keys 1-4 do nothing in normal play, so no game binding collides with the tool hotkeys; a tool click on Forest (about 600 collision pieces) is instant.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -86,6 +88,8 @@ Changes:
 Tests: 396 unit tests pass (`task check`). New tests cover the tools, outline, toolbar text, LevelState.FromTiles, baseline replay and planner/Build equivalence. In the game: the regression level loads with the same final tile states as before, the toolbar and targeting work, and Lance clicked through every tool.
 
 Follow-ups: TASK-004.11 (walls around removed tiles; sky shows under a removed tile today). Undo of removals arrives with TASK-005.05. Not confirmed: that keys 1-4 trigger no game action while paused (no report either way), and the cost of a click on larger maps (each click rebuilds the full collision mesh, about 600 pieces on Forest).
+
+Confirmed afterwards by Lance: keys 1-4 have no game binding (they do nothing in normal play), and a click is instant on Forest.
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
