@@ -19,6 +19,7 @@ public static class EditorMode
     private static FreeFlySettings _settings = DefaultSettings;
     private static float _horizontalSign = 1f;
     private static float _verticalSign = 1f;
+    private static bool _looking;
 
     public static bool Active => _session.Active;
 
@@ -84,6 +85,7 @@ public static class EditorMode
             return;
         }
 
+        _looking = false;
         CameraOverride.Clear();
         EditorPalette.OnEditorExited();
         if (shouldUnpause)
@@ -96,7 +98,13 @@ public static class EditorMode
 
     private static void Fly()
     {
-        var look = Input.GetMouseButton(1) && !EditorPalette.PointerOverPanel;
+        // A sweep that starts off the palette keeps turning when the pointer crosses it.
+        if (Input.GetMouseButtonDown(1))
+        {
+            _looking = !EditorPalette.PointerOverPanel;
+        }
+
+        var look = _looking && Input.GetMouseButton(1);
         var input = new FreeFlyInput(
             Forward: Axis(KeyCode.W, KeyCode.S),
             Right: Axis(KeyCode.D, KeyCode.A),
