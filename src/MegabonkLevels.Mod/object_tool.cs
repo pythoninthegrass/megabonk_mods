@@ -14,6 +14,22 @@ public static class ObjectTools
     private const float PositionTolerance = 0.01f;
     private const float DragHoldSeconds = 0.2f;
 
+    // Tiles, walls, fill pieces and tile objects (ForestParticles and the like) are scenery, never picked or outlined.
+    public static bool IsPickableGenId(string genId) => genId.StartsWith("object:", StringComparison.Ordinal);
+
+    // Evenly spaced points on a horizontal circle, starting on the +X axis; drawn as a closed loop.
+    public static IReadOnlyList<Vector3Data> Ring(float centreX, float y, float centreZ, float radius, int segments)
+    {
+        var points = new Vector3Data[segments];
+        for (var i = 0; i < segments; i++)
+        {
+            var angle = 2f * MathF.PI * i / segments;
+            points[i] = new Vector3Data(centreX + radius * MathF.Cos(angle), y, centreZ + radius * MathF.Sin(angle));
+        }
+
+        return points;
+    }
+
     // The cursor point kept inside its cell, at the tile surface there.
     public static Vector3Data PositionAt(int x, int z, TileState state, int width, int depth, float spacing, float tileHeight, float pointX, float pointZ)
     {

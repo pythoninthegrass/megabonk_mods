@@ -71,9 +71,8 @@ public static class EditorMode
 
         MyTime.Pause();
         ReadLookSettings();
-        var position = camera.transform.position;
-        var rotation = camera.transform.eulerAngles;
-        _pose = new CameraPose(position.x, position.y, position.z, NormalizePitch(rotation.x), rotation.y, rotation.z);
+        var player = MyPlayer.Instance.transform.position;
+        _pose = FreeFlyCamera.OverviewPose(player.x, player.y, player.z);
         CameraOverride.Set(_pose);
         EditorPalette.OnEditorEntered(logger);
         EditorTileTools.OnEditorEntered(logger);
@@ -131,9 +130,6 @@ public static class EditorMode
 
     private static float Axis(KeyCode positive, KeyCode negative) =>
         (Input.GetKey(positive) ? 1f : 0f) - (Input.GetKey(negative) ? 1f : 0f);
-
-    // Unity reports pitch in [0, 360); the free-fly maths works in [-180, 180).
-    private static float NormalizePitch(float degrees) => degrees > 180f ? degrees - 360f : degrees;
 
     private static bool RunInProgress() => MyPlayer.Instance != null && PlayerCamera.Instance != null;
 

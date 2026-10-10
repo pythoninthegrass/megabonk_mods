@@ -16,8 +16,10 @@ public static class EditorObjectTools
     private const float GridWidth = 0.25f;
     private const float MarkerWidth = 0.6f;
     private const float MarkerRadius = 1.5f;
+    private const int RingSegments = 48;
+    private const float SelectionRingScale = 0.4f;
 
-    private static readonly Color SelectionColor = new(0.3f, 0.9f, 1f, 1f);
+    private static readonly Color SelectionColor = new(1f, 0.15f, 0.15f, 1f);
     private static readonly Color GridColor = new(1f, 1f, 1f, 0.6f);
     private static readonly Color MarkerColor = new(1f, 0.4f, 0.2f, 1f);
 
@@ -39,9 +41,9 @@ public static class EditorObjectTools
         _logger = logger;
         _selected = null;
         _hovered = null;
-        _selectionOutline = BuildOutline(SelectionColor, OutlineWidth, 4, loop: true);
+        _selectionOutline = BuildOutline(SelectionColor, OutlineWidth, RingSegments, loop: true);
         _gridLines = BuildOutline(GridColor, GridWidth, 0, loop: false);
-        _placeMarker = BuildOutline(MarkerColor, MarkerWidth, 4, loop: true);
+        _placeMarker = BuildOutline(MarkerColor, MarkerWidth, RingSegments, loop: true);
     }
 
     public static void OnEditorExited()
@@ -391,23 +393,33 @@ public static class EditorObjectTools
 
         var go = tool == EditorTool.Select && _selected is { } selected ? LiveEditPatch.ObjectFor(selected) : null;
         var renderers = go != null ? go.GetComponentsInChildren<Renderer>() : null;
-        if (renderers == null || renderers.Length == 0)
+        Bounds? bounds = null;
+        foreach (var renderer in renderers ?? new Renderer[0])
+        {
+            if (renderer.TryCast<ParticleSystemRenderer>() != null)
+            {
+                continue;
+            }
+
+            if (bounds is { } combined)
+            {
+                combined.Encapsulate(renderer.bounds);
+                bounds = combined;
+            }
+            else
+            {
+                bounds = renderer.bounds;
+            }
+        }
+
+        if (bounds is not { } box)
         {
             _selectionOutline.enabled = false;
             return;
         }
 
-        var bounds = renderers[0].bounds;
-        for (var i = 1; i < renderers.Length; i++)
-        {
-            bounds.Encapsulate(renderers[i].bounds);
-        }
-
-        var y = bounds.min.y + OutlineLift;
-        _selectionOutline.SetPosition(0, new Vector3(bounds.min.x, y, bounds.min.z));
-        _selectionOutline.SetPosition(1, new Vector3(bounds.max.x, y, bounds.min.z));
-        _selectionOutline.SetPosition(2, new Vector3(bounds.max.x, y, bounds.max.z));
-        _selectionOutline.SetPosition(3, new Vector3(bounds.min.x, y, bounds.max.z));
+        var origin = go.transform.position;
+        SetRing(_selectionOutline, origin.x, box.min.y + OutlineLift, origin.z, Mathf.Max(box.extents.x, box.extents.z) * SelectionRingScale);
         _selectionOutline.enabled = true;
     }
 
@@ -440,13 +452,18 @@ public static class EditorObjectTools
         }
 
         var marker = ObjectTools.PositionAt(cell.X, cell.Z, cell.State, grid.Width, grid.Depth, grid.Spacing, grid.TileHeight, point.x, point.z);
-        var y = marker.Y + OutlineLift;
-        _placeMarker.SetPosition(0, new Vector3(marker.X - MarkerRadius, y, marker.Z - MarkerRadius));
-        _placeMarker.SetPosition(1, new Vector3(marker.X + MarkerRadius, y, marker.Z - MarkerRadius));
-        _placeMarker.SetPosition(2, new Vector3(marker.X + MarkerRadius, y, marker.Z + MarkerRadius));
-        _placeMarker.SetPosition(3, new Vector3(marker.X - MarkerRadius, y, marker.Z + MarkerRadius));
+        SetRing(_placeMarker, marker.X, marker.Y + OutlineLift, marker.Z, MarkerRadius);
         _gridLines.enabled = true;
-        _placeMarker.enabled = true;
+        _placeMarker.enabled = tool == EditorTool.Place;
+    }
+
+    private static void SetRing(LineRenderer line, float x, float y, float z, float radius)
+    {
+        var ring = ObjectTools.Ring(x, y, z, radius, RingSegments);
+        for (var i = 0; i < ring.Count; i++)
+        {
+            line.SetPosition(i, new Vector3(ring[i].X, ring[i].Y, ring[i].Z));
+        }
     }
 
     private static void SetEnabled(LineRenderer line, bool enabled)

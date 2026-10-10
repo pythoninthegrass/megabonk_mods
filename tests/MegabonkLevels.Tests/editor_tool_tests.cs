@@ -67,6 +67,12 @@ public class EditorToolTests
         Assert.Equal(new RemoveTile(4, 5).ToEditOp(), op);
     }
 
+    [Fact]
+    public void Default_IsSelect_SoTheFirstClickCannotEditATile()
+    {
+        Assert.Equal(EditorTool.Select, EditorTools.Default);
+    }
+
     [Theory]
     [InlineData(1, EditorTool.Raise)]
     [InlineData(2, EditorTool.Lower)]

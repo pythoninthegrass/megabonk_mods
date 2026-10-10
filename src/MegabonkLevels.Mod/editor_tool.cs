@@ -18,6 +18,9 @@ public static class EditorTools
     private const string CurrentToolColor = "#ffd84d";
     private static readonly EditorTool[] Tools = { EditorTool.Raise, EditorTool.Lower, EditorTool.Slope, EditorTool.Remove, EditorTool.Place, EditorTool.Select };
 
+    // The tool active on entering the editor; Select edits nothing until an object is pressed.
+    public const EditorTool Default = EditorTool.Select;
+
     public static EditorTool? FromHotkey(int digit) => digit >= 1 && digit <= Tools.Length ? Tools[digit - 1] : null;
 
     public static bool IsObjectTool(EditorTool tool) => tool is EditorTool.Place or EditorTool.Select;

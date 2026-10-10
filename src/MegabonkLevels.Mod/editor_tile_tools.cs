@@ -24,13 +24,14 @@ public static class EditorTileTools
     private static GameObject _root;
     private static TextMeshProUGUI _label;
     private static LineRenderer _outline;
-    private static EditorTool _tool = EditorTool.Raise;
+    private static EditorTool _tool = EditorTools.Default;
     private static (int X, int Z, TileState State)? _target;
     private static Vector3 _targetPoint;
 
     public static void OnEditorEntered(MelonLogger.Instance logger)
     {
         _logger = logger;
+        _tool = EditorTools.Default;
         EditorObjectTools.OnEditorEntered(logger);
         BuildToolbar();
         BuildOutline();

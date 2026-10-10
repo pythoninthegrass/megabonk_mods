@@ -324,15 +324,26 @@ public static class LiveEditPatch
             _index = index;
             foreach (var (genId, go) in index)
             {
-                if (IsPickableGenId(genId))
+                if (ObjectTools.IsPickableGenId(genId) && HasMeshRenderer(go))
                 {
                     _targetsByInstanceId[go.GetInstanceID()] = ObjectTarget.FromGenId(genId);
                 }
             }
         }
 
-        private static bool IsPickableGenId(string genId) =>
-            genId.StartsWith("tileObject:", StringComparison.Ordinal) || genId.StartsWith("object:", StringComparison.Ordinal);
+        // Effect-only roots such as ForestParticles span the map and are not objects to edit.
+        public static bool HasMeshRenderer(GameObject go)
+        {
+            foreach (var renderer in go.GetComponentsInChildren<Renderer>())
+            {
+                if (renderer.TryCast<ParticleSystemRenderer>() == null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         public ObjectTarget? TargetOf(Transform hit)
         {
@@ -360,7 +371,7 @@ public static class LiveEditPatch
             var result = new List<(ObjectTarget, GameObject)>();
             foreach (var (genId, go) in _index)
             {
-                if (IsPickableGenId(genId) && go != null)
+                if (ObjectTools.IsPickableGenId(genId) && go != null && HasMeshRenderer(go))
                 {
                     result.Add((ObjectTarget.FromGenId(genId), go));
                 }

@@ -13,6 +13,16 @@ public static class FreeFlyCamera
     private const float MaxPitchDegrees = 89f;
     private const float DegreesToRadians = MathF.PI / 180f;
 
+    public const float OverviewPitchDegrees = 40f;
+    private const float OverviewHeight = 60f;
+
+    // A zoomed-out view from +Z looking down at the target, so +X runs to the screen's left; the target stays centred.
+    public static CameraPose OverviewPose(float targetX, float targetY, float targetZ)
+    {
+        var back = OverviewHeight / MathF.Tan(OverviewPitchDegrees * DegreesToRadians);
+        return new CameraPose(targetX, targetY + OverviewHeight, targetZ + back, OverviewPitchDegrees, 180f, 0f);
+    }
+
     public static CameraPose Step(CameraPose pose, FreeFlyInput input, float deltaSeconds, FreeFlySettings settings)
     {
         var pitch = Math.Clamp(pose.Rx - input.MouseDy * settings.LookDegreesPerUnit, -MaxPitchDegrees, MaxPitchDegrees);

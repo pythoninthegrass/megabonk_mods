@@ -6,6 +6,40 @@ public class ObjectToolTests
     private static readonly ObjectTarget Generated = ObjectTarget.FromGenId("object:Tree0:0003");
     private static readonly TransformData Current = new(new Vector3Data(1, 2, 3), new Vector3Data(10, 90, 20), new Vector3Data(2, 2, 2));
 
+    [Theory]
+    [InlineData("object:Tree0:0003", true)]
+    [InlineData("object:Chest:0000", true)]
+    [InlineData("tileObject:0001", false)]
+    [InlineData("tile:0042", false)]
+    [InlineData("flatTile:0017", false)]
+    [InlineData("fillTile:0203", false)]
+    public void IsPickableGenId_OnlyCoversSpawnedObjects(string genId, bool expected)
+    {
+        Assert.Equal(expected, ObjectTools.IsPickableGenId(genId));
+    }
+
+    [Fact]
+    public void Ring_PlacesEveryPointOnTheCircleAtTheGivenHeight()
+    {
+        var ring = ObjectTools.Ring(10f, 5f, -3f, 4f, 8);
+
+        Assert.Equal(8, ring.Count);
+        Assert.All(ring, p =>
+        {
+            Assert.Equal(5f, p.Y);
+            Assert.Equal(4f, MathF.Sqrt((p.X - 10f) * (p.X - 10f) + (p.Z + 3f) * (p.Z + 3f)), 3);
+        });
+    }
+
+    [Fact]
+    public void Ring_StartsOnTheEastAxis()
+    {
+        var ring = ObjectTools.Ring(0f, 0f, 0f, 2f, 4);
+
+        Assert.Equal(2f, ring[0].X, 3);
+        Assert.Equal(0f, ring[0].Z, 3);
+    }
+
     [Fact]
     public void PositionAt_FlatTile_AtTheCellCentre_IsTheCentreAtTheTileSurface()
     {

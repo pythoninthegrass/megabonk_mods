@@ -6,6 +6,23 @@ public class FreeFlyCameraTests
     private static readonly CameraPose Origin = new(0f, 0f, 0f, 0f, 0f, 0f);
 
     [Fact]
+    public void OverviewPose_LooksDownAtTheTargetFromBehindAndAbove()
+    {
+        var pose = FreeFlyCamera.OverviewPose(120f, 2f, -3f);
+
+        Assert.Equal(FreeFlyCamera.OverviewPitchDegrees, pose.Rx);
+        Assert.Equal(180f, pose.Ry);
+        Assert.Equal(0f, pose.Rz);
+        Assert.Equal(120f, pose.X, 3);
+        Assert.True(pose.Y > 2f);
+        Assert.True(pose.Z > -3f);
+
+        var lookAt = FreeFlyCamera.Step(pose, new FreeFlyInput(Forward: 1f), 1f, new FreeFlySettings(MoveSpeed: 1f, FastMultiplier: 1f, LookDegreesPerUnit: 0f));
+        Assert.True(lookAt.Y < pose.Y);
+        Assert.True(lookAt.Z < pose.Z);
+    }
+
+    [Fact]
     public void Step_ForwardAtYawZero_MovesAlongPositiveZ()
     {
         var next = FreeFlyCamera.Step(Origin, new FreeFlyInput(Forward: 1f), 1f, Settings);
