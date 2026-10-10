@@ -39,6 +39,7 @@ public class MegabonkLevelsMod : MelonMod
         DevHarness.Poll();
         KillFloorWatcher.Tick();
         PositionLabel.Tick();
+        EditorMode.Tick(LoggerInstance);
 
         if (Input.GetKeyDown(KeyCode.F9))
         {

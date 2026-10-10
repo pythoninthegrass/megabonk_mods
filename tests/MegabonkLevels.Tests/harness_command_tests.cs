@@ -52,6 +52,32 @@ public class HarnessCommandTests
     [Theory]
     [InlineData("true", true)]
     [InlineData("false", false)]
+    public void TryParse_Editor_ReadsTheEnabledFlag(string enabled, bool expected)
+    {
+        var ok = HarnessCommand.TryParse($$"""{"command":"editor","enabled":{{enabled}}}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.Editor, command.Kind);
+        Assert.Equal(expected, command.Enabled);
+        Assert.Null(command.Path);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"editor"}""")]
+    [InlineData("""{"command":"editor","enabled":"yes"}""")]
+    [InlineData("""{"command":"editor","enabled":null}""")]
+    public void TryParse_Editor_MissingOrNonBooleanEnabled_IsRejected(string json)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains("enabled", error);
+    }
+
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
     public void TryParse_Heartbeat_ReadsTheEnabledFlag(string enabled, bool expected)
     {
         var ok = HarnessCommand.TryParse($$"""{"command":"heartbeat","enabled":{{enabled}}}""", out var command, out var error);

@@ -188,6 +188,30 @@ def test_cells_payload_maps_the_state_to_the_wire_command() -> None:
     assert run.cells_payload(run.parse_args(["cells", "off"])) == {"command": "cells", "enabled": False}
 
 
+def test_build_editor_command_carries_the_enabled_flag() -> None:
+    assert run.build_editor_command(True) == {"command": "editor", "enabled": True}
+    assert run.build_editor_command(False) == {"command": "editor", "enabled": False}
+
+
+def test_parse_args_editor_takes_on_or_off() -> None:
+    assert run.parse_args(["editor", "on"]).state == "on"
+    assert run.parse_args(["editor", "off"]).state == "off"
+
+
+def test_parse_args_editor_rejects_other_states_and_a_missing_state() -> None:
+    for argv in (["editor"], ["editor", "maybe"]):
+        try:
+            run.parse_args(argv)
+        except SystemExit:
+            continue
+        raise AssertionError(f"{argv} should have been rejected")
+
+
+def test_editor_payload_maps_the_state_to_the_wire_command() -> None:
+    assert run.editor_payload(run.parse_args(["editor", "on"])) == {"command": "editor", "enabled": True}
+    assert run.editor_payload(run.parse_args(["editor", "off"])) == {"command": "editor", "enabled": False}
+
+
 def test_parse_args_cycle_accepts_invulnerable_flag() -> None:
     assert run.parse_args(["cycle", "a.json", "o.png", "--invulnerable"]).invulnerable is True
     assert run.parse_args(["cycle", "a.json", "o.png"]).invulnerable is False

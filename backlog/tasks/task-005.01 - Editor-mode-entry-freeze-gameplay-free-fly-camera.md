@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@Claude'
 created_date: '2026-10-06 21:43'
-updated_date: '2026-10-10 04:59'
+updated_date: '2026-10-10 05:41'
 labels:
   - level-editor
 dependencies: []
@@ -26,10 +26,10 @@ This subtask is pure mode-management plumbing — no editing tools yet (that's T
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A keybind toggles editor mode on/off without colliding with existing game bindings
-- [ ] #2 Entering editor mode pauses the stage timeline, enemy spawning, and player control/damage
-- [ ] #3 Entering editor mode switches to a free-fly camera with mouse-look and WASD+vertical movement
-- [ ] #4 Exiting editor mode restores the prior camera and resumes gameplay cleanly, verified across multiple enter/exit cycles with no leaked state
+- [x] #1 A keybind toggles editor mode on/off without colliding with existing game bindings
+- [x] #2 Entering editor mode pauses the stage timeline, enemy spawning, and player control/damage
+- [x] #3 Entering editor mode switches to a free-fly camera with mouse-look and WASD+vertical movement
+- [x] #4 Exiting editor mode restores the prior camera and resumes gameplay cleanly, verified across multiple enter/exit cycles with no leaked state
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -75,17 +75,28 @@ What the dump plus already-verified live behaviour establishes:
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Handoff state: planning complete, **no code written yet**. The working tree is clean at 1749232 and nothing in src/, tests/, scripts/ or docs/ has been touched for this task.
+Implemented and verified in the running game; not yet committed.
 
-The plan above has been through one round with Lance (he chose F8, the WASD + mouse-look control scheme, and the any-active-run scope) but he has **not** yet given final approval to start implementing. Per the task-execution workflow, present the plan and get that approval before touching the codebase.
+Evidence per criterion:
+- AC1: Lance pressed F8 in the game and it toggled editor mode with no side effects reported. This rests on his observation; a Rewired binding cannot be read from code.
+- AC2: log shows `EditorMode: entered, MyTime.paused=True` on every entry, and Lance saw the player (Tony McZoom) stay frozen. Enemy spawning and enemy freeze rely on MyTime.Pause, which was proven separately for the harness freeze command; they were not re-observed inside editor mode.
+- AC3: Lance flew the camera with WASD, Space/Ctrl, Shift and mouse-look.
+- AC4: six harness `editor on`/`off` cycles on levels/task-004-05-regression.mblevel.json, all balanced with `MyTime.paused` True then False, zero errors in Latest.log, plus Lance's manual enter/exit cycles. The harness screenshots (in editor mode and after exit) show the same view because the free-fly pose seeds from the current camera, so they do not prove the restore by themselves.
 
-One detour worth not repeating: a research agent was spawned to decompile Assembly-CSharp for method bodies and was stopped once it became clear the Il2Cpp assemblies carry no IL. The plan's research section records everything that was actually established, so start from there rather than re-running a decompiler.
+Findings worth keeping:
+- The game's own LookHorizontal/LookVertical Rewired axes read zero while paused, so look uses raw Unity Mouse X/Y.
+- Measured with a temporary probe (removed): the player turns 1 degree per raw mouse unit at saved sensitivity 1.0, same sign convention. Look is scaled by SaveManager.Instance.config.cfControlSettings.sensitivity and the two inverted-axis flags. Lance confirmed the rate matches normal play.
+- The player does not turn or move while paused, so no PlayerInput workaround is needed.
+- Movement speed 60 units/s (4x with Shift) is a fixed choice; Lance confirmed it feels right.
+- Launch workflow fixes made along the way: task game:run now starts cxstart detached via python subprocess (Task's built-in shell kills `&` children), sets SteamAppId/SteamGameId, and AGENTS.md has the reload order of operations.
+
+Deviation: the run.py `editor` argument tests in scripts/test_run.py were written after the run.py change, not before. The C# logic tests were written first and confirmed red.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->

@@ -26,6 +26,7 @@ Usage:
     run.py vulnerable              Restore normal player damage
     run.py heartbeat <on|off>      Start or stop the kill-floor heartbeat (actor counts and lowest heights every 5 seconds)
     run.py cells <on|off>          Start or stop logging the player's and boss-tier actors' grid cell on change
+    run.py editor <on|off>         Enter or leave editor mode (frozen run, free-fly camera), like pressing F8
     run.py camera X Y Z --rot RX RY RZ  Hold the camera at a world pose (euler degrees)
     run.py camera --clear          Return the camera to the game
     run.py quit                    Quit the game and wait for the process to exit
@@ -119,6 +120,10 @@ def build_heartbeat_command(enabled: bool) -> dict[str, object]:
 
 def build_cells_command(enabled: bool) -> dict[str, object]:
     return {"command": "cells", "enabled": enabled}
+
+
+def build_editor_command(enabled: bool) -> dict[str, object]:
+    return {"command": "editor", "enabled": enabled}
 
 
 def build_camera_command(position: tuple[float, ...], rotation: tuple[float, ...]) -> dict[str, object]:
@@ -262,6 +267,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     heartbeat.add_argument("state", choices=["on", "off"])
     cells = sub.add_parser("cells")
     cells.add_argument("state", choices=["on", "off"])
+    editor = sub.add_parser("editor")
+    editor.add_argument("state", choices=["on", "off"])
     camera = sub.add_parser("camera")
     camera.add_argument("position", type=float, nargs="*", help="X Y Z in world units")
     camera.add_argument("--rot", type=float, nargs=3, metavar=("RX", "RY", "RZ"), help="euler degrees")
@@ -302,6 +309,10 @@ def cells_payload(args: argparse.Namespace) -> dict[str, object]:
     return build_cells_command(args.state == "on")
 
 
+def editor_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_editor_command(args.state == "on")
+
+
 def prepare_frame(harness: Path, args: argparse.Namespace) -> bool:
     """Apply the cycle's --freeze and --camera flags before the screenshot."""
     if args.freeze and not send(harness, build_command("freeze"), args.timeout):
@@ -339,6 +350,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send(harness, heartbeat_payload(args), args.timeout)
         case "cells":
             ok = send(harness, cells_payload(args), args.timeout)
+        case "editor":
+            ok = send(harness, editor_payload(args), args.timeout)
         case "camera":
             ok = send(harness, camera_payload(args), args.timeout)
         case "cycle":

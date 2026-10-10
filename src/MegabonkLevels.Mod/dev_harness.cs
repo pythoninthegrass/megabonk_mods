@@ -130,6 +130,9 @@ public static class DevHarness
             case HarnessCommandKind.Cells:
                 PositionLabel.SetCellLog(command.Enabled, _logger);
                 break;
+            case HarnessCommandKind.Editor:
+                EditorMode.Set(command.Enabled, _logger);
+                break;
             case HarnessCommandKind.Quit:
                 _logger.Msg("DevHarness: quit requested, calling Application.Quit.");
                 Application.Quit();
