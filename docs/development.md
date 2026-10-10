@@ -42,13 +42,17 @@ The paths in `load-level` and `screenshot` are interpreted by the game process, 
 
 ## Launching under CrossOver
 
-Starting the game with `task game:run` opens the CrossOver Steam client, which in testing did not always go on to launch Megabonk. The harness cycle was verified by launching the executable directly in the Steam bottle while the Steam client is running:
+`task game:run` starts `Megabonk.exe` directly in the CrossOver Steam bottle with `cxstart`, with `SteamAppId` and `SteamGameId` set to 3405340. The Steam client must already be running in the bottle; start it from CrossOver first. Launching through the `steam://rungameid` URI is avoided because it can open only the CrossOver window without starting the game, especially from a script. The equivalent command:
 
 ```sh
-cd "<game dir>"
+game='C:\Program Files (x86)\Steam\steamapps\common\Megabonk'
 SteamAppId=3405340 SteamGameId=3405340 \
-  /Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine --bottle Steam --cx-app Megabonk.exe
+  /Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/cxstart --bottle Steam --workdir "$game" "$game\Megabonk.exe" >/dev/null 2>&1 &
 ```
+
+`cxstart` stays in the foreground until the game exits, so the task starts it detached and returns at once, before MelonLoader has loaded the mod. The detach is a `python3` `subprocess.Popen(..., start_new_session=True)`. A plain `&` in a Taskfile command does not work: Task's built-in shell kills its background children when the task ends, so the game would die right after launching. Python's own session also keeps the game alive if the terminal that ran the task is closed.
+
+The two environment variables are required. A game started without them is not attached to Steam: Steam's `gameprocess_log.txt` shows no new tracking line, and `load-level` fails every time with `Steamworks is not initialized`, because the loader reads the app build id from Steamworks. With them set, a `load-level` sent right after launch can still fail once with the same error because Steamworks is not up yet; sending it again a few seconds later succeeds.
 
 ### Relaunching
 
@@ -64,19 +68,11 @@ Process detection uses the standard library only: `ps -axo pid=,command=` on mac
 
 ### Launching from an automated session
 
-`task game:run` (the `steam://rungameid` URI) is unreliable when nothing is interactively focused on the Steam client: in testing, repeated calls from a script left Steam running with no new game process and no new line in `gameprocess_log.txt`. A direct launch bypassing Steam's URL handler was reliable instead:
-
-```sh
-"/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/cxstart" --bottle Steam --workdir "C:\Program Files (x86)\Steam\steamapps\common\Megabonk" "C:\Program Files (x86)\Steam\steamapps\common\Megabonk\Megabonk.exe"
-```
-
-This also bypasses Steam's own session attach, so `load-level` can fail once right after a cold launch with the `Steamworks is not initialized` error below; immediately retrying the same `run.py load` succeeds, since it is a one-time race rather than a hard requirement for the `SteamAppId`/`SteamGameId` env vars above.
-
 To know when the mod is ready for commands, poll `MelonLoader/Latest.log` for the line `DevHarness: enabled` rather than for the process existing: MelonLoader takes several seconds to load after the process starts, and `Latest.log` is not truncated until that point, so an early read can see a stale line from the previous run. Run that poll as a background job (`run_in_background`, or `Monitor` as a self-ending loop) and wait for its own completion notice instead of a foreground `sleep`, which this harness blocks.
 
 Caveats:
 
-- `load-level` needs Steamworks, because the loader reads the app build id. A direct launch without `SteamAppId` fails with `Steamworks is not initialized`.
+- `load-level` needs Steamworks, because the loader reads the app build id; see the launch section above for the environment variables that provide it.
 - The game sees the host filesystem as the `Z:` drive. `run.py` rewrites host paths to `Z:\...` on macOS, so pass ordinary host paths.
 - `ScreenCapture.CaptureScreenshot(path)` and `ImageConversion.EncodeToPNG` both fail inside Il2CppInterop in this game build, and `ScreenCapture.CaptureScreenshotAsTexture` is unusable for the same reason. The harness reads the finished frame with `Texture2D.ReadPixels` at the end of the frame and encodes the PNG itself (`png_encoder.cs`).
 - The screenshot is the game's own frame at the game's render resolution, not a capture of the host screen.

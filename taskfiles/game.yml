@@ -20,13 +20,39 @@ tasks:
     summary: |
       Usage: task game:run
 
-      Platform-guarded: opens the CrossOver bottle's Steam app on macOS
-      (Steam then launches the game); on Linux uses the native `steam`
+      Platform-guarded. macOS: starts Megabonk.exe directly in the CrossOver
+      Steam bottle with cxstart, in the background, with SteamAppId and
+      SteamGameId set so Steamworks initializes; the Steam client must
+      already be running (the steam:// URI only opened the CrossOver window).
+      Linux: uses the native `steam` binary when present, otherwise the
+      Flatpak Steam, defaulting DISPLAY and XAUTHORITY so it also works from a
+      non-graphical shell (KDE Wayland). Windows: runs `steam` directly.
+    cmds:
+      - uv run scripts/install_melonloader.py
+
+  run:
+    desc: "Launch Megabonk"
+    summary: |
+      Usage: task game:run
+
+      Platform-guarded: on macOS starts Megabonk.exe directly in the CrossOver
+      Steam bottle with cxstart with SteamAppId and SteamGameId set so Steamworks initializes (the
+      Steam client must already be running; the steam:// URI only opened the
+      CrossOver window); returns once the game process is started in the background; on Linux uses the native `steam`
       binary when present, otherwise the Flatpak Steam, defaulting DISPLAY
       and XAUTHORITY so it also works from a non-graphical shell (KDE
       Wayland); runs `steam` directly on Windows.
     cmds:
-      - cmd: open -a "CrossOver" --args steam://rungameid/3405340
+      - cmd: |
+          game='C:\Program Files (x86)\Steam\steamapps\common\Megabonk'
+          python3 - "$game" <<'PY'
+          import ntpath, os, subprocess, sys
+          cxstart = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/cxstart"
+          game = sys.argv[1]
+          env = {**os.environ, "SteamAppId": "3405340", "SteamGameId": "3405340"}
+          args = [cxstart, "--bottle", "Steam", "--workdir", game, ntpath.join(game, "Megabonk.exe")]
+          subprocess.Popen(args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+          PY
         platforms: [darwin]
       - cmd: |
           export DISPLAY="${DISPLAY:-:0}"
