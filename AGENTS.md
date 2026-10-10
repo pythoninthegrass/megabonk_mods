@@ -19,6 +19,19 @@ Megabonk ships a native Linux build (`Megabonk.x86_64`), so there is no Proton o
 
 The mod has a development harness that loads a level, captures the game's rendered frame, and quits, without keyboard or mouse input. Enable it once with `uv run scripts/run.py enable`, launch the game, then run `uv run scripts/run.py cycle <level> <out.png>` and read the PNG. See `docs/development.md` for the commands, launch steps, and caveats.
 
+### Reloading a rebuilt mod
+
+MelonLoader loads the DLL once at startup, so a rebuild only takes effect on a fresh launch. Run `task mod:build` (it deploys the DLL into `Mods`), then send quit, launch, wait and load as one background command (`run_in_background`; a foreground `sleep` is blocked). `Latest.log` keeps the previous run's lines, and the old game appends to it while it shuts down, so touch the marker after the quit, not before, and wait for a log newer than it. A load sent before Steamworks is up fails once with `Steamworks is not initialized`, so retry it until the kill floor arms:
+
+```sh
+L="$(uv run scripts/game_paths.py | jq -r .latest_log_path)"
+uv run scripts/run.py quit && m="$(mktemp)" && task game:run
+until [ "$L" -nt "$m" ] && rg -q 'DevHarness: enabled' "$L"; do sleep 2; done
+for i in 1 2 3 4 5; do uv run scripts/run.py load <level>; sleep 10; rg -q 'KillFloor: armed' "$L" && break; done
+```
+
+`task game:run` returns at once because it detaches the game. Send the load only until it succeeds; a second `load` restarts the run. This exact chain has not been run end to end yet (the marker order and retry loop are the new parts).
+
 ## Reading the game's code
 
 Megabonk is an Il2Cpp build with no managed IL anywhere in the install. `MelonLoader/Il2CppAssemblies/*.dll` and Il2CppDumper's `DummyDll/*.dll` are both stubs — interop thunks and empty method bodies — so decompiling either returns plumbing, never game logic. Read `.tools/il2cpp_dump/dump.cs` (regenerate with `task re:dump`) for fields, method signatures and enum values; a method body exists only as native code in `GameAssembly`, reachable in Binary Ninja at the RVA the dump lists. Behaviour that lives in a serialized Unity asset rather than in code, such as Rewired's key bindings, is in neither place and has to be confirmed in the running game. See `docs/development.md` for the detail and the one-command check.
