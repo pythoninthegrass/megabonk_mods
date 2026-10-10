@@ -1,16 +1,16 @@
 ---
 id: TASK-005.02
 title: Catalog palette UI
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-06 21:43'
+updated_date: '2026-10-10 05:59'
 labels:
   - level-editor
 dependencies:
   - TASK-005.01
 parent_task_id: TASK-005
 priority: high
-type: feature
 ordinal: 24000
 ---
 
@@ -26,17 +26,23 @@ Selecting an entry should set it as the "currently selected catalog item" for TA
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A palette panel lists every placeable catalog entry for the currently-loaded map, sourced from the real game's prefab catalog fields
-- [ ] #2 Each entry displays a thumbnail (render-to-texture or a documented icon/label fallback) and a display name
-- [ ] #3 Each entry's catalogId matches TASK-003.05's format
-- [ ] #4 Selecting an entry exposes it as the current selection for consumption by the object-placement tool
-- [ ] #5 The palette updates correctly if the editor is reopened on a different map
+- [x] #1 A palette panel lists every placeable catalog entry for the currently-loaded map, sourced from the real game's prefab catalog fields
+- [x] #2 Each entry displays a thumbnail (render-to-texture or a documented icon/label fallback) and a display name
+- [x] #3 Each entry's catalogId matches TASK-003.05's format
+- [x] #4 Selecting an entry exposes it as the current selection for consumption by the object-placement tool
+- [x] #5 The palette updates correctly if the editor is reopened on a different map
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added a UGUI+TMP catalog palette shown in editor mode. PaletteCatalogBuilder builds catalogIds from the game's prefab catalog (CatalogPrefabs, shared with live editing); PaletteSelection exposes the current CatalogId for the placement tool. Rows show the prefab GameObject name (label-only, no thumbnails). Verified in game on Forest (75 entries) and Desert (73 entries): click selection, wheel scroll, rebuild on map change. Editor look now needs RMB held and is 10% more sensitive.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
