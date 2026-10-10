@@ -345,47 +345,8 @@ public static class LiveEditPatch
             return found;
         }
 
-        private GameObject ResolvePrefab(CatalogRoute route)
-        {
-            switch (route.Kind)
-            {
-                case CatalogRouteKind.Chest:
-                    return _controller.interactablesSpawner.chest;
-                case CatalogRouteKind.ChestFree:
-                    return _controller.interactablesSpawner.chestFree;
-                case CatalogRouteKind.Rail:
-                    return _controller.interactablesSpawner.rails[route.Index];
-            }
-
-            var mapData = FindMap(route.Map);
-            if (route.Kind == CatalogRouteKind.Shrine)
-            {
-                return mapData.shrines[route.Index];
-            }
-
-            var stage = mapData.stages[route.Stage];
-            return route.Kind switch
-            {
-                CatalogRouteKind.RandomMapObject => stage.randomMapObjects[route.Index].prefabs[route.SubIndex],
-                CatalogRouteKind.FlatTilePrefab => stage.stageTilePrefabs.flatTilePrefabs[route.Index],
-                CatalogRouteKind.SpecificTilePrefab => stage.stageTilePrefabs.mapSpecificTilesPrefabs[route.Index],
-                _ => throw new ArgumentException($"Unhandled catalog route kind {route.Kind}."),
-            };
-        }
-
-        private static MapData FindMap(EMap map)
-        {
-            var maps = DataManager.Instance.maps;
-            for (var i = 0; i < maps.Count; i++)
-            {
-                if ((int)maps[i].eMap == (int)map)
-                {
-                    return maps[i];
-                }
-            }
-
-            throw new ArgumentException($"No MapData for map {map}.");
-        }
+        private GameObject ResolvePrefab(CatalogRoute route) =>
+            CatalogPrefabs.Resolve(route, _controller.interactablesSpawner);
 
         private static Vector3 ToVector(Vector3Data v) => new(v.X, v.Y, v.Z);
     }

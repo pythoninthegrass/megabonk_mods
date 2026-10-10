@@ -7,10 +7,11 @@ using UnityEngine;
 
 namespace MegabonkLevels;
 
-// Editor overlay mode: F8 (or the harness) freezes the run through MyTime.Pause and flies the camera free of the player.
+// Editor overlay mode: F8 (or the harness) freezes the run through MyTime.Pause and flies the camera free of the player while the right mouse button is held.
 public static class EditorMode
 {
     private const KeyCode ToggleKey = KeyCode.F8;
+    private const float LookSensitivityScale = 1.1f;
     private static readonly FreeFlySettings DefaultSettings = new(MoveSpeed: 60f, FastMultiplier: 4f, LookDegreesPerUnit: 1f);
 
     private static readonly EditorSessionState _session = new();
@@ -35,6 +36,7 @@ public static class EditorMode
 
         if (_session.Active)
         {
+            EditorPalette.Tick();
             Fly();
         }
     }
@@ -71,6 +73,7 @@ public static class EditorMode
         var rotation = camera.transform.eulerAngles;
         _pose = new CameraPose(position.x, position.y, position.z, NormalizePitch(rotation.x), rotation.y, rotation.z);
         CameraOverride.Set(_pose);
+        EditorPalette.OnEditorEntered(logger);
         logger.Msg($"EditorMode: entered, MyTime.paused={MyTime.paused}.");
     }
 
@@ -82,6 +85,7 @@ public static class EditorMode
         }
 
         CameraOverride.Clear();
+        EditorPalette.OnEditorExited();
         if (shouldUnpause)
         {
             MyTime.Unpause();
@@ -92,12 +96,13 @@ public static class EditorMode
 
     private static void Fly()
     {
+        var look = Input.GetMouseButton(1) && !EditorPalette.PointerOverPanel;
         var input = new FreeFlyInput(
             Forward: Axis(KeyCode.W, KeyCode.S),
             Right: Axis(KeyCode.D, KeyCode.A),
             Up: Axis(KeyCode.Space, KeyCode.LeftControl),
-            MouseDx: Input.GetAxisRaw("Mouse X") * _horizontalSign,
-            MouseDy: Input.GetAxisRaw("Mouse Y") * _verticalSign,
+            MouseDx: look ? Input.GetAxisRaw("Mouse X") * _horizontalSign : 0f,
+            MouseDy: look ? Input.GetAxisRaw("Mouse Y") * _verticalSign : 0f,
             Fast: Input.GetKey(KeyCode.LeftShift));
 
         _pose = FreeFlyCamera.Step(_pose, input, Time.unscaledDeltaTime, _settings);
@@ -108,7 +113,7 @@ public static class EditorMode
     private static void ReadLookSettings()
     {
         var controls = SaveManager.Instance?.config?.cfControlSettings;
-        _settings = DefaultSettings with { LookDegreesPerUnit = controls?.sensitivity ?? DefaultSettings.LookDegreesPerUnit };
+        _settings = DefaultSettings with { LookDegreesPerUnit = (controls?.sensitivity ?? DefaultSettings.LookDegreesPerUnit) * LookSensitivityScale };
         _horizontalSign = controls?.inverted_horizontal_axis == 1 ? -1f : 1f;
         _verticalSign = controls?.inverted_vertical_axis == 1 ? -1f : 1f;
     }

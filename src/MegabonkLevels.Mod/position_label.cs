@@ -262,7 +262,7 @@ public static class PositionLabel
         return true;
     }
 
-    private static TMP_FontAsset FindFontAsset(string assetName)
+    internal static TMP_FontAsset FindFontAsset(string assetName)
     {
         foreach (var asset in Resources.FindObjectsOfTypeAll<TMP_FontAsset>())
         {

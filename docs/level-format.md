@@ -67,7 +67,7 @@ Every op type's constructor throws on invalid input — `ArgumentException` for 
 
 ### `catalogId` format
 
-`src/MegabonkLevels.Mod/catalog_id.cs` defines `CatalogId`, a purely syntactic parser/validator for the strings `PlaceObject` uses to reference a placeable prefab. It does not know which map/stage/category names are real — that catalog-building concern belongs to whatever populates the editor's object palette — it only enforces the grammar below.
+`src/MegabonkLevels.Mod/catalog_id.cs` defines `CatalogId`, a purely syntactic parser/validator for the strings `PlaceObject` uses to reference a placeable prefab. It does not know which map/stage/category names are real — that catalog-building concern belongs to `PaletteCatalogBuilder`, which populates the editor's object palette (see "Catalog palette" in `development.md`) — it only enforces the grammar below.
 
 Two namespaces, distinguished by a `bundle:` prefix:
 
@@ -96,7 +96,7 @@ Rules, checked in this order by `CatalogId.TryParse`/`Parse`:
 | `interactable/chest`, `interactable/chestFree` | — | `SpawnInteractables.chest` / `.chestFree` (singular fields) |
 | `interactable/rail/{index}` | `interactable/rail/2` | `SpawnInteractables.rails[2]` |
 
-**Prefabs have no name field.** `RandomMapObject.prefabs`, `StageTilePrefabs`'s arrays, `MapData.shrines`, and `SpawnInteractables.rails` are all plain `GameObject[]` with nothing resembling a human-readable name — only an array index. The final segment of a game-asset id is therefore typically numeric, not a descriptive name; a `Tree_03`-style segment would have to come from a future name lookup this task doesn't build, not from the game's own data.
+**Prefabs have no name field.** `RandomMapObject.prefabs`, `StageTilePrefabs`'s arrays, `MapData.shrines`, and `SpawnInteractables.rails` are all plain `GameObject[]` with nothing resembling a human-readable name — only an array index. The final segment of a game-asset id is therefore typically numeric, not a descriptive name; the palette shows each prefab's GameObject name next to its id, but the id itself stays index-based.
 
 `tests/MegabonkLevels.Tests/catalog_id_tests.cs` covers valid ids in both namespaces (including every shape above) and a table-driven set of malformed inputs (empty/whitespace, unknown namespace prefix, empty segment from a leading/trailing/doubled `/`, invalid characters, too few segments), each asserted against its specific failure reason.
 
