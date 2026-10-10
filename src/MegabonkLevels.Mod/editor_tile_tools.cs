@@ -9,8 +9,8 @@ namespace MegabonkLevels;
 // See "Tile tools" in docs/development.md.
 public static class EditorTileTools
 {
-    private const float ToolbarWidth = 640f;
-    private const float ToolbarHeight = 56f;
+    private const float ToolbarWidth = 960f;
+    private const float ToolbarHeight = 80f;
     private const float FontSize = 18f;
     private const float RayLength = 5000f;
     private const float WallNudge = 0.01f;
@@ -26,6 +26,7 @@ public static class EditorTileTools
     private static LineRenderer _outline;
     private static EditorTool _tool = EditorTool.Raise;
     private static (int X, int Z, TileState State)? _target;
+    private static Vector3 _targetPoint;
 
     public static void OnEditorEntered(MelonLogger.Instance logger)
     {
@@ -69,7 +70,7 @@ public static class EditorTileTools
         _target = EditorPalette.PointerOverPanel ? null : FindTarget();
         if (EditorTools.IsObjectTool(_tool))
         {
-            if (EditorObjectTools.Tick(_tool, _target) is { } requested)
+            if (EditorObjectTools.Tick(_tool, _target, _targetPoint) is { } requested)
             {
                 SetTool(requested);
             }
@@ -109,6 +110,7 @@ public static class EditorTileTools
 
         // Stepping just inside the surface puts a hit on a side wall in the cell the wall belongs to.
         var point = hit.point - hit.normal * WallNudge;
+        _targetPoint = point;
         var cell = PositionReadout.CellOf(point.x, point.z, grid.Width, grid.Depth, grid.Spacing);
         if (!cell.InGrid || LiveEditPatch.TileAt(cell.X, cell.Z) is not { } state)
         {

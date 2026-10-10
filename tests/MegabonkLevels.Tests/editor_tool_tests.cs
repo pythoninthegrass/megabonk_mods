@@ -120,7 +120,7 @@ public class EditorToolTests
     [Fact]
     public void SelectDetail_ShowsTheSelectionAndTheTargetCell()
     {
-        Assert.Equal("selected Tree0 - click ground to move, R rotate, Del remove\ntarget (3,4)", EditorTools.SelectDetail("Tree0", null, (3, 4)));
+        Assert.Equal("selected Tree0 - drag to move, R rotate, Del remove\ntarget (3,4)", EditorTools.SelectDetail("Tree0", null, (3, 4)));
     }
 
     [Fact]

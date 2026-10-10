@@ -266,19 +266,21 @@ The tools work in any `Tiles`-map run, not only mod-loaded levels, but the kill 
 
 ## Object tools
 
-Tool 5 (Place) and tool 6 (Select) edit objects. Both snap to cell centres, always: the position is the targeted tile's centre (same origin as `PositionReadout.CellOf`, via `PositionReadout.CellCentre`), at the tile's surface (`Height * tileHeight`, plus half a level on a ramp), with `tileHeight` and the spacing read from the live `StageData.mapParameters`. The yellow tile outline shows the cell an object will land in.
+Tool 5 (Place) and tool 6 (Select) edit objects. Both place at the cursor's ground point, not snapped: the point is kept inside the targeted cell (clamped to its edges), measured from the same origin as `PositionReadout.CellOf` (via `PositionReadout.CellCentre`). The height is the tile surface at that point (`Height * tileHeight`; on a ramp it rises a full level from the downhill edge to the uphill edge). `tileHeight` and the spacing are read from the live `StageData.mapParameters`. The yellow tile outline shows the targeted cell. While Place is active, or Select has an object selected, thin white lines draw a quarter-tile grid (spacing / 4, 10 units on Forest's 40-unit tiles) over that cell as a visual guide, and an orange square marks the exact placement point; objects do not snap to the lines.
+
+An identical object cannot be stacked: placing or moving an object is ignored, with a log line, when an object of the same prefab name already stands at the same position (within 0.01 on every axis, generator-spawned or editor-placed). Different objects may share a position.
 
 | Tool | Input | Edit |
 | --- | --- | --- |
-| Place | left click on a tile with a palette item selected | `PlaceObject` at the snapped cell; rotation is the prefab's pitch and roll with yaw set to the camera's yaw plus 180 degrees rounded to 90, so the object faces the camera (assumes a prefab's front is +Z; unconfirmed); scale is the prefab's local scale |
-| Select | left click an object | selects it (cyan footprint outline from its combined renderer bounds); clicking the selected object again deselects |
-| Select | left click ground with an object selected | `MoveObject` to the snapped cell, keeping rotation and scale |
+| Place | left click on a tile with a palette item selected | `PlaceObject` at the cursor point; rotation is the prefab's pitch and roll with yaw set to the camera's yaw plus 180 degrees rounded to 90, so the object faces the camera (assumes a prefab's front is +Z; unconfirmed); scale is the prefab's local scale |
+| Select | press an object | selects it (cyan footprint outline from its combined renderer bounds); pressing where nothing is picked deselects |
+| Select | keep holding for 0.2 seconds, move, then release | the object is picked up and follows the cursor as a preview, keeping the offset at which it was grabbed, then one `MoveObject` to the release point, keeping rotation and scale; releasing over the palette or off the grid, onto an identical object, or without moving puts it back and makes no edit; a press released before 0.2 seconds only selects |
 | Select | `R` / `Shift+R` | `MoveObject` with yaw 90 degrees clockwise / counter-clockwise, keeping pitch, roll and position |
 | Select | `Delete` or `Backspace` | `RemoveObject` |
 | any | middle click an object | pick block: selects the object's palette entry and switches to Place |
 
 Picking tries a physics raycast first and accepts the hit only when its hierarchy resolves to an indexed object in a `tileObject` or `object:*` category or to an editor-placed object; tiles, walls and fill pieces never resolve. When that finds nothing, the pickable object nearest the cursor's ground point on the XZ plane within half a tile is used. The log line names the path (`raycast` or `nearest`). Selection clears when the tool changes. Nothing is picked or placed while the pointer is over the palette.
 
-Pick block matches a generator-spawned object's prefab name (the `object:{prefabName}:{index}` genId category) against the palette's display names, preferring the current stage's entry, then a stage-independent one (shrines, interactables). An editor-placed object uses the catalogId it was placed with. An object with no matching entry, including every `tileObject`, is logged (`pick block found no palette entry`) and the selection is left alone.
+Pick block scrolls the palette to the picked entry when it is outside the visible list. It matches a generator-spawned object's prefab name (the `object:{prefabName}:{index}` genId category) against the palette's display names, preferring the current stage's entry, then a stage-independent one (shrines, interactables). An editor-placed object uses the catalogId it was placed with. An object with no matching entry, including every `tileObject`, is logged (`pick block found no palette entry`) and the selection is left alone.
 
-Every action logs `EditorObjectTools: <what> -> <opType>`. Removal destroys the object, so undo must respawn it or removal must switch to deactivation. Pure logic lives in `object_tool.cs` (snap, facing, the ops), `object_picker.cs` (nearest object) and `palette_pick.cs` (pick block lookup).
+Every action logs `EditorObjectTools: <what> -> <opType>`. Removal destroys the object, so undo must respawn it or removal must switch to deactivation. Pure logic lives in `object_tool.cs` (position, grid lines, stacking, facing, the ops), `palette_scroll.cs` (palette scroll offset), `object_picker.cs` (nearest object) and `palette_pick.cs` (pick block lookup).

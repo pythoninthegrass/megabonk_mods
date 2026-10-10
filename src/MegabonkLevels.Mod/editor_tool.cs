@@ -48,7 +48,7 @@ public static class EditorTools
         if (selectedObject != null)
         {
             var target = cell is { } c ? $"target ({c.X},{c.Z})" : "target none";
-            return $"selected {selectedObject} - click ground to move, R rotate, Del remove\n{target}";
+            return $"selected {selectedObject} - drag to move, R rotate, Del remove\n{target}";
         }
 
         return hoveredObject != null ? $"click to select {hoveredObject}" : "click an object to select it";

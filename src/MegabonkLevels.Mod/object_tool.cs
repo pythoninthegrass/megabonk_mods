@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace MegabonkLevels;
 
@@ -7,13 +9,72 @@ public static class ObjectTools
 {
     private const float YawStep = 90f;
 
-    // The cell's centre at its tile surface; a ramp's surface is half a level above its base.
-    public static Vector3Data SnapPosition(int x, int z, TileState state, int width, int depth, float spacing, float tileHeight)
+    // Grid lines per tile edge, drawn as a visual guide; placement is not snapped to them.
+    private const int GridDivisions = 4;
+    private const float PositionTolerance = 0.01f;
+    private const float DragHoldSeconds = 0.2f;
+
+    // The cursor point kept inside its cell, at the tile surface there.
+    public static Vector3Data PositionAt(int x, int z, TileState state, int width, int depth, float spacing, float tileHeight, float pointX, float pointZ)
     {
         var (centreX, centreZ) = PositionReadout.CellCentre(x, z, width, depth, spacing);
-        var rampLift = state.Slope == SlopeDirection.None ? 0f : tileHeight / 2f;
-        return new Vector3Data(centreX, state.Height * tileHeight + rampLift, centreZ);
+        var half = spacing / 2f;
+        var offsetX = Math.Clamp(pointX - centreX, -half, half);
+        var offsetZ = Math.Clamp(pointZ - centreZ, -half, half);
+        return new Vector3Data(centreX + offsetX, SurfaceY(state, offsetX, offsetZ, spacing, tileHeight), centreZ + offsetZ);
     }
+
+    // The tile surface at an offset from the cell centre; a ramp rises a full level from its downhill edge to its uphill edge.
+    public static float SurfaceY(TileState state, float offsetX, float offsetZ, float spacing, float tileHeight)
+    {
+        var baseY = state.Height * tileHeight;
+        if (state.Slope == SlopeDirection.None)
+        {
+            return baseY;
+        }
+
+        var (dx, dz) = TilePlacement.UphillVector(state.Slope);
+        return baseY + tileHeight * (0.5f + (offsetX * dx + offsetZ * dz) / spacing);
+    }
+
+    // A single path over the cell's quarter-tile grid lines; every connecting segment runs along the cell edge.
+    public static IReadOnlyList<Vector3Data> GridLines(int x, int z, TileState state, int width, int depth, float spacing, float tileHeight, float lift)
+    {
+        var (centreX, centreZ) = PositionReadout.CellCentre(x, z, width, depth, spacing);
+        var half = spacing / 2f;
+        var step = spacing / GridDivisions;
+        var points = new List<Vector3Data>();
+
+        Vector3Data At(float offsetX, float offsetZ) =>
+            new(centreX + offsetX, SurfaceY(state, offsetX, offsetZ, spacing, tileHeight) + lift, centreZ + offsetZ);
+
+        for (var i = 0; i <= GridDivisions; i++)
+        {
+            var offsetX = -half + i * step;
+            points.Add(At(offsetX, i % 2 == 0 ? -half : half));
+            points.Add(At(offsetX, i % 2 == 0 ? half : -half));
+        }
+
+        for (var j = GridDivisions; j >= 0; j--)
+        {
+            var offsetZ = -half + j * step;
+            var fromEast = (GridDivisions - j) % 2 == 0;
+            points.Add(At(fromEast ? half : -half, offsetZ));
+            points.Add(At(fromEast ? -half : half, offsetZ));
+        }
+
+        return points;
+    }
+
+    // True when an object of the same prefab already stands at the position.
+    public static bool IsStacked(string prefabName, Vector3Data position, IEnumerable<(string PrefabName, Vector3Data Position)> others) =>
+        others.Any(o => o.PrefabName == prefabName && !HasMoved(o.Position, position));
+
+    // A press only turns into a drag once held this long, so a quick click selects without moving.
+    public static bool DragStarted(float heldSeconds) => heldSeconds >= DragHoldSeconds;
+
+    public static bool HasMoved(Vector3Data from, Vector3Data to) =>
+        MathF.Abs(from.X - to.X) > PositionTolerance || MathF.Abs(from.Y - to.Y) > PositionTolerance || MathF.Abs(from.Z - to.Z) > PositionTolerance;
 
     // Faces the camera: the opposite of its yaw, rounded to a quarter turn.
     public static float FacingYaw(float cameraYaw) => NormalizeYaw(MathF.Round((cameraYaw + 180f) / YawStep) * YawStep);

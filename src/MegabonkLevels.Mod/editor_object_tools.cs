@@ -13,41 +13,56 @@ public static class EditorObjectTools
     private const float OutlineWidth = 0.8f;
     private const string CloneSuffix = "(Clone)";
 
+    private const float GridWidth = 0.25f;
+    private const float MarkerWidth = 0.6f;
+    private const float MarkerRadius = 1.5f;
+
     private static readonly Color SelectionColor = new(0.3f, 0.9f, 1f, 1f);
+    private static readonly Color GridColor = new(1f, 1f, 1f, 0.6f);
+    private static readonly Color MarkerColor = new(1f, 0.4f, 0.2f, 1f);
 
     private static MelonLogger.Instance _logger;
     private static LineRenderer _selectionOutline;
+    private static LineRenderer _gridLines;
+    private static LineRenderer _placeMarker;
     private static ObjectTarget? _selected;
     private static ObjectTarget? _hovered;
+    private static ObjectTarget? _dragging;
+    private static TransformData _dragOrigin;
+    private static float _dragLift;
+    private static bool _dragActive;
+    private static float _dragPressedAt;
+    private static (float X, float Z) _dragGrab;
 
     public static void OnEditorEntered(MelonLogger.Instance logger)
     {
         _logger = logger;
         _selected = null;
         _hovered = null;
-        _selectionOutline = BuildOutline();
+        _selectionOutline = BuildOutline(SelectionColor, OutlineWidth, 4, loop: true);
+        _gridLines = BuildOutline(GridColor, GridWidth, 0, loop: false);
+        _placeMarker = BuildOutline(MarkerColor, MarkerWidth, 4, loop: true);
     }
 
     public static void OnEditorExited()
     {
-        if (_selectionOutline != null)
-        {
-            Object.Destroy(_selectionOutline.gameObject);
-        }
-
-        _selectionOutline = null;
+        CancelDrag();
+        DestroyLine(ref _selectionOutline);
+        DestroyLine(ref _gridLines);
+        DestroyLine(ref _placeMarker);
         _selected = null;
         _hovered = null;
     }
 
     public static void OnToolChanged(EditorTool tool)
     {
+        CancelDrag();
         _selected = null;
         _hovered = null;
     }
 
     // Handles clicks and keys for the Place and Select tools; returns the tool to switch to after a pick-block click.
-    public static EditorTool? Tick(EditorTool tool, (int X, int Z, TileState State)? target)
+    public static EditorTool? Tick(EditorTool tool, (int X, int Z, TileState State)? target, Vector3 point)
     {
         EditorTool? switchTo = null;
         var pointerFree = !EditorPalette.PointerOverPanel;
@@ -63,11 +78,27 @@ public static class EditorObjectTools
         {
             if (tool == EditorTool.Place)
             {
-                Place(target);
+                Place(target, point);
             }
             else if (tool == EditorTool.Select)
             {
-                Select(target);
+                BeginDrag(target, point);
+            }
+        }
+
+        if (_dragging != null)
+        {
+            if (Input.GetMouseButtonUp(0))
+            {
+                EndDrag(target, point, pointerFree);
+            }
+            else if (Input.GetMouseButton(0))
+            {
+                _dragActive = _dragActive || ObjectTools.DragStarted(Time.unscaledTime - _dragPressedAt);
+                if (_dragActive)
+                {
+                    UpdateDrag(target, point);
+                }
             }
         }
 
@@ -77,6 +108,7 @@ public static class EditorObjectTools
         }
 
         RefreshOutline(tool);
+        RefreshGrid(tool, target, point);
         return switchTo;
     }
 
@@ -108,16 +140,30 @@ public static class EditorObjectTools
     private static string NameOf(ObjectTarget? target)
     {
         var go = target is { } t ? LiveEditPatch.ObjectFor(t) : null;
-        if (go == null)
-        {
-            return null;
-        }
+        return go == null ? null : PrefabNameOf(go);
+    }
 
+    private static string PrefabNameOf(GameObject go)
+    {
         var name = go.name;
         return name.EndsWith(CloneSuffix, System.StringComparison.Ordinal) ? name.Substring(0, name.Length - CloneSuffix.Length) : name;
     }
 
-    private static void Place((int X, int Z, TileState State)? target)
+    private static bool IsStacked(string prefabName, Vector3Data position, GameObject ignore)
+    {
+        var others = new List<(string PrefabName, Vector3Data Position)>();
+        foreach (var candidate in LiveEditPatch.PickableObjects())
+        {
+            if (candidate.Object != ignore)
+            {
+                others.Add((PrefabNameOf(candidate.Object), ToData(candidate.Object.transform.position)));
+            }
+        }
+
+        return ObjectTools.IsStacked(prefabName, position, others);
+    }
+
+    private static void Place((int X, int Z, TileState State)? target, Vector3 point)
     {
         if (target is not { } cell || LiveEditPatch.Grid is not { } grid)
         {
@@ -138,26 +184,111 @@ public static class EditorObjectTools
             return;
         }
 
-        var position = ObjectTools.SnapPosition(cell.X, cell.Z, cell.State, grid.Width, grid.Depth, grid.Spacing, grid.TileHeight);
-        var op = ObjectTools.Place(id, position, ToData(prefab.transform.eulerAngles), ToData(prefab.transform.localScale), camera.transform.eulerAngles.y);
-        Apply(op, $"place '{id.Serialize()}' at ({cell.X},{cell.Z})");
-    }
-
-    private static void Select((int X, int Z, TileState State)? cell)
-    {
-        var picked = PickAt();
-        if (picked is { } hit)
+        var position = ObjectTools.PositionAt(cell.X, cell.Z, cell.State, grid.Width, grid.Depth, grid.Spacing, grid.TileHeight, point.x, point.z);
+        if (IsStacked(prefab.name, position, null))
         {
-            _selected = _selected is { } current && current.Equals(hit.Target) ? null : hit.Target;
-            _logger.Msg($"EditorObjectTools: {(_selected == null ? "deselected" : "selected")} {hit.Target.Serialize()} '{hit.Object.name}' via {hit.Path}");
+            _logger.Msg($"EditorObjectTools: place ignored, '{prefab.name}' already stands at ({position.X:0.##}, {position.Y:0.##}, {position.Z:0.##})");
             return;
         }
 
-        if (_selected is { } selected && cell is { } target && LiveEditPatch.Grid is { } grid && LiveEditPatch.ObjectFor(selected) is { } go)
+        var op = ObjectTools.Place(id, position, ToData(prefab.transform.eulerAngles), ToData(prefab.transform.localScale), camera.transform.eulerAngles.y);
+        Apply(op, $"place '{id.Serialize()}' at ({position.X:0.##}, {position.Z:0.##}) in cell ({cell.X},{cell.Z})");
+    }
+
+    // Pressing on an object selects it; holding picks it up. Pressing on nothing deselects.
+    private static void BeginDrag((int X, int Z, TileState State)? target, Vector3 point)
+    {
+        if (PickAt() is not { } hit)
         {
-            var position = ObjectTools.SnapPosition(target.X, target.Z, target.State, grid.Width, grid.Depth, grid.Spacing, grid.TileHeight);
-            Apply(ObjectTools.Move(selected, CurrentTransform(go), position), $"move {selected.Serialize()} to ({target.X},{target.Z})");
+            _selected = null;
+            _logger.Msg("EditorObjectTools: deselected, nothing under the cursor");
+            return;
         }
+
+        _selected = hit.Target;
+        _dragging = hit.Target;
+        _dragOrigin = CurrentTransform(hit.Object);
+        _dragActive = false;
+        _dragPressedAt = Time.unscaledTime;
+        _dragGrab = target != null ? (_dragOrigin.Position.X - point.x, _dragOrigin.Position.Z - point.z) : (0f, 0f);
+        _dragLift = SurfaceYAt(_dragOrigin.Position) is { } surface ? _dragOrigin.Position.Y - surface : 0f;
+        _logger.Msg($"EditorObjectTools: selected {hit.Target.Serialize()} '{hit.Object.name}' via {hit.Path}");
+    }
+
+    // The object follows the cursor as a preview; the edit is only made on release.
+    private static void UpdateDrag((int X, int Z, TileState State)? target, Vector3 point)
+    {
+        if (_dragging is not { } dragged || LiveEditPatch.ObjectFor(dragged) is not { } go || CursorPosition(target, point, _dragGrab) is not { } position)
+        {
+            return;
+        }
+
+        go.transform.position = new Vector3(position.X, position.Y + _dragLift, position.Z);
+    }
+
+    private static void EndDrag((int X, int Z, TileState State)? target, Vector3 point, bool pointerFree)
+    {
+        var dragged = _dragging.Value;
+        _dragging = null;
+        if (!_dragActive)
+        {
+            return;
+        }
+
+        _dragActive = false;
+        if (LiveEditPatch.ObjectFor(dragged) is not { } go)
+        {
+            return;
+        }
+
+        var final = ToData(go.transform.position);
+        go.transform.position = new Vector3(_dragOrigin.Position.X, _dragOrigin.Position.Y, _dragOrigin.Position.Z);
+        if (!pointerFree || target == null || !ObjectTools.HasMoved(_dragOrigin.Position, final))
+        {
+            return;
+        }
+
+        if (IsStacked(PrefabNameOf(go), final, go))
+        {
+            _logger.Msg($"EditorObjectTools: move ignored, '{PrefabNameOf(go)}' already stands at ({final.X:0.##}, {final.Y:0.##}, {final.Z:0.##})");
+            return;
+        }
+
+        Apply(ObjectTools.Move(dragged, _dragOrigin, final), $"move {dragged.Serialize()} to ({final.X:0.##}, {final.Z:0.##})");
+    }
+
+    private static void CancelDrag()
+    {
+        if (_dragging is { } dragged && LiveEditPatch.ObjectFor(dragged) is { } go)
+        {
+            go.transform.position = new Vector3(_dragOrigin.Position.X, _dragOrigin.Position.Y, _dragOrigin.Position.Z);
+        }
+
+        _dragging = null;
+        _dragActive = false;
+    }
+
+    // The cursor point plus the offset at which the object was grabbed, so it does not jump to the cursor.
+    private static Vector3Data? CursorPosition((int X, int Z, TileState State)? target, Vector3 point, (float X, float Z) grab) =>
+        target is { } cell && LiveEditPatch.Grid is { } grid
+            ? ObjectTools.PositionAt(cell.X, cell.Z, cell.State, grid.Width, grid.Depth, grid.Spacing, grid.TileHeight, point.x + grab.X, point.z + grab.Z)
+            : null;
+
+    private static float? SurfaceYAt(Vector3Data world)
+    {
+        if (LiveEditPatch.Grid is not { } grid)
+        {
+            return null;
+        }
+
+        var cell = PositionReadout.CellOf(world.X, world.Z, grid.Width, grid.Depth, grid.Spacing);
+        if (!cell.InGrid || LiveEditPatch.TileAt(cell.X, cell.Z) is not { } state)
+        {
+            return null;
+        }
+
+        var (centreX, centreZ) = PositionReadout.CellCentre(cell.X, cell.Z, grid.Width, grid.Depth, grid.Spacing);
+        return ObjectTools.SurfaceY(state, world.X - centreX, world.Z - centreZ, grid.Spacing, grid.TileHeight);
     }
 
     private static void HandleSelectionKeys()
@@ -280,24 +411,70 @@ public static class EditorObjectTools
         _selectionOutline.enabled = true;
     }
 
-    private static LineRenderer BuildOutline()
+    private static void DestroyLine(ref LineRenderer line)
     {
-        var go = new GameObject("MegabonkLevelsObjectSelection");
+        if (line != null)
+        {
+            Object.Destroy(line.gameObject);
+        }
+
+        line = null;
+    }
+
+    // The quarter-tile grid of the targeted cell and a marker at the placement point, while Place or a selected Select can use them.
+    private static void RefreshGrid(EditorTool tool, (int X, int Z, TileState State)? target, Vector3 point)
+    {
+        var active = tool == EditorTool.Place || (tool == EditorTool.Select && _selected != null);
+        if (_gridLines == null || _placeMarker == null || !active || target is not { } cell || LiveEditPatch.Grid is not { } grid)
+        {
+            SetEnabled(_gridLines, false);
+            SetEnabled(_placeMarker, false);
+            return;
+        }
+
+        var lines = ObjectTools.GridLines(cell.X, cell.Z, cell.State, grid.Width, grid.Depth, grid.Spacing, grid.TileHeight, OutlineLift);
+        _gridLines.positionCount = lines.Count;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            _gridLines.SetPosition(i, new Vector3(lines[i].X, lines[i].Y, lines[i].Z));
+        }
+
+        var marker = ObjectTools.PositionAt(cell.X, cell.Z, cell.State, grid.Width, grid.Depth, grid.Spacing, grid.TileHeight, point.x, point.z);
+        var y = marker.Y + OutlineLift;
+        _placeMarker.SetPosition(0, new Vector3(marker.X - MarkerRadius, y, marker.Z - MarkerRadius));
+        _placeMarker.SetPosition(1, new Vector3(marker.X + MarkerRadius, y, marker.Z - MarkerRadius));
+        _placeMarker.SetPosition(2, new Vector3(marker.X + MarkerRadius, y, marker.Z + MarkerRadius));
+        _placeMarker.SetPosition(3, new Vector3(marker.X - MarkerRadius, y, marker.Z + MarkerRadius));
+        _gridLines.enabled = true;
+        _placeMarker.enabled = true;
+    }
+
+    private static void SetEnabled(LineRenderer line, bool enabled)
+    {
+        if (line != null)
+        {
+            line.enabled = enabled;
+        }
+    }
+
+    private static LineRenderer BuildOutline(Color color, float width, int positionCount, bool loop)
+    {
+        var go = new GameObject("MegabonkLevelsObjectOverlay");
         Object.DontDestroyOnLoad(go);
         var line = go.AddComponent<LineRenderer>();
-        line.loop = true;
+        line.loop = loop;
         line.useWorldSpace = true;
-        line.positionCount = 4;
-        line.startWidth = OutlineWidth;
-        line.endWidth = OutlineWidth;
-        line.startColor = SelectionColor;
-        line.endColor = SelectionColor;
+        line.positionCount = positionCount;
+        line.startWidth = width;
+        line.endWidth = width;
+        line.startColor = color;
+        line.endColor = color;
         line.enabled = false;
 
         var shader = Shader.Find("Sprites/Default") ?? Shader.Find("Hidden/Internal-Colored");
         if (shader != null)
         {
-            line.material = new Material(shader) { color = SelectionColor };
+            line.material = new Material(shader) { color = color };
         }
 
         return line;

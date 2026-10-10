@@ -7,19 +7,112 @@ public class ObjectToolTests
     private static readonly TransformData Current = new(new Vector3Data(1, 2, 3), new Vector3Data(10, 90, 20), new Vector3Data(2, 2, 2));
 
     [Fact]
-    public void SnapPosition_FlatTile_IsTheCellCentreAtTheTileSurface()
+    public void PositionAt_FlatTile_AtTheCellCentre_IsTheCentreAtTheTileSurface()
     {
-        var position = ObjectTools.SnapPosition(9, 7, new TileState(2, SlopeDirection.None), 15, 15, 40f, 20f);
+        var position = ObjectTools.PositionAt(9, 7, new TileState(2, SlopeDirection.None), 15, 15, 40f, 20f, 80f, 0f);
 
         Assert.Equal(new Vector3Data(80f, 40f, 0f), position);
     }
 
     [Fact]
-    public void SnapPosition_Ramp_SitsHalfALevelUp()
+    public void PositionAt_KeepsTheCursorPointInsideTheCell()
     {
-        var position = ObjectTools.SnapPosition(7, 7, new TileState(1, SlopeDirection.East), 15, 15, 40f, 20f);
+        var position = ObjectTools.PositionAt(7, 7, new TileState(0, SlopeDirection.None), 15, 15, 40f, 20f, 13f, -4f);
 
-        Assert.Equal(new Vector3Data(0f, 30f, 0f), position);
+        Assert.Equal(new Vector3Data(13f, 0f, -4f), position);
+    }
+
+    [Fact]
+    public void PositionAt_ClampsToTheCell()
+    {
+        var position = ObjectTools.PositionAt(7, 7, new TileState(0, SlopeDirection.None), 15, 15, 40f, 20f, 25f, -30f);
+
+        Assert.Equal(new Vector3Data(20f, 0f, -20f), position);
+    }
+
+    [Theory]
+    [InlineData(0f, 30f)]
+    [InlineData(20f, 40f)]
+    [InlineData(-20f, 20f)]
+    [InlineData(10f, 35f)]
+    [InlineData(13f, 36.5f)]
+    public void PositionAt_Ramp_FollowsTheSurfaceAlongTheUphillAxis(float pointX, float expectedY)
+    {
+        var position = ObjectTools.PositionAt(7, 7, new TileState(1, SlopeDirection.East), 15, 15, 40f, 20f, pointX, 0f);
+
+        Assert.Equal(expectedY, position.Y);
+    }
+
+    [Fact]
+    public void IsStacked_SamePrefabAtTheSamePosition_IsTrue()
+    {
+        var others = new[] { ("Tree0", new Vector3Data(10f, 0f, 20f)) };
+
+        Assert.True(ObjectTools.IsStacked("Tree0", new Vector3Data(10f, 0f, 20f), others));
+    }
+
+    [Fact]
+    public void IsStacked_DifferentPrefab_IsFalse()
+    {
+        var others = new[] { ("Tree0", new Vector3Data(10f, 0f, 20f)) };
+
+        Assert.False(ObjectTools.IsStacked("Log0", new Vector3Data(10f, 0f, 20f), others));
+    }
+
+    [Fact]
+    public void IsStacked_DifferentPosition_IsFalse()
+    {
+        var others = new[] { ("Tree0", new Vector3Data(10f, 0f, 20f)) };
+
+        Assert.False(ObjectTools.IsStacked("Tree0", new Vector3Data(20f, 0f, 20f), others));
+    }
+
+    [Theory]
+    [InlineData(0f, false)]
+    [InlineData(0.1f, false)]
+    [InlineData(0.2f, true)]
+    [InlineData(1f, true)]
+    public void DragStarted_OnlyAfterTheButtonHasBeenHeldForTheThreshold(float heldSeconds, bool expected)
+    {
+        Assert.Equal(expected, ObjectTools.DragStarted(heldSeconds));
+    }
+
+    [Fact]
+    public void HasMoved_SamePosition_IsFalse()
+    {
+        Assert.False(ObjectTools.HasMoved(new Vector3Data(1f, 2f, 3f), new Vector3Data(1f, 2f, 3f)));
+    }
+
+    [Theory]
+    [InlineData(1.5f, 2f, 3f)]
+    [InlineData(1f, 2.5f, 3f)]
+    [InlineData(1f, 2f, 3.5f)]
+    public void HasMoved_AnyAxisDiffers_IsTrue(float x, float y, float z)
+    {
+        Assert.True(ObjectTools.HasMoved(new Vector3Data(1f, 2f, 3f), new Vector3Data(x, y, z)));
+    }
+
+    [Fact]
+    public void GridLines_CoversTheCellWithQuarterTileLines()
+    {
+        var lines = ObjectTools.GridLines(7, 7, new TileState(1, SlopeDirection.None), 15, 15, 40f, 20f, 0.5f);
+
+        Assert.All(lines, p => Assert.InRange(p.X, -20f, 20f));
+        Assert.All(lines, p => Assert.InRange(p.Z, -20f, 20f));
+        Assert.All(lines, p => Assert.Equal(20.5f, p.Y));
+        Assert.Equal(new[] { -20f, -10f, 0f, 10f, 20f }, lines.Select(p => p.X).Distinct().OrderBy(v => v));
+        Assert.Equal(new[] { -20f, -10f, 0f, 10f, 20f }, lines.Select(p => p.Z).Distinct().OrderBy(v => v));
+    }
+
+    [Fact]
+    public void GridLines_EverySegmentIsAxisAligned()
+    {
+        var lines = ObjectTools.GridLines(7, 7, new TileState(0, SlopeDirection.None), 15, 15, 40f, 20f, 0f);
+
+        for (var i = 1; i < lines.Count; i++)
+        {
+            Assert.True(lines[i].X == lines[i - 1].X || lines[i].Z == lines[i - 1].Z);
+        }
     }
 
     [Theory]

@@ -245,6 +245,18 @@ public static class EditorPalette
         }
     }
 
+    private static void RevealRow(Row row)
+    {
+        if (_viewport == null || _content == null)
+        {
+            return;
+        }
+
+        var rowTop = -row.Rect.offsetMax.y;
+        var offset = PaletteScroll.OffsetToReveal(rowTop, RowHeight, _viewport.rect.height, _content.anchoredPosition.y, _contentHeight);
+        _content.anchoredPosition = new Vector2(0f, offset);
+    }
+
     private static void Scroll(float notches)
     {
         if (notches == 0f)
@@ -264,7 +276,12 @@ public static class EditorPalette
         {
             if (row.Background != null)
             {
-                row.Background.color = row.Id.Equals(current) ? SelectedColor : RowColor;
+                var selected = row.Id.Equals(current);
+                row.Background.color = selected ? SelectedColor : RowColor;
+                if (selected)
+                {
+                    RevealRow(row);
+                }
             }
         }
 
