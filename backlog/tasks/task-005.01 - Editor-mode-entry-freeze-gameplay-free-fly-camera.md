@@ -1,11 +1,11 @@
 ---
 id: TASK-005.01
 title: 'Editor mode entry, freeze gameplay, free-fly camera'
-status: In Progress
+status: Done
 assignee:
   - '@Claude'
 created_date: '2026-10-06 21:43'
-updated_date: '2026-10-10 05:41'
+updated_date: '2026-10-10 05:42'
 labels:
   - level-editor
 dependencies: []
@@ -75,7 +75,7 @@ What the dump plus already-verified live behaviour establishes:
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Implemented and verified in the running game; not yet committed.
+Implemented, verified in the running game, and committed (feat(mod) 5888a79, fix(game) 82902b9, docs 84973fa and a docs ordering follow-up).
 
 Evidence per criterion:
 - AC1: Lance pressed F8 in the game and it toggled editor mode with no side effects reported. This rests on his observation; a Rewired binding cannot be read from code.
@@ -98,5 +98,5 @@ Deviation: the run.py `editor` argument tests in scripts/test_run.py were writte
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
