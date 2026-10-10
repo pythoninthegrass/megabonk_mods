@@ -247,7 +247,7 @@ Clicking a row selects it, scrolling the wheel over the panel scrolls the list, 
 
 ## Tile tools
 
-While editor mode is active a toolbar at the top centre of the screen shows four tile tools and the targeted tile. The digit keys 1 to 4 select Raise, Lower, Slope and Remove; Raise is selected the first time editor mode is entered, and the choice persists across entries.
+While editor mode is active a toolbar at the top centre of the screen shows four tile tools and the targeted tile. The digit keys 1 to 4 select Raise, Lower, Slope and Remove; Raise is selected the first time editor mode is entered, and the choice persists across entries. Pressing 1 to 4 in normal play does nothing, so the game binds no action to them (confirmed in the game, like F8).
 
 The targeted tile is the one under the mouse pointer. A ray from the camera through the pointer is cast against the baked ground collision (`ProceduralTileGeneration.collider`, see "Ground collision after edits" in [runtime-map-structure.md](runtime-map-structure.md)) only, so enemies, props and the player never block it. The hit point is stepped 0.01 units into the surface before it is converted to a cell with `PositionReadout.CellOf`, so a hit on a side wall targets the tile the wall belongs to. A yellow outline traces the targeted tile's top surface, following the ramp on a slope. Nothing is targeted while the pointer is over the palette, outside the grid, or over a removed cell.
 
