@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-06 21:43'
-updated_date: '2026-10-10 07:01'
+updated_date: '2026-10-10 07:40'
 labels:
   - level-editor
 dependencies:
@@ -75,6 +75,14 @@ Risks and limits:
 2026-10-10: pure logic done with tests (EditorTool/EditorTools in editor_tool.cs, ObjectTools, ObjectPicker, PalettePick, PositionReadout.CellCentre); task mod:test 443 passing. Next: live side (LiveEditPatch lookups, EditorObjectTools input/picking/outline), docs, in-game check.
 
 2026-10-10: live side written (LiveEditPatch.TargetOf/ObjectFor/PickableObjects/CatalogIdOf/PrefabFor/CurrentStageIndex, editor_object_tools.cs, EditorTileTools hands tools 5/6 over) and docs/development.md + level-format.md updated; task check passes (443 tests, build, lint). Not yet verified in the running game; ACs stay unchecked until Lance drives place, select, move, rotate, delete, pick block and camera facing on Forest. Open in-game questions: do tile objects and trees have colliders (raycast vs nearest path), which way a prefab front points, do R/Delete/Backspace/middle click trigger a game action.
+
+2026-10-10: Lance's first in-game pass: placement snapped to cell centres only, so one object per cell, and identical objects stacked on the same spot (11 Tree0 at cell (10,8)), which made a stacked tree look undeletable; pick block did not reveal the palette entry when it was off screen. Changed: snap to a quarter-tile grid (spacing / 4, intersections include the centre) with a thin grid overlay and snap marker, ramp height follows the surface; placing or moving an identical prefab to the same position is blocked, different objects may share a position; the palette scrolls to the picked entry; the toolbar widened to 960x80 because tool 6 was ellipsised. Out of scope for this task: finer than quarter tile, which could later be added by holding Alt/Option. Not yet re-verified in game.
+
+2026-10-10: Lance found the quarter-tile snap too rigid. Placement and move now use the cursor's ground point unsnapped, clamped to the targeted cell, at the tile surface there (ObjectTools.PositionAt replaces SnapPosition); the quarter-tile grid lines stay as a visual guide and the orange marker shows the exact point. This supersedes the earlier snap decisions (cell centres, then quarter tile), and the Alt/Option finer-step idea no longer applies. Stacking is still blocked, but now only catches an exact repeat at the same coordinates. task check passes (460 tests).
+
+2026-10-10: Lance reported move did nothing: clicking the ground deselected a selected chest. Cause: Select ran the pick (raycast, then nearest object within half a tile) on every click, so a ground click near any object picked or deselected it before the move code ran. Replaced click-to-move with press-and-drag: press selects and picks up, the object follows the cursor as a preview, release makes one MoveObject (reverted without an edit over the palette, off the grid, onto an identical object, or with no movement); a generated object keeps its own height above the surface. Pressing on nothing deselects; pressing the selected object no longer toggles it off. task check passes (464 tests). Not yet verified in game.
+
+2026-10-10: Lance asked for a hold threshold so a quick click on an object only selects it. A press now becomes a drag after 0.2 seconds held (ObjectTools.DragStarted, unscaled time); the dragged object keeps the offset at which it was grabbed instead of jumping to the cursor. Lance also wants 3D rotation (pitch and roll, not only yaw): split out as TASK-005.09. task check passes (468 tests). Not yet verified in game.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
