@@ -19,6 +19,10 @@ Megabonk ships a native Linux build (`Megabonk.x86_64`), so there is no Proton o
 
 The mod has a development harness that loads a level, captures the game's rendered frame, and quits, without keyboard or mouse input. Enable it once with `uv run scripts/run.py enable`, launch the game, then run `uv run scripts/run.py cycle <level> <out.png>` and read the PNG. See `docs/development.md` for the commands, launch steps, and caveats.
 
+## Reading the game's code
+
+Megabonk is an Il2Cpp build with no managed IL anywhere in the install. `MelonLoader/Il2CppAssemblies/*.dll` and Il2CppDumper's `DummyDll/*.dll` are both stubs — interop thunks and empty method bodies — so decompiling either returns plumbing, never game logic. Read `.tools/il2cpp_dump/dump.cs` (regenerate with `task re:dump`) for fields, method signatures and enum values; a method body exists only as native code in `GameAssembly`, reachable in Binary Ninja at the RVA the dump lists. Behaviour that lives in a serialized Unity asset rather than in code, such as Rewired's key bindings, is in neither place and has to be confirmed in the running game. See `docs/development.md` for the detail and the one-command check.
+
 ## Comments in code (all languages)
 
 No section-banner or multi-paragraph comments, in `.cs`, `.py`, `.sh`, or anywhere else. Code should be self-explanatory; put design rationale in `docs/*.md` instead. A comment above a function, method, or field is at most 1-2 lines, and only when naming alone doesn't make intent clear.
