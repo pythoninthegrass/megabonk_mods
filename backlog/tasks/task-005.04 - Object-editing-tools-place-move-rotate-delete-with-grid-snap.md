@@ -1,11 +1,11 @@
 ---
 id: TASK-005.04
 title: 'Object editing tools (place, move, rotate, delete) with grid snap'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-10-06 21:43'
-updated_date: '2026-10-10 07:40'
+updated_date: '2026-10-10 08:11'
 labels:
   - level-editor
 dependencies:
@@ -20,19 +20,21 @@ ordinal: 26000
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Read parent TASK-005 first for full context.
 
-Implement object placement/manipulation tools: place the currently-selected palette item (from TASK-005.02) at the cursor's world position with grid snapping, move an existing placed/generated object (by clicking and dragging, or click-to-select then click-to-reposition), rotate it, and delete it. Each action constructs the corresponding TASK-003.02 op (`PlaceObject`, `MoveObject`, `RemoveObject`) with the correct `catalogId`/`genId`/placement-id target, pushes it through the `EditStack`, and applies it live via TASK-004.02's logic.
+Implement object placement/manipulation tools: place the currently-selected palette item (from TASK-005.02) at the cursor's world position, move an existing placed/generated object by pressing and dragging it, rotate it, and delete it. Each action constructs the corresponding TASK-003.02 op (`PlaceObject`, `MoveObject`, `RemoveObject`) with the correct `catalogId`/`genId`/placement-id target, pushes it through the `EditStack`, and applies it live via TASK-004.02's logic.
 
-Grid snapping should align to the tile grid spacing from `StageData.mapParameters` (same source TASK-004.02 uses — do not hardcode a separate snap value).
+Placement is not snapped: it uses the cursor's ground point clamped to the targeted cell, with tile spacing and height read from `StageData.mapParameters` (same source TASK-004.02 uses). The original grid-snap requirement was dropped after in-game testing; see the implementation notes.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The currently-selected palette item can be placed at the cursor's world position with grid snapping aligned to StageData.mapParameters's tile spacing
-- [ ] #2 An existing object (generator-spawned or editor-placed) can be selected, moved, and rotated
-- [ ] #3 An existing object can be deleted
-- [ ] #4 Each action constructs the correct TASK-003.02 op with correct target reference (catalogId for new placements, genId or placement-id for existing objects) and applies it through EditStack + TASK-004.02's live-application logic
-- [ ] #5 Middle-clicking an existing object (generator-spawned or editor-placed) selects its catalog entry in the palette (pick block), preferring the current stage's entry; an object with no matching entry is reported, not guessed
-- [ ] #6 A newly placed object faces the camera: its yaw is the camera's yaw plus 180 degrees, rounded to the nearest 90
+- [x] #1 The selected palette item is placed at the cursor's ground point, clamped to the targeted cell and set at the tile surface there (ramp-aware); not snapped to cell centres or a grid. A quarter-tile grid and an orange ring are drawn as visual guides only, and an identical prefab at the exact same position is refused
+- [x] #2 An existing object (generator-spawned or editor-placed) is selected by pressing it, moved by holding 0.2 seconds and dragging, and rotated in 90 degree yaw steps with R and Shift+R; pitch and roll are split out to TASK-005.09
+- [x] #3 An existing object can be deleted with Delete or Backspace
+- [x] #4 Each action constructs the correct TASK-003.02 op with the correct target (catalogId for new placements, genId or placement id for existing objects) and applies it through EditStack and TASK-004.02's live-application logic
+- [x] #5 Middle-clicking an existing object selects its catalog entry in the palette (pick block), preferring the current stage's entry and scrolling the palette to it; an object with no matching entry is reported, not guessed
+- [x] #6 A newly placed object faces the camera: its yaw is the camera's yaw plus 180 degrees, rounded to the nearest 90
+- [x] #7 The selected object shows a red ring on the ground beneath it, centred on its origin and sized from its mesh renderers; tiles, tile objects and particle-only roots such as ForestParticles are never selectable
+- [x] #8 The editor opens on the Select tool with an overview camera (40 degrees down, behind the player), so the first click edits nothing
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -83,12 +85,30 @@ Risks and limits:
 2026-10-10: Lance reported move did nothing: clicking the ground deselected a selected chest. Cause: Select ran the pick (raycast, then nearest object within half a tile) on every click, so a ground click near any object picked or deselected it before the move code ran. Replaced click-to-move with press-and-drag: press selects and picks up, the object follows the cursor as a preview, release makes one MoveObject (reverted without an edit over the palette, off the grid, onto an identical object, or with no movement); a generated object keeps its own height above the surface. Pressing on nothing deselects; pressing the selected object no longer toggles it off. task check passes (464 tests). Not yet verified in game.
 
 2026-10-10: Lance asked for a hold threshold so a quick click on an object only selects it. A press now becomes a drag after 0.2 seconds held (ObjectTools.DragStarted, unscaled time); the dragged object keeps the offset at which it was grabbed instead of jumping to the cursor. Lance also wants 3D rotation (pitch and roll, not only yaw): split out as TASK-005.09. task check passes (468 tests). Not yet verified in game.
+
+2026-10-10: Lance asked for the selection cursor to be a circle snapped beneath the object, as in RTS/MOBA games, resizing with the object. The cyan box is replaced by a red ring (ObjectTools.Ring, 48 segments) centred on the object's renderer bounds at its base, radius the larger horizontal half-extent; the orange placement marker is also a ring and shows only in Place. task check passes (470 tests). Not yet verified in game.
+
+2026-10-10: the editor now opens on Select (EditorTools.Default) on every entry instead of Raise, so the first click on the map cannot raise a tile; the last tool is no longer kept across entries. task check passes (471 tests). Not yet verified in game.
+
+2026-10-10: tileObject genIds (ForestParticles and similar scenery) are no longer pickable, so they are never selected, dragged or ringed; only object:* generator spawns and editor-placed objects are (ObjectTools.IsPickableGenId, shared by the reverse lookup and the nearest-object fallback). task check passes (477 tests). Not yet verified in game.
+
+2026-10-10: in-game, ForestParticles was still selectable and the ring was far too large (a tall tree's ring covered a smaller one). ForestParticles is an object:* scene root, not a tileObject, so it is now unpickable because it has no non-particle renderer (HasMeshRenderer; csproj gained UnityEngine.ParticleSystemModule). The ring is now centred on the object's origin (the trunk, not the canopy bounds), at the bounds' base, with radius 40% of the larger half-extent of its mesh renderers (particle renderers ignored). Not yet verified in game; the 0.4 factor is a guess to tune.
+
+2026-10-10: the editor camera now starts as a fixed overview of the player (FreeFlyCamera.OverviewPose: 60 units up, back along +Z, pitch 40, yaw 180) instead of the game camera's pose, matching Lance's screenshots. The pose is estimated from those screenshots, not measured (height, back distance and pitch are the tunables). task check passes (478 tests). Not yet verified in game.
+
+2026-10-10: Lance confirmed in game that placing, selecting, dragging, rotating, deleting, pick block, camera facing, the rings and the Select default with overview camera all work after the quality-of-life and grid changes. Open defects found while verifying are tracked in TASK-005.04.01 (no ring for ChargeShrines, broken chest rings, Forest ruins not selectable); 3D rotation is TASK-005.09; undo of a removed object is TASK-005.05.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Object tools for the editor: Place (tool 5) puts the selected palette item at the cursor's ground point, clamped to the targeted cell at the tile surface, facing the camera; Select (tool 6, the default on entry) selects an object by pressing it, drags it after a 0.2 second hold, rotates it in 90 degree yaw steps (R, Shift+R) and deletes it (Delete, Backspace); middle click picks the object's palette entry. Every action builds a PlaceObject, MoveObject or RemoveObject op, pushes it through EditStack and applies it live. Grid snapping was dropped during in-game testing in favour of an unsnapped point with a quarter-tile guide grid; identical prefabs at the exact same position are refused. A red ring beneath the selected object shows the selection, tiles, tile objects and particle-only roots are not selectable, and the editor starts on an overview camera. Known defects are in TASK-005.04.01, pitch and roll rotation in TASK-005.09, and undo of removal in TASK-005.05. Tests were written first for the pure logic, except the overview pose test, which was added together with its code.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
