@@ -164,6 +164,8 @@ After `LevelLoaderPatch` forces the seed it hands `level.Edits` to `LiveEditPatc
 | `SpawnObject` | resolves `catalogId` through `src/MegabonkLevels.Mod/catalog_route.cs` into the game's own prefab arrays and instantiates it at the given transform; registered as `placement:N` |
 | `MoveObject` / `RemoveObject` | resolves `gen:<genId>` against the live index or `placement:N` against objects spawned by this edit list |
 
+The editor's object tools (see "Object tools" in [development.md](development.md)) emit these same ops: Place sends `PlaceObject` with the palette entry's `catalogId`, and Select sends `MoveObject` and `RemoveObject` targeting `gen:<genId>` for a generator-spawned object or `placement:<id>` for one the editor placed. A `MoveObject` always carries the full new transform, so a rotate repeats the current position and scale.
+
 Known limits: `AddTile` outside the `size x size` grid logs a warning and does nothing. A replacement flat tile reuses the previous tile's direction, or faces +Z in an empty cell. After the tile edits the mod regenerates the wall and fill pieces on every edge between an edited tile and an occupied neighbour, and rebuilds the baked ground collision; see "Walls after edits" and "Ground collision after edits" in [runtime-map-structure.md](runtime-map-structure.md). Edges against a removed cell are left as they were, so a removed tile leaves an open hole with the old walls around it standing or floating; the kill floor ends a fall into it. `catalogId` resolution works only for `Tiles` maps (the edit list is skipped, with a warning, when `proceduralTiles` is null), and `bundle:` ids are rejected.
 
 ### Suppressing Steam leaderboard, achievement, and stats writes

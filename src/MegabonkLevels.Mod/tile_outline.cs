@@ -10,8 +10,7 @@ public static class TileOutline
     // lift raises the outline above the surface so it is not hidden inside the tile mesh.
     public static IReadOnlyList<Vector3Data> Corners(int x, int z, TileState state, int width, int depth, float spacing, float tileHeight, float lift)
     {
-        var centreX = (x - (width - 1) / 2f) * spacing;
-        var centreZ = (z - (depth - 1) / 2f) * spacing;
+        var (centreX, centreZ) = PositionReadout.CellCentre(x, z, width, depth, spacing);
         var half = spacing / 2f;
         var baseY = state.Height * tileHeight + lift;
         var uphill = state.Slope == SlopeDirection.None ? (Dx: 0, Dz: 0) : TilePlacement.UphillVector(state.Slope);

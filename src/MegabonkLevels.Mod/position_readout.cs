@@ -23,6 +23,10 @@ public static class PositionReadout
         return new GridCell(cellX, cellZ, cellX >= 0 && cellX < width && cellZ >= 0 && cellZ < depth);
     }
 
+    // World XZ of a cell's centre, the inverse of CellOf's grid origin.
+    public static (float X, float Z) CellCentre(int cellX, int cellZ, int width, int depth, float spacing) =>
+        ((cellX - (width - 1) / 2f) * spacing, (cellZ - (depth - 1) / 2f) * spacing);
+
     public static int LevelOf(float y, float tileHeight) => (int)MathF.Round(y / tileHeight, MidpointRounding.AwayFromZero);
 
     public static string Render(float playerX, float playerY, float playerZ, float floorY, IReadOnlyList<ReadoutActor> actors)

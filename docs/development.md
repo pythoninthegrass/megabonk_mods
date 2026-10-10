@@ -247,7 +247,7 @@ Clicking a row selects it, scrolling the wheel over the panel scrolls the list, 
 
 ## Tile tools
 
-While editor mode is active a toolbar at the top centre of the screen shows four tile tools and the targeted tile. The digit keys 1 to 4 select Raise, Lower, Slope and Remove; Raise is selected the first time editor mode is entered, and the choice persists across entries. Pressing 1 to 4 in normal play does nothing, so the game binds no action to them (confirmed in the game, like F8).
+While editor mode is active a toolbar at the top centre of the screen shows six tools and a detail line. The digit keys 1 to 6 select Raise, Lower, Slope, Remove, Place and Select (the last two are in "Object tools" below); Raise is selected the first time editor mode is entered, and the choice persists across entries. Pressing 1 to 4 in normal play does nothing, so the game binds no action to them (confirmed in the game, like F8).
 
 The targeted tile is the one under the mouse pointer. A ray from the camera through the pointer is cast against the baked ground collision (`ProceduralTileGeneration.collider`, see "Ground collision after edits" in [runtime-map-structure.md](runtime-map-structure.md)) only, so enemies, props and the player never block it. The hit point is stepped 0.01 units into the surface before it is converted to a cell with `PositionReadout.CellOf`, so a hit on a side wall targets the tile the wall belongs to. A yellow outline traces the targeted tile's top surface, following the ramp on a slope. Nothing is targeted while the pointer is over the palette, outside the grid, or over a removed cell.
 
@@ -262,4 +262,23 @@ A left click applies the selected tool to the targeted tile:
 
 The op goes through `LiveEditPatch.ApplyLive`, which runs it through a `LiveEditPlanner` (an `EditStack` on the generated grid plus every edit so far, including a loaded level file's) and applies the resulting action with the same applier, fill regeneration and collision rebuild a level file uses at load. Each click logs `EditorTileTools: <tool> (x,z) -> <opType>`. There is no tool to add a tile: a removed cell has no collision to aim at, and undo will restore it. Removing a tile does not yet build walls around the hole, so the sky shows past the neighbours' edges; this is open for both editor and level-file removals.
 
-The tools work in any `Tiles`-map run, not only mod-loaded levels, but the kill floor is armed only on mod-loaded levels; in a vanilla run a fall through a removed tile lands on the game's own catch floor. Pure logic lives in `tile_tool.cs` (what each tool emits, the toolbar text) and `tile_outline.cs` (the outline corners).
+The tools work in any `Tiles`-map run, not only mod-loaded levels, but the kill floor is armed only on mod-loaded levels; in a vanilla run a fall through a removed tile lands on the game's own catch floor. Pure logic lives in `tile_tool.cs` (what each tile tool emits), `editor_tool.cs` (tool list, hotkeys, toolbar text) and `tile_outline.cs` (the outline corners).
+
+## Object tools
+
+Tool 5 (Place) and tool 6 (Select) edit objects. Both snap to cell centres, always: the position is the targeted tile's centre (same origin as `PositionReadout.CellOf`, via `PositionReadout.CellCentre`), at the tile's surface (`Height * tileHeight`, plus half a level on a ramp), with `tileHeight` and the spacing read from the live `StageData.mapParameters`. The yellow tile outline shows the cell an object will land in.
+
+| Tool | Input | Edit |
+| --- | --- | --- |
+| Place | left click on a tile with a palette item selected | `PlaceObject` at the snapped cell; rotation is the prefab's pitch and roll with yaw set to the camera's yaw plus 180 degrees rounded to 90, so the object faces the camera (assumes a prefab's front is +Z; unconfirmed); scale is the prefab's local scale |
+| Select | left click an object | selects it (cyan footprint outline from its combined renderer bounds); clicking the selected object again deselects |
+| Select | left click ground with an object selected | `MoveObject` to the snapped cell, keeping rotation and scale |
+| Select | `R` / `Shift+R` | `MoveObject` with yaw 90 degrees clockwise / counter-clockwise, keeping pitch, roll and position |
+| Select | `Delete` or `Backspace` | `RemoveObject` |
+| any | middle click an object | pick block: selects the object's palette entry and switches to Place |
+
+Picking tries a physics raycast first and accepts the hit only when its hierarchy resolves to an indexed object in a `tileObject` or `object:*` category or to an editor-placed object; tiles, walls and fill pieces never resolve. When that finds nothing, the pickable object nearest the cursor's ground point on the XZ plane within half a tile is used. The log line names the path (`raycast` or `nearest`). Selection clears when the tool changes. Nothing is picked or placed while the pointer is over the palette.
+
+Pick block matches a generator-spawned object's prefab name (the `object:{prefabName}:{index}` genId category) against the palette's display names, preferring the current stage's entry, then a stage-independent one (shrines, interactables). An editor-placed object uses the catalogId it was placed with. An object with no matching entry, including every `tileObject`, is logged (`pick block found no palette entry`) and the selection is left alone.
+
+Every action logs `EditorObjectTools: <what> -> <opType>`. Removal destroys the object, so undo must respawn it or removal must switch to deactivation. Pure logic lives in `object_tool.cs` (snap, facing, the ops), `object_picker.cs` (nearest object) and `palette_pick.cs` (pick block lookup).

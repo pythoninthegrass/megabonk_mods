@@ -24,12 +24,13 @@ public static class EditorTileTools
     private static GameObject _root;
     private static TextMeshProUGUI _label;
     private static LineRenderer _outline;
-    private static TileTool _tool = TileTool.Raise;
+    private static EditorTool _tool = EditorTool.Raise;
     private static (int X, int Z, TileState State)? _target;
 
     public static void OnEditorEntered(MelonLogger.Instance logger)
     {
         _logger = logger;
+        EditorObjectTools.OnEditorEntered(logger);
         BuildToolbar();
         BuildOutline();
         _target = null;
@@ -38,6 +39,7 @@ public static class EditorTileTools
 
     public static void OnEditorExited()
     {
+        EditorObjectTools.OnEditorExited();
         if (_root != null)
         {
             Object.Destroy(_root);
@@ -58,20 +60,37 @@ public static class EditorTileTools
     {
         for (var digit = 1; digit <= 9; digit++)
         {
-            if (Input.GetKeyDown(KeyCode.Alpha0 + digit) && TileTools.FromHotkey(digit) is { } tool)
+            if (Input.GetKeyDown(KeyCode.Alpha0 + digit) && EditorTools.FromHotkey(digit) is { } tool)
             {
-                _tool = tool;
+                SetTool(tool);
             }
         }
 
         _target = EditorPalette.PointerOverPanel ? null : FindTarget();
-        if (_target is { } target && Input.GetMouseButtonDown(0))
+        if (EditorTools.IsObjectTool(_tool))
+        {
+            if (EditorObjectTools.Tick(_tool, _target) is { } requested)
+            {
+                SetTool(requested);
+            }
+        }
+        else if (_target is { } target && Input.GetMouseButtonDown(0))
         {
             Use(target.X, target.Z, target.State);
             _target = FindTarget();
         }
 
         Refresh();
+    }
+
+    private static void SetTool(EditorTool tool)
+    {
+        if (tool != _tool)
+        {
+            EditorObjectTools.OnToolChanged(tool);
+        }
+
+        _tool = tool;
     }
 
     private static (int X, int Z, TileState State)? FindTarget()
@@ -116,7 +135,8 @@ public static class EditorTileTools
     {
         if (_label != null)
         {
-            _label.text = TileTools.ToolbarText(_tool, _target);
+            var detail = EditorTools.IsObjectTool(_tool) ? EditorObjectTools.Detail(_tool, _target) : EditorTools.TileDetail(_target);
+            _label.text = EditorTools.ToolbarText(_tool, detail);
         }
 
         if (_outline == null)

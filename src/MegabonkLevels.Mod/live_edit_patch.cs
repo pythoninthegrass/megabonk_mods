@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Il2Cpp;
+using Il2CppAssets.Scripts.Managers;
 using Il2CppAssets.Scripts.MapGeneration.ProceduralTiles;
 using MelonLoader;
 using UnityEngine;
@@ -41,6 +42,36 @@ public static class LiveEditPatch
 
     // The baked ground collision, replaced after every terrain edit.
     public static MeshCollider GroundCollider() => _session?.TileGen.collider?.GetComponent<MeshCollider>();
+
+    // The editor-pickable object whose hierarchy contains hit, or null: tiles, walls and fill pieces never resolve.
+    public static ObjectTarget? TargetOf(Transform hit) => _session?.Applier.TargetOf(hit);
+
+    // The live object for a target, null when it is gone.
+    public static GameObject ObjectFor(ObjectTarget target) => _session?.Applier.Find(target);
+
+    public static IReadOnlyList<(ObjectTarget Target, GameObject Object)> PickableObjects() =>
+        _session?.Applier.PickableObjects() ?? new List<(ObjectTarget, GameObject)>();
+
+    // The catalogId an editor-placed object was spawned from, null for a generator-spawned object.
+    public static CatalogId? CatalogIdOf(ObjectTarget target) => _session?.Applier.CatalogIdOf(target);
+
+    public static GameObject PrefabFor(CatalogId id) => _session?.Applier.PrefabFor(id);
+
+    // Index of the run's stage in the current map's stage list, -1 when unknown.
+    public static int CurrentStageIndex()
+    {
+        var stages = MapController.currentMap?.stages;
+        var current = MapController.currentStage;
+        for (var i = 0; current != null && stages != null && i < stages.Length; i++)
+        {
+            if (stages[i] != null && stages[i].Pointer == current.Pointer)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
 
     // Applies one edit to the running level the same way a level file's edits are applied at load.
     public static bool ApplyLive(EditOp op)
@@ -281,6 +312,8 @@ public static class LiveEditPatch
         private readonly MapParameters _mapParameters;
         private readonly Dictionary<string, GameObject> _index;
         private readonly Dictionary<int, GameObject> _placed = new();
+        private readonly Dictionary<int, string> _placedCatalogIds = new();
+        private readonly Dictionary<int, ObjectTarget> _targetsByInstanceId = new();
 
         public Applier(MelonLogger.Instance logger, MapGenerationController controller, Dictionary<string, GameObject> index)
         {
@@ -289,7 +322,67 @@ public static class LiveEditPatch
             _tileGen = controller.proceduralTileGeneration;
             _mapParameters = _tileGen.currentMapParameters ?? _tileGen.currentStage?.mapParameters;
             _index = index;
+            foreach (var (genId, go) in index)
+            {
+                if (IsPickableGenId(genId))
+                {
+                    _targetsByInstanceId[go.GetInstanceID()] = ObjectTarget.FromGenId(genId);
+                }
+            }
         }
+
+        private static bool IsPickableGenId(string genId) =>
+            genId.StartsWith("tileObject:", StringComparison.Ordinal) || genId.StartsWith("object:", StringComparison.Ordinal);
+
+        public ObjectTarget? TargetOf(Transform hit)
+        {
+            for (var t = hit; t != null; t = t.parent)
+            {
+                if (_targetsByInstanceId.TryGetValue(t.gameObject.GetInstanceID(), out var target))
+                {
+                    return target;
+                }
+            }
+
+            return null;
+        }
+
+        public GameObject Find(ObjectTarget target)
+        {
+            var found = target.Kind == ObjectTargetKind.GenId
+                ? _index.GetValueOrDefault(target.GenId)
+                : _placed.GetValueOrDefault(target.PlacementId);
+            return found != null ? found : null;
+        }
+
+        public IReadOnlyList<(ObjectTarget Target, GameObject Object)> PickableObjects()
+        {
+            var result = new List<(ObjectTarget, GameObject)>();
+            foreach (var (genId, go) in _index)
+            {
+                if (IsPickableGenId(genId) && go != null)
+                {
+                    result.Add((ObjectTarget.FromGenId(genId), go));
+                }
+            }
+
+            foreach (var (id, go) in _placed)
+            {
+                if (go != null)
+                {
+                    result.Add((ObjectTarget.FromPlacementId(id), go));
+                }
+            }
+
+            return result;
+        }
+
+        public CatalogId? CatalogIdOf(ObjectTarget target) =>
+            target.Kind == ObjectTargetKind.PlacementId && _placedCatalogIds.TryGetValue(target.PlacementId, out var id)
+                ? CatalogId.Parse(id)
+                : null;
+
+        public GameObject PrefabFor(CatalogId id) => ResolvePrefab(CatalogRoute.Parse(id));
 
         public void Apply(LiveAction action)
         {
@@ -399,6 +492,8 @@ public static class LiveEditPatch
             var spawned = UnityEngine.Object.Instantiate(prefab, ToVector(t.Position), Quaternion.Euler(ToVector(t.Rotation)));
             spawned.transform.localScale = ToVector(t.Scale);
             _placed[action.Target.PlacementId] = spawned;
+            _placedCatalogIds[action.Target.PlacementId] = action.CatalogId;
+            _targetsByInstanceId[spawned.GetInstanceID()] = action.Target;
             _logger.Msg($"LiveEdit: spawned '{action.CatalogId}' (prefab '{prefab.name}') as placement:{action.Target.PlacementId} at {spawned.transform.position}");
         }
 
