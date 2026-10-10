@@ -1,15 +1,16 @@
 ---
 id: TASK-005.01
 title: 'Editor mode entry, freeze gameplay, free-fly camera'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@Claude'
 created_date: '2026-10-06 21:43'
+updated_date: '2026-10-10 04:59'
 labels:
   - level-editor
 dependencies: []
 parent_task_id: TASK-005
 priority: high
-type: feature
 ordinal: 23000
 ---
 
@@ -30,6 +31,56 @@ This subtask is pure mode-management plumbing — no editing tools yet (that's T
 - [ ] #3 Entering editor mode switches to a free-fly camera with mouse-look and WASD+vertical movement
 - [ ] #4 Exiting editor mode restores the prior camera and resumes gameplay cleanly, verified across multiple enter/exit cycles with no leaked state
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Decisions already made with Lance
+
+- Keybind: **F8** (confirm empirically in-game; see research note below on why it can't be confirmed from code).
+- Free-fly controls: **WASD + mouse-look, Space/Ctrl up-down, Shift to move fast**. Mouse-look on right-mouse-hold, so the cursor stays free for the palette UI that TASK-005.02 adds.
+- Scope: editor mode opens in **any active run**, not only mod-loaded custom levels, so a level can be started from a vanilla-generated map.
+
+## Research findings (complete — do not redo)
+
+**There are no managed method bodies to decompile.** `MelonLoader/Il2CppAssemblies/*.dll` are Il2CppInterop proxies: every method is a `NativeMethodInfoPtr` thunk with no IL. Running ilspycmd on them yields only interop plumbing. Real behaviour is native code in `GameAssembly`. The managed-level source of truth is `.tools/il2cpp_dump/dump.cs` (fields + signatures only, no bodies, regenerate with `task re:dump`); anything needing an actual method body requires native RE in Binary Ninja.
+
+What the dump plus already-verified live behaviour establishes:
+
+- Input is Rewired through `MyInputManager` (dump.cs:333116), with a fixed static action list: `Jump`, `JumpBhop`, `Slide`, `Aim`, `Interact`, `QuickReset`, `MapOverlay`, `Wallrun`, `MoveHorizontal`/`MoveVertical`, `LookHorizontal`/`LookVertical`, and the `UI*` set. All gameplay actions, none plausibly bound to an F-key. The actual key-to-action bindings live in a Rewired ScriptableObject asset that Il2CppDumper does not emit, so **F8 being unbound has to be confirmed by pressing it in-game**, not read from code. Access is via `MyInputManager.GetButton/GetButtonDown/GetAxis(string action)` and `IsActionBound(string)`.
+- `MyTime` (dump.cs:359927) owns `paused`, `stageTimer`, `runTimer`, `difficultyTimer`, `finalSwarmTimer`, `timeScale` and `A_Pause`. `MyTime.Pause()` is already proven live (docs/development.md, "Freezing gameplay") to stop the run timer, enemies and the player, so it covers AC #2 on its own — no separate spawner or `PlayerHealth` work needed.
+- `PlayerCamera` (dump.cs:329906) exposes a single `Camera camera` plus a private `Update()`. `CameraOverride` already proves that rewriting `camera.transform` from `MelonMod.OnLateUpdate` beats the game's own update and held for 6+ seconds of live play. Free-fly therefore reuses that mechanism rather than spawning a second camera — which also means there is no camera to stack, removing one of the leak risks named in AC #4.
+- `DebugConsole` (dump.cs:361058) has `IsActive()` and `Toggle()`; the game's own console is on F10, which is why the mod already avoids that key (mod currently owns F6 and F9).
+
+## Implementation steps
+
+1. **Tests first** for the two pure-logic pieces; confirm red before implementing.
+2. `src/MegabonkLevels.Mod/free_fly_camera.cs` — `FreeFlyCamera.Step(CameraPose pose, FreeFlyInput input, float deltaSeconds, settings) -> CameraPose`. No Unity types, so it compiles into the test project like `kill_floor.cs`. Reuse the existing `CameraPose` record struct from `harness_command.cs` (Rx = pitch, Ry = yaw) so the result feeds `CameraOverride.Set` directly. Camera-relative forward/right, world-up vertical, pitch clamped to +/-89 degrees, yaw normalised into [0, 360), mouse delta applied *without* deltaTime scaling (frame-rate-independent look) while movement *is* deltaTime-scaled.
+   Tests: forward at yaw 0 moves +Z and at yaw 90 moves +X; up input moves +Y regardless of pitch; pitch clamps at both extremes; yaw wraps; fast modifier multiplies distance; zero input leaves the pose unchanged.
+3. `src/MegabonkLevels.Mod/editor_session_state.cs` — records what entry changed so exit restores exactly that. `Enter(bool gamePausedBefore)` returns false if already active; `TryExit(out bool shouldUnpause)` returns false if not active. The real defect this prevents: entering editor mode while the game is *already* paused (e.g. a level-up dialog is open) must NOT unpause the game on exit.
+   Tests: enter twice is a no-op; exit without enter is a no-op; entered-while-running then exit unpauses; entered-while-already-paused then exit does not unpause; repeated enter/exit cycles keep the flag correct (this is the unit-level half of AC #4).
+4. `src/MegabonkLevels.Mod/editor_mode.cs` — Unity glue, untested like the other glue files (`position_label.cs`, `kill_floor_watcher.cs`). Polls F8 in `OnUpdate`; ignores the key while `DebugConsole.Instance?.IsActive()` is true and while no run is active; calls `MyTime.Pause`/`Unpause` via `EditorSessionState`; seeds the free-fly pose from the current camera transform on entry; each frame reads legacy `UnityEngine.Input` into a `FreeFlyInput` and pushes `FreeFlyCamera.Step`'s result to `CameraOverride.Set`; calls `CameraOverride.Clear()` on exit. Wire into `MegabonkLevelsMod.OnUpdate`.
+5. **Harness command** so enter/exit cycles are verifiable without a keyboard (the harness cannot press keys): add `HarnessCommandKind.Editor` parsed from `{"command":"editor","enabled":true}` exactly like `heartbeat`/`cells`, dispatch it in `dev_harness.cs`, and add `run.py editor <on|off>` with a matching case in `scripts/test_run.py`.
+6. `task check` (build + xUnit + python self-tests + markdownlint + ruff).
+7. **Live verification** on the CrossOver reference platform (see docs/development.md for launching): load `levels/task-004-05-regression.mblevel.json`, run at least 5 `editor on` / `editor off` cycles through the harness, screenshot in editor mode and after exit, and grep `MelonLoader/Latest.log` for `MyTime.paused` returning to false, the camera restored, and zero errors across the cycles. Then ask Lance to drive F8 + WASD + mouse-look manually once: that is the only way to close AC #1 (F8 collides with nothing) and AC #3 (the camera actually flies).
+8. **Docs**: add the `editor` row to the harness command table in `docs/development.md` and an "Editor mode" section covering the keybind, what entry freezes, the free-fly controls, and what exit restores. Follow AGENTS.md "Writing docs/*.md" — document the behaviour, never cite TASK-### IDs.
+9. Check acceptance criteria against the evidence, record implementation notes, conventional commit with no attribution.
+
+## Contingencies to check live, not assume
+
+- Whether the game's own mouse-look still rotates the player while `MyTime.paused` is true. If it does, disable the `PlayerInput` component for the duration of editor mode and restore it on exit.
+- Cursor lock is deliberately **not** managed in this subtask. The game locks the cursor during gameplay and `Input.GetAxis("Mouse X"/"Mouse Y")` works fine locked; TASK-005.02's palette UI is what actually forces the cursor decision, so make it there.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Handoff state: planning complete, **no code written yet**. The working tree is clean at 1749232 and nothing in src/, tests/, scripts/ or docs/ has been touched for this task.
+
+The plan above has been through one round with Lance (he chose F8, the WASD + mouse-look control scheme, and the any-active-run scope) but he has **not** yet given final approval to start implementing. Per the task-execution workflow, present the plan and get that approval before touching the codebase.
+
+One detour worth not repeating: a research agent was spawned to decompile Assembly-CSharp for method bodies and was stopped once it became clear the Il2Cpp assemblies carry no IL. The plan's research section records everything that was actually established, so start from there rather than re-running a decompiler.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
