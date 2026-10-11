@@ -117,6 +117,8 @@ public sealed class LiveEditPlanner
 
     public LevelState State => _stack.State;
 
+    public int NextPlacementId => _nextPlacementId;
+
     public LiveAction Apply(EditOp op)
     {
         _stack.Apply(op);

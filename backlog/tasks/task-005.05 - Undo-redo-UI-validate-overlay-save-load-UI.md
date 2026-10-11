@@ -2,8 +2,10 @@
 id: TASK-005.05
 title: 'Undo/redo UI, validate overlay, save/load UI'
 status: To Do
-assignee: []
+assignee:
+  - '@claude'
 created_date: '2026-10-06 21:43'
+updated_date: '2026-10-11 03:45'
 labels:
   - level-editor
 dependencies:
@@ -11,7 +13,6 @@ dependencies:
   - TASK-005.04
 parent_task_id: TASK-005
 priority: high
-type: feature
 ordinal: 27000
 ---
 
@@ -36,6 +37,59 @@ These three are grouped into one subtask since they're each relatively small, UI
 - [ ] #3 A save dialog writes the current edit history to a named .mblevel.json file in UserData/Levels/ via TASK-003.01's serializer
 - [ ] #4 A load dialog lists existing level files in UserData/Levels/ and loads a selected one via TASK-004.01's loader
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Approved plan (2026-10-10, Lance):
+1) Add an editor session model that owns an EditStack seeded from the generated baseline plus currently loaded file edits, and exposes Apply/Undo/Redo, CanUndo/CanRedo, and current edit history for save.
+2) Extend live edit application so undo/redo replays through the same live path as forward edits (same applier, fill regeneration, collision rebuild) rather than mutating scene state ad hoc.
+3) Add validate UI action in editor mode that runs ReachabilityValidator on the current live state, renders an unreachable-tile overlay, and separately reports boss-portal reachability.
+4) Boss portal targeting decision: Option 1 approved. Detect portal dynamically at runtime from live objects (PlayerSpawnPortal/portal-prefab-based match), then map its world position to a grid cell for IsReachable checks.
+5) Add save/load UI in editor mode:
+   - Save: filename input, writes .mblevel.json into <game>/UserData/Levels, serializing map/stage/tier/seed and the full current edit history.
+   - Load: list existing .mblevel.json files from the same folder and load the selected one via LevelLoaderPatch.LoadAndStart.
+6) Keep existing toolbar/tools behavior intact and integrate new controls cleanly.
+7) TDD first for testable logic (session/undo-redo coordination, save filename normalization/path rules, level listing/sorting, portal-targeting helper behavior), then runtime/UI glue, then task check and docs updates (development.md and level-format.md as needed).
+
+User-directed load regression fix (2026-10-10):
+1. Remove the Load-adjacent previous/next chevron controls.
+2. Add palette-style mouse-wheel selection while the pointer is over the saved-level list, with pure selection-index behavior covered by a failing unit test.
+3. Change Load to call `LevelLoaderPatch.LoadAndStart` for the selected file, preserving its map/stage/tier/forced seed/pending edit pipeline so the selected save regenerates and applies immediately.
+4. Build the mod, run focused and full tests, then use the development harness to verify the saved chest position and restored tree after a UI load.
+
+User-directed harness reliability fix (2026-10-10): add an explicit `steam-ready` harness command that probes the in-game Steamworks client without starting a level; make `run.py relaunch` poll it before `load-level`, report readiness milestones, and cover the new payload/flow with script tests.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-10: implemented editor-side undo/redo + validate + save/load loop around the existing live edit pipeline. Added pure logic helpers (`editor_editing_support.cs`) for edit history, undo/redo plan building, filename normalization, and boss-portal name matching, all test-first with new tests in `editor_editing_support_tests.cs`.
+
+Added `EditorEditSession` (`editor_edit_session.cs`) to keep the current forward edit list for save while applying planned inverse/redo ops live. Editor tile/object actions now go through this session; Ctrl+Z/Ctrl+Y and toolbar Undo/Redo buttons added.
+
+`EditorTileTools` now includes validate/save/load controls in the toolbar: Validate runs ReachabilityValidator from dynamic spawn portal cell and draws red tile overlays for unreachable cells; boss portal reachability is reported separately using Option 1 dynamic portal detection.
+
+Save writes `.mblevel.json` into `<game>/UserData/Levels/` with `LevelFileSerializer`; load lists/sorts files from that directory and uses `LevelLoaderPatch.LoadAndStart` for the selected file.
+
+`LiveEditPatch` extended with session/state/introspection helpers for editor UI (`CurrentState`, `SeedEdits`, level-file snapshot metadata, level-file listing, portal-cell detection, plan building).
+
+Adjusted live object remove semantics for undo/redo correctness: RemoveObject now deactivates; MoveObject reactivates before applying transform. Pickable/object lookup now ignores inactive objects for interaction while still allowing redo/undo restore by target identity.
+
+Docs updated in `docs/development.md` and `docs/level-format.md` for the new editing loop behavior and save/load path.
+
+Validation: `dotnet build src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj`, `dotnet test tests/MegabonkLevels.Tests/MegabonkLevels.Tests.csproj` (497 pass), `task lint`, and full `task check` all pass.
+
+2026-10-10: `run.py relaunch` now waits for an in-game Steamworks probe before loading. Live verification: first probe rejected while Steamworks initialized; subsequent probe succeeded, then Forest loaded with seed 20261007, Tony McZoom, generated map, kill floor, invulnerability, and editor mode. User also confirmed the UI save/load path works after this fix. `task check` passed (524 xUnit tests, 44 script tests).
+
+2026-10-10: committed only documentation and Python harness changes as requested: `53bd262 feat(harness): wait for Steamworks readiness`. Editor/runtime C# changes, tests, and the task record remain uncommitted for continued testing.
+
+2026-10-10: returned task to To Do for the next agent while editor changes continue to be tested. All acceptance criteria are deliberately unchecked for that agent to verify independently.
+
+2026-10-11: Fixed in-place load. Load no longer calls LevelLoaderPatch.LoadAndStart (which relaunched the game and was non-deterministic). Instead, it reads the level file, calls LiveEditPatch.ResetAndApplyEdits, and resets the editor session in-place. ResetAndApplyEdits: (1) diffs current vs baseline tiles via InPlaceLoadTileReset.ComputeTileResets, applies tile reset actions; (2) restores gen-id objects from a pre-edit transform snapshot taken in Applier constructor; (3) destroys editor-placed objects; (4) re-initializes the planner to a clean baseline; (5) replays the loaded file's edits. Session.Baseline stores the generation baseline. Applier._genIdBaselineTransforms snapshots pickable object transforms before seed edits are applied. 5 new unit tests (InPlaceLoadTileResetTests). 529 xUnit tests pass, mod builds clean.
+
+2026-10-11: Investigated user reports of Load still relaunching and elevation keys reverted. Root cause: game had the old DLL (the previous session's C# changes were not in the last committed build). Both fixes already existed in the working tree: (1) LoadSelected calls ResetAndApplyEdits not LoadAndStart; (2) editor_mode.cs has Up: Axis(KeyCode.Space, AltKey()) for Space=ascend, Alt=descend. Force-rebuilt with --no-incremental and deployed to Mods (218112 bytes, 22:45). Verified DLL contains ResetAndApplyEdits, ResetToGenBaseline, ComputeTileResets, and AltKey symbols. Also removed a stale comment that still referred to Load setting pending edits. Relaunch the game to pick up the new DLL.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

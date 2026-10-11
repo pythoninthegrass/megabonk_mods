@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using Il2Cpp;
 using Il2CppAssets.Scripts.Managers;
 using Il2CppAssets.Scripts.MapGeneration.ProceduralTiles;
@@ -30,6 +31,35 @@ public static class LiveEditPatch
         _pendingEdits = edits;
     }
 
+    // Apply pending edits immediately to the current session if present. Returns the number of edits applied.
+    public static int ApplyPendingEdits(MelonLogger.Instance logger)
+    {
+        if (_pendingEdits == null || _pendingEdits.Count == 0)
+        {
+            return 0;
+        }
+
+        var session = _session;
+        if (session == null)
+        {
+            // No active session; they will be applied on next generation.
+            return 0;
+        }
+
+        try
+        {
+            ApplyEdits(session, session.Planner.State, _pendingEdits);
+            var count = _pendingEdits.Count;
+            _pendingEdits = null;
+            return count;
+        }
+        catch (Exception ex)
+        {
+            logger.Error($"LiveEdit: ApplyPendingEdits failed: {ex.Message}");
+            return 0;
+        }
+    }
+
     public static void Install(MelonLogger.Instance logger)
     {
         MapGenerationController.A_GenerationComplete += (Il2CppSystem.Action)(() => OnGenerationComplete(logger));
@@ -37,8 +67,12 @@ public static class LiveEditPatch
 
     public static LiveGrid? Grid => _session?.Grid;
 
+    public static IReadOnlyList<EditOp> SeedEdits => _session?.SeedEdits ?? Array.Empty<EditOp>();
+
     // The tile's current state: the generated grid with every applied edit on top, null for an empty cell.
     public static TileState? TileAt(int x, int z) => _session?.Planner.State.GetTile(x, z);
+
+    public static LevelState CurrentState() => _session?.Planner.State;
 
     // The baked ground collision, replaced after every terrain edit.
     public static MeshCollider GroundCollider() => _session?.TileGen.collider?.GetComponent<MeshCollider>();
@@ -47,7 +81,7 @@ public static class LiveEditPatch
     public static ObjectTarget? TargetOf(Transform hit) => _session?.Applier.TargetOf(hit);
 
     // The live object for a target, null when it is gone.
-    public static GameObject ObjectFor(ObjectTarget target) => _session?.Applier.Find(target);
+    public static GameObject ObjectFor(ObjectTarget target) => _session?.Applier.FindActive(target);
 
     public static IReadOnlyList<(ObjectTarget Target, GameObject Object)> PickableObjects() =>
         _session?.Applier.PickableObjects() ?? new List<(ObjectTarget, GameObject)>();
@@ -56,6 +90,165 @@ public static class LiveEditPatch
     public static CatalogId? CatalogIdOf(ObjectTarget target) => _session?.Applier.CatalogIdOf(target);
 
     public static GameObject PrefabFor(CatalogId id) => _session?.Applier.PrefabFor(id);
+
+    public static bool TryBuildPlan(EditOp op, out EditCommandPlan plan)
+    {
+        var session = _session;
+        if (session == null)
+        {
+            plan = default;
+            return false;
+        }
+
+        TransformData? fallback = null;
+        if (op.OpType == RemoveObject.OpType)
+        {
+            var remove = RemoveObject.FromEditOp(op);
+            var go = ObjectFor(remove.Target);
+            if (go != null)
+            {
+                fallback = new TransformData(ToData(go.transform.position), ToData(go.transform.eulerAngles), ToData(go.transform.localScale));
+            }
+        }
+
+        try
+        {
+            plan = EditCommandPlanner.Plan(op, session.Planner.State, session.Planner.NextPlacementId, fallback);
+            return true;
+        }
+        catch (ArgumentException ex)
+        {
+            session.Logger.Error($"LiveEdit: plan failed for {op.OpType}: {ex.Message}");
+            plan = default;
+            return false;
+        }
+    }
+
+    public static bool ApplySequence(IReadOnlyList<EditOp> ops)
+    {
+        var session = _session;
+        if (session == null)
+        {
+            return false;
+        }
+
+        var actions = new List<LiveAction>(ops.Count);
+        foreach (var op in ops)
+        {
+            try
+            {
+                actions.Add(session.Planner.Apply(op));
+            }
+            catch (ArgumentException ex)
+            {
+                session.Logger.Error($"LiveEdit: invalid edit {op.OpType}: {ex.Message}");
+                return false;
+            }
+        }
+
+        ApplyPlan(session, actions);
+        return true;
+    }
+
+    public static LevelFile? SnapshotLevelFile(IReadOnlyList<EditOp> edits)
+    {
+        var session = _session;
+        if (session == null)
+        {
+            return null;
+        }
+
+        var map = MapController.currentMap;
+        var stage = MapController.currentStage;
+        if (map == null || stage == null)
+        {
+            return null;
+        }
+
+        var stageIndex = -1;
+        for (var i = 0; i < map.stages.Length; i++)
+        {
+            if (map.stages[i] != null && map.stages[i].Pointer == stage.Pointer)
+            {
+                stageIndex = i;
+                break;
+            }
+        }
+
+        if (stageIndex < 0)
+        {
+            return null;
+        }
+
+        return new LevelFile(
+            SchemaVersion: LevelFile.CurrentSchemaVersion,
+            GameBuildId: GameBuildIdPatch.CurrentBuildId() ?? "",
+            Map: (EMap)(int)map.eMap,
+            StageIndex: stageIndex,
+            Tier: MapController.runConfig?.mapTierIndex ?? 0,
+            Seed: session.TileGen.debugSeed,
+            Edits: edits.ToList());
+    }
+
+    public static string LevelsDirectoryPath()
+    {
+        var path = Path.Combine(MelonLoader.Utils.MelonEnvironment.GameRootDirectory, "UserData", "Levels");
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    public static IReadOnlyList<string> ListLevelFiles()
+    {
+        var path = LevelsDirectoryPath();
+        var names = Directory.GetFiles(path, "*.mblevel.json").Select(Path.GetFileName);
+        return EditorFileNaming.SortLevelNames(names);
+    }
+
+    public static string BossPortalTargetName()
+    {
+        var session = _session;
+        if (session == null)
+        {
+            return null;
+        }
+
+        foreach (var pair in session.Applier.PickableObjects())
+        {
+            if (pair.Object != null && EditorValidationTargets.IsBossPortalName(pair.Object.name))
+            {
+                return pair.Object.name;
+            }
+        }
+
+        return null;
+    }
+
+    public static (int X, int Z)? BossPortalCell()
+    {
+        var grid = Grid;
+        var session = _session;
+        if (grid == null || session == null)
+        {
+            return null;
+        }
+
+        foreach (var pair in session.Applier.PickableObjects())
+        {
+            var go = pair.Object;
+            if (go == null || !EditorValidationTargets.IsBossPortalName(go.name))
+            {
+                continue;
+            }
+
+            var cell = PositionReadout.CellOf(go.transform.position.x, go.transform.position.z, grid.Value.Width, grid.Value.Depth, grid.Value.Spacing);
+            if (cell.InGrid)
+            {
+                return (cell.X, cell.Z);
+            }
+        }
+
+        return null;
+    }
 
     // Index of the run's stage in the current map's stage list, -1 when unknown.
     public static int CurrentStageIndex()
@@ -98,6 +291,47 @@ public static class LiveEditPatch
         return true;
     }
 
+    // Resets the live level to its generation baseline then applies newEdits in place, without
+    // relaunching the game. Tile differences are computed and applied via InPlaceLoadTileReset;
+    // gen-id objects are restored from a pre-edit transform snapshot; placed objects are destroyed.
+    // Returns false when there is no active session (no level is running).
+    public static bool ResetAndApplyEdits(IReadOnlyList<EditOp> newEdits, MelonLogger.Instance logger)
+    {
+        var session = _session;
+        if (session == null)
+        {
+            return false;
+        }
+
+        var baseline = session.Baseline;
+        // Capture object state before resetting the planner.
+        var modifiedObjects = session.Planner.State.Objects;
+
+        // Reset tiles: compute diff from current back to baseline and apply each action.
+        var tileResets = InPlaceLoadTileReset.ComputeTileResets(baseline, session.Planner.State);
+        if (tileResets.Count > 0)
+        {
+            ApplyPlan(session, tileResets);
+        }
+
+        // Reset objects: restore gen-id objects to baseline transforms, destroy placed objects.
+        session.Applier.ResetToGenBaseline(modifiedObjects);
+
+        // Re-initialize the planner to a clean baseline before applying new edits.
+        session.Planner = new LiveEditPlanner(baseline);
+
+        // Apply the loaded edits.
+        var edits = newEdits ?? Array.Empty<EditOp>();
+        if (edits.Count > 0)
+        {
+            ApplyEdits(session, baseline, edits);
+        }
+
+        session.SeedEdits = edits.ToList();
+        logger.Msg($"LiveEdit: in-place load applied {edits.Count} edit(s) after baseline reset");
+        return true;
+    }
+
     private static void OnGenerationComplete(MelonLogger.Instance logger)
     {
         var edits = _pendingEdits;
@@ -126,7 +360,8 @@ public static class LiveEditPatch
         }
 
         var baseline = SnapshotGrid(tileGen);
-        var session = new Session(logger, controller, index, baseline);
+        var seedEdits = edits != null ? edits.ToList() : new List<EditOp>();
+        var session = new Session(logger, controller, index, baseline, seedEdits);
         if (edits != null && edits.Count > 0)
         {
             ApplyEdits(session, baseline, edits);
@@ -286,21 +521,28 @@ public static class LiveEditPatch
     private sealed class Session
     {
         public readonly MelonLogger.Instance Logger;
+        public readonly MapGenerationController Controller;
         public readonly ProceduralTileGeneration TileGen;
         public readonly LiveGrid Grid;
         public readonly Applier Applier;
-        public readonly LiveEditPlanner Planner;
+        public LiveEditPlanner Planner;
+        public IReadOnlyList<EditOp> SeedEdits;
+        // Generation baseline before any edits; used by ResetAndApplyEdits for in-place load.
+        public readonly LevelState Baseline;
 
-        public Session(MelonLogger.Instance logger, MapGenerationController controller, Dictionary<string, GameObject> index, LevelState baseline)
+        public Session(MelonLogger.Instance logger, MapGenerationController controller, Dictionary<string, GameObject> index, LevelState baseline, IReadOnlyList<EditOp> seedEdits)
         {
             Logger = logger;
+            Controller = controller;
             TileGen = controller.proceduralTileGeneration;
             var columns = TileGen.proceduralTiles;
             var mapParameters = TileGen.currentMapParameters ?? TileGen.currentStage?.mapParameters;
             var lowestLevel = baseline.Tiles.Count == 0 ? 0 : baseline.Tiles.Values.Min(t => t.Height);
             Grid = new LiveGrid(columns.Length, columns[0].Length, mapParameters.scaledTileWidth, mapParameters.scaledTileHeight, lowestLevel);
+            Baseline = baseline;
             Applier = new Applier(logger, controller, index);
             Planner = new LiveEditPlanner(baseline);
+            SeedEdits = seedEdits;
         }
     }
 
@@ -314,6 +556,8 @@ public static class LiveEditPatch
         private readonly Dictionary<int, GameObject> _placed = new();
         private readonly Dictionary<int, string> _placedCatalogIds = new();
         private readonly Dictionary<int, ObjectTarget> _targetsByInstanceId = new();
+        // Snapshots of generator object transforms taken before any edits, keyed by genId.
+        private readonly Dictionary<string, TransformData> _genIdBaselineTransforms = new();
 
         public Applier(MelonLogger.Instance logger, MapGenerationController controller, Dictionary<string, GameObject> index)
         {
@@ -327,6 +571,16 @@ public static class LiveEditPatch
                 if (ObjectTools.IsPickableGenId(genId) && HasMeshRenderer(go))
                 {
                     _targetsByInstanceId[go.GetInstanceID()] = ObjectTarget.FromGenId(genId);
+                }
+            }
+            foreach (var (genId, go) in index)
+            {
+                if (ObjectTools.IsPickableGenId(genId) && go != null)
+                {
+                    _genIdBaselineTransforms[genId] = new TransformData(
+                        ToData(go.transform.position),
+                        ToData(go.transform.eulerAngles),
+                        ToData(go.transform.localScale));
                 }
             }
         }
@@ -358,7 +612,13 @@ public static class LiveEditPatch
             return null;
         }
 
-        public GameObject Find(ObjectTarget target)
+        public GameObject FindActive(ObjectTarget target)
+        {
+            var found = FindAny(target);
+            return found != null && found.activeInHierarchy ? found : null;
+        }
+
+        private GameObject FindAny(ObjectTarget target)
         {
             var found = target.Kind == ObjectTargetKind.GenId
                 ? _index.GetValueOrDefault(target.GenId)
@@ -371,7 +631,7 @@ public static class LiveEditPatch
             var result = new List<(ObjectTarget, GameObject)>();
             foreach (var (genId, go) in _index)
             {
-                if (ObjectTools.IsPickableGenId(genId) && go != null && HasMeshRenderer(go))
+                if (ObjectTools.IsPickableGenId(genId) && go != null && go.activeInHierarchy && HasMeshRenderer(go))
                 {
                     result.Add((ObjectTarget.FromGenId(genId), go));
                 }
@@ -379,7 +639,7 @@ public static class LiveEditPatch
 
             foreach (var (id, go) in _placed)
             {
-                if (go != null)
+                if (go != null && go.activeInHierarchy)
                 {
                     result.Add((ObjectTarget.FromPlacementId(id), go));
                 }
@@ -517,6 +777,11 @@ public static class LiveEditPatch
             }
 
             var t = action.Transform.Value;
+            if (!go.activeSelf)
+            {
+                go.SetActive(true);
+            }
+
             go.transform.position = ToVector(t.Position);
             go.transform.rotation = Quaternion.Euler(ToVector(t.Rotation));
             go.transform.localScale = ToVector(t.Scale);
@@ -532,15 +797,13 @@ public static class LiveEditPatch
             }
 
             var name = go.name;
-            UnityEngine.Object.Destroy(go);
+            go.SetActive(false);
             _logger.Msg($"LiveEdit: removed {action.Target.Serialize()} '{name}'");
         }
 
         private GameObject Resolve(ObjectTarget target)
         {
-            var found = target.Kind == ObjectTargetKind.GenId
-                ? _index.GetValueOrDefault(target.GenId)
-                : _placed.GetValueOrDefault(target.PlacementId);
+            var found = FindAny(target);
             if (found == null)
             {
                 _logger.Warning($"LiveEdit: no live object for {target.Serialize()}");
@@ -553,5 +816,52 @@ public static class LiveEditPatch
             CatalogPrefabs.Resolve(route, _controller.interactablesSpawner);
 
         private static Vector3 ToVector(Vector3Data v) => new(v.X, v.Y, v.Z);
+
+        private static Vector3Data ToData(Vector3 v) => new(v.x, v.y, v.z);
+
+        // Restores all editor-modified objects to their pre-edit state: placed objects are destroyed,
+        // gen-id objects that were moved or removed are restored to their baseline transform.
+        public void ResetToGenBaseline(IReadOnlyDictionary<ObjectTarget, ObjectState> modifiedObjects)
+        {
+            foreach (var (target, _) in modifiedObjects)
+            {
+                if (target.Kind == ObjectTargetKind.GenId)
+                {
+                    if (!_index.TryGetValue(target.GenId, out var go) || go == null)
+                    {
+                        _logger.Warning($"LiveEdit reset: gen-id object '{target.GenId}' not found in index");
+                        continue;
+                    }
+
+                    if (!_genIdBaselineTransforms.TryGetValue(target.GenId, out var t))
+                    {
+                        _logger.Warning($"LiveEdit reset: no baseline transform snapshot for '{target.GenId}'");
+                        continue;
+                    }
+
+                    go.SetActive(true);
+                    go.transform.position = ToVector(t.Position);
+                    go.transform.rotation = Quaternion.Euler(ToVector(t.Rotation));
+                    go.transform.localScale = ToVector(t.Scale);
+                    _logger.Msg($"LiveEdit reset: restored gen-id '{target.GenId}' to baseline transform");
+                }
+                else if (target.Kind == ObjectTargetKind.PlacementId)
+                {
+                    if (_placed.TryGetValue(target.PlacementId, out var go) && go != null)
+                    {
+                        var instanceId = go.GetInstanceID();
+                        go.SetActive(false);
+                        UnityEngine.Object.Destroy(go);
+                        _targetsByInstanceId.Remove(instanceId);
+                        _logger.Msg($"LiveEdit reset: destroyed placement:{target.PlacementId} '{go.name}'");
+                    }
+
+                    _placed.Remove(target.PlacementId);
+                    _placedCatalogIds.Remove(target.PlacementId);
+                }
+            }
+        }
     }
+
+    private static Vector3Data ToData(Vector3 v) => new(v.x, v.y, v.z);
 }

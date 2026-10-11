@@ -8,6 +8,7 @@ public enum HarnessCommandKind
 {
     LoadLevel,
     Screenshot,
+    ApplyPendingEdits,
     Quit,
     Freeze,
     Resume,
@@ -18,6 +19,7 @@ public enum HarnessCommandKind
     Heartbeat,
     Cells,
     Editor,
+    SteamReady,
 }
 
 // World-space camera position and euler rotation in degrees.
@@ -76,6 +78,10 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 command = new HarnessCommand(HarnessCommandKind.Vulnerable, null);
                 error = null;
                 return true;
+            case "steam-ready":
+                command = new HarnessCommand(HarnessCommandKind.SteamReady, null);
+                error = null;
+                return true;
             case "camera-clear":
                 command = new HarnessCommand(HarnessCommandKind.CameraClear, null);
                 error = null;
@@ -90,6 +96,10 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseCamera(root, out command, out error);
             case "load-level":
                 return TryParseWithPath(root, HarnessCommandKind.LoadLevel, out command, out error);
+            case "apply-pending-edits":
+                command = new HarnessCommand(HarnessCommandKind.ApplyPendingEdits, null);
+                error = null;
+                return true;
             case "screenshot":
                 return TryParseWithPath(root, HarnessCommandKind.Screenshot, out command, out error);
             default:

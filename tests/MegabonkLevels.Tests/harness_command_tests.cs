@@ -39,6 +39,7 @@ public class HarnessCommandTests
     [InlineData("camera-clear", HarnessCommandKind.CameraClear)]
     [InlineData("invulnerable", HarnessCommandKind.Invulnerable)]
     [InlineData("vulnerable", HarnessCommandKind.Vulnerable)]
+    [InlineData("steam-ready", HarnessCommandKind.SteamReady)]
     public void TryParse_ArglessCommands_NeedNoPath(string name, HarnessCommandKind expected)
     {
         var ok = HarnessCommand.TryParse($$"""{"command":"{{name}}"}""", out var command, out var error);

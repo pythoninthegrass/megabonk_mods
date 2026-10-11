@@ -68,6 +68,7 @@ public static class EditorObjectTools
     {
         EditorTool? switchTo = null;
         var pointerFree = !EditorPalette.PointerOverPanel;
+        pointerFree = pointerFree && !EditorTileTools.PointerOverEditorOverlay;
 
         _hovered = tool == EditorTool.Select && pointerFree ? PickAt()?.Target : null;
 
@@ -315,7 +316,7 @@ public static class EditorObjectTools
 
     private static void Apply(EditOp op, string what)
     {
-        var applied = LiveEditPatch.ApplyLive(op);
+        var applied = EditorTileTools.ApplyFromObjectTools(op, what);
         _logger.Msg($"EditorObjectTools: {what} -> {op.OpType}{(applied ? "" : " not applied")}");
     }
 

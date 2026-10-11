@@ -20,6 +20,7 @@ public static class EditorMode
     private static float _horizontalSign = 1f;
     private static float _verticalSign = 1f;
     private static bool _looking;
+    private static bool _reenterRequested;
 
     public static bool Active => _session.Active;
 
@@ -28,6 +29,12 @@ public static class EditorMode
         if (_session.Active && !RunInProgress())
         {
             Exit(logger);
+        }
+
+        if (EditorReenterPolicy.ShouldEnter(_reenterRequested, _session.Active, RunInProgress(), ConsoleOpen()))
+        {
+            _reenterRequested = false;
+            Enter(logger);
         }
 
         if (Input.GetKeyDown(ToggleKey) && !ConsoleOpen())
@@ -45,6 +52,7 @@ public static class EditorMode
 
     public static void Set(bool enabled, MelonLogger.Instance logger)
     {
+        _reenterRequested = false;
         if (enabled)
         {
             Enter(logger);
@@ -53,6 +61,12 @@ public static class EditorMode
         {
             Exit(logger);
         }
+    }
+
+    public static void RequestReenter(MelonLogger.Instance logger)
+    {
+        _reenterRequested = true;
+        logger.Msg("EditorMode: re-enter requested after level load.");
     }
 
     private static void Enter(MelonLogger.Instance logger)
@@ -103,14 +117,14 @@ public static class EditorMode
         // A sweep that starts off the palette keeps turning when the pointer crosses it.
         if (Input.GetMouseButtonDown(1))
         {
-            _looking = !EditorPalette.PointerOverPanel;
+            _looking = !EditorPalette.PointerOverPanel && !EditorTileTools.PointerOverEditorOverlay;
         }
 
         var look = _looking && Input.GetMouseButton(1);
         var input = new FreeFlyInput(
             Forward: Axis(KeyCode.W, KeyCode.S),
             Right: Axis(KeyCode.D, KeyCode.A),
-            Up: Axis(KeyCode.Space, KeyCode.LeftControl),
+            Up: Axis(KeyCode.Space, AltKey()),
             MouseDx: look ? Input.GetAxisRaw("Mouse X") * _horizontalSign : 0f,
             MouseDy: look ? Input.GetAxisRaw("Mouse Y") * _verticalSign : 0f,
             Fast: Input.GetKey(KeyCode.LeftShift));
@@ -129,7 +143,9 @@ public static class EditorMode
     }
 
     private static float Axis(KeyCode positive, KeyCode negative) =>
-        (Input.GetKey(positive) ? 1f : 0f) - (Input.GetKey(negative) ? 1f : 0f);
+        EditorTileTools.TextInputFocused ? 0f : (Input.GetKey(positive) ? 1f : 0f) - (Input.GetKey(negative) ? 1f : 0f);
+
+    private static KeyCode AltKey() => Input.GetKey(KeyCode.RightAlt) ? KeyCode.RightAlt : KeyCode.LeftAlt;
 
     private static bool RunInProgress() => MyPlayer.Instance != null && PlayerCamera.Instance != null;
 

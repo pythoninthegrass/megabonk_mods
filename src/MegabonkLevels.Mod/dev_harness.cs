@@ -17,6 +17,7 @@ public static class DevHarness
 
     private static MelonLogger.Instance _logger;
     private static string _commandsDir;
+    private static string _processingDir;
     private static string _doneDir;
     private static string _rejectedDir;
     private static bool _enabled;
@@ -34,9 +35,11 @@ public static class DevHarness
 
         _logger = logger;
         _commandsDir = Path.Combine(root, "commands");
+        _processingDir = Path.Combine(root, "processing");
         _doneDir = Path.Combine(root, "done");
         _rejectedDir = Path.Combine(root, "rejected");
         Directory.CreateDirectory(_commandsDir);
+        Directory.CreateDirectory(_processingDir);
         Directory.CreateDirectory(_doneDir);
         Directory.CreateDirectory(_rejectedDir);
         _enabled = true;
@@ -79,14 +82,16 @@ public static class DevHarness
         }
 
         // Move first so a command that throws or quits the game is never replayed.
-        MoveTo(file, _doneDir);
+        var processingFile = MoveTo(file, _processingDir);
         try
         {
             Execute(command);
+            MoveTo(processingFile, _doneDir);
         }
         catch (Exception ex)
         {
             _logger.Error($"DevHarness: '{command.Kind}' failed: {ex.Message}");
+            MoveTo(processingFile, _rejectedDir);
         }
     }
 
@@ -96,7 +101,16 @@ public static class DevHarness
         {
             case HarnessCommandKind.LoadLevel:
                 _logger.Msg($"DevHarness: load-level '{command.Path}'.");
-                LevelLoaderPatch.LoadAndStart(command.Path, _logger);
+                // Always resolve relative paths from the repo workspace into the game's Z: mount.
+                // run.py already rewrites host paths when invoked, but accept both repo-relative and absolute paths.
+                var path = command.Path;
+                if (!Path.IsPathRooted(path) && File.Exists(Path.Combine(Environment.CurrentDirectory, path)))
+                {
+                    path = Path.Combine(Environment.CurrentDirectory, path);
+                }
+                LevelLoaderPatch.LoadAndStart(path, _logger);
+                // After loading, request editor auto-reenter so the run starts in editor mode for Forest.
+                EditorMode.RequestReenter(_logger);
                 break;
             case HarnessCommandKind.Screenshot:
                 _logger.Msg($"DevHarness: screenshot '{command.Path}'.");
@@ -121,6 +135,25 @@ public static class DevHarness
             case HarnessCommandKind.Invulnerable:
                 PlayerInvulnerability.Set(true, _logger);
                 break;
+            case HarnessCommandKind.ApplyPendingEdits:
+                _logger.Msg("DevHarness: apply-pending-edits requested.");
+                try
+                {
+                    var applied = LiveEditPatch.ApplyPendingEdits(_logger);
+                    if (applied > 0)
+                    {
+                        _logger.Msg($"DevHarness: applied {applied} pending edit(s)");
+                    }
+                    else
+                    {
+                        _logger.Msg("DevHarness: no pending edits or no active session");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"DevHarness: apply-pending-edits failed: {ex.Message}");
+                }
+                break;
             case HarnessCommandKind.Vulnerable:
                 PlayerInvulnerability.Set(false, _logger);
                 break;
@@ -132,6 +165,9 @@ public static class DevHarness
                 break;
             case HarnessCommandKind.Editor:
                 EditorMode.Set(command.Enabled, _logger);
+                break;
+            case HarnessCommandKind.SteamReady:
+                _logger.Msg($"DevHarness: Steamworks ready (build {GameBuildIdPatch.CurrentBuildId()}).");
                 break;
             case HarnessCommandKind.Quit:
                 _logger.Msg("DevHarness: quit requested, calling Application.Quit.");
@@ -170,9 +206,10 @@ public static class DevHarness
         }
     }
 
-    private static void MoveTo(string file, string dir)
+    private static string MoveTo(string file, string dir)
     {
         var target = Path.Combine(dir, Path.GetFileName(file));
         File.Move(file, target, overwrite: true);
+        return target;
     }
 }
