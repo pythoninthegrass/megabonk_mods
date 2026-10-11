@@ -21,7 +21,7 @@ The mod has a development harness that loads a level, captures the game's render
 
 ### Reloading a rebuilt mod
 
-MelonLoader loads the DLL once at startup, so a rebuild only takes effect on a fresh launch. Run `task mod:build` (it deploys the DLL into `Mods`), then send quit, launch, wait and load as one background command (`run_in_background`; a foreground `sleep` is blocked). `Latest.log` keeps the previous run's lines, and the old game appends to it while it shuts down, so touch the marker after the quit, not before, and wait for a log newer than it. A load sent before Steamworks is up fails once with `Steamworks is not initialized`, so retry it until the kill floor arms:
+MelonLoader loads the DLL once at startup, so a rebuild only takes effect on a fresh launch. Run `task mod:build` (it deploys the DLL into `Mods`), then run `uv run scripts/run.py relaunch` to quit the old game, launch a fresh instance, load `levels/example-forest.mblevel.json`, and enter editor mode. `relaunch` waits for a new harness log entry, retries the load until the kill floor arms, then enables invulnerability and editor mode. Pass an optional level path to test a different file. The manual sequence remains useful when diagnosing a failed relaunch:
 
 ```sh
 L="$(uv run scripts/game_paths.py | jq -r .latest_log_path)"

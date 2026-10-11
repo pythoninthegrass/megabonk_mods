@@ -33,8 +33,11 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Hold the camera at a pose | `{"command":"camera","position":[x,y,z],"rotation":[rx,ry,rz]}` | `run.py camera X Y Z --rot RX RY RZ` |
 | Return the camera to the game | `{"command":"camera-clear"}` | `run.py camera --clear` |
 | Quit the game | `{"command":"quit"}` | `run.py quit` |
+| Relaunch the test level in editor mode | Multiple commands | `run.py relaunch [level]` |
 
 `run.py cycle <level> <out.png>` runs load, waits `--settle` seconds (default 5), takes the screenshot, then quits. `--invulnerable` makes the player invulnerable right after the load, before the settle wait. `--freeze` freezes gameplay and `--camera X Y Z RX RY RZ` poses the camera after the settle wait and before the screenshot. `--timeout` (before the subcommand, default 15 seconds) sets how long to wait for each command and for the PNG to appear. The exit code is 0 only if every step succeeded, 1 if a step failed or timed out, and 2 if the harness is not enabled (`run.py` prints `harness not enabled at <dir>; run 'run.py enable' and relaunch the game`).
+
+`run.py relaunch` quits the running game, starts a fresh process through `task game:run`, waits for a new `DevHarness: enabled` log entry, and loads `levels/example-forest.mblevel.json`. It retries the load until `KillFloor: armed` appears, then enables invulnerability and editor mode. It allows at least 60 seconds for each readiness check, even when `--timeout` is lower. Pass an optional level path to use a different level file. Use this command between interactive editor sessions; do not send another `load` to an existing run.
 
 An unknown command, malformed JSON, or a missing or empty `path` logs `DevHarness: rejected '<file>': <reason>` and moves the file to `rejected/` without touching game state. A command that parses but fails while running logs an error and the game keeps running.
 
@@ -60,6 +63,12 @@ Quit the previous launch before starting a new one. A second instance fights the
 
 ```sh
 uv run scripts/run.py quit
+```
+
+For the usual test Forest editor session, use the single command below instead of manually sequencing quit, launch, load and editor commands:
+
+```sh
+uv run scripts/run.py relaunch
 ```
 
 `quit` sends the quit command and then blocks until the game process has exited, so the next launch can follow immediately. It prints `quit: game exited` and exits 0. It exits 1 if the command is not accepted or the process is still alive after `--timeout` seconds (default 15), and it prints the remaining pids. If no game process is running it prints `quit: game not running` and exits 0, so it is safe to run before every launch. `run.py cycle` ends with the same quit-and-wait step.

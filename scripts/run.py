@@ -50,6 +50,7 @@ import sys
 import time
 from collections.abc import Callable
 from decouple import Config, RepositoryEmpty, RepositoryEnv
+from game_paths import latest_log_path
 from pathlib import Path
 
 DEFAULT_BOTTLE_MACOS = "~/Library/Application Support/CrossOver/Bottles/Steam/drive_c"
@@ -57,10 +58,10 @@ DEFAULT_GAME_SUBPATH = "Program Files (x86)/Steam/steamapps/common/Megabonk"
 DEFAULT_GAME_DIR_WINDOWS = r"C:\Program Files (x86)\Steam\steamapps\common\Megabonk"
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 POLL_SECONDS = 0.1
-# Anchored to the start of the command so wrappers, shells and helpers that merely mention the executable
-# (winewrapper, `bash -c ... Megabonk.exe`, UnityCrashHandler64.exe) never match.
+RELAUNCH_READY_TIMEOUT = 60.0
 GAME_COMMAND = re.compile(r"^(?:[A-Za-z]:\\(?:.*\\)?Megabonk\.exe|(?:\S*/)?Megabonk\.x86_64)(?:\s|$)")
 GAME_IMAGE_WINDOWS = "Megabonk.exe"
+TEST_FOREST_LEVEL = Path(__file__).resolve().parents[1] / "levels" / "example-forest.mblevel.json"
 
 Lookup = Callable[[str], str | None]
 
@@ -177,6 +178,27 @@ def wait_for_png(path: Path, timeout: float) -> bool:
     return True
 
 
+def wait_for_log_line(log: Path, line: str, newer_than: float, timeout: float) -> bool:
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            if log.stat().st_mtime > newer_than and line in log.read_text(errors="ignore"):
+                return True
+        except OSError:
+            pass
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(POLL_SECONDS)
+
+
+def launch_game() -> bool:
+    return subprocess.run(["task", "game:run"], check=False).returncode == 0
+
+
+def relaunch_timeout(timeout: float) -> float:
+    return max(timeout, RELAUNCH_READY_TIMEOUT)
+
+
 def find_game_pids(ps_listing: str) -> list[int]:
     """Pids whose command is the game executable, from `ps -axo pid=,command=` output."""
     pids = []
@@ -290,6 +312,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="hold the camera at this pose for the screenshot",
     )
     cycle.add_argument("--settle", type=float, default=5.0, help="seconds between load and screenshot")
+    relaunch = sub.add_parser("relaunch")
+    relaunch.add_argument("level", type=Path, nargs="?", default=TEST_FOREST_LEVEL)
     return parser.parse_args(argv)
 
 
@@ -365,6 +389,35 @@ def main(argv: list[str] | None = None) -> int:
                 ok = send_screenshot(harness, args.out, args.timeout)
             if ok:
                 ok = quit_game(harness, args.timeout)
+        case "relaunch":
+            ok = quit_game(harness, args.timeout)
+            started = time.time()
+            if ok:
+                print("relaunch: starting game")
+                ok = launch_game()
+            if ok:
+                print("relaunch: waiting for harness")
+                ok = wait_for_log_line(
+                    latest_log_path(game_dir), "DevHarness: enabled", started, relaunch_timeout(args.timeout)
+                )
+            if not ok:
+                print("relaunch: harness did not become ready", file=sys.stderr)
+            for attempt in range(1, 6):
+                if not ok:
+                    break
+                print(f"relaunch: loading {args.level} (attempt {attempt}/5)")
+                ok = send(harness, build_command("load-level", to_game_path(args.level.resolve())), args.timeout)
+                if ok and wait_for_log_line(
+                    latest_log_path(game_dir), "KillFloor: armed", started, relaunch_timeout(args.timeout)
+                ):
+                    break
+                ok = True
+            else:
+                ok = False
+            if ok:
+                ok = send(harness, build_command("invulnerable"), args.timeout)
+            if ok:
+                ok = send(harness, build_editor_command(True), args.timeout)
     return 0 if ok else 1
 
 

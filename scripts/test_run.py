@@ -217,6 +217,17 @@ def test_parse_args_cycle_accepts_invulnerable_flag() -> None:
     assert run.parse_args(["cycle", "a.json", "o.png"]).invulnerable is False
 
 
+def test_parse_args_relaunch_defaults_to_the_test_forest_level() -> None:
+    args = run.parse_args(["relaunch"])
+    assert args.action == "relaunch"
+    assert args.level == run.TEST_FOREST_LEVEL
+
+
+def test_relaunch_timeout_allows_melonloader_to_initialize() -> None:
+    assert run.relaunch_timeout(15) == 60
+    assert run.relaunch_timeout(120) == 120
+
+
 def test_build_camera_command_carries_position_and_rotation() -> None:
     assert run.build_camera_command((1.0, 200.0, -3.0), (90.0, 0.0, 45.5)) == {
         "command": "camera",
