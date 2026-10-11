@@ -24,6 +24,7 @@ Usage:
     run.py resume                  Unpause gameplay through MyTime.Unpause
     run.py invulnerable            Make the player survive enemy damage
     run.py vulnerable              Restore normal player damage
+    run.py steam-ready             Check whether the in-game Steamworks client is ready
     run.py heartbeat <on|off>      Start or stop the kill-floor heartbeat (actor counts and lowest heights every 5 seconds)
     run.py cells <on|off>          Start or stop logging the player's and boss-tier actors' grid cell on change
     run.py editor <on|off>         Enter or leave editor mode (frozen run, free-fly camera), like pressing F8
@@ -59,6 +60,7 @@ DEFAULT_GAME_DIR_WINDOWS = r"C:\Program Files (x86)\Steam\steamapps\common\Megab
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 POLL_SECONDS = 0.1
 RELAUNCH_READY_TIMEOUT = 60.0
+STEAM_READY_POLL_SECONDS = 1.0
 GAME_COMMAND = re.compile(r"^(?:[A-Za-z]:\\(?:.*\\)?Megabonk\.exe|(?:\S*/)?Megabonk\.x86_64)(?:\s|$)")
 GAME_IMAGE_WINDOWS = "Megabonk.exe"
 TEST_FOREST_LEVEL = Path(__file__).resolve().parents[1] / "levels" / "example-forest.mblevel.json"
@@ -199,6 +201,21 @@ def relaunch_timeout(timeout: float) -> float:
     return max(timeout, RELAUNCH_READY_TIMEOUT)
 
 
+def wait_for_steamworks_ready(
+    probe: Callable[[], bool],
+    timeout: float,
+    sleep: Callable[[float], None] = time.sleep,
+    now: Callable[[], float] = time.monotonic,
+) -> bool:
+    deadline = now() + timeout
+    while True:
+        if probe():
+            return True
+        if now() >= deadline:
+            return False
+        sleep(STEAM_READY_POLL_SECONDS)
+
+
 def find_game_pids(ps_listing: str) -> list[int]:
     """Pids whose command is the game executable, from `ps -axo pid=,command=` output."""
     pids = []
@@ -285,6 +302,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("resume")
     sub.add_parser("invulnerable")
     sub.add_parser("vulnerable")
+    sub.add_parser("steam-ready")
     heartbeat = sub.add_parser("heartbeat")
     heartbeat.add_argument("state", choices=["on", "off"])
     cells = sub.add_parser("cells")
@@ -368,7 +386,7 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_screenshot(harness, args.out, args.timeout)
         case "quit":
             ok = quit_game(harness, args.timeout)
-        case "freeze" | "resume" | "invulnerable" | "vulnerable":
+        case "freeze" | "resume" | "invulnerable" | "vulnerable" | "steam-ready":
             ok = send(harness, build_command(args.action), args.timeout)
         case "heartbeat":
             ok = send(harness, heartbeat_payload(args), args.timeout)
@@ -402,6 +420,14 @@ def main(argv: list[str] | None = None) -> int:
                 )
             if not ok:
                 print("relaunch: harness did not become ready", file=sys.stderr)
+            if ok:
+                print("relaunch: waiting for Steamworks")
+                ok = wait_for_steamworks_ready(
+                    lambda: send(harness, build_command("steam-ready"), min(args.timeout, 2.0)),
+                    relaunch_timeout(args.timeout),
+                )
+            if not ok:
+                print("relaunch: Steamworks did not become ready", file=sys.stderr)
             for attempt in range(1, 6):
                 if not ok:
                     break

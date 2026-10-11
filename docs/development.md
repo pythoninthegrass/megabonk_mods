@@ -17,7 +17,7 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 
 ## Commands
 
-`run.py` writes one JSON file per command into `<game dir>/harness/commands/`. The mod polls that folder twice a second, runs the files in name order, and moves each one to `harness/done/` (accepted) or `harness/rejected/` (unparseable). A command is moved before it runs, so a command that crashes or quits the game is never replayed.
+`run.py` writes one JSON file per command into `<game dir>/harness/commands/`. The mod polls that folder twice a second, runs the files in name order, first moves each to `harness/processing/` so it cannot replay after a crash or quit, then moves it to `harness/done/` on success or `harness/rejected/` when parsing or execution fails.
 
 | Command | Wire format | `run.py` |
 | --- | --- | --- |
@@ -27,6 +27,7 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Resume gameplay | `{"command":"resume"}` | `run.py resume` |
 | Make the player survive enemy damage | `{"command":"invulnerable"}` | `run.py invulnerable` |
 | Restore normal player damage | `{"command":"vulnerable"}` | `run.py vulnerable` |
+| Check in-game Steamworks readiness | `{"command":"steam-ready"}` | `run.py steam-ready` |
 | Start or stop the kill-floor heartbeat | `{"command":"heartbeat","enabled":true}` | `run.py heartbeat <on\|off>` |
 | Start or stop the cell-change log | `{"command":"cells","enabled":true}` | `run.py cells <on\|off>` |
 | Enter or leave editor mode | `{"command":"editor","enabled":true}` | `run.py editor <on\|off>` |
@@ -37,9 +38,9 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 
 `run.py cycle <level> <out.png>` runs load, waits `--settle` seconds (default 5), takes the screenshot, then quits. `--invulnerable` makes the player invulnerable right after the load, before the settle wait. `--freeze` freezes gameplay and `--camera X Y Z RX RY RZ` poses the camera after the settle wait and before the screenshot. `--timeout` (before the subcommand, default 15 seconds) sets how long to wait for each command and for the PNG to appear. The exit code is 0 only if every step succeeded, 1 if a step failed or timed out, and 2 if the harness is not enabled (`run.py` prints `harness not enabled at <dir>; run 'run.py enable' and relaunch the game`).
 
-`run.py relaunch` quits the running game, starts a fresh process through `task game:run`, waits for a new `DevHarness: enabled` log entry, and loads `levels/example-forest.mblevel.json`. It retries the load until `KillFloor: armed` appears, then enables invulnerability and editor mode. It allows at least 60 seconds for each readiness check, even when `--timeout` is lower. Pass an optional level path to use a different level file. Use this command between interactive editor sessions; do not send another `load` to an existing run.
+`run.py relaunch` quits the running game, starts a fresh process through `task game:run`, waits for a new `DevHarness: enabled` log entry, then polls the in-game Steamworks client before loading `levels/example-forest.mblevel.json`. It retries the load until `KillFloor: armed` appears, then enables invulnerability and editor mode. It allows at least 60 seconds for readiness checks, even when `--timeout` is lower. Pass an optional level path to use a different level file. Use this command between interactive editor sessions; do not send another `load` to an existing run.
 
-An unknown command, malformed JSON, or a missing or empty `path` logs `DevHarness: rejected '<file>': <reason>` and moves the file to `rejected/` without touching game state. A command that parses but fails while running logs an error and the game keeps running.
+An unknown command, malformed JSON, a missing or empty `path`, or a command that fails while running logs an error and moves the file to `rejected/` without replaying it.
 
 The paths in `load-level` and `screenshot` are interpreted by the game process, so `run.py` converts them (see below).
 
@@ -236,7 +237,7 @@ Entering calls `MyTime.Pause`, which stops the run timer, enemy spawning, enemie
 | Input | Effect |
 | --- | --- |
 | W, A, S, D | Move along the view direction and sideways |
-| Space, Left Ctrl | Move up and down in world space |
+| Space, Left Alt / Right Alt (Option) | Move up and down in world space |
 | Left Shift | Move 4 times faster |
 | Mouse move while the right button is held, after pressing it off the palette | Look, read from Unity's raw `Mouse X` and `Mouse Y` axes and scaled by the game's saved mouse sensitivity and axis-invert settings, so it turns 10% faster than normal play |
 
@@ -273,6 +274,21 @@ The op goes through `LiveEditPatch.ApplyLive`, which runs it through a `LiveEdit
 
 The tools work in any `Tiles`-map run, not only mod-loaded levels, but the kill floor is armed only on mod-loaded levels; in a vanilla run a fall through a removed tile lands on the game's own catch floor. Pure logic lives in `tile_tool.cs` (what each tile tool emits), `editor_tool.cs` (tool list, hotkeys, toolbar text) and `tile_outline.cs` (the outline corners).
 
+The same toolbar now owns the editing loop controls:
+
+| Control | Effect |
+| --- | --- |
+| `Undo` button or `Ctrl+Z` | replays inverse ops through the same live path as normal edits (terrain/object applier, fill regeneration, collision rebuild), and removes the last edit from the current save history |
+| `Redo` button or `Ctrl+Y` | reapplies the undone edit through the same live path and returns it to save history |
+| `Validate` button | runs `ReachabilityValidator` from the live spawn portal cell (name contains `portal` + `spawn`, not `boss`), draws a red outline on each unreachable tile, and reports boss-portal reachability separately (boss portal found dynamically by object name containing `boss` + `portal`, excluding `spawn`) |
+| Save row (`name` + `Save`) | writes `<name>.mblevel.json` to `<game>/UserData/Levels/` using `LevelFileSerializer`, with map/stage/tier/seed from the current run plus the full current edit history. By default `Save` writes into the file selected in the `levels/UserData` overlay (the save-name form mirrors the selected file). |
+| `Save+Load` | saves first using the current name field, then loads that same file and requests editor auto-re-enter |
+| `Load` and right-side list | browses `.mblevel.json` files in `<game>/UserData/Levels/` (case-insensitive sort); click a row or scroll while hovering over the list to select it, which also copies its file stem into the save form; `Load` starts that file through `LevelLoaderPatch.LoadAndStart` and editor mode then auto-re-enters once the new run is active |
+
+Validation overlays are explicitly stale after any edit/undo/redo and are cleared until `Validate` is pressed again.
+
+The status line also shows `save: saved|dirty` with the current edit count. `Load` is not blocked when unsaved edits exist; it immediately starts the selected file's map, stage, tier, and forced seed while handing its edit history to the generation pipeline, so the loaded level is applied on the new run.
+
 ## Object tools
 
 Tool 5 (Place) and tool 6 (Select) edit objects. Both place at the cursor's ground point, not snapped: the point is kept inside the targeted cell (clamped to its edges), measured from the same origin as `PositionReadout.CellOf` (via `PositionReadout.CellCentre`). The height is the tile surface at that point (`Height * tileHeight`; on a ramp it rises a full level from the downhill edge to the uphill edge). `tileHeight` and the spacing are read from the live `StageData.mapParameters`. The yellow tile outline shows the targeted cell. While Place is active, or Select has an object selected, thin white lines draw a quarter-tile grid (spacing / 4, 10 units on Forest's 40-unit tiles) over that cell as a visual guide, and, in Place only, an orange circle marks the exact placement point; objects do not snap to the lines.
@@ -292,4 +308,4 @@ Picking tries a physics raycast first and accepts the hit only when its hierarch
 
 Pick block scrolls the palette to the picked entry when it is outside the visible list. It matches a generator-spawned object's prefab name (the `object:{prefabName}:{index}` genId category) against the palette's display names, preferring the current stage's entry, then a stage-independent one (shrines, interactables). An editor-placed object uses the catalogId it was placed with. An object with no matching entry, including every `tileObject`, is logged (`pick block found no palette entry`) and the selection is left alone.
 
-Every action logs `EditorObjectTools: <what> -> <opType>`. Removal destroys the object, so undo must respawn it or removal must switch to deactivation. Pure logic lives in `object_tool.cs` (position, grid lines, stacking, facing, the ops), `palette_scroll.cs` (palette scroll offset), `object_picker.cs` (nearest object) and `palette_pick.cs` (pick block lookup).
+Every action logs `EditorObjectTools: <what> -> <opType>`. Object removal now deactivates the live object (rather than destroying it), so undo/redo can restore the same object identity by toggling it active through a move action. Pure logic lives in `object_tool.cs` (position, grid lines, stacking, facing, the ops), `palette_scroll.cs` (palette scroll offset), `object_picker.cs` (nearest object) and `palette_pick.cs` (pick block lookup).

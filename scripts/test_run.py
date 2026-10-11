@@ -79,6 +79,10 @@ def test_build_command_quit_has_no_path() -> None:
     assert run.build_command("quit") == {"command": "quit"}
 
 
+def test_build_command_steam_ready_has_no_path() -> None:
+    assert run.build_command("steam-ready") == {"command": "steam-ready"}
+
+
 def test_write_command_is_atomic_and_ordered() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         commands = Path(tmp)
@@ -226,6 +230,16 @@ def test_parse_args_relaunch_defaults_to_the_test_forest_level() -> None:
 def test_relaunch_timeout_allows_melonloader_to_initialize() -> None:
     assert run.relaunch_timeout(15) == 60
     assert run.relaunch_timeout(120) == 120
+
+
+def test_wait_for_steamworks_ready_retries_until_the_game_reports_ready() -> None:
+    results = iter([False, False, True])
+    assert run.wait_for_steamworks_ready(lambda: next(results), timeout=5, sleep=lambda _: None)
+
+
+def test_wait_for_steamworks_ready_times_out_when_the_game_never_reports_ready() -> None:
+    clock = iter(range(100))
+    assert not run.wait_for_steamworks_ready(lambda: False, timeout=3, sleep=lambda _: None, now=lambda: next(clock))
 
 
 def test_build_camera_command_carries_position_and_rotation() -> None:

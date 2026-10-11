@@ -166,6 +166,12 @@ After `LevelLoaderPatch` forces the seed it hands `level.Edits` to `LiveEditPatc
 
 The editor's object tools (see "Object tools" in [development.md](development.md)) emit these same ops: Place sends `PlaceObject` with the palette entry's `catalogId`, and Select sends `MoveObject` and `RemoveObject` targeting `gen:<genId>` for a generator-spawned object or `placement:<id>` for one the editor placed. A `MoveObject` always carries the full new transform, so a rotate repeats the current position and scale.
 
+Editor undo/redo and save use this same op stream, not a second state model. The editor session stores the ordered list of forward ops (seeded from the loaded level's edit list, if any), and each new op is paired with planned inverse ops based on the pre-op `LevelState`: tile undo restores the previous height+slope pair, and object undo restores the previous transform (or deactivates/removes as appropriate). Undo and redo apply these planned ops through the same live pipeline (`LiveEditPlanner` + applier), so visuals, fill and collision updates stay identical to normal edits.
+
+For object removals, live `RemoveObject` deactivates the object instead of destroying it, and `MoveObject` reactivates before applying the transform. This keeps target identity stable across remove/undo/redo for both generator and editor-placed objects.
+
+Editor save writes the current forward-op list to `<game>/UserData/Levels/<name>.mblevel.json` through `LevelFileSerializer`, using current runtime metadata (`MapController.currentMap/currentStage`, `MapController.runConfig.mapTierIndex`, `ProceduralTileGeneration.debugSeed`) for the non-edit fields.
+
 Known limits: `AddTile` outside the `size x size` grid logs a warning and does nothing. A replacement flat tile reuses the previous tile's direction, or faces +Z in an empty cell. After the tile edits the mod regenerates the wall and fill pieces on every edge between an edited tile and an occupied neighbour, and rebuilds the baked ground collision; see "Walls after edits" and "Ground collision after edits" in [runtime-map-structure.md](runtime-map-structure.md). Edges against a removed cell are left as they were, so a removed tile leaves an open hole with the old walls around it standing or floating; the kill floor ends a fall into it. `catalogId` resolution works only for `Tiles` maps (the edit list is skipped, with a warning, when `proceduralTiles` is null), and `bundle:` ids are rejected.
 
 ### Suppressing Steam leaderboard, achievement, and stats writes
