@@ -1,11 +1,11 @@
 ---
 id: TASK-005.05
 title: 'Undo/redo UI, validate overlay, save/load UI'
-status: To Do
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-10-06 21:43'
-updated_date: '2026-10-11 05:28'
+updated_date: '2026-10-11 05:33'
 labels:
   - level-editor
 dependencies:
@@ -32,11 +32,13 @@ These three are grouped into one subtask since they're each relatively small, UI
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Undo/redo buttons and keybinds correctly revert/reapply the most recent edit, visible live in the 3D view
-- [ ] #2 A validate action highlights every tile the reachability validator reports as unreachable from spawn, and separately reports boss-portal reachability
-- [ ] #3 A save dialog writes the current edit history to a named .mblevel.json file in UserData/Levels/ via TASK-003.01's serializer
-- [ ] #4 A load dialog lists existing level files in UserData/Levels/ and loads a selected one via TASK-004.01's loader
+- [x] #1 Undo/redo buttons and keybinds correctly revert/reapply the most recent edit, visible live in the 3D view
+- [x] #2 A validate action highlights every tile the reachability validator reports as unreachable from spawn, and separately reports boss-portal reachability
+- [x] #3 A save dialog writes the current edit history to a named .mblevel.json file in UserData/Levels/ via TASK-003.01's serializer
+- [x] #4 A load dialog lists existing level files in UserData/Levels/ and loads a selected one via TASK-004.01's loader
 <!-- AC:END -->
+
+
 
 ## Implementation Plan
 
@@ -69,8 +71,8 @@ User-directed harness reliability fix (2026-10-10): add an explicit `steam-ready
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
