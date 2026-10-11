@@ -5,7 +5,7 @@ status: To Do
 assignee:
   - '@claude'
 created_date: '2026-10-06 21:43'
-updated_date: '2026-10-11 03:45'
+updated_date: '2026-10-11 05:28'
 labels:
   - level-editor
 dependencies:
@@ -64,31 +64,7 @@ User-directed harness reliability fix (2026-10-10): add an explicit `steam-ready
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-2026-10-10: implemented editor-side undo/redo + validate + save/load loop around the existing live edit pipeline. Added pure logic helpers (`editor_editing_support.cs`) for edit history, undo/redo plan building, filename normalization, and boss-portal name matching, all test-first with new tests in `editor_editing_support_tests.cs`.
-
-Added `EditorEditSession` (`editor_edit_session.cs`) to keep the current forward edit list for save while applying planned inverse/redo ops live. Editor tile/object actions now go through this session; Ctrl+Z/Ctrl+Y and toolbar Undo/Redo buttons added.
-
-`EditorTileTools` now includes validate/save/load controls in the toolbar: Validate runs ReachabilityValidator from dynamic spawn portal cell and draws red tile overlays for unreachable cells; boss portal reachability is reported separately using Option 1 dynamic portal detection.
-
-Save writes `.mblevel.json` into `<game>/UserData/Levels/` with `LevelFileSerializer`; load lists/sorts files from that directory and uses `LevelLoaderPatch.LoadAndStart` for the selected file.
-
-`LiveEditPatch` extended with session/state/introspection helpers for editor UI (`CurrentState`, `SeedEdits`, level-file snapshot metadata, level-file listing, portal-cell detection, plan building).
-
-Adjusted live object remove semantics for undo/redo correctness: RemoveObject now deactivates; MoveObject reactivates before applying transform. Pickable/object lookup now ignores inactive objects for interaction while still allowing redo/undo restore by target identity.
-
-Docs updated in `docs/development.md` and `docs/level-format.md` for the new editing loop behavior and save/load path.
-
-Validation: `dotnet build src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj`, `dotnet test tests/MegabonkLevels.Tests/MegabonkLevels.Tests.csproj` (497 pass), `task lint`, and full `task check` all pass.
-
-2026-10-10: `run.py relaunch` now waits for an in-game Steamworks probe before loading. Live verification: first probe rejected while Steamworks initialized; subsequent probe succeeded, then Forest loaded with seed 20261007, Tony McZoom, generated map, kill floor, invulnerability, and editor mode. User also confirmed the UI save/load path works after this fix. `task check` passed (524 xUnit tests, 44 script tests).
-
-2026-10-10: committed only documentation and Python harness changes as requested: `53bd262 feat(harness): wait for Steamworks readiness`. Editor/runtime C# changes, tests, and the task record remain uncommitted for continued testing.
-
-2026-10-10: returned task to To Do for the next agent while editor changes continue to be tested. All acceptance criteria are deliberately unchecked for that agent to verify independently.
-
-2026-10-11: Fixed in-place load. Load no longer calls LevelLoaderPatch.LoadAndStart (which relaunched the game and was non-deterministic). Instead, it reads the level file, calls LiveEditPatch.ResetAndApplyEdits, and resets the editor session in-place. ResetAndApplyEdits: (1) diffs current vs baseline tiles via InPlaceLoadTileReset.ComputeTileResets, applies tile reset actions; (2) restores gen-id objects from a pre-edit transform snapshot taken in Applier constructor; (3) destroys editor-placed objects; (4) re-initializes the planner to a clean baseline; (5) replays the loaded file's edits. Session.Baseline stores the generation baseline. Applier._genIdBaselineTransforms snapshots pickable object transforms before seed edits are applied. 5 new unit tests (InPlaceLoadTileResetTests). 529 xUnit tests pass, mod builds clean.
-
-2026-10-11: Investigated user reports of Load still relaunching and elevation keys reverted. Root cause: game had the old DLL (the previous session's C# changes were not in the last committed build). Both fixes already existed in the working tree: (1) LoadSelected calls ResetAndApplyEdits not LoadAndStart; (2) editor_mode.cs has Up: Axis(KeyCode.Space, AltKey()) for Space=ascend, Alt=descend. Force-rebuilt with --no-incremental and deployed to Mods (218112 bytes, 22:45). Verified DLL contains ResetAndApplyEdits, ResetToGenBaseline, ComputeTileResets, and AltKey symbols. Also removed a stale comment that still referred to Load setting pending edits. Relaunch the game to pick up the new DLL.
+2026-10-11: Fixed non-deterministic level load/relaunch (objects re-rolling every generation despite forced debugSeed). Root cause found via Binary Ninja on GameAssembly.dll: object placement draws from two RNGs neither tied to debugSeed. Positions use UnityEngine.Random.Range. Per-prefab counts use RandomMapObject.GetAmount() rolling on Utility.MyRandom.random, a static ConsistentRandom whose static ctor seeds once from QueryPerformanceCounter (wall clock). Drifting counts cascade into shifted positions even when UnityEngine.Random is reseeded, and mapSeed has no effect. Fix (seed_force_patch.cs): SeedForcePatch.ReseedPhase reseeds both RNGs from the forced seed before each spawn sub-phase via Harmony prefixes on GenerateTileObjects.Generate, SpawnInteractables.SpawnChests/SpawnShrines, and RandomObjectPlacer.GenerateInteractables, using SpawnSeed.PhaseSeed (new pure helper in spawn_seed.cs; SeedForceMode enum moved there) for a phase-distinct derived seed. Added objectsHash to the generation report (generation_report.cs/generation_patch.cs/generation_hash.cs reuse) to verify. Live verification: two relaunches of levels/example-forest.mblevel.json now produce byte-identical objectsHash and identical per-category object hashes/counts, while mapSeed still varies freely. Tests: new spawn_seed_tests.cs (ForcedSeed/PhaseSeed), updated generation_report_tests.cs; full task check passes (537 xUnit, 44 script tests, markdownlint, ruff). Docs: docs/map-generation-determinism.md gains an "Object placement determinism" section. Also added binary_ninja MCP server to opencode.jsonc and .mcp.json.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
