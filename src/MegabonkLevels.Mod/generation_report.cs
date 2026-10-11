@@ -9,10 +9,12 @@ public readonly record struct GenerationSnapshot(
     int FlatTileCount,
     int FillTileCount,
     int NodeCount,
-    string Hash);
+    string Hash,
+    int ObjectCount,
+    string ObjectsHash);
 
 public static class GenerationReport
 {
     public static string Format(GenerationSnapshot snapshot) =>
-        $"A_GenerationComplete: map={snapshot.MapName} mapType={snapshot.MapType} mapSeed={snapshot.MapSeed} debugSeed={snapshot.DebugSeed} tiles={snapshot.TileCount} flatTiles={snapshot.FlatTileCount} fillTiles={snapshot.FillTileCount} nodes={snapshot.NodeCount} hash={snapshot.Hash}";
+        $"A_GenerationComplete: map={snapshot.MapName} mapType={snapshot.MapType} mapSeed={snapshot.MapSeed} debugSeed={snapshot.DebugSeed} tiles={snapshot.TileCount} flatTiles={snapshot.FlatTileCount} fillTiles={snapshot.FillTileCount} nodes={snapshot.NodeCount} hash={snapshot.Hash} objects={snapshot.ObjectCount} objectsHash={snapshot.ObjectsHash}";
 }

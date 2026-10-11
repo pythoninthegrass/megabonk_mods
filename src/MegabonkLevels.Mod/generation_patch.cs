@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Il2Cpp;
 using MelonLoader;
@@ -11,6 +12,9 @@ namespace MegabonkLevels;
 // fires; tiles/flatTiles/fillTiles are the lists that still hold live GameObjects at this point.
 public static class GenerationPatch
 {
+    private const string CloneSuffix = "(Clone)";
+    private const string TileObjectsParentName = "TileObjectsParent";
+
     public static void Install(MelonLogger.Instance logger)
     {
         MapGenerationController.A_GenerationComplete += (Il2CppSystem.Action)(() => OnGenerationComplete(logger));
@@ -28,6 +32,8 @@ public static class GenerationPatch
         CollectDistinct(tiles?.flatTiles, seen, records);
         CollectDistinct(tiles?.fillTiles, seen, records);
 
+        var objectRecords = CollectSpawnedObjects(controller);
+
         var snapshot = new GenerationSnapshot(
             MapGenerationController.mapSeed,
             tiles?.debugSeed ?? -1,
@@ -37,8 +43,38 @@ public static class GenerationPatch
             tiles?.flatTiles?.Count ?? -1,
             tiles?.fillTiles?.Count ?? -1,
             records.Count,
-            GenerationHash.Compute(records));
+            GenerationHash.Compute(records),
+            objectRecords.Count,
+            GenerationHash.Compute(objectRecords));
         logger.Msg(GenerationReport.Format(snapshot));
+    }
+
+    private static List<SpawnRecord> CollectSpawnedObjects(MapGenerationController controller)
+    {
+        var records = new List<SpawnRecord>();
+        if (controller == null)
+        {
+            return records;
+        }
+
+        var seenTileObjectsParent = false;
+        foreach (var root in controller.gameObject.scene.GetRootGameObjects())
+        {
+            if (root.name == TileObjectsParentName)
+            {
+                seenTileObjectsParent = true;
+                continue;
+            }
+
+            if (!seenTileObjectsParent || !root.name.EndsWith(CloneSuffix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            records.Add(ToRecord(root.transform));
+        }
+
+        return records;
     }
 
     private static void CollectDistinct(Il2CppSystem.Collections.Generic.List<GameObject> source, HashSet<int> seen, List<SpawnRecord> records)
