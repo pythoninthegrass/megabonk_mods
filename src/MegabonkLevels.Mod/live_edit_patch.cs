@@ -23,6 +23,11 @@ public static class LiveEditPatch
 
     private static IReadOnlyList<EditOp> _pendingEdits;
     private static Session _session;
+    private static int _runGeneration;
+
+    // Increments each time a new map generation completes. EditorTileTools uses this to detect
+    // when the level has changed and the undo/redo session should be reset.
+    public static int RunGeneration => _runGeneration;
 
     // Set by LevelLoaderPatch right before it starts a run, consumed (and cleared) by the next
     // generation so a later vanilla run is never edited.
@@ -101,10 +106,12 @@ public static class LiveEditPatch
         }
 
         TransformData? fallback = null;
-        if (op.OpType == RemoveObject.OpType)
+        if (op.OpType == RemoveObject.OpType || op.OpType == MoveObject.OpType)
         {
-            var remove = RemoveObject.FromEditOp(op);
-            var go = ObjectFor(remove.Target);
+            var target = op.OpType == RemoveObject.OpType
+                ? RemoveObject.FromEditOp(op).Target
+                : MoveObject.FromEditOp(op).Target;
+            var go = ObjectFor(target);
             if (go != null)
             {
                 fallback = new TransformData(ToData(go.transform.position), ToData(go.transform.eulerAngles), ToData(go.transform.localScale));
@@ -336,6 +343,7 @@ public static class LiveEditPatch
     {
         var edits = _pendingEdits;
         _pendingEdits = null;
+        _runGeneration++;
         _session = null;
 
         var controller = UnityEngine.Object.FindObjectOfType<MapGenerationController>();

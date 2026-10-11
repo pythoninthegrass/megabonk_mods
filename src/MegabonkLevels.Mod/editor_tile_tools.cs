@@ -55,6 +55,7 @@ public static class EditorTileTools
     private static TextMeshProUGUI _loadStatusText;
     private static float _loadStatusExpiry = -1f;
     private static EditorEditSession _session;
+    private static int _sessionRunGeneration = -1;
     private static ReachabilityResult _reachability;
     private static string _validateSummary = "validate: not run";
     private static int _selectedLevel;
@@ -78,7 +79,14 @@ public static class EditorTileTools
     {
         _logger = logger;
         _tool = EditorTools.Default;
-        _session = new EditorEditSession(LiveEditPatch.SeedEdits);
+        var currentGen = LiveEditPatch.RunGeneration;
+        if (_session == null || _sessionRunGeneration != currentGen)
+        {
+            _session = new EditorEditSession(LiveEditPatch.SeedEdits);
+            _sessionRunGeneration = currentGen;
+            _lastSavedEditCount = LiveEditPatch.SeedEdits.Count;
+        }
+
         _reachability = null;
         _validateSummary = "validate: not run";
         EditorObjectTools.OnEditorEntered(logger);
@@ -117,14 +125,12 @@ public static class EditorTileTools
         _target = null;
         _toolbarRect = null;
         _loadRect = null;
-        _session = null;
         _reachability = null;
         _levelFiles.Clear();
         _selectedLevel = 0;
         _ctrlHeldSince = -1f;
         _saveInputFocused = false;
         _saveName = "";
-        _lastSavedEditCount = LiveEditPatch.SeedEdits.Count;
         _clickRegions.Clear();
         ClearUnreachable();
     }
@@ -595,6 +601,7 @@ public static class EditorTileTools
         }
 
         _session = new EditorEditSession(level.Edits);
+        _sessionRunGeneration = LiveEditPatch.RunGeneration;
         _lastSavedEditCount = level.Edits.Count;
         InvalidateValidation();
         _validateSummary = $"loaded {name}";

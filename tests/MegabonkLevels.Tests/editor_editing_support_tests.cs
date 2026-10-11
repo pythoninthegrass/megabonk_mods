@@ -48,7 +48,7 @@ public class EditorEditSessionTests
         var state = new LevelState();
         var applied = new List<EditOp>();
         var op = new AddTile(1, 2, 3).ToEditOp();
-        var plan = EditCommandPlanner.Plan(op, state, nextPlacementId: 0, removeObjectFallback: null);
+        var plan = EditCommandPlanner.Plan(op, state, nextPlacementId: 0, liveTransformFallback: null);
 
         Assert.True(session.Apply(plan, edit => { applied.Add(edit); return true; }));
         Assert.Single(session.CurrentEdits);
@@ -76,7 +76,7 @@ public class EditCommandPlannerTests
         new EditStack(state).Apply(new SetTileHeight(2, 3, 4).ToEditOp());
         new EditStack(state).Apply(new SetTileSlope(2, 3, SlopeDirection.West).ToEditOp());
 
-        var plan = EditCommandPlanner.Plan(new AddTile(2, 3, 8).ToEditOp(), state, nextPlacementId: 0, removeObjectFallback: null);
+        var plan = EditCommandPlanner.Plan(new AddTile(2, 3, 8).ToEditOp(), state, nextPlacementId: 0, liveTransformFallback: null);
 
         Assert.Equal(new[]
         {
@@ -90,7 +90,7 @@ public class EditCommandPlannerTests
     {
         var op = new PlaceObject("interactable/chest", new Vector3Data(1, 2, 3), new Vector3Data(0, 90, 0), new Vector3Data(1, 1, 1)).ToEditOp();
 
-        var plan = EditCommandPlanner.Plan(op, new LevelState(), nextPlacementId: 7, removeObjectFallback: null);
+        var plan = EditCommandPlanner.Plan(op, new LevelState(), nextPlacementId: 7, liveTransformFallback: null);
 
         Assert.Equal(new[] { new RemoveObject(ObjectTarget.FromPlacementId(7)).ToEditOp() }, plan.UndoOps);
         Assert.Equal(new[]
@@ -104,9 +104,23 @@ public class EditCommandPlannerTests
     {
         var target = ObjectTarget.FromGenId("object:BossPortal:0000");
         var fallback = new TransformData(new Vector3Data(9, 1, 4), new Vector3Data(0, 180, 0), new Vector3Data(1, 1, 1));
-        var plan = EditCommandPlanner.Plan(new RemoveObject(target).ToEditOp(), new LevelState(), nextPlacementId: 0, removeObjectFallback: fallback);
+        var plan = EditCommandPlanner.Plan(new RemoveObject(target).ToEditOp(), new LevelState(), nextPlacementId: 0, liveTransformFallback: fallback);
 
         Assert.Equal(new[] { new MoveObject(target, fallback).ToEditOp() }, plan.UndoOps);
+    }
+
+    [Fact]
+    public void Plan_MoveObject_UsesFallbackTransformWhenObjectNotInState()
+    {
+        var target = ObjectTarget.FromGenId("object:moai:0001");
+        var original = new TransformData(new Vector3Data(10, 0, 5), new Vector3Data(0, 45, 0), new Vector3Data(1, 1, 1));
+        var newTransform = new TransformData(new Vector3Data(20, 0, 5), new Vector3Data(0, 45, 0), new Vector3Data(1, 1, 1));
+        var op = new MoveObject(target, newTransform).ToEditOp();
+
+        var plan = EditCommandPlanner.Plan(op, new LevelState(), nextPlacementId: 0, liveTransformFallback: original);
+
+        Assert.Equal(new[] { new MoveObject(target, original).ToEditOp() }, plan.UndoOps);
+        Assert.Equal(new[] { op }, plan.RedoOpsAfterUndo);
     }
 }
 

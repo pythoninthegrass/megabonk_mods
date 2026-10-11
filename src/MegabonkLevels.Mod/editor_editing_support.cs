@@ -202,7 +202,7 @@ public readonly record struct EditCommandPlan(EditOp OriginalOp, IReadOnlyList<E
 
 public static class EditCommandPlanner
 {
-    public static EditCommandPlan Plan(EditOp op, LevelState state, int nextPlacementId, TransformData? removeObjectFallback)
+    public static EditCommandPlan Plan(EditOp op, LevelState state, int nextPlacementId, TransformData? liveTransformFallback)
     {
         switch (op.OpType)
         {
@@ -256,6 +256,14 @@ public static class EditCommandPlanner
                         RedoOpsAfterUndo: new[] { op });
                 }
 
+                if (liveTransformFallback is { } moveFallback)
+                {
+                    return new EditCommandPlan(
+                        OriginalOp: op,
+                        UndoOps: new[] { new MoveObject(typed.Target, moveFallback).ToEditOp() },
+                        RedoOpsAfterUndo: new[] { op });
+                }
+
                 return new EditCommandPlan(op, Array.Empty<EditOp>(), new[] { op });
             }
             case RemoveObject.OpType:
@@ -275,7 +283,7 @@ public static class EditCommandPlanner
                         RedoOpsAfterUndo: new[] { op });
                 }
 
-                if (removeObjectFallback is { } fallback)
+                if (liveTransformFallback is { } fallback)
                 {
                     return new EditCommandPlan(
                         OriginalOp: op,
