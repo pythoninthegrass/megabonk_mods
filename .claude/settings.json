@@ -1,6 +1,8 @@
 {
   "env": {
     "GHIDRA_INSTALL_DIR": "/Users/lance/.local/opt/ghidra/current",
-    "JAVA_HOME": "/Users/lance/.local/share/mise/installs/java/temurin-21.0.12+101.0.LTS"
+    "GHIDRA_HEADLESS_MAXMEM": "6G",
+    "JAVA_HOME": "/Users/lance/.local/share/mise/installs/java/temurin-21.0.12+101.0.LTS",
+    "REA_GHIDRA_STARTUP_TIMEOUT_MS": "3600000"
   }
 }

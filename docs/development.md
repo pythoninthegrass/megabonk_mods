@@ -258,18 +258,22 @@ Ghidra 12.1 needs Java 21 or newer. The tasks use the `java` pinned in `.tool-ve
 
 #### Using Ghidra through REA
 
-The REA MCP server (`rea` tools: `open_binary`, `analyze_function`, `procedure_pseudo_code`, `xrefs`, and the rest) has a Ghidra provider that runs headless Ghidra against a target. It stays `not_configured` until two environment variables are set, which Claude Code passes on to the REA process. They are in the `env` block of the committed `.claude/settings.json`, so they apply only to sessions started in this repo:
+The REA MCP server (`rea` tools: `open_binary`, `analyze_function`, `procedure_pseudo_code`, `xrefs`, and the rest) has a Ghidra provider that runs headless Ghidra against a target. It stays `not_configured` until `GHIDRA_INSTALL_DIR` and `JAVA_HOME` are set, which Claude Code passes on to the REA process. The variables are in the `env` block of the committed `.claude/settings.json`, so they apply only to sessions started in this repo:
 
 | Variable | Value |
 | --- | --- |
 | `GHIDRA_INSTALL_DIR` | `$HOME/.local/opt/ghidra/current` as an absolute path, so a version bump in `taskfiles/ghidra.yml` needs no change here |
 | `JAVA_HOME` | the output of `mise where java`, a JDK 21 or newer (REA rejects a JRE or a 32-bit JDK) |
+| `REA_GHIDRA_STARTUP_TIMEOUT_MS` | `3600000`. REA's default deadline for import plus auto-analysis is 330000 ms (5.5 minutes), and `GameAssembly.dll` did not finish within it |
+| `GHIDRA_HEADLESS_MAXMEM` | `6G`. REA passes this as the headless JVM's `-Xmx`, falling back to `GHIDRA_MAXMEM` and then `2G`; an Il2Cpp binary has a very large function count, and the machine has 16 GB |
 
 The values are absolute paths for the macOS machine this was set up on (`$HOME` and command substitution are not expanded in `settings.json`), so another machine, including the Linux host, needs its own values in `.claude/settings.local.json`, which overrides the committed file and is gitignored. `JAVA_HOME` also has to be updated when the `java` pin in `.tool-versions` changes. Restart Claude Code after changing either value. Check the setup, outside Claude Code, with `GHIDRA_INSTALL_DIR=... JAVA_HOME=... npx -y rea-agents@6.7.0 doctor --provider ghidra --json` (match the version in the `rea` entry of `~/.claude.json`): the `ghidra`, `ghidra-version`, `ghidra-headless`, `ghidra-native_decompiler` and `ghidra-java` checks should all be healthy.
 
 `REA_ANALYSIS_PROVIDER` is deliberately unset. The same REA server also has a Hopper provider (`HOPPER_LAUNCHER_PATH`), so pass `provider_id: "ghidra"` to `open_binary` to bind Ghidra, and `binary_session` shows which provider is bound. The first import of `GameAssembly.dll` runs Ghidra's full auto-analysis and can take several minutes; REA serves operations only once that finishes. Names and comments set through REA (`annotate_native_function` and the like) live in a session database that is discarded on close, so use the Ghidra GUI project when labels have to persist. The `GameAssembly.dll` to open is in the game directory (see "Enabling"); RVAs from `dump.cs` are offsets from the image base.
 
-Running REA's Ghidra provider on a PE under macOS arm64 is not covered by REA's own documentation, which describes Ghidra with PE files only on Windows x64. Whether it opens `GameAssembly.dll` cleanly here is unconfirmed: record the outcome in this section the first time it is tried.
+REA's documentation describes Ghidra with PE files only on Windows x64, so running it on `GameAssembly.dll` under macOS arm64 is not a documented configuration. What was observed (52 MB `GameAssembly.dll`, 16 GB machine, Ghidra 12.1.4, default 2G heap and 330 s deadline): the PE loader recognised the file as `x86:LE:64:windows` and found its TLS callbacks, the 15 imported Windows libraries were reported "not found in project" (expected, they are not imported), and the first query (`analyze_function` at the `dump.cs` VA of `MyTime.Pause`) failed with `provider_timeout` after 330 s while still analysing. `open_binary` itself returns at once and does not start the work; the first operation does, so that call is the one that waits.
+
+Whether analysis completes with the raised deadline and heap above, how long it takes, and whether the pseudocode for a `dump.cs` VA is usable are open questions: record the duration and the outcome here the first time it completes. If the analysis still fails or takes impractically long, `REA_GHIDRA_DISABLED_ANALYZERS` (comma-separated exact analyzer names) skips analyzers, and the Ghidra GUI project (`task ghidra:run`) keeps its analysis between sessions instead of redoing it per REA session. A `provider_timeout` is retryable: `close_binary`, then `open_binary` again.
 
 ## Editor mode
 
