@@ -1,7 +1,7 @@
 ---
 id: TASK-010.06
 title: MCP server over the dev harness
-status: Done
+status: In Progress
 assignee: []
 created_date: '2026-10-22 03:43'
 updated_date: '2026-10-22 06:09'
@@ -73,6 +73,7 @@ Do not: print to stdout from the server, duplicate run.py logic, add input or ga
 - [x] #7 The server is registered as megabonk in .mcp.json without removing other entries
 - [x] #8 docs/development.md has an MCP server section and AGENTS.md points to it
 - [x] #9 The task notes list the check against the real game (megabonk connected under /mcp, relaunch, state and screenshot viewed) as an open item for a human, not as verified
+- [ ] #10 Confirmed against the real running game: `/mcp` shows megabonk connected, and relaunch, state and screenshot work through it with the returned image viewed
 <!-- AC:END -->
 
 ## Implementation Notes
