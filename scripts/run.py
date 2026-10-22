@@ -278,12 +278,17 @@ def quit_game(harness: Path, timeout: float) -> bool:
     return True
 
 
-def send_for_result(harness: Path, payload: dict[str, object], timeout: float) -> tuple[bool, dict | None]:
-    """Send a command; ok is false on a rejected or timed-out command or a result with ok:false."""
+def request_result(harness: Path, payload: dict[str, object], timeout: float) -> tuple[str, dict | None]:
+    """Send a command and wait; returns the outcome ('done', 'rejected' or 'timeout') and the parsed result."""
     sent = write_command(harness / "commands", payload)
     outcome = wait_for_outcome(harness, sent.name, timeout)
+    return outcome, read_result(harness, sent.name)
+
+
+def send_for_result(harness: Path, payload: dict[str, object], timeout: float) -> tuple[bool, dict | None]:
+    """Send a command; ok is false on a rejected or timed-out command or a result with ok:false."""
+    outcome, result = request_result(harness, payload, timeout)
     print(f"{payload['command']}: {outcome}")
-    result = read_result(harness, sent.name)
     if result is not None and result.get("ok") is False:
         print(f"{payload['command']}: {result.get('error')}", file=sys.stderr)
         return False, result
@@ -390,6 +395,51 @@ def prepare_frame(harness: Path, args: argparse.Namespace) -> bool:
     return True
 
 
+def relaunch(
+    harness: Path,
+    game_dir: Path,
+    level: Path,
+    timeout: float,
+    task: str,
+    on_step: Callable[[str], None],
+    on_error: Callable[[str], None],
+) -> bool:
+    """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable and enter editor."""
+    ok = quit_game(harness, timeout)
+    started = time.time()
+    if ok:
+        on_step("relaunch: starting game")
+        ok = launch_game(task)
+    if ok:
+        on_step("relaunch: waiting for harness")
+        ok = wait_for_log_line(latest_log_path(game_dir), "DevHarness: enabled", started, relaunch_timeout(timeout))
+    if not ok:
+        on_error("relaunch: harness did not become ready")
+    if ok:
+        on_step("relaunch: waiting for Steamworks")
+        ok = wait_for_steamworks_ready(
+            lambda: send(harness, build_command("steam-ready"), min(timeout, 2.0)),
+            relaunch_timeout(timeout),
+        )
+    if not ok:
+        on_error("relaunch: Steamworks did not become ready")
+    for attempt in range(1, 6):
+        if not ok:
+            break
+        on_step(f"relaunch: loading {level} (attempt {attempt}/5)")
+        ok = send(harness, build_command("load-level", to_game_path(level.resolve())), timeout)
+        if ok and wait_for_log_line(latest_log_path(game_dir), "KillFloor: armed", started, relaunch_timeout(timeout)):
+            break
+        ok = True
+    else:
+        ok = False
+    if ok:
+        ok = send(harness, build_command("invulnerable"), timeout)
+    if ok:
+        ok = send(harness, build_editor_command(True), timeout)
+    return ok
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     game_dir = resolve_game_dir(load_lookup())
@@ -435,42 +485,15 @@ def main(argv: list[str] | None = None) -> int:
             if ok:
                 ok = quit_game(harness, args.timeout)
         case "relaunch":
-            ok = quit_game(harness, args.timeout)
-            started = time.time()
-            if ok:
-                print("relaunch: starting game")
-                ok = launch_game(launch_task(resolve_macos_runtime(load_lookup())))
-            if ok:
-                print("relaunch: waiting for harness")
-                ok = wait_for_log_line(
-                    latest_log_path(game_dir), "DevHarness: enabled", started, relaunch_timeout(args.timeout)
-                )
-            if not ok:
-                print("relaunch: harness did not become ready", file=sys.stderr)
-            if ok:
-                print("relaunch: waiting for Steamworks")
-                ok = wait_for_steamworks_ready(
-                    lambda: send(harness, build_command("steam-ready"), min(args.timeout, 2.0)),
-                    relaunch_timeout(args.timeout),
-                )
-            if not ok:
-                print("relaunch: Steamworks did not become ready", file=sys.stderr)
-            for attempt in range(1, 6):
-                if not ok:
-                    break
-                print(f"relaunch: loading {args.level} (attempt {attempt}/5)")
-                ok = send(harness, build_command("load-level", to_game_path(args.level.resolve())), args.timeout)
-                if ok and wait_for_log_line(
-                    latest_log_path(game_dir), "KillFloor: armed", started, relaunch_timeout(args.timeout)
-                ):
-                    break
-                ok = True
-            else:
-                ok = False
-            if ok:
-                ok = send(harness, build_command("invulnerable"), args.timeout)
-            if ok:
-                ok = send(harness, build_editor_command(True), args.timeout)
+            ok = relaunch(
+                harness,
+                game_dir,
+                args.level,
+                args.timeout,
+                launch_task(resolve_macos_runtime(load_lookup())),
+                on_step=print,
+                on_error=lambda m: print(m, file=sys.stderr),
+            )
     return 0 if ok else 1
 
 

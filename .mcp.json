@@ -18,6 +18,14 @@
         "@upstash/context7-mcp"
       ]
     },
+    "megabonk": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--script",
+        "scripts/mcp_server.py"
+      ]
+    },
     "osascript": {
       "command": "uvx",
       "args": [

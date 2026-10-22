@@ -19,6 +19,8 @@ Megabonk ships a native Linux build (`Megabonk.x86_64`), so there is no Proton o
 
 The mod has a development harness that loads a level, captures the game's rendered frame, and quits, without keyboard or mouse input. Enable it once with `uv run scripts/run.py enable`, launch the game, then run `uv run scripts/run.py cycle <level> <out.png>` and read the PNG. See `docs/development.md` for the commands, launch steps, and caveats.
 
+The same harness is also available as an MCP server named `megabonk` (`scripts/mcp_server.py`), so an agent can call typed tools (`relaunch`, `load`, `screenshot`, `state`, and the rest) and get screenshots back inline instead of shelling out to `run.py`. See the "MCP server" section in `docs/development.md`.
+
 ### Reloading a rebuilt mod
 
 MelonLoader loads the DLL once at startup, so a rebuild only takes effect on a fresh launch. Run `task mod:build` (it deploys the DLL into `Mods`), then run `uv run scripts/run.py relaunch` to quit the old game, launch a fresh instance, load `levels/example-forest.mblevel.json`, and enter editor mode. `relaunch` waits for a new harness log entry, retries the load until the kill floor arms, then enables invulnerability and editor mode. Pass an optional level path to test a different file. The manual sequence remains useful when diagnosing a failed relaunch:

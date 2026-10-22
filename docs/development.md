@@ -68,6 +68,16 @@ Before moving a command file to `done/` or `rejected/`, the mod writes `harness/
 | `paletteEntries` | int or null | The number of entries in the catalog palette. `null` outside editor mode, where the palette is not read |
 | `screen` | `[width, height]` | `Screen.width` and `Screen.height` in pixels; screen coordinates for input use this space |
 
+## MCP server
+
+`scripts/mcp_server.py` exposes the harness as an MCP server named `megabonk`, so an agent can call typed tools instead of shelling out to `run.py`, and gets screenshots back as inline `image/png` content. It is a PEP 723 script (`uv run --script scripts/mcp_server.py`) that reuses `run.py`'s helpers rather than duplicating them, and resolves the game directory the same way `run.py` does.
+
+stdout is the MCP protocol channel, so the server writes nothing to stdout; everything reaches the client as tool results. Blocking waits (sending a command, waiting for the game to exit, the whole relaunch sequence) run off the event loop so one tool call never stalls the server.
+
+Tools: `relaunch(level?)` (reports progress through the MCP context and returns the final `state`), `load(level)`, `quit()`, `screenshot()` (returns the PNG inline), `state()`, `editor(on)`, `freeze()`, `resume()`, `invulnerable(on)`, `camera(position?, rotation?, clear?)` and `log_tail(pattern?, since_launch?, max_lines?)`. A command the mod rejects, a timeout, or a result with `ok:false` surfaces as a tool error carrying the result file's `error` text (or `<command> <outcome>` when there is no result file). `log_tail` reads `MelonLoader/Latest.log`: `since_launch` (default true) trims to the last `DevHarness: enabled` line, `pattern` keeps lines matching a regex, and `max_lines` (default 50) caps the result to the last N lines. Input and gameplay tools are not part of this server.
+
+Register it by adding the `megabonk` entry under `mcpServers` in `.mcp.json` (command `uv`, args `["run", "--script", "scripts/mcp_server.py"]`); the repo ships it already. Confirm it with `/mcp`, which lists `megabonk` as connected.
+
 ## Launching under Wine (macOS)
 
 Plain Wine is the default macOS runtime. It runs against the Wine prefix named by `MEGABONK_WINE_PREFIX` (default `~/.local/share/megabonk/wine`), which has to hold a Windows Steam install with Megabonk; the repo does not create or populate a prefix. To reuse the bottle CrossOver created, set `MEGABONK_WINE_PREFIX=~/Library/Application Support/CrossOver/Bottles/Steam` in `.env`, and its saves, Steam login and installed game carry over. The setup was verified with Wine 11.18 and DXVK-macOS on Apple silicon with Rosetta, using that bottle as the prefix.
