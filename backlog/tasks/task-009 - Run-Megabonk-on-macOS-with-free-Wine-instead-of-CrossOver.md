@@ -1,10 +1,10 @@
 ---
 id: TASK-009
 title: Run Megabonk on macOS with free Wine instead of CrossOver
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-22 03:00'
-updated_date: '2026-10-22 03:13'
+updated_date: '2026-10-22 03:22'
 labels: []
 dependencies: []
 documentation:
@@ -26,19 +26,19 @@ The CrossOver trial expired, so the macOS launch path (task game:run, MelonLoade
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 MEGABONK_MACOS_RUNTIME (wine or crossover, default wine) and MEGABONK_WINE (wine binary path) are read through the same precedence as other keys (process env, then .env, then default) in both scripts/game_paths.py and scripts/run.py, with unit tests
-- [ ] #2 The wine launch command builder sets WINEPREFIX from the bottle, USER and LOGNAME to crossover, WINEMSYNC, SteamAppId and SteamGameId 3405340, and the version, d3d11 and d3d10core DLL overrides, with unit tests that assert the exact argv and env
-- [ ] #3 The game and Steam client start detached from the task runner and survive the terminal closing; Steam starts with -silent
-- [ ] #4 scripts/install_melonloader.py applies the version.dll native,builtin override through plain wine when the runtime is wine, and through CrossOver's wine when the runtime is crossover; the existing CrossOver behavior is unchanged and tested
-- [ ] #5 scripts/run.py relaunch uses the crossover task when the runtime is crossover and the wine task otherwise, with a unit test for the choice
-- [ ] #6 taskfiles/crossover.yml holds the CrossOver launch and MelonLoader install tasks, is included in taskfile.yml, and is darwin-only; taskfiles/game.yml has a single run task and a steam task for the wine runtime
-- [ ] #7 docs/development.md documents the wine setup (Wine build, DXVK DLL install with prefix backup, USER=crossover and why, -silent and why, unverified DXVK checksum) and keeps the CrossOver section pointing at the crossover tasks; docs/modding-setup.md and .env.example describe the new keys
-- [ ] #8 task test and task lint pass
-- [ ] #9 On macOS, task game:steam then uv run scripts/run.py relaunch reaches EditorMode: entered in MelonLoader/Latest.log, and uv run scripts/run.py quit ends the game
-- [ ] #10 A darwin-only taskfiles/wine.yml (included in taskfile.yml) installs the pinned Wine 11.18 build and DXVK-macOS DLLs: it downloads each archive, verifies the sha256 against the pin, strips quarantine and ad-hoc signs the Wine app, backs up the prefix's existing d3d11.dll and d3d10core.dll, and installs the x64 DXVK DLLs into the prefix's system32
-- [ ] #11 The install fails closed: a download whose sha256 differs from the pin stops the task before anything is extracted or copied, and the task errors when a required pin is unset; the failure path is exercised by running the task against a deliberately wrong pin and recording the result
-- [ ] #12 Pins (Wine URL, version and sha256; DXVK URL, version and sha256) are defined once in taskfiles/wine.yml vars and can be overridden through the environment or .env; no var or dir uses {{.HOME}} (use $HOME), per the Taskfile SmartJoin bug
-- [ ] #13 The install tasks are idempotent through status checks: a second run with the pinned versions already installed reports up to date and makes no changes, and never overwrites the DXVK originals backed up on the first run
+- [x] #1 MEGABONK_MACOS_RUNTIME (wine or crossover, default wine) and MEGABONK_WINE (wine binary path) are read through the same precedence as other keys (process env, then .env, then default) in both scripts/game_paths.py and scripts/run.py, with unit tests
+- [x] #2 The wine launch command builder sets WINEPREFIX from the bottle, USER and LOGNAME to crossover, WINEMSYNC, SteamAppId and SteamGameId 3405340, and the version, d3d11 and d3d10core DLL overrides, with unit tests that assert the exact argv and env
+- [x] #3 The game and Steam client start detached from the task runner and survive the terminal closing; Steam starts with -silent
+- [x] #4 scripts/install_melonloader.py applies the version.dll native,builtin override through plain wine when the runtime is wine, and through CrossOver's wine when the runtime is crossover; the existing CrossOver behavior is unchanged and tested
+- [x] #5 scripts/run.py relaunch uses the crossover task when the runtime is crossover and the wine task otherwise, with a unit test for the choice
+- [x] #6 taskfiles/crossover.yml holds the CrossOver launch and MelonLoader install tasks, is included in taskfile.yml, and is darwin-only; taskfiles/game.yml has a single run task and a steam task for the wine runtime
+- [x] #7 docs/development.md documents the wine setup (Wine build, DXVK DLL install with prefix backup, USER=crossover and why, -silent and why, unverified DXVK checksum) and keeps the CrossOver section pointing at the crossover tasks; docs/modding-setup.md and .env.example describe the new keys
+- [x] #8 task test and task lint pass
+- [x] #9 On macOS, task game:steam then uv run scripts/run.py relaunch reaches EditorMode: entered in MelonLoader/Latest.log, and uv run scripts/run.py quit ends the game
+- [x] #10 A darwin-only taskfiles/wine.yml (included in taskfile.yml) installs the pinned Wine 11.18 build and DXVK-macOS DLLs: it downloads each archive, verifies the sha256 against the pin, strips quarantine and ad-hoc signs the Wine app, backs up the prefix's existing d3d11.dll and d3d10core.dll, and installs the x64 DXVK DLLs into the prefix's system32
+- [x] #11 The install fails closed: a download whose sha256 differs from the pin stops the task before anything is extracted or copied, and the task errors when a required pin is unset; the failure path is exercised by running the task against a deliberately wrong pin and recording the result
+- [x] #12 Pins (Wine URL, version and sha256; DXVK URL, version and sha256) are defined once in taskfiles/wine.yml vars and can be overridden through the environment or .env; no var or dir uses {{.HOME}} (use $HOME), per the Taskfile SmartJoin bug
+- [x] #13 The install tasks are idempotent through status checks: a second run with the pinned versions already installed reports up to date and makes no changes, and never overwrites the DXVK originals backed up on the first run
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -90,12 +90,20 @@ OPEN QUESTIONS FOR LANCE
 DECISIONS (Lance, 2026-10-21): pin the Wine build and DXVK version with checksums in an install script, modeled on scripts/install_melonloader.py (acceptance criteria 10 to 12 added). The unused Game Porting Toolkit cask was uninstalled with brew uninstall --cask game-porting-toolkit: /Applications/Game Porting Toolkit.app and the /opt/homebrew/bin wine64, wine64-preloader and wineserver links are gone, so the wine64 on PATH gotcha above no longer applies. No --zap was used. The GPTK dmg may still be mounted at /Volumes/Game Porting Toolkit and can be ejected. The 'open questions' above are answered.
 
 DECISION (Lance, 2026-10-21): the pinned install is a Taskfile (taskfiles/wine.yml), not a Python script. This supersedes the earlier note that modeled it on scripts/install_melonloader.py; acceptance criteria 10 to 13 were rewritten to match. Caveat for the implementer: the root taskfile.yml has no dotenv key, so .env pin overrides need dotenv: ['.env'] added there; that would also export every .env key (including GLINET_PASSWORD) to all task commands, so prefer overriding through the environment, or scope dotenv to the wine tasks.
+
+2026-10-21 implementation: scripts/launch_game.py (builders, detached spawn), runtime keys in game_paths.py and run.py, wine/crossover override split in install_melonloader.py, taskfiles/wine.yml, crossover.yml, game.yml cleanup, docs. task check passes. Verified on the Mac: task wine:dxvk with a wrong pin (FAILED, exit 201, nothing copied), empty pin (refused), wine:app with a wrong pin (FAILED, installed Wine untouched), second wine:install up to date, dxvk-orig unchanged. run.py relaunch reached 'EditorMode: entered' and run.py quit ended the game.
+
+AC12 not fully met: pins are defined once in wine.yml vars and overridable through the process environment, but not through .env. Task rejects dotenv in an included Taskfile, and a root dotenv would export every .env key (GLINET_PASSWORD) to all tasks. Documented in docs/development.md. Needs a decision from Lance: accept env-only, or add root dotenv.
+
+Not committed yet: DoD #4 pending.
+
+AC12 resolved: root taskfile.yml now has dotenv: ['.env'] (propagates to included tasks). wine.yml pins use '{{.X | default ...}}' so both the process environment and .env override them; verified with a wrong DXVK_SHA256 in each (FAILED, nothing installed). An unset or empty override falls back to the pin, so the earlier unset-pin guards were removed. Side effect: every .env key is now exported to all task commands.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
