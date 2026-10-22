@@ -2,4 +2,5 @@ dotnet 10.0.108
 java   temurin-21.0.12+101.0.LTS
 python 3.13.14
 ruff   0.15.20
+task   3.47.0
 uv     0.11.32
