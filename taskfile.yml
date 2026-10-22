@@ -43,15 +43,15 @@ tasks:
       - task: scripts:test
 
   scripts:test:
-    desc: "Run every scripts/test_*.py self-test via uv"
+    desc: "Run the Python tests under tests/ with pytest"
     cmds:
-      - for f in scripts/test_*.py; do uv run "$f"; done
+      - uv run --python 3.13 --exclude-newer 2026-10-31T00:00:00Z --with "pytest>=8" --with "python-decouple>=3.8" pytest
 
   lint:
     desc: "markdownlint + ruff over the repo"
     cmds:
       - markdownlint -c .markdownlint.jsonc .
-      - ruff check scripts/
+      - ruff check scripts/ tests/
 
   check:
     desc: "Build, test, and lint in sequence; non-zero exit on any failure"

@@ -1,27 +1,11 @@
-#!/usr/bin/env -S uv run --script
-
-# /// script
-# requires-python = ">=3.13,<3.14"
-# dependencies = [
-#     "python-decouple>=3.8",
-# ]
-# ///
-
 """
 Self-test for scripts/run.py.
-
-Usage: uv run scripts/test_run.py
 """
 
 import json
-import sys
-import tempfile
-import traceback
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 import run
+import tempfile
+from pathlib import Path
 
 
 def test_find_env_file_walks_up_from_start() -> None:
@@ -321,21 +305,3 @@ def test_wait_for_exit_true_once_probe_reports_no_pids() -> None:
 def test_wait_for_exit_false_when_game_outlives_timeout() -> None:
     clock = iter(range(100))
     assert not run.wait_for_exit(lambda: [1], timeout=3, sleep=lambda _: None, now=lambda: next(clock))
-
-
-def main() -> int:
-    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
-    failed = 0
-    for name, fn in tests:
-        try:
-            fn()
-        except Exception:
-            failed += 1
-            print(f"FAIL {name}", file=sys.stderr)
-            traceback.print_exc()
-    print(f"{len(tests) - failed}/{len(tests)} passed")
-    return 1 if failed else 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

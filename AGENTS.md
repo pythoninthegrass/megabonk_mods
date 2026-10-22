@@ -43,6 +43,10 @@ Megabonk is an Il2Cpp build with no managed IL anywhere in the install. `MelonLo
 
 `.tools/` is gitignored, so `rg` skips it by default. Pass `-u` (`--no-ignore`, honours `.gitignore` off) to search gitignored files, or `-uu` to also include hidden files, e.g. `rg -u 'RandomMapObject' .tools/il2cpp_dump/dump.cs`. Prefer scoping the search to the specific path over `-uu` across the repo. `-u` also sidesteps a `rg` quirk where a malformed `.gitignore` glob (such as the `Icon[` / `.HFS+ Private Directory Data[` entries here) prints a parse error and can mangle matched-line output.
 
+## Python tests
+
+The Python tests are in `tests/` and run with `task scripts:test` (pytest). `tests/conftest.py` isolates every test from `MEGABONK_*` settings and the repo `.env`; see "Python tests" in `docs/development.md`.
+
 ## Comments in code (all languages)
 
 No section-banner or multi-paragraph comments, in `.cs`, `.py`, `.sh`, or anywhere else. Code should be self-explanatory; put design rationale in `docs/*.md` instead. A comment above a function, method, or field is at most 1-2 lines, and only when naming alone doesn't make intent clear.
