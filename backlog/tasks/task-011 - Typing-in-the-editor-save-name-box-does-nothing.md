@@ -4,6 +4,7 @@ title: Typing in the editor save-name box does nothing
 status: To Do
 assignee: []
 created_date: '2026-10-22T06:03:00Z'
+updated_date: '2026-10-22 06:10'
 labels:
   - editor
   - bug
@@ -14,7 +15,6 @@ references:
 documentation:
   - docs/development.md
 priority: high
-type: bug
 ordinal: 61000
 ---
 
@@ -31,6 +31,12 @@ In editor mode, clicking the save-name box and typing produces no characters, so
 - [ ] #3 The cause is recorded in docs/development.md, including any runtime on which typing behaves differently
 - [ ] #4 Any testable logic changed has a failing test written first
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Diagnostic once the harness type command exists (TASK-010.03): inject the same text into the save-name box with it. If the box fills, the text-handling code in EditorTileTools.HandleSaveTyping is fine and the cause is that real keyboard text (Input.inputString) is not delivered under Wine; if it stays empty, the fault is in the box focus or the typing code. Injected text goes through EditorInput.InputString, so it does not exercise the real key path, which is the part under test.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

@@ -12,7 +12,7 @@ dependencies:
   - TASK-010.04
 references:
   - scripts/run.py
-  - scripts/test_run.py
+  - tests/test_run.py
   - src/MegabonkLevels.Mod/dev_harness.cs
   - src/MegabonkLevels.Mod/harness_command.cs
   - tests/MegabonkLevels.Tests/harness_command_tests.cs
@@ -36,7 +36,7 @@ Wire formats (decided):
 - `{"command":"dismiss-levelup","choice":0}`; `choice` is an optional zero-based index into the offered upgrades (default 0). The result is `{"dialogWasOpen":true|false,"chosen":"<upgrade name or null>"}`. When no dialog is open, the command succeeds with `dialogWasOpen:false` and does nothing.
 - A request that cannot be honoured (no run active, no player, choice out of range, both or neither of position/cell) is rejected: parse errors at parse time, runtime failures by throwing from `Execute` so TASK-010.01's result file reports `ok:false` with the message.
 
-Steps (TDD): 1) failing xUnit tests in harness_command_tests.cs for `TryParse` of both commands (valid forms, both/neither of position/cell, wrong array lengths, negative choice) and for any pure cell-to-position helper you add (reuse the existing one first; do not duplicate it); 2) failing Python tests in scripts/test_run.py for the `teleport` and `dismiss-levelup` subcommand payloads; 3) add `Teleport` and `DismissLevelUp` to `HarnessCommandKind`, `TryParse` and `Execute` using the TASK-010.04 call sequence; 4) run.py: `teleport X Y Z`, `teleport --cell CX CY`, `dismiss-levelup [--choice N]`, each printing the result JSON; update the docstring usage; 5) `task check`; 6) in the game: relaunch, `invulnerable`, `teleport --cell` to a distant cell and confirm with `state` (TASK-010.01) and a screenshot; wait for or force a level-up and confirm `dismiss-levelup` clears it; 7) docs/development.md: document the commands, wire formats and results next to the TASK-010.04 findings, and remove "move the player" and "skip the level-up dialog" from the Not covered list.
+Steps (TDD): 1) failing xUnit tests in harness_command_tests.cs for `TryParse` of both commands (valid forms, both/neither of position/cell, wrong array lengths, negative choice) and for any pure cell-to-position helper you add (reuse the existing one first; do not duplicate it); 2) failing Python tests in tests/test_run.py for the `teleport` and `dismiss-levelup` subcommand payloads; 3) add `Teleport` and `DismissLevelUp` to `HarnessCommandKind`, `TryParse` and `Execute` using the TASK-010.04 call sequence; 4) run.py: `teleport X Y Z`, `teleport --cell CX CY`, `dismiss-levelup [--choice N]`, each printing the result JSON; update the docstring usage; 5) `task check`; 6) in the game: relaunch, `invulnerable`, `teleport --cell` to a distant cell and confirm with `state` (TASK-010.01) and a screenshot; wait for or force a level-up and confirm `dismiss-levelup` clears it; 7) docs/development.md: document the commands, wire formats and results next to the TASK-010.04 findings, and remove "move the player" and "skip the level-up dialog" from the Not covered list.
 
 Do not: re-research the game internals (use the TASK-010.04 findings, and if they are wrong or incomplete, record the correction in the same docs section), or bypass the kill floor or invulnerability behaviour.
 <!-- SECTION:DESCRIPTION:END -->
