@@ -35,7 +35,7 @@ done
 uv run scripts/run.py invulnerable && uv run scripts/run.py editor on
 ```
 
-`task game:run` returns at once because it detaches the game. Send the load only until it succeeds; a second `load` restarts the run. `<level>` is a level file, such as `levels/example-forest.mblevel.json`, not a stage name. Once the kill floor arms, send `invulnerable` and then `editor on` straight away, so the idle player is not killed by enemies while the run waits and the game opens in the map editor (frozen run, free-fly camera) ready to test; confirm `EditorMode: entered` in the log. Always relaunch rather than sending a second `load` into a running game: a reload over a run that was left unattended once left the player dead, and entering the editor late lets enemies reach an idle player. The whole chain has been run end to end on the CrossOver setup.
+`task game:run` returns at once because it detaches the game. Send the load only until it succeeds; a second `load` restarts the run. `<level>` is a level file, such as `levels/example-forest.mblevel.json`, not a stage name. Once the kill floor arms, send `invulnerable` and then `editor on` straight away, so the idle player is not killed by enemies while the run waits and the game opens in the map editor (frozen run, free-fly camera) ready to test; confirm `EditorMode: entered` in the log. Always relaunch rather than sending a second `load` into a running game: a reload over a run that was left unattended once left the player dead, and entering the editor late lets enemies reach an idle player. The whole chain has been run end to end on the CrossOver setup and on a copied plain-Wine prefix on a second Mac (see "Setting up a second machine" in `docs/development.md`).
 
 ## Reading the game's code
 

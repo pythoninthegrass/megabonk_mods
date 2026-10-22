@@ -66,6 +66,23 @@ task game:run           # Megabonk.exe, detached
 
 Shut Steam down with `wine 'C:\Program Files (x86)\Steam\steam.exe' -shutdown` (same `WINEPREFIX` and `USER`), never while the game is running, because that can break the Steamworks session and Cloud sync.
 
+### Setting up a second machine
+
+The repo does not create a prefix, and Steam cannot show a login prompt under Wine, so a second Mac gets its prefix by copying one that already works. Copy the prefix directory (the one that contains `drive_c`) to `~/.local/share/megabonk/wine` on the other machine, skipping what is volatile or not needed:
+
+```sh
+rsync -ah --stats \
+  --exclude='/drive_c/Program Files (x86)/Steam/steamapps/common/<other game>/' \
+  --exclude='/drive_c/Program Files (x86)/Steam/steamapps/appmanifest_<other app id>.acf' \
+  --exclude='/drive_c/Program Files (x86)/Steam/logs/' --exclude='/drive_c/Program Files (x86)/Steam/dumps/' \
+  --exclude='/drive_c/users/crossover/AppData/Local/Steam/htmlcache/' \
+  "<source prefix>/" <host>:.local/share/megabonk/wine/
+```
+
+With only Megabonk kept, a prefix of about 12 GB copies as about 4.5 GB. The copy carries the Steam login, the saves, MelonLoader, the `version.dll` override and the DXVK DLLs, so `task wine:install` finds both steps up to date and `task game:steam` followed by `uv run scripts/run.py relaunch` works without a Steam login prompt. Steam allows one session per account: starting Steam from the copy signs the account out everywhere else, including the other machine's Steam and a native macOS Steam client. Copy while Steam is stopped when possible; a copy taken while it runs still booted, but the registry files can change underneath the copy. Check the result with `uv run scripts/game_paths.py` (it should print the new prefix) and `Latest.log` (`DevHarness: enabled`, then `Steamworks ready`, then `EditorMode: entered`).
+
+This was verified on a second Apple silicon Mac (Wine 11.18, DXVK-macOS async, Rosetta): the game launched with MelonLoader, `relaunch` loaded the example Forest level into editor mode, and `screenshot` returned the editor overlay. Building the mod there needs a `Directory.Build.local.props` for the new prefix; see [modding-setup.md](modding-setup.md).
+
 ## Launching under CrossOver
 
 Set `MEGABONK_MACOS_RUNTIME=crossover` to use CrossOver instead of plain Wine; `run.py relaunch` then starts the game through `task crossover:run`, and `task crossover:melonloader:install` installs MelonLoader with CrossOver's Wine. `task crossover:run` starts `Megabonk.exe` directly in the CrossOver Steam bottle with `cxstart`, with `SteamAppId` and `SteamGameId` set to 3405340. The Steam client must already be running in the bottle; start it from CrossOver first. Launching through the `steam://rungameid` URI is avoided because it can open only the CrossOver window without starting the game, especially from a script. The equivalent command:

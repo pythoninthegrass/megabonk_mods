@@ -21,8 +21,18 @@ This downloads the pinned MelonLoader release, verifies its checksum, and extrac
 
 Path resolution precedence (see `scripts/game_paths.py`): process environment variable > `.env` file > built-in default.
 
-1. Copy `.env.example` to `.env` and set `MEGABONK_BOTTLE` (macOS CrossOver bottle) or `MEGABONK_GAME_DIR` (direct game directory override, any platform) if your install isn't at the default location. On macOS, `MEGABONK_MACOS_RUNTIME` (`wine` by default, or `crossover`) selects the runtime and `MEGABONK_WINE` overrides the plain Wine binary.
-2. For MSBuild-time overrides instead (or in addition), copy `src/MegabonkLevels.Mod/Directory.Build.props`'s properties into a `src/MegabonkLevels.Mod/Directory.Build.local.props` file (gitignored) and override `BottleFolder`/`GameFolder`/`ModInstanceFolder` there.
+1. Copy `.env.example` to `.env` and set `MEGABONK_WINE_PREFIX` (the macOS Wine prefix that holds Steam, the directory containing `drive_c`) or `MEGABONK_GAME_DIR` (direct game directory override, any platform) if your install isn't at the default location. On macOS, `MEGABONK_MACOS_RUNTIME` (`wine` by default, or `crossover`) selects the runtime and `MEGABONK_WINE` overrides the plain Wine binary.
+2. For MSBuild-time overrides instead (or in addition), copy `src/MegabonkLevels.Mod/Directory.Build.props`'s properties into a `src/MegabonkLevels.Mod/Directory.Build.local.props` file (gitignored) and override `BottleFolder`/`GameFolder`/`ModInstanceFolder` there. MSBuild does not read `.env`, and `Directory.Build.props` defaults to the CrossOver Steam bottle, so a build against any other prefix needs this file. For the default plain-Wine prefix it is:
+
+```xml
+<Project>
+  <PropertyGroup>
+    <BottleFolder>$(HOME)/.local/share/megabonk/wine/drive_c</BottleFolder>
+  </PropertyGroup>
+</Project>
+```
+
+`BottleFolder` is the prefix's `drive_c`; `GameFolder`, the MelonLoader folders and `ModInstanceFolder` derive from it. To compile without copying the DLL into the game's `Mods` folder, pass `-p:ModInstanceFolder=<temp dir>/` to `dotnet build`.
 
 Run `uv run scripts/game_paths.py` at any point to see the paths actually resolved.
 
