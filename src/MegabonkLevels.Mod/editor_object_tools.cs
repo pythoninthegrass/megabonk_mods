@@ -36,6 +36,8 @@ public static class EditorObjectTools
     private static float _dragPressedAt;
     private static (float X, float Z) _dragGrab;
 
+    public static ObjectTarget? Selected => _selected;
+
     public static void OnEditorEntered(MelonLogger.Instance logger)
     {
         _logger = logger;

@@ -31,6 +31,8 @@ public static class KillFloorWatcher
     private static float _lowestBossY = float.PositiveInfinity;
     private static readonly KillTracker _enemyKills = new(RetryKillAfterSeconds);
 
+    public static bool Armed => _armed;
+
     public static void Arm(ProceduralTileGeneration tileGen, MelonLogger.Instance logger)
     {
         var mapParameters = tileGen.currentMapParameters ?? tileGen.currentStage?.mapParameters;

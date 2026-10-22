@@ -23,6 +23,17 @@ public class HarnessCommandTests
         Assert.Equal("C:\\shots\\one.png", command.Path);
     }
 
+    [Theory]
+    [InlineData("""{"command":"state"}""", "state")]
+    [InlineData("""{"command":"load-level","path":"a"}""", "load-level")]
+    [InlineData("""{"command":"editor","enabled":true}""", "editor")]
+    [InlineData("""{"command":"camera","position":[1,2,3],"rotation":[4,5,6]}""", "camera")]
+    public void TryParse_RecordsTheWireName(string json, string expected)
+    {
+        Assert.True(HarnessCommand.TryParse(json, out var command, out _));
+        Assert.Equal(expected, command.Name);
+    }
+
     [Fact]
     public void TryParse_Quit_NeedsNoPath()
     {
@@ -40,6 +51,7 @@ public class HarnessCommandTests
     [InlineData("invulnerable", HarnessCommandKind.Invulnerable)]
     [InlineData("vulnerable", HarnessCommandKind.Vulnerable)]
     [InlineData("steam-ready", HarnessCommandKind.SteamReady)]
+    [InlineData("state", HarnessCommandKind.State)]
     public void TryParse_ArglessCommands_NeedNoPath(string name, HarnessCommandKind expected)
     {
         var ok = HarnessCommand.TryParse($$"""{"command":"{{name}}"}""", out var command, out var error);

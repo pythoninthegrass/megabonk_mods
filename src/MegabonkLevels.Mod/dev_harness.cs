@@ -2,6 +2,9 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.Json.Nodes;
+using Il2CppAssets.Scripts.Actors.Player;
 using Il2CppAssets.Scripts.Utility;
 using MelonLoader;
 using MelonLoader.Utils;
@@ -20,6 +23,7 @@ public static class DevHarness
     private static string _processingDir;
     private static string _doneDir;
     private static string _rejectedDir;
+    private static string _resultsDir;
     private static bool _enabled;
     private static float _nextPoll;
 
@@ -41,7 +45,9 @@ public static class DevHarness
         Directory.CreateDirectory(_commandsDir);
         Directory.CreateDirectory(_processingDir);
         Directory.CreateDirectory(_doneDir);
+        _resultsDir = Path.Combine(root, "results");
         Directory.CreateDirectory(_rejectedDir);
+        Directory.CreateDirectory(_resultsDir);
         _enabled = true;
         logger.Msg($"DevHarness: enabled, watching '{_commandsDir}'.");
     }
@@ -77,6 +83,7 @@ public static class DevHarness
         if (!HarnessCommand.TryParse(json, out var command, out var error))
         {
             _logger.Warning($"DevHarness: rejected '{Path.GetFileName(file)}': {error}");
+            WriteResult(file, HarnessResult.Failure(null, error));
             MoveTo(file, _rejectedDir);
             return;
         }
@@ -85,17 +92,19 @@ public static class DevHarness
         var processingFile = MoveTo(file, _processingDir);
         try
         {
-            Execute(command);
+            var result = Execute(command);
+            WriteResult(file, HarnessResult.Success(command.Name, result));
             MoveTo(processingFile, _doneDir);
         }
         catch (Exception ex)
         {
             _logger.Error($"DevHarness: '{command.Kind}' failed: {ex.Message}");
+            WriteResult(file, HarnessResult.Failure(command.Name, ex.Message));
             MoveTo(processingFile, _rejectedDir);
         }
     }
 
-    private static void Execute(HarnessCommand command)
+    private static JsonObject Execute(HarnessCommand command)
     {
         switch (command.Kind)
         {
@@ -169,10 +178,54 @@ public static class DevHarness
             case HarnessCommandKind.SteamReady:
                 _logger.Msg($"DevHarness: Steamworks ready (build {GameBuildIdPatch.CurrentBuildId()}).");
                 break;
+            case HarnessCommandKind.State:
+                return ReadState().ToJson();
             case HarnessCommandKind.Quit:
                 _logger.Msg("DevHarness: quit requested, calling Application.Quit.");
                 Application.Quit();
                 break;
+        }
+
+        return null;
+    }
+
+    private static GameStateSnapshot ReadState()
+    {
+        var editor = EditorMode.Active;
+        var player = MyPlayer.Instance;
+        PlayerSnapshot? playerSnapshot = null;
+        if (player != null)
+        {
+            var position = player.transform.position;
+            playerSnapshot = new PlayerSnapshot(position.x, position.y, position.z, PositionLabel.CellOf(position.x, position.z));
+        }
+
+        return new GameStateSnapshot(
+            LevelLoaded: CustomLevelState.IsActive,
+            KillFloorArmed: KillFloorWatcher.Armed,
+            Editor: editor,
+            Frozen: MyTime.paused,
+            Invulnerable: PlayerInvulnerability.Active,
+            Player: playerSnapshot,
+            EditorTool: editor ? EditorTileTools.CurrentTool.ToString() : null,
+            Selected: editor ? EditorObjectTools.Selected?.Serialize() : null,
+            PaletteEntries: editor ? EditorPalette.Selection.Entries.Count : null,
+            ScreenWidth: Screen.width,
+            ScreenHeight: Screen.height);
+    }
+
+    private static void WriteResult(string commandFile, HarnessResult result)
+    {
+        try
+        {
+            var target = Path.Combine(_resultsDir, Path.GetFileName(commandFile));
+            var staging = target + ".tmp";
+            File.WriteAllText(staging, result.ToJson(), new UTF8Encoding(false));
+            File.Move(staging, target, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"DevHarness: could not write result for '{Path.GetFileName(commandFile)}': {ex.Message}");
         }
     }
 

@@ -390,6 +390,8 @@ public static class EditorTileTools
         _logger.Msg($"EditorTileTools: highlight shader '{shader.name}'");
     }
 
+    public static EditorTool CurrentTool => _tool;
+
     public static bool ApplyFromObjectTools(EditOp op, string what)
     {
         var ok = ApplyFromTool(op, what);

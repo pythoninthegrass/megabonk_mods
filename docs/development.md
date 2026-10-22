@@ -28,6 +28,7 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Make the player survive enemy damage | `{"command":"invulnerable"}` | `run.py invulnerable` |
 | Restore normal player damage | `{"command":"vulnerable"}` | `run.py vulnerable` |
 | Check in-game Steamworks readiness | `{"command":"steam-ready"}` | `run.py steam-ready` |
+| Read the game's current state | `{"command":"state"}` | `run.py state` |
 | Start or stop the kill-floor heartbeat | `{"command":"heartbeat","enabled":true}` | `run.py heartbeat <on\|off>` |
 | Start or stop the cell-change log | `{"command":"cells","enabled":true}` | `run.py cells <on\|off>` |
 | Enter or leave editor mode | `{"command":"editor","enabled":true}` | `run.py editor <on\|off>` |
@@ -43,6 +44,29 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 An unknown command, malformed JSON, a missing or empty `path`, or a command that fails while running logs an error and moves the file to `rejected/` without replaying it.
 
 The paths in `load-level` and `screenshot` are interpreted by the game process, so `run.py` converts them (see below).
+
+### Results
+
+Before moving a command file to `done/` or `rejected/`, the mod writes `harness/results/<command file name>`: UTF-8 JSON, one object, written to `<name>.tmp` and renamed so a reader never sees a partial file. A command that succeeds writes `{"command":"<wire name>","ok":true,"result":<object or null>}`. A command that fails while running writes `{"command":"<wire name>","ok":false,"error":"<message>"}`. A file that does not parse writes the same failure shape with `"command":null`. Every command other than `state` has `"result":null`. The result file is written before the command file moves, so a caller that sees the file in `done/` or `rejected/` can read the result at once. Result files are never deleted by the mod.
+
+`run.py` reads them with `read_result(harness, name)`, which returns `None` when the file is absent or not valid JSON. Every subcommand that sends a command exits 1 and prints the `error` text on stderr when the result has `ok:false`, even if the command file landed in `done/`. A missing result file does not fail a command, so `run.py` still works against a mod built before results existed.
+
+### State
+
+`run.py state` prints the `result` object of the `state` command as one line of JSON. A field the mod cannot source is `null`.
+
+| Field | Type | Source and when it is `null` |
+| --- | --- | --- |
+| `levelLoaded` | bool | `CustomLevelState.IsActive`: the run was started through the mod's level loader |
+| `killFloorArmed` | bool | The kill-floor watcher armed for the current level |
+| `editor` | bool | Editor mode is active |
+| `frozen` | bool | `MyTime.paused` |
+| `invulnerable` | bool | The harness's invulnerability is active on the current player's inventory |
+| `player` | object or null | `{"position":[x,y,z],"cell":[column,row]}`. `null` when there is no player in the scene (menu, loading). `cell` is `null` when the position label's grid is not armed (no kill floor), and can lie outside the grid |
+| `editorTool` | string or null | The active tool name (`Raise`, `Lower`, `Slope`, `Remove`, `Place`, `Select`). `null` outside editor mode, where the tool is not read |
+| `selected` | string or null | The selected object as `gen:<genId>` or `placement:<id>`. `null` outside editor mode or when nothing is selected |
+| `paletteEntries` | int or null | The number of entries in the catalog palette. `null` outside editor mode, where the palette is not read |
+| `screen` | `[width, height]` | `Screen.width` and `Screen.height` in pixels; screen coordinates for input use this space |
 
 ## Launching under Wine (macOS)
 
@@ -229,7 +253,7 @@ Caveats:
 
 ## Not covered
 
-The harness does not skip the level-up dialog, move the player, or press menu buttons. Use `freeze` to stop an idle player dying during a screenshot, or `invulnerable` when enemies must keep moving.
+The harness does not skip the level-up dialog, move the player, or press menu buttons. Only `state` returns data; the other commands report success or failure and nothing else, and `state` does not report health, inventory, enemies, the level-up dialog or the edit stack. Use `freeze` to stop an idle player dying during a screenshot, or `invulnerable` when enemies must keep moving.
 
 ## Character selection
 

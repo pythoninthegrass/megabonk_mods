@@ -25,6 +25,7 @@ Usage:
     run.py invulnerable            Make the player survive enemy damage
     run.py vulnerable              Restore normal player damage
     run.py steam-ready             Check whether the in-game Steamworks client is ready
+    run.py state                   Print the game's current state as JSON (level, editor, player, tool, selection)
     run.py heartbeat <on|off>      Start or stop the kill-floor heartbeat (actor counts and lowest heights every 5 seconds)
     run.py cells <on|off>          Start or stop logging the player's and boss-tier actors' grid cell on change
     run.py editor <on|off>         Enter or leave editor mode (frozen run, free-fly camera), like pressing F8
@@ -161,6 +162,13 @@ def wait_for_outcome(harness: Path, name: str, timeout: float) -> str:
         time.sleep(POLL_SECONDS)
 
 
+def read_result(harness: Path, name: str) -> dict | None:
+    try:
+        return json.loads((harness / "results" / name).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def is_png(path: Path) -> bool:
     try:
         with path.open("rb") as handle:
@@ -270,11 +278,29 @@ def quit_game(harness: Path, timeout: float) -> bool:
     return True
 
 
-def send(harness: Path, payload: dict[str, object], timeout: float) -> bool:
+def send_for_result(harness: Path, payload: dict[str, object], timeout: float) -> tuple[bool, dict | None]:
+    """Send a command; ok is false on a rejected or timed-out command or a result with ok:false."""
     sent = write_command(harness / "commands", payload)
     outcome = wait_for_outcome(harness, sent.name, timeout)
     print(f"{payload['command']}: {outcome}")
-    return outcome == "done"
+    result = read_result(harness, sent.name)
+    if result is not None and result.get("ok") is False:
+        print(f"{payload['command']}: {result.get('error')}", file=sys.stderr)
+        return False, result
+    return outcome == "done", result
+
+
+def send(harness: Path, payload: dict[str, object], timeout: float) -> bool:
+    return send_for_result(harness, payload, timeout)[0]
+
+
+def send_state(harness: Path, timeout: float) -> bool:
+    ok, result = send_for_result(harness, build_command("state"), timeout)
+    if ok and result is not None:
+        print(json.dumps(result.get("result")))
+    elif ok:
+        print("state: no result file written", file=sys.stderr)
+    return ok and result is not None
 
 
 def send_screenshot(harness: Path, out: Path, timeout: float) -> bool:
@@ -301,6 +327,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("invulnerable")
     sub.add_parser("vulnerable")
     sub.add_parser("steam-ready")
+    sub.add_parser("state")
     heartbeat = sub.add_parser("heartbeat")
     heartbeat.add_argument("state", choices=["on", "off"])
     cells = sub.add_parser("cells")
@@ -386,6 +413,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = quit_game(harness, args.timeout)
         case "freeze" | "resume" | "invulnerable" | "vulnerable" | "steam-ready":
             ok = send(harness, build_command(args.action), args.timeout)
+        case "state":
+            ok = send_state(harness, args.timeout)
         case "heartbeat":
             ok = send(harness, heartbeat_payload(args), args.timeout)
         case "cells":

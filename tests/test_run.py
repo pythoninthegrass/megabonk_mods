@@ -3,8 +3,11 @@ Self-test for scripts/run.py.
 """
 
 import json
+import os
 import run
 import tempfile
+import threading
+import time
 from pathlib import Path
 
 
@@ -130,6 +133,91 @@ def test_wait_for_outcome_reports_done_rejected_and_timeout() -> None:
         assert run.wait_for_outcome(harness, "a.json", timeout=0.2) == "done"
         assert run.wait_for_outcome(harness, "b.json", timeout=0.2) == "rejected"
         assert run.wait_for_outcome(harness, "c.json", timeout=0.2) == "timeout"
+
+
+def write_result(harness: Path, name: str, body: str) -> None:
+    (harness / "results").mkdir(exist_ok=True)
+    (harness / "results" / name).write_text(body)
+
+
+def test_read_result_returns_the_parsed_object() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        harness = Path(tmp)
+        write_result(harness, "a.json", '{"command":"state","ok":true,"result":{"editor":true}}')
+        assert run.read_result(harness, "a.json") == {"command": "state", "ok": True, "result": {"editor": True}}
+
+
+def test_read_result_is_none_when_absent() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        assert run.read_result(Path(tmp), "missing.json") is None
+
+
+def test_read_result_is_none_for_invalid_json() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        harness = Path(tmp)
+        write_result(harness, "a.json", "{not json")
+        assert run.read_result(harness, "a.json") is None
+
+
+def fake_game(tmp: str, result: str | None, outcome: str = "done") -> Path:
+    """Game dir with an enabled harness whose first command is answered by a background responder."""
+    game = Path(tmp)
+    harness = game / "harness"
+    run.set_enabled(game, True)
+    for folder in ("done", "rejected", "results"):
+        (harness / folder).mkdir(exist_ok=True)
+
+    def respond() -> None:
+        for _ in range(100):
+            for command in (harness / "commands").glob("*.json"):
+                if result is not None:
+                    write_result(harness, command.name, result)
+                command.rename(harness / outcome / command.name)
+                return
+            time.sleep(0.05)
+
+    threading.Thread(target=respond, daemon=True).start()
+    return game
+
+
+def run_main(game: Path, *argv: str) -> int:
+    previous = os.environ.get("MEGABONK_GAME_DIR")
+    os.environ["MEGABONK_GAME_DIR"] = str(game)
+    try:
+        return run.main(["--timeout", "5", *argv])
+    finally:
+        if previous is None:
+            os.environ.pop("MEGABONK_GAME_DIR")
+        else:
+            os.environ["MEGABONK_GAME_DIR"] = previous
+
+
+def test_state_prints_the_result_json(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"state","ok":true,"result":{"editor":true,"player":null}}')
+        assert run_main(game, "state") == 0
+    printed = capsys.readouterr().out.strip().splitlines()[-1]
+    assert json.loads(printed) == {"editor": True, "player": None}
+
+
+def test_state_exits_1_when_the_result_is_not_ok(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"state","ok":false,"error":"no player"}', outcome="rejected")
+        assert run_main(game, "state") == 1
+    assert "no player" in capsys.readouterr().err
+
+
+def test_send_reports_an_ok_false_result_even_when_the_file_landed_in_done(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"freeze","ok":false,"error":"boom"}')
+        assert run_main(game, "freeze") == 1
+    assert "boom" in capsys.readouterr().err
+
+
+def test_send_still_succeeds_when_no_result_file_is_written() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, None)
+        assert run_main(game, "freeze") == 0
 
 
 def test_is_png_checks_signature() -> None:

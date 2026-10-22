@@ -54,6 +54,8 @@ public static class PositionLabel
         _armed = DevHarness.Enabled;
     }
 
+    public static GridCell? CellOf(float x, float z) => _armed ? PositionReadout.CellOf(x, z, _gridWidth, _gridDepth, _spacing) : null;
+
     public static void Disarm()
     {
         _armed = false;

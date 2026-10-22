@@ -20,18 +20,31 @@ public enum HarnessCommandKind
     Cells,
     Editor,
     SteamReady,
+    State,
 }
 
 // World-space camera position and euler rotation in degrees.
 public readonly record struct CameraPose(float X, float Y, float Z, float Rx, float Ry, float Rz);
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null)
 {
     // Returns false with a human-readable error instead of throwing, so a bad file can never crash the game.
     public static bool TryParse(string json, out HarnessCommand command, out string error)
     {
+        if (!TryParseKnown(json, out command, out error, out var name))
+        {
+            return false;
+        }
+
+        command = command with { Name = name };
+        return true;
+    }
+
+    private static bool TryParseKnown(string json, out HarnessCommand command, out string error, out string name)
+    {
         command = default;
+        name = null;
 
         JsonObject root;
         try
@@ -50,7 +63,7 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
             return false;
         }
 
-        if (!TryGetString(root, "command", out var name))
+        if (!TryGetString(root, "command", out name))
         {
             error = "missing string field 'command'";
             return false;
@@ -80,6 +93,10 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return true;
             case "steam-ready":
                 command = new HarnessCommand(HarnessCommandKind.SteamReady, null);
+                error = null;
+                return true;
+            case "state":
+                command = new HarnessCommand(HarnessCommandKind.State, null);
                 error = null;
                 return true;
             case "camera-clear":
