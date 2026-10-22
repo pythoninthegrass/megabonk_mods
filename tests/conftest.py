@@ -12,3 +12,8 @@ def isolated_megabonk_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in [key for key in os.environ if key.startswith("MEGABONK_")]:
         monkeypatch.delenv(key)
     monkeypatch.setattr(game_paths, "ENV_FILE", Path("/nonexistent/.env"))
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"

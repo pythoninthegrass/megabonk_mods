@@ -267,9 +267,9 @@ To confirm which character spawned, run `run.py cycle` and read the screenshot; 
 
 The tooling scripts under `scripts/` are covered by pytest tests in `tests/` (the C# tests live in `tests/MegabonkLevels.Tests`). `task scripts:test` runs them, and `task test` runs them after the C# tests. `pytest.ini` at the repo root sets `testpaths = tests` and puts `scripts/` on the import path, so a test does `import game_paths` directly and no `pyproject.toml` is needed.
 
-`tests/conftest.py` has an autouse fixture that removes every `MEGABONK_*` environment variable and points `game_paths.ENV_FILE` at a nonexistent file for each test, so a developer's shell or `.env` (for example `MEGABONK_WINE_PREFIX`) cannot change a result. A test that needs a setting sets it with `monkeypatch.setenv` or passes `env_file_values` to the function under test.
+`tests/conftest.py` has an autouse fixture that removes every `MEGABONK_*` environment variable and points `game_paths.ENV_FILE` at a nonexistent file for each test, so a developer's shell or `.env` (for example `MEGABONK_WINE_PREFIX`) cannot change a result. A test that needs a setting sets it with `monkeypatch.setenv` or passes `env_file_values` to the function under test. Async tests use `@pytest.mark.anyio`; the conftest pins `anyio_backend` to `asyncio`, so no trio dependency is needed.
 
-`pytest` and `python-decouple` are not in a lockfile. The `--exclude-newer` date on the `uv run` line in `taskfile.yml` fixes what `uv` resolves, the same way the PEP 723 headers of the scripts do, so move that date forward deliberately when updating the dependencies.
+`pytest`, `python-decouple` and `mcp` are not in a lockfile. The `--exclude-newer` date on the `uv run` line in `taskfile.yml` fixes what `uv` resolves, the same way the PEP 723 headers of the scripts do, so move that date forward deliberately when updating the dependencies.
 
 ## Reading the game's code
 
