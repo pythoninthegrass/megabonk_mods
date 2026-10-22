@@ -81,7 +81,7 @@ rsync -ah --stats \
 
 With only Megabonk kept, a prefix of about 12 GB copies as about 4.5 GB. The copy carries the Steam login, the saves, MelonLoader, the `version.dll` override and the DXVK DLLs, so `task wine:install` finds both steps up to date and `task game:steam` followed by `uv run scripts/run.py relaunch` works without a Steam login prompt. Steam allows one session per account: starting Steam from the copy signs the account out everywhere else, including the other machine's Steam and a native macOS Steam client. Copy while Steam is stopped when possible; a copy taken while it runs still booted, but the registry files can change underneath the copy. Check the result with `uv run scripts/game_paths.py` (it should print the new prefix) and `Latest.log` (`DevHarness: enabled`, then `Steamworks ready`, then `EditorMode: entered`).
 
-This was verified on a second Apple silicon Mac (Wine 11.18, DXVK-macOS async, Rosetta): the game launched with MelonLoader, `relaunch` loaded the example Forest level into editor mode, and `screenshot` returned the editor overlay. Building the mod there needs a `Directory.Build.local.props` for the new prefix; see [modding-setup.md](modding-setup.md).
+This was verified on a second Apple silicon Mac (Wine 11.18, DXVK-macOS async, Rosetta): the game launched with MelonLoader, `relaunch` loaded the example Forest level into editor mode, and `screenshot` returned the editor overlay. The mod builds there with no extra setup, because the build reads the same prefix setting and default; see [modding-setup.md](modding-setup.md).
 
 ## Launching under CrossOver
 

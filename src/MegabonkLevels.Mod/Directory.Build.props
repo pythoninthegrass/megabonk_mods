@@ -1,8 +1,17 @@
 <Project>
   <!-- Untracked per-machine overrides, imported first so they feed the derived paths below -->
   <Import Project="$(MSBuildThisFileDirectory)Directory.Build.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.local.props')" />
+  <!-- The same settings and precedence as scripts/game_paths.py, read from the environment (task loads .env into it); a leading ~ is expanded -->
   <PropertyGroup>
-    <BottleFolder Condition="'$(BottleFolder)' == ''">$(HOME)/Library/Application Support/CrossOver/Bottles/Steam/drive_c</BottleFolder>
+    <GameDirSetting>$([System.Text.RegularExpressions.Regex]::Replace('$(MEGABONK_GAME_DIR)', '^~(?=/|$)', '$(HOME)'))</GameDirSetting>
+    <WinePrefixSetting>$([System.Text.RegularExpressions.Regex]::Replace('$(MEGABONK_WINE_PREFIX)', '^~(?=/|$)', '$(HOME)'))</WinePrefixSetting>
+    <BottleSetting>$([System.Text.RegularExpressions.Regex]::Replace('$(MEGABONK_BOTTLE)', '^~(?=/|$)', '$(HOME)'))</BottleSetting>
+  </PropertyGroup>
+  <PropertyGroup>
+    <BottleFolder Condition="'$(BottleFolder)' == '' And '$(WinePrefixSetting)' != ''">$(WinePrefixSetting)/drive_c</BottleFolder>
+    <BottleFolder Condition="'$(BottleFolder)' == '' And '$(BottleSetting)' != ''">$(BottleSetting)</BottleFolder>
+    <BottleFolder Condition="'$(BottleFolder)' == ''">$(HOME)/.local/share/megabonk/wine/drive_c</BottleFolder>
+    <GameFolder Condition="'$(GameFolder)' == '' And '$(GameDirSetting)' != ''">$(GameDirSetting)</GameFolder>
     <GameFolder Condition="'$(GameFolder)' == ''">$(BottleFolder)/Program Files (x86)/Steam/steamapps/common/Megabonk</GameFolder>
     <MelonLoaderFolder Condition="'$(MelonLoaderFolder)' == ''">$(GameFolder)/MelonLoader/net6</MelonLoaderFolder>
     <Il2CppAssembliesFolder Condition="'$(Il2CppAssembliesFolder)' == ''">$(GameFolder)/MelonLoader/Il2CppAssemblies</Il2CppAssembliesFolder>
