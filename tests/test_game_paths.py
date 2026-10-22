@@ -3,12 +3,34 @@ Self-test for scripts/game_paths.py.
 """
 
 import game_paths as gp
+import os
 from pathlib import Path
 
 
-def test_default_macos_bottle_path_when_nothing_set() -> None:
+def test_default_wine_runtime_game_dir_is_in_the_megabonk_prefix_not_crossover() -> None:
     game = gp.game_dir(env_file_values={})
+    assert str(game).endswith(".local/share/megabonk/wine/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk")
+    assert "CrossOver" not in str(game)
+
+
+def test_default_crossover_runtime_game_dir_is_in_the_crossover_bottle() -> None:
+    game = gp.game_dir(env_file_values={"MEGABONK_MACOS_RUNTIME": "crossover"})
     assert str(game).endswith("CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk")
+
+
+def test_wine_prefix_setting_derives_the_game_dir() -> None:
+    game = gp.game_dir(env_file_values={"MEGABONK_WINE_PREFIX": "/tmp/my prefix"})
+    assert str(game) == "/tmp/my prefix/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk"
+
+
+def test_game_dir_override_beats_the_wine_prefix_setting() -> None:
+    values = {"MEGABONK_GAME_DIR": "/tmp/fake_game", "MEGABONK_WINE_PREFIX": "/tmp/my_prefix"}
+    assert str(gp.game_dir(env_file_values=values)) == "/tmp/fake_game"
+
+
+def test_wine_prefix_setting_beats_the_legacy_bottle_setting() -> None:
+    values = {"MEGABONK_WINE_PREFIX": "/tmp/new_prefix", "MEGABONK_BOTTLE": "/tmp/old_bottle/drive_c"}
+    assert str(gp.game_dir(env_file_values=values)).startswith("/tmp/new_prefix/drive_c/")
 
 
 def test_env_file_bottle_override() -> None:
@@ -32,7 +54,6 @@ def test_macos_runtime_defaults_to_wine() -> None:
 
 
 def test_macos_runtime_reads_env_file_and_process_env() -> None:
-    import os
 
     assert gp.macos_runtime(env_file_values={"MEGABONK_MACOS_RUNTIME": "crossover"}) == "crossover"
     os.environ["MEGABONK_MACOS_RUNTIME"] = "wine"
@@ -58,11 +79,31 @@ def test_wine_bin_default_and_override() -> None:
 
 def test_wine_prefix_is_parent_of_drive_c() -> None:
     game = Path("/b/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk")
-    assert gp.wine_prefix(game) == Path("/b/Steam")
+    assert gp.wine_prefix(game, env_file_values={}) == Path("/b/Steam")
 
 
-def test_wine_prefix_none_without_drive_c() -> None:
-    assert gp.wine_prefix(Path("/tmp/fake_game")) is None
+def test_wine_prefix_none_without_drive_c_or_setting() -> None:
+    assert gp.wine_prefix(Path("/tmp/fake_game"), env_file_values={}) is None
+
+
+def test_wine_prefix_setting_applies_to_a_game_dir_outside_any_prefix() -> None:
+    values = {"MEGABONK_WINE_PREFIX": "/tmp/my_prefix"}
+    assert gp.wine_prefix(Path("/tmp/fake_game"), env_file_values=values) == Path("/tmp/my_prefix")
+
+
+def test_wine_prefix_setting_beats_a_drive_c_ancestor() -> None:
+    game = Path("/b/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk")
+    values = {"MEGABONK_WINE_PREFIX": "/tmp/my_prefix"}
+    assert gp.wine_prefix(game, env_file_values=values) == Path("/tmp/my_prefix")
+
+
+def test_resolved_paths_report_the_wine_prefix() -> None:
+
+    os.environ["MEGABONK_WINE_PREFIX"] = "/tmp/reported_prefix"
+    try:
+        assert gp.resolved_paths()["wine_prefix"] == "/tmp/reported_prefix"
+    finally:
+        del os.environ["MEGABONK_WINE_PREFIX"]
 
 
 def test_derived_paths() -> None:

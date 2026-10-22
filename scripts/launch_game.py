@@ -62,7 +62,7 @@ def build_steam_launch(wine: Path, prefix: Path) -> Launch:
 def prefix_for(game: Path) -> Path:
     prefix = gp.wine_prefix(game)
     if prefix is None:
-        raise SystemExit(f"{game} is not inside a Wine prefix (no drive_c ancestor)")
+        raise SystemExit(f"{game} is not inside a Wine prefix (no drive_c ancestor); set MEGABONK_WINE_PREFIX")
     return prefix
 
 

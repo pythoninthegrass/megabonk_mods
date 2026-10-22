@@ -10,8 +10,10 @@ Resolves the Megabonk install directory and the paths derived from it
 (MelonLoader dir, Mods dir, UserLibs dir, Latest.log).
 
 Precedence: process env > .env file in the repo root > built-in default.
-Defaults assume a Steam install in the CrossOver Steam bottle on macOS, run by plain Wine
-(MEGABONK_MACOS_RUNTIME=wine) or by CrossOver (crossover). MEGABONK_WINE points at the plain Wine binary.
+The Wine prefix holds the Steam install: MEGABONK_WINE_PREFIX names it, MEGABONK_GAME_DIR overrides the game
+directory directly, and MEGABONK_BOTTLE (a prefix's drive_c) is the older spelling of the prefix setting.
+Without any of them the prefix is ~/.local/share/megabonk/wine for plain Wine (MEGABONK_MACOS_RUNTIME=wine) and the
+CrossOver Steam bottle for CrossOver (crossover). MEGABONK_WINE points at the plain Wine binary.
 
 Usage: uv run scripts/game_paths.py
 """
@@ -20,12 +22,14 @@ import json
 import os
 import platform
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ENV_FILE = REPO_ROOT / ".env"
 
-DEFAULT_BOTTLE_MACOS = "~/Library/Application Support/CrossOver/Bottles/Steam/drive_c"
+DEFAULT_WINE_PREFIX = "~/.local/share/megabonk/wine"
+DEFAULT_CROSSOVER_PREFIX = "~/Library/Application Support/CrossOver/Bottles/Steam"
 DEFAULT_WINE_BIN = "~/Applications/wine11/Wine Devel.app/Contents/Resources/wine/bin/wine"
 MACOS_RUNTIMES = ("wine", "crossover")
 DEFAULT_GAME_SUBPATH = "Program Files (x86)/Steam/steamapps/common/Megabonk"
@@ -53,22 +57,35 @@ def _lookup(key: str, env_file_values: dict[str, str]) -> str | None:
     return None
 
 
-def game_dir(env_file_values: dict[str, str] | None = None) -> Path:
-    if env_file_values is None:
-        env_file_values = _parse_env_file(ENV_FILE)
+def _env_lookup(env_file_values: dict[str, str] | None) -> Callable[[str], str | None]:
+    values = _parse_env_file(ENV_FILE) if env_file_values is None else env_file_values
+    return lambda key: _lookup(key, values)
 
-    override = _lookup("MEGABONK_GAME_DIR", env_file_values)
+
+def resolve_game_dir(lookup: Callable[[str], str | None], system: str | None = None) -> Path:
+    system = system or platform.system()
+
+    override = lookup("MEGABONK_GAME_DIR")
     if override:
         return Path(override).expanduser()
 
-    bottle = _lookup("MEGABONK_BOTTLE", env_file_values)
+    prefix = lookup("MEGABONK_WINE_PREFIX")
+    if prefix:
+        return Path(prefix).expanduser() / "drive_c" / DEFAULT_GAME_SUBPATH
+
+    bottle = lookup("MEGABONK_BOTTLE")
     if bottle:
         return Path(bottle).expanduser() / DEFAULT_GAME_SUBPATH
 
-    if platform.system() == "Windows":
+    if system == "Windows":
         return Path(DEFAULT_GAME_DIR_WINDOWS)
 
-    return Path(DEFAULT_BOTTLE_MACOS).expanduser() / DEFAULT_GAME_SUBPATH
+    default_prefix = DEFAULT_CROSSOVER_PREFIX if lookup("MEGABONK_MACOS_RUNTIME") == "crossover" else DEFAULT_WINE_PREFIX
+    return Path(default_prefix).expanduser() / "drive_c" / DEFAULT_GAME_SUBPATH
+
+
+def game_dir(env_file_values: dict[str, str] | None = None) -> Path:
+    return resolve_game_dir(_env_lookup(env_file_values))
 
 
 def macos_runtime(env_file_values: dict[str, str] | None = None) -> str:
@@ -86,7 +103,10 @@ def wine_bin(env_file_values: dict[str, str] | None = None) -> Path:
     return Path(_lookup("MEGABONK_WINE", env_file_values) or DEFAULT_WINE_BIN).expanduser()
 
 
-def wine_prefix(game: Path) -> Path | None:
+def wine_prefix(game: Path, env_file_values: dict[str, str] | None = None) -> Path | None:
+    explicit = _env_lookup(env_file_values)("MEGABONK_WINE_PREFIX")
+    if explicit:
+        return Path(explicit).expanduser()
     for parent in game.parents:
         if parent.name == "drive_c":
             return parent.parent
@@ -111,8 +131,10 @@ def latest_log_path(game: Path | None = None) -> Path:
 
 def resolved_paths() -> dict[str, str]:
     game = game_dir()
+    prefix = wine_prefix(game)
     return {
         "game_dir": str(game),
+        "wine_prefix": str(prefix) if prefix else None,
         "melonloader_dir": str(melonloader_dir(game)),
         "mods_dir": str(mods_dir(game)),
         "userlibs_dir": str(userlibs_dir(game)),

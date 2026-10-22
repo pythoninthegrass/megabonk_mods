@@ -36,8 +36,9 @@ Usage:
                                    [--freeze] [--camera X Y Z RX RY RZ] apply before the screenshot
 
 Game directory resolution: process environment, then the nearest .env walking up from the current
-directory or this script, then the macOS CrossOver bottle / Windows Steam default. Keys: MEGABONK_GAME_DIR,
-MEGABONK_BOTTLE, MEGABONK_MACOS_RUNTIME (wine or crossover; selects the task relaunch starts the game with).
+directory or this script, then the per-runtime default (see game_paths.py). Keys: MEGABONK_GAME_DIR,
+MEGABONK_WINE_PREFIX, MEGABONK_BOTTLE, MEGABONK_MACOS_RUNTIME (wine or crossover; selects the task relaunch
+starts the game with).
 """
 
 import argparse
@@ -51,12 +52,9 @@ import sys
 import time
 from collections.abc import Callable
 from decouple import Config, RepositoryEmpty, RepositoryEnv
-from game_paths import latest_log_path
+from game_paths import latest_log_path, resolve_game_dir as _resolve_game_dir
 from pathlib import Path
 
-DEFAULT_BOTTLE_MACOS = "~/Library/Application Support/CrossOver/Bottles/Steam/drive_c"
-DEFAULT_GAME_SUBPATH = "Program Files (x86)/Steam/steamapps/common/Megabonk"
-DEFAULT_GAME_DIR_WINDOWS = r"C:\Program Files (x86)\Steam\steamapps\common\Megabonk"
 MACOS_RUNTIMES = ("wine", "crossover")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 POLL_SECONDS = 0.1
@@ -87,20 +85,7 @@ def load_lookup(search_from: list[Path] | None = None) -> Lookup:
 
 
 def resolve_game_dir(lookup: Lookup, system: str | None = None) -> Path:
-    system = system or platform.system()
-
-    override = lookup("MEGABONK_GAME_DIR")
-    if override:
-        return Path(override).expanduser()
-
-    bottle = lookup("MEGABONK_BOTTLE")
-    if bottle:
-        return Path(bottle).expanduser() / DEFAULT_GAME_SUBPATH
-
-    if system == "Windows":
-        return Path(DEFAULT_GAME_DIR_WINDOWS)
-
-    return Path(DEFAULT_BOTTLE_MACOS).expanduser() / DEFAULT_GAME_SUBPATH
+    return _resolve_game_dir(lookup, system)
 
 
 def resolve_macos_runtime(lookup: Lookup) -> str:

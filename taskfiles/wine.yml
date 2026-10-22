@@ -14,7 +14,7 @@ vars:
   WINE_BIN:
     sh: echo "${MEGABONK_WINE:-$HOME/Applications/wine11/Wine Devel.app/Contents/Resources/wine/bin/wine}"
   PREFIX:
-    sh: uv run scripts/game_paths.py | jq -r '.game_dir | split("/drive_c")[0]'
+    sh: uv run scripts/game_paths.py | jq -r '.wine_prefix // "(none, set MEGABONK_WINE_PREFIX)"'
 
 tasks:
   install:
@@ -25,8 +25,10 @@ tasks:
       Runs wine:app then wine:dxvk. Each step downloads its archive, checks the
       sha256 against the pin in this file before extracting or copying
       anything, and skips itself when the pinned version is already installed.
-      wine:dxvk also skips itself, with a message and exit 0, when the Steam
-      prefix does not exist yet; run 'task wine:dxvk' once it does.
+      wine:dxvk installs into the Wine prefix named by MEGABONK_WINE_PREFIX
+      (default ~/.local/share/megabonk/wine) and skips itself, with a message
+      and exit 0, when that prefix does not exist yet; run 'task wine:dxvk'
+      once it does.
 
       Override a pin by exporting WINE_VERSION, WINE_URL, WINE_SHA256,
       DXVK_VERSION, DXVK_URL or DXVK_SHA256, or by
@@ -60,7 +62,7 @@ tasks:
           "{{.WINE_APP}}/Contents/Resources/wine/bin/wine" --version
 
   dxvk:
-    desc: "Install the pinned DXVK d3d11 and d3d10core DLLs into the Steam prefix"
+    desc: "Install the pinned DXVK d3d11 and d3d10core DLLs into the Wine prefix (MEGABONK_WINE_PREFIX)"
     platforms: [darwin]
     requires:
       vars: [DXVK_URL, DXVK_SHA256, DXVK_VERSION]
@@ -68,7 +70,7 @@ tasks:
       - test "$(cat "{{.PREFIX}}/drive_c/windows/dxvk.installed" 2>/dev/null)" = "{{.DXVK_SHA256}}"
     cmds:
       - cmd: |
-          echo "wine:dxvk skipped: no Wine prefix at {{.PREFIX}}; create or copy the Steam prefix there, then run 'task wine:dxvk'" >&2
+          echo "wine:dxvk skipped: no Wine prefix at {{.PREFIX}}; create the prefix or point MEGABONK_WINE_PREFIX at it, then run 'task wine:dxvk'" >&2
         if: '! test -d "{{.PREFIX}}/drive_c/windows/system32"'
       - cmd: |
           set -eu

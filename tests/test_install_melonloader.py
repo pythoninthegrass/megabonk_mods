@@ -93,6 +93,26 @@ def test_apply_dll_override_runs_plain_wine_for_the_wine_runtime() -> None:
     assert kw["env"]["WINEPREFIX"] == "/b/Steam" and kw["check"] is True
 
 
+def test_apply_dll_override_uses_the_wine_prefix_setting_for_a_game_dir_outside_any_prefix() -> None:
+    game = Path("/tmp/fake_game")
+    calls = []
+    original = im.subprocess.run
+    im.subprocess.run = lambda argv, **kw: calls.append((argv, kw))
+    with tempfile.TemporaryDirectory() as tmp:
+        fake_wine = Path(tmp) / "wine"
+        fake_wine.touch()
+        os.environ["MEGABONK_WINE"] = str(fake_wine)
+        os.environ["MEGABONK_WINE_PREFIX"] = "/tmp/my_prefix"
+        try:
+            im.apply_dll_override("wine", game)
+        finally:
+            im.subprocess.run = original
+            del os.environ["MEGABONK_WINE"]
+            del os.environ["MEGABONK_WINE_PREFIX"]
+    ((_, kw),) = calls
+    assert kw["env"]["WINEPREFIX"] == "/tmp/my_prefix"
+
+
 def test_apply_dll_override_runs_crossover_wine_for_the_crossover_runtime() -> None:
     game = Path("/b/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk")
     calls = []

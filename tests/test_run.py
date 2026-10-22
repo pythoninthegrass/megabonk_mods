@@ -33,9 +33,20 @@ def test_game_dir_from_bottle() -> None:
     assert run.resolve_game_dir(values.get, system="Darwin") == expected
 
 
-def test_game_dir_macos_default_bottle() -> None:
+def test_game_dir_macos_default_is_the_megabonk_wine_prefix() -> None:
     game = run.resolve_game_dir({}.get, system="Darwin")
+    assert str(game).endswith(".local/share/megabonk/wine/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk")
+
+
+def test_game_dir_macos_crossover_runtime_default_is_the_crossover_bottle() -> None:
+    game = run.resolve_game_dir({"MEGABONK_MACOS_RUNTIME": "crossover"}.get, system="Darwin")
     assert str(game).endswith("CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk")
+
+
+def test_game_dir_from_wine_prefix() -> None:
+    values = {"MEGABONK_WINE_PREFIX": "/p"}
+    expected = Path("/p/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk")
+    assert run.resolve_game_dir(values.get, system="Darwin") == expected
 
 
 def test_game_dir_windows_default() -> None:
