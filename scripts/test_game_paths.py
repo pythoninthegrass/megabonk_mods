@@ -46,6 +46,44 @@ def test_process_env_takes_precedence_over_env_file(monkeypatch=None) -> None:
         del os.environ["MEGABONK_GAME_DIR"]
 
 
+def test_macos_runtime_defaults_to_wine() -> None:
+    assert gp.macos_runtime(env_file_values={}) == "wine"
+
+
+def test_macos_runtime_reads_env_file_and_process_env() -> None:
+    import os
+
+    assert gp.macos_runtime(env_file_values={"MEGABONK_MACOS_RUNTIME": "crossover"}) == "crossover"
+    os.environ["MEGABONK_MACOS_RUNTIME"] = "wine"
+    try:
+        assert gp.macos_runtime(env_file_values={"MEGABONK_MACOS_RUNTIME": "crossover"}) == "wine"
+    finally:
+        del os.environ["MEGABONK_MACOS_RUNTIME"]
+
+
+def test_macos_runtime_rejects_unknown_value() -> None:
+    try:
+        gp.macos_runtime(env_file_values={"MEGABONK_MACOS_RUNTIME": "proton"})
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError")
+
+
+def test_wine_bin_default_and_override() -> None:
+    default = gp.wine_bin(env_file_values={})
+    assert str(default).endswith("Applications/wine11/Wine Devel.app/Contents/Resources/wine/bin/wine")
+    assert gp.wine_bin(env_file_values={"MEGABONK_WINE": "/opt/wine/bin/wine"}) == Path("/opt/wine/bin/wine")
+
+
+def test_wine_prefix_is_parent_of_drive_c() -> None:
+    game = Path("/b/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk")
+    assert gp.wine_prefix(game) == Path("/b/Steam")
+
+
+def test_wine_prefix_none_without_drive_c() -> None:
+    assert gp.wine_prefix(Path("/tmp/fake_game")) is None
+
+
 def test_derived_paths() -> None:
     game = Path("/tmp/fake_game")
     assert gp.melonloader_dir(game) == game / "MelonLoader"

@@ -36,8 +36,8 @@ Usage:
                                    [--freeze] [--camera X Y Z RX RY RZ] apply before the screenshot
 
 Game directory resolution: process environment, then the nearest .env walking up from the current
-directory or this script, then the macOS CrossOver / Windows Steam default. Keys: MEGABONK_GAME_DIR,
-MEGABONK_BOTTLE.
+directory or this script, then the macOS CrossOver bottle / Windows Steam default. Keys: MEGABONK_GAME_DIR,
+MEGABONK_BOTTLE, MEGABONK_MACOS_RUNTIME (wine or crossover; selects the task relaunch starts the game with).
 """
 
 import argparse
@@ -57,6 +57,7 @@ from pathlib import Path
 DEFAULT_BOTTLE_MACOS = "~/Library/Application Support/CrossOver/Bottles/Steam/drive_c"
 DEFAULT_GAME_SUBPATH = "Program Files (x86)/Steam/steamapps/common/Megabonk"
 DEFAULT_GAME_DIR_WINDOWS = r"C:\Program Files (x86)\Steam\steamapps\common\Megabonk"
+MACOS_RUNTIMES = ("wine", "crossover")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 POLL_SECONDS = 0.1
 RELAUNCH_READY_TIMEOUT = 60.0
@@ -100,6 +101,18 @@ def resolve_game_dir(lookup: Lookup, system: str | None = None) -> Path:
         return Path(DEFAULT_GAME_DIR_WINDOWS)
 
     return Path(DEFAULT_BOTTLE_MACOS).expanduser() / DEFAULT_GAME_SUBPATH
+
+
+def resolve_macos_runtime(lookup: Lookup) -> str:
+    runtime = lookup("MEGABONK_MACOS_RUNTIME") or "wine"
+    if runtime not in MACOS_RUNTIMES:
+        raise SystemExit(f"MEGABONK_MACOS_RUNTIME must be one of {MACOS_RUNTIMES}, got {runtime!r}")
+    return runtime
+
+
+def launch_task(runtime: str, system: str | None = None) -> str:
+    system = system or platform.system()
+    return "crossover:run" if system == "Darwin" and runtime == "crossover" else "game:run"
 
 
 def to_game_path(path: Path, system: str | None = None) -> str:
@@ -193,8 +206,8 @@ def wait_for_log_line(log: Path, line: str, newer_than: float, timeout: float) -
         time.sleep(POLL_SECONDS)
 
 
-def launch_game() -> bool:
-    return subprocess.run(["task", "game:run"], check=False).returncode == 0
+def launch_game(task: str = "game:run") -> bool:
+    return subprocess.run(["task", task], check=False).returncode == 0
 
 
 def relaunch_timeout(timeout: float) -> float:
@@ -412,7 +425,7 @@ def main(argv: list[str] | None = None) -> int:
             started = time.time()
             if ok:
                 print("relaunch: starting game")
-                ok = launch_game()
+                ok = launch_game(launch_task(resolve_macos_runtime(load_lookup())))
             if ok:
                 print("relaunch: waiting for harness")
                 ok = wait_for_log_line(

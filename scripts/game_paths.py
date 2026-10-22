@@ -10,7 +10,8 @@ Resolves the Megabonk install directory and the paths derived from it
 (MelonLoader dir, Mods dir, UserLibs dir, Latest.log).
 
 Precedence: process env > .env file in the repo root > built-in default.
-Defaults assume a Steam install, CrossOver bottle on macOS.
+Defaults assume a Steam install in the CrossOver Steam bottle on macOS, run by plain Wine
+(MEGABONK_MACOS_RUNTIME=wine) or by CrossOver (crossover). MEGABONK_WINE points at the plain Wine binary.
 
 Usage: uv run scripts/game_paths.py
 """
@@ -25,6 +26,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 ENV_FILE = REPO_ROOT / ".env"
 
 DEFAULT_BOTTLE_MACOS = "~/Library/Application Support/CrossOver/Bottles/Steam/drive_c"
+DEFAULT_WINE_BIN = "~/Applications/wine11/Wine Devel.app/Contents/Resources/wine/bin/wine"
+MACOS_RUNTIMES = ("wine", "crossover")
 DEFAULT_GAME_SUBPATH = "Program Files (x86)/Steam/steamapps/common/Megabonk"
 DEFAULT_GAME_DIR_WINDOWS = r"C:\Program Files (x86)\Steam\steamapps\common\Megabonk"
 
@@ -66,6 +69,28 @@ def game_dir(env_file_values: dict[str, str] | None = None) -> Path:
         return Path(DEFAULT_GAME_DIR_WINDOWS)
 
     return Path(DEFAULT_BOTTLE_MACOS).expanduser() / DEFAULT_GAME_SUBPATH
+
+
+def macos_runtime(env_file_values: dict[str, str] | None = None) -> str:
+    if env_file_values is None:
+        env_file_values = _parse_env_file(ENV_FILE)
+    runtime = _lookup("MEGABONK_MACOS_RUNTIME", env_file_values) or "wine"
+    if runtime not in MACOS_RUNTIMES:
+        raise ValueError(f"MEGABONK_MACOS_RUNTIME must be one of {MACOS_RUNTIMES}, got {runtime!r}")
+    return runtime
+
+
+def wine_bin(env_file_values: dict[str, str] | None = None) -> Path:
+    if env_file_values is None:
+        env_file_values = _parse_env_file(ENV_FILE)
+    return Path(_lookup("MEGABONK_WINE", env_file_values) or DEFAULT_WINE_BIN).expanduser()
+
+
+def wine_prefix(game: Path) -> Path | None:
+    for parent in game.parents:
+        if parent.name == "drive_c":
+            return parent.parent
+    return None
 
 
 def melonloader_dir(game: Path | None = None) -> Path:

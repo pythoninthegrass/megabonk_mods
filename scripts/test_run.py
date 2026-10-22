@@ -59,6 +59,25 @@ def test_game_dir_windows_default() -> None:
     assert str(game) == r"C:\Program Files (x86)\Steam\steamapps\common\Megabonk"
 
 
+def test_macos_runtime_defaults_to_wine_and_reads_lookup() -> None:
+    assert run.resolve_macos_runtime({}.get) == "wine"
+    assert run.resolve_macos_runtime({"MEGABONK_MACOS_RUNTIME": "crossover"}.get) == "crossover"
+
+
+def test_macos_runtime_rejects_unknown_value() -> None:
+    try:
+        run.resolve_macos_runtime({"MEGABONK_MACOS_RUNTIME": "proton"}.get)
+    except SystemExit:
+        return
+    raise AssertionError("expected SystemExit")
+
+
+def test_launch_task_is_crossover_only_for_the_crossover_runtime_on_macos() -> None:
+    assert run.launch_task("crossover", system="Darwin") == "crossover:run"
+    assert run.launch_task("wine", system="Darwin") == "game:run"
+    assert run.launch_task("crossover", system="Linux") == "game:run"
+
+
 def test_to_game_path_maps_host_path_into_wine_z_drive_on_macos() -> None:
     assert run.to_game_path(Path("/tmp/a.png"), system="Darwin") == "Z:\\tmp\\a.png"
 

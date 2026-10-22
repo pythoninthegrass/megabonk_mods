@@ -8,9 +8,10 @@
 """
 Downloads a pinned MelonLoader release (the Linux build on Linux, the Windows
 build elsewhere), verifies its checksum, and extracts it into the resolved
-Megabonk game directory. On macOS (CrossOver), also
-applies the Wine DLL override MelonLoader's installer normally sets for you
-(version.dll -> native,builtin) so Il2Cpp hooking works under Wine.
+Megabonk game directory. On macOS, also applies the Wine DLL override
+MelonLoader's installer normally sets for you (version.dll -> native,builtin)
+so Il2Cpp hooking works under Wine, through plain Wine or CrossOver's Wine
+depending on MEGABONK_MACOS_RUNTIME.
 
 Idempotent: install() skips the download/extract when the pinned version is
 already present.
@@ -105,6 +106,27 @@ def _find_crossover_wine() -> Path | None:
     return None
 
 
+REG_ADD_VERSION_OVERRIDE = [
+    "reg",
+    "add",
+    r"HKCU\Software\Wine\DllOverrides",
+    "/v",
+    "version",
+    "/d",
+    "native,builtin",
+    "/f",
+]
+
+
+def _crossover_override_command(wine_bin: Path, bottle_name: str) -> list[str]:
+    return [str(wine_bin), "--bottle", bottle_name, *REG_ADD_VERSION_OVERRIDE]
+
+
+def _wine_override_command(wine_bin: Path, prefix: Path) -> tuple[list[str], dict[str, str]]:
+    env = {"WINEPREFIX": str(prefix), "USER": "crossover", "LOGNAME": "crossover", "WINEDEBUG": "-all"}
+    return [str(wine_bin), *REG_ADD_VERSION_OVERRIDE], env
+
+
 def _apply_crossover_dll_override(bottle_name: str) -> None:
     """Sets version.dll = native,builtin in the bottle's Wine registry.
 
@@ -123,22 +145,32 @@ def _apply_crossover_dll_override(bottle_name: str) -> None:
         )
         return
 
-    subprocess.run(
-        [
-            str(wine_bin),
-            "--bottle",
-            bottle_name,
-            "reg",
-            "add",
-            r"HKCU\Software\Wine\DllOverrides",
-            "/v",
-            "version",
-            "/d",
-            "native,builtin",
-            "/f",
-        ],
-        check=True,
-    )
+    subprocess.run(_crossover_override_command(wine_bin, bottle_name), check=True)
+
+
+def _apply_wine_dll_override(prefix: Path) -> None:
+    wine_bin = gp.wine_bin()
+    if not wine_bin.is_file():
+        print(
+            f"warning: wine binary not found at {wine_bin}; skipping the version.dll "
+            "override. Run 'task wine:install' or set MEGABONK_WINE.",
+            file=sys.stderr,
+        )
+        return
+
+    argv, env = _wine_override_command(wine_bin, prefix)
+    subprocess.run(argv, env={**os.environ, **env}, check=True)
+
+
+def apply_dll_override(runtime: str, game: Path) -> None:
+    if runtime == "crossover":
+        bottle_name = _lookup_bottle_name(game)
+        if bottle_name is not None:
+            _apply_crossover_dll_override(bottle_name)
+        return
+    prefix = gp.wine_prefix(game)
+    if prefix is not None:
+        _apply_wine_dll_override(prefix)
 
 
 def install(version: str = MELONLOADER_VERSION, game: Path | None = None) -> None:
@@ -162,9 +194,7 @@ def install(version: str = MELONLOADER_VERSION, game: Path | None = None) -> Non
     # add overwrites the same value) and needs to succeed on its own retry if
     # it failed on a prior run (e.g. wine wasn't found yet).
     if platform.system() == "Darwin":
-        bottle_name = _lookup_bottle_name(game)
-        if bottle_name is not None:
-            _apply_crossover_dll_override(bottle_name)
+        apply_dll_override(gp.macos_runtime(), game)
 
 
 def _lookup_bottle_name(game: Path) -> str | None:

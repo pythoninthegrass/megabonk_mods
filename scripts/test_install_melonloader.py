@@ -74,6 +74,54 @@ def test_lookup_bottle_name_none_when_absent() -> None:
     assert im._lookup_bottle_name(game) is None
 
 
+REG_ADD_TAIL = ["reg", "add", r"HKCU\Software\Wine\DllOverrides", "/v", "version", "/d", "native,builtin", "/f"]
+
+
+def test_crossover_override_command_selects_bottle_by_name() -> None:
+    argv = im._crossover_override_command(Path("/cx/wine"), "Steam")
+    assert argv == ["/cx/wine", "--bottle", "Steam", *REG_ADD_TAIL]
+
+
+def test_wine_override_command_uses_prefix_and_crossover_user() -> None:
+    argv, env = im._wine_override_command(Path("/w/wine"), Path("/b/Steam"))
+    assert argv == ["/w/wine", *REG_ADD_TAIL]
+    assert env == {"WINEPREFIX": "/b/Steam", "USER": "crossover", "LOGNAME": "crossover", "WINEDEBUG": "-all"}
+
+
+def test_apply_dll_override_runs_plain_wine_for_the_wine_runtime() -> None:
+    game = Path("/b/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk")
+    calls = []
+    original = im.subprocess.run
+    im.subprocess.run = lambda argv, **kw: calls.append((argv, kw))
+    with tempfile.TemporaryDirectory() as tmp:
+        fake_wine = Path(tmp) / "wine"
+        fake_wine.touch()
+        os.environ["MEGABONK_WINE"] = str(fake_wine)
+        try:
+            im.apply_dll_override("wine", game)
+        finally:
+            im.subprocess.run = original
+            del os.environ["MEGABONK_WINE"]
+    ((argv, kw),) = calls
+    assert argv == [str(fake_wine), *REG_ADD_TAIL]
+    assert kw["env"]["WINEPREFIX"] == "/b/Steam" and kw["check"] is True
+
+
+def test_apply_dll_override_runs_crossover_wine_for_the_crossover_runtime() -> None:
+    game = Path("/b/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk")
+    calls = []
+    original = im.subprocess.run
+    im.subprocess.run = lambda argv, **kw: calls.append((argv, kw))
+    os.environ["CROSSOVER_WINE_BIN"] = "/cx/wine"
+    try:
+        im.apply_dll_override("crossover", game)
+    finally:
+        im.subprocess.run = original
+        del os.environ["CROSSOVER_WINE_BIN"]
+    ((argv, kw),) = calls
+    assert argv == ["/cx/wine", "--bottle", "Steam", *REG_ADD_TAIL]
+
+
 def test_release_asset_linux_uses_linux_zip_and_sha() -> None:
     url, sha = im.release_asset("Linux", "0.7.3")
     assert url.endswith("/v0.7.3/MelonLoader.Linux.x64.zip")
