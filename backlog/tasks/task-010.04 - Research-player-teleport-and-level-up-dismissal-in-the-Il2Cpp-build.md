@@ -4,7 +4,7 @@ title: Research player teleport and level-up dismissal in the Il2Cpp build
 status: To Do
 assignee: []
 created_date: '2026-10-22 03:43'
-updated_date: '2026-10-22 04:05'
+updated_date: '2026-10-22 04:08'
 labels:
   - dev-harness
   - research
@@ -57,7 +57,11 @@ If either question cannot be answered, say so with the evidence of what was trie
 - [ ] #6 A question that could not be answered is recorded as an open question with the evidence of what was tried, and Lance is told
 <!-- AC:END -->
 
+## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
+Ghidra via REA, first attempt (Mac, 16 GB, 52 MB GameAssembly.dll, Ghidra 12.1.4): open_binary with provider_id ghidra succeeded and Ghidra's PE loader recognised x86:LE:64:windows, but the first analyze_function (VA 0x1803E5B20, MyTime.Pause) failed with provider_timeout after the default 330000 ms startup deadline, still analysing. The committed .claude/settings.json now sets REA_GHIDRA_STARTUP_TIMEOUT_MS=3600000 and GHIDRA_HEADLESS_MAXMEM=6G (default heap is 2G). Restart Claude Code, open_binary again with provider_id ghidra, and re-run the first query; the outcome and duration still have to be recorded in docs/development.md (acceptance criterion 1). If it still fails or takes impractically long, options are REA_GHIDRA_DISABLED_ANALYZERS, the Ghidra GUI project (task ghidra:run), or Binary Ninja.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
