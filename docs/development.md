@@ -13,7 +13,7 @@ uv run scripts/run.py disable   # removes the marker
 
 Enabling takes effect on the next game launch. When active, the mod logs `DevHarness: enabled, watching '<dir>'` to `MelonLoader/Latest.log`.
 
-The game directory is resolved the same way as in `scripts/game_paths.py`: process environment, then the nearest `.env` found walking up from the current directory or the script, then the built-in default: the CrossOver Steam bottle (`~/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk`) on macOS, `C:\Program Files (x86)\Steam\steamapps\common\Megabonk` on Windows. The keys are `MEGABONK_GAME_DIR` (the game directory itself) and `MEGABONK_BOTTLE` (a bottle's `drive_c`).
+The game directory is resolved the same way as in `scripts/game_paths.py`: process environment, then the nearest `.env` found walking up from the current directory or the script, then the built-in default: the CrossOver Steam bottle (`~/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk`) on macOS, `C:\Program Files (x86)\Steam\steamapps\common\Megabonk` on Windows. The keys are `MEGABONK_GAME_DIR` (the game directory itself) and `MEGABONK_BOTTLE` (a bottle's `drive_c`). On macOS, `MEGABONK_MACOS_RUNTIME` (`wine`, the default, or `crossover`) picks the runtime and `MEGABONK_WINE` points at the plain Wine binary.
 
 ## Commands
 
@@ -38,15 +38,37 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 
 `run.py cycle <level> <out.png>` runs load, waits `--settle` seconds (default 5), takes the screenshot, then quits. `--invulnerable` makes the player invulnerable right after the load, before the settle wait. `--freeze` freezes gameplay and `--camera X Y Z RX RY RZ` poses the camera after the settle wait and before the screenshot. `--timeout` (before the subcommand, default 15 seconds) sets how long to wait for each command and for the PNG to appear. The exit code is 0 only if every step succeeded, 1 if a step failed or timed out, and 2 if the harness is not enabled (`run.py` prints `harness not enabled at <dir>; run 'run.py enable' and relaunch the game`).
 
-`run.py relaunch` quits the running game, starts a fresh process through `task game:run`, waits for a new `DevHarness: enabled` log entry, then polls the in-game Steamworks client before loading `levels/example-forest.mblevel.json`. It retries the load until `KillFloor: armed` appears, then enables invulnerability and editor mode. It allows at least 60 seconds for readiness checks, even when `--timeout` is lower. Pass an optional level path to use a different level file. Use this command between interactive editor sessions; do not send another `load` to an existing run.
+`run.py relaunch` quits the running game, starts a fresh process through `task game:run` (`task crossover:run` when `MEGABONK_MACOS_RUNTIME=crossover`), waits for a new `DevHarness: enabled` log entry, then polls the in-game Steamworks client before loading `levels/example-forest.mblevel.json`. It retries the load until `KillFloor: armed` appears, then enables invulnerability and editor mode. It allows at least 60 seconds for readiness checks, even when `--timeout` is lower. Pass an optional level path to use a different level file. Use this command between interactive editor sessions; do not send another `load` to an existing run.
 
 An unknown command, malformed JSON, a missing or empty `path`, or a command that fails while running logs an error and moves the file to `rejected/` without replaying it.
 
 The paths in `load-level` and `screenshot` are interpreted by the game process, so `run.py` converts them (see below).
 
+## Launching under Wine (macOS)
+
+Plain Wine is the default macOS runtime. It runs the same Steam bottle that CrossOver created (`~/Library/Application Support/CrossOver/Bottles/Steam`), so saves, Steam login and the installed game carry over. The setup was verified with Wine 11.18 and DXVK-macOS on Apple silicon with Rosetta.
+
+```sh
+task wine:install       # pinned Wine build and DXVK DLLs; skips what is already installed
+task game:steam         # Steam client, detached; wait about 30 seconds for logon
+task game:melonloader:install
+task game:run           # Megabonk.exe, detached
+```
+
+`task wine:install` runs `wine:app` and `wine:dxvk` from `taskfiles/wine.yml`. The pins (version, URL, sha256 for each) are defined once in that file's `vars` and can be overridden by exporting `WINE_VERSION`, `WINE_URL`, `WINE_SHA256`, `DXVK_VERSION`, `DXVK_URL` or `DXVK_SHA256`, or by setting them in `.env`, which the root `taskfile.yml` loads with `dotenv` for every task. Each step downloads its archive to a temporary directory and checks the sha256 before extracting or copying anything, so a mismatch stops the task with nothing changed. An unset or empty override falls back to the pin.
+
+- **Wine build.** The Gcenx `wine-devel` 11.18 build is extracted to `~/Applications/wine11/Wine Devel.app`, then the quarantine attribute is removed and the app is ad-hoc signed so Gatekeeper lets it run. Set `MEGABONK_WINE` to use a different binary. Wine 7.7 (the Game Porting Toolkit cask) crashes Steam with an unhandled page fault, and Homebrew's `wine-stable` is disabled.
+- **DXVK.** Wine's own Direct3D path reports no supported feature level on macOS, and Unity fails with `Failed to initialize player`. The task copies the x64 `d3d11.dll` and `d3d10core.dll` from DXVK-macOS (async build, `v1.10.3-20230507-repack`) into the prefix's `drive_c/windows/system32`. The first run saves the DLLs it replaces in `drive_c/windows/dxvk-orig/` and never overwrites that backup. `drive_c/windows/dxvk.installed` records the installed pin. MoltenVK ships inside the Wine build. The DXVK release publishes no checksum for its archive, so the pinned sha256 was computed locally from the downloaded file and is not independently verified.
+- **`USER=crossover`.** Wine takes the Windows profile name from the macOS user. Without the override Wine creates `C:\users\<macOS user>` with no saves, and the game starts from an empty profile. CrossOver ran as `crossover`, so the saves live in `drive_c/users/crossover`. `scripts/launch_game.py` sets `USER` and `LOGNAME` to `crossover` for every Wine call it makes.
+- **`-silent`.** The Steam UI renders as a black window under Wine because its embedded browser does not draw. `-silent` keeps the main window closed while the client still logs on and serves Steamworks. The client must be logged on before the game starts, or Steamworks fails to initialize. It cannot show a login prompt, so sign in through the macOS Steam client or CrossOver if the session expires.
+- **`version.dll`.** MelonLoader needs `version=native,builtin`. `scripts/install_melonloader.py` sets it with `reg add` through the selected runtime's Wine; the game launch also passes it in `WINEDLLOVERRIDES`, along with the native DXVK DLLs.
+- **Detaching.** `scripts/launch_game.py` starts Wine with `subprocess.Popen(..., start_new_session=True)`, so the game and Steam survive the task runner and a closed terminal. A trailing `&` does not work: Task's shell kills its background children when the task ends.
+
+Shut Steam down with `wine 'C:\Program Files (x86)\Steam\steam.exe' -shutdown` (same `WINEPREFIX` and `USER`), never while the game is running, because that can break the Steamworks session and Cloud sync.
+
 ## Launching under CrossOver
 
-`task game:run` starts `Megabonk.exe` directly in the CrossOver Steam bottle with `cxstart`, with `SteamAppId` and `SteamGameId` set to 3405340. The Steam client must already be running in the bottle; start it from CrossOver first. Launching through the `steam://rungameid` URI is avoided because it can open only the CrossOver window without starting the game, especially from a script. The equivalent command:
+Set `MEGABONK_MACOS_RUNTIME=crossover` to use CrossOver instead of plain Wine; `run.py relaunch` then starts the game through `task crossover:run`, and `task crossover:melonloader:install` installs MelonLoader with CrossOver's Wine. `task crossover:run` starts `Megabonk.exe` directly in the CrossOver Steam bottle with `cxstart`, with `SteamAppId` and `SteamGameId` set to 3405340. The Steam client must already be running in the bottle; start it from CrossOver first. Launching through the `steam://rungameid` URI is avoided because it can open only the CrossOver window without starting the game, especially from a script. The equivalent command:
 
 ```sh
 game='C:\Program Files (x86)\Steam\steamapps\common\Megabonk'

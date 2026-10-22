@@ -15,13 +15,13 @@ Inside `src/MegabonkLevels.Mod/`:
 task game:melonloader:install
 ```
 
-This downloads the pinned MelonLoader release, verifies its checksum, and extracts it into your resolved Megabonk game directory (see below). The task is idempotent: it's a no-op if the pinned version is already installed. On macOS (CrossOver) it also applies the Wine DLL override (`version.dll` -> `native,builtin`) that IL2Cpp hooking needs under Wine.
+This downloads the pinned MelonLoader release, verifies its checksum, and extracts it into your resolved Megabonk game directory (see below). The task is idempotent: it's a no-op if the pinned version is already installed. On macOS it also applies the Wine DLL override (`version.dll` -> `native,builtin`) that IL2Cpp hooking needs under Wine, through plain Wine by default or CrossOver's Wine when `MEGABONK_MACOS_RUNTIME=crossover` (`task crossover:melonloader:install` sets that for you). Run `task wine:install` first on a new macOS setup; see [development.md](development.md#launching-under-wine-macos).
 
 ## Pointing a build at your own Megabonk install
 
 Path resolution precedence (see `scripts/game_paths.py`): process environment variable > `.env` file > built-in default.
 
-1. Copy `.env.example` to `.env` and set `MEGABONK_BOTTLE` (macOS CrossOver bottle) or `MEGABONK_GAME_DIR` (direct game directory override, any platform) if your install isn't at the default location.
+1. Copy `.env.example` to `.env` and set `MEGABONK_BOTTLE` (macOS CrossOver bottle) or `MEGABONK_GAME_DIR` (direct game directory override, any platform) if your install isn't at the default location. On macOS, `MEGABONK_MACOS_RUNTIME` (`wine` by default, or `crossover`) selects the runtime and `MEGABONK_WINE` overrides the plain Wine binary.
 2. For MSBuild-time overrides instead (or in addition), copy `src/MegabonkLevels.Mod/Directory.Build.props`'s properties into a `src/MegabonkLevels.Mod/Directory.Build.local.props` file (gitignored) and override `BottleFolder`/`GameFolder`/`ModInstanceFolder` there.
 
 Run `uv run scripts/game_paths.py` at any point to see the paths actually resolved.
