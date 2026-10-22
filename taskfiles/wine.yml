@@ -25,6 +25,8 @@ tasks:
       Runs wine:app then wine:dxvk. Each step downloads its archive, checks the
       sha256 against the pin in this file before extracting or copying
       anything, and skips itself when the pinned version is already installed.
+      wine:dxvk also skips itself, with a message and exit 0, when the Steam
+      prefix does not exist yet; run 'task wine:dxvk' once it does.
 
       Override a pin by exporting WINE_VERSION, WINE_URL, WINE_SHA256,
       DXVK_VERSION, DXVK_URL or DXVK_SHA256, or by
@@ -68,7 +70,10 @@ tasks:
       - cmd: |
           set -eu
           sys32="{{.PREFIX}}/drive_c/windows/system32"
-          test -d "$sys32" || { echo "no Wine prefix at {{.PREFIX}}" >&2; exit 1; }
+          if [ ! -d "$sys32" ]; then
+            echo "wine:dxvk skipped: no Wine prefix at {{.PREFIX}}; create or copy the Steam prefix there, then run 'task wine:dxvk'" >&2
+            exit 0
+          fi
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
           curl -fL --progress-bar -o "$tmp/dxvk.tar.gz" "{{.DXVK_URL}}"
