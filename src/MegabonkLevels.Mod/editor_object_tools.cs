@@ -72,12 +72,12 @@ public static class EditorObjectTools
 
         _hovered = tool == EditorTool.Select && pointerFree ? PickAt()?.Target : null;
 
-        if (pointerFree && Input.GetMouseButtonDown(2))
+        if (pointerFree && EditorInput.GetMouseButtonDown(2))
         {
             switchTo = PickBlock();
         }
 
-        if (pointerFree && Input.GetMouseButtonDown(0))
+        if (pointerFree && EditorInput.GetMouseButtonDown(0))
         {
             if (tool == EditorTool.Place)
             {
@@ -91,11 +91,11 @@ public static class EditorObjectTools
 
         if (_dragging != null)
         {
-            if (Input.GetMouseButtonUp(0))
+            if (EditorInput.GetMouseButtonUp(0))
             {
                 EndDrag(target, point, pointerFree);
             }
-            else if (Input.GetMouseButton(0))
+            else if (EditorInput.GetMouseButton(0))
             {
                 _dragActive = _dragActive || ObjectTools.DragStarted(Time.unscaledTime - _dragPressedAt);
                 if (_dragActive)
@@ -302,12 +302,12 @@ public static class EditorObjectTools
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.R))
+        if (EditorInput.GetKeyDown(KeyCode.R))
         {
-            var shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            var shift = EditorInput.GetKey(KeyCode.LeftShift) || EditorInput.GetKey(KeyCode.RightShift);
             Apply(ObjectTools.Rotate(selected, CurrentTransform(go), !shift), $"rotate {selected.Serialize()} {(shift ? "counter-clockwise" : "clockwise")}");
         }
-        else if (Input.GetKeyDown(KeyCode.Delete) || Input.GetKeyDown(KeyCode.Backspace))
+        else if (EditorInput.GetKeyDown(KeyCode.Delete) || EditorInput.GetKeyDown(KeyCode.Backspace))
         {
             Apply(ObjectTools.Remove(selected), $"remove {selected.Serialize()}");
             _selected = null;
@@ -354,7 +354,7 @@ public static class EditorObjectTools
             return null;
         }
 
-        var ray = camera.ScreenPointToRay(Input.mousePosition);
+        var ray = camera.ScreenPointToRay(EditorInput.MousePosition);
         if (Physics.Raycast(ray, out var physicsHit, RayLength)
             && LiveEditPatch.TargetOf(physicsHit.transform) is { } target
             && LiveEditPatch.ObjectFor(target) is { } hitObject)

@@ -37,7 +37,7 @@ public static class EditorMode
             Enter(logger);
         }
 
-        if (Input.GetKeyDown(ToggleKey) && !ConsoleOpen())
+        if (EditorInput.GetKeyDown(ToggleKey) && !ConsoleOpen())
         {
             Set(!_session.Active, logger);
         }
@@ -115,19 +115,19 @@ public static class EditorMode
     private static void Fly()
     {
         // A sweep that starts off the palette keeps turning when the pointer crosses it.
-        if (Input.GetMouseButtonDown(1))
+        if (EditorInput.GetMouseButtonDown(1))
         {
             _looking = !EditorPalette.PointerOverPanel && !EditorTileTools.PointerOverEditorOverlay;
         }
 
-        var look = _looking && Input.GetMouseButton(1);
+        var look = _looking && EditorInput.GetMouseButton(1);
         var input = new FreeFlyInput(
             Forward: Axis(KeyCode.W, KeyCode.S),
             Right: Axis(KeyCode.D, KeyCode.A),
             Up: Axis(KeyCode.Space, AltKey()),
-            MouseDx: look ? Input.GetAxisRaw("Mouse X") * _horizontalSign : 0f,
-            MouseDy: look ? Input.GetAxisRaw("Mouse Y") * _verticalSign : 0f,
-            Fast: Input.GetKey(KeyCode.LeftShift));
+            MouseDx: look ? EditorInput.GetAxisRaw("Mouse X") * _horizontalSign : 0f,
+            MouseDy: look ? EditorInput.GetAxisRaw("Mouse Y") * _verticalSign : 0f,
+            Fast: EditorInput.GetKey(KeyCode.LeftShift));
 
         _pose = FreeFlyCamera.Step(_pose, input, Time.unscaledDeltaTime, _settings);
         CameraOverride.Set(_pose);
@@ -143,9 +143,9 @@ public static class EditorMode
     }
 
     private static float Axis(KeyCode positive, KeyCode negative) =>
-        EditorTileTools.TextInputFocused ? 0f : (Input.GetKey(positive) ? 1f : 0f) - (Input.GetKey(negative) ? 1f : 0f);
+        EditorTileTools.TextInputFocused ? 0f : (EditorInput.GetKey(positive) ? 1f : 0f) - (EditorInput.GetKey(negative) ? 1f : 0f);
 
-    private static KeyCode AltKey() => Input.GetKey(KeyCode.RightAlt) ? KeyCode.RightAlt : KeyCode.LeftAlt;
+    private static KeyCode AltKey() => EditorInput.GetKey(KeyCode.RightAlt) ? KeyCode.RightAlt : KeyCode.LeftAlt;
 
     private static bool RunInProgress() => MyPlayer.Instance != null && PlayerCamera.Instance != null;
 

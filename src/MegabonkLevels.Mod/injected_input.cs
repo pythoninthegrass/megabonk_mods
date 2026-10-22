@@ -6,13 +6,13 @@ namespace MegabonkLevels;
 // Unity-free scripted keyboard and mouse state; keys are UnityEngine.KeyCode member names.
 public sealed class InjectedInputQueue
 {
-    private readonly List<(int Offset, Action Apply)> _pending = [];
-    private readonly HashSet<string> _heldKeys = [];
-    private readonly HashSet<string> _pressedKeys = [];
-    private readonly HashSet<string> _releasedKeys = [];
-    private readonly HashSet<int> _heldButtons = [];
-    private readonly HashSet<int> _pressedButtons = [];
-    private readonly HashSet<int> _releasedButtons = [];
+    private readonly List<(int Offset, Action Apply)> _pending = new();
+    private readonly HashSet<string> _heldKeys = new();
+    private readonly HashSet<string> _pressedKeys = new();
+    private readonly HashSet<string> _releasedKeys = new();
+    private readonly HashSet<int> _heldButtons = new();
+    private readonly HashSet<int> _pressedButtons = new();
+    private readonly HashSet<int> _releasedButtons = new();
     private int _cursor;
     private int? _lastFrame;
 

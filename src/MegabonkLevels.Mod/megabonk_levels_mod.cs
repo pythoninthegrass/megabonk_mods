@@ -36,18 +36,19 @@ public class MegabonkLevelsMod : MelonMod
 
     public override void OnUpdate()
     {
+        EditorInput.Queue.BeginFrame(Time.frameCount);
         DevHarness.Poll();
         KillFloorWatcher.Tick();
         PositionLabel.Tick();
         EditorMode.Tick(LoggerInstance);
 
-        if (Input.GetKeyDown(KeyCode.F9))
+        if (EditorInput.GetKeyDown(KeyCode.F9))
         {
             SeedForcePatch.CycleMode();
         }
 
         // F6, not F10: F10 is already bound to the game's own built-in debug console.
-        if (Input.GetKeyDown(KeyCode.F6))
+        if (EditorInput.GetKeyDown(KeyCode.F6))
         {
             var path = Path.Combine(MelonEnvironment.ModsDirectory, TestLevelFileName);
             LevelLoaderPatch.LoadAndStart(path, LoggerInstance);
