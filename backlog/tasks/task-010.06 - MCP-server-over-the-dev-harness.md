@@ -1,10 +1,11 @@
 ---
 id: TASK-010.06
 title: MCP server over the dev harness
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-22 03:43'
 updated_date: '2026-10-22 06:09'
+verified_date: '2026-10-22 06:09'
 labels:
   - dev-harness
   - tooling
@@ -63,27 +64,31 @@ Do not: print to stdout from the server, duplicate run.py logic, add input or ga
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 scripts/mcp_server.py is a PEP 723 script using MCPServer over stdio with the documented tools: relaunch, load, quit, screenshot, state, editor, freeze, resume, invulnerable, camera and log_tail
-- [ ] #2 screenshot returns an inline image/png content block, and relaunch reports progress through the MCP context
-- [ ] #3 Tools reuse run.py functions: send_for_result is split into a non-printing request_result with tests written first and unchanged CLI output, and relaunch is extracted from the CLI dispatch with tests for its order, its failure cases and its 5-attempt limit, with unchanged CLI messages and exit codes
-- [ ] #4 Nothing is written to stdout by the server, and blocking waits run off the event loop
-- [ ] #5 A rejected command or a timeout surfaces as a ToolError whose text contains the result file's error, not the generic 'Error executing tool' text alone
-- [ ] #6 tests/test_mcp_server.py uses the in-memory Client against a temp harness with a fake mod and covers success, rejection, timeout, screenshot and stdout silence, and runs under task scripts:test without changes to taskfile.yml, pytest.ini or tests/conftest.py
-- [ ] #7 The server is registered as megabonk in .mcp.json without removing other entries
-- [ ] #8 docs/development.md has an MCP server section and AGENTS.md points to it
-- [ ] #9 The task notes list the check against the real game (megabonk connected under /mcp, relaunch, state and screenshot viewed) as an open item for a human, not as verified
+- [x] #1 scripts/mcp_server.py is a PEP 723 script using MCPServer over stdio with the documented tools: relaunch, load, quit, screenshot, state, editor, freeze, resume, invulnerable, camera and log_tail
+- [x] #2 screenshot returns an inline image/png content block, and relaunch reports progress through the MCP context
+- [x] #3 Tools reuse run.py functions: send_for_result is split into a non-printing request_result with tests written first and unchanged CLI output, and relaunch is extracted from the CLI dispatch with tests for its order, its failure cases and its 5-attempt limit, with unchanged CLI messages and exit codes
+- [x] #4 Nothing is written to stdout by the server, and blocking waits run off the event loop
+- [x] #5 A rejected command or a timeout surfaces as a ToolError whose text contains the result file's error, not the generic 'Error executing tool' text alone
+- [x] #6 tests/test_mcp_server.py uses the in-memory Client against a temp harness with a fake mod and covers success, rejection, timeout, screenshot and stdout silence, and runs under task scripts:test without changes to taskfile.yml, pytest.ini or tests/conftest.py
+- [x] #7 The server is registered as megabonk in .mcp.json without removing other entries
+- [x] #8 docs/development.md has an MCP server section and AGENTS.md points to it
+- [x] #9 The task notes list the check against the real game (megabonk connected under /mcp, relaunch, state and screenshot viewed) as an open item for a human, not as verified
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Definition of Done item 'task check passes' cannot be run unattended because task check builds the mod and the csproj deploys into the live game's Mods folder. This task changes only Python, so satisfy it with task scripts:test and task lint.
+
+Done: scripts/mcp_server.py (MCPServer "megabonk" over stdio) with tools relaunch, load, quit, screenshot, state, editor, freeze, resume, invulnerable, camera, log_tail. run.py split: non-printing request_result (send_for_result keeps its printing and return exactly) and relaunch extracted from the CLI dispatch into run.relaunch(..., on_step, on_error) with identical messages and exit codes. Blocking waits run through anyio.to_thread; relaunch reports progress through the MCP context. Registered megabonk in .mcp.json (other entries kept). Verified unattended: task scripts:test (116 passed, 7 new in tests/test_mcp_server.py plus request_result/relaunch tests in tests/test_run.py), task lint clean, and starting the server by hand prints nothing to stdout until it receives a message (initialize returns serverInfo name "megabonk").
+
+Open item for a human (not verified here): confirm against the real running game that /mcp lists megabonk as connected, and that relaunch, state and screenshot work through it with the returned image actually viewed. The game cannot be launched in this unattended run.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->

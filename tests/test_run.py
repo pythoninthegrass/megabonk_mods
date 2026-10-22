@@ -404,3 +404,103 @@ def test_wait_for_exit_true_once_probe_reports_no_pids() -> None:
 def test_wait_for_exit_false_when_game_outlives_timeout() -> None:
     clock = iter(range(100))
     assert not run.wait_for_exit(lambda: [1], timeout=3, sleep=lambda _: None, now=lambda: next(clock))
+
+
+def make_harness(tmp: str) -> Path:
+    harness = Path(tmp) / "harness"
+    for folder in ("commands", "done", "rejected", "results"):
+        (harness / folder).mkdir(parents=True)
+    return harness
+
+
+def test_request_result_returns_the_outcome_and_the_parsed_result() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"state","ok":true,"result":{"editor":true}}')
+        outcome, result = run.request_result(game / "harness", {"command": "state"}, timeout=5)
+        assert outcome == "done"
+        assert result == {"command": "state", "ok": True, "result": {"editor": True}}
+
+
+def test_request_result_reports_rejected_with_the_result_file() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"freeze","ok":false,"error":"boom"}', outcome="rejected")
+        outcome, result = run.request_result(game / "harness", {"command": "freeze"}, timeout=5)
+        assert outcome == "rejected"
+        assert result == {"command": "freeze", "ok": False, "error": "boom"}
+
+
+def test_request_result_times_out_with_no_result() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        harness = make_harness(tmp)
+        outcome, result = run.request_result(harness, {"command": "state"}, timeout=0.2)
+        assert outcome == "timeout"
+        assert result is None
+
+
+def test_request_result_prints_nothing(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"freeze","ok":true}')
+        run.request_result(game / "harness", {"command": "freeze"}, timeout=5)
+        out = capsys.readouterr()
+        assert out.out == "" and out.err == ""
+
+
+def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_ready=True, kill_floor=True):
+    calls = []
+    monkeypatch.setattr(run, "quit_game", lambda h, t: calls.append("quit") or True)
+    monkeypatch.setattr(run, "launch_game", lambda task: calls.append(("launch", task)) or True)
+    monkeypatch.setattr(run, "wait_for_steamworks_ready", lambda probe, timeout: calls.append("steam") or steam_ready)
+    monkeypatch.setattr(run, "send", lambda h, payload, t: calls.append(("send", payload["command"])) or True)
+
+    def wait_log(log, line, newer, timeout):
+        calls.append(("log", line))
+        if line == "DevHarness: enabled":
+            return harness_ready
+        return kill_floor
+
+    monkeypatch.setattr(run, "wait_for_log_line", wait_log)
+    return calls
+
+
+def test_relaunch_runs_every_step_in_order_and_returns_true(monkeypatch) -> None:
+    calls = relaunch_stubs(monkeypatch)
+    ok = run.relaunch(
+        Path("/h"), Path("/g"), Path("/lvl.json"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None
+    )
+    assert ok is True
+    assert calls == [
+        "quit",
+        ("launch", "game:run"),
+        ("log", "DevHarness: enabled"),
+        "steam",
+        ("send", "load-level"),
+        ("log", "KillFloor: armed"),
+        ("send", "invulnerable"),
+        ("send", "editor"),
+    ]
+
+
+def test_relaunch_fails_with_the_exact_error_when_the_harness_never_becomes_ready(monkeypatch) -> None:
+    relaunch_stubs(monkeypatch, harness_ready=False)
+    errors = []
+    ok = run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=errors.append)
+    assert ok is False
+    assert "relaunch: harness did not become ready" in errors
+
+
+def test_relaunch_fails_when_steamworks_never_becomes_ready(monkeypatch) -> None:
+    relaunch_stubs(monkeypatch, steam_ready=False)
+    errors = []
+    ok = run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=errors.append)
+    assert ok is False
+    assert "relaunch: Steamworks did not become ready" in errors
+
+
+def test_relaunch_retries_the_load_and_gives_up_after_five_attempts(monkeypatch) -> None:
+    calls = relaunch_stubs(monkeypatch, kill_floor=False)
+    ok = run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None)
+    assert ok is False
+    loads = [c for c in calls if c == ("send", "load-level")]
+    assert len(loads) == 5
+    assert ("send", "invulnerable") not in calls
+    assert ("send", "editor") not in calls
