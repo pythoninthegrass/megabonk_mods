@@ -5,6 +5,8 @@ version: "3.0"
 set: ["e", "u", "pipefail"]
 shopt: ["globstar"]
 
+dotenv: [".env"]
+
 vars:
   MISE_SHIMS: "{{.HOME}}/.local/share/mise/shims"
 
@@ -15,6 +17,12 @@ includes:
   mod: taskfiles/mod.yml
   game: taskfiles/game.yml
   re: taskfiles/re.yml
+  wine:
+    taskfile: taskfiles/wine.yml
+    platforms: [darwin]
+  crossover:
+    taskfile: taskfiles/crossover.yml
+    platforms: [darwin]
 
 tasks:
   default:

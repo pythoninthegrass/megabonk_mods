@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+tasks:
+  run:
+    desc: "Launch Megabonk through CrossOver (MEGABONK_MACOS_RUNTIME=crossover)"
+    summary: |
+      Usage: task crossover:run
+
+      Starts Megabonk.exe directly in the CrossOver Steam bottle with cxstart,
+      in the background, with SteamAppId and SteamGameId set so Steamworks
+      initializes. The Steam client must already be running; the steam://
+      URI only opened the CrossOver window.
+    platforms: [darwin]
+    cmds:
+      - cmd: |
+          game='C:\Program Files (x86)\Steam\steamapps\common\Megabonk'
+          python3 - "$game" <<'PY'
+          import ntpath, os, subprocess, sys
+          cxstart = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/cxstart"
+          game = sys.argv[1]
+          env = {**os.environ, "SteamAppId": "3405340", "SteamGameId": "3405340"}
+          args = [cxstart, "--bottle", "Steam", "--workdir", game, ntpath.join(game, "Megabonk.exe")]
+          subprocess.Popen(args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+          PY
+
+  melonloader:install:
+    desc: "Install MelonLoader and set the version.dll override through CrossOver's wine"
+    summary: |
+      Usage: task crossover:melonloader:install
+
+      Runs scripts/install_melonloader.py with MEGABONK_MACOS_RUNTIME=crossover.
+    platforms: [darwin]
+    env:
+      MEGABONK_MACOS_RUNTIME: crossover
+    cmds:
+      - uv run scripts/install_melonloader.py
