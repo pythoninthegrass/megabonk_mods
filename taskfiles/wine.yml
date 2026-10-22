@@ -68,12 +68,11 @@ tasks:
       - test "$(cat "{{.PREFIX}}/drive_c/windows/dxvk.installed" 2>/dev/null)" = "{{.DXVK_SHA256}}"
     cmds:
       - cmd: |
+          echo "wine:dxvk skipped: no Wine prefix at {{.PREFIX}}; create or copy the Steam prefix there, then run 'task wine:dxvk'" >&2
+        if: '! test -d "{{.PREFIX}}/drive_c/windows/system32"'
+      - cmd: |
           set -eu
           sys32="{{.PREFIX}}/drive_c/windows/system32"
-          if [ ! -d "$sys32" ]; then
-            echo "wine:dxvk skipped: no Wine prefix at {{.PREFIX}}; create or copy the Steam prefix there, then run 'task wine:dxvk'" >&2
-            exit 0
-          fi
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
           curl -fL --progress-bar -o "$tmp/dxvk.tar.gz" "{{.DXVK_URL}}"
@@ -89,3 +88,4 @@ tasks:
           fi
           cp "$src/d3d11.dll" "$src/d3d10core.dll" "$sys32/"
           echo "{{.DXVK_SHA256}}" > "{{.PREFIX}}/drive_c/windows/dxvk.installed"
+        if: 'test -d "{{.PREFIX}}/drive_c/windows/system32"'
