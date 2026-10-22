@@ -1,10 +1,10 @@
 ---
 id: TASK-009
 title: Run Megabonk on macOS with free Wine instead of CrossOver
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-22 03:00'
-updated_date: '2026-10-22 03:22'
+updated_date: '2026-10-22 03:24'
 labels: []
 dependencies: []
 documentation:
@@ -105,5 +105,5 @@ AC12 resolved: root taskfile.yml now has dotenv: ['.env'] (propagates to include
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
