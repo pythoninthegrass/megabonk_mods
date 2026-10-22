@@ -4,7 +4,7 @@ title: Research player teleport and level-up dismissal in the Il2Cpp build
 status: To Do
 assignee: []
 created_date: '2026-10-22 03:43'
-updated_date: '2026-10-22 04:08'
+updated_date: '2026-10-22T04:36:00Z'
 labels:
   - dev-harness
   - research
@@ -49,19 +49,13 @@ If either question cannot be answered, say so with the evidence of what was trie
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The outcome of opening GameAssembly.dll with REA's Ghidra provider and decompiling MyTime.Pause is recorded in docs/development.md (works or not, first-analysis duration, any error), with a fallback named if it does not work
+- [x] #1 The outcome of opening GameAssembly.dll with REA's Ghidra provider and decompiling MyTime.Pause is recorded in docs/development.md (works or not, first-analysis duration, any error), with a fallback named if it does not work
 - [ ] #2 docs/development.md records a teleport method for the player that was confirmed in the running game, with the classes, methods, field types, RVAs, call sequence, failed approaches and side effects on camera, enemies and kill floor
 - [ ] #3 docs/development.md records how to detect an open level-up dialog and how to apply an upgrade choice, confirmed in the running game, with the classes, methods, RVAs and call sequence
 - [ ] #4 The result fields TASK-010.05 should return for each command are recorded
 - [ ] #5 Any temporary harness code or logging added for experiments is removed before finishing
 - [ ] #6 A question that could not be answered is recorded as an open question with the evidence of what was tried, and Lance is told
 <!-- AC:END -->
-
-## Implementation Notes
-
-<!-- SECTION:NOTES:BEGIN -->
-Ghidra via REA, first attempt (Mac, 16 GB, 52 MB GameAssembly.dll, Ghidra 12.1.4): open_binary with provider_id ghidra succeeded and Ghidra's PE loader recognised x86:LE:64:windows, but the first analyze_function (VA 0x1803E5B20, MyTime.Pause) failed with provider_timeout after the default 330000 ms startup deadline, still analysing. The committed .claude/settings.json now sets REA_GHIDRA_STARTUP_TIMEOUT_MS=3600000 and GHIDRA_HEADLESS_MAXMEM=6G (default heap is 2G). Restart Claude Code, open_binary again with provider_id ghidra, and re-run the first query; the outcome and duration still have to be recorded in docs/development.md (acceptance criterion 1). If it still fails or takes impractically long, options are REA_GHIDRA_DISABLED_ANALYZERS, the Ghidra GUI project (task ghidra:run), or Binary Ninja.
-<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
@@ -70,3 +64,13 @@ Ghidra via REA, first attempt (Mac, 16 GB, 52 MB GameAssembly.dll, Ghidra 12.1.4
 - [ ] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Ghidra via REA, first attempt (Mac, 16 GB, 52 MB GameAssembly.dll, Ghidra 12.1.4): open_binary with provider_id ghidra succeeded and Ghidra's PE loader recognised x86:LE:64:windows, but the first analyze_function (VA 0x1803E5B20, MyTime.Pause) failed with provider_timeout after the default 330000 ms startup deadline, still analysing. The committed .claude/settings.json now sets REA_GHIDRA_STARTUP_TIMEOUT_MS=3600000 and GHIDRA_HEADLESS_MAXMEM=6G (default heap is 2G). Restart Claude Code, open_binary again with provider_id ghidra, and re-run the first query; the outcome and duration still have to be recorded in docs/development.md (acceptance criterion 1). If it still fails or takes impractically long, options are REA_GHIDRA_DISABLED_ANALYZERS, the Ghidra GUI project (task ghidra:run), or Binary Ninja.
+
+Static half done on a 64 GB arm64 Mac (game not installed, nothing confirmed in the running game). REA Ghidra provider works on GameAssembly.dll: settings REA_GHIDRA_STARTUP_TIMEOUT_MS=3600000, GHIDRA_HEADLESS_MAXMEM=16G (settings.local.json), no analyzers disabled. First analyze_function (MyTime.Pause, 0x1803E5B20) finished about 12 minutes after open_binary (Ghidra reports 713 s auto-analysis); later queries return in seconds. Pseudocode is usable but unnamed (FUN_/DAT_ only); map FUN_1xxxxxxxx minus 0x180000000 to the RVA in dump.cs for names. LevelupScreen.Open (RVA 0x54F110) has no Ghidra function and could not be decompiled. close_binary with snapshot_path .tools/GameAssembly/ghidra.rea-snapshot succeeded (616 KB, evidence for queried functions only; importing it is untested).
+
+Static findings are recorded in docs/development.md under 'Player teleport' and 'Level-up dialog', all unconfirmed in the running game. Teleport candidates: MyPlayer.TeleportPlayerImmediate (RVA 0x4B6E00) calling PlayerMovement.TeleportPlayer (RVA 0x343A80, Rigidbody-based, zeroes velocity); PlayerMovement.VerifyPosition (RVA 0x344220) may revert a low target. Level-up candidates: LevelupScreen.isLevelingUp static flag; UpgradeButton.SelectUpgrade (RVA 0x55F0A0) -> UpgradePicker.SelectUpgrade (RVA 0x561500) -> PlayerInventory.AddUpgrade (RVA 0x4DFD80) -> EncounterWindows.RewardFinished (RVA 0x3E09D0); UpgradePicker.AutoSelectUpgrade (RVA 0x560BE0) is a static UI-free pick. Acceptance criteria 2 and 3 stay open until confirmed in the running game on the CrossOver Mac.
+<!-- SECTION:NOTES:END -->
