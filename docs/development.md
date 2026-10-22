@@ -250,6 +250,12 @@ What to read instead:
 
 That last table row covers a whole class of behaviour that is not in code at all. Serialized ScriptableObjects, scene and prefab data are not emitted by the dumper, so the game's Rewired key bindings live in an input-manager asset: `MyInputManager`'s action names (`Jump`, `Interact`, `MapOverlay`, and the rest) are plainly visible in `dump.cs`, but which physical key each action binds is not recorded anywhere the dump can see. Questions of that shape get settled by trying it in the game, not by reading harder.
 
+### Ghidra
+
+Ghidra is available as an alternative to Binary Ninja for reading `GameAssembly`. `task ghidra:install` downloads the pinned release into `$HOME/.local/opt/ghidra`, points `$HOME/.local/opt/ghidra/current` at it, and on macOS builds the native components (decompiler, sleigh) with the bundled Gradle wrapper, because the macOS release ships without them. Every step checks its result first, so re-running is a no-op once everything is in place. `task ghidra:run` installs if needed and launches the GUI.
+
+Ghidra 12.1 needs Java 21 or newer. The tasks use the `java` pinned in `.tool-versions` through mise, and `JAVA_HOME` is set per command rather than globally. The version is pinned in `taskfiles/ghidra.yml` (`GHIDRA_VERSION`, `GHIDRA_DATE`); a new version installs beside the old one and `current` moves to it. The first GUI launch may quarantine the locally built natives under Gatekeeper; clear it with `xattr -dr com.apple.quarantine "$HOME/.local/opt/ghidra/current/"`.
+
 ## Editor mode
 
 Editor mode is a freeze-and-fly overlay for surveying a map while a run is active. It works in any run, not only mod-loaded levels. Toggle it with F8, or with `run.py editor on` and `run.py editor off` when the harness is enabled (the harness cannot press keys). F8 is ignored while the game's debug console (F10) is open and while no run is in progress. The game's own `LookHorizontal` and `LookVertical` Rewired axes read zero while the run is paused, which is why look uses Unity's raw mouse axes. Rewired's key bindings live in a serialized asset that is not readable from code, so that F8 collides with no game binding is only confirmed by pressing it in the game.

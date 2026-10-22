@@ -17,6 +17,7 @@ includes:
   mod: taskfiles/mod.yml
   game: taskfiles/game.yml
   re: taskfiles/re.yml
+  ghidra: taskfiles/ghidra.yml
   wine:
     taskfile: taskfiles/wine.yml
     platforms: [darwin]
