@@ -1,10 +1,10 @@
 ---
 id: TASK-010.02
 title: Injected-input seam for editor input
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-22 03:42'
-updated_date: '2026-10-22 05:36'
+updated_date: '2026-10-22T05:51:00Z'
 labels:
   - dev-harness
   - tooling
@@ -56,20 +56,14 @@ Do not: add harness commands (TASK-010.03), touch the game's Rewired input, chan
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 InjectedInputQueue exists as a Unity-free class with the documented API and frame semantics, linked into the test project
-- [ ] #2 EditorInput returns the real UnityEngine.Input value or the injected one for key, mouse button, mouse position and input string reads, and passes axis and scroll reads through, using the same Input member for each call site as before
-- [ ] #3 EditorInput.Queue.BeginFrame(Time.frameCount) runs at the top of OnUpdate before the harness poll and any editor code
-- [ ] #4 A raw-Input search over src (rg 'Input\.(GetKey|GetMouse|mousePosition|inputString|GetAxis|mouseScrollDelta)' src) finds matches only in editor_input.cs, and the mod project compiles with the deploy redirected to a temp directory
-- [ ] #5 Queue behaviour (tap timing, pressed/released one frame, hold, click, text with backspace and return, mouse persistence and clear, repeated BeginFrame) has xUnit tests written first and passing
-- [ ] #6 docs/development.md describes the seam and its frame semantics
-- [ ] #7 The task notes list the in-game check that real keyboard and mouse input still behaves as before as an open item for a human, not as verified
+- [x] #1 InjectedInputQueue exists as a Unity-free class with the documented API and frame semantics, linked into the test project
+- [x] #2 EditorInput returns the real UnityEngine.Input value or the injected one for key, mouse button, mouse position and input string reads, and passes axis and scroll reads through, using the same Input member for each call site as before
+- [x] #3 EditorInput.Queue.BeginFrame(Time.frameCount) runs at the top of OnUpdate before the harness poll and any editor code
+- [x] #4 A raw-Input search over src (rg 'Input\.(GetKey|GetMouse|mousePosition|inputString|GetAxis|mouseScrollDelta)' src) finds matches only in editor_input.cs, and the mod project compiles with the deploy redirected to a temp directory
+- [x] #5 Queue behaviour (tap timing, pressed/released one frame, hold, click, text with backspace and return, mouse persistence and clear, repeated BeginFrame) has xUnit tests written first and passing
+- [x] #6 docs/development.md describes the seam and its frame semantics
+- [x] #7 The task notes list the in-game check that real keyboard and mouse input still behaves as before as an open item for a human, not as verified
 <!-- AC:END -->
-
-## Implementation Notes
-
-<!-- SECTION:NOTES:BEGIN -->
-Definition of Done item 'task check passes' cannot be run unattended because task check builds the mod and the csproj deploys into the live game's Mods folder. Satisfy it by running its parts: task mod:test, the dotnet build with -p:ModInstanceFolder redirected to a temp directory, task lint and task scripts:test.
-<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
@@ -78,3 +72,11 @@ Definition of Done item 'task check passes' cannot be run unattended because tas
 - [ ] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Definition of Done item 'task check passes' cannot be run unattended because task check builds the mod and the csproj deploys into the live game's Mods folder. Satisfy it by running its parts: task mod:test, the dotnet build with -p:ModInstanceFolder redirected to a temp directory, task lint and task scripts:test.
+
+Open item for a human: confirm in the running game that the real keyboard and mouse still drive the editor exactly as before (palette clicks, W/A/S/D fly, tool hotkeys, R rotation, typing). Not verified; the game was not run. The task's rg done-check also matches 'EditorInput.' call sites because 'Input\.' is a substring; the check 'rg -P (?<![A-Za-z])Input\.(GetKey|GetMouse|mousePosition|inputString|GetAxis|mouseScrollDelta) src' finds matches only in editor_input.cs.
+<!-- SECTION:NOTES:END -->

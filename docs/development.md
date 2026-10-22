@@ -485,3 +485,22 @@ Picking tries a physics raycast first and accepts the hit only when its hierarch
 Pick block scrolls the palette to the picked entry when it is outside the visible list. It matches a generator-spawned object's prefab name (the `object:{prefabName}:{index}` genId category) against the palette's display names, preferring the current stage's entry, then a stage-independent one (shrines, interactables). An editor-placed object uses the catalogId it was placed with. An object with no matching entry, including every `tileObject`, is logged (`pick block found no palette entry`) and the selection is left alone.
 
 Every action logs `EditorObjectTools: <what> -> <opType>`. Object removal now deactivates the live object (rather than destroying it), so undo/redo can restore the same object identity by toggling it active through a move action. Pure logic lives in `object_tool.cs` (position, grid lines, stacking, facing, the ops), `palette_scroll.cs` (palette scroll offset), `object_picker.cs` (nearest object) and `palette_pick.cs` (pick block lookup).
+
+## Editor input
+
+The editor reads keyboard and mouse state through `EditorInput` instead of `UnityEngine.Input`, so scripted input can drive it. `EditorInput` exposes `GetKey`, `GetKeyDown`, `GetKeyUp`, `GetMouseButton`, `GetMouseButtonDown`, `GetMouseButtonUp`, `MousePosition` and `InputString`. Each returns the real `UnityEngine.Input` value or the injected one: key and button reads are true when either source says so, `MousePosition` is the injected position when one is set and the real one otherwise, and `InputString` is the real string followed by the injected character for the frame. `GetAxisRaw` and `MouseScrollDelta` return the real value only, since axes and scrolling cannot be injected. `EditorMode`, `EditorTileTools`, `EditorObjectTools`, `EditorPalette` and `MegabonkLevelsMod.OnUpdate` call `EditorInput`; none of them read `UnityEngine.Input` directly, and neither should new editor code.
+
+The injected state lives in `EditorInput.Queue`, an `InjectedInputQueue` (Unity-free, covered by the xUnit tests). Keys are named by their `UnityEngine.KeyCode` member names as strings, such as `"R"`, `"LeftShift"`, `"Alpha1"` and `"Escape"`; the queue does not check that a name is a real key. `OnUpdate` calls `EditorInput.Queue.BeginFrame(Time.frameCount)` before the harness poll and before any editor code, so every reader in a frame sees the same state.
+
+Each enqueue schedules its steps on consecutive frames, starting at the next `BeginFrame` or after the steps already queued:
+
+| Enqueue | Schedule, with N as its first frame |
+| --- | --- |
+| `EnqueueTap(key, modifiers)` with modifiers | modifiers down at N, key down at N+1, key up at N+2, modifiers up at N+3 |
+| `EnqueueTap(key, modifiers)` without modifiers | key down at N, key up at N+1 |
+| `EnqueueKeyDown(key)`, `EnqueueKeyUp(key)`, `EnqueueMouseDown(button)`, `EnqueueMouseUp(button)` | one step at N |
+| `EnqueueClick(button)` | button down at N, button up at N+1 |
+| `EnqueueMouseMove(x, y)` | position set at N, using no frame of its own, so a click queued after it lands on that position on the same frame |
+| `EnqueueText(text)` | one character per frame into `InputStringThisFrame`; `\b` is backspace and `\n` is return |
+
+Pressed and released flags are true for exactly one frame. A held key or button stays held until its up step. An injected mouse position (screen pixels, origin bottom-left) persists until `ClearMouse`, after which `MousePosition` is null and `EditorInput.MousePosition` falls back to the real cursor. Calling `BeginFrame` again with the same frame number does nothing.

@@ -95,15 +95,15 @@ public static class EditorPalette
             return;
         }
 
-        var mouse = (Vector2)Input.mousePosition;
+        var mouse = (Vector2)EditorInput.MousePosition;
         PointerOverPanel = RectTransformUtility.RectangleContainsScreenPoint(_panel, mouse, null);
         if (!PointerOverPanel)
         {
             return;
         }
 
-        Scroll(Input.mouseScrollDelta.y);
-        if (Input.GetMouseButtonDown(0) && RectTransformUtility.RectangleContainsScreenPoint(_viewport, mouse, null))
+        Scroll(EditorInput.MouseScrollDelta.y);
+        if (EditorInput.GetMouseButtonDown(0) && RectTransformUtility.RectangleContainsScreenPoint(_viewport, mouse, null))
         {
             ClickRowAt(mouse);
         }

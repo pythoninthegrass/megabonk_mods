@@ -142,7 +142,7 @@ public static class EditorTileTools
 
         for (var digit = 1; digit <= 9; digit++)
         {
-            if (Input.GetKeyDown(KeyCode.Alpha0 + digit) && EditorTools.FromHotkey(digit) is { } tool)
+            if (EditorInput.GetKeyDown(KeyCode.Alpha0 + digit) && EditorTools.FromHotkey(digit) is { } tool)
             {
                 SetTool(tool);
             }
@@ -157,7 +157,7 @@ public static class EditorTileTools
                 SetTool(requested);
             }
         }
-        else if (_target is { } target && Input.GetMouseButtonDown(0))
+        else if (_target is { } target && EditorInput.GetMouseButtonDown(0))
         {
             Use(target.X, target.Z, target.State);
             _target = FindTarget();
@@ -185,7 +185,7 @@ public static class EditorTileTools
             return null;
         }
 
-        if (!ground.Raycast(camera.ScreenPointToRay(Input.mousePosition), out var hit, RayLength))
+        if (!ground.Raycast(camera.ScreenPointToRay(EditorInput.MousePosition), out var hit, RayLength))
         {
             return null;
         }
@@ -422,7 +422,7 @@ public static class EditorTileTools
 
     private static void HandleUndoRedoHotkeys()
     {
-        var ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+        var ctrl = EditorInput.GetKey(KeyCode.LeftControl) || EditorInput.GetKey(KeyCode.RightControl);
         if (!ctrl)
         {
             _ctrlHeldSince = -1f;
@@ -439,11 +439,11 @@ public static class EditorTileTools
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.Z))
+        if (EditorInput.GetKeyDown(KeyCode.Z))
         {
             Undo();
         }
-        else if (Input.GetKeyDown(KeyCode.Y))
+        else if (EditorInput.GetKeyDown(KeyCode.Y))
         {
             Redo();
         }
@@ -704,8 +704,8 @@ public static class EditorTileTools
     }
 
     private static bool PointerOverOverlay() =>
-        (_toolbarRect != null && RectTransformUtility.RectangleContainsScreenPoint(_toolbarRect, Input.mousePosition, null))
-        || (_loadRect != null && RectTransformUtility.RectangleContainsScreenPoint(_loadRect, Input.mousePosition, null));
+        (_toolbarRect != null && RectTransformUtility.RectangleContainsScreenPoint(_toolbarRect, EditorInput.MousePosition, null))
+        || (_loadRect != null && RectTransformUtility.RectangleContainsScreenPoint(_loadRect, EditorInput.MousePosition, null));
 
     private static void HandleOverlayInput()
     {
@@ -716,12 +716,12 @@ public static class EditorTileTools
 
         ScrollLoadList();
 
-        if (!Input.GetMouseButtonDown(0))
+        if (!EditorInput.GetMouseButtonDown(0))
         {
             return;
         }
 
-        var mouse = (Vector2)Input.mousePosition;
+        var mouse = (Vector2)EditorInput.MousePosition;
         var handled = false;
         foreach (var region in _clickRegions)
         {
@@ -745,12 +745,12 @@ public static class EditorTileTools
 
     private static void ScrollLoadList()
     {
-        if (_loadRect == null || !RectTransformUtility.RectangleContainsScreenPoint(_loadRect, Input.mousePosition, null))
+        if (_loadRect == null || !RectTransformUtility.RectangleContainsScreenPoint(_loadRect, EditorInput.MousePosition, null))
         {
             return;
         }
 
-        var selected = EditorOverlayModel.SelectedIndexAfterScroll(_selectedLevel, _levelFiles.Count, Input.mouseScrollDelta.y);
+        var selected = EditorOverlayModel.SelectedIndexAfterScroll(_selectedLevel, _levelFiles.Count, EditorInput.MouseScrollDelta.y);
         if (selected == _selectedLevel)
         {
             return;
@@ -762,12 +762,12 @@ public static class EditorTileTools
 
     private static void HandleSaveTyping()
     {
-        if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
+        if (EditorInput.GetKey(KeyCode.LeftControl) || EditorInput.GetKey(KeyCode.RightControl))
         {
             return;
         }
 
-        foreach (var c in Input.inputString)
+        foreach (var c in EditorInput.InputString)
         {
             if (c == '\b')
             {
@@ -786,7 +786,7 @@ public static class EditorTileTools
             }
         }
 
-        if (Input.GetKeyDown(KeyCode.Escape))
+        if (EditorInput.GetKeyDown(KeyCode.Escape))
         {
             _saveInputFocused = false;
         }

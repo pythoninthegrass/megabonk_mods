@@ -59,6 +59,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/editor_editing_support.cs" Link="editor_editing_support.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/editor_edit_session.cs" Link="editor_edit_session.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/editor_reenter_policy.cs" Link="editor_reenter_policy.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/injected_input.cs" Link="injected_input.cs" />
   </ItemGroup>
 
   <ItemGroup>
