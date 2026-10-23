@@ -6,6 +6,8 @@ namespace MegabonkLevels;
 // Unity-free scripted keyboard and mouse state; keys are UnityEngine.KeyCode member names.
 public sealed class InjectedInputQueue
 {
+    private const float MouseHoldSeconds = 1f;
+
     private readonly List<(int Offset, Action Apply)> _pending = new();
     private readonly HashSet<string> _heldKeys = new();
     private readonly HashSet<string> _pressedKeys = new();
@@ -15,6 +17,8 @@ public sealed class InjectedInputQueue
     private readonly HashSet<int> _releasedButtons = new();
     private int _cursor;
     private int? _lastFrame;
+    private float _now;
+    private float _mouseSetAt;
 
     public (float, float)? MousePosition { get; private set; }
 
@@ -55,7 +59,11 @@ public sealed class InjectedInputQueue
     public void EnqueueKeyUp(string key) => ScheduleNext(() => ReleaseKey(key));
 
     // Applies on the same frame as the next step, so a click queued after a move lands on the moved position.
-    public void EnqueueMouseMove(float x, float y) => Schedule(_cursor, () => MousePosition = (x, y));
+    public void EnqueueMouseMove(float x, float y) => Schedule(_cursor, () =>
+    {
+        MousePosition = (x, y);
+        _mouseSetAt = _now;
+    });
 
     public void EnqueueClick(int button)
     {
@@ -79,7 +87,8 @@ public sealed class InjectedInputQueue
 
     public void ClearMouse() => MousePosition = null;
 
-    public void BeginFrame(int frame)
+    // The injected pointer position lapses MouseHoldSeconds after its last move, so a finished script hands the pointer back to the real mouse.
+    public void BeginFrame(int frame, float now = 0f)
     {
         if (_lastFrame == frame)
         {
@@ -87,6 +96,7 @@ public sealed class InjectedInputQueue
         }
 
         _lastFrame = frame;
+        _now = now;
         _pressedKeys.Clear();
         _releasedKeys.Clear();
         _pressedButtons.Clear();
@@ -105,6 +115,11 @@ public sealed class InjectedInputQueue
         foreach (var step in due)
         {
             step.Apply();
+        }
+
+        if (MousePosition != null && now - _mouseSetAt >= MouseHoldSeconds)
+        {
+            MousePosition = null;
         }
     }
 

@@ -533,7 +533,7 @@ Each enqueue schedules its steps on consecutive frames, starting at the next `Be
 | `EnqueueMouseMove(x, y)` | position set at N, using no frame of its own, so a click queued after it lands on that position on the same frame |
 | `EnqueueText(text)` | one character per frame into `InputStringThisFrame`; `\b` is backspace and `\n` is return |
 
-Pressed and released flags are true for exactly one frame. A held key or button stays held until its up step. An injected mouse position (screen pixels, origin bottom-left) persists until `ClearMouse`, after which `MousePosition` is null and `EditorInput.MousePosition` falls back to the real cursor. Calling `BeginFrame` again with the same frame number does nothing.
+Pressed and released flags are true for exactly one frame. A held key or button stays held until its up step. An injected mouse position (screen pixels, origin bottom-left) lapses 1 second after its last move, or on `ClearMouse`, after which `MousePosition` is null and `EditorInput.MousePosition` falls back to the real cursor. Calling `BeginFrame` again with the same frame number does nothing.
 
 ### Real keyboard text
 

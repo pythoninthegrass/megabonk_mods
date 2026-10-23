@@ -36,7 +36,7 @@ public class MegabonkLevelsMod : MelonMod
 
     public override void OnUpdate()
     {
-        EditorInput.Queue.BeginFrame(Time.frameCount);
+        EditorInput.Queue.BeginFrame(Time.frameCount, Time.unscaledTime);
         DevHarness.Poll();
         KillFloorWatcher.Tick();
         PositionLabel.Tick();

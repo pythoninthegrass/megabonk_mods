@@ -197,6 +197,34 @@ public class InjectedInputQueueTests
     }
 
     [Fact]
+    public void MousePosition_ExpiresOneSecondAfterTheMove()
+    {
+        var queue = new InjectedInputQueue();
+        queue.EnqueueMouseMove(10f, 20f);
+
+        queue.BeginFrame(1, 5f);
+        queue.BeginFrame(2, 5.9f);
+        Assert.Equal((10f, 20f), queue.MousePosition);
+
+        queue.BeginFrame(3, 6f);
+        Assert.Null(queue.MousePosition);
+    }
+
+    [Fact]
+    public void MousePosition_ANewMoveRestartsTheExpiry()
+    {
+        var queue = new InjectedInputQueue();
+        queue.EnqueueMouseMove(10f, 20f);
+        queue.BeginFrame(1, 5f);
+
+        queue.EnqueueMouseMove(30f, 40f);
+        queue.BeginFrame(2, 5.8f);
+        queue.BeginFrame(3, 6.5f);
+
+        Assert.Equal((30f, 40f), queue.MousePosition);
+    }
+
+    [Fact]
     public void MousePosition_PersistsUntilCleared()
     {
         var queue = new InjectedInputQueue();
