@@ -1,9 +1,10 @@
 ---
 id: TASK-010
 title: Let agents drive and observe the running game
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-22 03:42'
+updated_date: '2026-10-23T01:51:00Z'
 labels:
   - dev-harness
   - tooling
@@ -28,17 +29,23 @@ Rules every subtask follows (restated in each): write a failing test first (TDD)
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Every harness command returns a structured JSON result (or a structured error) that run.py can read
-- [ ] #2 The editor accepts injected key, mouse and text input without the game window having focus
-- [ ] #3 A player teleport and a level-up dismissal command exist
-- [ ] #4 An MCP server exposes the harness, with screenshots returned inline as image content
-- [ ] #5 An end-to-end check through the MCP server succeeds on macOS and is documented in docs/development.md
+- [x] #1 Every harness command returns a structured JSON result (or a structured error) that run.py can read
+- [x] #2 The editor accepts injected key, mouse and text input without the game window having focus
+- [x] #3 A player teleport and a level-up dismissal command exist
+- [x] #4 An MCP server exposes the harness, with screenshots returned inline as image content
+- [x] #5 An end-to-end check through the MCP server succeeds on macOS and is documented in docs/development.md
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+An agent can now drive Megabonk with the mod loaded and read structured results, without OS-level input or log grepping. All seven subtasks are done. Harness commands write result files (ok/error plus a result object) and a state command reports level, editor, player, tool and selection (010.01). The editor reads input through an injectable seam (010.02), fed by key, mouse and type commands that work with the game window unfocused (010.03). Player teleport (position or cell) and level-up dismissal were researched (010.04) and added as commands (010.05). The megabonk MCP server exposes the harness with screenshots returned inline (010.06) plus key, mouse, type_text, teleport and dismiss_levelup tools (010.07). An end-to-end run through the MCP tools only succeeded on macOS (relaunch, palette click, place, select, rotate, text entry, teleport, state, screenshot, quit), and dismiss_levelup was confirmed in the real game for a valid pick, no dialog open and an out-of-range choice. The walkthrough is in docs/development.md ("MCP server", "End-to-end check") and AGENTS.md lists the MCP tools first. Open items: the palette search text path (needs the palette search feature to land) is untested end to end, and the teleport-after-relaunch non-application noted in docs/development.md did not recur but is unexplained.
+<!-- SECTION:FINAL_SUMMARY:END -->
