@@ -1,7 +1,7 @@
 ---
 id: TASK-005.04.01
 title: 'Debug object selection rings and picking for shrines, chests and ruins'
-status: In Progress
+status: Done
 assignee:
   - Claude
 created_date: '2026-10-10 08:11'
@@ -40,7 +40,7 @@ Start by logging, per failing object, its genId or placement id, whether the ray
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
