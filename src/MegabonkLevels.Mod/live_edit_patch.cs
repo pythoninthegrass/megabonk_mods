@@ -70,31 +70,34 @@ public static class LiveEditPatch
         MapGenerationController.A_GenerationComplete += (Il2CppSystem.Action)(() => OnGenerationComplete(logger));
     }
 
-    public static LiveGrid? Grid => _session?.Grid;
+    // The session is kept until the next generation completes, so its tile generator is destroyed while a reloaded level generates.
+    private static Session LiveSession => _session is { } session && session.TileGen != null ? session : null;
 
-    public static IReadOnlyList<EditOp> SeedEdits => _session?.SeedEdits ?? Array.Empty<EditOp>();
+    public static LiveGrid? Grid =>LiveSession?.Grid;
+
+    public static IReadOnlyList<EditOp> SeedEdits => LiveSession?.SeedEdits ?? Array.Empty<EditOp>();
 
     // The tile's current state: the generated grid with every applied edit on top, null for an empty cell.
-    public static TileState? TileAt(int x, int z) => _session?.Planner.State.GetTile(x, z);
+    public static TileState? TileAt(int x, int z) => LiveSession?.Planner.State.GetTile(x, z);
 
-    public static LevelState CurrentState() => _session?.Planner.State;
+    public static LevelState CurrentState() => LiveSession?.Planner.State;
 
     // The baked ground collision, replaced after every terrain edit.
-    public static MeshCollider GroundCollider() => _session?.TileGen.collider?.GetComponent<MeshCollider>();
+    public static MeshCollider GroundCollider() => LiveSession?.TileGen.collider?.GetComponent<MeshCollider>();
 
     // The editor-pickable object whose hierarchy contains hit, or null: tiles, walls and fill pieces never resolve.
-    public static ObjectTarget? TargetOf(Transform hit) => _session?.Applier.TargetOf(hit);
+    public static ObjectTarget? TargetOf(Transform hit) => LiveSession?.Applier.TargetOf(hit);
 
     // The live object for a target, null when it is gone.
-    public static GameObject ObjectFor(ObjectTarget target) => _session?.Applier.FindActive(target);
+    public static GameObject ObjectFor(ObjectTarget target) => LiveSession?.Applier.FindActive(target);
 
     public static IReadOnlyList<(ObjectTarget Target, GameObject Object)> PickableObjects() =>
-        _session?.Applier.PickableObjects() ?? new List<(ObjectTarget, GameObject)>();
+        LiveSession?.Applier.PickableObjects() ?? new List<(ObjectTarget, GameObject)>();
 
     // The catalogId an editor-placed object was spawned from, null for a generator-spawned object.
-    public static CatalogId? CatalogIdOf(ObjectTarget target) => _session?.Applier.CatalogIdOf(target);
+    public static CatalogId? CatalogIdOf(ObjectTarget target) => LiveSession?.Applier.CatalogIdOf(target);
 
-    public static GameObject PrefabFor(CatalogId id) => _session?.Applier.PrefabFor(id);
+    public static GameObject PrefabFor(CatalogId id) => LiveSession?.Applier.PrefabFor(id);
 
     public static bool TryBuildPlan(EditOp op, out EditCommandPlan plan)
     {
