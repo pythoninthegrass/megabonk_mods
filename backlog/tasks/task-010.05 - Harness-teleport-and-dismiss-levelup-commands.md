@@ -1,9 +1,11 @@
 ---
 id: TASK-010.05
 title: Harness teleport and dismiss-levelup commands
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - claude
 created_date: '2026-10-22 03:43'
+updated_date: '2026-10-23T01:38:00Z'
 labels:
   - dev-harness
   - tooling
@@ -43,19 +45,43 @@ Do not: re-research the game internals (use the TASK-010.04 findings, and if the
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 teleport accepts exactly one of position or cell, moves the player there in the running game, and returns the position and cell actually reached
-- [ ] #2 dismiss-levelup applies the chosen upgrade when the dialog is open and returns dialogWasOpen and chosen, and succeeds with dialogWasOpen false and no effect when no dialog is open
-- [ ] #3 Invalid or impossible requests (no run, no player, bad choice, both or neither of position/cell) are rejected with a clear error visible in the result file
-- [ ] #4 run.py has teleport and dismiss-levelup subcommands that build the documented payloads and print the result JSON
-- [ ] #5 Confirmed in the running game: a teleport to a distant cell shows in state and in a screenshot, and a level-up dialog is cleared by dismiss-levelup
-- [ ] #6 Parsing, validation and any pure helper logic have tests written first, and an existing cell-to-position helper is reused rather than duplicated
-- [ ] #7 docs/development.md documents both commands and the Not covered list no longer lists moving the player or skipping the level-up dialog
+- [x] #1 teleport accepts exactly one of position or cell, moves the player there in the running game, and returns the position and cell actually reached
+- [x] #2 dismiss-levelup applies the chosen upgrade when the dialog is open and returns dialogWasOpen and chosen, and succeeds with dialogWasOpen false and no effect when no dialog is open
+- [x] #3 Invalid or impossible requests (no run, no player, bad choice, both or neither of position/cell) are rejected with a clear error visible in the result file
+- [x] #4 run.py has teleport and dismiss-levelup subcommands that build the documented payloads and print the result JSON
+- [x] #5 Confirmed in the running game: a teleport to a distant cell shows in state and in a screenshot, and a level-up dialog is cleared by dismiss-levelup
+- [x] #6 Parsing, validation and any pure helper logic have tests written first, and an existing cell-to-position helper is reused rather than duplicated
+- [x] #7 docs/development.md documents both commands and the Not covered list no longer lists moving the player or skipping the level-up dialog
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. xUnit tests first (harness_command_tests.cs): TryParse for teleport (position, cell, both, neither, wrong lengths, non-numeric, non-integer cell) and dismiss-levelup (default choice 0, explicit choice, negative, non-integer). Reuse PositionReadout.CellCentre for cell to world XZ; add a small pure helper only for the surface-height fallback if needed, with tests.
+2. Python tests first (tests/test_run.py): build_teleport_command / build_dismiss_levelup_command payloads and the argparse subcommands.
+3. harness_command.cs: add Teleport and DismissLevelUp kinds, carry Vector3/cell/choice in HarnessCommand.
+4. dev_harness.cs Execute: Teleport via MyPlayer.Instance.TeleportPlayerImmediate (TASK-010.04 sequence), cell via LiveEditPatch.Grid + TileAt + ObjectTools.SurfaceY (fall back to current height when cell empty), reject below kill floor, no run/no player; DismissLevelUp via LevelupScreen.isLevelingUp + upgradePicker.buttons[choice].SelectUpgrade(), re-Pause if EditorMode.Active; result dialogWasOpen/chosen.
+5. run.py: teleport X Y Z, teleport --cell CX CY, dismiss-levelup [--choice N]; print result JSON; update docstring.
+6. task check; relaunch in game; verify teleport with state and screenshot; open dialog via a level-up and verify dismiss.
+7. docs/development.md: document commands, wire formats and results; drop moving the player and skipping the level-up dialog from the Not covered list.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+In-game (CrossOver, Forest level): teleport --cell 12 12 returned position [200,-38.075,200] cell [12,12], state agreed, screenshot position label matched after --cell 3 3. Rejections seen in the result file: below kill floor (y=-500), cell outside grid (99,99), missing target. A natural level-up gave dialogWasOpen:true chosen:Dice; a second call gave dialogWasOpen:false and state showed frozen:false. Teleport result reads the Rigidbody position straight after the call (the transform lags a physics step), so the result is the body position before any fall. Not exercised in the game: choice past the number of offers on an open dialog (runtime range check, no unit test since it needs Il2Cpp types) and dismiss during editor mode. A negative choice is rejected at parse time and unit-tested.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added teleport and dismiss-levelup to the dev harness. teleport takes a world position or a grid cell (centre of the cell on the tile surface via PositionReadout.CellCentre and the new TeleportTarget.CellStandingPoint, falling back to the current height for an empty cell), rejects no player, out-of-grid cells, no grid, and targets below the kill floor, and returns the position and cell from the Rigidbody. dismiss-levelup selects offer N through UpgradeButton.SelectUpgrade, re-pauses during editor mode, and returns dialogWasOpen and chosen. run.py gained both subcommands, and send_state became send_printing_result. Tests written first (xUnit parse and helper tests, pytest payload and result tests); task check passes. Confirmed in the running game as noted. Docs updated, Not covered list trimmed. Risks: out-of-range choice and dismiss during editor mode were not run in the game.
+<!-- SECTION:FINAL_SUMMARY:END -->
