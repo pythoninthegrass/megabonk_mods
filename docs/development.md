@@ -532,3 +532,7 @@ Each enqueue schedules its steps on consecutive frames, starting at the next `Be
 | `EnqueueText(text)` | one character per frame into `InputStringThisFrame`; `\b` is backspace and `\n` is return |
 
 Pressed and released flags are true for exactly one frame. A held key or button stays held until its up step. An injected mouse position (screen pixels, origin bottom-left) persists until `ClearMouse`, after which `MousePosition` is null and `EditorInput.MousePosition` falls back to the real cursor. Calling `BeginFrame` again with the same frame number does nothing.
+
+### Real keyboard text
+
+Typing on a real keyboard into the level-name box works under plain Wine on macOS: after a click on the box, typed characters, Backspace and Enter (which saves the level under the typed name) all behave as `HandleSaveTyping` intends, through the real `Input.inputString` half of `EditorInput.InputString`. An earlier report of an empty box on the same setup did not reproduce, and its cause is unconfirmed. It was not the text-handling code, since injected text and real text take the same path, and not the game failing to receive text under Wine. Open questions if it reappears: whether the game window had OS focus when the box was clicked, and whether the failure is intermittent. CrossOver and Windows were not compared.
