@@ -31,6 +31,12 @@ Usage:
     run.py editor <on|off>         Enter or leave editor mode (frozen run, free-fly camera), like pressing F8
     run.py camera X Y Z --rot RX RY RZ  Hold the camera at a world pose (euler degrees)
     run.py camera --clear          Return the camera to the game
+    run.py key <name> [--mod NAME ...]  Tap a key (UnityEngine.KeyCode name), optionally with modifier keys held
+    run.py key --down|--up <name>  Press or release a key and leave it held or released
+    run.py mouse move X Y          Move the injected mouse to screenshot pixels (origin top left)
+    run.py mouse click|down|up [--button N] [X Y]  Click or press/release a button (0 left, 1 right, 2 middle), moving first when X Y is given
+    run.py mouse clear             Return the mouse to the real pointer
+    run.py type <text>             Type text into the focused field (\\b is backspace, \\n is return), at most 200 characters
     run.py quit                    Quit the game and wait for the process to exit
     run.py cycle <level> <out.png> Load, wait --settle seconds, screenshot, quit
                                    [--invulnerable] applies before the settle wait
@@ -130,6 +136,28 @@ def build_editor_command(enabled: bool) -> dict[str, object]:
 
 def build_camera_command(position: tuple[float, ...], rotation: tuple[float, ...]) -> dict[str, object]:
     return {"command": "camera", "position": list(position), "rotation": list(rotation)}
+
+
+def build_key_command(action: str, key: str, modifiers: list[str] | None = None) -> dict[str, object]:
+    payload: dict[str, object] = {"command": "key", "action": action, "key": key}
+    if modifiers:
+        payload["modifiers"] = modifiers
+    return payload
+
+
+def build_mouse_command(
+    action: str, position: tuple[float, float] | None = None, button: int | None = None
+) -> dict[str, object]:
+    payload: dict[str, object] = {"command": "mouse", "action": action}
+    if position is not None:
+        payload["x"], payload["y"] = position
+    if button is not None:
+        payload["button"] = button
+    return payload
+
+
+def build_type_command(text: str) -> dict[str, object]:
+    return {"command": "type", "text": text}
 
 
 def write_command(commands_dir: Path, payload: dict[str, object]) -> Path:
@@ -343,6 +371,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     camera.add_argument("position", type=float, nargs="*", help="X Y Z in world units")
     camera.add_argument("--rot", type=float, nargs=3, metavar=("RX", "RY", "RZ"), help="euler degrees")
     camera.add_argument("--clear", action="store_true", help="return the camera to the game")
+    key = sub.add_parser("key")
+    key.add_argument("name", help="UnityEngine.KeyCode member name, e.g. R, Escape, LeftShift")
+    key_action = key.add_mutually_exclusive_group()
+    key_action.add_argument("--down", action="store_true", help="press the key and leave it held")
+    key_action.add_argument("--up", action="store_true", help="release a held key")
+    key.add_argument("--mod", action="append", default=[], metavar="NAME", help="modifier key held during a tap; repeatable")
+    mouse = sub.add_parser("mouse")
+    mouse.add_argument("verb", choices=["move", "click", "down", "up", "clear"])
+    mouse.add_argument("position", type=float, nargs="*", metavar="X Y", help="screenshot pixels, origin top left")
+    mouse.add_argument("--button", type=int, choices=[0, 1, 2], help="0 left (default), 1 right, 2 middle")
+    type_ = sub.add_parser("type")
+    type_.add_argument("text")
     load = sub.add_parser("load")
     load.add_argument("level", type=Path)
     shot = sub.add_parser("screenshot")
@@ -371,6 +411,28 @@ def camera_payload(args: argparse.Namespace) -> dict[str, object]:
     if len(args.position) != 3 or args.rot is None:
         raise SystemExit("camera: give X Y Z and --rot RX RY RZ, or --clear")
     return build_camera_command(tuple(args.position), tuple(args.rot))
+
+
+def key_payload(args: argparse.Namespace) -> dict[str, object]:
+    action = "down" if args.down else "up" if args.up else "tap"
+    if args.mod and action != "tap":
+        raise SystemExit("key: --mod only applies to a tap")
+    return build_key_command(action, args.name, args.mod)
+
+
+def mouse_payload(args: argparse.Namespace) -> dict[str, object]:
+    if len(args.position) not in (0, 2):
+        raise SystemExit("mouse: give both X and Y, or neither")
+    if args.verb == "move" and not args.position:
+        raise SystemExit("mouse move: give X Y")
+    if args.verb == "clear" and (args.position or args.button is not None):
+        raise SystemExit("mouse clear takes no coordinates or button")
+    position = (args.position[0], args.position[1]) if args.position else None
+    return build_mouse_command(args.verb, position, args.button)
+
+
+def type_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_type_command(args.text)
 
 
 def heartbeat_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -471,6 +533,12 @@ def main(argv: list[str] | None = None) -> int:
             ok = send(harness, cells_payload(args), args.timeout)
         case "editor":
             ok = send(harness, editor_payload(args), args.timeout)
+        case "key":
+            ok = send(harness, key_payload(args), args.timeout)
+        case "mouse":
+            ok = send(harness, mouse_payload(args), args.timeout)
+        case "type":
+            ok = send(harness, type_payload(args), args.timeout)
         case "camera":
             ok = send(harness, camera_payload(args), args.timeout)
         case "cycle":

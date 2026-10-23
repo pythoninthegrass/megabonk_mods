@@ -217,4 +217,175 @@ public class HarnessCommandTests
         Assert.False(ok);
         Assert.False(string.IsNullOrEmpty(error));
     }
+
+    [Fact]
+    public void TryParse_KeyTap_ReadsKeyAndModifiers()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"key","action":"tap","key":"R","modifiers":["LeftShift"]}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.Key, command.Kind);
+        Assert.Equal("key", command.Name);
+        Assert.Equal("tap", command.Input.Action);
+        Assert.Equal("R", command.Input.Key);
+        Assert.Equal(new[] { "LeftShift" }, command.Input.Modifiers);
+    }
+
+    [Theory]
+    [InlineData("tap")]
+    [InlineData("down")]
+    [InlineData("up")]
+    public void TryParse_Key_AcceptsEachAction(string action)
+    {
+        var ok = HarnessCommand.TryParse($$"""{"command":"key","action":"{{action}}","key":"Escape"}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Equal(action, command.Input.Action);
+        Assert.Empty(command.Input.Modifiers);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"key","key":"R"}""", "action")]
+    [InlineData("""{"command":"key","action":"hold","key":"R"}""", "hold")]
+    [InlineData("""{"command":"key","action":"tap"}""", "key")]
+    [InlineData("""{"command":"key","action":"tap","key":5}""", "key")]
+    [InlineData("""{"command":"key","action":"tap","key":"r"}""", "r")]
+    [InlineData("""{"command":"key","action":"tap","key":"NotAKey"}""", "NotAKey")]
+    [InlineData("""{"command":"key","action":"down","key":"R","modifiers":["LeftShift"]}""", "modifiers")]
+    [InlineData("""{"command":"key","action":"tap","key":"R","modifiers":["Bogus"]}""", "Bogus")]
+    [InlineData("""{"command":"key","action":"tap","key":"R","modifiers":"LeftShift"}""", "modifiers")]
+    [InlineData("""{"command":"key","action":"tap","key":"R","modifiers":[1]}""", "modifiers")]
+    public void TryParse_KeyInvalid_IsRejectedNamingTheProblem(string json, string expectedFragment)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains(expectedFragment, error);
+    }
+
+    [Fact]
+    public void TryParse_MouseMove_ReadsCoordinates()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"mouse","action":"move","x":960,"y":540.5}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.Mouse, command.Kind);
+        Assert.Equal("move", command.Input.Action);
+        Assert.Equal(960f, command.Input.X);
+        Assert.Equal(540.5f, command.Input.Y);
+    }
+
+    [Theory]
+    [InlineData("click")]
+    [InlineData("down")]
+    [InlineData("up")]
+    public void TryParse_MouseButtonActions_DefaultToTheLeftButtonWithoutAMove(string action)
+    {
+        var ok = HarnessCommand.TryParse($$"""{"command":"mouse","action":"{{action}}"}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Equal(0, command.Input.Button);
+        Assert.Null(command.Input.X);
+        Assert.Null(command.Input.Y);
+    }
+
+    [Fact]
+    public void TryParse_MouseClick_ReadsButtonAndMoveFirstPosition()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"mouse","action":"click","button":1,"x":10,"y":20}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Equal(1, command.Input.Button);
+        Assert.Equal(10f, command.Input.X);
+        Assert.Equal(20f, command.Input.Y);
+    }
+
+    [Fact]
+    public void TryParse_MouseClear_NeedsNoCoordinates()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"mouse","action":"clear"}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Equal("clear", command.Input.Action);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"mouse"}""", "action")]
+    [InlineData("""{"command":"mouse","action":"drag"}""", "drag")]
+    [InlineData("""{"command":"mouse","action":"move"}""", "x")]
+    [InlineData("""{"command":"mouse","action":"move","x":1}""", "y")]
+    [InlineData("""{"command":"mouse","action":"move","x":"1","y":2}""", "x")]
+    [InlineData("""{"command":"mouse","action":"click","x":1}""", "y")]
+    [InlineData("""{"command":"mouse","action":"click","y":1}""", "x")]
+    [InlineData("""{"command":"mouse","action":"click","button":3}""", "button")]
+    [InlineData("""{"command":"mouse","action":"click","button":-1}""", "button")]
+    [InlineData("""{"command":"mouse","action":"down","button":"left"}""", "button")]
+    [InlineData("""{"command":"mouse","action":"up","button":1.5}""", "button")]
+    public void TryParse_MouseInvalid_IsRejectedNamingTheProblem(string json, string expectedFragment)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains(expectedFragment, error);
+    }
+
+    [Fact]
+    public void TryParse_Type_ReadsTextWithControlCharacters()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"type","text":"ab\b\n"}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.Type, command.Kind);
+        Assert.Equal("ab\b\n", command.Input.Text);
+    }
+
+    [Fact]
+    public void TryParse_Type_AcceptsExactlyTheMaximumLength()
+    {
+        var text = new string('a', HarnessCommand.MaxTypeLength);
+
+        Assert.True(HarnessCommand.TryParse($$"""{"command":"type","text":"{{text}}"}""", out _, out _));
+    }
+
+    [Theory]
+    [InlineData("""{"command":"type"}""")]
+    [InlineData("""{"command":"type","text":""}""")]
+    [InlineData("""{"command":"type","text":5}""")]
+    public void TryParse_TypeWithoutText_IsRejectedNamingText(string json)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains("text", error);
+    }
+
+    [Fact]
+    public void TryParse_TypeOverTheMaximumLength_IsRejected()
+    {
+        var text = new string('a', HarnessCommand.MaxTypeLength + 1);
+
+        var ok = HarnessCommand.TryParse($$"""{"command":"type","text":"{{text}}"}""", out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains("200", error);
+    }
+
+    [Fact]
+    public void KeyNames_ListsTheDocumentedGroupsAndNoDuplicates()
+    {
+        string[] expected =
+        [
+            "A", "Z", "Alpha0", "Alpha9", "Keypad0", "Keypad9", "F1", "F12", "UpArrow", "DownArrow", "LeftArrow", "RightArrow",
+            "Escape", "Return", "Backspace", "Delete", "Space", "Tab",
+            "LeftShift", "RightShift", "LeftControl", "RightControl", "LeftAlt", "RightAlt",
+        ];
+
+        Assert.All(expected, name => Assert.True(KeyNames.IsValid(name), name));
+        Assert.Equal(KeyNames.All.Count, KeyNames.All.Distinct().Count());
+        Assert.False(KeyNames.IsValid("a"));
+        Assert.False(KeyNames.IsValid(null));
+    }
 }

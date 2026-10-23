@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -21,14 +22,38 @@ public enum HarnessCommandKind
     Editor,
     SteamReady,
     State,
+    Key,
+    Mouse,
+    Type,
 }
 
 // World-space camera position and euler rotation in degrees.
 public readonly record struct CameraPose(float X, float Y, float Z, float Rx, float Ry, float Rz);
 
-// A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null)
+// Arguments of a key, mouse or type command; fields a command does not use stay at their defaults.
+public sealed class InputArgs
 {
+    public string Action { get; init; }
+
+    public string Key { get; init; }
+
+    public IReadOnlyList<string> Modifiers { get; init; } = Array.Empty<string>();
+
+    public float? X { get; init; }
+
+    public float? Y { get; init; }
+
+    public int Button { get; init; }
+
+    public string Text { get; init; }
+}
+
+// A parsed dev-harness command file; see docs/development.md for the wire format.
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null)
+{
+    public const int MaxTypeLength = 200;
+
+
     // Returns false with a human-readable error instead of throwing, so a bad file can never crash the game.
     public static bool TryParse(string json, out HarnessCommand command, out string error)
     {
@@ -109,6 +134,12 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseEnabledFlag(root, HarnessCommandKind.Cells, out command, out error);
             case "editor":
                 return TryParseEnabledFlag(root, HarnessCommandKind.Editor, out command, out error);
+            case "key":
+                return TryParseKey(root, out command, out error);
+            case "mouse":
+                return TryParseMouse(root, out command, out error);
+            case "type":
+                return TryParseType(root, out command, out error);
             case "camera":
                 return TryParseCamera(root, out command, out error);
             case "load-level":
@@ -150,6 +181,194 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.Camera, null, new CameraPose(p[0], p[1], p[2], r[0], r[1], r[2]));
+        return true;
+    }
+
+    private static bool TryParseKey(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        if (!TryReadAction(root, new[] { "tap", "down", "up" }, out var action, out error))
+        {
+            return false;
+        }
+
+        if (!TryGetString(root, "key", out var key))
+        {
+            error = "missing string field 'key'";
+            return false;
+        }
+
+        if (!KeyNames.IsValid(key))
+        {
+            error = $"unknown key '{key}'; names are case-sensitive UnityEngine.KeyCode members from the documented list";
+            return false;
+        }
+
+        if (!TryReadModifiers(root, action, out var modifiers, out error))
+        {
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.Key, null, Input: new InputArgs { Action = action, Key = key, Modifiers = modifiers });
+        return true;
+    }
+
+    private static bool TryReadModifiers(JsonObject root, string action, out string[] modifiers, out string error)
+    {
+        modifiers = Array.Empty<string>();
+        error = null;
+
+        if (!root.TryGetPropertyValue("modifiers", out var node) || node == null)
+        {
+            return true;
+        }
+
+        if (action != "tap")
+        {
+            error = "'modifiers' is only valid for action 'tap'";
+            return false;
+        }
+
+        if (node is not JsonArray array)
+        {
+            error = "field 'modifiers' must be an array of key names";
+            return false;
+        }
+
+        var names = new List<string>();
+        foreach (var item in array)
+        {
+            if (item is not JsonValue value || !value.TryGetValue(out string name))
+            {
+                error = "field 'modifiers' must be an array of key names";
+                return false;
+            }
+
+            if (!KeyNames.IsValid(name))
+            {
+                error = $"unknown modifier key '{name}'";
+                return false;
+            }
+
+            names.Add(name);
+        }
+
+        modifiers = names.ToArray();
+        return true;
+    }
+
+    private static bool TryParseMouse(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        if (!TryReadAction(root, new[] { "move", "click", "down", "up", "clear" }, out var action, out error))
+        {
+            return false;
+        }
+
+        float? x = null;
+        float? y = null;
+        var button = 0;
+        if (action != "clear")
+        {
+            var coordinatesRequired = action == "move";
+            if (!TryReadCoordinate(root, "x", coordinatesRequired || root.ContainsKey("y"), out x, out error)
+                || !TryReadCoordinate(root, "y", coordinatesRequired || root.ContainsKey("x"), out y, out error))
+            {
+                return false;
+            }
+
+            if (action != "move" && !TryReadButton(root, out button, out error))
+            {
+                return false;
+            }
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.Mouse, null, Input: new InputArgs { Action = action, X = x, Y = y, Button = button });
+        return true;
+    }
+
+    private static bool TryReadAction(JsonObject root, string[] allowed, out string action, out string error)
+    {
+        if (!TryGetString(root, "action", out action))
+        {
+            error = $"missing string field 'action' ({string.Join(", ", allowed)})";
+            return false;
+        }
+
+        if (Array.IndexOf(allowed, action) < 0)
+        {
+            error = $"unknown action '{action}'; expected {string.Join(", ", allowed)}";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    private static bool TryReadCoordinate(JsonObject root, string field, bool required, out float? value, out string error)
+    {
+        value = null;
+        error = null;
+
+        if (!root.TryGetPropertyValue(field, out var node) || node == null)
+        {
+            if (required)
+            {
+                error = $"missing number field '{field}'";
+            }
+
+            return !required;
+        }
+
+        if (node is not JsonValue json || !json.TryGetValue(out float number))
+        {
+            error = $"field '{field}' must be a number";
+            return false;
+        }
+
+        value = number;
+        return true;
+    }
+
+    private static bool TryReadButton(JsonObject root, out int button, out string error)
+    {
+        button = 0;
+        error = null;
+
+        if (!root.TryGetPropertyValue("button", out var node) || node == null)
+        {
+            return true;
+        }
+
+        if (node is not JsonValue json || !json.TryGetValue(out button) || button < 0 || button > 2)
+        {
+            error = "field 'button' must be 0 (left), 1 (right) or 2 (middle)";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryParseType(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        if (!TryGetString(root, "text", out var text) || text.Length == 0)
+        {
+            error = "missing non-empty string field 'text'";
+            return false;
+        }
+
+        if (text.Length > MaxTypeLength)
+        {
+            error = $"field 'text' is {text.Length} characters; the maximum is {MaxTypeLength}";
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.Type, null, Input: new InputArgs { Action = "type", Text = text });
+        error = null;
         return true;
     }
 

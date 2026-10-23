@@ -4,6 +4,7 @@ Self-test for scripts/run.py.
 
 import json
 import os
+import pytest
 import run
 import tempfile
 import threading
@@ -504,3 +505,93 @@ def test_relaunch_retries_the_load_and_gives_up_after_five_attempts(monkeypatch)
     assert len(loads) == 5
     assert ("send", "invulnerable") not in calls
     assert ("send", "editor") not in calls
+
+
+def test_build_key_command_tap_carries_modifiers_only_when_given() -> None:
+    assert run.build_key_command("tap", "R") == {"command": "key", "action": "tap", "key": "R"}
+    assert run.build_key_command("tap", "R", ["LeftShift"]) == {
+        "command": "key",
+        "action": "tap",
+        "key": "R",
+        "modifiers": ["LeftShift"],
+    }
+
+
+def test_key_payload_maps_flags_to_the_action() -> None:
+    assert run.key_payload(run.parse_args(["key", "Escape"])) == {"command": "key", "action": "tap", "key": "Escape"}
+    assert run.key_payload(run.parse_args(["key", "--down", "W"])) == {"command": "key", "action": "down", "key": "W"}
+    assert run.key_payload(run.parse_args(["key", "--up", "W"])) == {"command": "key", "action": "up", "key": "W"}
+    args = run.parse_args(["key", "R", "--mod", "LeftShift", "--mod", "LeftControl"])
+    assert run.key_payload(args)["modifiers"] == ["LeftShift", "LeftControl"]
+
+
+def test_key_payload_rejects_modifiers_on_down_and_up() -> None:
+    with pytest.raises(SystemExit):
+        run.key_payload(run.parse_args(["key", "--down", "W", "--mod", "LeftShift"]))
+
+
+def test_key_down_and_up_are_mutually_exclusive() -> None:
+    with pytest.raises(SystemExit):
+        run.parse_args(["key", "--down", "--up", "W"])
+
+
+def test_build_mouse_command_includes_only_the_given_fields() -> None:
+    assert run.build_mouse_command("clear") == {"command": "mouse", "action": "clear"}
+    assert run.build_mouse_command("move", (960.0, 540.0)) == {"command": "mouse", "action": "move", "x": 960.0, "y": 540.0}
+    assert run.build_mouse_command("click", (1.0, 2.0), 1) == {
+        "command": "mouse",
+        "action": "click",
+        "x": 1.0,
+        "y": 2.0,
+        "button": 1,
+    }
+    assert run.build_mouse_command("down", None, 2) == {"command": "mouse", "action": "down", "button": 2}
+
+
+def test_mouse_payload_maps_the_subcommands() -> None:
+    assert run.mouse_payload(run.parse_args(["mouse", "move", "960", "540"])) == {
+        "command": "mouse",
+        "action": "move",
+        "x": 960.0,
+        "y": 540.0,
+    }
+    assert run.mouse_payload(run.parse_args(["mouse", "click"])) == {"command": "mouse", "action": "click"}
+    assert run.mouse_payload(run.parse_args(["mouse", "click", "--button", "1", "10", "20"])) == {
+        "command": "mouse",
+        "action": "click",
+        "x": 10.0,
+        "y": 20.0,
+        "button": 1,
+    }
+    assert run.mouse_payload(run.parse_args(["mouse", "down"])) == {"command": "mouse", "action": "down"}
+    assert run.mouse_payload(run.parse_args(["mouse", "up"])) == {"command": "mouse", "action": "up"}
+    assert run.mouse_payload(run.parse_args(["mouse", "clear"])) == {"command": "mouse", "action": "clear"}
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["mouse", "move"],
+        ["mouse", "move", "1"],
+        ["mouse", "click", "1"],
+        ["mouse", "clear", "1", "2"],
+        ["mouse", "click", "--button", "3"],
+    ],
+)
+def test_mouse_payload_rejects_bad_coordinates_or_buttons(argv) -> None:
+    with pytest.raises(SystemExit):
+        run.mouse_payload(run.parse_args(argv))
+
+
+def test_build_type_command_and_payload() -> None:
+    assert run.build_type_command("chest") == {"command": "type", "text": "chest"}
+    assert run.type_payload(run.parse_args(["type", "ab\b\n"])) == {"command": "type", "text": "ab\b\n"}
+
+
+def test_key_mouse_and_type_send_their_payloads() -> None:
+    for argv, name in ((("key", "R"), "key"), (("mouse", "move", "1", "2"), "mouse"), (("type", "hi"), "type")):
+        with tempfile.TemporaryDirectory() as tmp:
+            game = fake_game(tmp, None)
+            assert run_main(game, *argv) == 0
+            sent = list((game / "harness" / "done").glob(f"*-{name}.json"))
+            assert len(sent) == 1

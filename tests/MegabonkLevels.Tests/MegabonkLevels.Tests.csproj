@@ -60,6 +60,8 @@
     <Compile Include="../../src/MegabonkLevels.Mod/editor_edit_session.cs" Link="editor_edit_session.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/editor_reenter_policy.cs" Link="editor_reenter_policy.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/injected_input.cs" Link="injected_input.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/screen_point.cs" Link="screen_point.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/key_names.cs" Link="key_names.cs" />
   </ItemGroup>
 
   <ItemGroup>

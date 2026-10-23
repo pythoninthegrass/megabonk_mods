@@ -34,6 +34,9 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Enter or leave editor mode | `{"command":"editor","enabled":true}` | `run.py editor <on\|off>` |
 | Hold the camera at a pose | `{"command":"camera","position":[x,y,z],"rotation":[rx,ry,rz]}` | `run.py camera X Y Z --rot RX RY RZ` |
 | Return the camera to the game | `{"command":"camera-clear"}` | `run.py camera --clear` |
+| Tap, press or release a key | `{"command":"key","action":"tap","key":"R","modifiers":["LeftShift"]}` | `run.py key R --mod LeftShift`, `run.py key --down W`, `run.py key --up W` |
+| Move, click, press or release the mouse | `{"command":"mouse","action":"click","button":0,"x":960,"y":540}` | `run.py mouse move X Y`, `run.py mouse click [--button N] [X Y]`, `run.py mouse down\|up`, `run.py mouse clear` |
+| Type text | `{"command":"type","text":"chest"}` | `run.py type chest` |
 | Quit the game | `{"command":"quit"}` | `run.py quit` |
 | Relaunch the test level in editor mode | Multiple commands | `run.py relaunch [level]` |
 
@@ -495,6 +498,18 @@ Picking tries a physics raycast first and accepts the hit only when its hierarch
 Pick block scrolls the palette to the picked entry when it is outside the visible list. It matches a generator-spawned object's prefab name (the `object:{prefabName}:{index}` genId category) against the palette's display names, preferring the current stage's entry, then a stage-independent one (shrines, interactables). An editor-placed object uses the catalogId it was placed with. An object with no matching entry, including every `tileObject`, is logged (`pick block found no palette entry`) and the selection is left alone.
 
 Every action logs `EditorObjectTools: <what> -> <opType>`. Object removal now deactivates the live object (rather than destroying it), so undo/redo can restore the same object identity by toggling it active through a move action. Pure logic lives in `object_tool.cs` (position, grid lines, stacking, facing, the ops), `palette_scroll.cs` (palette scroll offset), `object_picker.cs` (nearest object) and `palette_pick.cs` (pick block lookup).
+
+### Key, mouse and type commands
+
+These commands feed `EditorInput.Queue` (see "Editor input"), so they reach the editor without OS input or window focus. They do not reach the game's own Rewired input, only editor code that reads `EditorInput`.
+
+- `key`: `action` is `tap`, `down` or `up`. `key` is a `UnityEngine.KeyCode` member name from the list below, matched case-sensitively. `modifiers` is an optional array of names from the same list and is only valid for `tap`; the modifiers are held around the tap.
+- `mouse`: `action` is `move`, `click`, `down`, `up` or `clear`. `move` requires `x` and `y`. `click`, `down` and `up` take an optional `button` (0 left, 1 right, 2 middle; default 0) and an optional `x` and `y` (both or neither) that move the pointer first. `clear` drops the injected position so the real pointer is used again.
+- `type`: `text` is 1 to 200 characters, one character per frame. `\b` is backspace and `\n` is return.
+
+Coordinates are screenshot pixels with the origin at the top left, the same space as a harness screenshot and the `screen` field of `state`. The mod converts them to Unity's bottom-left origin with `ScreenPoint.ToUnity(x, y, Screen.height)`. An unknown key or modifier name, an unknown action, a missing or non-numeric coordinate, an `x` without a `y`, a button outside 0 to 2, `modifiers` on a `down` or `up`, and empty or over-long text are rejected at parse time and reported as `ok:false` in the result file.
+
+Valid key names (`key_names.cs`): `A` to `Z`, `Alpha0` to `Alpha9`, `Keypad0` to `Keypad9`, `F1` to `F12`, `UpArrow`, `DownArrow`, `LeftArrow`, `RightArrow`, `Escape`, `Return`, `Backspace`, `Delete`, `Space`, `Tab`, `LeftShift`, `RightShift`, `LeftControl`, `RightControl`, `LeftAlt` and `RightAlt`. The harness logs a warning at startup for any listed name that `Enum.TryParse<KeyCode>` rejects.
 
 ## Editor input
 

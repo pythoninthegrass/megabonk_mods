@@ -49,6 +49,7 @@ public static class DevHarness
         Directory.CreateDirectory(_rejectedDir);
         Directory.CreateDirectory(_resultsDir);
         _enabled = true;
+        WarnOnUnparseableKeyNames();
         logger.Msg($"DevHarness: enabled, watching '{_commandsDir}'.");
     }
 
@@ -180,6 +181,15 @@ public static class DevHarness
                 break;
             case HarnessCommandKind.State:
                 return ReadState().ToJson();
+            case HarnessCommandKind.Key:
+                QueueKey(command.Input);
+                break;
+            case HarnessCommandKind.Mouse:
+                QueueMouse(command.Input);
+                break;
+            case HarnessCommandKind.Type:
+                EditorInput.Queue.EnqueueText(command.Input.Text);
+                break;
             case HarnessCommandKind.Quit:
                 _logger.Msg("DevHarness: quit requested, calling Application.Quit.");
                 Application.Quit();
@@ -187,6 +197,60 @@ public static class DevHarness
         }
 
         return null;
+    }
+
+    private static void QueueKey(InputArgs input)
+    {
+        var queue = EditorInput.Queue;
+        switch (input.Action)
+        {
+            case "tap":
+                queue.EnqueueTap(input.Key, input.Modifiers);
+                break;
+            case "down":
+                queue.EnqueueKeyDown(input.Key);
+                break;
+            case "up":
+                queue.EnqueueKeyUp(input.Key);
+                break;
+        }
+    }
+
+    private static void QueueMouse(InputArgs input)
+    {
+        var queue = EditorInput.Queue;
+        if (input.Action == "clear")
+        {
+            queue.ClearMouse();
+            return;
+        }
+
+        if (input.X is float x && input.Y is float y)
+        {
+            var (unityX, unityY) = ScreenPoint.ToUnity(x, y, Screen.height);
+            queue.EnqueueMouseMove(unityX, unityY);
+        }
+
+        switch (input.Action)
+        {
+            case "click":
+                queue.EnqueueClick(input.Button);
+                break;
+            case "down":
+                queue.EnqueueMouseDown(input.Button);
+                break;
+            case "up":
+                queue.EnqueueMouseUp(input.Button);
+                break;
+        }
+    }
+
+    private static void WarnOnUnparseableKeyNames()
+    {
+        foreach (var name in KeyNames.All.Where(name => !Enum.TryParse<KeyCode>(name, out _)))
+        {
+            _logger.Warning($"DevHarness: key name '{name}' is not a UnityEngine.KeyCode member.");
+        }
     }
 
     private static GameStateSnapshot ReadState()
