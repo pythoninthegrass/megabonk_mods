@@ -16,6 +16,7 @@ public static class EditorTileTools
     private const float ToolbarMargin = 8f;
     private const float ToastSeconds = 3f;
     private const float ToastGap = 4f;
+    private const int MaxToasts = 5;
     private const float ToolbarHeight = 144f;
     private const float FontSize = 18f;
     private const float OverlayFontSize = 16f;
@@ -54,10 +55,8 @@ public static class EditorTileTools
     private static Vector3 _targetPoint;
     private static RectTransform _toolbarRect;
     private static RectTransform _loadRect;
-    private static TextMeshProUGUI _loadStatusText;
-    private static Image _loadStatusBackground;
-    private static RectTransform _toastRect;
-    private static float _loadStatusExpiry = -1f;
+    private static readonly ToastStack _toasts = new(ToastSeconds, MaxToasts);
+    private static readonly List<ToastSlot> _toastSlots = new();
     private static EditorEditSession _session;
     private static int _sessionRunGeneration = -1;
     private static ReachabilityResult _reachability;
@@ -67,6 +66,13 @@ public static class EditorTileTools
     private static bool _saveInputFocused;
     private static string _saveName = "";
     private static int _lastSavedEditCount;
+
+    private sealed class ToastSlot
+    {
+        public RectTransform Rect;
+        public Image Background;
+        public TextMeshProUGUI Text;
+    }
 
     private sealed class ClickRegion
     {
@@ -124,10 +130,8 @@ public static class EditorTileTools
         _undoButtonBg = null;
         _redoButtonBg = null;
         _outline = null;
-        _loadStatusText = null;
-        _loadStatusBackground = null;
-        _toastRect = null;
-        _loadStatusExpiry = -1f;
+        _toasts.Clear();
+        _toastSlots.Clear();
         _target = null;
         _toolbarRect = null;
         _loadRect = null;
@@ -266,9 +270,10 @@ public static class EditorTileTools
             _savePlaceholderText.enabled = EditorInputModel.PlaceholderVisible(_saveName);
         }
 
-        if (_loadStatusText != null && _loadStatusExpiry >= 0f && Time.unscaledTime >= _loadStatusExpiry)
+        if (_toastSlots.Count > 0)
         {
-            ClearToast();
+            _toasts.Expire(Time.unscaledTime);
+            RenderToasts();
         }
 
         if (_outline == null)
@@ -358,26 +363,50 @@ public static class EditorTileTools
         _loadList.enableWordWrapping = true;
         _loadList.overflowMode = TextOverflowModes.Overflow;
 
-        // Save/load toast: orange text on a panel under the toolbar, cleared after ToastSeconds or on click.
-        var toastRect = EditorUi.NewRect("Toast", _root.transform);
-        toastRect.anchorMin = new Vector2(0.5f, 1f);
-        toastRect.anchorMax = new Vector2(0.5f, 1f);
-        toastRect.pivot = new Vector2(0.5f, 1f);
-        toastRect.sizeDelta = new Vector2(toolbarWidth, OverlayRowHeight);
-        toastRect.anchoredPosition = new Vector2(panel.anchoredPosition.x, -(ToolbarHeight + ToastGap));
-        _toastRect = toastRect;
-        _clickRegions.Add(new ClickRegion { Rect = toastRect, OnClick = ClearToast, Enabled = () => _loadStatusExpiry >= 0f });
-        _loadStatusBackground = toastRect.gameObject.AddComponent<Image>();
-        _loadStatusBackground.color = PanelColor;
-        _loadStatusBackground.enabled = false;
-        var toastTextRect = EditorUi.NewRect("ToastText", toastRect);
-        toastTextRect.anchorMin = Vector2.zero;
-        toastTextRect.anchorMax = Vector2.one;
-        toastTextRect.offsetMin = new Vector2(ToolbarMargin, 0f);
-        toastTextRect.offsetMax = new Vector2(-ToolbarMargin, 0f);
-        _loadStatusText = EditorUi.NewLabel(toastTextRect, PositionLabel.FindFontAsset(EditorUi.FontName), TextAlignmentOptions.Center, OverlayFontSize);
-        _loadStatusText.color = WarnColor;
-        _loadStatusText.text = "";
+        // Toasts stack under the toolbar, newest nearest it: orange for success, red for failures, each cleared after ToastSeconds or on click.
+        for (var i = 0; i < MaxToasts; i++)
+        {
+            _toastSlots.Add(BuildToastSlot(i, toolbarWidth, panel.anchoredPosition.x));
+        }
+    }
+
+    private static ToastSlot BuildToastSlot(int index, float width, float x)
+    {
+        var rect = EditorUi.NewRect($"Toast{index}", _root.transform);
+        rect.anchorMin = new Vector2(0.5f, 1f);
+        rect.anchorMax = new Vector2(0.5f, 1f);
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.sizeDelta = new Vector2(width, OverlayRowHeight);
+        rect.anchoredPosition = new Vector2(x, -(ToolbarHeight + ToastGap + index * (OverlayRowHeight + ToastGap)));
+        _clickRegions.Add(new ClickRegion { Rect = rect, OnClick = () => _toasts.Dismiss(index), Enabled = () => index < _toasts.Items.Count });
+
+        var background = rect.gameObject.AddComponent<Image>();
+        background.color = PanelColor;
+        background.enabled = false;
+
+        var textRect = EditorUi.NewRect($"Toast{index}Text", rect);
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = new Vector2(ToolbarMargin, 0f);
+        textRect.offsetMax = new Vector2(-ToolbarMargin, 0f);
+        var text = EditorUi.NewLabel(textRect, PositionLabel.FindFontAsset(EditorUi.FontName), TextAlignmentOptions.Center, OverlayFontSize);
+        text.text = "";
+        return new ToastSlot { Rect = rect, Background = background, Text = text };
+    }
+
+    private static void RenderToasts()
+    {
+        for (var i = 0; i < _toastSlots.Count; i++)
+        {
+            var slot = _toastSlots[i];
+            var shown = i < _toasts.Items.Count;
+            slot.Background.enabled = shown;
+            slot.Text.text = shown ? _toasts.Items[i].Text : "";
+            if (shown)
+            {
+                slot.Text.color = _toasts.Items[i].IsError ? ErrorColor : WarnColor;
+            }
+        }
     }
 
     private static void BuildOutline()
@@ -493,7 +522,7 @@ public static class EditorTileTools
     {
         if (LiveEditPatch.CurrentState() is not { } state || LiveEditPatch.Grid is not { } grid)
         {
-            _validateSummary = "validate: no live level";
+            Fail("validate: no live level");
             _reachability = null;
             ClearUnreachable();
             return;
@@ -502,7 +531,7 @@ public static class EditorTileTools
         var spawn = SpawnCell(grid);
         if (spawn == null)
         {
-            _validateSummary = "validate: no spawn portal found";
+            Fail("validate: no spawn portal found");
             _reachability = null;
             ClearUnreachable();
             return;
@@ -514,7 +543,7 @@ public static class EditorTileTools
         }
         catch (ArgumentException ex)
         {
-            _validateSummary = $"validate failed: {ex.Message}";
+            Fail($"validate failed: {ex.Message}");
             _reachability = null;
             ClearUnreachable();
             return;
@@ -563,7 +592,7 @@ public static class EditorTileTools
         var level = LiveEditPatch.SnapshotLevelFile(_session.CurrentEdits);
         if (level == null)
         {
-            _validateSummary = "save failed: no active run";
+            Fail("save failed: no active run");
             return false;
         }
 
@@ -575,7 +604,7 @@ public static class EditorTileTools
         }
         catch (Exception ex)
         {
-            _validateSummary = $"save failed: {ex.Message}";
+            Fail($"save failed: {ex.Message}");
             return false;
         }
 
@@ -592,7 +621,7 @@ public static class EditorTileTools
     {
         if (_levelFiles.Count == 0)
         {
-            _validateSummary = "load failed: no files";
+            Fail("load failed: no files");
             return;
         }
 
@@ -606,7 +635,7 @@ public static class EditorTileTools
         }
         catch (Exception ex)
         {
-            _validateSummary = $"load failed: {ex.Message}";
+            Fail($"load failed: {ex.Message}");
             return;
         }
 
@@ -618,7 +647,7 @@ public static class EditorTileTools
 
         if (!LiveEditPatch.ResetAndApplyEdits(level.Edits, _logger))
         {
-            _validateSummary = "load failed: no active run";
+            Fail("load failed: no active run");
             return;
         }
 
@@ -717,28 +746,31 @@ public static class EditorTileTools
         _unreachable.Clear();
     }
 
-    private static void ClearToast()
+    private static void Fail(string message)
     {
-        _loadStatusText.text = "";
-        _loadStatusBackground.enabled = false;
-        _loadStatusExpiry = -1f;
+        _validateSummary = message;
+        _toasts.Push(message, true, Time.unscaledTime);
     }
 
-    private static void ShowTransientStatus(string text)
-    {
-        if (_loadStatusText != null)
-        {
-            _loadStatusText.text = text;
-            _loadStatusBackground.enabled = true;
-        }
-
-        _loadStatusExpiry = Time.unscaledTime + ToastSeconds;
-    }
+    private static void ShowTransientStatus(string text) => _toasts.Push(text, false, Time.unscaledTime);
 
     private static bool PointerOverOverlay() =>
         (_toolbarRect != null && RectTransformUtility.RectangleContainsScreenPoint(_toolbarRect, EditorInput.MousePosition, null))
-        || (_toastRect != null && _loadStatusExpiry >= 0f && RectTransformUtility.RectangleContainsScreenPoint(_toastRect, EditorInput.MousePosition, null))
+        || PointerOverToast()
         || (_loadRect != null && RectTransformUtility.RectangleContainsScreenPoint(_loadRect, EditorInput.MousePosition, null));
+
+    private static bool PointerOverToast()
+    {
+        for (var i = 0; i < _toasts.Items.Count && i < _toastSlots.Count; i++)
+        {
+            if (RectTransformUtility.RectangleContainsScreenPoint(_toastSlots[i].Rect, EditorInput.MousePosition, null))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static void HandleOverlayInput()
     {
