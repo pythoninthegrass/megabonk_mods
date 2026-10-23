@@ -1,10 +1,10 @@
 ---
 id: TASK-010.02
 title: Injected-input seam for editor input
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-22 03:42'
-updated_date: '2026-10-22T05:51:00Z'
+updated_date: '2026-10-23T00:56:00Z'
 labels:
   - dev-harness
   - tooling
@@ -67,10 +67,10 @@ Do not: add harness commands (TASK-010.03), touch the game's Rewired input, chan
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Notes
@@ -79,4 +79,6 @@ Do not: add harness commands (TASK-010.03), touch the game's Rewired input, chan
 Definition of Done item 'task check passes' cannot be run unattended because task check builds the mod and the csproj deploys into the live game's Mods folder. Satisfy it by running its parts: task mod:test, the dotnet build with -p:ModInstanceFolder redirected to a temp directory, task lint and task scripts:test.
 
 Open item for a human: confirm in the running game that the real keyboard and mouse still drive the editor exactly as before (palette clicks, W/A/S/D fly, tool hotkeys, R rotation, typing). Not verified; the game was not run. The task's rg done-check also matches 'EditorInput.' call sites because 'Input\.' is a substring; the check 'rg -P (?<![A-Za-z])Input\.(GetKey|GetMouse|mousePosition|inputString|GetAxis|mouseScrollDelta) src' finds matches only in editor_input.cs.
+
+Re-verified on main after merge 0008b7e: task mod:test 566 passed, redirected mod build 0 errors, task lint exit 0, task scripts:test 116 passed. Open item for a human unchanged: real keyboard and mouse behaviour in the running game is unverified.
 <!-- SECTION:NOTES:END -->
