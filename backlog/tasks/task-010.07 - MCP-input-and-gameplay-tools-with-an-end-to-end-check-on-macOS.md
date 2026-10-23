@@ -5,7 +5,7 @@ status: Done
 assignee:
   - claude
 created_date: '2026-10-22 03:43'
-updated_date: '2026-10-23T01:45:00Z'
+updated_date: '2026-10-23T01:47:00Z'
 labels:
   - dev-harness
   - tooling
@@ -87,6 +87,8 @@ End-to-end run on macOS (Wine runtime), MCP tools only, after reconnecting the m
 - teleport cell [30,30] -> tool error 'cell (30,30) is outside the 15x15 grid' (mod rejection surfaced as ToolError). teleport cell [2,12] -> {position [-200,-8.075,200], cell [2,12]}. state -> player position [-200,-8.075,200] cell [2,12], editor true. screenshot: HUD label 'me: pos(-200, -8, 200)'; the editor free-fly camera does not follow the player, so the view is unchanged.
 - quit -> true.
 No failures in any layer. dismiss_levelup was covered by the fake-mod tests only; no level-up dialog was open in the run.
+
+dismiss_levelup in the real game (macOS): relaunch, editor(on=false), invulnerable on, user played to a level-up. state showed frozen true; screenshot showed 3 offers (Wireless Dagger, Aura, Space Noodle). dismiss_levelup(choice=1) -> {dialogWasOpen:true, chosen:'Aura'}. state afterwards: frozen false, editor false; screenshot showed the dialog closed and an Aura icon in the weapon slots with the aura ring around the player. dismiss_levelup(choice=0) with no dialog open -> {dialogWasOpen:false, chosen:null}, no error. An out-of-range choice was not run.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
