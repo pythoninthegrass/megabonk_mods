@@ -345,77 +345,63 @@ Snapshot: `close_binary` with `snapshot_path` set to `.tools/GameAssembly/ghidra
 
 If analysis ever fails or runs impractically long, `REA_GHIDRA_DISABLED_ANALYZERS` (comma-separated exact analyzer names) skips analyzers, and the Ghidra GUI project (`task ghidra:run`) keeps its analysis between sessions instead of redoing it per REA session. A `provider_timeout` is retryable: `close_binary`, then `open_binary` again.
 
-## Player teleport: static findings, unconfirmed in the running game
+## Player teleport
 
-Everything in this section comes from `dump.cs` and from Ghidra pseudocode of `GameAssembly.dll` (sha256 starting `4350a7ae25ba`). Nothing was run in the game, so each behaviour below is an unconfirmed reading of decompiled code. Callee names are inferred by matching the callee's RVA to a `dump.cs` entry; a name marked "inferred from RVA" has no other evidence.
+Confirmed in the running game (CrossOver, Forest level). The player is a `MyPlayer` (static `MyPlayer.Instance`) with a `PlayerMovement playerMovement` field (`0x28`), a `PlayerRenderer playerRenderer` (`0x20`) and a `PlayerInput playerInput` (`0x48`). `PlayerMovement` is a Rigidbody controller (`private Rigidbody rb` at `0x48`, `CapsuleCollider playerCollider` at `0x140`, `float playerHeight` at `0x104`), not a `CharacterController`.
 
-The player is a `MyPlayer` (static `MyPlayer.Instance`, offset `0x8`) with a `PlayerMovement playerMovement` field at `0x28`, a `PlayerRenderer playerRenderer` at `0x20` and a `PlayerInput playerInput` at `0x48`. `PlayerMovement` is a Rigidbody controller, not a `CharacterController`: it has `private Rigidbody rb` at `0x48` and a `CapsuleCollider playerCollider` at `0x140`, and `dump.cs` lists no `CharacterController` field on either class.
-
-| Method | RVA | VA | Signature |
-| --- | --- | --- | --- |
-| `PlayerMovement.TeleportPlayer` | `0x343A80` | `0x180343A80` | `void TeleportPlayer(Vector3 pos)` |
-| `PlayerMovement.TeleportPlayerBackToBounds` | `0x343870` | `0x180343870` | `void TeleportPlayerBackToBounds(Vector3 pos)` |
-| `PlayerMovement.VerifyPosition` | `0x344220` | `0x180344220` | `private void VerifyPosition()` |
-| `MyPlayer.TeleportPlayerImmediate` | `0x4B6E00` | `0x1804B6E00` | `void TeleportPlayerImmediate(Vector3 position, Vector3 dir, Vector3 cameraDir, float cameraPitch = 20)` |
-| `MyPlayer.TeleportPlayerNextStage` | `0x4B6EB0` | `0x1804B6EB0` | `void TeleportPlayerNextStage()` |
-| `MyPlayer.TeleportEnd` | `0x4B6D90` | `0x1804B6D90` | `private void TeleportEnd()` |
-| `MyPlayer.Spawn` | `0x4B6770` | `0x1804B6770` | `void Spawn(Vector3 position, Vector3 direction, bool useHeightOffset = false)` |
-
-What the decompiled code does:
-
-- `PlayerMovement.TeleportPlayer(pos)` reads `rb` (`this + 0x48`) and `playerHeight` (`this + 0x104`). It calls one Rigidbody setter with `pos + playerHeight * 0.5 * <a Vector3 static>` (the static is read from the `Vector3` class statics at offset `0x18` to `0x20`, which is most likely `Vector3.up`), then a second Rigidbody setter with the `Vector3` static at offset `0`, which is most likely `Vector3.zero`. The two setters sit at RVAs `0x232D2C0` and `0x232E6E0`, which `dump.cs` does not name; from the argument shapes they are probably `Rigidbody.position` and `Rigidbody.velocity`, so the method most likely moves the body and zeroes its velocity. It does not touch `transform` directly and does not touch the camera. Confidence: medium for the shape, low for the two setter names.
-- `PlayerMovement.TeleportPlayerBackToBounds(pos)` does the same position and velocity writes with an offset of `4.0` times the same `Vector3` static instead of half the player height, then writes the position `pos - playerHeight * <Vector3 static>` into a `CheckLanding(Vector3 point, Vector3 normal)` call (RVA `0x33C240`, resolved from `dump.cs`) and calls `ResetAerialJumps()` (RVA `0x3424A0`). It is the out-of-bounds recovery path.
-- `PlayerMovement.VerifyPosition()` is the game's own recovery from a fall. When `grounded` (`0xDF`) is true it stores the current rigidbody position into `lastGroundedPosition` (`0x244`) as long as the ground object is not a specific component type. When not grounded and the rigidbody `y` is below a static float minus `10.0`, it writes the saved `lastGroundedPosition` back into the rigidbody (the same position and velocity pair as `TeleportPlayer`) and calls `CheckLanding`. The static float is read from a class at RVA-unresolved handle `DAT_182f59150`; it is likely the map's lowest `y` or a kill plane, but that is unconfirmed. Consequence worth testing: a teleport target that is more than 10 units below that static, or a stale `lastGroundedPosition`, may be undone by this method on the next tick.
-- `MyPlayer.TeleportPlayerImmediate(position, dir, cameraDir, cameraPitch)` calls `PlayerMovement.TeleportPlayer(position)` on `playerMovement`, `PlayerRenderer.ForceRotation(dir)` (RVA `0x345B50`, resolved from `dump.cs`) on `playerRenderer`, and `PlayerInput.SetSpawnDirection(cameraDir, cameraPitch)` (RVA `0x33ABF0`, resolved from `dump.cs`) on `playerInput`. It therefore sets position, body facing and look direction in one call; the camera is driven through `PlayerInput`'s spawn direction rather than by moving the camera object. It does not set `isTeleporting` and does not touch enemies.
-- `MyPlayer.TeleportPlayerNextStage()` activates `teleportEffect` (`this + 0x70`), sets `isTeleporting` (`0x128`) to true and schedules a delayed `Invoke` of a method by name (probably `TeleportEnd`, by name only) after `1.0` second. `TeleportEnd()` calls `RemoveAllStatusEffects` (RVA `0x4495C0`, resolved from `dump.cs`) on the object at `inventory + 0x38` and deactivates the effect object. This is the portal transition between stages, not a position move, and it does not take a position argument.
-- `MyPlayer.Spawn(position, direction, useHeightOffset)` is the full respawn: it fires a static `Action` (`A_PrePlayerSpawn`), runs `TryInit`, calls `StartPlayer` and sets the spawn direction through `PlayerInput`. It is heavier than a teleport and is not a candidate.
-
-Candidate call sequence, unconfirmed: with `var me = MyPlayer.Instance;`, call `me.TeleportPlayerImmediate(position, dir, cameraDir)` where `position` is the world position wanted and `dir` and `cameraDir` are the current forward vectors (read from the player's `transform` first so the facing does not change), then read `me.transform.position` after a frame. `PlayerMovement.TeleportPlayer(position)` alone is the narrower call if the facing must be untouched. Both hold the `Vector3` by pointer in native code, so call them through the Il2CppInterop proxies on the main thread.
-
-Open questions about the teleport, all needing the running game:
-
-- Whether `TeleportPlayer` moves the body to exactly `position + playerHeight * 0.5` on `y`, which would put the feet at `position.y`, or whether `position` is already the centre height.
-- Whether `VerifyPosition` reverts a teleport whose target is below the threshold static, and what that static holds.
-- Whether the camera follows with no extra call, and whether `PlayerCamera` needs a reset after a long jump.
-- What a teleport does to enemies already chasing the player (nothing is called on them), to the kill-floor heartbeat, and to `cells` output.
-- What field to return from a harness command: the position actually reached is `MyPlayer.Instance.transform.position` read one frame after the call, together with the requested position, so a revert shows up as a difference.
-
-## Level-up dialog: static findings, unconfirmed in the running game
-
-The same caveats as the teleport section apply: `dump.cs` plus Ghidra pseudocode only, nothing run in the game, and callee names inferred from RVA.
-
-The level-up window is `LevelupScreen : BaseEncounterWindow`, owned by `EncounterWindows` (field `levelupScreen`, `0x20`). `LevelupScreen.upgradePicker` (`0x48`) is an `UpgradePicker` whose `UpgradeButton[] buttons` (`0x20`) hold the offers. An `UpgradeButton` keeps its offer as `IUpgradable upgradable` (`0xA8`), `List<StatModifier> upgradeOffer` (`0xB0`), `bool isItem` (`0xC8`) and `ERarity rarity` (`0xD8`).
-
-| Method | RVA | VA |
+| Method | RVA | Signature |
 | --- | --- | --- |
-| `LevelupScreen.ShowLevelupScreen()` | `0x54F7E0` | `0x18054F7E0` |
-| `LevelupScreen.OnClose()` (override) | `0x54F040` | `0x18054F040` |
-| `LevelupScreen.CloseLevelupScreen()` / `Leave()` (same address) | `0x54EA30` | `0x18054EA30` |
-| `UpgradeButton.SelectUpgrade()` | `0x55F0A0` | `0x18055F0A0` |
-| `UpgradePicker.SelectUpgrade(IUpgradable, List<StatModifier>, UpgradeButton, ERarity)` | `0x561500` | `0x180561500` |
-| `UpgradePicker.AutoSelectUpgrade()` (static) | `0x560BE0` | `0x180560BE0` |
-| `PlayerInventory.AddUpgrade(IUpgradable, List<StatModifier>, ERarity)` | `0x4DFD80` | `0x1804DFD80` |
-| `EncounterWindows.RewardFinished()` | `0x3E09D0` | `0x1803E09D0` |
-| `EncounterWindows.OnLevelUp(int level)` | `0x3E02B0` | `0x1803E02B0` |
-| `MyTime.Unpause()` | `0x3E5DB0` | `0x1803E5DB0` |
+| `MyPlayer.TeleportPlayerImmediate` | `0x4B6E00` | `void TeleportPlayerImmediate(Vector3 position, Vector3 dir, Vector3 cameraDir, float cameraPitch = 20)` |
+| `PlayerMovement.TeleportPlayer` | `0x343A80` | `void TeleportPlayer(Vector3 pos)` |
+| `PlayerMovement.TeleportPlayerBackToBounds` | `0x343870` | `void TeleportPlayerBackToBounds(Vector3 pos)` |
+| `PlayerMovement.VerifyPosition` | `0x344220` | `private void VerifyPosition()` |
 
-`LevelupScreen.ChooseOffer` and `UpgradeButton.OnClick` are listed at RVA `0x3321E0`, the shared empty stub, so they have no logic of their own and must not be hooked; the choice goes through `UpgradeButton.SelectUpgrade`. `LevelupScreen.Open` (RVA `0x54F110`) could not be decompiled (see "Using Ghidra through REA").
+Call sequence that worked, on the main thread: `MyPlayer.Instance.TeleportPlayerImmediate(position, me.transform.forward, me.transform.forward, 20f)`. It calls `PlayerMovement.TeleportPlayer(position)`, which writes the Rigidbody position and zeroes its velocity, then `PlayerRenderer.ForceRotation(dir)` and `PlayerInput.SetSpawnDirection(cameraDir, cameraPitch)`. `me.playerMovement.TeleportPlayer(position)` alone also works and leaves facing untouched.
 
-Detecting an open dialog. `LevelupScreen` has `public static bool isLevelingUp` at statics offset `0`. `ShowLevelupScreen` calls `UpgradePicker.ShuffleUpgrades(encounterType)`, writes `isLevelingUp = false`, then writes `isLevelingUp = true` and fires the static `A_LevelupEnabled` action only when `encounterType` (`0x9C`) is `0` (`EEncounter.Levelup`). `OnClose` writes `isLevelingUp = false`, hides `window` (`0x20`) and `effects` (`0x28`), calls `MyTime.Unpause()` and fires the static `A_LevelUpClose` action for `Levelup`. If the picker has no upgrades to offer (`numUpgrades` at `0x30` is below `1`) and the type is not `ShadyGuy` (`7`), `ShowLevelupScreen` calls `CloseLevelupScreen` immediately. So `LevelupScreen.isLevelingUp` is the candidate dialog-open flag for level-ups; `EncounterWindows.encounterInProgress` (`0x58`) is the broader flag for any encounter window, and is true while `activeEncounterWindow` (`0x48`) is set.
+- The call does not change `transform.position` in the same frame. The new position is visible on `MyPlayer.Instance.transform.position` after about a second at most (the Rigidbody position reaches the transform on the next physics sync), so a command has to wait a few frames before reading the position back.
+- `position` is the feet point: the body lands at `position.y + 1.925` (half `playerHeight`) on the pivot, so `(120, 0, 80)` on flat ground settles at `y = 1.925`, the same as the spawn pose. Pass the ground height, not the centre height.
+- Live physics applies afterwards: a target above the terrain falls, and a target over a lower tile ends up at the bottom of that fall. Teleporting to cell centre `(-200, 0, 200)` in the live game ended at `y = -11` after sliding down a slope. While frozen (editor mode or `freeze`), the body is placed but does not fall.
+- Writing `MyPlayer.Instance.transform.position` directly does not work in a live run: the Rigidbody overwrites it within a frame (set to y 15, read back at 1.925). While frozen it sticks, which is not useful because the physics body stays at the old place.
+- A target far below the map is not reverted by `VerifyPosition`. A teleport to `y = -100` was left in place and the kill floor then fired (`KillFloor: player fell to y=-98.2, killing`), after which the run is over and `MyTime.paused` is true. A harness teleport must not target below the kill floor.
+- The camera follows with no extra call: a screenshot taken after a 40-cell jump showed the player centred on the new position in the game camera.
+- Enemies are not moved. Enemies that spawn afterwards appear around the new position (the position label listed three enemies within 30 units a few seconds after a jump to `(-200, 0, 200)`); whether enemies that were already chasing the player at the old position are culled or walk over was not observed.
 
-Applying a choice. `UpgradeButton.SelectUpgrade()` returns early while `Time.time` is below `UpgradePicker.banishCooldownOverAtTime` (`0x64`). For a non-item offer (`isItem` false) it calls `UpgradePicker.SelectUpgrade(upgradable, upgradeOffer, this, rarity)`. When `banishMode` (`0x60`) is false, that method calls `PlayerInventory.AddUpgrade(upgradable, upgradeOffer, rarity)` on `MyPlayer.Instance.inventory`, then `EncounterWindows.RewardFinished()` on the encounter-windows object reached through a static instance's field at `0x30` (`dump.cs` lists `encounterWindows` at `0x30` of a class at RVA-unresolved statics handle `DAT_182f9a528`), then `UpgradePicker.StopBanishMode()` on the screen's picker. `RewardFinished` calls the active window's `OnClose` virtual (vtable slot at `0x188`), clears `activeEncounterWindow`, sets `encounterInProgress` false and `closedEncounterThisFrame` true, and, when the reward queue is empty, calls `MyTime.Unpause()` and fires `A_WindowClosed`; when the queue is not empty it calls `PopReward` to open the next window. For an item offer (`isItem` true) the button path adds the item through `ItemInventory.AddItem(EItem)` (RVA `0x4421C0`) and charges gold with `PlayerInventory.ChangeGold(-price)` when `price` (`0xDC`) is above zero, then finishes the same way.
+Open questions about the teleport:
 
-`UpgradePicker.AutoSelectUpgrade()` is a static method that picks an offer without any UI. It calls `InventoryUtility.GetRandomUpgrades()` (RVA `0x420EF0`), scores each entry from its rarity (`Rarity.GetUpgradeOfferRarity(luck)` with a `PlayerStats.GetStat` luck value), keeps the highest, calls `PlayerInventory.AddUpgrade` on the player's inventory, and posts a `ServerFeed.SetFeed` message with the upgrade name. It does not call `RewardFinished` or touch `LevelupScreen`. `EncounterWindows.OnLevelUp(level)` calls it for each gained level, instead of queuing a `Levelup` encounter with `AddEncounter`, when a field at `0x68` of an object reached through a static (`DAT_182f7c7c0`, unresolved) equals `1` and a comparison against the current level holds; that reads as a game option or mode that auto-picks upgrades, and what sets it is not established.
+- One teleport sent right after `run.py relaunch` (frozen in editor mode, target `(-200, 0, 200)`) was not applied at all after 5 seconds, while the same call minutes later was. It did not reproduce; the cause is unknown.
+- What happens to enemies already chasing at the old position.
 
-Candidate call sequence for choosing without a click, unconfirmed: when `LevelupScreen.isLevelingUp` is true, take the open `LevelupScreen` (the `levelupScreen` field of the `EncounterWindows` instance), read `upgradePicker.buttons`, pick one `UpgradeButton` whose `isItem` is false, and call its `SelectUpgrade()`; this runs the same code path as a click. It is gated by `banishCooldownOverAtTime`, so a call right after the window opens may be ignored and has to be retried. `LevelupScreen.Skip` (RVA `0x54FF20`) and `Refresh` (RVA `0x54F5F0`) were not decompiled.
+Result fields for a harness teleport command: `requested` (`[x, y, z]` as passed), `position` (`[x, y, z]` read from `MyPlayer.Instance.transform.position` after waiting for the sync, which includes the `+1.925` body offset), and `cell` (as in `state`). A difference between the requested ground height plus `1.925` and `position.y` shows a fall or revert.
 
-Open questions about the level-up dialog, all needing the running game:
+## Level-up dialog
 
-- How to obtain the `EncounterWindows` instance from the mod, since the decompiled code reaches it through a static whose class was not identified; `Object.FindObjectOfType` on `EncounterWindows` or `LevelupScreen` is the fallback.
-- Whether calling `UpgradeButton.SelectUpgrade()` from a mod thread produces the same result as a click, including that `isLevelingUp` goes false, `MyTime.paused` goes false and the stat change is applied; and what a harness freeze (`MyTime.Pause`) does to the window while it is open.
-- Whether `OnClose` runs `MyTime.Unpause()` while the editor-mode freeze is active, which would unfreeze a run the harness meant to keep frozen.
-- Whether `AutoSelectUpgrade` alone leaves an open dialog behind when called while the window is showing.
-- Result fields a harness command should return: `isLevelingUp` before and after, the chosen upgrade's name (read from `UpgradeButton.t_name` or the `upgradable`) and its `rarity`, and the player's character level.
+Confirmed in the running game. The level-up window is `LevelupScreen : BaseEncounterWindow`, owned by `EncounterWindows` (field `levelupScreen`, `0x20`). `LevelupScreen.upgradePicker` (`0x48`) is an `UpgradePicker` whose `UpgradeButton[] buttons` (`0x20`) hold the offers; there were 4 buttons. An `UpgradeButton` keeps `IUpgradable upgradable` (`0xA8`), `bool isItem` (`0xC8`), `ERarity rarity` (`0xD8`) and `TextMeshProUGUI t_name` (`0x60`). The interop proxies expose the private fields.
+
+| Method | RVA |
+| --- | --- |
+| `EncounterWindows.AddEncounter(EEncounter)` | `0x3DF700` |
+| `UpgradeButton.SelectUpgrade()` | `0x55F0A0` |
+| `UpgradePicker.SelectUpgrade(IUpgradable, List<StatModifier>, UpgradeButton, ERarity)` | `0x561500` |
+| `PlayerInventory.AddUpgrade(IUpgradable, List<StatModifier>, ERarity)` | `0x4DFD80` |
+| `EncounterWindows.RewardFinished()` | `0x3E09D0` |
+| `LevelupScreen.OnClose()` | `0x54F040` |
+
+Detecting an open dialog: `LevelupScreen.isLevelingUp` (static bool) is true while the level-up window is open, and `EncounterWindows.encounterInProgress` is true for any encounter window. Both were false at rest, true after the window opened, and false after a choice. `MyTime.paused` is true while the window is open.
+
+Finding the objects: `UnityEngine.Object.FindObjectOfType<EncounterWindows>()` and `FindObjectOfType<LevelupScreen>()` both return the live instances; no static accessor is needed.
+
+Choosing without a click, which worked: with `LevelupScreen.isLevelingUp` true, `var button = FindObjectOfType<LevelupScreen>().upgradePicker.buttons[i]; button.SelectUpgrade();`. The same call opened and answered in one frame also worked, so the banish cooldown did not block it. Afterwards `isLevelingUp`, `encounterInProgress` and `MyTime.paused` were all false, and the chosen upgrade was in the player's inventory (a Bow offered as a new weapon appeared in the HUD at `LVL 1`, then `LVL 2` on a second pick). The button's name is `button.upgradable.GetName()` (same as `button.t_name.text`) and its rarity was `New` for the new weapon. With no dialog open `upgradePicker.buttons` is empty, so indexing it throws `IndexOutOfRange`; check `isLevelingUp` first.
+
+To open the dialog for a test, `FindObjectOfType<EncounterWindows>().AddEncounter(EEncounter.Levelup)` (`EEncounter.Levelup` is `0`) opens it at once and sets `isLevelingUp`. It does not change `PlayerXp.level`.
+
+Interaction with the editor freeze: choosing an upgrade runs `LevelupScreen.OnClose`, which calls `MyTime.Unpause()`. While editor mode was on and the run was frozen, a choice left `editor` true but set `frozen` (`MyTime.paused`) to false, so the editor session's freeze was lost and enemies resume. A harness command that dismisses the dialog during an editor session has to call `MyTime.Pause()` again afterwards.
+
+Open questions about the level-up dialog:
+
+- Whether `UpgradePicker.AutoSelectUpgrade()` alone leaves an open dialog behind; it was not called.
+- Whether item offers (`isItem` true) and the banish and refresh modes behave the same through `SelectUpgrade`; only upgrade offers were tried.
+
+Result fields for a harness dismiss command: `wasLevelingUp` and `isLevelingUp` (before and after), `chosen` (index), `name` (from `GetName()`), `rarity` (the `ERarity` name), `frozenBefore` and `frozenAfter` (`MyTime.paused`), and `playerLevel` (`MyPlayer.Instance.inventory.playerXp.level`). A call with no dialog open returns `ok:false` with an error rather than throwing an index error.
 
 ## Editor mode
 
