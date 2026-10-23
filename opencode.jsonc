@@ -56,10 +56,13 @@
     }
   },
   "mcp": {
-    "binary_ninja": {
-      "type": "remote",
-      "url": "http://localhost:24642/mcp",
-      "enabled": true
+    "megabonk": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--script",
+        "scripts/mcp_server.py"
+      ]
     }
   }
 }
