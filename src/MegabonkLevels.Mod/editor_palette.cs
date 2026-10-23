@@ -11,7 +11,7 @@ namespace MegabonkLevels;
 // See "Catalog palette" in docs/development.md.
 public static class EditorPalette
 {
-    private const float PanelWidth = 340f;
+    private const float LabelMargin = 8f;
     private const float TitleHeight = 48f;
     private const float RowHeight = 26f;
     private const float HeaderHeight = 22f;
@@ -157,7 +157,7 @@ public static class EditorPalette
         _panel.anchorMin = new Vector2(0f, 0f);
         _panel.anchorMax = new Vector2(0f, 1f);
         _panel.pivot = new Vector2(0f, 0.5f);
-        _panel.sizeDelta = new Vector2(PanelWidth, 0f);
+        _panel.sizeDelta = new Vector2(0f, 0f);
         _panel.anchoredPosition = Vector2.zero;
         _panel.gameObject.AddComponent<Image>().color = PanelColor;
 
@@ -179,6 +179,7 @@ public static class EditorPalette
         _content.anchoredPosition = Vector2.zero;
 
         var y = 0f;
+        var widestLabel = 0f;
         var lastGroup = ((int Stage, PaletteCategory Category)?)null;
         foreach (var entry in entries)
         {
@@ -186,13 +187,14 @@ public static class EditorPalette
             if (lastGroup != group)
             {
                 lastGroup = group;
-                AddRow(font, GroupLabel(entry), null, HeaderHeight, ref y);
+                AddRow(font, GroupLabel(entry), null, HeaderHeight, ref y, ref widestLabel);
             }
 
-            AddRow(font, entry.DisplayName, entry.Id, RowHeight, ref y);
+            AddRow(font, entry.DisplayName, entry.Id, RowHeight, ref y, ref widestLabel);
         }
 
         _contentHeight = y;
+        _panel.sizeDelta = new Vector2(widestLabel + LabelMargin * 2f, 0f);
         _content.sizeDelta = new Vector2(0f, y);
         RefreshSelection();
     }
@@ -206,7 +208,7 @@ public static class EditorPalette
         _ => "Interactables",
     };
 
-    private static void AddRow(TMP_FontAsset font, string text, CatalogId? id, float height, ref float y)
+    private static void AddRow(TMP_FontAsset font, string text, CatalogId? id, float height, ref float y, ref float widestLabel)
     {
         var rect = EditorUi.NewRect(id.HasValue ? "Entry" : "Header", _content);
         rect.anchorMin = new Vector2(0f, 1f);
@@ -226,10 +228,11 @@ public static class EditorPalette
         var labelRect = EditorUi.NewRect("Label", rect);
         labelRect.anchorMin = Vector2.zero;
         labelRect.anchorMax = Vector2.one;
-        labelRect.offsetMin = new Vector2(8f, 0f);
-        labelRect.offsetMax = new Vector2(-8f, 0f);
+        labelRect.offsetMin = new Vector2(LabelMargin, 0f);
+        labelRect.offsetMax = new Vector2(-LabelMargin, 0f);
         var label = EditorUi.NewLabel(labelRect, font, TextAlignmentOptions.MidlineLeft, FontSize);
         label.text = id.HasValue ? text : $"<color=#d0b050>{text}</color>";
+        widestLabel = Mathf.Max(widestLabel, label.GetPreferredValues(label.text).x);
         _rows.Add(row);
     }
 

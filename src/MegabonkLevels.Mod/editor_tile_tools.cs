@@ -13,7 +13,8 @@ namespace MegabonkLevels;
 // See "Tile tools" in docs/development.md.
 public static class EditorTileTools
 {
-    private const float ToolbarWidth = 960f;
+    private const float ToolbarFullWidth = 960f;
+    private const float ToolbarWidth = ToolbarFullWidth * 0.85f;
     private const float ToolbarHeight = 144f;
     private const float FontSize = 18f;
     private const float OverlayFontSize = 16f;
@@ -293,9 +294,9 @@ public static class EditorTileTools
         _toolbarRect = panel;
         panel.anchorMin = new Vector2(0.5f, 1f);
         panel.anchorMax = new Vector2(0.5f, 1f);
-        panel.pivot = new Vector2(0.5f, 1f);
+        panel.pivot = new Vector2(0f, 1f);
         panel.sizeDelta = new Vector2(ToolbarWidth, ToolbarHeight);
-        panel.anchoredPosition = Vector2.zero;
+        panel.anchoredPosition = new Vector2(-ToolbarFullWidth / 2f, 0f);
         panel.gameObject.AddComponent<Image>().color = PanelColor;
 
         var labelRect = EditorUi.NewRect("Label", panel);
@@ -336,7 +337,7 @@ public static class EditorTileTools
         loadRect.anchorMax = new Vector2(1f, 1f);
         loadRect.pivot = new Vector2(1f, 1f);
         loadRect.sizeDelta = new Vector2(OverlayWidth, OverlayRowHeight * (MaxListedLevels + 1) + OverlayPadding * 2);
-        loadRect.anchoredPosition = new Vector2(-8f, -8f);
+        loadRect.anchoredPosition = new Vector2(0f, -8f);
         loadRect.gameObject.AddComponent<Image>().color = PanelColor;
 
         var loadLabelRect = EditorUi.NewRect("LoadText", loadRect);
