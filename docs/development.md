@@ -88,8 +88,8 @@ A walkthrough that exercises the whole chain (agent, MCP, harness files, mod, ga
 1. `relaunch()` quits any running game, starts a fresh one, loads `levels/example-forest.mblevel.json`, goes invulnerable and enters editor mode. The returned state has `editor: true`.
 2. `screenshot()` and look for the catalog palette on the left.
 3. `mouse(action="click", x, y)` on a palette row, using pixel coordinates read from the screenshot. A later `screenshot()` shows the title of the palette panel with that entry selected.
-4. `key(key="R")` taps R, which rotates the selected object; `type_text("chest")` types into the palette search when the search field has focus.
-5. `teleport(cell=[cx, cz])` to a distant cell, wait about a second, then `state()` to confirm `player` and `cell` moved and `editor` is still true, and `screenshot()` to see the new position.
+4. `key(key="Alpha5")` switches to the Place tool and a `mouse` click on a tile places the selected entry; `key(key="Alpha6")` and a click on the object select it, and `key(key="R")` rotates it. `type_text("e2e")` after a click on the level-name field types into it.
+5. `teleport(cell=[cx, cz])` to a distant cell, wait about a second, then `state()` to confirm `player` and `cell` moved and `editor` is still true, and `screenshot()`. In editor mode the free-fly camera does not follow the player, so the check is the `state` position and the on-screen `me: pos(...)` label, not the view. The example forest grid is 15x15, so cells run 0 to 14; a cell outside it comes back as a tool error.
 6. `quit()`.
 
 If a step fails, `log_tail(pattern="Harness|Error")` shows whether the mod saw the command. A rejected command carries the mod's error text in the tool error, which says which layer refused it.
