@@ -13,9 +13,8 @@ public static class ObjectTools
     private const int GridDivisions = 4;
     private const float PositionTolerance = 0.01f;
     private const float DragHoldSeconds = 0.2f;
-    private const float LargeRingScale = 0.4f;
-    private const float SmallRingScale = 2f;
-    private const float SmallRingCap = 3f;
+    private const float FootprintClearance = 1.1f;
+    private const float MinRingRadius = 0.5f;
 
     // Tiles, walls, fill pieces and tile objects (ForestParticles and the like) are scenery, never picked or outlined.
     public static bool IsPickableGenId(string genId) => genId.StartsWith("object:", StringComparison.Ordinal);
@@ -28,9 +27,46 @@ public static class ObjectTools
     public static float RingBaseY(float boundsMinY, float? surfaceY) =>
         surfaceY is { } surface ? MathF.Max(boundsMinY, surface) : boundsMinY;
 
-    // Large objects such as trees get a ring well inside their canopy bounds; small ones get one just outside the mesh so it is not hidden.
-    public static float RingRadius(float extent) =>
-        MathF.Max(extent * LargeRingScale, MathF.Min(extent * SmallRingScale, SmallRingCap));
+    // The ring sits on the physical ground under the object, but an intentionally elevated object (its origin above
+    // the ground) keeps its own base instead of dropping to the terrain.
+    public static float RingBaseY(float? groundY, float boundsMinY, float originY, float? surfaceY)
+    {
+        var ownBase = MathF.Min(boundsMinY, originY);
+        if (groundY is { } ground)
+        {
+            return MathF.Max(ground, ownBase);
+        }
+
+        return RingBaseY(boundsMinY, surfaceY);
+    }
+
+    // Of the ground heights the probe found, the object rests on the one nearest its own origin, so overhanging
+    // geometry above a chest cannot lift its ring off the floor.
+    public static float? SupportY(float[] hitYs, float originY)
+    {
+        if (hitYs.Length == 0)
+        {
+            return null;
+        }
+
+        var best = hitYs[0];
+        var bestDistance = MathF.Abs(best - originY);
+        for (var i = 1; i < hitYs.Length; i++)
+        {
+            var distance = MathF.Abs(hitYs[i] - originY);
+            if (distance < bestDistance)
+            {
+                best = hitYs[i];
+                bestDistance = distance;
+            }
+        }
+
+        return best;
+    }
+
+    // Enclosing circle of the base footprint with modest clearance, so the ring hugs the object at its base.
+    public static float RingRadius(float extentX, float extentZ) =>
+        MathF.Max(MinRingRadius, MathF.Sqrt(extentX * extentX + extentZ * extentZ) * FootprintClearance);
 
     // Evenly spaced points on a horizontal circle, starting on the +X axis; drawn as a closed loop.
     public static IReadOnlyList<Vector3Data> Ring(float centreX, float y, float centreZ, float radius, int segments)

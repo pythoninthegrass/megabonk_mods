@@ -12,6 +12,7 @@ public static class EditorObjectTools
     private const float OutlineLift = 0.5f;
     private const float NearestPickTiles = 0.125f;
     private const int OnTopRenderQueue = 4000;
+    private const float FlatDecalEpsilon = 0.01f;
     private const float OutlineWidth = 0.8f;
     private const string CloneSuffix = "(Clone)";
 
@@ -426,20 +427,28 @@ public static class EditorObjectTools
         }
 
         var go = tool == EditorTool.Select && _selected is { } selected ? LiveEditPatch.ObjectFor(selected) : null;
+        if (go == null)
+        {
+            _diagLogged = null;
+        }
+
         Bounds? bounds = null;
+        Bounds? flatBounds = null;
         foreach (var renderer in go != null ? LiveEditPatch.ModelRenderers(go) : new Renderer[0])
         {
-            if (bounds is { } combined)
+            // A zero-thickness quad is a shadow or indicator decal, not model geometry; it must not stretch the ring.
+            var b = renderer.bounds;
+            if (b.size.y > FlatDecalEpsilon)
             {
-                combined.Encapsulate(renderer.bounds);
-                bounds = combined;
+                bounds = bounds is { } combined ? Encapsulate(combined, b) : b;
             }
             else
             {
-                bounds = renderer.bounds;
+                flatBounds = flatBounds is { } flatCombined ? Encapsulate(flatCombined, b) : b;
             }
         }
 
+        bounds ??= flatBounds;
         if (bounds is not { } box)
         {
             _selectionOutline.enabled = false;
@@ -447,9 +456,116 @@ public static class EditorObjectTools
         }
 
         var origin = go.transform.position;
-        var baseY = ObjectTools.RingBaseY(box.min.y, SurfaceYAt(ToData(origin)));
-        SetRing(_selectionOutline, origin.x, baseY + OutlineLift, origin.z, ObjectTools.RingRadius(Mathf.Max(box.extents.x, box.extents.z)));
+        var footprint = Footprint(go, box);
+        var groundY = GroundYAt(footprint.Centre, box.max.y, go);
+        var baseY = ObjectTools.RingBaseY(groundY, box.min.y, origin.y, SurfaceYAt(ToData(origin)));
+        var radius = ObjectTools.RingRadius(footprint.ExtentX, footprint.ExtentZ);
+        LogRingDiagnostics(go, box, origin, footprint, groundY, baseY, radius);
+        SetRing(_selectionOutline, footprint.Centre.x, baseY + OutlineLift, footprint.Centre.z, radius);
         _selectionOutline.enabled = true;
+    }
+
+    private static ObjectTarget? _diagLogged;
+
+    // The union of enabled colliders is the object's physical footprint — solid colliders, then triggers (an
+    // interactable's small body collider is often a trigger) — with renderer bounds as the last resort.
+    private static (Vector3 Centre, float ExtentX, float ExtentZ) Footprint(GameObject go, Bounds fallback)
+    {
+        Bounds? solid = null;
+        Bounds? trigger = null;
+        foreach (var collider in go.GetComponentsInChildren<Collider>())
+        {
+            if (!collider.enabled)
+            {
+                continue;
+            }
+
+            if (collider.isTrigger)
+            {
+                trigger = trigger is { } combinedTrigger ? Encapsulate(combinedTrigger, collider.bounds) : collider.bounds;
+            }
+            else
+            {
+                solid = solid is { } combinedSolid ? Encapsulate(combinedSolid, collider.bounds) : collider.bounds;
+            }
+        }
+
+        var footprint = solid ?? trigger;
+        if (footprint is not { } chosen)
+        {
+            return (fallback.center, fallback.extents.x, fallback.extents.z);
+        }
+
+        return (chosen.center, chosen.extents.x, chosen.extents.z);
+    }
+
+    private static Bounds Encapsulate(Bounds combined, Bounds other)
+    {
+        combined.Encapsulate(other);
+        return combined;
+    }
+
+    // Ground heights below the footprint centre, ignoring the object's own colliders; triggers and effects are not ground.
+    private static float? GroundYAt(Vector3 centre, float topY, GameObject go)
+    {
+        var self = go.GetComponentsInChildren<Collider>();
+        var from = new Vector3(centre.x, topY + 5f, centre.z);
+        var length = topY + 55f;
+        var hits = Physics.RaycastAll(from, Vector3.down, length);
+        var groundYs = new List<float>();
+        for (var i = 0; i < hits.Length; i++)
+        {
+            var hit = hits[i];
+            if (hit.collider.isTrigger)
+            {
+                continue;
+            }
+
+            var belongs = false;
+            for (var j = 0; j < self.Length; j++)
+            {
+                belongs |= hit.collider == self[j];
+            }
+
+            if (!belongs)
+            {
+                groundYs.Add(hit.point.y);
+            }
+        }
+
+        return ObjectTools.SupportY(groundYs.ToArray(), go.transform.position.y);
+    }
+
+    // Temporary MEGABONK_RING_DIAG output: once per selection, renderers, colliders, ring numbers, shader availability.
+    private static void LogRingDiagnostics(
+        GameObject go, Bounds box, Vector3 origin, (Vector3 Centre, float ExtentX, float ExtentZ) footprint,
+        float? groundY, float baseY, float radius)
+    {
+        if (!EnvFlag.IsSet("MEGABONK_RING_DIAG") || _selected is not { } target || _diagLogged == target)
+        {
+            return;
+        }
+
+        _diagLogged = target;
+        _logger.Warning($"[ring-diag] name={PrefabNameOf(go)} origin=({origin.x:F2},{origin.y:F2},{origin.z:F2}) bounds=({box.min.x:F2},{box.min.y:F2},{box.max.x:F2},{box.max.y:F2}) footprintCentre=({footprint.Centre.x:F2},{footprint.Centre.z:F2}) extents=({footprint.ExtentX:F2},{footprint.ExtentZ:F2}) groundY={groundY?.ToString("F2") ?? "none"} surfaceY={SurfaceYAt(ToData(origin))?.ToString("F2") ?? "none"} baseY={baseY:F2} radius={radius:F2}");
+        var renderers = go.GetComponentsInChildren<Renderer>();
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            var r = renderers[i];
+            var b = r.bounds;
+            _logger.Warning($"[ring-diag]   renderer={r.name} type={r.GetType().Name} enabled={r.enabled} min=({b.min.x:F2},{b.min.y:F2},{b.min.z:F2}) max=({b.max.x:F2},{b.max.y:F2},{b.max.z:F2})");
+        }
+
+        var colliders = go.GetComponentsInChildren<Collider>();
+        for (var i = 0; i < colliders.Length; i++)
+        {
+            var c = colliders[i];
+            var b = c.bounds;
+            _logger.Warning($"[ring-diag]   collider={c.name} type={c.GetType().Name} enabled={c.enabled} trigger={c.isTrigger} min=({b.min.x:F2},{b.min.y:F2},{b.min.z:F2}) max=({b.max.x:F2},{b.max.y:F2},{b.max.z:F2})");
+        }
+
+        _logger.Warning($"[ring-diag]   ground-probe y={groundY?.ToString("F2") ?? "none"}");
+        _logger.Warning($"[ring-diag]   shaders Sprites/Default={Shader.Find("Sprites/Default") != null} UI/Default={Shader.Find("UI/Default") != null} Hidden/Internal-Colored={Shader.Find("Hidden/Internal-Colored") != null} material={_selectionOutline.sharedMaterial?.name} queue={_selectionOutline.sharedMaterial?.renderQueue}");
     }
 
     private static void DestroyLine(ref LineRenderer line)
@@ -518,7 +634,11 @@ public static class EditorObjectTools
         line.endColor = color;
         line.enabled = false;
 
-        var shader = Shader.Find("Sprites/Default") ?? Shader.Find("Hidden/Internal-Colored");
+        // UI/Default honours unity_GUIZTestMode, so an onTop ring draws over the scene's depth; Sprites/Default would
+        // silently keep its less-equal depth test and hide a ring buried in terrain or a large mesh.
+        var shader = (onTop ? Shader.Find("UI/Default") : null)
+                     ?? Shader.Find("Sprites/Default")
+                     ?? Shader.Find("Hidden/Internal-Colored");
         if (shader != null)
         {
             line.material = new Material(shader) { color = color };
