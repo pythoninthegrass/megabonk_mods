@@ -17,6 +17,10 @@ public static class ObjectTools
     // Tiles, walls, fill pieces and tile objects (ForestParticles and the like) are scenery, never picked or outlined.
     public static bool IsPickableGenId(string genId) => genId.StartsWith("object:", StringComparison.Ordinal);
 
+    // Disabled renderers (a shrine's charge-radius sphere), particles and the minimap marker are not part of the visible model.
+    public static bool IsModelRenderer(string rendererName, bool enabled, bool isParticle) =>
+        enabled && !isParticle && rendererName != "MinimapIcon";
+
     // Evenly spaced points on a horizontal circle, starting on the +X axis; drawn as a closed loop.
     public static IReadOnlyList<Vector3Data> Ring(float centreX, float y, float centreZ, float radius, int segments)
     {

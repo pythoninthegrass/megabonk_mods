@@ -91,6 +91,8 @@ public static class LiveEditPatch
     // The live object for a target, null when it is gone.
     public static GameObject ObjectFor(ObjectTarget target) => LiveSession?.Applier.FindActive(target);
 
+    public static IEnumerable<Renderer> ModelRenderers(GameObject go) => Applier.ModelRenderers(go);
+
     public static IReadOnlyList<(ObjectTarget Target, GameObject Object)> PickableObjects() =>
         LiveSession?.Applier.PickableObjects() ?? new List<(ObjectTarget, GameObject)>();
 
@@ -597,18 +599,11 @@ public static class LiveEditPatch
         }
 
         // Effect-only roots such as ForestParticles span the map and are not objects to edit.
-        public static bool HasMeshRenderer(GameObject go)
-        {
-            foreach (var renderer in go.GetComponentsInChildren<Renderer>())
-            {
-                if (renderer.TryCast<ParticleSystemRenderer>() == null)
-                {
-                    return true;
-                }
-            }
+        public static bool HasMeshRenderer(GameObject go) => ModelRenderers(go).Any();
 
-            return false;
-        }
+        public static IEnumerable<Renderer> ModelRenderers(GameObject go) =>
+            go.GetComponentsInChildren<Renderer>()
+                .Where(r => ObjectTools.IsModelRenderer(r.name, r.enabled, r.TryCast<ParticleSystemRenderer>() != null));
 
         public ObjectTarget? TargetOf(Transform hit)
         {

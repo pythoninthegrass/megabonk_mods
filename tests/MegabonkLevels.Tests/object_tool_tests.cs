@@ -18,6 +18,17 @@ public class ObjectToolTests
         Assert.Equal(expected, ObjectTools.IsPickableGenId(genId));
     }
 
+    [Theory]
+    [InlineData("Chest(Clone)", true, false, true)]
+    [InlineData("AltarIcon", true, false, true)]
+    [InlineData("MinimapIcon", true, false, false)]
+    [InlineData("ChargeShrine(Clone)", false, false, false)]
+    [InlineData("Dust", true, true, false)]
+    public void IsModelRenderer_ExcludesDisabledParticleAndMinimapRenderers(string name, bool enabled, bool isParticle, bool expected)
+    {
+        Assert.Equal(expected, ObjectTools.IsModelRenderer(name, enabled, isParticle));
+    }
+
     [Fact]
     public void Ring_PlacesEveryPointOnTheCircleAtTheGivenHeight()
     {

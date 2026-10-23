@@ -395,15 +395,9 @@ public static class EditorObjectTools
         }
 
         var go = tool == EditorTool.Select && _selected is { } selected ? LiveEditPatch.ObjectFor(selected) : null;
-        var renderers = go != null ? go.GetComponentsInChildren<Renderer>() : null;
         Bounds? bounds = null;
-        foreach (var renderer in renderers ?? new Renderer[0])
+        foreach (var renderer in go != null ? LiveEditPatch.ModelRenderers(go) : new Renderer[0])
         {
-            if (renderer.TryCast<ParticleSystemRenderer>() != null)
-            {
-                continue;
-            }
-
             if (bounds is { } combined)
             {
                 combined.Encapsulate(renderer.bounds);
