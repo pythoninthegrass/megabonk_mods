@@ -17,9 +17,9 @@ Megabonk ships a native Linux build (`Megabonk.x86_64`), so there is no Proton o
 
 ## Verifying changes in the running game
 
-The mod has a development harness that loads a level, captures the game's rendered frame, and quits, without keyboard or mouse input. Enable it once with `uv run scripts/run.py enable`, launch the game, then run `uv run scripts/run.py cycle <level> <out.png>` and read the PNG. See `docs/development.md` for the commands, launch steps, and caveats.
+The mod has a development harness that loads a level, captures the game's rendered frame, drives the editor with injected key, mouse and text input, teleports the player, and quits, without OS-level input. Prefer it through the MCP server named `megabonk` (`scripts/mcp_server.py`): an agent calls typed tools (`relaunch`, `load`, `screenshot`, `state`, `key`, `mouse`, `type_text`, `teleport`, `dismiss_levelup`, and the rest) and gets screenshots back inline. See the "MCP server" section and its "End-to-end check" walkthrough in `docs/development.md`.
 
-The same harness is also available as an MCP server named `megabonk` (`scripts/mcp_server.py`), so an agent can call typed tools (`relaunch`, `load`, `screenshot`, `state`, and the rest) and get screenshots back inline instead of shelling out to `run.py`. See the "MCP server" section in `docs/development.md`.
+The fallback is the same harness through `scripts/run.py`. Enable it once with `uv run scripts/run.py enable`, launch the game, then run `uv run scripts/run.py cycle <level> <out.png>` (or `relaunch`, below) and read the PNG. See `docs/development.md` for the commands, launch steps, and caveats.
 
 ### Reloading a rebuilt mod
 

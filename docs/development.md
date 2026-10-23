@@ -79,7 +79,20 @@ Before moving a command file to `done/` or `rejected/`, the mod writes `harness/
 
 stdout is the MCP protocol channel, so the server writes nothing to stdout; everything reaches the client as tool results. Blocking waits (sending a command, waiting for the game to exit, the whole relaunch sequence) run off the event loop so one tool call never stalls the server.
 
-Tools: `relaunch(level?)` (reports progress through the MCP context and returns the final `state`), `load(level)`, `quit()`, `screenshot()` (returns the PNG inline), `state()`, `editor(on)`, `freeze()`, `resume()`, `invulnerable(on)`, `camera(position?, rotation?, clear?)` and `log_tail(pattern?, since_launch?, max_lines?)`. A command the mod rejects, a timeout, or a result with `ok:false` surfaces as a tool error carrying the result file's `error` text (or `<command> <outcome>` when there is no result file). `log_tail` reads `MelonLoader/Latest.log`: `since_launch` (default true) trims to the last `DevHarness: enabled` line, `pattern` keeps lines matching a regex, and `max_lines` (default 50) caps the result to the last N lines. Input and gameplay tools are not part of this server.
+Tools: `relaunch(level?)` (reports progress through the MCP context and returns the final `state`), `load(level)`, `quit()`, `screenshot()` (returns the PNG inline), `state()`, `editor(on)`, `freeze()`, `resume()`, `invulnerable(on)`, `camera(position?, rotation?, clear?)` `log_tail(pattern?, since_launch?, max_lines?)`, and the input and gameplay tools `key(key, modifiers?, action?)`, `mouse(action, x?, y?, button?)`, `type_text(text)`, `teleport(position?, cell?)` and `dismiss_levelup(choice?)`. A command the mod rejects, a timeout, or a result with `ok:false` surfaces as a tool error carrying the result file's `error` text (or `<command> <outcome>` when there is no result file). `log_tail` reads `MelonLoader/Latest.log`: `since_launch` (default true) trims to the last `DevHarness: enabled` line, `pattern` keeps lines matching a regex, and `max_lines` (default 50) caps the result to the last N lines. The input tools validate their arguments before sending anything and raise a tool error for a bad combination: `teleport` needs exactly one of `position` (three numbers) or `cell` (two integers), `mouse` `move` needs both `x` and `y` and the other actions take both or neither, and `key` accepts `modifiers` only with `action` `tap`. Each returns the result file's object (`teleport` and `dismiss_levelup` carry data; the others return `null`). Coordinates are screenshot pixels with the origin at the top left, as in "Key, mouse and type commands", which also lists the valid key names. Input is queued over the next frames, so a `screenshot` straight after may predate its effect.
+
+### End-to-end check
+
+A walkthrough that exercises the whole chain (agent, MCP, harness files, mod, game) using only the `megabonk` tools, in editor mode on the example forest level:
+
+1. `relaunch()` quits any running game, starts a fresh one, loads `levels/example-forest.mblevel.json`, goes invulnerable and enters editor mode. The returned state has `editor: true`.
+2. `screenshot()` and look for the catalog palette on the left.
+3. `mouse(action="click", x, y)` on a palette row, using pixel coordinates read from the screenshot. A later `screenshot()` shows the title of the palette panel with that entry selected.
+4. `key(key="R")` taps R, which rotates the selected object; `type_text("chest")` types into the palette search when the search field has focus.
+5. `teleport(cell=[cx, cz])` to a distant cell, wait about a second, then `state()` to confirm `player` and `cell` moved and `editor` is still true, and `screenshot()` to see the new position.
+6. `quit()`.
+
+If a step fails, `log_tail(pattern="Harness|Error")` shows whether the mod saw the command. A rejected command carries the mod's error text in the tool error, which says which layer refused it.
 
 Register it by adding the `megabonk` entry under `mcpServers` in `.mcp.json` (command `uv`, args `["run", "--script", "scripts/mcp_server.py"]`); the repo ships it already. Confirm it with `/mcp`, which lists `megabonk` as connected.
 
