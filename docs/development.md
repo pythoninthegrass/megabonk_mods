@@ -37,6 +37,8 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Tap, press or release a key | `{"command":"key","action":"tap","key":"R","modifiers":["LeftShift"]}` | `run.py key R --mod LeftShift`, `run.py key --down W`, `run.py key --up W` |
 | Move, click, press or release the mouse | `{"command":"mouse","action":"click","button":0,"x":960,"y":540}` | `run.py mouse move X Y`, `run.py mouse click [--button N] [X Y]`, `run.py mouse down\|up`, `run.py mouse clear` |
 | Type text | `{"command":"type","text":"chest"}` | `run.py type chest` |
+| Move the player | `{"command":"teleport","position":[x,y,z]}` or `{"command":"teleport","cell":[cx,cz]}` | `run.py teleport X Y Z`, `run.py teleport --cell CX CY` |
+| Pick an upgrade in the open level-up dialog | `{"command":"dismiss-levelup","choice":0}` | `run.py dismiss-levelup [--choice N]` |
 | Quit the game | `{"command":"quit"}` | `run.py quit` |
 | Relaunch the test level in editor mode | Multiple commands | `run.py relaunch [level]` |
 
@@ -50,7 +52,7 @@ The paths in `load-level` and `screenshot` are interpreted by the game process, 
 
 ### Results
 
-Before moving a command file to `done/` or `rejected/`, the mod writes `harness/results/<command file name>`: UTF-8 JSON, one object, written to `<name>.tmp` and renamed so a reader never sees a partial file. A command that succeeds writes `{"command":"<wire name>","ok":true,"result":<object or null>}`. A command that fails while running writes `{"command":"<wire name>","ok":false,"error":"<message>"}`. A file that does not parse writes the same failure shape with `"command":null`. Every command other than `state` has `"result":null`. The result file is written before the command file moves, so a caller that sees the file in `done/` or `rejected/` can read the result at once. Result files are never deleted by the mod.
+Before moving a command file to `done/` or `rejected/`, the mod writes `harness/results/<command file name>`: UTF-8 JSON, one object, written to `<name>.tmp` and renamed so a reader never sees a partial file. A command that succeeds writes `{"command":"<wire name>","ok":true,"result":<object or null>}`. A command that fails while running writes `{"command":"<wire name>","ok":false,"error":"<message>"}`. A file that does not parse writes the same failure shape with `"command":null`. Every command other than `state`, `teleport` and `dismiss-levelup` has `"result":null`. The result file is written before the command file moves, so a caller that sees the file in `done/` or `rejected/` can read the result at once. Result files are never deleted by the mod.
 
 `run.py` reads them with `read_result(harness, name)`, which returns `None` when the file is absent or not valid JSON. Every subcommand that sends a command exits 1 and prints the `error` text on stderr when the result has `ok:false`, even if the command file landed in `done/`. A missing result file does not fail a command, so `run.py` still works against a mod built before results existed.
 
@@ -266,7 +268,7 @@ Caveats:
 
 ## Not covered
 
-The harness does not skip the level-up dialog, move the player, or press menu buttons. Only `state` returns data; the other commands report success or failure and nothing else, and `state` does not report health, inventory, enemies, the level-up dialog or the edit stack. Use `freeze` to stop an idle player dying during a screenshot, or `invulnerable` when enemies must keep moving.
+The harness does not press menu buttons or open the level-up dialog. Only `state`, `teleport` and `dismiss-levelup` return data; the other commands report success or failure and nothing else, and `state` does not report health, inventory, enemies, the level-up dialog or the edit stack. Use `freeze` to stop an idle player dying during a screenshot, or `invulnerable` when enemies must keep moving.
 
 ## Character selection
 
@@ -371,7 +373,7 @@ Open questions about the teleport:
 - One teleport sent right after `run.py relaunch` (frozen in editor mode, target `(-200, 0, 200)`) was not applied at all after 5 seconds, while the same call minutes later was. It did not reproduce; the cause is unknown.
 - What happens to enemies already chasing at the old position.
 
-Result fields for a harness teleport command: `requested` (`[x, y, z]` as passed), `position` (`[x, y, z]` read from `MyPlayer.Instance.transform.position` after waiting for the sync, which includes the `+1.925` body offset), and `cell` (as in `state`). A difference between the requested ground height plus `1.925` and `position.y` shows a fall or revert.
+The `teleport` command takes exactly one of `position` (world `[x, y, z]`, the feet point) or `cell` (`[cx, cz]`, the same grid as `state`). A cell resolves to the cell centre with `PositionReadout.CellCentre` and the tile surface there (`TeleportTarget.CellStandingPoint`); an empty cell keeps the player's current feet height. Spacing and tile height come from the running level, so a cell teleport needs a loaded custom level. It rejects, with `ok:false` in the result file: no player, a cell outside the grid, a cell given to a game with no level grid, a target below the kill floor, both or neither of `position` and `cell`, and arrays of the wrong length. The result is `{"position":[x,y,z],"cell":[cx,cz]}` (`cell` is `null` without a grid), read from the player's Rigidbody straight after the call, so it is the body position (feet plus `1.925`) at the moment of the teleport, before any fall. `state` agrees with it once the transform syncs.
 
 ## Level-up dialog
 
@@ -395,6 +397,8 @@ Choosing without a click, which worked: with `LevelupScreen.isLevelingUp` true, 
 To open the dialog for a test, `FindObjectOfType<EncounterWindows>().AddEncounter(EEncounter.Levelup)` (`EEncounter.Levelup` is `0`) opens it at once and sets `isLevelingUp`. It does not change `PlayerXp.level`.
 
 Interaction with the editor freeze: choosing an upgrade runs `LevelupScreen.OnClose`, which calls `MyTime.Unpause()`. While editor mode was on and the run was frozen, a choice left `editor` true but set `frozen` (`MyTime.paused`) to false, so the editor session's freeze was lost and enemies resume. A harness command that dismisses the dialog during an editor session has to call `MyTime.Pause()` again afterwards.
+
+The `dismiss-levelup` command does the choose-without-a-click sequence above: `choice` is a zero-based index into the offers (default 0, negative or non-integer rejected at parse time), and the result is `{"dialogWasOpen":true,"chosen":"<upgrade name>"}`. With no dialog open it succeeds with `{"dialogWasOpen":false,"chosen":null}` and changes nothing. A `choice` past the number of offers is rejected with `ok:false`; this path was not run in the game. It calls `MyTime.Pause()` again after the pick when editor mode is active. Confirmed in the running game: a natural level-up reported `dialogWasOpen:true` with `chosen:"Dice"`, and a second call then reported `dialogWasOpen:false` with `frozen:false` in `state`. The harness has no command to open the dialog, so a test waits for a level-up.
 
 Open questions about the level-up dialog:
 

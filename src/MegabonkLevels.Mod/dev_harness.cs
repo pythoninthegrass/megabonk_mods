@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json.Nodes;
+using Il2Cpp;
 using Il2CppAssets.Scripts.Actors.Player;
 using Il2CppAssets.Scripts.Utility;
 using MelonLoader;
@@ -17,6 +18,8 @@ namespace MegabonkLevels;
 public static class DevHarness
 {
     private const float PollIntervalSeconds = 0.5f;
+    private const float PlayerBodyOffsetY = 1.925f;
+    private const float TeleportCameraPitch = 20f;
 
     private static MelonLogger.Instance _logger;
     private static string _commandsDir;
@@ -190,6 +193,10 @@ public static class DevHarness
             case HarnessCommandKind.Type:
                 EditorInput.Queue.EnqueueText(command.Input.Text);
                 break;
+            case HarnessCommandKind.Teleport:
+                return Teleport(command.Teleport);
+            case HarnessCommandKind.DismissLevelUp:
+                return DismissLevelUp(command.Choice);
             case HarnessCommandKind.Quit:
                 _logger.Msg("DevHarness: quit requested, calling Application.Quit.");
                 Application.Quit();
@@ -197,6 +204,76 @@ public static class DevHarness
         }
 
         return null;
+    }
+
+    private static JsonObject Teleport(TeleportArgs args)
+    {
+        var player = MyPlayer.Instance;
+        if (player == null)
+        {
+            throw new InvalidOperationException("no player: start a run first");
+        }
+
+        var target = args.Cell is { } cell ? CellFeetPoint(cell[0], cell[1], player.transform.position.y - PlayerBodyOffsetY) : new Vector3(args.Position[0], args.Position[1], args.Position[2]);
+        if (KillFloor.ShouldKill(target.y, KillFloorWatcher.FloorY))
+        {
+            throw new InvalidOperationException($"target y={target.y} is below the kill floor y={KillFloorWatcher.FloorY}");
+        }
+
+        var facing = player.transform.forward;
+        player.TeleportPlayerImmediate(target, facing, facing, TeleportCameraPitch);
+        _logger.Msg($"DevHarness: teleport to {target}.");
+
+        // The transform only follows the Rigidbody on the next physics sync, so read the body itself.
+        var reached = player.playerMovement.rb.position;
+        return new JsonObject
+        {
+            ["position"] = new JsonArray(reached.x, reached.y, reached.z),
+            ["cell"] = PositionLabel.CellOf(reached.x, reached.z) is { } c ? new JsonArray(c.X, c.Z) : null,
+        };
+    }
+
+    private static Vector3 CellFeetPoint(int cellX, int cellZ, float currentFeetY)
+    {
+        if (LiveEditPatch.Grid is not { } grid)
+        {
+            throw new InvalidOperationException("no level grid: a cell teleport needs a loaded custom level");
+        }
+
+        if (cellX < 0 || cellX >= grid.Width || cellZ < 0 || cellZ >= grid.Depth)
+        {
+            throw new InvalidOperationException($"cell ({cellX},{cellZ}) is outside the {grid.Width}x{grid.Depth} grid");
+        }
+
+        var (x, y, z) = TeleportTarget.CellStandingPoint(cellX, cellZ, LiveEditPatch.TileAt(cellX, cellZ), grid.Width, grid.Depth, grid.Spacing, grid.TileHeight, currentFeetY);
+        return new Vector3(x, y, z);
+    }
+
+    private static JsonObject DismissLevelUp(int choice)
+    {
+        if (!LevelupScreen.isLevelingUp)
+        {
+            return new JsonObject { ["dialogWasOpen"] = false, ["chosen"] = null };
+        }
+
+        var buttons = UnityEngine.Object.FindObjectOfType<LevelupScreen>().upgradePicker.buttons;
+        if (choice >= buttons.Length)
+        {
+            throw new InvalidOperationException($"choice {choice} is out of range; the dialog offers {buttons.Length} upgrades");
+        }
+
+        var button = buttons[choice];
+        var chosen = button.upgradable.GetName();
+        button.SelectUpgrade();
+
+        // Closing the dialog unpauses the run, which would end an editor session's freeze.
+        if (EditorMode.Active)
+        {
+            MyTime.Pause();
+        }
+
+        _logger.Msg($"DevHarness: dismiss-levelup chose {choice} '{chosen}'.");
+        return new JsonObject { ["dialogWasOpen"] = true, ["chosen"] = chosen };
     }
 
     private static void QueueKey(InputArgs input)

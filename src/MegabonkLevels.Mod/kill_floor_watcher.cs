@@ -33,6 +33,8 @@ public static class KillFloorWatcher
 
     public static bool Armed => _armed;
 
+    public static float FloorY => _armed ? _floorY : float.NegativeInfinity;
+
     public static void Arm(ProceduralTileGeneration tileGen, MelonLogger.Instance logger)
     {
         var mapParameters = tileGen.currentMapParameters ?? tileGen.currentStage?.mapParameters;

@@ -374,6 +374,82 @@ public class HarnessCommandTests
     }
 
     [Fact]
+    public void TryParse_TeleportPosition_ReturnsTheWorldPoint()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"teleport","position":[1.5,0,-200]}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.Teleport, command.Kind);
+        Assert.Equal("teleport", command.Name);
+        Assert.Equal(new[] { 1.5f, 0f, -200f }, command.Teleport.Position);
+        Assert.Null(command.Teleport.Cell);
+    }
+
+    [Fact]
+    public void TryParse_TeleportCell_ReturnsTheCell()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"teleport","cell":[3,12]}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.Teleport, command.Kind);
+        Assert.Equal(new[] { 3, 12 }, command.Teleport.Cell);
+        Assert.Null(command.Teleport.Position);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"teleport"}""", "position")]
+    [InlineData("""{"command":"teleport","position":[1,2,3],"cell":[1,2]}""", "exactly one")]
+    [InlineData("""{"command":"teleport","position":[1,2]}""", "position")]
+    [InlineData("""{"command":"teleport","position":[1,2,3,4]}""", "position")]
+    [InlineData("""{"command":"teleport","position":[1,"a",3]}""", "position")]
+    [InlineData("""{"command":"teleport","cell":[1]}""", "cell")]
+    [InlineData("""{"command":"teleport","cell":[1,2,3]}""", "cell")]
+    [InlineData("""{"command":"teleport","cell":[1.5,2]}""", "cell")]
+    [InlineData("""{"command":"teleport","cell":"1,2"}""", "cell")]
+    public void TryParse_TeleportWithoutExactlyOneUsableTarget_FailsNamingTheField(string json, string expectedFragment)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains(expectedFragment, error);
+    }
+
+    [Fact]
+    public void TryParse_DismissLevelUp_DefaultsToTheFirstOffer()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"dismiss-levelup"}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.DismissLevelUp, command.Kind);
+        Assert.Equal("dismiss-levelup", command.Name);
+        Assert.Equal(0, command.Choice);
+    }
+
+    [Fact]
+    public void TryParse_DismissLevelUp_CarriesTheChoice()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"dismiss-levelup","choice":3}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Equal(3, command.Choice);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"dismiss-levelup","choice":-1}""")]
+    [InlineData("""{"command":"dismiss-levelup","choice":1.5}""")]
+    [InlineData("""{"command":"dismiss-levelup","choice":"first"}""")]
+    public void TryParse_DismissLevelUpWithABadChoice_FailsNamingTheField(string json)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains("choice", error);
+    }
+
+    [Fact]
     public void KeyNames_ListsTheDocumentedGroupsAndNoDuplicates()
     {
         string[] expected =

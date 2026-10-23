@@ -37,6 +37,9 @@ Usage:
     run.py mouse click|down|up [--button N] [X Y]  Click or press/release a button (0 left, 1 right, 2 middle), moving first when X Y is given
     run.py mouse clear             Return the mouse to the real pointer
     run.py type <text>             Type text into the focused field (\\b is backspace, \\n is return), at most 200 characters
+    run.py teleport X Y Z          Move the player's feet to a world position and print the position reached
+    run.py teleport --cell CX CY   Move the player to a grid cell's centre, on the tile surface there
+    run.py dismiss-levelup [--choice N]  Pick offer N (default 0) in the open level-up dialog; prints dialogWasOpen and chosen
     run.py quit                    Quit the game and wait for the process to exit
     run.py cycle <level> <out.png> Load, wait --settle seconds, screenshot, quit
                                    [--invulnerable] applies before the settle wait
@@ -158,6 +161,19 @@ def build_mouse_command(
 
 def build_type_command(text: str) -> dict[str, object]:
     return {"command": "type", "text": text}
+
+
+def build_teleport_command(position: tuple[float, ...] | None = None, cell: tuple[int, int] | None = None) -> dict[str, object]:
+    payload: dict[str, object] = {"command": "teleport"}
+    if position is not None:
+        payload["position"] = list(position)
+    if cell is not None:
+        payload["cell"] = list(cell)
+    return payload
+
+
+def build_dismiss_levelup_command(choice: int) -> dict[str, object]:
+    return {"command": "dismiss-levelup", "choice": choice}
 
 
 def write_command(commands_dir: Path, payload: dict[str, object]) -> Path:
@@ -327,12 +343,12 @@ def send(harness: Path, payload: dict[str, object], timeout: float) -> bool:
     return send_for_result(harness, payload, timeout)[0]
 
 
-def send_state(harness: Path, timeout: float) -> bool:
-    ok, result = send_for_result(harness, build_command("state"), timeout)
+def send_printing_result(harness: Path, payload: dict[str, object], timeout: float) -> bool:
+    ok, result = send_for_result(harness, payload, timeout)
     if ok and result is not None:
         print(json.dumps(result.get("result")))
     elif ok:
-        print("state: no result file written", file=sys.stderr)
+        print(f"{payload['command']}: no result file written", file=sys.stderr)
     return ok and result is not None
 
 
@@ -381,6 +397,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     mouse.add_argument("verb", choices=["move", "click", "down", "up", "clear"])
     mouse.add_argument("position", type=float, nargs="*", metavar="X Y", help="screenshot pixels, origin top left")
     mouse.add_argument("--button", type=int, choices=[0, 1, 2], help="0 left (default), 1 right, 2 middle")
+    teleport = sub.add_parser("teleport")
+    teleport.add_argument("position", type=float, nargs="*", metavar="X Y Z", help="world units, the player's feet point")
+    teleport.add_argument("--cell", type=int, nargs=2, metavar=("CX", "CY"), help="grid cell to stand at the centre of")
+    dismiss = sub.add_parser("dismiss-levelup")
+    dismiss.add_argument("--choice", type=int, default=0, help="zero-based index of the offered upgrade")
     type_ = sub.add_parser("type")
     type_.add_argument("text")
     load = sub.add_parser("load")
@@ -429,6 +450,20 @@ def mouse_payload(args: argparse.Namespace) -> dict[str, object]:
         raise SystemExit("mouse clear takes no coordinates or button")
     position = (args.position[0], args.position[1]) if args.position else None
     return build_mouse_command(args.verb, position, args.button)
+
+
+def teleport_payload(args: argparse.Namespace) -> dict[str, object]:
+    if args.cell is not None and args.position:
+        raise SystemExit("teleport: give X Y Z or --cell CX CY, not both")
+    if args.cell is not None:
+        return build_teleport_command(cell=tuple(args.cell))
+    if len(args.position) != 3:
+        raise SystemExit("teleport: give X Y Z or --cell CX CY")
+    return build_teleport_command(position=tuple(args.position))
+
+
+def dismiss_levelup_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_dismiss_levelup_command(args.choice)
 
 
 def type_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -526,7 +561,11 @@ def main(argv: list[str] | None = None) -> int:
         case "freeze" | "resume" | "invulnerable" | "vulnerable" | "steam-ready":
             ok = send(harness, build_command(args.action), args.timeout)
         case "state":
-            ok = send_state(harness, args.timeout)
+            ok = send_printing_result(harness, build_command("state"), args.timeout)
+        case "teleport":
+            ok = send_printing_result(harness, teleport_payload(args), args.timeout)
+        case "dismiss-levelup":
+            ok = send_printing_result(harness, dismiss_levelup_payload(args), args.timeout)
         case "heartbeat":
             ok = send(harness, heartbeat_payload(args), args.timeout)
         case "cells":

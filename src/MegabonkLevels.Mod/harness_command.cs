@@ -25,6 +25,8 @@ public enum HarnessCommandKind
     Key,
     Mouse,
     Type,
+    Teleport,
+    DismissLevelUp,
 }
 
 // World-space camera position and euler rotation in degrees.
@@ -48,8 +50,16 @@ public sealed class InputArgs
     public string Text { get; init; }
 }
 
+// Exactly one of Position (world x, y, z) or Cell (grid x, z) is set.
+public sealed class TeleportArgs
+{
+    public float[] Position { get; init; }
+
+    public int[] Cell { get; init; }
+}
+
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0)
 {
     public const int MaxTypeLength = 200;
 
@@ -140,6 +150,10 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseMouse(root, out command, out error);
             case "type":
                 return TryParseType(root, out command, out error);
+            case "teleport":
+                return TryParseTeleport(root, out command, out error);
+            case "dismiss-levelup":
+                return TryParseDismissLevelUp(root, out command, out error);
             case "camera":
                 return TryParseCamera(root, out command, out error);
             case "load-level":
@@ -181,6 +195,81 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.Camera, null, new CameraPose(p[0], p[1], p[2], r[0], r[1], r[2]));
+        return true;
+    }
+
+    private static bool TryParseTeleport(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        var hasPosition = root.ContainsKey("position");
+        var hasCell = root.ContainsKey("cell");
+        if (hasPosition == hasCell)
+        {
+            error = "give exactly one of 'position' (3 numbers) or 'cell' (2 integers)";
+            return false;
+        }
+
+        TeleportArgs args;
+        if (hasPosition)
+        {
+            if (!TryGetVector3(root, "position", out var position, out error))
+            {
+                return false;
+            }
+
+            args = new TeleportArgs { Position = position };
+        }
+        else
+        {
+            if (!TryGetCell(root, out var cell, out error))
+            {
+                return false;
+            }
+
+            args = new TeleportArgs { Cell = cell };
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.Teleport, null, Teleport: args);
+        return true;
+    }
+
+    private static bool TryGetCell(JsonObject root, out int[] cell, out string error)
+    {
+        cell = new int[2];
+        error = "field 'cell' must be an array of 2 integers";
+
+        if (root["cell"] is not JsonArray { Count: 2 } array)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < 2; i++)
+        {
+            if (array[i] is not JsonValue value || !value.TryGetValue(out cell[i]))
+            {
+                return false;
+            }
+        }
+
+        error = null;
+        return true;
+    }
+
+    private static bool TryParseDismissLevelUp(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+        var choice = 0;
+
+        if (root.TryGetPropertyValue("choice", out var node) && node != null
+            && (node is not JsonValue value || !value.TryGetValue(out choice) || choice < 0))
+        {
+            error = "field 'choice' must be a non-negative integer";
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.DismissLevelUp, null, Choice: choice);
+        error = null;
         return true;
     }
 

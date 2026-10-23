@@ -319,6 +319,50 @@ def test_editor_payload_maps_the_state_to_the_wire_command() -> None:
     assert run.editor_payload(run.parse_args(["editor", "off"])) == {"command": "editor", "enabled": False}
 
 
+def test_build_teleport_command_carries_a_position_or_a_cell() -> None:
+    assert run.build_teleport_command(position=(1.5, 0.0, -200.0)) == {"command": "teleport", "position": [1.5, 0.0, -200.0]}
+    assert run.build_teleport_command(cell=(3, 12)) == {"command": "teleport", "cell": [3, 12]}
+
+
+def test_build_dismiss_levelup_command_carries_the_choice() -> None:
+    assert run.build_dismiss_levelup_command(0) == {"command": "dismiss-levelup", "choice": 0}
+    assert run.build_dismiss_levelup_command(2) == {"command": "dismiss-levelup", "choice": 2}
+
+
+def test_teleport_payload_takes_xyz_or_cell() -> None:
+    assert run.teleport_payload(run.parse_args(["teleport", "1", "2", "3"])) == {"command": "teleport", "position": [1.0, 2.0, 3.0]}
+    assert run.teleport_payload(run.parse_args(["teleport", "--cell", "3", "12"])) == {"command": "teleport", "cell": [3, 12]}
+
+
+def test_teleport_payload_rejects_missing_partial_or_both_targets() -> None:
+    for argv in (["teleport"], ["teleport", "1", "2"], ["teleport", "1", "2", "3", "--cell", "1", "2"]):
+        try:
+            run.teleport_payload(run.parse_args(argv))
+        except SystemExit:
+            continue
+        raise AssertionError(f"{argv} should have been rejected")
+
+
+def test_dismiss_levelup_payload_defaults_to_the_first_offer() -> None:
+    assert run.dismiss_levelup_payload(run.parse_args(["dismiss-levelup"])) == {"command": "dismiss-levelup", "choice": 0}
+    assert run.dismiss_levelup_payload(run.parse_args(["dismiss-levelup", "--choice", "2"])) == {"command": "dismiss-levelup", "choice": 2}
+
+
+def test_teleport_prints_the_result_json(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"teleport","ok":true,"result":{"position":[1,2,3],"cell":[4,5]}}')
+        assert run_main(game, "teleport", "--cell", "4", "5") == 0
+    printed = capsys.readouterr().out.strip().splitlines()[-1]
+    assert json.loads(printed) == {"position": [1, 2, 3], "cell": [4, 5]}
+
+
+def test_dismiss_levelup_exits_1_when_the_result_is_not_ok(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"dismiss-levelup","ok":false,"error":"choice 9 out of range"}', outcome="rejected")
+        assert run_main(game, "dismiss-levelup", "--choice", "9") == 1
+    assert "out of range" in capsys.readouterr().err
+
+
 def test_parse_args_cycle_accepts_invulnerable_flag() -> None:
     assert run.parse_args(["cycle", "a.json", "o.png", "--invulnerable"]).invulnerable is True
     assert run.parse_args(["cycle", "a.json", "o.png"]).invulnerable is False
