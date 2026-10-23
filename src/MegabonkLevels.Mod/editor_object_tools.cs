@@ -10,6 +10,7 @@ public static class EditorObjectTools
 {
     private const float RayLength = 5000f;
     private const float OutlineLift = 0.5f;
+    private const float NearestPickTiles = 0.125f;
     private const float OutlineWidth = 0.8f;
     private const string CloneSuffix = "(Clone)";
 
@@ -346,7 +347,39 @@ public static class EditorObjectTools
         return EditorTool.Place;
     }
 
-    // A physics hit on an object wins; otherwise the object nearest the cursor's ground point within half a tile.
+    // The nearest object the ray selects; see ObjectPicker.NearestHit for which colliders count.
+    private static (ObjectTarget Target, GameObject Object)? RaycastObject(Ray ray)
+    {
+        var raw = Physics.RaycastAll(ray, RayLength, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+        var hits = new List<RayHit>(raw.Length);
+        var objects = new List<(ObjectTarget Target, GameObject Object)?>(raw.Length);
+        for (var i = 0; i < raw.Length; i++)
+        {
+            var hit = raw[i];
+            var target = LiveEditPatch.TargetOf(hit.transform);
+            var go = target is { } t ? LiveEditPatch.ObjectFor(t) : null;
+            objects.Add(target is { } found && go != null ? (found, go) : null);
+            hits.Add(new RayHit(hit.distance, hit.collider.isTrigger, go != null, go != null && CrossesModel(ray, go)));
+        }
+
+        var index = ObjectPicker.NearestHit(hits);
+        return index < 0 ? null : objects[index];
+    }
+
+    private static bool CrossesModel(Ray ray, GameObject go)
+    {
+        foreach (var renderer in LiveEditPatch.ModelRenderers(go))
+        {
+            if (renderer.bounds.IntersectRay(ray))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // A physics hit on an object wins; otherwise the object nearest the cursor's ground point within an eighth of a tile.
     private static (ObjectTarget Target, GameObject Object, string Path)? PickAt()
     {
         var camera = PlayerCamera.Instance?.camera;
@@ -356,11 +389,9 @@ public static class EditorObjectTools
         }
 
         var ray = camera.ScreenPointToRay(EditorInput.MousePosition);
-        if (Physics.Raycast(ray, out var physicsHit, RayLength)
-            && LiveEditPatch.TargetOf(physicsHit.transform) is { } target
-            && LiveEditPatch.ObjectFor(target) is { } hitObject)
+        if (RaycastObject(ray) is { } picked)
         {
-            return (target, hitObject, "raycast");
+            return (picked.Target, picked.Object, "raycast");
         }
 
         var ground = LiveEditPatch.GroundCollider();
@@ -377,7 +408,7 @@ public static class EditorObjectTools
             positions.Add((p.x, p.z));
         }
 
-        var nearest = ObjectPicker.NearestIndex(positions, groundHit.point.x, groundHit.point.z, grid.Spacing / 2f);
+        var nearest = ObjectPicker.NearestIndex(positions, groundHit.point.x, groundHit.point.z, grid.Spacing * NearestPickTiles);
         return nearest < 0 ? null : (candidates[nearest].Target, candidates[nearest].Object, "nearest");
     }
 
