@@ -13,7 +13,9 @@ namespace MegabonkLevels;
 // See "Tile tools" in docs/development.md.
 public static class EditorTileTools
 {
-    private const float ToolbarWidth = 816f;
+    private const float ToolbarMargin = 8f;
+    private const float ToastSeconds = 5f;
+    private const float ToastGap = 4f;
     private const float ToolbarHeight = 144f;
     private const float FontSize = 18f;
     private const float OverlayFontSize = 16f;
@@ -53,6 +55,7 @@ public static class EditorTileTools
     private static RectTransform _toolbarRect;
     private static RectTransform _loadRect;
     private static TextMeshProUGUI _loadStatusText;
+    private static Image _loadStatusBackground;
     private static float _loadStatusExpiry = -1f;
     private static EditorEditSession _session;
     private static int _sessionRunGeneration = -1;
@@ -121,6 +124,7 @@ public static class EditorTileTools
         _redoButtonBg = null;
         _outline = null;
         _loadStatusText = null;
+        _loadStatusBackground = null;
         _loadStatusExpiry = -1f;
         _target = null;
         _toolbarRect = null;
@@ -263,6 +267,7 @@ public static class EditorTileTools
         if (_loadStatusText != null && _loadStatusExpiry >= 0f && Time.unscaledTime >= _loadStatusExpiry)
         {
             _loadStatusText.text = "";
+            _loadStatusBackground.enabled = false;
             _loadStatusExpiry = -1f;
         }
 
@@ -294,7 +299,6 @@ public static class EditorTileTools
         panel.anchorMin = new Vector2(0.5f, 1f);
         panel.anchorMax = new Vector2(0.5f, 1f);
         panel.pivot = new Vector2(0.5f, 1f);
-        panel.sizeDelta = new Vector2(ToolbarWidth, ToolbarHeight);
         var freeWidth = Screen.width - EditorPalette.Width - OverlayWidth;
         panel.anchoredPosition = new Vector2(EditorPalette.Width + freeWidth / 2f - Screen.width / 2f, 0f);
         panel.gameObject.AddComponent<Image>().color = PanelColor;
@@ -323,6 +327,11 @@ public static class EditorTileTools
         NewButton(actionsRect, "Save", "Save", saveX + 206f, 70f, () => { Save(); });
         NewButton(actionsRect, "Load", "Load", saveX + 282f, 70f, LoadSelected);
 
+        var actionsWidth = saveX + 282f + 70f;
+        var toolsWidth = _label.GetPreferredValues(EditorTools.ToolbarText(EditorTool.Select, "")).x;
+        var toolbarWidth = Mathf.Max(actionsWidth, toolsWidth) + ToolbarMargin * 2f;
+        panel.sizeDelta = new Vector2(toolbarWidth, ToolbarHeight);
+
         var statusRect = EditorUi.NewRect("Status", panel);
         statusRect.anchorMin = new Vector2(0f, 1f);
         statusRect.anchorMax = new Vector2(1f, 1f);
@@ -349,14 +358,22 @@ public static class EditorTileTools
         _loadList.enableWordWrapping = true;
         _loadList.overflowMode = TextOverflowModes.Overflow;
 
-        // Transient save/load status: bottom-right of the toolbar, orange, disappears after 3s.
-        var lsRect = EditorUi.NewRect("LoadStatus", panel);
-        lsRect.anchorMin = new Vector2(1f, 0f);
-        lsRect.anchorMax = new Vector2(1f, 0f);
-        lsRect.pivot = new Vector2(1f, 0f);
-        lsRect.sizeDelta = new Vector2(420f, OverlayRowHeight);
-        lsRect.anchoredPosition = new Vector2(-8f, 4f);
-        _loadStatusText = EditorUi.NewLabel(lsRect, PositionLabel.FindFontAsset(EditorUi.FontName), TextAlignmentOptions.MidlineRight, OverlayFontSize);
+        // Save/load toast: orange text on a panel under the toolbar, cleared after ToastSeconds.
+        var toastRect = EditorUi.NewRect("Toast", _root.transform);
+        toastRect.anchorMin = new Vector2(0.5f, 1f);
+        toastRect.anchorMax = new Vector2(0.5f, 1f);
+        toastRect.pivot = new Vector2(0.5f, 1f);
+        toastRect.sizeDelta = new Vector2(toolbarWidth, OverlayRowHeight);
+        toastRect.anchoredPosition = new Vector2(panel.anchoredPosition.x, -(ToolbarHeight + ToastGap));
+        _loadStatusBackground = toastRect.gameObject.AddComponent<Image>();
+        _loadStatusBackground.color = PanelColor;
+        _loadStatusBackground.enabled = false;
+        var toastTextRect = EditorUi.NewRect("ToastText", toastRect);
+        toastTextRect.anchorMin = Vector2.zero;
+        toastTextRect.anchorMax = Vector2.one;
+        toastTextRect.offsetMin = new Vector2(ToolbarMargin, 0f);
+        toastTextRect.offsetMax = new Vector2(-ToolbarMargin, 0f);
+        _loadStatusText = EditorUi.NewLabel(toastTextRect, PositionLabel.FindFontAsset(EditorUi.FontName), TextAlignmentOptions.Center, OverlayFontSize);
         _loadStatusText.color = WarnColor;
         _loadStatusText.text = "";
     }
@@ -700,8 +717,13 @@ public static class EditorTileTools
 
     private static void ShowTransientStatus(string text)
     {
-        if (_loadStatusText != null) _loadStatusText.text = text;
-        _loadStatusExpiry = Time.unscaledTime + 3f;
+        if (_loadStatusText != null)
+        {
+            _loadStatusText.text = text;
+            _loadStatusBackground.enabled = true;
+        }
+
+        _loadStatusExpiry = Time.unscaledTime + ToastSeconds;
     }
 
     private static bool PointerOverOverlay() =>
