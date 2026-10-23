@@ -433,6 +433,7 @@ Entering calls `MyTime.Pause`, which stops the run timer, enemy spawning, enemie
 | W, A, S, D | Move along the view direction and sideways |
 | Space, Left Alt / Right Alt (Option) | Move up and down in world space |
 | Left Shift | Move 4 times faster |
+| C | Snap the camera back to the overview pose over the player, from anywhere on the level; ignored while a text field has focus or Ctrl is held |
 | Mouse move while the right button is held, after pressing it off the palette | Look, read from Unity's raw `Mouse X` and `Mouse Y` axes and scaled by the game's saved mouse sensitivity and axis-invert settings, so it turns 10% faster than normal play |
 
 Exiting clears the camera override, which restores the camera's local pose saved before entry, and calls `MyTime.Unpause` only if the game was running when editor mode was entered. Entering while the game was already paused (a level-up dialog, for example) leaves it paused on exit. If the run ends while editor mode is active, the mode exits on the next frame. Entering and leaving log `EditorMode: entered` and `EditorMode: exited` with the resulting `MyTime.paused`.

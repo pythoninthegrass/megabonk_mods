@@ -11,6 +11,7 @@ namespace MegabonkLevels;
 public static class EditorMode
 {
     private const KeyCode ToggleKey = KeyCode.F8;
+    private const KeyCode CenterKey = KeyCode.C;
     private const float LookSensitivityScale = 1.1f;
     private static readonly FreeFlySettings DefaultSettings = new(MoveSpeed: 60f, FastMultiplier: 4f, LookDegreesPerUnit: 1f);
 
@@ -120,6 +121,12 @@ public static class EditorMode
             _looking = !EditorPalette.PointerOverPanel && !EditorTileTools.PointerOverEditorOverlay;
         }
 
+        if (CenterRequested())
+        {
+            var player = MyPlayer.Instance.transform.position;
+            _pose = FreeFlyCamera.OverviewPose(player.x, player.y, player.z);
+        }
+
         var look = _looking && EditorInput.GetMouseButton(1);
         var input = new FreeFlyInput(
             Forward: Axis(KeyCode.W, KeyCode.S),
@@ -144,6 +151,13 @@ public static class EditorMode
 
     private static float Axis(KeyCode positive, KeyCode negative) =>
         EditorTileTools.TextInputFocused ? 0f : (EditorInput.GetKey(positive) ? 1f : 0f) - (EditorInput.GetKey(negative) ? 1f : 0f);
+
+    // Ctrl+C is left free for copy shortcuts.
+    private static bool CenterRequested() =>
+        EditorInput.GetKeyDown(CenterKey)
+        && !EditorTileTools.TextInputFocused
+        && !EditorInput.GetKey(KeyCode.LeftControl)
+        && !EditorInput.GetKey(KeyCode.RightControl);
 
     private static KeyCode AltKey() => EditorInput.GetKey(KeyCode.RightAlt) ? KeyCode.RightAlt : KeyCode.LeftAlt;
 
