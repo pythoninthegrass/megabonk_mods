@@ -6,7 +6,8 @@ namespace MegabonkLevels;
 // Unity-free scripted keyboard and mouse state; keys are UnityEngine.KeyCode member names.
 public sealed class InjectedInputQueue
 {
-    private const float MouseHoldSeconds = 1f;
+    private const float MouseIdleSeconds = 10f;
+    private const float RealMouseTolerance = 2f;
 
     private readonly List<(int Offset, Action Apply)> _pending = new();
     private readonly HashSet<string> _heldKeys = new();
@@ -18,7 +19,9 @@ public sealed class InjectedInputQueue
     private int _cursor;
     private int? _lastFrame;
     private float _now;
-    private float _mouseSetAt;
+    private float _mouseTouchedAt;
+    private (float X, float Y) _realMouse;
+    private (float X, float Y) _realMouseBaseline;
 
     public (float, float)? MousePosition { get; private set; }
 
@@ -62,7 +65,8 @@ public sealed class InjectedInputQueue
     public void EnqueueMouseMove(float x, float y) => Schedule(_cursor, () =>
     {
         MousePosition = (x, y);
-        _mouseSetAt = _now;
+        _mouseTouchedAt = _now;
+        _realMouseBaseline = _realMouse;
     });
 
     public void EnqueueClick(int button)
@@ -87,8 +91,8 @@ public sealed class InjectedInputQueue
 
     public void ClearMouse() => MousePosition = null;
 
-    // The injected pointer position lapses MouseHoldSeconds after its last move, so a finished script hands the pointer back to the real mouse.
-    public void BeginFrame(int frame, float now = 0f)
+    // The injected pointer yields to the real mouse once it moves, and lapses after MouseIdleSeconds without a move or button event unless an injected button is held.
+    public void BeginFrame(int frame, float now = 0f, (float X, float Y) realMouse = default)
     {
         if (_lastFrame == frame)
         {
@@ -97,6 +101,7 @@ public sealed class InjectedInputQueue
 
         _lastFrame = frame;
         _now = now;
+        _realMouse = realMouse;
         _pressedKeys.Clear();
         _releasedKeys.Clear();
         _pressedButtons.Clear();
@@ -117,7 +122,7 @@ public sealed class InjectedInputQueue
             step.Apply();
         }
 
-        if (MousePosition != null && now - _mouseSetAt >= MouseHoldSeconds)
+        if (MousePosition != null && (RealMouseMoved() || (_heldButtons.Count == 0 && now - _mouseTouchedAt >= MouseIdleSeconds)))
         {
             MousePosition = null;
         }
@@ -134,6 +139,9 @@ public sealed class InjectedInputQueue
     public bool WasMousePressedThisFrame(int button) => _pressedButtons.Contains(button);
 
     public bool WasMouseReleasedThisFrame(int button) => _releasedButtons.Contains(button);
+
+    private bool RealMouseMoved() =>
+        Math.Abs(_realMouse.X - _realMouseBaseline.X) > RealMouseTolerance || Math.Abs(_realMouse.Y - _realMouseBaseline.Y) > RealMouseTolerance;
 
     private void Schedule(int offset, Action apply) => _pending.Add((offset, apply));
 
@@ -161,6 +169,7 @@ public sealed class InjectedInputQueue
 
     private void PressButton(int button)
     {
+        _mouseTouchedAt = _now;
         if (_heldButtons.Add(button))
         {
             _pressedButtons.Add(button);
@@ -169,6 +178,7 @@ public sealed class InjectedInputQueue
 
     private void ReleaseButton(int button)
     {
+        _mouseTouchedAt = _now;
         if (_heldButtons.Remove(button))
         {
             _releasedButtons.Add(button);

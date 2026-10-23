@@ -197,31 +197,89 @@ public class InjectedInputQueueTests
     }
 
     [Fact]
-    public void MousePosition_ExpiresOneSecondAfterTheMove()
+    public void MousePosition_RealCursorMovingReleasesIt()
     {
         var queue = new InjectedInputQueue();
         queue.EnqueueMouseMove(10f, 20f);
 
-        queue.BeginFrame(1, 5f);
-        queue.BeginFrame(2, 5.9f);
+        queue.BeginFrame(1, 5f, (100f, 100f));
+        queue.BeginFrame(2, 5.1f, (100f, 100f));
         Assert.Equal((10f, 20f), queue.MousePosition);
 
-        queue.BeginFrame(3, 6f);
+        queue.BeginFrame(3, 5.2f, (140f, 100f));
         Assert.Null(queue.MousePosition);
     }
 
     [Fact]
-    public void MousePosition_ANewMoveRestartsTheExpiry()
+    public void MousePosition_RealCursorJitterWithinToleranceKeepsIt()
     {
         var queue = new InjectedInputQueue();
         queue.EnqueueMouseMove(10f, 20f);
+
+        queue.BeginFrame(1, 5f, (100f, 100f));
+        queue.BeginFrame(2, 5.1f, (101f, 99f));
+
+        Assert.Equal((10f, 20f), queue.MousePosition);
+    }
+
+    [Fact]
+    public void MousePosition_ExpiresAfterTheTtlWithNoActivity()
+    {
+        var queue = new InjectedInputQueue();
+        queue.EnqueueMouseMove(10f, 20f);
+
         queue.BeginFrame(1, 5f);
+        queue.BeginFrame(2, 14.9f);
+        Assert.Equal((10f, 20f), queue.MousePosition);
+
+        queue.BeginFrame(3, 15f);
+        Assert.Null(queue.MousePosition);
+    }
+
+    [Fact]
+    public void MousePosition_ANewMoveRestartsTheTtlAndTheRealCursorBaseline()
+    {
+        var queue = new InjectedInputQueue();
+        queue.EnqueueMouseMove(10f, 20f);
+        queue.BeginFrame(1, 5f, (100f, 100f));
 
         queue.EnqueueMouseMove(30f, 40f);
-        queue.BeginFrame(2, 5.8f);
-        queue.BeginFrame(3, 6.5f);
+        queue.BeginFrame(2, 12f, (300f, 300f));
+        queue.BeginFrame(3, 16f, (300f, 300f));
 
         Assert.Equal((30f, 40f), queue.MousePosition);
+    }
+
+    [Fact]
+    public void MousePosition_HeldInjectedButtonKeepsItPastTheTtl()
+    {
+        var queue = new InjectedInputQueue();
+        queue.EnqueueMouseMove(10f, 20f);
+        queue.EnqueueMouseDown(0);
+        queue.BeginFrame(1, 5f);
+
+        queue.BeginFrame(2, 100f);
+        Assert.Equal((10f, 20f), queue.MousePosition);
+
+        queue.EnqueueMouseUp(0);
+        queue.BeginFrame(3, 101f);
+        Assert.Equal((10f, 20f), queue.MousePosition);
+
+        queue.BeginFrame(4, 111f);
+        Assert.Null(queue.MousePosition);
+    }
+
+    [Fact]
+    public void MousePosition_RealCursorMovingReleasesItEvenWhileAnInjectedButtonIsHeld()
+    {
+        var queue = new InjectedInputQueue();
+        queue.EnqueueMouseMove(10f, 20f);
+        queue.EnqueueMouseDown(0);
+        queue.BeginFrame(1, 5f, (100f, 100f));
+
+        queue.BeginFrame(2, 5.1f, (200f, 100f));
+
+        Assert.Null(queue.MousePosition);
     }
 
     [Fact]
