@@ -29,6 +29,33 @@ public class ObjectToolTests
         Assert.Equal(expected, ObjectTools.IsModelRenderer(name, enabled, isParticle));
     }
 
+    [Theory]
+    [InlineData(-0.64f, 0f, 0f)]
+    [InlineData(-8.48f, 0f, 0f)]
+    [InlineData(8.18f, 0f, 8.18f)]
+    [InlineData(1f, 3f, 3f)]
+    public void RingBaseY_NeverSinksBelowTheTileSurface(float boundsMinY, float surfaceY, float expected)
+    {
+        Assert.Equal(expected, ObjectTools.RingBaseY(boundsMinY, surfaceY), 3);
+    }
+
+    [Theory]
+    [InlineData(1.41f, 1.7625f)]
+    [InlineData(0.95f, 1.1875f)]
+    [InlineData(2.5f, 2.5f)]
+    [InlineData(7.83f, 3.132f)]
+    [InlineData(20f, 8f)]
+    public void RingRadius_ClearsSmallObjectsAndStaysTightOnLargeOnes(float extent, float expected)
+    {
+        Assert.Equal(expected, ObjectTools.RingRadius(extent), 2);
+    }
+
+    [Fact]
+    public void RingBaseY_WithoutASurface_IsTheBoundsMinimum()
+    {
+        Assert.Equal(-2f, ObjectTools.RingBaseY(-2f, null), 3);
+    }
+
     [Fact]
     public void Ring_PlacesEveryPointOnTheCircleAtTheGivenHeight()
     {

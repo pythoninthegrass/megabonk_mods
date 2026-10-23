@@ -1,11 +1,11 @@
 ---
 id: TASK-005.04.01
 title: 'Debug object selection rings and picking for shrines, chests and ruins'
-status: In Progress
+status: Done
 assignee:
   - Claude
 created_date: '2026-10-10 08:11'
-updated_date: '2026-10-23T02:27:00Z'
+updated_date: '2026-10-23T02:33:00Z'
 labels:
   - level-editor
 dependencies: []
@@ -30,7 +30,7 @@ Start by logging, per failing object, its genId or placement id, whether the ray
 <!-- AC:BEGIN -->
 - [x] #1 Each of the three failures is reproduced and its cause recorded in the task notes
 - [x] #2 A selected ChargeShrine shows a ring beneath it
-- [ ] #3 A selected chest shows a ring that sits at its base and fits its footprint
+- [x] #3 A selected chest shows a ring that sits at its base and fits its footprint
 - [x] #4 The Forest ruins can be selected (or the decision to leave them unpickable is recorded, with the reason)
 - [x] #5 Logic that can be tested without the game has tests written first
 <!-- AC:END -->
@@ -40,7 +40,7 @@ Start by logging, per failing object, its genId or placement id, whether the ray
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -66,4 +66,12 @@ Chest reproduced (gen:object:Chest:0001, picked via nearest, not raycast). Visib
 Ruins reproduced and cause found: the ruin pieces are scene roots named without the (Clone) suffix ('Castle', 'Castle (1)', 'CastleLying', 'Ruins (1)', 'Pillar', 'Pillar (1)', 'Cube', 'Crate (n)', 'Tree'), each a single MeshRenderer with a collider, placed by the tileObject generator. The tileObject:#### entries in the index are the bare 'Forest0_PrefabN(Clone)' placeholders: 0 children, 0 renderers, and not pickable. BuildIndex only collects '(Clone)' roots after TileObjectsParent, so these pieces are not in the index. Raycast hits their colliders but TargetOf finds no target, and the nearest fallback picks a nearby tree instead.
 
 Ruins decision (Lance): leave unpickable, reason recorded in docs/development.md. Fix: ObjectTools.IsModelRenderer (test written first) used by HasMeshRenderer and RefreshOutline. Shrine ring verified in the running game. Chest ring: fix applied by the same renderer filter but not visually confirmed (the ring was too small to judge from the editor camera), so AC #3 stays unchecked.
+
+Chest follow-up: after the renderer filter a chest at the player start still showed no ring. Causes: ring base used bounds min.y, which is below the ground for models partly buried (chest min.y -0.64, rock -8.48 relative to origin y 0), and the radius (0.4 x extent) put the ring inside the chest's own footprint. Fixed with ObjectTools.RingBaseY (clamp to the tile surface) and ObjectTools.RingRadius (small objects get a ring that clears the mesh), both tests first. Verified in the running game: red ring around the chest base and around a tree base.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Selection rings now use only visible model renderers (disabled, particle and MinimapIcon renderers are skipped), sit at or above the tile surface, and have a radius that clears small objects such as chests and shrines. The Forest ruins are deliberately unpickable: they are scene roots outside the genId index, and the reason is in docs/development.md. Verified in the running game for a shrine, a chest and a tree.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -17,7 +17,6 @@ public static class EditorObjectTools
     private const float MarkerWidth = 0.6f;
     private const float MarkerRadius = 1.5f;
     private const int RingSegments = 48;
-    private const float SelectionRingScale = 0.4f;
 
     private static readonly Color SelectionColor = new(1f, 0.15f, 0.15f, 1f);
     private static readonly Color GridColor = new(1f, 1f, 1f, 0.6f);
@@ -416,7 +415,8 @@ public static class EditorObjectTools
         }
 
         var origin = go.transform.position;
-        SetRing(_selectionOutline, origin.x, box.min.y + OutlineLift, origin.z, Mathf.Max(box.extents.x, box.extents.z) * SelectionRingScale);
+        var baseY = ObjectTools.RingBaseY(box.min.y, SurfaceYAt(ToData(origin)));
+        SetRing(_selectionOutline, origin.x, baseY + OutlineLift, origin.z, ObjectTools.RingRadius(Mathf.Max(box.extents.x, box.extents.z)));
         _selectionOutline.enabled = true;
     }
 

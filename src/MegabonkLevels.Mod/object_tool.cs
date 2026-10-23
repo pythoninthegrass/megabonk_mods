@@ -13,6 +13,9 @@ public static class ObjectTools
     private const int GridDivisions = 4;
     private const float PositionTolerance = 0.01f;
     private const float DragHoldSeconds = 0.2f;
+    private const float LargeRingScale = 0.4f;
+    private const float SmallRingScale = 1.25f;
+    private const float SmallRingCap = 2.5f;
 
     // Tiles, walls, fill pieces and tile objects (ForestParticles and the like) are scenery, never picked or outlined.
     public static bool IsPickableGenId(string genId) => genId.StartsWith("object:", StringComparison.Ordinal);
@@ -20,6 +23,14 @@ public static class ObjectTools
     // Disabled renderers (a shrine's charge-radius sphere), particles and the minimap marker are not part of the visible model.
     public static bool IsModelRenderer(string rendererName, bool enabled, bool isParticle) =>
         enabled && !isParticle && rendererName != "MinimapIcon";
+
+    // A model partly buried in the ground has bounds below the surface, which would hide its ring.
+    public static float RingBaseY(float boundsMinY, float? surfaceY) =>
+        surfaceY is { } surface ? MathF.Max(boundsMinY, surface) : boundsMinY;
+
+    // Large objects such as trees get a ring well inside their canopy bounds; small ones get one just outside the mesh so it is not hidden.
+    public static float RingRadius(float extent) =>
+        MathF.Max(extent * LargeRingScale, MathF.Min(extent * SmallRingScale, SmallRingCap));
 
     // Evenly spaced points on a horizontal circle, starting on the +X axis; drawn as a closed loop.
     public static IReadOnlyList<Vector3Data> Ring(float centreX, float y, float centreZ, float radius, int segments)
