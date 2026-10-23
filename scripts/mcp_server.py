@@ -26,6 +26,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import Literal
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -154,6 +155,58 @@ async def camera(
     else:
         raise ToolError("camera: give position and rotation, or clear=true")
     return await _request(_harness(), payload, TIMEOUT)
+
+
+@mcp.tool()
+async def key(key: str, modifiers: list[str] | None = None, action: Literal["tap", "down", "up"] = "tap") -> dict | None:
+    """Inject a key for the editor (not the game's own input). Valid names are listed under "Key, mouse and type commands" in docs/development.md (A-Z, Alpha0-9, F1-F12, arrows, Escape, Return, Space, Tab, shift/control/alt). tap presses and releases over the next frames (one frame down, one up; with modifiers they are held around it, four frames); down holds until up. modifiers only apply to tap. Returns once the mod queued it, so take a screenshot after a moment to see the effect."""
+    if modifiers and action != "tap":
+        raise ToolError("key: modifiers are only valid with action=tap")
+    return await _request(_harness(), run.build_key_command(action, key, modifiers), TIMEOUT)
+
+
+@mcp.tool()
+async def mouse(
+    action: Literal["move", "click", "down", "up", "clear"],
+    x: float | None = None,
+    y: float | None = None,
+    button: int = 0,
+) -> dict | None:
+    """Inject mouse input for the editor. x and y are screenshot pixels with the origin at the top left, the same space as the screenshot tool and the screen field of state. move needs x and y; click, down and up take an optional x and y (both or neither) that move the pointer first, and button 0 left, 1 right, 2 middle; clear returns the pointer to the real cursor. A click is one frame down then one frame up, so a screenshot straight after may predate its effect."""
+    if (x is None) != (y is None):
+        raise ToolError("mouse: give both or neither of x and y")
+    if action == "move" and x is None:
+        raise ToolError("mouse: move needs x and y")
+    position = (x, y) if x is not None and y is not None else None
+    payload = run.build_mouse_command(action, position, button if action in ("click", "down", "up") else None)
+    return await _request(_harness(), payload, TIMEOUT)
+
+
+@mcp.tool()
+async def type_text(text: str) -> dict | None:
+    """Type 1 to 200 characters into the focused editor text field, one character per frame; \\b is backspace and \\n is return. A screenshot straight after may show only part of the text."""
+    return await _request(_harness(), run.build_type_command(text), TIMEOUT)
+
+
+@mcp.tool()
+async def teleport(position: list[float] | None = None, cell: list[int] | None = None) -> dict | None:
+    """Move the player. Give exactly one of position (world [x, y, z], the feet point) or cell ([cx, cz], the grid used by state; needs a loaded custom level). Returns the body position and cell at the moment of the call; the transform catches up within about a second, so wait before reading state. Targets below the kill floor are rejected."""
+    if (position is None) == (cell is None):
+        raise ToolError("teleport: give exactly one of position or cell")
+    if position is not None and len(position) != 3:
+        raise ToolError("teleport: position needs three numbers")
+    if cell is not None and len(cell) != 2:
+        raise ToolError("teleport: cell needs two integers")
+    payload = run.build_teleport_command(
+        tuple(position) if position is not None else None, tuple(cell) if cell is not None else None
+    )
+    return await _request(_harness(), payload, TIMEOUT)
+
+
+@mcp.tool()
+async def dismiss_levelup(choice: int = 0) -> dict | None:
+    """Pick the upgrade at the zero-based index choice in the open level-up dialog without a click. With no dialog open it succeeds and changes nothing (dialogWasOpen false)."""
+    return await _request(_harness(), run.build_dismiss_levelup_command(choice), TIMEOUT)
 
 
 @mcp.tool()

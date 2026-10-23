@@ -170,3 +170,97 @@ async def test_log_tail_since_launch_trims_to_the_last_session(tmp_path, monkeyp
         every = await client.call_tool("log_tail", {"since_launch": False})
     assert [block.text for block in since.content] == ["DevHarness: enabled", "fresh line"]
     assert [block.text for block in every.content] == ["old-session", "DevHarness: enabled", "fresh line"]
+
+
+INPUT_TOOL_CASES = [
+    ("key", {"key": "R"}, {"command": "key", "action": "tap", "key": "R"}),
+    (
+        "key",
+        {"key": "R", "modifiers": ["LeftShift"], "action": "tap"},
+        {"command": "key", "action": "tap", "key": "R", "modifiers": ["LeftShift"]},
+    ),
+    ("key", {"key": "W", "action": "down"}, {"command": "key", "action": "down", "key": "W"}),
+    ("key", {"key": "W", "action": "up"}, {"command": "key", "action": "up", "key": "W"}),
+    ("mouse", {"action": "move", "x": 10, "y": 20}, {"command": "mouse", "action": "move", "x": 10, "y": 20}),
+    ("mouse", {"action": "click"}, {"command": "mouse", "action": "click", "button": 0}),
+    (
+        "mouse",
+        {"action": "click", "x": 960, "y": 540, "button": 1},
+        {"command": "mouse", "action": "click", "x": 960, "y": 540, "button": 1},
+    ),
+    ("mouse", {"action": "clear"}, {"command": "mouse", "action": "clear"}),
+    ("type_text", {"text": "chest"}, {"command": "type", "text": "chest"}),
+    ("teleport", {"position": [1.5, 0, -3]}, {"command": "teleport", "position": [1.5, 0, -3]}),
+    ("teleport", {"cell": [4, 7]}, {"command": "teleport", "cell": [4, 7]}),
+    ("dismiss_levelup", {}, {"command": "dismiss-levelup", "choice": 0}),
+    ("dismiss_levelup", {"choice": 2}, {"command": "dismiss-levelup", "choice": 2}),
+]
+
+
+@pytest.mark.parametrize(("tool", "args", "expected"), INPUT_TOOL_CASES)
+async def test_input_tool_writes_the_harness_payload_and_returns_the_result(
+    tmp_path, monkeypatch, tool, args, expected
+) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def responder(payload):
+        seen.append(payload)
+        return ok_result(payload, {"echo": True})
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool(tool, args)
+    finally:
+        stop.set()
+    assert not result.is_error
+    assert seen == [expected]
+    assert json.loads(result.content[0].text)["result"] == {"echo": True}
+
+
+@pytest.mark.parametrize(
+    ("tool", "args"),
+    [
+        ("key", {"key": "R"}),
+        ("mouse", {"action": "click"}),
+        ("type_text", {"text": "x"}),
+        ("teleport", {"cell": [1, 1]}),
+        ("dismiss_levelup", {}),
+    ],
+)
+async def test_input_tool_rejection_surfaces_the_error(tmp_path, monkeypatch, tool, args) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    rejected = json.dumps({"command": None, "ok": False, "error": "unknown key 'Nope'"})
+    stop = start_fake_mod(harness, lambda p: ("rejected", rejected))
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool(tool, args)
+    finally:
+        stop.set()
+    assert result.is_error
+    assert "unknown key 'Nope'" in result.content[0].text
+
+
+@pytest.mark.parametrize(
+    ("tool", "args", "message"),
+    [
+        ("teleport", {}, "exactly one"),
+        ("teleport", {"position": [0, 0, 0], "cell": [1, 1]}, "exactly one"),
+        ("teleport", {"position": [0, 0]}, "three"),
+        ("teleport", {"cell": [1]}, "two"),
+        ("mouse", {"action": "move"}, "x and y"),
+        ("mouse", {"action": "move", "x": 5}, "x and y"),
+        ("mouse", {"action": "click", "x": 5}, "both or neither"),
+        ("key", {"key": "R", "modifiers": ["LeftShift"], "action": "down"}, "modifiers"),
+    ],
+)
+async def test_invalid_arguments_are_rejected_before_anything_is_sent(
+    tmp_path, monkeypatch, tool, args, message
+) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool(tool, args)
+    assert result.is_error
+    assert message in result.content[0].text
+    assert list((harness / "commands").iterdir()) == []
