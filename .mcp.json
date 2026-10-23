@@ -7,10 +7,6 @@
         "start"
       ]
     },
-    "binary_ninja": {
-      "type": "http",
-      "url": "http://localhost:24642/mcp"
-    },
     "context7": {
       "command": "npx",
       "args": [

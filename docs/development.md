@@ -161,6 +161,8 @@ For the usual test Forest editor session, use the single command below instead o
 
 ```sh
 uv run scripts/run.py relaunch
+task game:editor                                  # same, through the taskfile
+task game:editor -- levels/other.mblevel.json     # a different level
 ```
 
 `quit` sends the quit command and then blocks until the game process has exited, so the next launch can follow immediately. It prints `quit: game exited` and exits 0. It exits 1 if the command is not accepted or the process is still alive after `--timeout` seconds (default 15), and it prints the remaining pids. If no game process is running it prints `quit: game not running` and exits 0, so it is safe to run before every launch. `run.py cycle` ends with the same quit-and-wait step.

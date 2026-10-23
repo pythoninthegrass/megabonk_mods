@@ -56,10 +56,55 @@
     }
   },
   "mcp": {
-    "binary_ninja": {
-      "type": "remote",
-      "url": "http://localhost:24642/mcp",
-      "enabled": true
+    "servers": {
+      "backlog": {
+        "type": "local",
+        "command": [
+          "backlog",
+          "mcp",
+          "start"
+        ]
+      },
+      "context7": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "@upstash/context7-mcp"
+        ]
+      },
+      "megabonk": {
+        "type": "local",
+        "command": [
+          "uv",
+          "run",
+          "--script",
+          "scripts/mcp_server.py"
+        ]
+      },
+      "osascript": {
+        "type": "local",
+        "disabled": true,
+        "command": [
+          "uvx",
+          "--from",
+          "git+https://github.com/pythoninthegrass/osascript-mcp",
+          "osascript-mcp"
+        ]
+      },
+      "serena": {
+        "type": "local",
+        "command": [
+          "uvx",
+          "--from",
+          "git+https://github.com/oraios/serena",
+          "serena",
+          "start-mcp-server",
+          "--context",
+          "ide",
+          "--project-from-cwd"
+        ]
+      }
     }
   }
 }
