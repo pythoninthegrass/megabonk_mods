@@ -44,6 +44,8 @@ public static class EditorPalette
 
     public static bool PointerOverPanel { get; private set; }
 
+    public static float Width { get; private set; }
+
     private sealed class Row
     {
         public RectTransform Rect;
@@ -194,10 +196,25 @@ public static class EditorPalette
         }
 
         _contentHeight = y;
-        _panel.sizeDelta = new Vector2(widestLabel + LabelMargin * 2f, 0f);
+        widestLabel = Mathf.Max(widestLabel, WidestTitleWidth(entries));
+        Width = widestLabel + LabelMargin * 2f;
+        _panel.sizeDelta = new Vector2(Width, 0f);
         _content.sizeDelta = new Vector2(0f, y);
         RefreshSelection();
     }
+
+    private static float WidestTitleWidth(IReadOnlyList<PaletteEntry> entries)
+    {
+        var widest = 0f;
+        foreach (var entry in entries)
+        {
+            widest = Mathf.Max(widest, _title.GetPreferredValues(TitleText(entry.DisplayName)).x);
+        }
+
+        return widest;
+    }
+
+    private static string TitleText(string selectedName) => $"{_mapLabel} palette\nselected: {selectedName}";
 
     private static string GroupLabel(PaletteEntry entry) => entry.Category switch
     {
@@ -299,7 +316,7 @@ public static class EditorPalette
                 }
             }
 
-            _title.text = $"{_mapLabel} palette\nselected: {name}";
+            _title.text = TitleText(name);
         }
     }
 }

@@ -13,8 +13,7 @@ namespace MegabonkLevels;
 // See "Tile tools" in docs/development.md.
 public static class EditorTileTools
 {
-    private const float ToolbarFullWidth = 960f;
-    private const float ToolbarWidth = ToolbarFullWidth * 0.85f;
+    private const float ToolbarWidth = 816f;
     private const float ToolbarHeight = 144f;
     private const float FontSize = 18f;
     private const float OverlayFontSize = 16f;
@@ -294,9 +293,10 @@ public static class EditorTileTools
         _toolbarRect = panel;
         panel.anchorMin = new Vector2(0.5f, 1f);
         panel.anchorMax = new Vector2(0.5f, 1f);
-        panel.pivot = new Vector2(0f, 1f);
+        panel.pivot = new Vector2(0.5f, 1f);
         panel.sizeDelta = new Vector2(ToolbarWidth, ToolbarHeight);
-        panel.anchoredPosition = new Vector2(-ToolbarFullWidth / 2f, 0f);
+        var freeWidth = Screen.width - EditorPalette.Width - OverlayWidth;
+        panel.anchoredPosition = new Vector2(EditorPalette.Width + freeWidth / 2f - Screen.width / 2f, 0f);
         panel.gameObject.AddComponent<Image>().color = PanelColor;
 
         var labelRect = EditorUi.NewRect("Label", panel);
