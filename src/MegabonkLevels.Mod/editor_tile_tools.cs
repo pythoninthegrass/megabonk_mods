@@ -14,7 +14,7 @@ namespace MegabonkLevels;
 public static class EditorTileTools
 {
     private const float ToolbarMargin = 8f;
-    private const float ToastSeconds = 5f;
+    private const float ToastSeconds = 3f;
     private const float ToastGap = 4f;
     private const float ToolbarHeight = 144f;
     private const float FontSize = 18f;
@@ -56,6 +56,7 @@ public static class EditorTileTools
     private static RectTransform _loadRect;
     private static TextMeshProUGUI _loadStatusText;
     private static Image _loadStatusBackground;
+    private static RectTransform _toastRect;
     private static float _loadStatusExpiry = -1f;
     private static EditorEditSession _session;
     private static int _sessionRunGeneration = -1;
@@ -125,6 +126,7 @@ public static class EditorTileTools
         _outline = null;
         _loadStatusText = null;
         _loadStatusBackground = null;
+        _toastRect = null;
         _loadStatusExpiry = -1f;
         _target = null;
         _toolbarRect = null;
@@ -266,9 +268,7 @@ public static class EditorTileTools
 
         if (_loadStatusText != null && _loadStatusExpiry >= 0f && Time.unscaledTime >= _loadStatusExpiry)
         {
-            _loadStatusText.text = "";
-            _loadStatusBackground.enabled = false;
-            _loadStatusExpiry = -1f;
+            ClearToast();
         }
 
         if (_outline == null)
@@ -358,13 +358,15 @@ public static class EditorTileTools
         _loadList.enableWordWrapping = true;
         _loadList.overflowMode = TextOverflowModes.Overflow;
 
-        // Save/load toast: orange text on a panel under the toolbar, cleared after ToastSeconds.
+        // Save/load toast: orange text on a panel under the toolbar, cleared after ToastSeconds or on click.
         var toastRect = EditorUi.NewRect("Toast", _root.transform);
         toastRect.anchorMin = new Vector2(0.5f, 1f);
         toastRect.anchorMax = new Vector2(0.5f, 1f);
         toastRect.pivot = new Vector2(0.5f, 1f);
         toastRect.sizeDelta = new Vector2(toolbarWidth, OverlayRowHeight);
         toastRect.anchoredPosition = new Vector2(panel.anchoredPosition.x, -(ToolbarHeight + ToastGap));
+        _toastRect = toastRect;
+        _clickRegions.Add(new ClickRegion { Rect = toastRect, OnClick = ClearToast, Enabled = () => _loadStatusExpiry >= 0f });
         _loadStatusBackground = toastRect.gameObject.AddComponent<Image>();
         _loadStatusBackground.color = PanelColor;
         _loadStatusBackground.enabled = false;
@@ -715,6 +717,13 @@ public static class EditorTileTools
         _unreachable.Clear();
     }
 
+    private static void ClearToast()
+    {
+        _loadStatusText.text = "";
+        _loadStatusBackground.enabled = false;
+        _loadStatusExpiry = -1f;
+    }
+
     private static void ShowTransientStatus(string text)
     {
         if (_loadStatusText != null)
@@ -728,6 +737,7 @@ public static class EditorTileTools
 
     private static bool PointerOverOverlay() =>
         (_toolbarRect != null && RectTransformUtility.RectangleContainsScreenPoint(_toolbarRect, EditorInput.MousePosition, null))
+        || (_toastRect != null && _loadStatusExpiry >= 0f && RectTransformUtility.RectangleContainsScreenPoint(_toastRect, EditorInput.MousePosition, null))
         || (_loadRect != null && RectTransformUtility.RectangleContainsScreenPoint(_loadRect, EditorInput.MousePosition, null));
 
     private static void HandleOverlayInput()
