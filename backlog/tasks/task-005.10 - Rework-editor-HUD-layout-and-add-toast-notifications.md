@@ -1,10 +1,10 @@
 ---
 id: TASK-005.10
 title: Rework editor HUD layout and add toast notifications
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-23T16:06:00Z'
-updated_date: '2026-10-23T16:07:00Z'
+updated_date: '2026-10-23T16:29:00Z'
 labels: []
 dependencies: []
 modified_files:
