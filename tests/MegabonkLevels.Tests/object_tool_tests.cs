@@ -40,9 +40,9 @@ public class ObjectToolTests
     }
 
     [Theory]
-    [InlineData(1.41f, 1.7625f)]
-    [InlineData(0.95f, 1.1875f)]
-    [InlineData(2.5f, 2.5f)]
+    [InlineData(1.41f, 2.82f)]
+    [InlineData(0.95f, 1.9f)]
+    [InlineData(2.5f, 3f)]
     [InlineData(7.83f, 3.132f)]
     [InlineData(20f, 8f)]
     public void RingRadius_ClearsSmallObjectsAndStaysTightOnLargeOnes(float extent, float expected)

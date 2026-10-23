@@ -11,6 +11,7 @@ public static class EditorObjectTools
     private const float RayLength = 5000f;
     private const float OutlineLift = 0.5f;
     private const float NearestPickTiles = 0.125f;
+    private const int OnTopRenderQueue = 4000;
     private const float OutlineWidth = 0.8f;
     private const string CloneSuffix = "(Clone)";
 
@@ -43,7 +44,7 @@ public static class EditorObjectTools
         _logger = logger;
         _selected = null;
         _hovered = null;
-        _selectionOutline = BuildOutline(SelectionColor, OutlineWidth, RingSegments, loop: true);
+        _selectionOutline = BuildOutline(SelectionColor, OutlineWidth, RingSegments, loop: true, onTop: true);
         _gridLines = BuildOutline(GridColor, GridWidth, 0, loop: false);
         _placeMarker = BuildOutline(MarkerColor, MarkerWidth, RingSegments, loop: true);
     }
@@ -502,7 +503,8 @@ public static class EditorObjectTools
         }
     }
 
-    private static LineRenderer BuildOutline(Color color, float width, int positionCount, bool loop)
+    // onTop draws over the scene's depth, so a ring inside or behind a large mesh stays visible.
+    private static LineRenderer BuildOutline(Color color, float width, int positionCount, bool loop, bool onTop = false)
     {
         var go = new GameObject("MegabonkLevelsObjectOverlay");
         Object.DontDestroyOnLoad(go);
@@ -520,6 +522,12 @@ public static class EditorObjectTools
         if (shader != null)
         {
             line.material = new Material(shader) { color = color };
+            if (onTop)
+            {
+                line.material.SetInt("unity_GUIZTestMode", (int)UnityEngine.Rendering.CompareFunction.Always);
+                line.material.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+                line.material.renderQueue = OnTopRenderQueue;
+            }
         }
 
         return line;

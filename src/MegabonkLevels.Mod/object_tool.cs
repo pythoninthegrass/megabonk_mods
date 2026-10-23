@@ -14,8 +14,8 @@ public static class ObjectTools
     private const float PositionTolerance = 0.01f;
     private const float DragHoldSeconds = 0.2f;
     private const float LargeRingScale = 0.4f;
-    private const float SmallRingScale = 1.25f;
-    private const float SmallRingCap = 2.5f;
+    private const float SmallRingScale = 2f;
+    private const float SmallRingCap = 3f;
 
     // Tiles, walls, fill pieces and tile objects (ForestParticles and the like) are scenery, never picked or outlined.
     public static bool IsPickableGenId(string genId) => genId.StartsWith("object:", StringComparison.Ordinal);

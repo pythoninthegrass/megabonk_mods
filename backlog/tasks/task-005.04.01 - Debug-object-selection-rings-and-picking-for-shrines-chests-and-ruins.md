@@ -1,11 +1,11 @@
 ---
 id: TASK-005.04.01
 title: 'Debug object selection rings and picking for shrines, chests and ruins'
-status: Done
+status: In Progress
 assignee:
   - Claude
 created_date: '2026-10-10 08:11'
-updated_date: '2026-10-23T02:33:00Z'
+updated_date: '2026-10-23T02:44:00Z'
 labels:
   - level-editor
 dependencies: []
@@ -40,7 +40,7 @@ Start by logging, per failing object, its genId or placement id, whether the ray
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [x] #4 Conventional commit with no attribution
+- [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -68,10 +68,16 @@ Ruins reproduced and cause found: the ruin pieces are scene roots named without 
 Ruins decision (Lance): leave unpickable, reason recorded in docs/development.md. Fix: ObjectTools.IsModelRenderer (test written first) used by HasMeshRenderer and RefreshOutline. Shrine ring verified in the running game. Chest ring: fix applied by the same renderer filter but not visually confirmed (the ring was too small to judge from the editor camera), so AC #3 stays unchecked.
 
 Chest follow-up: after the renderer filter a chest at the player start still showed no ring. Causes: ring base used bounds min.y, which is below the ground for models partly buried (chest min.y -0.64, rock -8.48 relative to origin y 0), and the radius (0.4 x extent) put the ring inside the chest's own footprint. Fixed with ObjectTools.RingBaseY (clamp to the tile surface) and ObjectTools.RingRadius (small objects get a ring that clears the mesh), both tests first. Verified in the running game: red ring around the chest base and around a tree base.
+
+REOPENED. The task was closed too early; later in-game use by Lance showed selection is still not right. Status after the follow-up commits (7b3652a ring base/radius, df56367 trigger-aware picking, plus the commit that closes this note):
+
+What works (confirmed in the running game): shrine ring appears; chest ring visible around its base; clicking chest, tree trunk, rock and shrine from the default overview each selects that object via the raycast path.
+
+Cause found for picking: Physics.Raycast hit TRIGGER colliders far larger than the models (shrine charge sphere 12.5, tree FadeCollider about 11x15, chest sphere 1.3), so they swallowed clicks. ObjectPicker.NearestHit now accepts a trigger only when the ray crosses the object's model renderer bounds, and a solid non-object collider (terrain) blocks what is behind it. Nearest-object fallback radius cut from half a tile to an eighth.
+
+Test-harness trap: an injected mouse position (mouse tool) overrides the real cursor until cleared with mouse clear. My earlier testing left it set, which can make Lance's real clicks land at my last coordinates and was probably behind some of the reported imprecision. Clear it after every harness test.
+
+STILL OPEN, reported by Lance and not resolved: (1) a boulder (rock_medium_01) selects per the log but no ring is visible; I changed the selection ring to ignore depth (render queue 4000, ZTest Always) and it still showed no ring on the boulder, cause unknown, I was about to log ring base y, radius and origin vs the tile surface (SurfaceYAt may return a different level than the rock origin). (2) The shrine ring/hit area still looks too small against its perceived size: its only model renderer is AltarIcon (extents 0.55/0.99/0.95) so the click target and ring come from that small bound; I raised the small-object ring scale to 2 (cap 3) but did not verify it. (3) Selecting objects close together is not confirmed precise; I could not reproduce a boulder-selects-chest result with injected clicks (5 clicks across both stones all picked the boulder). Lance suspects another asset layer interferes; not investigated beyond the trigger finding.
+
+Last commit contains the on-top ring material and the larger small-object ring radius; neither is confirmed to fix the reported problems. Ruins decision (unpickable) stands.
 <!-- SECTION:NOTES:END -->
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Selection rings now use only visible model renderers (disabled, particle and MinimapIcon renderers are skipped), sit at or above the tile surface, and have a radius that clears small objects such as chests and shrines. The Forest ruins are deliberately unpickable: they are scene roots outside the genId index, and the reason is in docs/development.md. Verified in the running game for a shrine, a chest and a tree.
-<!-- SECTION:FINAL_SUMMARY:END -->
