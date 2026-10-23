@@ -5,7 +5,7 @@ status: Done
 assignee:
   - claude
 created_date: '2026-10-22 03:43'
-updated_date: '2026-10-23T01:47:00Z'
+updated_date: '2026-10-23T01:49:00Z'
 labels:
   - dev-harness
   - tooling
@@ -89,10 +89,12 @@ End-to-end run on macOS (Wine runtime), MCP tools only, after reconnecting the m
 No failures in any layer. dismiss_levelup was covered by the fake-mod tests only; no level-up dialog was open in the run.
 
 dismiss_levelup in the real game (macOS): relaunch, editor(on=false), invulnerable on, user played to a level-up. state showed frozen true; screenshot showed 3 offers (Wireless Dagger, Aura, Space Noodle). dismiss_levelup(choice=1) -> {dialogWasOpen:true, chosen:'Aura'}. state afterwards: frozen false, editor false; screenshot showed the dialog closed and an Aura icon in the weapon slots with the aura ring around the player. dismiss_levelup(choice=0) with no dialog open -> {dialogWasOpen:false, chosen:null}, no error. An out-of-range choice was not run.
+
+Out-of-range choice in the real game: with a 4-offer dialog open, dismiss_levelup(choice=9) raised a tool error 'choice 9 is out of range; the dialog offers 4 upgrades'. state afterwards still showed frozen true, so the dialog stayed open and untouched. A following dismiss_levelup(choice=0) closed it normally.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Added MCP tools key, mouse, type_text, teleport and dismiss_levelup to scripts/mcp_server.py, with argument validation before anything is sent (teleport exactly one of position/cell, mouse move needs x and y, key modifiers only with tap). Tests were written first in tests/test_mcp_server.py (payload, result, rejection, validation); task check passes. docs/development.md lists the tools and has an End-to-end check walkthrough; AGENTS.md lists the MCP tools first. A full end-to-end run through the MCP tools on macOS succeeded (details in the notes). dismiss_levelup was verified by tests only.
+Added MCP tools key, mouse, type_text, teleport and dismiss_levelup to scripts/mcp_server.py, with argument validation before anything is sent (teleport exactly one of position/cell, mouse move needs x and y, key modifiers only with tap). Tests were written first in tests/test_mcp_server.py (payload, result, rejection, validation); task check passes. docs/development.md lists the tools and has an End-to-end check walkthrough; AGENTS.md lists the MCP tools first. A full end-to-end run through the MCP tools on macOS succeeded, and dismiss_levelup was also confirmed in the real game: a valid pick, no dialog open, and an out-of-range choice (details in the notes).
 <!-- SECTION:FINAL_SUMMARY:END -->
