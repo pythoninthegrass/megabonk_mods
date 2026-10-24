@@ -52,9 +52,13 @@ The paths in `load-level` and `screenshot` are interpreted by the game process, 
 
 ### Results
 
-Before moving a command file to `done/` or `rejected/`, the mod writes `harness/results/<command file name>`: UTF-8 JSON, one object, written to `<name>.tmp` and renamed so a reader never sees a partial file. A command that succeeds writes `{"command":"<wire name>","ok":true,"result":<object or null>}`. A command that fails while running writes `{"command":"<wire name>","ok":false,"error":"<message>"}`. A file that does not parse writes the same failure shape with `"command":null`. Every command other than `state`, `teleport` and `dismiss-levelup` has `"result":null`. The result file is written before the command file moves, so a caller that sees the file in `done/` or `rejected/` can read the result at once. Result files are never deleted by the mod.
+Before moving a command file to `done/` or `rejected/`, the mod writes `harness/results/<command file name>`: UTF-8 JSON, one object, written to `<name>.tmp` and renamed so a reader never sees a partial file. A command that succeeds writes `{"command":"<wire name>","ok":true,"result":<object or null>}`. A command that fails while running writes `{"command":"<wire name>","ok":false,"error":"<message>"}`. A file that does not parse writes the same failure shape with `"command":null`. Every command other than `state`, `teleport`, `dismiss-levelup` and `steam-ready` has `"result":null`. The result file is written before the command file moves, so a caller that sees the file in `done/` or `rejected/` can read the result at once. Result files are never deleted by the mod.
 
 `run.py` reads them with `read_result(harness, name)`, which returns `None` when the file is absent or not valid JSON. Every subcommand that sends a command exits 1 and prints the `error` text on stderr when the result has `ok:false`, even if the command file landed in `done/`. A missing result file does not fail a command, so `run.py` still works against a mod built before results existed.
+
+### Steamworks readiness
+
+`steam-ready` succeeds with `{"ready":true,"buildId":"<id>"}` once the game's Steamworks client answers `GetAppBuildId`, and with `{"ready":false}` while it is still starting. The not-initialized fault is an expected answer during startup, so `SteamReadiness.Probe` catches that one message (`Steamworks is not initialized`) and returns it as data instead of letting it reach the harness's generic error handler, which would log an ERROR with an IL2CPP stack trace on every poll. Any other fault still propagates and is logged. `run.py steam-ready` exits 1 on `ready:false`, and `run.py relaunch` keeps polling until it sees `ready:true`. A mod that returns no result counts as ready. A long-running caller such as the MCP server has to be restarted to pick up a changed `run.py`; an old one treats any `ok:true` as ready.
 
 ### State
 
@@ -539,6 +543,36 @@ Each enqueue schedules its steps on consecutive frames, starting at the next `Be
 | `EnqueueText(text)` | one character per frame into `InputStringThisFrame`; `\b` is backspace and `\n` is return |
 
 Pressed and released flags are true for exactly one frame. A held key or button stays held until its up step. An injected mouse position (screen pixels, origin bottom-left) yields to the real mouse: it is dropped when the real cursor moves more than 2 pixels from where it was at the last injected move, after 10 seconds without a move or button event (unless an injected button is still held, which keeps it for a real-time drag), or on `ClearMouse`; after any of these `MousePosition` is null and `EditorInput.MousePosition` falls back to the real cursor. Calling `BeginFrame` again with the same frame number does nothing.
+
+## Static recomp
+
+The mod runs inside the game through MelonLoader, which loads the mod DLL into the Il2Cpp runtime. A static recomp of `GameAssembly.dll` — rebuilding the game code into a separate native library so the mod can run without Steam or MelonLoader — is a large lift and not yet implemented. This section records the exploration (backlog TASK-015).
+
+### Scale
+
+`GameAssembly.dll` is a Windows x86_64 il2Cpp assembly (52 MB). The dump `.tools/il2cpp_dump/dump.cs` lists 114,472 methods across 58 images (`Image 3: Assembly-CSharp.dll` is the game code; the rest are Unity modules, Rewired, Steam, etc.). The mod source (`src/MegabonkLevels.Mod/`, net6.0, ~14k lines) binds ~18,200 types. REA + Ghidra analysis of the binary takes ~12 minutes per session. REA (`/morluto/rea`) is an analysis CLI/MCP (decompile, xrefs, def-use tracing); it does not emit compilable source — reconstruction is hand-authored. The game ships a native Linux build, so a recomp buys no portability; the only reason to build one is to drop Steam/MelonLoader from the dev loop.
+
+### Entry point
+
+The mod is a MelonLoader plugin: `megabonk_levels_mod.cs` carries `[assembly: MelonGame("", "Megabonk")]` and `[assembly: MelonInfo(...)]`, and `MelonMod.OnInitializeMelon()` is the hook. MelonLoader's Il2Cpp bootstrap loads `MelonLoader/Il2CppAssemblies/*.dll` stubs and a set of `version.dll` overrides (`version=n,b;d3d11,d3d10core=n,b`, see `launch_game.py`). A recomp's first call back into the game must be a Unity/Mono/Il2Cpp entry (`Il2CppSystem.Reflection.Assembly.LoadFrom` or a game `dllmain`-style hook) to resolve types — there is no "just call the game's main" without the runtime. Candidate entry points are a `version.dll`/`game.dll` proxy (the existing MelonLoader entry point) or the native executable's own import table.
+
+### Interop surface
+
+The mod already mirrors the game's `EMap` flags enum by value (`level_file.cs`) and binds `Il2Cpp`, `Il2CppAssets.Scripts.*` (Managers, Actors/Player, Steam, MapGeneration/ProceduralTiles, Game/Other), `Il2CppTMPro`, `Il2Cppcom.rlabrecque.steamworks.net`, `Il2CppSystem.Action`, `Il2CppSystem.Collections.Generic.List<GameObject>`, `Il2CppReferenceArray<T>`, and `Il2CppConsistentRandom`. The dump confirms methods carry `// RVA: 0x... Offset: 0x... VA: 0x18...` (VA = image base + RVA). The interop surface spans every Unity module plus Rewired, Discord, Newtonsoft, and ProBuilder. A recomp must reproduce the Il2Cpp runtime's managed/native bridge (IL2CPPLauncher-style type resolution, delegate marshalling, Il2CppString) or the mod code cannot bind — this is the single largest chunk.
+
+### Steamworks
+
+The game initializes Steam itself before mod code runs (`steam-ready: done` after retries). The mod's only Steam coupling is `Il2CppSteamworks.SteamApps.GetAppBuildId()` in `game_build_id_patch.cs`, called from the harness `SteamReady` case and from level load and save. The game tolerates a missing Steamworks client (it retries and proceeds), so a recomp does not need to reimplement Steam: the first step is to confirm whether the game calls Steam at startup in a way that hard-fails when the client is absent, or only lazily (as `GetAppBuildId` does). The non-throwing readiness probe is `SteamClient.IsValid()` / `SteamAPI.IsSteamRunning()` from `com.rlabrecque.steamworks.net` instead of calling `GetAppBuildId()` blind.
+
+The startup `GetAppBuildId` fault is handled by the `SteamReady` harness command; see "Steamworks readiness" above. Level load and save call `GameBuildIdPatch.CurrentBuildId()` unguarded, so they throw if run before Steamworks is up.
+
+### Build / relink
+
+The mod builds to `MegabonkLevels.Mod.dll` + `.pdb`, deployed to `$(GameFolder)/Mods/` by the csproj `CopyOutputToModsFolder` target; it references `MelonLoader.dll`, `0Harmony.dll`, `Il2CppInterop.Runtime.dll`, and the Il2Cpp stub assemblies as `<Reference>` (not copied, `<Private>False`). A recomp's output is a native DLL (or patched executable), not a managed assembly, and the linking decision gates everything: if it links the game's own native runtime, it must be loaded by the patched exe; if it bundles a runtime, it is effectively a redistributable.
+
+### Effort / de-risking
+
+The interop/runtime bridge is the make-or-break; per-function reconstruction is tedious but bounded. Smallest first steps: (1) confirm the game's startup Steamworks behavior under a non-Steam launch — hard-fail or lazy? — which gates whether the Steam question is a blocker; (2) confirm a recomp can bind the game runtime by symbol (a single native call into `Assembly-CSharp`) with a "hello world" function decompiled from `dump.cs`.
 
 ### Real keyboard text
 

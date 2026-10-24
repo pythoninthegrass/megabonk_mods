@@ -379,6 +379,24 @@ def test_relaunch_timeout_allows_melonloader_to_initialize() -> None:
     assert run.relaunch_timeout(120) == 120
 
 
+def test_steam_ready_exits_1_when_the_game_reports_not_ready() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"steam-ready","ok":true,"result":{"ready":false}}')
+        assert run_main(game, "steam-ready") == 1
+
+
+def test_steam_ready_exits_0_when_the_game_reports_ready() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"steam-ready","ok":true,"result":{"ready":true,"buildId":"21750826"}}')
+        assert run_main(game, "steam-ready") == 0
+
+
+def test_steam_ready_exits_0_for_a_mod_that_returns_no_result() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"steam-ready","ok":true,"result":null}')
+        assert run_main(game, "steam-ready") == 0
+
+
 def test_wait_for_steamworks_ready_retries_until_the_game_reports_ready() -> None:
     results = iter([False, False, True])
     assert run.wait_for_steamworks_ready(lambda: next(results), timeout=5, sleep=lambda _: None)

@@ -180,8 +180,13 @@ public static class DevHarness
                 EditorMode.Set(command.Enabled, _logger);
                 break;
             case HarnessCommandKind.SteamReady:
-                _logger.Msg($"DevHarness: Steamworks ready (build {GameBuildIdPatch.CurrentBuildId()}).");
-                break;
+                var readiness = SteamReadiness.Probe(GameBuildIdPatch.CurrentBuildId);
+                if (readiness.Ready)
+                {
+                    _logger.Msg($"DevHarness: Steamworks ready (build {readiness.BuildId}).");
+                }
+
+                return readiness.ToJson();
             case HarnessCommandKind.State:
                 return ReadState().ToJson();
             case HarnessCommandKind.Key:

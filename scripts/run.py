@@ -343,6 +343,13 @@ def send(harness: Path, payload: dict[str, object], timeout: float) -> bool:
     return send_for_result(harness, payload, timeout)[0]
 
 
+def send_steam_ready(harness: Path, timeout: float) -> bool:
+    """True when the game's Steamworks client is up; a mod that returns no result counts as ready."""
+    ok, result = send_for_result(harness, build_command("steam-ready"), timeout)
+    payload = (result or {}).get("result")
+    return ok and not (isinstance(payload, dict) and payload.get("ready") is False)
+
+
 def send_printing_result(harness: Path, payload: dict[str, object], timeout: float) -> bool:
     ok, result = send_for_result(harness, payload, timeout)
     if ok and result is not None:
@@ -515,7 +522,7 @@ def relaunch(
     if ok:
         on_step("relaunch: waiting for Steamworks")
         ok = wait_for_steamworks_ready(
-            lambda: send(harness, build_command("steam-ready"), min(timeout, 2.0)),
+            lambda: send_steam_ready(harness, min(timeout, 2.0)),
             relaunch_timeout(timeout),
         )
     if not ok:
@@ -558,7 +565,9 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_screenshot(harness, args.out, args.timeout)
         case "quit":
             ok = quit_game(harness, args.timeout)
-        case "freeze" | "resume" | "invulnerable" | "vulnerable" | "steam-ready":
+        case "steam-ready":
+            ok = send_steam_ready(harness, args.timeout)
+        case "freeze" | "resume" | "invulnerable" | "vulnerable":
             ok = send(harness, build_command(args.action), args.timeout)
         case "state":
             ok = send_printing_result(harness, build_command("state"), args.timeout)
