@@ -1,11 +1,11 @@
 ---
 id: TASK-004.11
 title: Wall the edges of a removed tile
-status: In Progress
+status: Done
 assignee:
   - OpenCode
 created_date: '2026-10-10 06:41'
-updated_date: '2026-10-25T18:07:00Z'
+updated_date: '2026-10-25T18:08:00Z'
 labels:
   - level-editor
 dependencies: []
@@ -55,7 +55,7 @@ Likely fix (unconfirmed): for each edge between a removed cell and an occupied n
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -80,4 +80,12 @@ In-game evidence (Wine, Forest seed 20261007): original regression level load re
 Temporary direct MeshCollider.Raycast probes after CollisionRebuild, from world y=200 down 500 units, returned combinedGroundHit=False over (9,7), (13,7), (0,0), (0,1) at load and (11,6) on editor removal/redo. Diagnostic code removed before final task check. Evidence saved locally in .tools/removed-tile-checks/: runtime-probes.log, editor-slope.png, final-editor-slope.png, editor-flat.png, load-slope.png, load-flat.png, load-border-pair.png, task-check.log. Screenshots inspected: continuous neighbour side walls, no hanging removed-slope side pieces, open shaft remains (sky at bottom is intentional; no floor). Generated props can overhang holes and are not terrain pieces.
 
 Added permanent load-time regression fixture; documented FillEdge contract and removal/collision behavior. Game left frozen in editor on original regression level with slope (9,7) removed for inspection. Unrelated untracked TASK-015 left untouched. Honcho recall unavailable (HTTP 404 Session not found); continued without alternate memory store.
+
+Implementation committed as c48ab00 (fix(terrain): rebuild walls around removed tiles), without attribution.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Removed tiles now participate in fill regeneration. Stale pieces are cleared even across adjacent holes or removed border cells, without dereferencing null tiles. Occupied neighbours receive downward FillEdge walls using the native island-cliff recipe confirmed through REA/Ghidra. Occupied-to-occupied FillHole behavior is preserved. Added pure regression tests, a load-time level fixture, and confirmed FillEdge documentation. Verified flat/slope removal from level files and editor, undo/redo, screenshots and no floor over holes after collision rebuilding. task check passes: 679 C# tests, 165 Python tests, build and lint. Implementation commit: c48ab00. Game remains frozen in editor for inspection.
+<!-- SECTION:FINAL_SUMMARY:END -->
