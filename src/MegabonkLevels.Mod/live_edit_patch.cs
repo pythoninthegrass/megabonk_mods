@@ -429,7 +429,7 @@ public static class LiveEditPatch
 
         if (LiveEditPlan.ChangesTerrain(plan))
         {
-            var touched = plan.Where(a => a.Kind == LiveActionKind.SetTile).Select(a => (a.X, a.Z));
+            var touched = plan.Where(a => a.Kind is LiveActionKind.SetTile or LiveActionKind.RemoveTile).Select(a => (a.X, a.Z));
             FillRegeneration.Regenerate(session.TileGen, session.Grid.Spacing, touched, session.Logger);
             CollisionRebuild.Replace(session.TileGen, session.Logger);
         }

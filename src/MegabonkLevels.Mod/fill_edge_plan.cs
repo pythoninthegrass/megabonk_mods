@@ -15,6 +15,35 @@ public static class FillEdgePlan
 
     private static readonly (int Dx, int Dz)[] Neighbours = { (-1, 0), (1, 0), (0, -1), (0, 1) };
 
+    public static IReadOnlyList<CellEdge> EdgesAroundRemovals(IEnumerable<(int X, int Z)> touched,
+        Func<int, int, bool> isOccupied, Func<int, int, bool> isInGrid) =>
+        CleanupEdges(touched, isOccupied, isInGrid)
+            .Where(e => isInGrid(e.Ax, e.Az) && isInGrid(e.Bx, e.Bz)
+                && isOccupied(e.Ax, e.Az) != isOccupied(e.Bx, e.Bz)).ToList();
+
+    // Empty touched cells need every old edge cleared, including shared holes and the outer border.
+    public static IReadOnlyList<CellEdge> CleanupEdges(IEnumerable<(int X, int Z)> touched,
+        Func<int, int, bool> isOccupied, Func<int, int, bool> isInGrid)
+    {
+        var edges = new HashSet<CellEdge>();
+        foreach (var (x, z) in touched.Distinct().Where(p => isInGrid(p.X, p.Z)))
+        {
+            foreach (var (dx, dz) in Neighbours)
+            {
+                var (nx, nz) = (x + dx, z + dz);
+                if (!isOccupied(x, z) || isInGrid(nx, nz))
+                {
+                    edges.Add((x, z).CompareTo((nx, nz)) < 0
+                        ? new CellEdge(x, z, nx, nz) : new CellEdge(nx, nz, x, z));
+                }
+            }
+        }
+
+        return edges.OrderBy(e => (e.Ax, e.Az, e.Bx, e.Bz)).ToList();
+    }
+
+    public static int HoleWallOffset(int minimumHeight, int tileHeight) => minimumHeight - 1 - tileHeight;
+
     // Edges between a touched, occupied cell and an occupied neighbour. A neighbour that is empty or outside the
     // grid has no tile to wall against, so that edge is left alone.
     public static IReadOnlyList<CellEdge> EdgesAround(IEnumerable<(int X, int Z)> touched, Func<int, int, bool> isOccupied)

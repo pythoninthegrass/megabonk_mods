@@ -5,6 +5,80 @@ public class FillEdgePlanTests
     private static bool All(int x, int z) => x >= 0 && x < 15 && z >= 0 && z < 15;
 
     [Fact]
+    public void HoleEdges_RemovedCell_HasFourOccupiedNeighbours()
+    {
+        var edges = FillEdgePlan.EdgesAroundRemovals(new[] { (5, 5) },
+            (x, z) => All(x, z) && (x, z) != (5, 5), All);
+
+        Assert.Equal(4, edges.Count);
+        Assert.All(edges, e => Assert.True((e.Ax, e.Az).CompareTo((e.Bx, e.Bz)) < 0));
+    }
+
+    [Fact]
+    public void HoleEdges_AdjacentRemovedCells_OmitSharedEdgeAndDeduplicate()
+    {
+        var edges = FillEdgePlan.EdgesAroundRemovals(new[] { (5, 5), (6, 5), (5, 5) },
+            (x, z) => All(x, z) && (x, z) != (5, 5) && (x, z) != (6, 5), All);
+
+        Assert.Equal(6, edges.Count);
+    }
+
+    [Fact]
+    public void HoleEdges_EditNextToExistingHole_RebuildsHoleWall()
+    {
+        Assert.Single(FillEdgePlan.EdgesAroundRemovals(new[] { (5, 5) },
+            (x, z) => All(x, z) && (x, z) != (6, 5), All),
+            e => e == new CellEdge(5, 5, 6, 5));
+    }
+
+    [Fact]
+    public void HoleEdges_CornerRemoval_SkipsOutsideGrid()
+    {
+        Assert.Equal(2, FillEdgePlan.EdgesAroundRemovals(new[] { (0, 0), (-1, 0) },
+            (x, z) => All(x, z) && (x, z) != (0, 0), All).Count);
+    }
+
+    [Fact]
+    public void CleanupEdges_Removals_IncludeEmptySharedEdgeAndOuterBorder()
+    {
+        var edges = FillEdgePlan.CleanupEdges(new[] { (0, 0), (1, 0), (0, 0) },
+            (x, z) => All(x, z) && (x, z) != (0, 0) && (x, z) != (1, 0), All);
+
+        Assert.Equal(7, edges.Count);
+        Assert.Contains(new CellEdge(0, 0, 1, 0), edges);
+        Assert.Contains(new CellEdge(-1, 0, 0, 0), edges);
+    }
+
+    [Fact]
+    public void CleanupEdges_OccupiedCorner_PreservesUntouchedOuterCliffs()
+    {
+        Assert.Equal(2, FillEdgePlan.CleanupEdges(new[] { (0, 0) }, All, All).Count);
+    }
+
+    [Fact]
+    public void HoleEdges_AllEmpty_HasNothingToBuildButStillCleansEdges()
+    {
+        Assert.Empty(FillEdgePlan.EdgesAroundRemovals(new[] { (5, 5) }, (_, _) => false, All));
+        Assert.Equal(4, FillEdgePlan.CleanupEdges(new[] { (5, 5) }, (_, _) => false, All).Count);
+    }
+
+    [Fact]
+    public void HoleEdges_RestoredCell_HasOnlyOccupiedEdges()
+    {
+        Assert.Empty(FillEdgePlan.EdgesAroundRemovals(new[] { (5, 5) }, All, All));
+        Assert.Equal(4, FillEdgePlan.EdgesAround(new[] { (5, 5) }, All).Count);
+    }
+
+    [Theory]
+    [InlineData(0, 0, -1)]
+    [InlineData(0, 3, -4)]
+    [InlineData(-2, 1, -4)]
+    public void HoleWallOffset_UsesIslandCliffDepth(int minimumHeight, int tileHeight, int expected)
+    {
+        Assert.Equal(expected, FillEdgePlan.HoleWallOffset(minimumHeight, tileHeight));
+    }
+
+    [Fact]
     public void EdgesAround_InteriorCell_HasFourEdges()
     {
         var edges = FillEdgePlan.EdgesAround(new[] { (5, 5) }, All);

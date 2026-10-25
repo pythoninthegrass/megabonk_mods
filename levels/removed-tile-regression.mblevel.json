@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "gameBuildId": "21750826",
+  "map": 1,
+  "stageIndex": 0,
+  "tier": 0,
+  "seed": 20261007,
+  "edits": [
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":7,\"height\":0}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":7,\"direction\":3}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":7}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":7}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":1}"
+    }
+  ]
+}

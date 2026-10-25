@@ -75,7 +75,27 @@ All ground collision is one baked mesh, `ProceduralTileGeneration.collider` (a G
 
 Whole-grid `FillHoles`/`FillEdges` would duplicate pieces everywhere, so the mod uses the per-edge private `ProceduralTileGeneration.FillHole(Vector2Int from, Vector2Int to)` through reflection. Calling it from a vanilla slope cell to each of its four neighbours recreates exactly the four wall pieces generation had built there (`TileWall` below, `TileWallSlopeLeftDown` on the slope sides, same positions, rotations and scales).
 
-`FillRegeneration.Regenerate` runs after the tile edits and before the collision rebuild. `FillEdgePlan` lists the edges between each edited, still occupied tile and each occupied neighbour. For each edge the mod destroys the fill pieces whose position lies on the edge line (within 0.5 units, and within half a tile along it), then calls `FillHole` in both directions. New pieces are appended to `fillTiles`; the genId index is built before the edits, so the ids of existing objects do not move. Edges against a removed cell or the grid border are not touched. On the scratch level the sky that showed through the replaced slope at (9,7) is gone and the slope has side walls.
+`FillRegeneration.Regenerate` runs after tile edits and before the collision rebuild, for both level-file edits and editor clicks (including undo/redo). `FillEdgePlan.EdgesAround` selects occupied–occupied edges for `FillHole` in both directions; `EdgesAroundRemovals` selects occupied–empty edges for `FillEdge` on the occupied side, directed toward the hole. This also rebuilds walls when an occupied tile beside an existing hole changes. The cleanup set includes empty–empty edges between adjacent removals and exterior edges of removed border cells; unchanged exterior cliffs of occupied cells are left alone.
+
+For each affected edge the mod destroys fill pieces whose position lies on the edge line (within 0.5 units, and within half a tile along it). Midpoints come from `TilePositionToWorldPosition(Vector2Int.zero)` and grid spacing, not nullable tile transforms. Pieces are removed from `fillTiles` and deactivated before destruction, so deferred Unity destruction cannot include them in the collision rebuild. New pieces are appended to `fillTiles`; the genId index is built before the edits, so the ids of existing objects do not move.
+
+### Confirmed `FillEdge` parameters
+
+Native code read with REA's Ghidra provider confirms `FillEdge` (RVA `0x51DCC0`), `FillEdgesIsland` (`0x51E4D0`), and `FillEdgesWalls` (`0x51EAE0`) use the following contract:
+
+| Parameter | Meaning |
+| --- | --- |
+| `pos1` | Occupied grid cell owning the edge. The method reads its tile and `GetEdge` result; neither may be null. |
+| `desiredHeightOffset` | Signed vertical extent in tile-height levels, not an absolute target height. For a flat edge, positive values stack upward from `tile.posY + edge.offsetHeight`; negative values stack downward from one level below that height. Zero creates no flat wall. |
+| `isFacingOut` | If false, negate `dir` before edge lookup and construction. If true, use `dir` unchanged. Negative extents additionally reverse the piece direction while retaining the selected edge. |
+| `dir` | Cardinal grid direction of the selected edge after the conditional negation; resolved with `tile.GetEdge(dir)`. |
+| `useEdgeTextures` | Forwarded to `InstantiateFillTile` for the wall pieces; false uses normal textures. |
+
+Sloped edges use `wallLeftUp` or `wallLeftDown` according to the extent's sign and a flip flag according to slope handedness, with flat pieces extending the wall. Even a zero extent can emit a slope cap; it is not a universal no-op. `FillHole` computes its signed height difference from both tiles' `posY + edge.offsetHeight`, but cannot accept a missing tile.
+
+For holes the mod mirrors `FillEdgesIsland`: `desiredHeightOffset = minimumLivePosY - 1 - occupiedTile.posY`, `isFacingOut = true`, `dir = emptyCell - occupiedCell`, `useEdgeTextures = false`. This guarantees downward walls even for same-height neighbours. The removed tile's former height is not needed. The game's enclosed-map border builder, `FillEdgesWalls`, instead uses `maximumPosY + 2 - tile.posY`, false, an inward direction, and edge textures to build upward-extending perimeter walls.
+
+Verified on Forest seed 20261007: removing the edited East slope at (9,7) through the editor removes eight stale pieces and builds four hole-facing edges. Flat removal at (11,6), undo, and redo also rebuild correctly; straight-down probes against the rebuilt combined mesh miss the hole. `levels/removed-tile-regression.mblevel.json` exercises load-time removal at (9,7), (13,7), and adjacent border cells (0,0)/(0,1). Screenshots show continuous side walls up to the occupied edges, with sky visible only down the open shaft, not through missing side faces; downward collision probes miss all four removed cells. Generated props are not terrain pieces and can still overhang a hole.
 
 ## Kill floor
 

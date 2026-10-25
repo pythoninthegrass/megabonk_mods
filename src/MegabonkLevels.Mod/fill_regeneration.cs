@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Il2Cpp;
 using MelonLoader;
@@ -7,28 +8,31 @@ using UnityEngine;
 
 namespace MegabonkLevels;
 
-// Tile edits only move or replace the tile itself, which leaves the old wall and fill pieces around it stale and the
-// sides of a new slope open to the sky. This destroys the pieces on every edge of an edited tile and asks the game's own
-// per-edge builder (ProceduralTileGeneration.FillHole, private) to recreate them, so the walls match what generation
-// would have built. Whole-grid FillHoles/FillEdges are not used: they would duplicate pieces everywhere.
+// Rebuild only edited edges; whole-grid FillHoles/FillEdges would duplicate untouched pieces.
 public static class FillRegeneration
 {
     private static readonly MethodInfo FillHole = typeof(ProceduralTileGeneration).GetMethod(
         "FillHole", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+    private static readonly MethodInfo FillEdge = typeof(ProceduralTileGeneration).GetMethod(
+        "FillEdge", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
     public static void Regenerate(ProceduralTileGeneration tileGen, float tileWidth, IEnumerable<(int X, int Z)> touched, MelonLogger.Instance logger)
     {
-        if (FillHole == null)
+        if (FillHole == null || FillEdge == null)
         {
-            logger.Warning("FillRegeneration: ProceduralTileGeneration.FillHole not found; wall and fill pieces left as they were");
+            logger.Warning("FillRegeneration: FillHole or FillEdge not found; wall and fill pieces left as they were");
             return;
         }
 
         var grid = tileGen.proceduralTiles;
-        var edges = FillEdgePlan.EdgesAround(touched, (x, z) =>
-            x >= 0 && x < grid.Length && grid[x] != null && z >= 0 && z < grid[x].Length && grid[x][z] != null);
+        bool InGrid(int x, int z) => x >= 0 && x < grid.Length && grid[x] != null && z >= 0 && z < grid[x].Length;
+        bool Occupied(int x, int z) => InGrid(x, z) && grid[x][z] != null;
+        var cells = touched.ToList();
+        var edges = FillEdgePlan.EdgesAround(cells, Occupied);
+        var holeEdges = FillEdgePlan.EdgesAroundRemovals(cells, Occupied, InGrid);
+        var cleanup = FillEdgePlan.CleanupEdges(cells, Occupied, InGrid);
 
-        var removed = RemoveStalePieces(tileGen, tileWidth, edges);
+        var removed = RemoveStalePieces(tileGen, tileWidth, cleanup);
         var before = tileGen.fillTiles.Count;
         foreach (var edge in edges)
         {
@@ -36,12 +40,41 @@ public static class FillRegeneration
             Build(tileGen, new Vector2Int(edge.Bx, edge.Bz), new Vector2Int(edge.Ax, edge.Az), logger);
         }
 
-        logger.Msg($"FillRegeneration: {edges.Count} edge(s), removed {removed} stale piece(s), created {tileGen.fillTiles.Count - before}");
+        var minimumHeight = int.MaxValue;
+        for (var x = 0; x < grid.Length; x++)
+        {
+            for (var z = 0; grid[x] != null && z < grid[x].Length; z++)
+            {
+                if (grid[x][z] != null)
+                {
+                    minimumHeight = Math.Min(minimumHeight, grid[x][z].posY);
+                }
+            }
+        }
+
+        foreach (var edge in holeEdges)
+        {
+            var a = new Vector2Int(edge.Ax, edge.Az);
+            var b = new Vector2Int(edge.Bx, edge.Bz);
+            var from = Occupied(edge.Ax, edge.Az) ? a : b;
+            var to = from == a ? b : a;
+            var offset = FillEdgePlan.HoleWallOffset(minimumHeight, grid[from.x][from.y].posY);
+            try
+            {
+                FillEdge.Invoke(tileGen, new object[] { from, offset, true, to - from, false });
+            }
+            catch (Exception ex)
+            {
+                logger.Warning($"FillRegeneration: FillEdge({from}, {offset}, {to - from}) failed: {ex.InnerException?.Message ?? ex.Message}");
+            }
+        }
+
+        logger.Msg($"FillRegeneration: {edges.Count} edge(s), {holeEdges.Count} hole edge(s), removed {removed} stale piece(s), created {tileGen.fillTiles.Count - before}");
     }
 
     private static int RemoveStalePieces(ProceduralTileGeneration tileGen, float tileWidth, IReadOnlyList<CellEdge> edges)
     {
-        var grid = tileGen.proceduralTiles;
+        var origin = tileGen.TilePositionToWorldPosition(Vector2Int.zero);
         var stale = new List<GameObject>();
         for (var i = 0; i < tileGen.fillTiles.Count; i++)
         {
@@ -54,10 +87,10 @@ public static class FillRegeneration
             var position = piece.transform.position;
             foreach (var edge in edges)
             {
-                var a = grid[edge.Ax][edge.Az].transform.position;
-                var b = grid[edge.Bx][edge.Bz].transform.position;
+                var mx = origin.x + (edge.Ax + edge.Bx) * tileWidth / 2;
+                var mz = origin.z + (edge.Az + edge.Bz) * tileWidth / 2;
                 var alongX = edge.Az != edge.Bz;
-                if (FillEdgePlan.LiesOnEdge((a.x + b.x) / 2, (a.z + b.z) / 2, alongX, tileWidth / 2, position.x, position.z))
+                if (FillEdgePlan.LiesOnEdge(mx, mz, alongX, tileWidth / 2, position.x, position.z))
                 {
                     stale.Add(piece);
                     break;
