@@ -85,6 +85,23 @@ stdout is the MCP protocol channel, so the server writes nothing to stdout; ever
 
 Tools: `relaunch(level?)` (reports progress through the MCP context and returns the final `state`), `load(level)`, `quit()`, `screenshot()` (returns the PNG inline), `state()`, `editor(on)`, `freeze()`, `resume()`, `invulnerable(on)`, `camera(position?, rotation?, clear?)` `log_tail(pattern?, since_launch?, max_lines?)`, and the input and gameplay tools `key(key, modifiers?, action?)`, `mouse(action, x?, y?, button?)`, `type_text(text)`, `teleport(position?, cell?)` and `dismiss_levelup(choice?)`. A command the mod rejects, a timeout, or a result with `ok:false` surfaces as a tool error carrying the result file's `error` text (or `<command> <outcome>` when there is no result file). `log_tail` reads `MelonLoader/Latest.log`: `since_launch` (default true) trims to the last `DevHarness: enabled` line, `pattern` keeps lines matching a regex, and `max_lines` (default 50) caps the result to the last N lines. The input tools validate their arguments before sending anything and raise a tool error for a bad combination: `teleport` needs exactly one of `position` (three numbers) or `cell` (two integers), `mouse` `move` needs both `x` and `y` and the other actions take both or neither, and `key` accepts `modifiers` only with `action` `tap`. Each returns the result file's object (`teleport` and `dismiss_levelup` carry data; the others return `null`). Coordinates are screenshot pixels with the origin at the top left, as in "Key, mouse and type commands", which also lists the valid key names. Input is queued over the next frames, so a `screenshot` straight after may predate its effect.
 
+### Retaining screenshots
+
+`screenshot(directory=None, filename=None)` returns two content blocks: the inline PNG and text reporting its saved absolute path. With no arguments it saves `megabonk-<timestamp-in-nanoseconds>.png` in the MCP server's working directory (not necessarily the game directory or repository root). Optional keyword arguments select the destination:
+
+```python
+screenshot()
+screenshot(directory=".tools/evidence")
+screenshot(directory=".tools/evidence", filename="final-editor-slope.png")
+screenshot(directory="/Users/lance/Pictures/megabonk", filename="forest.png")
+```
+
+Relative directories resolve against the server's working directory; absolute directories are supported. Missing directories, including parents, are created automatically. `filename` must be a single basename ending in `.png`, not a path; path separators and invalid filename characters are rejected. Omit it for a timestamped name in the chosen directory.
+
+Existing files, directories and symlinks are never overwritten: a collision returns a tool error asking for another filename or directory, including if the destination appears during capture. The server captures into a temporary subdirectory, validates the PNG, and publishes it using an exclusive hard link on the same filesystem; the filesystem must support hard links. Temporary captures are cleaned up on success or failure, though newly created destination directories remain. Invalid destinations, permissions and capture failures return actionable tool errors rather than a saved path. A server restart is needed to pick up changes to its tool signatures.
+
+To verify retention through MCP, call `screenshot(directory=".tools/evidence", filename="editor-check.png")`, inspect the inline image and open the reported path as a PNG. A second call with the same arguments must return a collision error and leave the first PNG unchanged.
+
 ### End-to-end check
 
 A walkthrough that exercises the whole chain (agent, MCP, harness files, mod, game) using only the `megabonk` tools, in editor mode on the example forest level:

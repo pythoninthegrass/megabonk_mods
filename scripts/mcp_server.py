@@ -101,16 +101,35 @@ async def quit() -> bool:
 
 
 @mcp.tool()
-async def screenshot() -> Image:
-    """Capture the game's current frame and return it as an inline PNG."""
+async def screenshot(*, directory: str | None = None, filename: str | None = None) -> list[Image | str]:
+    """Save a PNG (default: timestamped name in server cwd), returning inline image and absolute path. Creates directories; never overwrites. filename must be a single .png basename."""
+    if filename is not None and (
+        not filename
+        or any(c in filename for c in '/\\\x00<>:"|?*')
+        or any(ord(c) < 32 for c in filename)
+        or not filename.lower().endswith(".png")
+    ):
+        raise ToolError("screenshot: filename must be a single .png basename without path separators or invalid characters")
     harness = _harness()
-    out = Path(tempfile.gettempdir()) / f"megabonk-{time.time_ns()}.png"
-    out.unlink(missing_ok=True)
-    await _request(harness, run.build_command("screenshot", run.to_game_path(out)), TIMEOUT)
-    captured = await anyio.to_thread.run_sync(run.wait_for_png, out, TIMEOUT)
-    if not captured:
-        raise ToolError(f"screenshot: no valid PNG at {out} after {TIMEOUT}s")
-    return Image(path=str(out))
+    try:
+        folder = Path(directory if directory is not None else Path.cwd()).resolve()
+        out = folder / (filename if filename is not None else f"megabonk-{time.time_ns()}.png")
+        if out.exists() or out.is_symlink():
+            raise FileExistsError(f"{out} already exists")
+        folder.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=".megabonk-", dir=folder) as staging:
+            capture = Path(staging) / "capture.png"
+            await _request(harness, run.build_command("screenshot", run.to_game_path(capture)), TIMEOUT)
+            captured = await anyio.to_thread.run_sync(run.wait_for_png, capture, TIMEOUT)
+            if not captured:
+                raise ToolError(f"screenshot: no valid PNG at {capture} after {TIMEOUT}s; retry the capture")
+            image = Image(data=capture.read_bytes(), format="png")
+            out.hardlink_to(capture)
+        return [image, f"Saved screenshot to {out}"]
+    except FileExistsError as exc:
+        raise ToolError(f"screenshot: destination exists; choose another filename or directory: {exc}") from exc
+    except (OSError, ValueError) as exc:
+        raise ToolError(f"screenshot: cannot save PNG; check directory, filename and write permissions: {exc}") from exc
 
 
 @mcp.tool()

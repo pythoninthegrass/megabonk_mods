@@ -125,6 +125,7 @@ async def test_editor_tool_sends_the_enabled_flag(tmp_path, monkeypatch) -> None
 
 async def test_screenshot_returns_an_inline_png(tmp_path, monkeypatch) -> None:
     harness = setup_harness(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
 
     def responder(payload):
         if payload["command"] == "screenshot":
@@ -142,6 +143,106 @@ async def test_screenshot_returns_an_inline_png(tmp_path, monkeypatch) -> None:
     assert block.type == "image"
     assert block.mime_type == "image/png"
     assert base64.b64decode(block.data).startswith(PNG_SIGNATURE)
+    saved = list(tmp_path.glob("megabonk-*.png"))
+    assert len(saved) == 1
+    assert saved[0].stem.removeprefix("megabonk-").isdigit()
+    assert saved[0].read_bytes() == base64.b64decode(block.data)
+    assert result.content[1].text == f"Saved screenshot to {saved[0]}"
+
+
+@pytest.mark.parametrize("destination", [None, "evidence/nested", "absolute"])
+async def test_screenshot_destinations_and_unique_names(tmp_path, monkeypatch, destination) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    directory = str(tmp_path / "outside") if destination == "absolute" else destination
+    target = Path(directory).absolute() if directory else tmp_path
+
+    async def request(harness, payload, timeout):
+        host_path(payload["path"]).write_bytes(tiny_png())
+
+    monkeypatch.setattr(mcp_server, "_request", request)
+    async with Client(mcp_server.mcp) as client:
+        for args in ({"directory": directory}, {"directory": directory}, {"directory": directory, "filename": "final.png"}):
+            result = await client.call_tool("screenshot", args)
+            assert not result.is_error
+            assert result.content[0].type == "image"
+            path = Path(result.content[1].text.removeprefix("Saved screenshot to "))
+            assert path.is_absolute()
+            assert path.parent == target
+            assert path.read_bytes() == base64.b64decode(result.content[0].data) == tiny_png()
+    assert len(list(target.glob("*.png"))) == 3
+    assert (target / "final.png").is_file()
+    assert not list(target.glob(".megabonk-*"))
+
+
+@pytest.mark.parametrize("filename", ["", "../escape.png", "/absolute.png", "nested/file.png", "nested\\file.png", "no-extension", "bad.jpg", "bad\x00.png", "bad:drive.png"])
+async def test_screenshot_invalid_filename_is_actionable(tmp_path, monkeypatch, filename) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("screenshot", {"filename": filename})
+    assert result.is_error
+    assert "filename" in result.content[0].text
+    assert ".png" in result.content[0].text
+    assert not list((harness / "commands").iterdir())
+
+
+@pytest.mark.parametrize("kind", ["file", "directory", "symlink", "race"])
+async def test_screenshot_never_overwrites_existing_destinations(tmp_path, monkeypatch, kind) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    out = tmp_path / "final.png"
+    original = b"existing evidence"
+    if kind == "directory":
+        out.mkdir()
+    elif kind == "symlink":
+        out.symlink_to(tmp_path / "missing.png")
+    elif kind == "file":
+        out.write_bytes(original)
+
+    async def request(harness, payload, timeout):
+        assert kind == "race", "preexisting destinations must fail before capture"
+        host_path(payload["path"]).write_bytes(tiny_png())
+        out.write_bytes(original)
+
+    monkeypatch.setattr(mcp_server, "_request", request)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("screenshot", {"directory": str(tmp_path), "filename": out.name})
+    assert result.is_error
+    assert "exists" in result.content[0].text
+    assert "filename" in result.content[0].text
+    if kind in ("file", "race"):
+        assert out.read_bytes() == original
+    elif kind == "symlink":
+        assert out.is_symlink()
+        assert not (tmp_path / "missing.png").exists()
+    else:
+        assert out.is_dir()
+
+
+@pytest.mark.parametrize("failure", ["directory", "permission", "rejected", "invalid-png"])
+async def test_screenshot_failures_are_actionable_and_leave_no_final_file(tmp_path, monkeypatch, failure) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    directory = tmp_path / "evidence"
+    if failure == "directory":
+        directory.write_bytes(b"not a directory")
+    elif failure == "permission":
+        def denied(*args, **kwargs):
+            raise PermissionError("permission denied")
+        monkeypatch.setattr(mcp_server.tempfile, "TemporaryDirectory", denied)
+
+    async def request(harness, payload, timeout):
+        if failure == "rejected":
+            raise mcp_server.ToolError("screenshot rejected")
+        host_path(payload["path"]).write_bytes(b"invalid")
+
+    monkeypatch.setattr(mcp_server, "_request", request)
+    monkeypatch.setattr(mcp_server, "TIMEOUT", 0.05)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("screenshot", {"directory": str(directory), "filename": "final.png"})
+    assert result.is_error
+    assert "screenshot" in result.content[0].text
+    if failure != "directory":
+        assert not list(directory.iterdir())
 
 
 async def test_log_tail_returns_matching_lines(tmp_path, monkeypatch) -> None:
