@@ -1,9 +1,11 @@
 ---
 id: TASK-007.01
 title: AssetBundle authoring pipeline for Megabonk's engine version
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-10-06 21:44'
+updated_date: '2026-10-26T22:16:00Z'
 labels:
   - level-editor
   - assets
@@ -43,3 +45,13 @@ This is the foundation the other TASK-007 subtasks build on — if this proves i
 - [ ] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Find out whether Unity 2023.2.22f1 is available on any host (not found under /Applications, /opt or ~ on the Mac as of 2026-10-26; check Unity Hub and mf). If none, ask Lance how to get it before going further.
+2. Decide fresh minimal project vs upgrading .tools/mb_terrain_generator and record the reasoning (AC #1). Default is a fresh built-in-pipeline project, since the sandbox is URP/2022.3 and paid content.
+3. Build a cube or simple-prop AssetBundle with BuildPipeline.BuildAssetBundles targeting the standalone Linux/Windows player; record editor version, pipeline setting and build steps in docs/ (AC #2).
+4. Load it with AssetBundle.LoadFromFile/LoadAsset from a minimal MelonLoader harness and check the log (AC #3).
+5. If the bundle will not deserialize or Unity is unobtainable, stop and flag it to Lance (AC #4).
+<!-- SECTION:PLAN:END -->

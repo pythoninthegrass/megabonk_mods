@@ -4,7 +4,7 @@ title: Rework editor HUD layout and add toast notifications
 status: Done
 assignee: []
 created_date: '2026-10-23T16:06:00Z'
-updated_date: '2026-10-23T16:29:00Z'
+updated_date: '2026-10-26T22:15:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -42,5 +42,11 @@ The editor's lefthand palette and top-center toolbar reserved more width than th
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Commits 0d29c5c, bf82244 and 0053614 use conventional types and carry no attribution trailers.
+<!-- SECTION:NOTES:END -->

@@ -1,9 +1,10 @@
 ---
 id: TASK-007
 title: Custom asset packs
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06 21:43'
+updated_date: '2026-10-26T22:15:00Z'
 labels:
   - level-editor
   - assets
@@ -44,3 +45,9 @@ This whole parent task is exploratory/lower-confidence compared to TASK-001 thro
 - [ ] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-26: started ahead of TASK-006 at Lance's request. TASK-007 depends only on TASK-004 (Done). First subtask is TASK-007.01.
+<!-- SECTION:NOTES:END -->

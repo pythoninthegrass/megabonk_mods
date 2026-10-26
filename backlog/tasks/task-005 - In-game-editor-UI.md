@@ -1,10 +1,10 @@
 ---
 id: TASK-005
 title: In-game editor UI
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-06 21:42'
-updated_date: '2026-10-26T17:06:00Z'
+updated_date: '2026-10-26T22:15:00Z'
 labels:
   - level-editor
 dependencies:
@@ -28,19 +28,25 @@ Read TASK-003's `docs/level-format.md` and TASK-004's integration docs before st
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A player can enter an editor mode in-game via a keybind, freezing gameplay and switching to a free-fly camera
-- [ ] #2 A catalog palette shows placeable objects/tiles available for the current map, sourced from the real game's prefab catalog
-- [ ] #3 Tile tools (raise, lower, slope rotate, remove) and object tools (place with grid snap, move, rotate, delete) are usable via mouse/keyboard in the overlay
-- [ ] #4 Undo/redo is exposed in the UI and backed by TASK-003's EditStack
-- [ ] #5 A validate action highlights unreachable tiles using TASK-003's reachability validator
-- [ ] #6 A level can be saved to and loaded from disk via the UI, using TASK-003's file format and TASK-004's load/apply machinery
-- [ ] #7 F8 toggles editing and live playtesting of the same run with unsaved edits applied, preserving edit history without a stage reload
+- [x] #1 A player can enter an editor mode in-game via a keybind, freezing gameplay and switching to a free-fly camera
+- [x] #2 A catalog palette shows placeable objects/tiles available for the current map, sourced from the real game's prefab catalog
+- [x] #3 Tile tools (raise, lower, slope rotate, remove) and object tools (place with grid snap, move, rotate, delete) are usable via mouse/keyboard in the overlay
+- [x] #4 Undo/redo is exposed in the UI and backed by TASK-003's EditStack
+- [x] #5 A validate action highlights unreachable tiles using TASK-003's reachability validator
+- [x] #6 A level can be saved to and loaded from disk via the UI, using TASK-003's file format and TASK-004's load/apply machinery
+- [x] #7 F8 toggles editing and live playtesting of the same run with unsaved edits applied, preserving edit history without a stage reload
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Every acceptance criterion is delivered by a Done subtask. #1 editor entry, freeze and free-fly camera: TASK-005.01. #2 catalog palette: TASK-005.02, with search/tabs/tooltips in .07, thumbnails in .08 and the compact layout in .11. #3 tile and object tools: TASK-005.03 and .04, with object picking and rings in .04.01 and three-axis rotation in .09. #4 undo/redo, #5 validate overlay and #6 save/load UI: TASK-005.05. #7 F8 same-run edit/playtest toggle: TASK-005.06, confirmed hands-on by Lance. HUD and toast layout: TASK-005.10 and .12. Verification: task check passes (804 C# tests, 185 Python tests, markdownlint, ruff).
+<!-- SECTION:FINAL_SUMMARY:END -->
