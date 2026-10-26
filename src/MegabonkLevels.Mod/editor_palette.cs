@@ -433,25 +433,26 @@ public static class EditorPalette
         var panelWidth = PanelWidth;
         var innerWidth = panelWidth - Margin * 2f;
         var gridTop = TitleHeight + ControlHeight + Margin;
-        var footerTop = gridTop + PaletteLayout.Rows * (SlotSize + SlotGap);
+        var slotSize = compact ? CompactInnerWidth : SlotSize;
+        var footerTop = gridTop + PaletteLayout.Rows * (slotSize + SlotGap);
         Width = TabWidth + panelWidth + ChevronWidth;
-        _panel.sizeDelta = new Vector2(panelWidth, _panel.sizeDelta.y);
+        _panel.sizeDelta = new Vector2(panelWidth, footerTop + ControlHeight + Margin);
 
         _titleRect.gameObject.SetActive(!compact);
         PlaceTopLeft(_titleRect, Margin, 4f, innerWidth, TitleHeight - 4f);
         _searchRect.gameObject.SetActive(!compact);
         PlaceTopLeft(_searchRect, Margin, TitleHeight, innerWidth, ControlHeight);
         _magnifierRect.gameObject.SetActive(compact);
-        PlaceTopLeft(_magnifierRect, Margin + (innerWidth - SlotSize) / 2f, TitleHeight, SlotSize, ControlHeight);
+        PlaceTopLeft(_magnifierRect, Margin + (innerWidth - slotSize) / 2f, TitleHeight, slotSize, ControlHeight);
         PlaceTopLeft(_chevronRect, panelWidth, (_panel.sizeDelta.y - ChevronHeight) / 2f, ChevronWidth, ChevronHeight);
         _chevronLabel.text = compact ? ">>" : "<<";
 
         var columns = _layout.Columns;
-        var slotsWidth = columns * SlotSize + (columns - 1) * SlotGap;
+        var slotsWidth = columns * slotSize + (columns - 1) * SlotGap;
         var slotsLeft = Margin + (innerWidth - slotsWidth) / 2f;
         for (var i = 0; i < _slots.Count; i++)
         {
-            PlaceTopLeft(_slots[i].Rect, slotsLeft + i % columns * (SlotSize + SlotGap), gridTop + i / columns * (SlotSize + SlotGap), SlotSize, SlotSize);
+            PlaceTopLeft(_slots[i].Rect, slotsLeft + i % columns * (slotSize + SlotGap), gridTop + i / columns * (slotSize + SlotGap), slotSize, slotSize);
         }
 
         PlaceTopLeft(_previousRect, Margin, footerTop, ButtonWidth, ControlHeight);
