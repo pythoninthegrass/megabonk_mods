@@ -4,13 +4,21 @@ using System.Linq;
 
 namespace MegabonkLevels;
 
+public enum RotationAxis
+{
+    Pitch,
+    Yaw,
+    Roll,
+}
+
 // Unity-free rules for what the editor's object tools send to the edit stack.
 public static class ObjectTools
 {
-    private const float YawStep = 90f;
+    private const float QuarterTurn = 90f;
 
     // Grid lines per tile edge, drawn as a visual guide; placement is not snapped to them.
     private const int GridDivisions = 4;
+    private const float GimbalLimit = 0.99999f;
     private const float PositionTolerance = 0.01f;
     private const float DragHoldSeconds = 0.2f;
     private const float FootprintClearance = 1.1f;
@@ -144,7 +152,7 @@ public static class ObjectTools
         MathF.Abs(from.X - to.X) > PositionTolerance || MathF.Abs(from.Y - to.Y) > PositionTolerance || MathF.Abs(from.Z - to.Z) > PositionTolerance;
 
     // Faces the camera: the opposite of its yaw, rounded to a quarter turn.
-    public static float FacingYaw(float cameraYaw) => NormalizeYaw(MathF.Round((cameraYaw + 180f) / YawStep) * YawStep);
+    public static float FacingYaw(float cameraYaw) => NormalizeAngle(MathF.Round((cameraYaw + 180f) / QuarterTurn) * QuarterTurn);
 
     public static EditOp Place(CatalogId catalogId, Vector3Data position, Vector3Data prefabRotation, Vector3Data scale, float cameraYaw) =>
         new PlaceObject(catalogId.Serialize(), position, prefabRotation with { Y = FacingYaw(cameraYaw) }, scale).ToEditOp();
@@ -152,17 +160,68 @@ public static class ObjectTools
     public static EditOp Move(ObjectTarget target, TransformData current, Vector3Data position) =>
         new MoveObject(target, current with { Position = position }).ToEditOp();
 
-    public static EditOp Rotate(ObjectTarget target, TransformData current, bool clockwise)
+    // Steps the object a quarter turn about a world axis; yaw edits the Y euler directly, pitch and roll compose in world space.
+    public static EditOp Rotate(ObjectTarget target, TransformData current, RotationAxis axis, bool positive)
     {
-        var yaw = NormalizeYaw(current.Rotation.Y + (clockwise ? YawStep : -YawStep));
-        return new MoveObject(target, current with { Rotation = current.Rotation with { Y = yaw } }).ToEditOp();
+        var rotation = axis == RotationAxis.Yaw
+            ? current.Rotation with { Y = NormalizeAngle(current.Rotation.Y + (positive ? QuarterTurn : -QuarterTurn)) }
+            : WorldStep(current.Rotation, axis, positive ? QuarterTurn : -QuarterTurn);
+        return new MoveObject(target, current with { Rotation = rotation }).ToEditOp();
     }
 
     public static EditOp Remove(ObjectTarget target) => new RemoveObject(target).ToEditOp();
 
-    private static float NormalizeYaw(float yaw)
+    // Rotation is Unity's euler order: Z first, then X, then Y, all about world axes (matrix Ry * Rx * Rz).
+    private static Vector3Data WorldStep(Vector3Data euler, RotationAxis axis, float degrees)
     {
-        var wrapped = yaw % 360f;
-        return wrapped < 0f ? wrapped + 360f : wrapped;
+        var m = Multiply(AxisMatrix(axis, degrees), EulerMatrix(euler));
+        var sinX = -m[1, 2];
+        if (MathF.Abs(sinX) < GimbalLimit)
+        {
+            return Snap(RadToDeg(MathF.Asin(sinX)), RadToDeg(MathF.Atan2(m[0, 2], m[2, 2])), RadToDeg(MathF.Atan2(m[1, 0], m[1, 1])));
+        }
+
+        return Snap(sinX > 0f ? 90f : -90f, RadToDeg(MathF.Atan2(-m[2, 0], m[0, 0])), 0f);
+    }
+
+    private static float[,] EulerMatrix(Vector3Data euler) =>
+        Multiply(Multiply(AxisMatrix(RotationAxis.Yaw, euler.Y), AxisMatrix(RotationAxis.Pitch, euler.X)), AxisMatrix(RotationAxis.Roll, euler.Z));
+
+    private static float[,] AxisMatrix(RotationAxis axis, float degrees)
+    {
+        var radians = degrees * MathF.PI / 180f;
+        var (s, c) = (MathF.Sin(radians), MathF.Cos(radians));
+        return axis switch
+        {
+            RotationAxis.Pitch => new float[,] { { 1, 0, 0 }, { 0, c, -s }, { 0, s, c } },
+            RotationAxis.Yaw => new float[,] { { c, 0, s }, { 0, 1, 0 }, { -s, 0, c } },
+            _ => new float[,] { { c, -s, 0 }, { s, c, 0 }, { 0, 0, 1 } },
+        };
+    }
+
+    private static float[,] Multiply(float[,] a, float[,] b)
+    {
+        var result = new float[3, 3];
+        for (var row = 0; row < 3; row++)
+        {
+            for (var col = 0; col < 3; col++)
+            {
+                result[row, col] = a[row, 0] * b[0, col] + a[row, 1] * b[1, col] + a[row, 2] * b[2, col];
+            }
+        }
+
+        return result;
+    }
+
+    private static float RadToDeg(float radians) => radians * 180f / MathF.PI;
+
+    // Rounds away float noise so a quarter-turn lands on exact degrees, then wraps into 0 to 360.
+    private static Vector3Data Snap(float x, float y, float z) =>
+        new(NormalizeAngle(MathF.Round(x, 3)), NormalizeAngle(MathF.Round(y, 3)), NormalizeAngle(MathF.Round(z, 3)));
+
+    private static float NormalizeAngle(float angle)
+    {
+        var wrapped = angle % 360f;
+        return wrapped < 0f ? wrapped + 360f : wrapped + 0f;
     }
 }

@@ -240,7 +240,7 @@ public class ObjectToolTests
     [InlineData(false, 0f)]
     public void Rotate_StepsYawNinetyDegreesKeepingPitchRollAndPosition(bool clockwise, float expectedYaw)
     {
-        var op = ObjectTools.Rotate(Generated, Current, clockwise);
+        var op = ObjectTools.Rotate(Generated, Current, RotationAxis.Yaw, clockwise);
 
         var expected = new MoveObject(Generated, new TransformData(Current.Position, new Vector3Data(10, expectedYaw, 20), Current.Scale));
         Assert.Equal(expected.ToEditOp(), op);
@@ -253,9 +253,74 @@ public class ObjectToolTests
     {
         var start = Current with { Rotation = new Vector3Data(0, yaw, 0) };
 
-        var op = ObjectTools.Rotate(Generated, start, clockwise);
+        var op = ObjectTools.Rotate(Generated, start, RotationAxis.Yaw, clockwise);
 
         Assert.Equal(expectedYaw, MoveObject.FromEditOp(op).NewTransform.Rotation.Y);
+    }
+
+    [Theory]
+    [InlineData(RotationAxis.Pitch, true, 90f, 0f, 0f)]
+    [InlineData(RotationAxis.Pitch, false, 270f, 0f, 0f)]
+    [InlineData(RotationAxis.Roll, true, 0f, 0f, 90f)]
+    [InlineData(RotationAxis.Roll, false, 0f, 0f, 270f)]
+    public void Rotate_PitchAndRollStepNinetyDegreesFromAnUpright(RotationAxis axis, bool positive, float x, float y, float z)
+    {
+        var start = Current with { Rotation = new Vector3Data(0, 0, 0) };
+
+        var op = ObjectTools.Rotate(Generated, start, axis, positive);
+
+        var expected = new MoveObject(Generated, new TransformData(Current.Position, new Vector3Data(x, y, z), Current.Scale));
+        Assert.Equal(expected.ToEditOp(), op);
+    }
+
+    [Fact]
+    public void Rotate_PitchTwiceTurnsAnObjectUpsideDown()
+    {
+        var upright = Current with { Rotation = new Vector3Data(0, 0, 0) };
+
+        var once = MoveObject.FromEditOp(ObjectTools.Rotate(Generated, upright, RotationAxis.Pitch, true)).NewTransform;
+        var twice = MoveObject.FromEditOp(ObjectTools.Rotate(Generated, once, RotationAxis.Pitch, true)).NewTransform;
+
+        // Same rotation as (180, 0, 0), in Unity's canonical form with pitch limited to 0-90 and 270-360.
+        Assert.Equal(new Vector3Data(0f, 180f, 180f), twice.Rotation);
+    }
+
+    [Fact]
+    public void Rotate_PitchAboutTheWorldXAxisAfterAYawTurn()
+    {
+        var yawed = Current with { Rotation = new Vector3Data(0, 90, 0) };
+
+        var op = ObjectTools.Rotate(Generated, yawed, RotationAxis.Pitch, true);
+
+        Assert.Equal(new Vector3Data(0f, 90f, 90f), MoveObject.FromEditOp(op).NewTransform.Rotation);
+    }
+
+    [Theory]
+    [InlineData(RotationAxis.Pitch)]
+    [InlineData(RotationAxis.Roll)]
+    public void Rotate_FourStepsReturnToTheStartingRotation(RotationAxis axis)
+    {
+        var transform = Current;
+        for (var i = 0; i < 4; i++)
+        {
+            transform = MoveObject.FromEditOp(ObjectTools.Rotate(Generated, transform, axis, true)).NewTransform;
+        }
+
+        Assert.Equal(Current.Rotation.X, transform.Rotation.X, 2);
+        Assert.Equal(Current.Rotation.Y, transform.Rotation.Y, 2);
+        Assert.Equal(Current.Rotation.Z, transform.Rotation.Z, 2);
+    }
+
+    [Theory]
+    [InlineData(RotationAxis.Pitch)]
+    [InlineData(RotationAxis.Roll)]
+    [InlineData(RotationAxis.Yaw)]
+    public void Rotate_KeepsPositionAndScale(RotationAxis axis)
+    {
+        var transform = MoveObject.FromEditOp(ObjectTools.Rotate(Generated, Current, axis, true)).NewTransform;
+
+        Assert.Equal(Current.Position, transform.Position);
+        Assert.Equal(Current.Scale, transform.Scale);
     }
 
     [Fact]

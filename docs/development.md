@@ -542,6 +542,7 @@ An identical object cannot be stacked: placing or moving an object is ignored, w
 | Select | press an object | selects it (red ring on the ground at its base, sized to its footprint — see below); pressing where nothing is picked deselects |
 | Select | keep holding for 0.2 seconds, move, then release | the object is picked up and follows the cursor as a preview, keeping the offset at which it was grabbed, then one `MoveObject` to the release point, keeping rotation and scale; releasing over the palette or off the grid, onto an identical object, or without moving puts it back and makes no edit; a press released before 0.2 seconds only selects |
 | Select | `R` / `Shift+R` | `MoveObject` with yaw 90 degrees clockwise / counter-clockwise, keeping pitch, roll and position |
+| Select | `F` / `Shift+F`, `G` / `Shift+G` | `MoveObject` turning the object 90 degrees about the world X axis (pitch) or Z axis (roll), positive / negative with Shift, keeping position and scale; the rotation is composed in world space and written back as Unity euler angles, so the same orientation can read differently (an upside-down object saves as `0,180,180`, not `180,0,0`) |
 | Select | `Delete` or `Backspace` | `RemoveObject` |
 | any | middle click an object | pick block: selects the object's palette entry and switches to Place |
 

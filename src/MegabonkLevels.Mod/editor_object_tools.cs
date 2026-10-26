@@ -306,16 +306,31 @@ public static class EditorObjectTools
             return;
         }
 
-        if (EditorInput.GetKeyDown(KeyCode.R))
+        if (RotationKeyPressed() is { } axis)
         {
             var shift = EditorInput.GetKey(KeyCode.LeftShift) || EditorInput.GetKey(KeyCode.RightShift);
-            Apply(ObjectTools.Rotate(selected, CurrentTransform(go), !shift), $"rotate {selected.Serialize()} {(shift ? "counter-clockwise" : "clockwise")}");
+            Apply(ObjectTools.Rotate(selected, CurrentTransform(go), axis, !shift), $"rotate {selected.Serialize()} {axis} {(shift ? "negative" : "positive")}");
         }
         else if (EditorInput.GetKeyDown(KeyCode.Delete) || EditorInput.GetKeyDown(KeyCode.Backspace))
         {
             Apply(ObjectTools.Remove(selected), $"remove {selected.Serialize()}");
             _selected = null;
         }
+    }
+
+    private static RotationAxis? RotationKeyPressed()
+    {
+        if (EditorInput.GetKeyDown(KeyCode.R))
+        {
+            return RotationAxis.Yaw;
+        }
+
+        if (EditorInput.GetKeyDown(KeyCode.F))
+        {
+            return RotationAxis.Pitch;
+        }
+
+        return EditorInput.GetKeyDown(KeyCode.G) ? RotationAxis.Roll : null;
     }
 
     private static void Apply(EditOp op, string what)
