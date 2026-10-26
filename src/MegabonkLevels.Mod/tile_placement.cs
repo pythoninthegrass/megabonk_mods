@@ -34,7 +34,7 @@ public static class TilePlacement
     };
 
     // liveSlope is the slope direction of the tile currently in the cell (None for a flat tile).
-    public static TilePlacementKind Decide(bool liveTileExists, SlopeDirection liveSlope, TileState target)
+    public static TilePlacementKind Decide(bool liveTileExists, SlopeDirection liveSlope, TileState target, bool liveIsStaticBatch = false)
     {
         var targetIsSlope = target.Slope != SlopeDirection.None;
         if (!liveTileExists)
@@ -42,7 +42,7 @@ public static class TilePlacement
             return targetIsSlope ? TilePlacementKind.AddSlope : TilePlacementKind.AddFlat;
         }
 
-        if (liveSlope == target.Slope)
+        if (liveSlope == target.Slope && !liveIsStaticBatch)
         {
             return TilePlacementKind.MoveOnly;
         }

@@ -3,6 +3,26 @@ namespace MegabonkLevels.Tests;
 public class CustomLevelStateTests
 {
     [Fact]
+    public void MarkEditorUsed_ImmediatelyGuardsCurrentNormalRun()
+    {
+        CustomLevelState.Reset();
+        CustomLevelState.OnRunStarting();
+        CustomLevelState.MarkEditorUsed();
+        Assert.True(CustomLevelState.IsActive);
+        CustomLevelState.MarkEditorUsed();
+        Assert.True(CustomLevelState.IsActive);
+    }
+
+    [Fact]
+    public void MarkEditorUsed_DoesNotMarkNextNormalRun()
+    {
+        CustomLevelState.Reset();
+        CustomLevelState.MarkEditorUsed();
+        CustomLevelState.OnRunStarting();
+        Assert.False(CustomLevelState.IsActive);
+    }
+
+    [Fact]
     public void OnRunStarting_WithNoPendingStart_StaysInactive()
     {
         CustomLevelState.Reset();

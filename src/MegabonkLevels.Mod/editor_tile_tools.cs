@@ -59,7 +59,6 @@ public static class EditorTileTools
     private static readonly List<ToastSlot> _toastSlots = new();
     private static EditorEditSession _session;
     private static int _sessionRunGeneration = -1;
-    private static PlaytestCoordinator _playtest;
     private static ReachabilityResult _reachability;
     private static string _validateSummary = "validate: not run";
     private static int _selectedLevel;
@@ -90,13 +89,7 @@ public static class EditorTileTools
     {
         _logger = logger;
         _tool = EditorTools.Default;
-        var currentGen = LiveEditPatch.RunGeneration;
-        if (EditorSessionPick.Pick(_playtest, currentGen, _session, _sessionRunGeneration, LiveEditPatch.SeedEdits, out var session, out var runGeneration, out var lastSavedEditCount))
-        {
-            _session = session;
-            _sessionRunGeneration = runGeneration;
-            _lastSavedEditCount = lastSavedEditCount;
-        }
+        SynchronizeSession();
 
         _reachability = null;
         _validateSummary = "validate: not run";
@@ -148,6 +141,11 @@ public static class EditorTileTools
 
     public static void Tick()
     {
+        if (SynchronizeSession())
+        {
+            InvalidateValidation();
+        }
+
         HandleUndoRedoHotkeys();
         HandleOverlayInput();
 
@@ -327,9 +325,8 @@ public static class EditorTileTools
         _undoButtonBg = NewButton(actionsRect, "Undo", "Undo", 0f, 88f, Undo, () => _session?.CanUndo == true);
         _redoButtonBg = NewButton(actionsRect, "Redo", "Redo", 94f, 88f, Redo, () => _session?.CanRedo == true);
         NewButton(actionsRect, "Validate", "Validate", 188f, 110f, Validate);
-        NewButton(actionsRect, "Playtest", "Playtest", 304f, 110f, () => Playtest(_logger), () => _session != null);
 
-        var saveX = 424f;
+        var saveX = 304f;
         NewInput(actionsRect, "SaveInput", saveX, 200f, "level");
         NewButton(actionsRect, "Save", "Save", saveX + 206f, 70f, () => { Save(); });
         NewButton(actionsRect, "Load", "Load", saveX + 282f, 70f, LoadSelected);
@@ -471,6 +468,20 @@ public static class EditorTileTools
         return applied;
     }
 
+    // Editor re-entry may happen before the map's generation-complete callback.
+    private static bool SynchronizeSession()
+    {
+        if (!EditorSessionPick.Pick(LiveEditPatch.RunGeneration, _session, _sessionRunGeneration, _lastSavedEditCount, LiveEditPatch.SeedEdits, out var session, out var generation, out var saved))
+        {
+            return false;
+        }
+
+        _session = session;
+        _sessionRunGeneration = generation;
+        _lastSavedEditCount = saved;
+        return true;
+    }
+
     private static void HandleUndoRedoHotkeys()
     {
         var ctrl = EditorInput.GetKey(KeyCode.LeftControl) || EditorInput.GetKey(KeyCode.RightControl);
@@ -582,43 +593,6 @@ public static class EditorTileTools
         }
 
         return null;
-    }
-
-    // Replays the current in-memory edits as a fresh, playable run without saving to disk, then
-    // leaves editor mode so the player can walk/fight through it. The undo/redo session is
-    // preserved (TASK-005.06) and restored on return. Returns false when the level cannot be
-    // started; the editor session is left intact in that case so the run can be retried.
-    public static bool Playtest(MelonLogger.Instance logger)
-    {
-        if (_session == null)
-        {
-            Fail("playtest failed: no active run");
-            return false;
-        }
-
-        var level = LiveEditPatch.SnapshotLevelFile(_session.CurrentEdits);
-        if (level == null)
-        {
-            Fail("playtest failed: no active run");
-            return false;
-        }
-
-        // Preserve the undo/redo session across the reload; restored on return via OnEditorEntered.
-        _playtest = new PlaytestCoordinator();
-        _playtest.Begin(_session, _lastSavedEditCount);
-
-        if (!LevelLoaderPatch.Start(level.Value, logger))
-        {
-            _playtest.Discard();
-            Fail("playtest failed: could not start the run");
-            return false;
-        }
-
-        // A playtest is a real run: no editor camera, no invulnerability.
-        PlayerInvulnerability.Set(false, logger);
-        EditorMode.Set(false, logger);
-        logger.Msg("Playtest: started run from in-memory edits; press F8 to return to editor");
-        return true;
     }
 
     private static bool Save()

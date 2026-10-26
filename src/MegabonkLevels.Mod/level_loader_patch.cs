@@ -19,9 +19,7 @@ namespace MegabonkLevels;
 // MapController.IsMainMenu() stayed true before and after calling it) — it never actually starts a run.
 public static class LevelLoaderPatch
 {
-    // Reads a .mblevel.json from disk and starts the matching run. Returns false when the file
-    // cannot be read. Reused by the editor playtest action, which starts from an in-memory
-    // LevelFile via Start instead (TASK-005.06).
+    // Reads a .mblevel.json from disk and starts the matching run.
     public static bool LoadAndStart(string path, MelonLogger.Instance logger)
     {
         LevelFile level;

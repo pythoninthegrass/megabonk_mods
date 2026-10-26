@@ -3,6 +3,20 @@ namespace MegabonkLevels.Tests;
 public class TilePlacementTests
 {
     [Theory]
+    [InlineData(SlopeDirection.None, TilePlacementKind.ReplaceWithFlat)]
+    [InlineData(SlopeDirection.North, TilePlacementKind.ReplaceWithSlope)]
+    [InlineData(SlopeDirection.East, TilePlacementKind.ReplaceWithSlope)]
+    [InlineData(SlopeDirection.South, TilePlacementKind.ReplaceWithSlope)]
+    [InlineData(SlopeDirection.West, TilePlacementKind.ReplaceWithSlope)]
+    public void Decide_StaticBatch_ReplacesInsteadOfMovingInvisibleSurface(SlopeDirection slope, TilePlacementKind expected)
+    {
+        foreach (var height in new[] { -1, 0, 1, 3 })
+        {
+            Assert.Equal(expected, TilePlacement.Decide(true, slope, new TileState(height, slope), liveIsStaticBatch: true));
+        }
+    }
+
+    [Theory]
     [InlineData(SlopeDirection.North, 0, 1)]
     [InlineData(SlopeDirection.South, 0, -1)]
     [InlineData(SlopeDirection.East, 1, 0)]

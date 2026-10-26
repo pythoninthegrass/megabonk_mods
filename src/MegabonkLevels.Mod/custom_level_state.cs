@@ -1,15 +1,14 @@
 namespace MegabonkLevels;
 
-// Whether the currently active run was started via LevelLoaderPatch (TASK-004.01) rather than the
-// game's own menu flow. MapController.StartNewMap is the single entry point both paths funnel through
-// (confirmed live by TASK-004.01's SceneTransitionProbe), so OnRunStarting() is driven from a Harmony
-// prefix on that method and resolves whatever LoadAndStart most recently marked pending into IsActive —
-// one source of truth, so a normal run always re-resolves to inactive even right after a custom one.
+// Custom-loaded or editor-used runs cannot submit scores, achievements or stats.
+// Starting a new normal run clears the guard; leaving the editor does not.
 public static class CustomLevelState
 {
     public static bool IsActive { get; private set; }
 
     private static bool _pendingStart;
+
+    public static void MarkEditorUsed() => IsActive = true;
 
     // Set by LevelLoaderPatch immediately before it calls MapController.StartNewMap.
     public static void MarkPendingStart()

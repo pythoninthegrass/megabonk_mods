@@ -706,7 +706,8 @@ public static class LiveEditPatch
 
             var state = action.Tile.Value;
             var live = TileAt(x, z);
-            var kind = TilePlacement.Decide(live != null, SlopeOf(live), state);
+            var batched = live != null && live.GetComponentsInChildren<Renderer>().Any(renderer => renderer.isPartOfStaticBatch);
+            var kind = TilePlacement.Decide(live != null, SlopeOf(live), state, liveIsStaticBatch: batched);
 
             if (kind == TilePlacementKind.MoveOnly)
             {

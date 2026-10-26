@@ -84,6 +84,7 @@ public static class EditorMode
             return;
         }
 
+        CustomLevelState.MarkEditorUsed();
         MyTime.Pause();
         ReadLookSettings();
         var player = MyPlayer.Instance.transform.position;
