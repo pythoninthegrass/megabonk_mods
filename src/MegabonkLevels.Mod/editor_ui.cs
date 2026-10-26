@@ -51,4 +51,10 @@ public static class EditorUi
         label.raycastTarget = false;
         return label;
     }
+
+    public static void FixInputBaseline(TextMeshProUGUI label)
+    {
+        label.alignment = TextAlignmentOptions.BaselineLeft;
+        label.rectTransform.anchoredPosition += new Vector2(0f, -label.fontSize * 0.3f);
+    }
 }

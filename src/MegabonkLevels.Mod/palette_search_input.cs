@@ -51,4 +51,10 @@ public sealed class PaletteSearchInput
         Focused = false;
         CapturesKeyboard = false;
     }
+
+    public void Blur()
+    {
+        Focused = false;
+        CapturesKeyboard = true;
+    }
 }

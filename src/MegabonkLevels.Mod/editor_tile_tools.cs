@@ -84,7 +84,15 @@ public static class EditorTileTools
 
     public static bool PointerOverEditorOverlay => PointerOverOverlay();
 
-    public static bool TextInputFocused => _saveInputFocused || _textInputCaptured || EditorPalette.TextInputCaptured;
+    public static bool TextInputFocused => _saveInputFocused || _textInputCaptured || EditorPalette.TextInputCaptured || EditorEscapeInput.CapturedThisFrame;
+
+    public static bool SaveInputFocused => _saveInputFocused;
+
+    public static bool SaveInputHasText => _saveName.Length > 0;
+
+    public static void BlurSaveInput() => _saveInputFocused = false;
+
+    public static void ClearSaveInput() => _saveName = "";
 
     public static void OnEditorEntered(MelonLogger.Instance logger)
     {
@@ -952,6 +960,7 @@ public static class EditorTileTools
         textRect.offsetMin = new Vector2(8f, 0f);
         textRect.offsetMax = new Vector2(-8f, 0f);
         _saveInputText = EditorUi.NewLabel(textRect, PositionLabel.FindFontAsset(EditorUi.FontName), TextAlignmentOptions.MidlineLeft, OverlayFontSize);
+        EditorUi.FixInputBaseline(_saveInputText);
         _saveInputText.text = placeholder;
 
         var phRect = EditorUi.NewRect("Placeholder", rect);
@@ -960,6 +969,7 @@ public static class EditorTileTools
         phRect.offsetMin = new Vector2(8f, 0f);
         phRect.offsetMax = new Vector2(-8f, 0f);
         _savePlaceholderText = EditorUi.NewLabel(phRect, PositionLabel.FindFontAsset(EditorUi.FontName), TextAlignmentOptions.MidlineLeft, OverlayFontSize);
+        EditorUi.FixInputBaseline(_savePlaceholderText);
         _savePlaceholderText.text = placeholder;
         _savePlaceholderText.color = new Color(0.6f, 0.6f, 0.6f, 1f);
         _saveName = "";

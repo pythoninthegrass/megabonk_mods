@@ -45,6 +45,7 @@ public static class EditorMode
 
         if (_session.Active)
         {
+            EditorEscapeInput.Tick();
             EditorPalette.Tick();
             EditorTileTools.Tick();
             Fly();
@@ -90,6 +91,7 @@ public static class EditorMode
         var player = MyPlayer.Instance.transform.position;
         _pose = FreeFlyCamera.OverviewPose(player.x, player.y, player.z);
         CameraOverride.Set(_pose);
+        EditorEscapeInput.Reset();
         EditorPalette.OnEditorEntered(logger);
         EditorTileTools.OnEditorEntered(logger);
         logger.Msg($"EditorMode: entered, MyTime.paused={MyTime.paused}.");
@@ -103,6 +105,7 @@ public static class EditorMode
         }
 
         _looking = false;
+        EditorEscapeInput.Reset();
         CameraOverride.Clear();
         EditorPalette.OnEditorExited();
         EditorTileTools.OnEditorExited();

@@ -21,6 +21,8 @@ public static class EditorPalette
     private const float ScrollPixelsPerNotch = 40f;
 
     private static readonly Color PanelColor = new(0f, 0f, 0f, 0.75f);
+    private static readonly Color HeaderColor = new(0f, 0f, 0f, 0.95f);
+    private static readonly Color SearchColor = new(0.1f, 0.1f, 0.1f, 0.98f);
     private static readonly Color RowColor = new(1f, 1f, 1f, 0.06f);
     private static readonly Color SelectedColor = new(0.2f, 0.5f, 0.9f, 0.9f);
 
@@ -62,6 +64,18 @@ public static class EditorPalette
     public static float Width { get; private set; }
 
     public static bool TextInputCaptured => _search.CapturesKeyboard;
+
+    public static bool SearchFocused => _search.Focused;
+
+    public static bool SearchHasText => _search.Query.Length > 0;
+
+    public static void BlurSearch() => _search.Blur();
+
+    public static void ClearSearch()
+    {
+        _search.Reset();
+        ApplyFilter();
+    }
 
     private sealed class Row
     {
@@ -131,8 +145,8 @@ public static class EditorPalette
         }
 
         _searchLabel.text = _search.Query.Length == 0 ? "Search name or id..." : _search.Query;
-        _searchLabel.color = _search.Query.Length == 0 ? Color.gray : Color.white;
-        _searchBackground.color = _search.Focused ? SelectedColor : RowColor;
+        _searchLabel.color = Color.white;
+        _searchBackground.color = _search.Focused ? SelectedColor : SearchColor;
         UpdateTooltip(mouse);
         if (!PointerOverPanel)
         {
@@ -216,13 +230,21 @@ public static class EditorPalette
         _panel.anchoredPosition = Vector2.zero;
         _panel.gameObject.AddComponent<Image>().color = PanelColor;
 
+        var headerRect = EditorUi.NewRect("HeaderBackground", _panel);
+        EditorUi.Stretch(headerRect, TitleHeight + ControlsHeight);
+        headerRect.offsetMin = new Vector2(0f, -(TitleHeight + ControlsHeight));
+        headerRect.offsetMax = Vector2.zero;
+        headerRect.gameObject.AddComponent<Image>().color = HeaderColor;
+
         var titleRect = EditorUi.NewRect("Title", _panel);
         EditorUi.Stretch(titleRect, TitleHeight);
         _title = EditorUi.NewLabel(titleRect, font, TextAlignmentOptions.TopLeft, FontSize);
 
         _searchRect = ControlRect("Search", TitleHeight, 0f, 0f);
         _searchBackground = _searchRect.gameObject.AddComponent<Image>();
+        _searchBackground.color = SearchColor;
         _searchLabel = ControlLabel(_searchRect, font, "Search name or id...");
+        EditorUi.FixInputBaseline(_searchLabel);
         _allRect = ControlRect("All", TitleHeight + 30f, 0f, 0f);
         _allRect.anchorMax = new Vector2(0f, 1f);
         _allRect.offsetMax = new Vector2(48f, -(TitleHeight + 30f));

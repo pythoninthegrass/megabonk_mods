@@ -53,6 +53,19 @@ public class PaletteSearchInputTests
     }
 
     [Fact]
+    public void ExternalBlur_PreservesQueryAndCapturesItsFrame()
+    {
+        var input = new PaletteSearchInput();
+        input.Step(true, true, false, "rock");
+        input.Blur();
+        Assert.Equal("rock", input.Query);
+        Assert.False(input.Focused);
+        Assert.True(input.CapturesKeyboard);
+        input.Step(false, false, false, "");
+        Assert.False(input.CapturesKeyboard);
+    }
+
+    [Fact]
     public void Query_HasABoundedLengthAndResetClearsFocus()
     {
         var input = new PaletteSearchInput();
