@@ -22,6 +22,7 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Command | Wire format | `run.py` |
 | --- | --- | --- |
 | Load a level and start the run | `{"command":"load-level","path":"<file>"}` | `run.py load <level>` |
+| Load an AssetBundle and read back its assets (see [asset-bundles.md](asset-bundles.md)) | `{"command":"load-bundle","path":"<bundle>"}` | `run.py bundle <bundle>` |
 | Save the rendered frame as a PNG | `{"command":"screenshot","path":"<file>"}` | `run.py screenshot <out.png>` |
 | Freeze gameplay | `{"command":"freeze"}` | `run.py freeze` |
 | Resume gameplay | `{"command":"resume"}` | `run.py resume` |

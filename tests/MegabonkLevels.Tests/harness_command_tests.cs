@@ -23,6 +23,18 @@ public class HarnessCommandTests
         Assert.Equal("C:\\shots\\one.png", command.Path);
     }
 
+    [Fact]
+    public void TryParse_LoadBundle_ReturnsKindAndPath()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"load-bundle","path":"C:\\packs\\testprop"}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.LoadBundle, command.Kind);
+        Assert.Equal("C:\\packs\\testprop", command.Path);
+        Assert.Equal("load-bundle", command.Name);
+    }
+
     [Theory]
     [InlineData("""{"command":"state"}""", "state")]
     [InlineData("""{"command":"load-level","path":"a"}""", "load-level")]
@@ -182,6 +194,7 @@ public class HarnessCommandTests
     [InlineData("""{"command":"load-level","path":""}""", "path")]
     [InlineData("""{"command":"screenshot","path":"  "}""", "path")]
     [InlineData("""{"command":"load-level","path":3}""", "path")]
+    [InlineData("""{"command":"load-bundle"}""", "path")]
     public void TryParse_PathCommandWithoutUsablePath_FailsNamingPath(string json, string expectedFragment)
     {
         var ok = HarnessCommand.TryParse(json, out _, out var error);

@@ -201,6 +201,16 @@ def test_state_prints_the_result_json(capsys) -> None:
     assert json.loads(printed) == {"editor": True, "player": None}
 
 
+def test_bundle_sends_load_bundle_and_prints_the_result_json(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"load-bundle","ok":true,"result":{"assets":["a.prefab"],"prefab":"A"}}')
+        assert run_main(game, "bundle", "/tmp/testprop") == 0
+        sent = next((game / "harness" / "done").glob("*.json"))
+        assert json.loads(sent.read_text())["command"] == "load-bundle"
+    printed = capsys.readouterr().out.strip().splitlines()[-1]
+    assert json.loads(printed) == {"assets": ["a.prefab"], "prefab": "A"}
+
+
 def test_state_exits_1_when_the_result_is_not_ok(capsys) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         game = fake_game(tmp, '{"command":"state","ok":false,"error":"no player"}', outcome="rejected")

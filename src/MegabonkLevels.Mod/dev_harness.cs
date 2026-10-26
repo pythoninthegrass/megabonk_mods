@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using Il2Cpp;
 using Il2CppAssets.Scripts.Actors.Player;
 using Il2CppAssets.Scripts.Utility;
+using Il2CppInterop.Runtime;
 using MelonLoader;
 using MelonLoader.Utils;
 using UnityEngine;
@@ -125,6 +126,8 @@ public static class DevHarness
                 // After loading, request editor auto-reenter so the run starts in editor mode for Forest.
                 EditorMode.RequestReenter(_logger);
                 break;
+            case HarnessCommandKind.LoadBundle:
+                return LoadBundle(command.Path);
             case HarnessCommandKind.Screenshot:
                 _logger.Msg($"DevHarness: screenshot '{command.Path}'.");
                 MelonCoroutines.Start(CaptureAtEndOfFrame(command.Path));
@@ -209,6 +212,39 @@ public static class DevHarness
         }
 
         return null;
+    }
+
+    // The interop wrappers for the synchronous AssetBundle loaders fail on Il2CppSystem span types, so this uses the async API (the parameterless LoadAllAssetsAsync has no native body, hence the Type overload); reading .assetBundle and .allAssets blocks until the load completes.
+    private static JsonObject LoadBundle(string path)
+    {
+        var bundle = AssetBundle.LoadFromFileAsync(path).assetBundle;
+        if (bundle == null)
+        {
+            throw new InvalidOperationException($"no AssetBundle loaded from '{path}'");
+        }
+
+        try
+        {
+            var assets = new JsonArray();
+            GameObject prefab = null;
+            foreach (var asset in bundle.LoadAllAssetsAsync(Il2CppType.Of<UnityEngine.Object>()).allAssets)
+            {
+                assets.Add($"{asset.name}:{asset.GetIl2CppType().Name}");
+                prefab ??= asset.TryCast<GameObject>();
+            }
+
+            if (prefab == null)
+            {
+                throw new InvalidOperationException($"bundle '{path}' holds no GameObject asset");
+            }
+
+            _logger.Msg($"DevHarness: load-bundle '{path}' loaded prefab '{prefab.name}' among {assets.Count} asset(s).");
+            return new JsonObject { ["assets"] = assets, ["prefab"] = prefab.name };
+        }
+        finally
+        {
+            bundle.Unload(true);
+        }
     }
 
     private static JsonObject Teleport(TeleportArgs args)

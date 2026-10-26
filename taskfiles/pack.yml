@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+vars:
+  PACK_PROJECT: unity/pack-authoring
+  PACK_OUTPUT: .tools/bundles
+
+tasks:
+  build:
+    desc: "Build the test AssetBundle for Windows and Linux with Unity 2023.2.22f1 into .tools/bundles"
+    summary: |
+      Usage: task pack:build
+
+      Runs Assets/Editor/PackBuilder.cs in batch mode. Set UNITY_EDITOR in
+      .env to override the default Hub install path. See docs/asset-bundles.md.
+    cmds:
+      - >-
+        "${UNITY_EDITOR:-/Applications/Unity/Hub/Editor/2023.2.22f1/Unity.app/Contents/MacOS/Unity}"
+        -batchmode -nographics -quit
+        -projectPath {{.PACK_PROJECT}}
+        -executeMethod PackBuilder.BuildTestPack
+        -packOutput "$PWD/{{.PACK_OUTPUT}}"
+        -logFile -

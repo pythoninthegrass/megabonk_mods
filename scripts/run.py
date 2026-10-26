@@ -413,6 +413,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     type_.add_argument("text")
     load = sub.add_parser("load")
     load.add_argument("level", type=Path)
+    bundle = sub.add_parser("bundle")
+    bundle.add_argument("bundle", type=Path)
     shot = sub.add_parser("screenshot")
     shot.add_argument("out", type=Path)
     cycle = sub.add_parser("cycle")
@@ -561,6 +563,8 @@ def main(argv: list[str] | None = None) -> int:
     match args.action:
         case "load":
             ok = send(harness, build_command("load-level", to_game_path(args.level.resolve())), args.timeout)
+        case "bundle":
+            ok = send_printing_result(harness, build_command("load-bundle", to_game_path(args.bundle.resolve())), args.timeout)
         case "screenshot":
             ok = send_screenshot(harness, args.out, args.timeout)
         case "quit":

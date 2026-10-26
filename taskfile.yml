@@ -16,6 +16,7 @@ env:
 includes:
   mod: taskfiles/mod.yml
   game: taskfiles/game.yml
+  pack: taskfiles/pack.yml
   re: taskfiles/re.yml
   ghidra: taskfiles/ghidra.yml
   wine:

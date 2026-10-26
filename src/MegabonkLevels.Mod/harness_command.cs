@@ -8,6 +8,7 @@ namespace MegabonkLevels;
 public enum HarnessCommandKind
 {
     LoadLevel,
+    LoadBundle,
     Screenshot,
     ApplyPendingEdits,
     Quit,
@@ -158,6 +159,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseCamera(root, out command, out error);
             case "load-level":
                 return TryParseWithPath(root, HarnessCommandKind.LoadLevel, out command, out error);
+            case "load-bundle":
+                return TryParseWithPath(root, HarnessCommandKind.LoadBundle, out command, out error);
             case "apply-pending-edits":
                 command = new HarnessCommand(HarnessCommandKind.ApplyPendingEdits, null);
                 error = null;
