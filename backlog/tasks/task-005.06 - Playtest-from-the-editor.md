@@ -1,11 +1,11 @@
 ---
 id: TASK-005.06
 title: Playtest from the editor
-status: In Progress
+status: Done
 assignee:
   - lance
 created_date: '2026-10-06 21:43'
-updated_date: '2026-10-26T15:56:00Z'
+updated_date: '2026-10-26T16:01:00Z'
 labels:
   - level-editor
 dependencies:
@@ -35,10 +35,10 @@ Verify the leaderboard/achievement/stats guard from TASK-004.04 also applies dur
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -107,3 +107,13 @@ Tests: editor_playtest_tests.cs (8 tests) covering CurrentEdits excludes undone 
 
 docs/development.md: toolbar controls table Playtest row plus a full playtest paragraph (in-memory LevelFile, guard active, session preserved, invulnerability cleared).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Playtest action added to the editor toolbar. It builds a LevelFile from the editor's in-memory edit list (SnapshotLevelFile), starts a fresh run via the new LevelLoaderPatch.Start(LevelFile, logger) entry point, clears invulnerability, and exits editor mode. Returning to the editor on F8 restores the preserved undo/redo session (PlaytestCoordinator + EditorSessionPick.Pick) instead of resetting on the generation change. Because Start reuses the disk-load path (seed forcing, SetPendingEdits, CustomLevelState.MarkPendingStart), the TASK-004.04 custom-run guard arms automatically, so leaderboard/achievement/stats writes stay suppressed during playtest.
+
+Verification (dev harness, example-forest): raised tile (10,7), Playtest -> fresh run with the raised platform visible, player vulnerable with normal HUD/enemies, 68 SteamWriteGuard suppressions during the run; F8 returned to editor with the session intact, and Ctrl+Z/Ctrl+Y both worked.
+
+Tests: 8 new tests in editor_playtest_tests.cs (Unity-free coordinator + session-pick logic); 686 total pass. Mod builds clean (0 warnings). task check (build + test + lint) passes. docs/development.md updated (toolbar row + playtest paragraph). Commit 8fce8e4.
+<!-- SECTION:FINAL_SUMMARY:END -->
