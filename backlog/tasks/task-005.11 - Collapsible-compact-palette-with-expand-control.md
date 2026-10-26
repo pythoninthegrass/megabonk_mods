@@ -4,7 +4,7 @@ title: Collapsible compact palette with expand control
 status: To Do
 assignee: []
 created_date: '2026-10-26T20:33:00Z'
-updated_date: '2026-10-26T20:37:00Z'
+updated_date: '2026-10-26T20:38:00Z'
 labels:
   - level-editor
 dependencies:
@@ -30,7 +30,7 @@ Behaviour requested by Lance:
 - Expanded state: a double chevron `<<` on the right-hand side of the palette menu collapses it to a single column.
 - Compact state: the chevron flips to `>>`, and a magnifying glass appears in the place where the "Search name or id..." input sits in the expanded state. Clicking the magnifying glass expands the palette again and focuses the search field. Clicking `>>` expands it too.
 
-Decisions (answered by Lance, see the notes): compact keeps the category tab column plus one column of slots; the column pages with the wheel and the single `<` `>` footer chevrons; the state resets to expanded on each editor entry; the magnifying glass focuses the search and expands; search and category stay applied while compact and are cleared manually.
+Decisions (answered and confirmed by Lance, see the notes): compact keeps the category tab column plus one column of slots, only as wide as the `<` and `>` buttons side by side with one slot above them; the column pages with the wheel and the single `<` `>` footer chevrons; the state resets to expanded on each editor entry; the magnifying glass focuses the search and expands; search and category stay applied while compact and are cleared manually.
 
 Technical notes:
 - `EditorPalette.Width` and `PointerOverPanel` are consumed by `editor_tile_tools.cs` (toolbar centring) and `editor_mode.cs` (look suppression). Both must follow the current state, so the toolbar re-centres when the width changes.
@@ -66,4 +66,6 @@ Technical notes:
 2026-10-26: Lance answered the open questions. (1) Compact keeps the category tab column plus the first slot column, so category switching stays available. (2) The compact column can both scroll (wheel) and page with the single `<` `>` chevrons; both work. (3) The compact/expanded state resets to expanded on each editor entry. (4) Clicking the magnifying glass focuses the search field and expands. (5) An active search and category stay applied while compact and are cleared manually (Esc sequence / Delete in the field).
 
 Interpretation to confirm when building: answer 2 read as wheel scrolling pages the compact column as it does the grid, plus the footer `<` `>` buttons, with no separate continuous scroll. Answer 5 read as the existing three-step Esc sequence and the Delete key clearing the search text; nothing clears the filters automatically on collapse.
+
+2026-10-26: Lance confirmed the interpretations (1, 2, 5 all yes). Sizing for the compact state: the panel is only as wide as needed for the `<` and `>` buttons side by side with one slot column above them, so the compact width is about one slot plus margins, and the footer buttons set the minimum if they are wider than the slot. Wheel and the `<` `>` buttons page the column; filters stay applied and are cleared by hand.
 <!-- SECTION:NOTES:END -->
