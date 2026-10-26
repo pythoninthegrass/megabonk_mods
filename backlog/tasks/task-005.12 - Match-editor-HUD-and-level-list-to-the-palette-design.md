@@ -1,10 +1,10 @@
 ---
 id: TASK-005.12
 title: Match editor HUD and level list to the palette design
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-26T21:34:00Z'
-updated_date: '2026-10-26T21:47:00Z'
+updated_date: '2026-10-26T21:51:00Z'
 labels: []
 dependencies: []
 parent_task_id: TASK-005
@@ -35,18 +35,18 @@ The palette now uses a bordered gray panel with bordered controls and a paged gr
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
 1. Move palette colours, Bordered and PlaceTopLeft into EditorUi; extract EditorTooltip from the palette.
-2. TDD: ToolbarText drops the detail line; PalettePager.IndexAt added; remove unused EditorOverlayModel list helpers.
-3. Toolbar: bordered panel and controls, ToolbarHeight 116, hint shown through the cursor tooltip over the map.
+2. TDD: ToolbarText loses the detail line, EditorTools gains ToolLabel and Description, PalettePager gains IndexAt, HoverDelay added; remove unused EditorOverlayModel list helpers.
+3. Toolbar: bordered panel and controls, ToolbarHeight 116, per-tool hover slots with static descriptions shown after a shared 3 s delay with a 2 s grace.
 4. Level list: bordered panel at toolbar height, 4 rows, title-row pager, wheel pages via PalettePager.Step, click rows via IndexAt, page follows saved file.
 5. Docs in docs/development.md; verify in the running game through the megabonk MCP.
 <!-- SECTION:PLAN:END -->
@@ -58,3 +58,9 @@ Verified in the running game: restyled panels, tool hover tooltip under the tool
 
 The 3 second tooltip delay is unit-tested (HoverDelay) and the tooltip was confirmed absent right after hovering, but the harness pointer injection lasts only a few frames, so the tooltip appearing after 3 s was not observed in the running game.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+The toolbar and the levels/UserData list now share the palette's gray bordered style through EditorUi, and the tooltip box is shared through EditorTooltip. The toolbar's hint line became per-tool tooltips (static descriptions), which cut the toolbar to 116 px; the level list matches that height and pages 4 files at a time with a title-row pager and one-page-per-notch wheel scrolling through PalettePager. Every tooltip (toolbar and palette) appears after a 3 s hover, and moving between tooltip items within 2 s of one being visible shows the next at once. Verified with task check (793 .NET and 185 Python tests passing) and in the running game: styling, 2/2 paging via the next button, row click filling the save name, and save landing on the saved file's page. Not observed in game because the harness pointer injection lasts only a few frames: the tooltip appearing after 3 s, the grace behaviour, wheel paging and the previous-page button; these rely on unit-tested HoverDelay and PalettePager logic. Live target info (target (x,z), place at (x,z)) no longer shows anywhere; EditorTools.TileDetail/PlaceDetail/SelectDetail and EditorObjectTools.Detail are unused and left in place.
+<!-- SECTION:FINAL_SUMMARY:END -->
