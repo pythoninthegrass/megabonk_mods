@@ -116,6 +116,12 @@ public static class EditorMode
 
     private static void Fly()
     {
+        if (EditorTileTools.TextInputFocused)
+        {
+            _looking = false;
+            return;
+        }
+
         // A sweep that starts off the palette keeps turning when the pointer crosses it.
         if (EditorInput.GetMouseButtonDown(1))
         {

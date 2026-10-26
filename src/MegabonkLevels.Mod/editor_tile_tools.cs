@@ -64,6 +64,7 @@ public static class EditorTileTools
     private static int _selectedLevel;
     private static float _ctrlHeldSince = -1f;
     private static bool _saveInputFocused;
+    private static bool _textInputCaptured;
     private static string _saveName = "";
     private static int _lastSavedEditCount;
 
@@ -83,7 +84,7 @@ public static class EditorTileTools
 
     public static bool PointerOverEditorOverlay => PointerOverOverlay();
 
-    public static bool TextInputFocused => _saveInputFocused;
+    public static bool TextInputFocused => _saveInputFocused || _textInputCaptured || EditorPalette.TextInputCaptured;
 
     public static void OnEditorEntered(MelonLogger.Instance logger)
     {
@@ -134,6 +135,7 @@ public static class EditorTileTools
         _selectedLevel = 0;
         _ctrlHeldSince = -1f;
         _saveInputFocused = false;
+        _textInputCaptured = false;
         _saveName = "";
         _clickRegions.Clear();
         ClearUnreachable();
@@ -146,8 +148,18 @@ public static class EditorTileTools
             InvalidateValidation();
         }
 
-        HandleUndoRedoHotkeys();
+        _textInputCaptured = _saveInputFocused || EditorPalette.TextInputCaptured;
         HandleOverlayInput();
+        _textInputCaptured |= _saveInputFocused;
+        if (TextInputFocused)
+        {
+            _ctrlHeldSince = -1f;
+            _target = null;
+            Refresh();
+            return;
+        }
+
+        HandleUndoRedoHotkeys();
 
         for (var digit = 1; digit <= 9; digit++)
         {

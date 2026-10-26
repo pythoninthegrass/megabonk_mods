@@ -471,6 +471,12 @@ Entries have no thumbnail. Each row shows the prefab's GameObject name, falling 
 
 Clicking a row selects it, scrolling the wheel over the panel scrolls the list, and the panel title shows the current selection. Clicks and scrolling are read from Unity's `Input` directly instead of through a UGUI `EventSystem`, so the game's Rewired input module is untouched. The selection is `EditorPalette.Selection.Current`, a `CatalogId`, with a `Changed` event; the placement tool reads it from there. The palette is rebuilt each time editor mode is entered, so it follows the map; a selection that is not in the new map's entries is cleared. Building logs `EditorPalette: built <n> entries for <map>`.
 
+Click the search field below the title to filter by any part of the display name or `catalogId`, ignoring case. Search uses `EditorInput.InputString` (Unity's `Input.inputString` plus harness text), with backspace and a 128-character limit. Esc, Enter or a click outside the field ends focus without clearing the query. While typing, camera movement/look, centering, tool hotkeys, object shortcuts and undo/redo hotkeys are suppressed, including the frame focus ends. The save-name field uses the same keyboard guard.
+
+The `<` and `>` controls cycle through the map's existing stage/category groups and All; the `All` button jumps directly back to all groups. Group selection and text search combine, and `No matching entries` appears when nothing matches. Changing either filter resets the list scroll but never changes the selected prefab, even if it is hidden. Clearing the query and choosing All restores the full list. Search and group state reset on editor entry.
+
+Hover a visible entry to see its full display name and `catalogId` in a tooltip positioned within the screen. Filtering and focus behavior live in the Unity-independent `palette_filter.cs` and `palette_search_input.cs`; selection always retains the full catalog separately from visible rows.
+
 ## Tile tools
 
 While editor mode is active a toolbar at the top centre of the screen shows six tools and a detail line. The digit keys 1 to 6 select Raise, Lower, Slope, Remove, Place and Select (the last two are in "Object tools" below); Select is active on every entry, so the first click edits nothing until an object is pressed; the previous choice is not kept. Pressing 1 to 4 in normal play does nothing, so the game binds no action to them (confirmed in the game, like F8).
