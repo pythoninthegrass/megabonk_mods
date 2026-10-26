@@ -71,6 +71,7 @@ public static class EditorPalette
     private static RectTransform _panel;
     private static RectTransform _tabColumn;
     private static TextMeshProUGUI _title;
+    private static string _selectedName = "none";
     private static string _mapLabel = "";
     private static CursorLockMode _cursorLockBefore;
     private static bool _cursorVisibleBefore;
@@ -438,7 +439,6 @@ public static class EditorPalette
         Width = TabWidth + panelWidth + ChevronWidth;
         _panel.sizeDelta = new Vector2(panelWidth, footerTop + ControlHeight + Margin);
 
-        _titleRect.gameObject.SetActive(!compact);
         PlaceTopLeft(_titleRect, Margin, 4f, innerWidth, TitleHeight - 4f);
         _searchRect.gameObject.SetActive(!compact);
         PlaceTopLeft(_searchRect, Margin, TitleHeight, innerWidth, ControlHeight);
@@ -461,6 +461,7 @@ public static class EditorPalette
         PlaceTopLeft(_pageRect, Margin + ButtonWidth + SlotGap, footerTop, innerWidth - (ButtonWidth + SlotGap) * 2f, ControlHeight);
         PlaceTopLeft(_emptyRect, Margin, gridTop, innerWidth, ControlHeight);
         _emptyLabel.text = compact ? "None" : "No matching entries";
+        _title.text = TitleText();
     }
 
     private static void SetCompact(bool compact)
@@ -551,7 +552,8 @@ public static class EditorPalette
         return label;
     }
 
-    private static string TitleText(string selectedName) => $"{_mapLabel} palette\nselected: {selectedName}";
+    private static string TitleText() =>
+        _layout.Compact ? $"{_mapLabel}\n{_selectedName}" : $"{_mapLabel} palette\nselected: {_selectedName}";
 
     private static bool Contains(RectTransform rect, Vector2 mouse) =>
         rect != null && RectTransformUtility.RectangleContainsScreenPoint(rect, mouse, null);
@@ -692,17 +694,17 @@ public static class EditorPalette
         Rebind();
         if (_title != null)
         {
-            var name = "none";
+            _selectedName = "none";
             var current = Selection.Current;
             foreach (var entry in Selection.Entries)
             {
                 if (current.HasValue && entry.Id.Equals(current.Value))
                 {
-                    name = entry.DisplayName;
+                    _selectedName = entry.DisplayName;
                 }
             }
 
-            _title.text = TitleText(name);
+            _title.text = TitleText();
         }
     }
 }
