@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-10-10 07:39'
-updated_date: '2026-10-26T22:05:00Z'
+updated_date: '2026-10-26T22:09:00Z'
 labels:
   - level-editor
 dependencies:
@@ -25,7 +25,7 @@ The editor's Select tool (TASK-005.04) rotates a selected object only about the 
 <!-- AC:BEGIN -->
 - [x] #1 A selected object can be rotated about each of the three axes from the editor, generated and editor-placed objects alike
 - [x] #2 Each rotation produces a MoveObject with the full resulting rotation and the object's position and scale unchanged, applied live through the EditStack
-- [ ] #3 The rotation survives a save and reload of the level file
+- [x] #3 The rotation survives a save and reload of the level file
 - [x] #4 Existing yaw rotation (R and Shift+R) keeps working
 - [ ] #5 The key bindings do not trigger a game action and do not clash with the digit tool hotkeys, the free-fly camera or Delete and Backspace (checked in game)
 - [x] #6 Rotation rules have tests written first, and docs/development.md describes the controls
@@ -54,4 +54,6 @@ Keys (Lance's decision): R/Shift+R yaw (unchanged), F/Shift+F pitch about world 
 
 <!-- SECTION:NOTES:BEGIN -->
 In game (CrossOver): selected ChargeShrine:0007, F then G each logged object.move and the shrine visibly tipped onto its side; save wrote two object.move ops with full rotation (296.842,270,270 then 26.842,270,270), position and scale unchanged. Not yet done: Load of the saved file to confirm the rotation after reload (AC3), and a check that F/G do nothing in normal play (AC5). Euler results are Unity-canonical (pitch limited to 0-90 / 270-360), so an upside-down object saves as 0,180,180.
+
+Reload verified in game: rotated ChargeShrine:0007 with F and Shift+G, saved as rotcheck, pressed Load; log showed 'LiveEdit: in-place load applied 2 edit(s) after baseline reset' and the shrine stayed tilted. AC5 left open: the harness injects into EditorInput only and cannot reach the game's Rewired input, so whether the game binds F or G needs a real keypress in the running game.
 <!-- SECTION:NOTES:END -->
