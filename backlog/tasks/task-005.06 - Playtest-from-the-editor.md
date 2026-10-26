@@ -1,11 +1,11 @@
 ---
 id: TASK-005.06
 title: Playtest from the editor
-status: In Progress
+status: Done
 assignee:
   - '@Assistant'
 created_date: '2026-10-06 21:43'
-updated_date: '2026-10-26T17:21:00Z'
+updated_date: '2026-10-26T17:25:00Z'
 labels:
   - level-editor
 dependencies:
@@ -25,7 +25,7 @@ F8 is the single toggle between frozen in-game editing and live playtesting of t
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 F8 alternates editing and live gameplay in the same run with current unsaved edits, without a Playtest button or stage reload
-- [ ] #2 Repeated F8 toggles preserve undo/redo and save state and restore the normal follow camera, movement and combat
+- [x] #2 Repeated F8 toggles preserve undo/redo and save state and restore the normal follow camera, movement and combat
 - [x] #3 Editor-used runs suppress leaderboard/achievement/stats writes until a new normal run starts
 - [x] #4 Raised/lowered statically batched tiles have visible ground at the edited height matching collision, including undo/redo and live F8 playtests
 <!-- AC:END -->
@@ -95,4 +95,14 @@ Enclosed-pit test: .tools/evidence/f8-pit.mblevel.json raises four neighbors of 
 AC2 left unchecked pending hands-on normal keyboard movement/damage review: harness keys drive editor input only, not Rewired gameplay movement. Camera/freeze, terrain physics, combat/enemy activity, same-run persistence and undo/redo verified live; save bookkeeping verified in unit tests. Final handoff: fresh example forest in editor, unsaved raised platform at (9,6), player on platform, harness invulnerability disabled. Press F8 to walk/test damage and F8 again to edit. Task remains In Progress rather than declaring untested interaction complete.
 
 Implementation committed as 0e2b50a (fix(editor): use F8 live playtests and replace batched terrain). Task remains In Progress pending hands-on AC2 review, not a known failing automated check.
+
+User hands-on verification: 'Verified the game works as expected toggling playtest/editor'. This closes the remaining gameplay-interaction review gap; all acceptance criteria are now satisfied.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Replaced restart-based Playtest with F8-only toggling between editing and live gameplay of the same run. Removed the toolbar button and reload coordinator; preserved unsaved edits, undo/redo and save bookkeeping, including generation-completion synchronization. Editor-used runs remain unscored until a new normal run starts. Fixed missing raised ground by replacing statically batched tile instances rather than moving their baked render geometry.
+
+Verification: task check passes (690 C# tests, 185 Python tests and lint); live harness checks covered raised terrain, enclosed pit, follow camera, collision, repeated F8 transitions and undo/redo. User confirmed normal playtest/editor toggling works as expected, closing the final manual review gap. Implementation: 0e2b50a; prior verification record: 839172e.
+<!-- SECTION:FINAL_SUMMARY:END -->
