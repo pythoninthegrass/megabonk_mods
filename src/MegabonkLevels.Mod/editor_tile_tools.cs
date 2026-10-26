@@ -380,11 +380,11 @@ public static class EditorTileTools
         _hint.Show(EditorTools.Description(EditorTools.All[tool]), belowToolbar);
     }
 
-    // The toolbar sits centred between the palette and the load overlay, so it follows the palette width.
+    // The toolbar sits centred between the expanded palette and the load overlay, so collapsing the palette does not move it.
     private static void CentreToolbar()
     {
-        var freeWidth = Screen.width - EditorPalette.Width - OverlayWidth;
-        _toolbarRect.anchoredPosition = new Vector2(EditorPalette.Width + freeWidth / 2f - Screen.width / 2f, -EditorUi.TopInset);
+        var freeWidth = Screen.width - EditorPalette.ExpandedWidth - OverlayWidth;
+        _toolbarRect.anchoredPosition = new Vector2(EditorPalette.ExpandedWidth + freeWidth / 2f - Screen.width / 2f, -EditorUi.TopInset);
     }
 
     private static void BuildToolbar()

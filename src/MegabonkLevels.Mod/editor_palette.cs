@@ -86,6 +86,8 @@ public static class EditorPalette
 
     public static float Width { get; private set; }
 
+    public static float ExpandedWidth => TabWidth + 2f * Margin + ExpandedInnerWidth + ChevronWidth;
+
     public static bool TextInputCaptured => _search.CapturesKeyboard;
 
     public static bool SearchFocused => _search.Focused;
