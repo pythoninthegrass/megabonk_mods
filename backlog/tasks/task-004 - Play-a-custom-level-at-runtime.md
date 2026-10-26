@@ -1,9 +1,10 @@
 ---
 id: TASK-004
 title: Play a custom level at runtime
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-06 21:41'
+updated_date: '2026-10-26T15:41:00Z'
 labels:
   - level-editor
 dependencies:
@@ -49,3 +50,11 @@ This task produces the runtime half of the "seed + edits" model: TASK-003 proved
 - [ ] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Integration of TASK-003's level format into the live MelonLoader mod: load a .mblevel.json, force its map/stage/tier/seed, apply all six edit op types to the running world, rebuild collision/walls/fill, arm a kill floor, and suppress Steam leaderboard/achievement/stats writes during the run. All 11 subtasks (004.01-004.11) are Done and verified on macOS/CrossOver via the scripts/run.py dev harness (file-drop command channel, screenshots, freeze, camera pose, invulnerability). Parent acceptance criteria and Definition of Done satisfied: task check green (679 C# + 185 Python tests), tests written first, docs updated (level-format.md, runtime-map-structure.md, development.md), conventional commits with no attribution.
+
+Documented caveats (not blockers): the 'enemies cross added/raised/sloped tiles without sticking' claim rests on the playtester's observation rather than logged enemy positions; invulnerability (Mirror item) does not protect against mini bosses.
+<!-- SECTION:FINAL_SUMMARY:END -->
