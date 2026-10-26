@@ -1,10 +1,11 @@
 ---
 id: TASK-005.11
 title: Collapsible compact palette with expand control
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - Claude
 created_date: '2026-10-26T20:33:00Z'
-updated_date: '2026-10-26T20:38:00Z'
+updated_date: '2026-10-26T20:43:00Z'
 labels:
   - level-editor
 dependencies:
@@ -43,22 +44,31 @@ Technical notes:
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 Lance's open questions in the description are answered and recorded in the task notes before implementation starts
-- [ ] #2 A double chevron `<<` on the right-hand side of the expanded palette collapses it to a single column
-- [ ] #3 In the compact state the chevron reads `>>` and the palette shows a magnifying glass where the search input is in the expanded state
-- [ ] #4 Clicking the magnifying glass or `>>` returns to the full palette with its search field
-- [ ] #5 The selected entry stays selected and visible (its page is shown) after collapsing and expanding
-- [ ] #6 EditorPalette.Width and PointerOverPanel follow the current state, so the toolbar re-centres and map clicks and look are not blocked by the empty space left by the collapsed palette
-- [ ] #7 Collapsing while the search field has focus ends focus cleanly and does not leave keyboard capture or the Esc sequence in a stuck state
-- [ ] #8 Pure compact-state and paging logic is unit tested; docs/development.md Catalog palette section is updated
+- [x] #2 A double chevron `<<` on the right-hand side of the expanded palette collapses it to a single column
+- [x] #3 In the compact state the chevron reads `>>` and the palette shows a magnifying glass where the search input is in the expanded state
+- [x] #4 Clicking the magnifying glass or `>>` returns to the full palette with its search field
+- [x] #5 The selected entry stays selected and visible (its page is shown) after collapsing and expanding
+- [x] #6 EditorPalette.Width and PointerOverPanel follow the current state, so the toolbar re-centres and map clicks and look are not blocked by the empty space left by the collapsed palette
+- [x] #7 Collapsing while the search field has focus ends focus cleanly and does not leave keyboard capture or the Esc sequence in a stuck state
+- [x] #8 Pure compact-state and paging logic is unit tested; docs/development.md Catalog palette section is updated
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. PaletteLayout (Unity-free): compact flag, columns/slots per page, page shift on state change; MagnifierIcon pixel mask; unit tests written first.
+2. EditorPalette: chevron button in the title row, magnifier button in place of the search field when compact, ApplyLayout repositions every width-dependent element, Width/PointerOverPanel follow the panel; collapse blurs search; magnifier click focuses search and expands; state resets on rebuild.
+3. EditorTileTools: re-centre the toolbar every frame from EditorPalette.Width.
+4. Verify in the running game through the megabonk MCP; update docs/development.md Catalog palette section.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
@@ -68,4 +78,12 @@ Technical notes:
 Interpretation to confirm when building: answer 2 read as wheel scrolling pages the compact column as it does the grid, plus the footer `<` `>` buttons, with no separate continuous scroll. Answer 5 read as the existing three-step Esc sequence and the Delete key clearing the search text; nothing clears the filters automatically on collapse.
 
 2026-10-26: Lance confirmed the interpretations (1, 2, 5 all yes). Sizing for the compact state: the panel is only as wide as needed for the `<` and `>` buttons side by side with one slot column above them, so the compact width is about one slot plus margins, and the footer buttons set the minimum if they are wider than the slot. Wheel and the `<` `>` buttons page the column; filters stay applied and are cleared by hand.
+
+Verified in the running game (CrossOver, Forest): collapse via << gives a single column with the toolbar re-centred; >> and the magnifier both expand; magnifier click focuses the search field; the selected entry (rock_medium) stayed selected and its page was shown after collapse, paging in compact and expand; with search 'zz' applied, collapsing blurred the field, further typing was ignored, and the query and filter stayed applied. Magnifier is a generated 24 px texture (MagnifierIcon.Mask), not a TMP glyph, so no font coverage dependency. Compact hides the title and page label (no room beside the two footer buttons) and shows 'None' for an empty result. Collapsed palette cannot clear the search; expand first.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added a collapsible compact palette. A << / >> chevron in the title row switches between the 4x6 grid and a one-column (6 slot) panel that keeps the category tabs; compact swaps the search field for a magnifying glass that expands the palette and focuses search. Layout and page shift live in PaletteLayout (unit tested), the icon is a generated texture from MagnifierIcon.Mask. EditorPalette.Width and PointerOverPanel follow the panel and the tile toolbar re-centres each frame. Collapsing blurs a focused search field. State resets to expanded on each editor entry. Verified with 781 passing unit tests, task check, and an in-game run through the megabonk MCP. Known limits: compact hides the title and page counter, and clearing a search requires expanding first.
+<!-- SECTION:FINAL_SUMMARY:END -->
