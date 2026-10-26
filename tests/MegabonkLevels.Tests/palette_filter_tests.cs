@@ -18,21 +18,21 @@ public class PaletteFilterTests
         Assert.Equal(count, PaletteFilter.Apply(Entries, query, null).Count);
 
     [Fact]
-    public void GroupAndSearch_AreCombinedWithoutMixingStages()
+    public void CategoryAndSearch_AreCombinedAcrossStages()
     {
-        var result = PaletteFilter.Apply(Entries, "grass", new PaletteGroup(1, PaletteCategory.FlatTile));
+        var result = PaletteFilter.Apply(Entries, "grass", PaletteCategory.FlatTile);
 
-        Assert.Equal(Entries[2], Assert.Single(result));
-        Assert.Empty(PaletteFilter.Apply(Entries, "shrine", new PaletteGroup(1, PaletteCategory.FlatTile)));
+        Assert.Equal(new[] { Entries[1], Entries[2] }, result);
+        Assert.Empty(PaletteFilter.Apply(Entries, "shrine", PaletteCategory.FlatTile));
     }
 
     [Fact]
-    public void Groups_AreDistinctInCatalogOrder()
+    public void Categories_AreDistinctInCatalogOrder()
     {
         Assert.Equal(
-            new[] { new PaletteGroup(0, PaletteCategory.Shrine), new(0, PaletteCategory.FlatTile), new(1, PaletteCategory.FlatTile) },
-            PaletteFilter.Groups(Entries.Concat(Entries).ToArray()));
-        Assert.Empty(PaletteFilter.Groups([]));
+            new[] { PaletteCategory.Shrine, PaletteCategory.FlatTile },
+            PaletteFilter.Categories(Entries.Concat(Entries).ToArray()));
+        Assert.Empty(PaletteFilter.Categories([]));
     }
 
     [Fact]
@@ -40,11 +40,27 @@ public class PaletteFilterTests
     {
         var selection = new PaletteSelection();
         selection.Replace(Entries);
-        var visible = PaletteFilter.Apply(selection.Entries, "grass", new PaletteGroup(1, PaletteCategory.FlatTile));
+        var visible = PaletteFilter.Apply(selection.Entries, "shrine", PaletteCategory.Shrine);
         selection.Select(Assert.Single(visible).Id);
 
         Assert.Empty(PaletteFilter.Apply(selection.Entries, "missing", null));
-        Assert.Equal(Entries[2].Id, selection.Current);
+        Assert.Equal(Entries[0].Id, selection.Current);
         Assert.Equal(3, selection.Entries.Count);
     }
+}
+
+public class PaletteCategoryNamesTests
+{
+    [Theory]
+    [InlineData(PaletteCategory.RandomObject, "Random objects")]
+    [InlineData(PaletteCategory.FlatTile, "Flat tiles")]
+    [InlineData(PaletteCategory.SpecificTile, "Specific tiles")]
+    [InlineData(PaletteCategory.Shrine, "Shrines")]
+    [InlineData(PaletteCategory.Interactable, "Interactables")]
+    public void Label_NamesTheCategory(PaletteCategory category, string expected) =>
+        Assert.Equal(expected, category.Label());
+
+    [Fact]
+    public void ShortLabel_FitsATab() =>
+        Assert.All(Enum.GetValues<PaletteCategory>(), category => Assert.InRange(category.ShortLabel().Length, 1, 5));
 }

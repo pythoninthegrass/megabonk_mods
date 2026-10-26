@@ -20,11 +20,32 @@ public readonly record struct PaletteGroup(int Stage, PaletteCategory Category)
 
 public static class PaletteFilter
 {
-    public static IReadOnlyList<PaletteGroup> Groups(IReadOnlyList<PaletteEntry> entries) =>
-        entries.Select(PaletteGroup.Of).Distinct().ToArray();
+    public static IReadOnlyList<PaletteCategory> Categories(IReadOnlyList<PaletteEntry> entries) =>
+        entries.Select(entry => entry.Category).Distinct().ToArray();
 
-    public static IReadOnlyList<PaletteEntry> Apply(IReadOnlyList<PaletteEntry> entries, string query, PaletteGroup? group) =>
-        entries.Where(entry => (!group.HasValue || PaletteGroup.Of(entry) == group.Value)
+    public static IReadOnlyList<PaletteEntry> Apply(IReadOnlyList<PaletteEntry> entries, string query, PaletteCategory? category) =>
+        entries.Where(entry => (!category.HasValue || entry.Category == category.Value)
             && (entry.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase)
                 || entry.Id.Serialize().Contains(query, StringComparison.OrdinalIgnoreCase))).ToArray();
+}
+
+public static class PaletteCategoryNames
+{
+    public static string Label(this PaletteCategory category) => category switch
+    {
+        PaletteCategory.RandomObject => "Random objects",
+        PaletteCategory.FlatTile => "Flat tiles",
+        PaletteCategory.SpecificTile => "Specific tiles",
+        PaletteCategory.Shrine => "Shrines",
+        _ => "Interactables",
+    };
+
+    public static string ShortLabel(this PaletteCategory category) => category switch
+    {
+        PaletteCategory.RandomObject => "Obj",
+        PaletteCategory.FlatTile => "Flat",
+        PaletteCategory.SpecificTile => "Spec",
+        PaletteCategory.Shrine => "Shrn",
+        _ => "Item",
+    };
 }

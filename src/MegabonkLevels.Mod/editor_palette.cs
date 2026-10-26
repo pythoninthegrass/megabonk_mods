@@ -12,42 +12,53 @@ namespace MegabonkLevels;
 // See "Catalog palette" in docs/development.md.
 public static class EditorPalette
 {
+    private const float Margin = 8f;
     private const float LabelMargin = 8f;
     private const float TitleHeight = 48f;
-    private const float ControlsHeight = 60f;
-    private const float RowHeight = 26f;
-    private const float HeaderHeight = 22f;
+    private const float ControlHeight = 30f;
     private const float FontSize = 16f;
-    private const float ScrollPixelsPerNotch = 40f;
+    private const float SlotFontSize = 11f;
+    private const float SlotSize = 56f;
+    private const float SlotGap = 4f;
+    private const float Border = 2f;
+    private const float TabWidth = 56f;
+    private const float TabHeight = 48f;
+    private const int Columns = 5;
+    private const int Rows = 6;
+    private const int PerPage = Columns * Rows;
 
-    private static readonly Color PanelColor = new(0f, 0f, 0f, 0.75f);
-    private static readonly Color HeaderColor = new(0f, 0f, 0f, 0.95f);
-    private static readonly Color SearchColor = new(0.1f, 0.1f, 0.1f, 0.98f);
-    private static readonly Color RowColor = new(1f, 1f, 1f, 0.06f);
-    private static readonly Color SelectedColor = new(0.2f, 0.5f, 0.9f, 0.9f);
+    private static readonly Color PanelBorder = Gray(0.55f);
+    private static readonly Color PanelFill = Gray(0.36f, 0.95f);
+    private static readonly Color SlotBorder = Gray(0.15f);
+    private static readonly Color SlotFill = Gray(0.22f);
+    private static readonly Color HoverFill = Gray(0.30f);
+    private static readonly Color SelectedBorder = Gray(1f);
+    private static readonly Color SelectedFill = Gray(0.42f);
+    private static readonly Color TabFill = Gray(0.28f);
+    private static readonly Color ActiveTabBorder = Gray(0.8f);
+    private static readonly Color SearchFill = Gray(0.12f);
 
-    private static readonly List<Row> _rows = new();
+    private static readonly List<Slot> _slots = new();
+    private static readonly List<Tab> _tabs = new();
     private static readonly PaletteSearchInput _search = new();
-    private static IReadOnlyList<PaletteGroup> _groups;
-    private static int _groupIndex = -1;
+    private static IReadOnlyList<PaletteEntry> _filtered = new List<PaletteEntry>();
+    private static PaletteCategory? _category;
+    private static int _page;
     private static RectTransform _searchRect;
     private static TextMeshProUGUI _searchLabel;
-    private static Image _searchBackground;
-    private static RectTransform _allRect;
+    private static Image _searchFill;
     private static RectTransform _previousRect;
     private static RectTransform _nextRect;
-    private static TextMeshProUGUI _groupLabel;
+    private static TextMeshProUGUI _pageLabel;
     private static TextMeshProUGUI _emptyLabel;
     private static RectTransform _tooltip;
     private static TextMeshProUGUI _tooltipLabel;
     private static MelonLogger.Instance _logger;
     private static GameObject _root;
     private static RectTransform _panel;
-    private static RectTransform _viewport;
-    private static RectTransform _content;
+    private static RectTransform _tabColumn;
     private static TextMeshProUGUI _title;
     private static string _mapLabel = "";
-    private static float _contentHeight;
     private static CursorLockMode _cursorLockBefore;
     private static bool _cursorVisibleBefore;
     private static bool _open;
@@ -77,16 +88,26 @@ public static class EditorPalette
         ApplyFilter();
     }
 
-    private sealed class Row
+    private sealed class Slot
     {
         public RectTransform Rect;
-        public Image Background;
-        public CatalogId? Id;
-        public PaletteGroup Group;
-        public string Name;
-        public float Height;
-        public bool Visible;
+        public Image Border;
+        public Image Fill;
+        public RawImage Thumb;
+        public TextMeshProUGUI Name;
+        public PaletteEntry? Entry;
     }
+
+    private sealed class Tab
+    {
+        public RectTransform Rect;
+        public Image Border;
+        public Image Fill;
+        public PaletteCategory? Category;
+        public string Label;
+    }
+
+    private static Color Gray(float value, float alpha = 1f) => new(value, value, value, alpha);
 
     public static void OnEditorEntered(MelonLogger.Instance logger)
     {
@@ -134,7 +155,7 @@ public static class EditorPalette
         }
 
         var mouse = (Vector2)EditorInput.MousePosition;
-        PointerOverPanel = RectTransformUtility.RectangleContainsScreenPoint(_panel, mouse, null);
+        PointerOverPanel = Contains(_panel, mouse) || Contains(_tabColumn, mouse);
         var clicked = EditorInput.GetMouseButtonDown(0);
         var queryBefore = _search.Query;
         _search.Step(clicked, Contains(_searchRect, mouse), EditorInput.GetKeyDown(KeyCode.Escape), EditorInput.InputString,
@@ -146,34 +167,45 @@ public static class EditorPalette
 
         _searchLabel.text = _search.Query.Length == 0 ? "Search name or id..." : _search.Query;
         _searchLabel.color = Color.white;
-        _searchBackground.color = _search.Focused ? SelectedColor : SearchColor;
-        UpdateTooltip(mouse);
+        _searchFill.color = _search.Focused ? SelectedFill : SearchFill;
+        var hover = SlotAt(mouse);
+        UpdateSlotColors(hover);
+        UpdateTooltip(mouse, hover);
         if (!PointerOverPanel)
         {
             return;
         }
 
-        if (Contains(_viewport, mouse))
+        if (Contains(_panel, mouse))
         {
-            Scroll(EditorInput.MouseScrollDelta.y);
+            SetPage(PalettePager.Step(_page, -EditorInput.MouseScrollDelta.y, PageCount));
         }
 
-        if (clicked && Contains(_allRect, mouse))
+        if (!clicked)
         {
-            _groupIndex = -1;
-            ApplyFilter();
+            return;
         }
-        else if (clicked && (Contains(_previousRect, mouse) || Contains(_nextRect, mouse)))
+
+        if (Contains(_previousRect, mouse))
         {
-            var direction = Contains(_previousRect, mouse) ? -1 : 1;
-            _groupIndex = (_groupIndex + 1 + direction + _groups.Count + 1) % (_groups.Count + 1) - 1;
-            ApplyFilter();
+            SetPage(PalettePager.Step(_page, -1f, PageCount));
         }
-        else if (clicked && Contains(_viewport, mouse))
+        else if (Contains(_nextRect, mouse))
         {
-            ClickRowAt(mouse);
+            SetPage(PalettePager.Step(_page, 1f, PageCount));
+        }
+        else if (hover is { Entry: { } entry })
+        {
+            Selection.Select(entry.Id);
+        }
+        else if (TabAt(mouse) is { } tab)
+        {
+            _category = tab.Category;
+            ApplyFilter();
         }
     }
+
+    private static int PageCount => PalettePager.PageCount(_filtered.Count, PerPage);
 
     private static void Rebuild()
     {
@@ -183,9 +215,11 @@ public static class EditorPalette
         }
 
         _root = null;
-        _rows.Clear();
+        _slots.Clear();
+        _tabs.Clear();
         _search.Reset();
-        _groupIndex = -1;
+        _category = null;
+        _page = 0;
 
         var mapData = MapController.currentMap;
         if (mapData == null)
@@ -198,18 +232,31 @@ public static class EditorPalette
         var interactables = Object.FindObjectOfType<MapGenerationController>()?.interactablesSpawner;
         var catalog = CatalogPrefabs.Describe(mapData, interactables);
         var entries = PaletteCatalogBuilder.Build(catalog, id => PrefabName(id, interactables));
-        _groups = PaletteFilter.Groups(entries);
         Selection.Replace(entries);
         _mapLabel = catalog.Map.ToString();
+        RenderThumbnails(entries, interactables);
         BuildCanvas(entries);
         _logger.Msg($"EditorPalette: built {entries.Count} entries for {_mapLabel}");
     }
 
-    private static string PrefabName(CatalogId id, SpawnInteractables interactables)
+    private static void RenderThumbnails(IReadOnlyList<PaletteEntry> entries, SpawnInteractables interactables)
+    {
+        var cachedBefore = PrefabThumbnails.Cache.Count;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        foreach (var entry in entries)
+        {
+            PrefabThumbnails.Cache.GetOrRender(entry.Id, id => PrefabFor(id, interactables) is { } prefab ? PrefabThumbnails.Render(prefab) : null);
+        }
+
+        var rendered = PrefabThumbnails.Cache.Count - cachedBefore;
+        _logger.Msg($"EditorPalette: rendered {rendered} thumbnails in {watch.ElapsedMilliseconds} ms (cached {cachedBefore})");
+    }
+
+    private static GameObject PrefabFor(CatalogId id, SpawnInteractables interactables)
     {
         try
         {
-            return CatalogPrefabs.Resolve(CatalogRoute.Parse(id), interactables)?.name;
+            return CatalogPrefabs.Resolve(CatalogRoute.Parse(id), interactables);
         }
         catch (System.Exception)
         {
@@ -217,111 +264,158 @@ public static class EditorPalette
         }
     }
 
+    private static string PrefabName(CatalogId id, SpawnInteractables interactables) => PrefabFor(id, interactables)?.name;
+
+    private static (RectTransform Outer, Image Border, Image Fill) Bordered(string name, Transform parent, Color border, Color fill)
+    {
+        var outer = EditorUi.NewRect(name, parent);
+        var borderImage = outer.gameObject.AddComponent<Image>();
+        borderImage.color = border;
+        var inner = EditorUi.NewRect("Fill", outer);
+        inner.anchorMin = Vector2.zero;
+        inner.anchorMax = Vector2.one;
+        inner.offsetMin = new Vector2(Border, Border);
+        inner.offsetMax = new Vector2(-Border, -Border);
+        var fillImage = inner.gameObject.AddComponent<Image>();
+        fillImage.color = fill;
+        return (outer, borderImage, fillImage);
+    }
+
+    private static void PlaceTopLeft(RectTransform rect, float x, float y, float width, float height)
+    {
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.anchoredPosition = new Vector2(x, -y);
+        rect.sizeDelta = new Vector2(width, height);
+    }
+
+    private static RawImage AddThumb(RectTransform parent)
+    {
+        var rect = EditorUi.NewRect("Thumb", parent);
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = new Vector2(Border, Border);
+        rect.offsetMax = new Vector2(-Border, -Border);
+        var thumb = rect.gameObject.AddComponent<RawImage>();
+        thumb.raycastTarget = false;
+        thumb.enabled = false;
+        return thumb;
+    }
+
+    private static TextMeshProUGUI CenteredLabel(RectTransform parent, TMP_FontAsset font, float size)
+    {
+        var rect = EditorUi.NewRect("Label", parent);
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = new Vector2(2f, 2f);
+        rect.offsetMax = new Vector2(-2f, -2f);
+        var label = EditorUi.NewLabel(rect, font, TextAlignmentOptions.Center, size);
+        label.richText = false;
+        label.enableWordWrapping = true;
+        return label;
+    }
+
     private static void BuildCanvas(IReadOnlyList<PaletteEntry> entries)
     {
         _root = EditorUi.NewCanvas("MegabonkLevelsPalette");
-
         var font = PositionLabel.FindFontAsset(EditorUi.FontName);
-        _panel = EditorUi.NewRect("Panel", _root.transform);
-        _panel.anchorMin = new Vector2(0f, 0f);
-        _panel.anchorMax = new Vector2(0f, 1f);
-        _panel.pivot = new Vector2(0f, 0.5f);
-        _panel.sizeDelta = new Vector2(0f, 0f);
-        _panel.anchoredPosition = Vector2.zero;
-        _panel.gameObject.AddComponent<Image>().color = PanelColor;
+        var panelWidth = Columns * SlotSize + (Columns - 1) * SlotGap + Margin * 2f;
+        var gridTop = TitleHeight + ControlHeight + Margin;
+        var footerTop = gridTop + Rows * (SlotSize + SlotGap);
+        var panelHeight = footerTop + ControlHeight + Margin;
+        Width = TabWidth + panelWidth;
 
-        var headerRect = EditorUi.NewRect("HeaderBackground", _panel);
-        EditorUi.Stretch(headerRect, TitleHeight + ControlsHeight);
-        headerRect.offsetMin = new Vector2(0f, -(TitleHeight + ControlsHeight));
-        headerRect.offsetMax = Vector2.zero;
-        headerRect.gameObject.AddComponent<Image>().color = HeaderColor;
+        var panel = Bordered("Panel", _root.transform, PanelBorder, PanelFill);
+        _panel = panel.Outer;
+        PlaceTopLeft(_panel, TabWidth, Margin, panelWidth, panelHeight);
 
         var titleRect = EditorUi.NewRect("Title", _panel);
-        EditorUi.Stretch(titleRect, TitleHeight);
+        PlaceTopLeft(titleRect, Margin, 4f, panelWidth - Margin * 2f, TitleHeight - 4f);
         _title = EditorUi.NewLabel(titleRect, font, TextAlignmentOptions.TopLeft, FontSize);
 
-        _searchRect = ControlRect("Search", TitleHeight, 0f, 0f);
-        _searchBackground = _searchRect.gameObject.AddComponent<Image>();
-        _searchBackground.color = SearchColor;
+        var search = Bordered("Search", _panel, SlotBorder, SearchFill);
+        _searchRect = search.Outer;
+        _searchFill = search.Fill;
+        PlaceTopLeft(_searchRect, Margin, TitleHeight, panelWidth - Margin * 2f, ControlHeight);
         _searchLabel = ControlLabel(_searchRect, font, "Search name or id...");
         EditorUi.FixInputBaseline(_searchLabel);
-        _allRect = ControlRect("All", TitleHeight + 30f, 0f, 0f);
-        _allRect.anchorMax = new Vector2(0f, 1f);
-        _allRect.offsetMax = new Vector2(48f, -(TitleHeight + 30f));
-        ControlLabel(_allRect, font, "All");
-        _previousRect = ControlRect("PreviousGroup", TitleHeight + 30f, 48f, 0f);
-        _previousRect.anchorMax = new Vector2(0f, 1f);
-        _previousRect.offsetMax = new Vector2(76f, -(TitleHeight + 30f));
-        ControlLabel(_previousRect, font, "<");
-        _nextRect = ControlRect("NextGroup", TitleHeight + 30f, 0f, 0f);
-        _nextRect.anchorMin = new Vector2(1f, 1f);
-        _nextRect.offsetMin = new Vector2(-28f, -(TitleHeight + ControlsHeight));
-        ControlLabel(_nextRect, font, ">");
-        var groupRect = ControlRect("Group", TitleHeight + 30f, 76f, 28f);
-        _groupLabel = ControlLabel(groupRect, font, "All");
 
-        _viewport = EditorUi.NewRect("Viewport", _panel);
-        _viewport.anchorMin = Vector2.zero;
-        _viewport.anchorMax = Vector2.one;
-        _viewport.offsetMin = Vector2.zero;
-        _viewport.offsetMax = new Vector2(0f, -(TitleHeight + ControlsHeight));
-        _viewport.gameObject.AddComponent<RectMask2D>();
-
-        _content = EditorUi.NewRect("Content", _viewport);
-        _content.anchorMin = new Vector2(0f, 1f);
-        _content.anchorMax = new Vector2(1f, 1f);
-        _content.pivot = new Vector2(0f, 1f);
-        _content.anchoredPosition = Vector2.zero;
-
-        var y = 0f;
-        var widestLabel = 0f;
-        var lastGroup = ((int Stage, PaletteCategory Category)?)null;
-        foreach (var entry in entries)
+        BuildTabs(entries, font);
+        for (var i = 0; i < PerPage; i++)
         {
-            var group = (entry.Stage, entry.Category);
-            if (lastGroup != group)
-            {
-                lastGroup = group;
-                AddRow(font, PaletteGroup.Of(entry).Label, null, PaletteGroup.Of(entry), HeaderHeight, ref y, ref widestLabel);
-            }
-
-            AddRow(font, entry.DisplayName, entry.Id, PaletteGroup.Of(entry), RowHeight, ref y, ref widestLabel);
+            BuildSlot(i, gridTop, font);
         }
 
-        _contentHeight = y;
-        widestLabel = Mathf.Max(widestLabel, WidestTitleWidth(entries));
-        foreach (var group in _groups)
-        {
-            widestLabel = Mathf.Max(widestLabel, _groupLabel.GetPreferredValues(group.Label).x + 104f);
-        }
-        Width = widestLabel + LabelMargin * 2f;
-        _panel.sizeDelta = new Vector2(Width, 0f);
-        _content.sizeDelta = new Vector2(0f, y);
-        var emptyRect = EditorUi.NewRect("NoResults", _viewport);
-        EditorUi.Stretch(emptyRect, RowHeight);
+        _previousRect = BuildButton("PreviousPage", "<", Margin, footerTop, font);
+        _nextRect = BuildButton("NextPage", ">", panelWidth - Margin - 40f, footerTop, font);
+        var pageRect = EditorUi.NewRect("Page", _panel);
+        PlaceTopLeft(pageRect, Margin + 44f, footerTop, panelWidth - Margin * 2f - 88f, ControlHeight);
+        _pageLabel = ControlLabel(pageRect, font, "1/1");
+        _pageLabel.alignment = TextAlignmentOptions.Center;
+
+        var emptyRect = EditorUi.NewRect("NoResults", _panel);
+        PlaceTopLeft(emptyRect, Margin, gridTop, panelWidth - Margin * 2f, ControlHeight);
         _emptyLabel = ControlLabel(emptyRect, font, "No matching entries");
+
         _tooltip = EditorUi.NewRect("Tooltip", _root.transform);
         _tooltip.anchorMin = new Vector2(0f, 1f);
         _tooltip.anchorMax = new Vector2(0f, 1f);
         _tooltip.pivot = new Vector2(0f, 1f);
-        _tooltip.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.95f);
+        _tooltip.gameObject.AddComponent<Image>().color = Gray(0.08f, 0.95f);
         _tooltipLabel = ControlLabel(_tooltip, font, "");
         _tooltip.gameObject.SetActive(false);
         ApplyFilter();
     }
 
-    private static float WidestTitleWidth(IReadOnlyList<PaletteEntry> entries)
+    private static void BuildTabs(IReadOnlyList<PaletteEntry> entries, TMP_FontAsset font)
     {
-        var widest = 0f;
-        foreach (var entry in entries)
+        var categories = new List<PaletteCategory?> { null };
+        categories.AddRange(PaletteFilter.Categories(entries).Select(category => (PaletteCategory?)category));
+        _tabColumn = EditorUi.NewRect("Tabs", _root.transform);
+        PlaceTopLeft(_tabColumn, 0f, Margin, TabWidth, categories.Count * TabHeight);
+        for (var i = 0; i < categories.Count; i++)
         {
-            widest = Mathf.Max(widest, _title.GetPreferredValues(TitleText(entry.DisplayName)).x);
-        }
+            var category = categories[i];
+            var parts = Bordered("Tab", _tabColumn, PanelBorder, TabFill);
+            PlaceTopLeft(parts.Outer, 0f, i * TabHeight, TabWidth, TabHeight - 4f);
+            var first = category.HasValue ? entries.First(entry => entry.Category == category.Value) : (PaletteEntry?)null;
+            var thumb = AddThumb(parts.Fill.rectTransform);
+            if (first.HasValue && PrefabThumbnails.Cache.TryGet(first.Value.Id, out var texture) && texture != null)
+            {
+                thumb.texture = texture;
+                thumb.enabled = true;
+            }
+            else
+            {
+                CenteredLabel(parts.Fill.rectTransform, font, FontSize).text = category?.ShortLabel() ?? "All";
+            }
 
-        return widest;
+            _tabs.Add(new Tab { Rect = parts.Outer, Border = parts.Border, Fill = parts.Fill, Category = category, Label = category?.Label() ?? "All" });
+        }
     }
 
-    private static string TitleText(string selectedName) => $"{_mapLabel} palette\nselected: {selectedName}";
+    private static void BuildSlot(int index, float gridTop, TMP_FontAsset font)
+    {
+        var parts = Bordered("Slot", _panel, SlotBorder, SlotFill);
+        PlaceTopLeft(parts.Outer, Margin + index % Columns * (SlotSize + SlotGap), gridTop + index / Columns * (SlotSize + SlotGap), SlotSize, SlotSize);
+        _slots.Add(new Slot
+        {
+            Rect = parts.Outer,
+            Border = parts.Border,
+            Fill = parts.Fill,
+            Thumb = AddThumb(parts.Fill.rectTransform),
+            Name = CenteredLabel(parts.Fill.rectTransform, font, SlotFontSize),
+        });
+    }
+
+    private static RectTransform BuildButton(string name, string text, float x, float y, TMP_FontAsset font)
+    {
+        var parts = Bordered(name, _panel, SlotBorder, SlotFill);
+        PlaceTopLeft(parts.Outer, x, y, 40f, ControlHeight);
+        CenteredLabel(parts.Fill.rectTransform, font, FontSize).text = text;
+        return parts.Outer;
+    }
 
     private static RectTransform ControlRect(string name, float top, float left, float right)
     {
@@ -329,7 +423,7 @@ public static class EditorPalette
         rect.anchorMin = new Vector2(0f, 1f);
         rect.anchorMax = new Vector2(1f, 1f);
         rect.pivot = new Vector2(0f, 1f);
-        rect.offsetMin = new Vector2(left, -(top + 30f));
+        rect.offsetMin = new Vector2(left, -(top + ControlHeight));
         rect.offsetMax = new Vector2(-right, -top);
         return rect;
     }
@@ -347,149 +441,141 @@ public static class EditorPalette
         return label;
     }
 
+    private static string TitleText(string selectedName) => $"{_mapLabel} palette\nselected: {selectedName}";
+
     private static bool Contains(RectTransform rect, Vector2 mouse) =>
-        RectTransformUtility.RectangleContainsScreenPoint(rect, mouse, null);
+        rect != null && RectTransformUtility.RectangleContainsScreenPoint(rect, mouse, null);
+
+    private static Slot SlotAt(Vector2 mouse) =>
+        _slots.FirstOrDefault(slot => slot.Entry.HasValue && Contains(slot.Rect, mouse));
+
+    private static Tab TabAt(Vector2 mouse) => _tabs.FirstOrDefault(tab => Contains(tab.Rect, mouse));
 
     private static void ApplyFilter()
     {
-        PaletteGroup? group = _groupIndex < 0 ? null : _groups[_groupIndex];
-        var entries = PaletteFilter.Apply(Selection.Entries, _search.Query, group);
-        var ids = new HashSet<CatalogId>(entries.Select(entry => entry.Id));
-        var groups = new HashSet<PaletteGroup>(entries.Select(PaletteGroup.Of));
-        var y = 0f;
-        foreach (var row in _rows)
-        {
-            row.Visible = row.Id is { } id ? ids.Contains(id) : groups.Contains(row.Group);
-            row.Rect.gameObject.SetActive(row.Visible);
-            if (!row.Visible)
-            {
-                continue;
-            }
-
-            row.Rect.offsetMin = new Vector2(0f, -(y + row.Height));
-            row.Rect.offsetMax = new Vector2(0f, -y);
-            y += row.Height;
-        }
-
-        _contentHeight = y;
-        _content.sizeDelta = new Vector2(0f, y);
-        _groupLabel.text = group?.Label ?? "All";
-        _emptyLabel.gameObject.SetActive(entries.Count == 0);
+        _filtered = PaletteFilter.Apply(Selection.Entries, _search.Query, _category);
+        _page = 0;
+        _emptyLabel.gameObject.SetActive(_filtered.Count == 0);
         RefreshSelection();
-        _content.anchoredPosition = Vector2.zero;
+        Rebind();
     }
 
-    private static void UpdateTooltip(Vector2 mouse)
+    private static void SetPage(int page)
     {
-        _tooltip.gameObject.SetActive(false);
-        if (!Contains(_viewport, mouse))
+        if (page == _page)
         {
             return;
         }
 
-        foreach (var row in _rows)
-        {
-            if (!row.Visible || row.Id is not { } id || !Contains(row.Rect, mouse))
-            {
-                continue;
-            }
+        _page = page;
+        Rebind();
+    }
 
-            _tooltipLabel.text = $"{row.Name}\n{id.Serialize()}";
-            var size = _tooltipLabel.GetPreferredValues(_tooltipLabel.text) + new Vector2(LabelMargin * 2f, 12f);
-            size.x = Mathf.Min(size.x, Screen.width);
-            _tooltip.sizeDelta = size;
-            var x = Mathf.Clamp(mouse.x + 16f, 0f, Screen.width - size.x);
-            var top = Mathf.Clamp(Screen.height - mouse.y + 16f, 0f, Mathf.Max(0f, Screen.height - size.y));
-            _tooltip.anchoredPosition = new Vector2(x, -top);
-            _tooltip.gameObject.SetActive(true);
+    // Shows the page that holds the current selection, when the active filters leave it visible.
+    private static void RevealSelection()
+    {
+        if (Selection.Current is not { } current)
+        {
             return;
         }
-    }
 
-    private static void AddRow(TMP_FontAsset font, string text, CatalogId? id, PaletteGroup group, float height, ref float y, ref float widestLabel)
-    {
-        var rect = EditorUi.NewRect(id.HasValue ? "Entry" : "Header", _content);
-        rect.anchorMin = new Vector2(0f, 1f);
-        rect.anchorMax = new Vector2(1f, 1f);
-        rect.pivot = new Vector2(0f, 1f);
-        rect.offsetMin = new Vector2(0f, -(y + height));
-        rect.offsetMax = new Vector2(0f, -y);
-        y += height;
-
-        var row = new Row { Rect = rect, Id = id, Name = text, Group = group, Height = height };
-        if (id.HasValue)
+        for (var i = 0; i < _filtered.Count; i++)
         {
-            row.Background = rect.gameObject.AddComponent<Image>();
-            row.Background.color = RowColor;
-        }
-
-        var labelRect = EditorUi.NewRect("Label", rect);
-        labelRect.anchorMin = Vector2.zero;
-        labelRect.anchorMax = Vector2.one;
-        labelRect.offsetMin = new Vector2(LabelMargin, 0f);
-        labelRect.offsetMax = new Vector2(-LabelMargin, 0f);
-        var label = EditorUi.NewLabel(labelRect, font, TextAlignmentOptions.MidlineLeft, FontSize);
-        label.richText = !id.HasValue;
-        label.text = id.HasValue ? text : $"<color=#d0b050>{text}</color>";
-        widestLabel = Mathf.Max(widestLabel, label.GetPreferredValues(label.text).x);
-        _rows.Add(row);
-    }
-
-    private static void ClickRowAt(Vector2 mouse)
-    {
-        foreach (var row in _rows)
-        {
-            if (row.Visible && row.Id.HasValue && RectTransformUtility.RectangleContainsScreenPoint(row.Rect, mouse, null))
+            if (_filtered[i].Id.Equals(current))
             {
-                Selection.Select(row.Id.Value);
+                _page = PalettePager.PageOf(i, PerPage);
                 return;
             }
         }
     }
 
-    private static void RevealRow(Row row)
+    private static void Rebind()
     {
-        if (_viewport == null || _content == null)
+        var pageEntries = PalettePager.Slice(_filtered, _page, PerPage);
+        for (var i = 0; i < _slots.Count; i++)
         {
-            return;
+            var slot = _slots[i];
+            slot.Entry = i < pageEntries.Count ? pageEntries[i] : null;
+            slot.Rect.gameObject.SetActive(slot.Entry.HasValue);
+            if (!slot.Entry.HasValue)
+            {
+                continue;
+            }
+
+            var hasThumb = PrefabThumbnails.Cache.TryGet(slot.Entry.Value.Id, out var texture) && texture != null;
+            slot.Thumb.texture = hasThumb ? texture : null;
+            slot.Thumb.enabled = hasThumb;
+            slot.Name.gameObject.SetActive(!hasThumb);
+            slot.Name.text = slot.Entry.Value.DisplayName;
         }
 
-        var rowTop = -row.Rect.offsetMax.y;
-        var offset = PaletteScroll.OffsetToReveal(rowTop, RowHeight, _viewport.rect.height, _content.anchoredPosition.y, _contentHeight);
-        _content.anchoredPosition = new Vector2(0f, offset);
+        _pageLabel.text = $"{_page + 1}/{PageCount}";
+        foreach (var tab in _tabs)
+        {
+            tab.Border.color = tab.Category == _category ? ActiveTabBorder : PanelBorder;
+            tab.Fill.color = tab.Category == _category ? PanelFill : TabFill;
+        }
+
+        UpdateSlotColors(null);
     }
 
-    private static void Scroll(float notches)
+    private static void UpdateSlotColors(Slot hover)
     {
-        if (notches == 0f)
+        var current = Selection.Current;
+        foreach (var slot in _slots)
+        {
+            if (!slot.Entry.HasValue)
+            {
+                continue;
+            }
+
+            var selected = current.HasValue && slot.Entry.Value.Id.Equals(current.Value);
+            slot.Border.color = selected ? SelectedBorder : SlotBorder;
+            slot.Fill.color = selected ? SelectedFill : slot == hover ? HoverFill : SlotFill;
+        }
+    }
+
+    private static void UpdateTooltip(Vector2 mouse, Slot hover)
+    {
+        _tooltip.gameObject.SetActive(false);
+        string text = null;
+        if (hover is { Entry: { } entry })
+        {
+            text = $"{hover.Name.text}\n{entry.Id.Serialize()}\n{PaletteGroup.Of(entry).Label}";
+        }
+        else if (TabAt(mouse) is { } tab)
+        {
+            text = tab.Label;
+        }
+
+        if (text == null)
         {
             return;
         }
 
-        var maxOffset = Mathf.Max(0f, _contentHeight - _viewport.rect.height);
-        var offset = Mathf.Clamp(_content.anchoredPosition.y - notches * ScrollPixelsPerNotch, 0f, maxOffset);
-        _content.anchoredPosition = new Vector2(0f, offset);
+        _tooltipLabel.text = text;
+        var size = _tooltipLabel.GetPreferredValues(text) + new Vector2(LabelMargin * 2f, 12f);
+        size.x = Mathf.Min(size.x, Screen.width);
+        _tooltip.sizeDelta = size;
+        var x = Mathf.Clamp(mouse.x + 16f, 0f, Screen.width - size.x);
+        var top = Mathf.Clamp(Screen.height - mouse.y + 16f, 0f, Mathf.Max(0f, Screen.height - size.y));
+        _tooltip.anchoredPosition = new Vector2(x, -top);
+        _tooltip.gameObject.SetActive(true);
     }
 
     private static void RefreshSelection()
     {
-        var current = Selection.Current;
-        foreach (var row in _rows)
+        if (_slots.Count == 0)
         {
-            if (row.Background != null)
-            {
-                var selected = row.Id.Equals(current);
-                row.Background.color = selected ? SelectedColor : RowColor;
-                if (selected && row.Visible)
-                {
-                    RevealRow(row);
-                }
-            }
+            return;
         }
 
+        RevealSelection();
+        Rebind();
         if (_title != null)
         {
             var name = "none";
+            var current = Selection.Current;
             foreach (var entry in Selection.Entries)
             {
                 if (current.HasValue && entry.Id.Equals(current.Value))
