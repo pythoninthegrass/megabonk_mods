@@ -5,7 +5,7 @@ status: Done
 assignee:
   - OpenCode
 created_date: '2026-10-10 06:23'
-updated_date: '2026-10-26T18:30:00Z'
+updated_date: '2026-10-26T19:58:00Z'
 labels:
   - level-editor
 dependencies:
@@ -20,8 +20,15 @@ modified_files:
   - src/MegabonkLevels.Mod/palette_search_input.cs
   - src/MegabonkLevels.Mod/editor_tile_tools.cs
   - src/MegabonkLevels.Mod/editor_mode.cs
+  - src/MegabonkLevels.Mod/editor_ui.cs
+  - src/MegabonkLevels.Mod/editor_escape_input.cs
+  - src/MegabonkLevels.Mod/editor_escape_sequence.cs
+  - src/MegabonkLevels.Mod/editor_pause_input_patch.cs
+  - src/MegabonkLevels.Mod/editor_text_input_policy.cs
   - tests/MegabonkLevels.Tests/palette_filter_tests.cs
   - tests/MegabonkLevels.Tests/palette_search_input_tests.cs
+  - tests/MegabonkLevels.Tests/editor_escape_sequence_tests.cs
+  - tests/MegabonkLevels.Tests/editor_text_input_policy_tests.cs
   - tests/MegabonkLevels.Tests/MegabonkLevels.Tests.csproj
   - docs/development.md
 parent_task_id: TASK-005
@@ -67,10 +74,11 @@ Thumbnails and an icon grid are a separate task.
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-1. Measure live palette sizes and confirm proceeding for modest catalogs before implementation.
-2. After approval, inspect palette/shared editor text-focus routing and write failing unit tests for pure filtering, grouping and focus logic.
-3. Implement direct-input name/catalogId search, All/group toggles and hover tooltips. Preserve hidden selections and suppress camera/tool shortcuts while typing.
-4. Update Catalog palette docs, run task check and runtime harness verification, and finalize with a conventional commit.
+1. Measure live catalog sizes and confirm proceeding for modest catalogs (Forest 75, Desert 73; approved).
+2. Add test-first pure filtering, grouping, focus, game-menu guard and Escape-sequence tests.
+3. Add live name/id search, All/group controls and name/id tooltips while preserving hidden selections; use higher-contrast search styling and fixed search/save text baselines.
+4. Share keyboard suppression across both forms, guard the confirmed PauseUi.Toggle cancel path, and preserve editor cursor ownership. For a form with text, Esc blurs, then clears, then opens the menu; an empty focused/pending form lets Esc open the menu immediately.
+5. Update docs, run task check, verify runtime behavior plus user native-input confirmation, commit and close.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -89,10 +97,30 @@ Verification: wrote filtering/focus tests before implementation; initial task mo
 Runtime verification on fresh Forest relaunch: rOcK showed only rock names; FOREST/SHRINES matched the five shrine ids despite case; selecting filtered rock_medium_01 showed name + forest/stage0/randomMapObjects/3/0 tooltip, and remained selected while hidden by shrine/group filters. While focused, held W/Space and tapped Alpha1/C left camera framing and Select unchanged. Escape ended focus; clicking group controls outside search ended focus and subsequent Alpha2 selected Lower. Stage 0 flat tiles showed only its nine entries; incompatible query/group showed No matching entries; previous-group from All wrapped to Interactables; All reset restored the full catalog and selection highlight. No ERROR/Exception lines in the current launch log. Screenshots are under the approved OpenCode temporary directory: palette-name-filter-focus.png, palette-selected-tooltip.png, palette-id-filter-hidden-selection.png, palette-group-no-results.png, palette-flat-group.png, palette-interactables-wrap.png and palette-all-restored.png.
 
 Implementation committed as fb2f89e (feat(editor): add palette search, group filters and tooltips), with no attribution. All six acceptance criteria and four Definition of Done items verified.
+
+User reports adding k to roc moves the search text vertically, and real Escape opens the game menu and hides the cursor while a form is focused. User explicitly requested the same guard for the level-save form. Reopened to fix and verify the keyboard-focus criterion against native game input.
+
+Follow-up implementation: added a Harmony prefix to the unique PauseUi.Update method (dump RVA 0x5570B0), bypassing game menu input while EditorMode.Active and the existing shared search/save text capture guard is true. Rewired and EventSystem remain untouched. Both fields and save placeholder now use BaselineLeft with a fixed offset instead of MidlineLeft geometry centering. Kept requested opaque header/search backgrounds and white search text.
+
+Follow-up verification: wrote five game-menu policy tests first (confirmed missing-type compilation failure), then task check passed with 708 C# tests and 185 Python tests plus build and lint. Fresh relaunch succeeded. Paired screenshots palette-fixed-baseline-roc/rock.png and save-fixed-baseline-roc/rock.png show no movement of the existing roc glyphs when adding k. Native Esc/menu and cursor behavior is not yet verified: harness key injects editor-only input, so it cannot exercise the game menu; host System Events discovery timed out. Await user confirmation with physical Escape in each field before rechecking AC2 and closing. Changes currently uncommitted.
+
+User confirms physical Esc still opens menu. Targeted Capstone disassembly establishes UiManager.Update (RVA 0x55EEE0) reads MyInputManager UICancel/UIAbort at static offsets 0x98/0xA0 via GetButtonDown and calls PauseUi.Toggle (RVA 0x557050). PauseUi.Update only reads MapOverlay (offset 0x50) to switch windows, so the prior prefix could not intercept cancel. WindowManager.RefreshCursor (RVA 0x39E650) can hide/lock the cursor when there is no active game window; editor cursor ownership must override that refresh.
+
+Replaced ineffective PauseUi.Update prefix with a PauseUi.Toggle prefix on the confirmed native cancel path. Added WindowManager.RefreshCursor prefix to keep cursor visible/unlocked throughout active editor mode; normal gameplay/menu behavior is unchanged when editor/text capture is inactive. Suppressed real menu toggles now log EditorTextInput: suppressed game menu toggle while typing for verification. Updated docs to explain the actual handler. task check passes (708 C# tests, 185 Python tests, build/lint); fresh Forest editor relaunch succeeded with no Harmony/ERROR/Exception lines. Awaiting physical Escape confirmation in search and save before closing.
+
+Lance requested first Escape blur, second clear, third game menu. Applying the same sequence to search and level-save forms.
+
+2026-10-26: Implemented shared EditorEscapeSequence and runtime routing: first Esc blurs preserving text, second clears that same form even if empty, third passes through to game menu; refocus starts at blur. Guard records consumed frames to cover game/editor Update ordering. Added test-first sequence/reset/refocus tests and external search-blur coverage. task check passes: 714 C# tests, 185 Python tests, build, markdownlint, ruff; git diff --check passes. Fresh editor relaunch succeeded, harness screenshots confirm search blur/clear and save blur. Lance confirmed the behavior works and explicitly requested checking ACs and marking Done; native-input verification is now accepted. All six acceptance criteria verified.
+
+After confirming the three-step sequence and requesting task closure, Lance refined it: an empty form must let the first Escape trigger the game menu. Applying this before final commit/closure.
+
+Final refinement implemented and tested: relevant empty search/save form immediately allows the game menu on Escape, including an empty pending-clear form. Content of the other form never causes an empty form to consume Escape. The consumed-frame guard still blocks the same press that clears text, so clearing does not also open the menu. Added focused-empty/pending-empty/unrelated-content tests before implementation; final task check passes 717 C# tests, 185 Python tests, build and lint. Latest build was deployed and freshly relaunched into Forest editor. Prior live behavior/user confirmation and all six AC checks retained; final empty-form policy is covered by pure tests.
+
+Follow-up committed as d8eb1ad (fix(editor): stabilize text fields and handle form escape sequences), no attribution. All ACs and DoD items checked. Marked Done following user confirmation and final empty-form refinement.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Added live case-insensitive palette name/id search, stage/category cycling with an All reset, empty results feedback and full name/id hover tooltips. Filtering preserves hidden selections; text focus blocks camera and editor shortcuts without touching Rewired/EventSystem. Added 13 test cases and updated Catalog palette docs. Verified in the running Forest editor and with task check (703 C# tests, 185 Python tests, build and lint). Implementation commit: fb2f89e. Thumbnails/icon grid remain out of scope.
+Completed live case-insensitive name/id search, All/stage-category filtering and hover tooltips while preserving hidden selections. Both search/save forms suppress editor shortcuts, use stable text baselines, and share Escape handling: with text, blur then clear then menu; empty forms open the menu immediately. Guard targets the native PauseUi.Toggle path and preserves the editor cursor. Increased palette header/search opacity and made search text white. Updated docs; test-first logic coverage. Verified task check: 717 C# tests, 185 Python tests, build and lint, plus harness runtime checks and user confirmation of native-input behavior. Original implementation fb2f89e; follow-up fixes d8eb1ad. Thumbnails/icon grid remain out of scope.
 <!-- SECTION:FINAL_SUMMARY:END -->
