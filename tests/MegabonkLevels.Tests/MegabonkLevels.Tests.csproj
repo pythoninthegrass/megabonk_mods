@@ -60,6 +60,8 @@
     <Compile Include="../../src/MegabonkLevels.Mod/editor_editing_support.cs" Link="editor_editing_support.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/editor_edit_session.cs" Link="editor_edit_session.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/editor_reenter_policy.cs" Link="editor_reenter_policy.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_playtest_coordinator.cs" Link="editor_playtest_coordinator.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_session_pick.cs" Link="editor_session_pick.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/injected_input.cs" Link="injected_input.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/screen_point.cs" Link="screen_point.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/toast_stack.cs" Link="toast_stack.cs" />

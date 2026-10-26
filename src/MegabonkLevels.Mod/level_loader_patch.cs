@@ -19,7 +19,10 @@ namespace MegabonkLevels;
 // MapController.IsMainMenu() stayed true before and after calling it) — it never actually starts a run.
 public static class LevelLoaderPatch
 {
-    public static void LoadAndStart(string path, MelonLogger.Instance logger)
+    // Reads a .mblevel.json from disk and starts the matching run. Returns false when the file
+    // cannot be read. Reused by the editor playtest action, which starts from an in-memory
+    // LevelFile via Start instead (TASK-005.06).
+    public static bool LoadAndStart(string path, MelonLogger.Instance logger)
     {
         LevelFile level;
         try
@@ -29,9 +32,17 @@ public static class LevelLoaderPatch
         catch (Exception ex)
         {
             logger.Error($"LevelLoader: failed to read '{path}': {ex.Message}");
-            return;
+            return false;
         }
 
+        return Start(level, logger);
+    }
+
+    // Starts a run from an in-memory level file, reusing the same seed forcing, pending-edit and
+    // custom-run marking as a disk load. Returns false when the level cannot be started (missing
+    // map/stage, or StartNewMap threw). A build-id mismatch is logged but not fatal.
+    public static bool Start(LevelFile level, MelonLogger.Instance logger)
+    {
         var warning = GameBuildIdCheck.MismatchWarning(level.GameBuildId, GameBuildIdPatch.CurrentBuildId());
         if (warning != null)
         {
@@ -42,13 +53,13 @@ public static class LevelLoaderPatch
         if (mapData == null)
         {
             logger.Error($"LevelLoader: no MapData found for map={level.Map}");
-            return;
+            return false;
         }
 
         if (level.StageIndex < 0 || level.StageIndex >= mapData.stages.Length)
         {
             logger.Error($"LevelLoader: stageIndex {level.StageIndex} out of range for {level.Map} ({mapData.stages.Length} stages)");
-            return;
+            return false;
         }
 
         SeedForcePatch.ForceLevelSeed(level.Seed);
@@ -68,7 +79,7 @@ public static class LevelLoaderPatch
             logger.Warning(characterWarning);
         }
 
-        logger.Msg($"LevelLoader: starting '{path}' map={level.Map} stage={level.StageIndex} tier={level.Tier} seed={level.Seed}");
+        logger.Msg($"LevelLoader: starting map={level.Map} stage={level.StageIndex} tier={level.Tier} seed={level.Seed}");
 
         try
         {
@@ -77,7 +88,10 @@ public static class LevelLoaderPatch
         catch (Exception ex)
         {
             logger.Error($"LevelLoader: StartNewMap threw: {ex}");
+            return false;
         }
+
+        return true;
     }
 
     private static MapData FindMapData(EMap map)
