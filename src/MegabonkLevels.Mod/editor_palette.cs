@@ -6,6 +6,7 @@ using Il2CppTMPro;
 using MelonLoader;
 using UnityEngine;
 using UnityEngine.UI;
+using static MegabonkLevels.EditorUi;
 
 namespace MegabonkLevels;
 
@@ -20,28 +21,23 @@ public static class EditorPalette
     private const float SlotFontSize = 12f;
     private const float SlotSize = 61.6f;
     private const float SlotGap = 4f;
-    private const float Border = 2f;
     private const float TabWidth = 56f;
     private const float TabHeight = 48f;
     private const float ButtonWidth = 40f;
     private const float ChevronWidth = 28f;
     private const float ChevronHeight = 48f;
     private const int MagnifierPixels = 24;
+    private const int TabTargetBase = 1000;
+    private const int ChevronTarget = 2000;
+    private const int MagnifierTarget = 2001;
     private const float ExpandedInnerWidth = PaletteLayout.ExpandedColumns * SlotSize + (PaletteLayout.ExpandedColumns - 1) * SlotGap;
     private const float CompactInnerWidth = ButtonWidth * 2f + SlotGap;
 
-    private static readonly Color PanelBorder = Gray(0.55f);
-    private static readonly Color PanelFill = Gray(0.36f, 0.95f);
-    private static readonly Color SlotBorder = Gray(0.15f);
-    private static readonly Color SlotFill = Gray(0.22f);
-    private static readonly Color HoverFill = Gray(0.30f);
     private static readonly Color SelectedBorder = Gray(1f);
-    private static readonly Color SelectedFill = Gray(0.42f);
     private static readonly Color TabFill = Gray(0.28f);
     private static readonly Color ActiveTabBorder = Gray(0.8f);
     // Opaque stand-in for the translucent PanelFill as composited over the world, so the active tab has no seam.
     private static readonly Color ActiveTabFill =Gray(95f / 255f);
-    private static readonly Color SearchFill = Gray(0.12f);
 
     private static readonly List<Slot> _slots = new();
     private static readonly List<Tab> _tabs = new();
@@ -66,8 +62,8 @@ public static class EditorPalette
     private static RectTransform _nextRect;
     private static TextMeshProUGUI _pageLabel;
     private static TextMeshProUGUI _emptyLabel;
-    private static RectTransform _tooltip;
-    private static TextMeshProUGUI _tooltipLabel;
+    private static EditorTooltip _tooltip;
+    private static readonly HoverDelay _tooltipDelay = EditorTooltip.NewHoverDelay();
     private static MelonLogger.Instance _logger;
     private static GameObject _root;
     private static RectTransform _panel;
@@ -123,8 +119,6 @@ public static class EditorPalette
         public PaletteCategory? Category;
         public string Label;
     }
-
-    private static Color Gray(float value, float alpha = 1f) => new(value, value, value, alpha);
 
     public static void OnEditorEntered(MelonLogger.Instance logger)
     {
@@ -293,30 +287,6 @@ public static class EditorPalette
 
     private static string PrefabName(CatalogId id, SpawnInteractables interactables) => PrefabFor(id, interactables)?.name;
 
-    private static (RectTransform Outer, Image Border, Image Fill) Bordered(string name, Transform parent, Color border, Color fill)
-    {
-        var outer = EditorUi.NewRect(name, parent);
-        var borderImage = outer.gameObject.AddComponent<Image>();
-        borderImage.color = border;
-        var inner = EditorUi.NewRect("Fill", outer);
-        inner.anchorMin = Vector2.zero;
-        inner.anchorMax = Vector2.one;
-        inner.offsetMin = new Vector2(Border, Border);
-        inner.offsetMax = new Vector2(-Border, -Border);
-        var fillImage = inner.gameObject.AddComponent<Image>();
-        fillImage.color = fill;
-        return (outer, borderImage, fillImage);
-    }
-
-    private static void PlaceTopLeft(RectTransform rect, float x, float y, float width, float height)
-    {
-        rect.anchorMin = new Vector2(0f, 1f);
-        rect.anchorMax = new Vector2(0f, 1f);
-        rect.pivot = new Vector2(0f, 1f);
-        rect.anchoredPosition = new Vector2(x, -y);
-        rect.sizeDelta = new Vector2(width, height);
-    }
-
     private static RawImage AddThumb(RectTransform parent)
     {
         var rect = EditorUi.NewRect("Thumb", parent);
@@ -397,13 +367,7 @@ public static class EditorPalette
         _emptyRect = EditorUi.NewRect("NoResults", _panel);
         _emptyLabel = ControlLabel(_emptyRect, font, "No matching entries");
 
-        _tooltip = EditorUi.NewRect("Tooltip", _root.transform);
-        _tooltip.anchorMin = new Vector2(0f, 1f);
-        _tooltip.anchorMax = new Vector2(0f, 1f);
-        _tooltip.pivot = new Vector2(0f, 1f);
-        _tooltip.gameObject.AddComponent<Image>().color = Gray(0.08f, 0.95f);
-        _tooltipLabel = ControlLabel(_tooltip, font, "");
-        _tooltip.gameObject.SetActive(false);
+        _tooltip = new EditorTooltip(_root.transform, font, FontSize);
         ApplyLayout();
         ApplyFilter();
     }
@@ -661,38 +625,36 @@ public static class EditorPalette
 
     private static void UpdateTooltip(Vector2 mouse, Slot hover)
     {
-        _tooltip.gameObject.SetActive(false);
         string text = null;
+        int? target = null;
         if (hover is { Entry: { } entry })
         {
             text = $"{hover.Name.text}\n{entry.Id.Serialize()}\n{PaletteGroup.Of(entry).Label}";
+            target = _slots.IndexOf(hover);
         }
         else if (TabAt(mouse) is { } tab)
         {
             text = tab.Label;
+            target = TabTargetBase + _tabs.IndexOf(tab);
         }
         else if (Contains(_chevronRect, mouse))
         {
             text = _layout.Compact ? "Expand palette" : "Collapse palette";
+            target = ChevronTarget;
         }
         else if (_layout.Compact && Contains(_magnifierRect, mouse))
         {
             text = "Search";
+            target = MagnifierTarget;
         }
 
-        if (text == null)
+        if (text == null || !_tooltipDelay.Update(target, Time.unscaledTime))
         {
+            _tooltip.Hide();
             return;
         }
 
-        _tooltipLabel.text = text;
-        var size = _tooltipLabel.GetPreferredValues(text) + new Vector2(LabelMargin * 2f, 12f);
-        size.x = Mathf.Min(size.x, Screen.width);
-        _tooltip.sizeDelta = size;
-        var x = Mathf.Clamp(mouse.x + 16f, 0f, Screen.width - size.x);
-        var top = Mathf.Clamp(Screen.height - mouse.y + 16f, 0f, Mathf.Max(0f, Screen.height - size.y));
-        _tooltip.anchoredPosition = new Vector2(x, -top);
-        _tooltip.gameObject.SetActive(true);
+        _tooltip.Show(text, mouse);
     }
 
     private static void RefreshSelection()

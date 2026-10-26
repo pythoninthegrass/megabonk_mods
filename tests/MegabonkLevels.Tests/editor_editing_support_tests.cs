@@ -203,44 +203,6 @@ public class EditorHotkeysTests
     }
 }
 
-public class EditorOverlayModelTests
-{
-    [Theory]
-    [InlineData(1, 3, 1f, 0)]
-    [InlineData(1, 3, -1f, 2)]
-    [InlineData(0, 3, 1f, 0)]
-    [InlineData(2, 3, -1f, 2)]
-    [InlineData(1, 3, 0f, 1)]
-    public void SelectedIndexAfterScroll_ChangesSelectionWithoutWrapping(int selectedIndex, int itemCount, float notches, int expected)
-    {
-        Assert.Equal(expected, EditorOverlayModel.SelectedIndexAfterScroll(selectedIndex, itemCount, notches));
-    }
-
-    [Fact]
-    public void LoadListStart_KeepsSelectionVisibleNearEnd()
-    {
-        var start = EditorOverlayModel.LoadListStart(selectedIndex: 9, itemCount: 10, maxListed: 8);
-
-        Assert.Equal(2, start);
-    }
-
-    [Fact]
-    public void LoadIndexAtRow_MapsVisibleRowToRealIndex()
-    {
-        var index = EditorOverlayModel.LoadIndexAtRow(selectedIndex: 5, itemCount: 10, maxListed: 8, row: 1);
-
-        Assert.Equal(2, index);
-    }
-
-    [Fact]
-    public void LoadIndexAtRow_OutOfRange_ReturnsNull()
-    {
-        var index = EditorOverlayModel.LoadIndexAtRow(selectedIndex: 0, itemCount: 1, maxListed: 8, row: 3);
-
-        Assert.Null(index);
-    }
-}
-
 public class EditorInputModelTests
 {
     [Fact]

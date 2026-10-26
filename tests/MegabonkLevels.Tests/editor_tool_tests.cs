@@ -86,12 +86,29 @@ public class EditorToolTests
     }
 
     [Fact]
-    public void ToolbarText_MarksTheCurrentToolAndAppendsTheDetailLine()
+    public void ToolbarText_MarksTheCurrentTool()
     {
-        var text = EditorTools.ToolbarText(EditorTool.Slope, "detail");
+        var text = EditorTools.ToolbarText(EditorTool.Slope);
 
-        Assert.Equal("1 Raise   2 Lower   <color=#ffd84d>[3 Slope]</color>   4 Remove   5 Place   6 Select\ndetail", text);
+        Assert.Equal("1 Raise   2 Lower   <color=#ffd84d>[3 Slope]</color>   4 Remove   5 Place   6 Select", text);
     }
+
+    [Fact]
+    public void ToolLabel_MarksOnlyTheCurrentTool()
+    {
+        Assert.Equal("<color=#ffd84d>[3 Slope]</color>", EditorTools.ToolLabel(EditorTool.Slope, EditorTool.Slope));
+        Assert.Equal("4 Remove", EditorTools.ToolLabel(EditorTool.Remove, EditorTool.Slope));
+    }
+
+    [Theory]
+    [InlineData(EditorTool.Raise, "Click a tile to raise it one level")]
+    [InlineData(EditorTool.Lower, "Click a tile to lower it one level")]
+    [InlineData(EditorTool.Slope, "Click a tile to cycle its slope: north, east, south, west, flat")]
+    [InlineData(EditorTool.Remove, "Click a tile to remove it")]
+    [InlineData(EditorTool.Place, "Pick an item in the palette, then click the map to place it")]
+    [InlineData(EditorTool.Select, "Click an object to select it; drag to move, R rotate, Del remove")]
+    public void Description_ExplainsEachTool(EditorTool tool, string expected) =>
+        Assert.Equal(expected, EditorTools.Description(tool));
 
     [Fact]
     public void TileDetail_DescribesTheTarget()

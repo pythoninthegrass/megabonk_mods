@@ -45,4 +45,14 @@ public class PalettePagerTests
     [InlineData(2, 0f, 4, 2)]
     public void Step_MovesOnePagePerNotchWithoutWrapping(int page, float notches, int pageCount, int expected) =>
         Assert.Equal(expected, PalettePager.Step(page, notches, pageCount));
+
+    [Theory]
+    [InlineData(0, 0, 4, 10, 0)]
+    [InlineData(1, 2, 4, 10, 6)]
+    [InlineData(2, 1, 4, 10, 9)]
+    [InlineData(2, 2, 4, 10, null)]
+    [InlineData(0, -1, 4, 10, null)]
+    [InlineData(0, 0, 4, 0, null)]
+    public void IndexAt_MapsAPageRowToTheItemIndex(int page, int row, int perPage, int count, int? expected) =>
+        Assert.Equal(expected, PalettePager.IndexAt(page, row, perPage, count));
 }

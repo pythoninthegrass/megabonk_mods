@@ -1,5 +1,6 @@
 using Il2CppTMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace MegabonkLevels;
 
@@ -10,6 +11,18 @@ public static class EditorUi
 
     // Distance from the top of the window to the first overlay row, clearing the viewport border and the screen notch.
     public const float TopInset = 26f;
+
+    public const float Border = 2f;
+
+    public static readonly Color PanelBorder = Gray(0.55f);
+    public static readonly Color PanelFill = Gray(0.36f, 0.95f);
+    public static readonly Color SlotBorder = Gray(0.15f);
+    public static readonly Color SlotFill = Gray(0.22f);
+    public static readonly Color HoverFill = Gray(0.30f);
+    public static readonly Color SelectedFill = Gray(0.42f);
+    public static readonly Color SearchFill = Gray(0.12f);
+
+    public static Color Gray(float value, float alpha = 1f) => new(value, value, value, alpha);
 
     public static GameObject NewCanvas(string name)
     {
@@ -26,6 +39,30 @@ public static class EditorUi
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
         return go.AddComponent<RectTransform>();
+    }
+
+    public static (RectTransform Outer, Image Border, Image Fill) Bordered(string name, Transform parent, Color border, Color fill)
+    {
+        var outer = NewRect(name, parent);
+        var borderImage = outer.gameObject.AddComponent<Image>();
+        borderImage.color = border;
+        var inner = NewRect("Fill", outer);
+        inner.anchorMin = Vector2.zero;
+        inner.anchorMax = Vector2.one;
+        inner.offsetMin = new Vector2(Border, Border);
+        inner.offsetMax = new Vector2(-Border, -Border);
+        var fillImage = inner.gameObject.AddComponent<Image>();
+        fillImage.color = fill;
+        return (outer, borderImage, fillImage);
+    }
+
+    public static void PlaceTopLeft(RectTransform rect, float x, float y, float width, float height)
+    {
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.anchoredPosition = new Vector2(x, -y);
+        rect.sizeDelta = new Vector2(width, height);
     }
 
     // Anchors rect to the top of its parent, full width less an 8-pixel margin, height pixels tall.

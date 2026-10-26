@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace MegabonkLevels;
 
-// Unity-free paging maths for the palette grid.
+// Unity-free paging maths for the palette grid and the level list.
 public static class PalettePager
 {
     public static int PageCount(int count, int perPage) => Math.Max(1, (count + perPage - 1) / perPage);
@@ -15,6 +15,12 @@ public static class PalettePager
         items.Skip(Clamp(page, items.Count, perPage) * perPage).Take(perPage).ToArray();
 
     public static int PageOf(int index, int perPage) => Math.Max(0, index) / perPage;
+
+    public static int? IndexAt(int page, int row, int perPage, int count)
+    {
+        var index = Clamp(page, count, perPage) * perPage + row;
+        return row >= 0 && index < count ? index : null;
+    }
 
     // One wheel notch is one page; the result stops at the first and last page.
     public static int Step(int page, float notches, int pageCount) =>

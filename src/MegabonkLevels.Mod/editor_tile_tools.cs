@@ -7,6 +7,7 @@ using Il2CppTMPro;
 using MelonLoader;
 using UnityEngine;
 using UnityEngine.UI;
+using static MegabonkLevels.EditorUi;
 
 namespace MegabonkLevels;
 
@@ -17,9 +18,10 @@ public static class EditorTileTools
     private const float ToastSeconds = 3f;
     private const float ToastGap = 4f;
     private const int MaxToasts = 5;
-    private const float ToolbarHeight = 144f;
+    private const float ToolbarHeight = 116f;
     private const float FontSize = 18f;
     private const float OverlayFontSize = 16f;
+    private const float ToolGap = 8f;
     private const float RayLength = 5000f;
     private const float WallNudge = 0.01f;
     private const float OutlineLift = 0.5f;
@@ -27,7 +29,13 @@ public static class EditorTileTools
     private const float OverlayWidth = 300f;
     private const float OverlayRowHeight = 30f;
     private const float OverlayPadding = 8f;
-    private const int MaxListedLevels = 8;
+    private const int ListedLevels = 4;
+    private const float ListTitleHeight = 24f;
+    private const float ListRowHeight = 19f;
+    // The 16 pt line is taller than a list row, and an ellipsis label hides lines that overflow its rect.
+    private const float ListRowTextOverhang = 4f;
+    private const float ListPagerButtonWidth = 28f;
+    private const float ListPageLabelWidth = 48f;
     private const float UndoRedoCtrlHoldSeconds = 0.2f;
     private const int SaveNameMaxChars = 80;
 
@@ -38,12 +46,16 @@ public static class EditorTileTools
 
     private static MelonLogger.Instance _logger;
     private static GameObject _root;
-    private static TextMeshProUGUI _label;
+    private static readonly List<ToolSlot> _toolSlots = new();
     private static TextMeshProUGUI _status;
-    private static TextMeshProUGUI _loadList;
+    private static TextMeshProUGUI _loadPageLabel;
+    private static readonly List<LoadRow> _loadRows = new();
+    private static EditorTooltip _hint;
+    private static readonly HoverDelay _hintDelay = EditorTooltip.NewHoverDelay();
     private static TextMeshProUGUI _saveInputText;
     private static TextMeshProUGUI _savePlaceholderText;
     private static RectTransform _saveInputRect;
+    private static Image _saveInputFill;
     private static Image _undoButtonBg;
     private static Image _redoButtonBg;
     private static LineRenderer _outline;
@@ -62,6 +74,7 @@ public static class EditorTileTools
     private static ReachabilityResult _reachability;
     private static string _validateSummary = "validate: not run";
     private static int _selectedLevel;
+    private static int _loadPage;
     private static float _ctrlHeldSince = -1f;
     private static bool _saveInputFocused;
     private static bool _textInputCaptured;
@@ -74,6 +87,19 @@ public static class EditorTileTools
     {
         public RectTransform Rect;
         public Image Background;
+        public TextMeshProUGUI Text;
+    }
+
+    private sealed class ToolSlot
+    {
+        public RectTransform Rect;
+        public TextMeshProUGUI Text;
+    }
+
+    private sealed class LoadRow
+    {
+        public RectTransform Rect;
+        public Image Fill;
         public TextMeshProUGUI Text;
     }
 
@@ -126,9 +152,12 @@ public static class EditorTileTools
         }
 
         _root = null;
-        _label = null;
+        _toolSlots.Clear();
         _status = null;
-        _loadList = null;
+        _loadPageLabel = null;
+        _loadRows.Clear();
+        _hint = null;
+        _saveInputFill = null;
         _saveInputText = null;
         _saveView = null;
         _savePlaceholderText = null;
@@ -144,6 +173,7 @@ public static class EditorTileTools
         _reachability = null;
         _levelFiles.Clear();
         _selectedLevel = 0;
+        _loadPage = 0;
         _ctrlHeldSince = -1f;
         _saveInputFocused = false;
         _textInputCaptured = false;
@@ -253,10 +283,14 @@ public static class EditorTileTools
 
     private static void Refresh()
     {
-        if (_label != null)
+        for (var i = 0; i < _toolSlots.Count; i++)
         {
-            var detail = EditorTools.IsObjectTool(_tool) ? EditorObjectTools.Detail(_tool, _target) : EditorTools.TileDetail(_target);
-            _label.text = EditorTools.ToolbarText(_tool, detail);
+            _toolSlots[i].Text.text = EditorTools.ToolLabel(EditorTools.All[i], _tool);
+        }
+
+        if (_hint != null)
+        {
+            RefreshHint();
         }
 
         if (_status != null)
@@ -270,26 +304,26 @@ public static class EditorTileTools
             _status.color = _reachability == null ? WarnColor : Color.white;
         }
 
-        if (_loadList != null)
+        if (_loadPageLabel != null)
         {
-            _loadList.text = RenderLoadList();
-            _loadList.overflowMode = TextOverflowModes.Ellipsis;
+            RenderLoadList();
         }
 
         if (_undoButtonBg != null)
         {
-            _undoButtonBg.color = _session?.CanUndo == true ? new Color(0.15f, 0.15f, 0.15f, 0.95f) : new Color(0.1f, 0.1f, 0.1f, 0.55f);
+            _undoButtonBg.color = _session?.CanUndo == true ? SlotFill : SearchFill;
         }
 
         if (_redoButtonBg != null)
         {
-            _redoButtonBg.color = _session?.CanRedo == true ? new Color(0.15f, 0.15f, 0.15f, 0.95f) : new Color(0.1f, 0.1f, 0.1f, 0.55f);
+            _redoButtonBg.color = _session?.CanRedo == true ? SlotFill : SearchFill;
         }
 
         if (_saveInputText != null)
         {
             _saveView?.Render(_saveField, _saveInputFocused, null);
             _saveInputText.color = _saveInputFocused ? Color.white : new Color(0.85f, 0.85f, 0.85f, 1f);
+            _saveInputFill.color = _saveInputFocused ? SelectedFill : SearchFill;
         }
 
         if (_savePlaceholderText != null)
@@ -323,6 +357,29 @@ public static class EditorTileTools
         _outline.enabled = true;
     }
 
+    private static void RefreshHint()
+    {
+        var mouse = (Vector2)EditorInput.MousePosition;
+        int? hovered = null;
+        for (var i = 0; i < _toolSlots.Count; i++)
+        {
+            if (RectTransformUtility.RectangleContainsScreenPoint(_toolSlots[i].Rect, mouse, null))
+            {
+                hovered = i;
+                break;
+            }
+        }
+
+        if (!_hintDelay.Update(hovered, Time.unscaledTime) || hovered is not { } tool)
+        {
+            _hint.Hide();
+            return;
+        }
+
+        var belowToolbar = new Vector2(mouse.x, Screen.height - EditorUi.TopInset - ToolbarHeight);
+        _hint.Show(EditorTools.Description(EditorTools.All[tool]), belowToolbar);
+    }
+
     // The toolbar sits centred between the palette and the load overlay, so it follows the palette width.
     private static void CentreToolbar()
     {
@@ -333,28 +390,32 @@ public static class EditorTileTools
     private static void BuildToolbar()
     {
         _root = EditorUi.NewCanvas("MegabonkLevelsTileTools");
-        var panel = EditorUi.NewRect("Toolbar", _root.transform);
+        var font = PositionLabel.FindFontAsset(EditorUi.FontName);
+        var panel = Bordered("Toolbar", _root.transform, PanelBorder, PanelFill).Outer;
         _toolbarRect = panel;
         panel.anchorMin = new Vector2(0.5f, 1f);
         panel.anchorMax = new Vector2(0.5f, 1f);
         panel.pivot = new Vector2(0.5f, 1f);
         CentreToolbar();
-        panel.gameObject.AddComponent<Image>().color = PanelColor;
 
-        var labelRect = EditorUi.NewRect("Label", panel);
-        labelRect.anchorMin = new Vector2(0f, 1f);
-        labelRect.anchorMax = new Vector2(1f, 1f);
-        labelRect.pivot = new Vector2(0f, 1f);
-        labelRect.offsetMin = new Vector2(8f, -58f);
-        labelRect.offsetMax = new Vector2(-8f, -4f);
-        _label = EditorUi.NewLabel(labelRect, PositionLabel.FindFontAsset(EditorUi.FontName), TextAlignmentOptions.Center, FontSize);
+        var toolWidths = new List<float>();
+        foreach (var tool in EditorTools.All)
+        {
+            var toolRect = EditorUi.NewRect($"Tool{tool}", panel);
+            var toolText = EditorUi.NewLabel(toolRect, font, TextAlignmentOptions.Center, FontSize);
+            toolText.text = EditorTools.ToolLabel(tool, tool);
+            toolText.ForceMeshUpdate();
+            toolWidths.Add(toolText.preferredWidth);
+            _toolSlots.Add(new ToolSlot { Rect = toolRect, Text = toolText });
+        }
+
 
         var actionsRect = EditorUi.NewRect("Actions", panel);
         actionsRect.anchorMin = new Vector2(0f, 1f);
         actionsRect.anchorMax = new Vector2(1f, 1f);
         actionsRect.pivot = new Vector2(0f, 1f);
-        actionsRect.offsetMin = new Vector2(8f, -96f);
-        actionsRect.offsetMax = new Vector2(-8f, -62f);
+        actionsRect.offsetMin = new Vector2(8f, -68f);
+        actionsRect.offsetMax = new Vector2(-8f, -38f);
 
         _undoButtonBg = NewButton(actionsRect, "Undo", "Undo", 0f, 88f, Undo, () => _session?.CanUndo == true);
         _redoButtonBg = NewButton(actionsRect, "Redo", "Redo", 94f, 88f, Redo, () => _session?.CanRedo == true);
@@ -366,40 +427,68 @@ public static class EditorTileTools
         NewButton(actionsRect, "Load", "Load", saveX + 282f, 70f, LoadSelected);
 
         var actionsWidth = saveX + 282f + 70f;
-        var toolsWidth = _label.GetPreferredValues(EditorTools.ToolbarText(EditorTool.Select, "")).x;
+        var toolsWidth = toolWidths.Sum() + ToolGap * (toolWidths.Count - 1);
         var toolbarWidth = Mathf.Max(actionsWidth, toolsWidth) + ToolbarMargin * 2f;
         panel.sizeDelta = new Vector2(toolbarWidth, ToolbarHeight);
+        var toolX = (toolbarWidth - toolsWidth) / 2f;
+        for (var i = 0; i < _toolSlots.Count; i++)
+        {
+            PlaceTopLeft(_toolSlots[i].Rect, toolX - ToolGap / 2f, 6f, toolWidths[i] + ToolGap, 28f);
+            toolX += toolWidths[i] + ToolGap;
+        }
 
         var statusRect = EditorUi.NewRect("Status", panel);
         statusRect.anchorMin = new Vector2(0f, 1f);
         statusRect.anchorMax = new Vector2(1f, 1f);
         statusRect.pivot = new Vector2(0f, 1f);
-        statusRect.offsetMin = new Vector2(8f, -138f);
-        statusRect.offsetMax = new Vector2(-8f, -100f);
-        _status = EditorUi.NewLabel(statusRect, PositionLabel.FindFontAsset(EditorUi.FontName), TextAlignmentOptions.Left, OverlayFontSize);
+        statusRect.offsetMin = new Vector2(8f, -110f);
+        statusRect.offsetMax = new Vector2(-8f, -72f);
+        _status = EditorUi.NewLabel(statusRect, font, TextAlignmentOptions.Left, OverlayFontSize);
 
-        var loadRect = EditorUi.NewRect("LoadList", _root.transform);
-        _loadRect = loadRect;
-        loadRect.anchorMin = new Vector2(1f, 1f);
-        loadRect.anchorMax = new Vector2(1f, 1f);
-        loadRect.pivot = new Vector2(1f, 1f);
-        loadRect.sizeDelta = new Vector2(OverlayWidth, OverlayRowHeight * (MaxListedLevels + 1) + OverlayPadding * 2);
-        loadRect.anchoredPosition = new Vector2(0f, -EditorUi.TopInset);
-        loadRect.gameObject.AddComponent<Image>().color = PanelColor;
-
-        var loadLabelRect = EditorUi.NewRect("LoadText", loadRect);
-        loadLabelRect.anchorMin = Vector2.zero;
-        loadLabelRect.anchorMax = Vector2.one;
-        loadLabelRect.offsetMin = new Vector2(OverlayPadding, OverlayPadding);
-        loadLabelRect.offsetMax = new Vector2(-OverlayPadding, -OverlayPadding);
-        _loadList = EditorUi.NewLabel(loadLabelRect, PositionLabel.FindFontAsset(EditorUi.FontName), TextAlignmentOptions.TopLeft, OverlayFontSize);
-        _loadList.enableWordWrapping = true;
-        _loadList.overflowMode = TextOverflowModes.Overflow;
+        BuildLoadList(font);
 
         // Toasts stack under the toolbar, newest nearest it: orange for success, red for failures, each cleared after ToastSeconds or on click.
         for (var i = 0; i < MaxToasts; i++)
         {
             _toastSlots.Add(BuildToastSlot(i, toolbarWidth, panel.anchoredPosition.x));
+        }
+
+        _hint = new EditorTooltip(_root.transform, font, OverlayFontSize);
+    }
+
+    private static void BuildLoadList(TMP_FontAsset font)
+    {
+        var loadRect = Bordered("LoadList", _root.transform, PanelBorder, PanelFill).Outer;
+        _loadRect = loadRect;
+        loadRect.anchorMin = new Vector2(1f, 1f);
+        loadRect.anchorMax = new Vector2(1f, 1f);
+        loadRect.pivot = new Vector2(1f, 1f);
+        loadRect.sizeDelta = new Vector2(OverlayWidth, ToolbarHeight);
+        loadRect.anchoredPosition = new Vector2(0f, -EditorUi.TopInset);
+
+        var pagerLeft = OverlayWidth - OverlayPadding - ListPagerButtonWidth * 2f - ListPageLabelWidth;
+        var titleRect = EditorUi.NewRect("LoadTitle", loadRect);
+        PlaceTopLeft(titleRect, OverlayPadding, OverlayPadding, pagerLeft - OverlayPadding, ListTitleHeight);
+        EditorUi.NewLabel(titleRect, font, TextAlignmentOptions.MidlineLeft, OverlayFontSize).text = "levels/UserData";
+
+        NewButton(loadRect, "PreviousLevels", "<", pagerLeft, ListPagerButtonWidth, () => StepLoadPage(-1f), null, OverlayPadding, ListTitleHeight);
+        var pageRect = EditorUi.NewRect("LoadPage", loadRect);
+        PlaceTopLeft(pageRect, pagerLeft + ListPagerButtonWidth, OverlayPadding, ListPageLabelWidth, ListTitleHeight);
+        _loadPageLabel = EditorUi.NewLabel(pageRect, font, TextAlignmentOptions.Center, OverlayFontSize);
+        NewButton(loadRect, "NextLevels", ">", pagerLeft + ListPagerButtonWidth + ListPageLabelWidth, ListPagerButtonWidth, () => StepLoadPage(1f), null, OverlayPadding, ListTitleHeight);
+
+        for (var i = 0; i < ListedLevels; i++)
+        {
+            var row = EditorUi.NewRect($"LoadRow{i}", loadRect);
+            PlaceTopLeft(row, OverlayPadding, OverlayPadding + ListTitleHeight + i * ListRowHeight, OverlayWidth - OverlayPadding * 2f, ListRowHeight);
+            var fill = row.gameObject.AddComponent<Image>();
+            fill.color = Color.clear;
+            var textRect = EditorUi.NewRect("Text", row);
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = new Vector2(4f, -ListRowTextOverhang);
+            textRect.offsetMax = new Vector2(-4f, ListRowTextOverhang);
+            _loadRows.Add(new LoadRow { Rect = row, Fill = fill, Text = EditorUi.NewLabel(textRect, font, TextAlignmentOptions.MidlineLeft, OverlayFontSize) });
         }
     }
 
@@ -715,6 +804,7 @@ public static class EditorTileTools
         if (_levelFiles.Count == 0)
         {
             _selectedLevel = 0;
+            _loadPage = 0;
             return;
         }
 
@@ -722,33 +812,34 @@ public static class EditorTileTools
         {
             var index = _levelFiles.FindIndex(n => n.Equals(selectName, StringComparison.OrdinalIgnoreCase));
             _selectedLevel = index >= 0 ? index : 0;
+            _loadPage = PalettePager.PageOf(_selectedLevel, ListedLevels);
         }
         else
         {
             _selectedLevel = Mathf.Clamp(_selectedLevel, 0, _levelFiles.Count - 1);
+            _loadPage = PalettePager.Clamp(_loadPage, _levelFiles.Count, ListedLevels);
         }
     }
 
-    private static string RenderLoadList()
+    private static int LoadPageCount => PalettePager.PageCount(_levelFiles.Count, ListedLevels);
+
+    private static void StepLoadPage(float notches) => _loadPage = PalettePager.Step(_loadPage, notches, LoadPageCount);
+
+    private static void RenderLoadList()
     {
-        if (_levelFiles.Count == 0)
+        _loadPage = PalettePager.Clamp(_loadPage, _levelFiles.Count, ListedLevels);
+        _loadPageLabel.text = $"{_loadPage + 1}/{LoadPageCount}";
+        var mouse = (Vector2)EditorInput.MousePosition;
+        for (var i = 0; i < _loadRows.Count; i++)
         {
-            return "levels/UserData\n(no .mblevel.json files)";
+            var row = _loadRows[i];
+            var index = PalettePager.IndexAt(_loadPage, i, ListedLevels, _levelFiles.Count);
+            row.Text.text = index is { } n ? _levelFiles[n] : i == 0 && _levelFiles.Count == 0 ? "(no .mblevel.json files)" : "";
+            var selected = index == _selectedLevel;
+            row.Text.color = selected ? HighlightColor : Color.white;
+            var hovered = index.HasValue && RectTransformUtility.RectangleContainsScreenPoint(row.Rect, mouse, null);
+            row.Fill.color = selected ? SelectedFill : hovered ? HoverFill : Color.clear;
         }
-
-        var start = Mathf.Max(0, _selectedLevel - MaxListedLevels / 2);
-        if (start + MaxListedLevels > _levelFiles.Count)
-        {
-            start = Mathf.Max(0, _levelFiles.Count - MaxListedLevels);
-        }
-
-        var lines = new List<string> { "levels/UserData" };
-        for (var i = start; i < _levelFiles.Count && i < start + MaxListedLevels; i++)
-        {
-            lines.Add((i == _selectedLevel ? "<color=#ffd84d>> </color>" : "  ") + _levelFiles[i]);
-        }
-
-        return string.Join("\n", lines);
     }
 
     private static void InvalidateValidation()
@@ -867,14 +958,7 @@ public static class EditorTileTools
             return;
         }
 
-        var selected = EditorOverlayModel.SelectedIndexAfterScroll(_selectedLevel, _levelFiles.Count, EditorInput.MouseScrollDelta.y);
-        if (selected == _selectedLevel)
-        {
-            return;
-        }
-
-        _selectedLevel = selected;
-        _saveField.Set(EditorFileNaming.StemForForm(_levelFiles[selected], SaveNameMaxChars));
+        StepLoadPage(-EditorInput.MouseScrollDelta.y);
     }
 
     private static void HandleSaveTyping()
@@ -899,45 +983,31 @@ public static class EditorTileTools
 
     private static bool TrySelectLoadRow(Vector2 mouse)
     {
-        if (_loadRect == null || _levelFiles.Count == 0 || !RectTransformUtility.RectangleContainsScreenPoint(_loadRect, mouse, null))
+        for (var i = 0; i < _loadRows.Count; i++)
         {
-            return false;
+            if (!RectTransformUtility.RectangleContainsScreenPoint(_loadRows[i].Rect, mouse, null))
+            {
+                continue;
+            }
+
+            if (PalettePager.IndexAt(_loadPage, i, ListedLevels, _levelFiles.Count) is not { } index)
+            {
+                return false;
+            }
+
+            _selectedLevel = index;
+            _saveField.Set(EditorFileNaming.StemForForm(_levelFiles[index], SaveNameMaxChars));
+            return true;
         }
 
-        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(_loadRect, mouse, null, out var local))
-        {
-            return false;
-        }
-
-        var top = _loadRect.rect.yMax - OverlayPadding;
-        var line = Mathf.FloorToInt((top - local.y) / OverlayRowHeight);
-        if (line <= 0)
-        {
-            return false;
-        }
-
-        var maybeIndex = EditorOverlayModel.LoadIndexAtRow(_selectedLevel, _levelFiles.Count, MaxListedLevels, line - 1);
-        if (maybeIndex is not { } index)
-        {
-            return false;
-        }
-
-        _selectedLevel = index;
-        _saveField.Set(EditorFileNaming.StemForForm(_levelFiles[index], SaveNameMaxChars));
-        return true;
+        return false;
     }
 
-    private static Image NewButton(RectTransform parent, string name, string text, float x, float width, Action onClick, Func<bool> enabled = null)
+    private static Image NewButton(RectTransform parent, string name, string text, float x, float width, Action onClick, Func<bool> enabled = null, float y = 0f, float height = OverlayRowHeight)
     {
-        var rect = EditorUi.NewRect(name, parent);
-        rect.anchorMin = new Vector2(0f, 1f);
-        rect.anchorMax = new Vector2(0f, 1f);
-        rect.pivot = new Vector2(0f, 1f);
-        rect.sizeDelta = new Vector2(width, OverlayRowHeight);
-        rect.anchoredPosition = new Vector2(x, 0f);
-
-        var image = rect.gameObject.AddComponent<Image>();
-        image.color = new Color(0.15f, 0.15f, 0.15f, 0.95f);
+        var parts = Bordered(name, parent, SlotBorder, SlotFill);
+        var rect = parts.Outer;
+        PlaceTopLeft(rect, x, y, width, height);
         _clickRegions.Add(new ClickRegion { Rect = rect, OnClick = onClick, Enabled = enabled });
 
         var labelRect = EditorUi.NewRect("Text", rect);
@@ -947,19 +1017,16 @@ public static class EditorTileTools
         labelRect.offsetMax = Vector2.zero;
         var label = EditorUi.NewLabel(labelRect, PositionLabel.FindFontAsset(EditorUi.FontName), TextAlignmentOptions.Center, OverlayFontSize);
         label.text = text;
-        return image;
+        return parts.Fill;
     }
 
     private static void NewInput(RectTransform parent, string name, float x, float width, string placeholder)
     {
-        var rect = EditorUi.NewRect(name, parent);
+        var parts = Bordered(name, parent, SlotBorder, SearchFill);
+        var rect = parts.Outer;
         _saveInputRect = rect;
-        rect.anchorMin = new Vector2(0f, 1f);
-        rect.anchorMax = new Vector2(0f, 1f);
-        rect.pivot = new Vector2(0f, 1f);
-        rect.sizeDelta = new Vector2(width, OverlayRowHeight);
-        rect.anchoredPosition = new Vector2(x, 0f);
-        rect.gameObject.AddComponent<Image>().color = new Color(0.1f, 0.1f, 0.1f, 0.95f);
+        _saveInputFill = parts.Fill;
+        PlaceTopLeft(rect, x, 0f, width, OverlayRowHeight);
 
         var textRect = EditorUi.NewRect("Text", rect);
         textRect.anchorMin = Vector2.zero;

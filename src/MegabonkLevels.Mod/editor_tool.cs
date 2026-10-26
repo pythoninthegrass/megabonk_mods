@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace MegabonkLevels;
@@ -25,12 +27,26 @@ public static class EditorTools
 
     public static bool IsObjectTool(EditorTool tool) => tool is EditorTool.Place or EditorTool.Select;
 
-    public static string ToolbarText(EditorTool current, string detail)
+    public static IReadOnlyList<EditorTool> All => Tools;
+
+    public static string ToolLabel(EditorTool tool, EditorTool current)
     {
-        var tools = string.Join("   ", Tools.Select((tool, i) =>
-            tool == current ? $"<color={CurrentToolColor}>[{i + 1} {tool}]</color>" : $"{i + 1} {tool}"));
-        return $"{tools}\n{detail}";
+        var label = $"{Array.IndexOf(Tools, tool) + 1} {tool}";
+        return tool == current ? $"<color={CurrentToolColor}>[{label}]</color>" : label;
     }
+
+    public static string ToolbarText(EditorTool current) => string.Join("   ", Tools.Select(tool => ToolLabel(tool, current)));
+
+    public static string Description(EditorTool tool) => tool switch
+    {
+        EditorTool.Raise => "Click a tile to raise it one level",
+        EditorTool.Lower => "Click a tile to lower it one level",
+        EditorTool.Slope => "Click a tile to cycle its slope: north, east, south, west, flat",
+        EditorTool.Remove => "Click a tile to remove it",
+        EditorTool.Place => "Pick an item in the palette, then click the map to place it",
+        EditorTool.Select => "Click an object to select it; drag to move, R rotate, Del remove",
+        _ => "",
+    };
 
     public static string TileDetail((int X, int Z, TileState State)? target) =>
         target is { } t ? $"target ({t.X},{t.Z}) level {t.State.Height} slope {t.State.Slope}" : "target none";

@@ -133,42 +133,6 @@ public static class EditorHotkeys
         ctrlHeldSince >= 0f && now - ctrlHeldSince >= thresholdSeconds;
 }
 
-public static class EditorOverlayModel
-{
-    public static int SelectedIndexAfterScroll(int selectedIndex, int itemCount, float notches)
-    {
-        if (itemCount <= 0)
-        {
-            return 0;
-        }
-
-        return Math.Clamp(selectedIndex - Math.Sign(notches), 0, itemCount - 1);
-    }
-
-    public static int LoadListStart(int selectedIndex, int itemCount, int maxListed)
-    {
-        if (itemCount <= 0)
-        {
-            return 0;
-        }
-
-        var start = Math.Max(0, selectedIndex - maxListed / 2);
-        if (start + maxListed > itemCount)
-        {
-            start = Math.Max(0, itemCount - maxListed);
-        }
-
-        return start;
-    }
-
-    public static int? LoadIndexAtRow(int selectedIndex, int itemCount, int maxListed, int row)
-    {
-        var start = LoadListStart(selectedIndex, itemCount, maxListed);
-        var index = start + row;
-        return index >= 0 && index < itemCount ? index : null;
-    }
-}
-
 public static class EditorInputModel
 {
     public static bool PlaceholderVisible(string text) => string.IsNullOrEmpty(text);
