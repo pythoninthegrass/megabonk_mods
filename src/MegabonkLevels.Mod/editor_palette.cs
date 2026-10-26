@@ -24,7 +24,8 @@ public static class EditorPalette
     private const float TabWidth = 56f;
     private const float TabHeight = 48f;
     private const float ButtonWidth = 40f;
-    private const float ChevronTop = 4f;
+    private const float ChevronWidth = 28f;
+    private const float ChevronHeight = 48f;
     private const int MagnifierPixels = 24;
     private const float ExpandedInnerWidth = PaletteLayout.ExpandedColumns * SlotSize + (PaletteLayout.ExpandedColumns - 1) * SlotGap;
     private const float CompactInnerWidth = ButtonWidth * 2f + SlotGap;
@@ -167,7 +168,7 @@ public static class EditorPalette
         }
 
         var mouse = (Vector2)EditorInput.MousePosition;
-        PointerOverPanel = Contains(_panel, mouse) || Contains(_tabColumn, mouse);
+        PointerOverPanel = Contains(_panel, mouse) || Contains(_tabColumn, mouse) || Contains(_chevronRect, mouse);
         var clicked = EditorInput.GetMouseButtonDown(0);
         var queryBefore = _search.Query;
         var overSearch = _layout.Compact ? Contains(_magnifierRect, mouse) : Contains(_searchRect, mouse);
@@ -433,16 +434,16 @@ public static class EditorPalette
         var innerWidth = panelWidth - Margin * 2f;
         var gridTop = TitleHeight + ControlHeight + Margin;
         var footerTop = gridTop + PaletteLayout.Rows * (SlotSize + SlotGap);
-        Width = TabWidth + panelWidth;
+        Width = TabWidth + panelWidth + ChevronWidth;
         _panel.sizeDelta = new Vector2(panelWidth, _panel.sizeDelta.y);
 
         _titleRect.gameObject.SetActive(!compact);
-        PlaceTopLeft(_titleRect, Margin, ChevronTop, innerWidth - ButtonWidth - Margin, TitleHeight - ChevronTop);
+        PlaceTopLeft(_titleRect, Margin, 4f, innerWidth, TitleHeight - 4f);
         _searchRect.gameObject.SetActive(!compact);
         PlaceTopLeft(_searchRect, Margin, TitleHeight, innerWidth, ControlHeight);
         _magnifierRect.gameObject.SetActive(compact);
-        PlaceTopLeft(_magnifierRect, Margin, TitleHeight, innerWidth, ControlHeight);
-        PlaceTopLeft(_chevronRect, compact ? Margin + (innerWidth - ButtonWidth) / 2f : panelWidth - Margin - ButtonWidth, ChevronTop, ButtonWidth, ControlHeight);
+        PlaceTopLeft(_magnifierRect, Margin + (innerWidth - SlotSize) / 2f, TitleHeight, SlotSize, ControlHeight);
+        PlaceTopLeft(_chevronRect, panelWidth, (_panel.sizeDelta.y - ChevronHeight) / 2f, ChevronWidth, ChevronHeight);
         _chevronLabel.text = compact ? ">>" : "<<";
 
         var columns = _layout.Columns;
