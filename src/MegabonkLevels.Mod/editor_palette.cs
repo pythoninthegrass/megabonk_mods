@@ -39,6 +39,8 @@ public static class EditorPalette
     private static readonly Color SelectedFill = Gray(0.42f);
     private static readonly Color TabFill = Gray(0.28f);
     private static readonly Color ActiveTabBorder = Gray(0.8f);
+    // Opaque stand-in for the translucent PanelFill as composited over the world, so the active tab has no seam.
+    private static readonly Color ActiveTabFill =Gray(95f / 255f);
     private static readonly Color SearchFill = Gray(0.12f);
 
     private static readonly List<Slot> _slots = new();
@@ -117,6 +119,7 @@ public static class EditorPalette
         public RectTransform Rect;
         public Image Border;
         public Image Fill;
+        public Image Seam;
         public PaletteCategory? Category;
         public string Label;
     }
@@ -491,7 +494,15 @@ public static class EditorPalette
         {
             var category = categories[i];
             var parts = Bordered("Tab", _tabColumn, PanelBorder, TabFill);
-            PlaceTopLeft(parts.Outer, 0f, i * TabHeight, TabWidth, TabHeight - 4f);
+            PlaceTopLeft(parts.Outer, 0f, i * TabHeight, TabWidth + Border, TabHeight - 4f);
+            parts.Fill.rectTransform.offsetMax = new Vector2(-2f * Border, -Border);
+            var seam = EditorUi.NewRect("Seam", parts.Outer);
+            seam.anchorMin = new Vector2(1f, 0f);
+            seam.anchorMax = Vector2.one;
+            seam.offsetMin = new Vector2(-2f * Border, Border);
+            seam.offsetMax = new Vector2(0f, -Border);
+            var seamImage = seam.gameObject.AddComponent<Image>();
+            seamImage.raycastTarget = false;
             var first = category.HasValue ? entries.First(entry => entry.Category == category.Value) : (PaletteEntry?)null;
             var thumb = AddThumb(parts.Fill.rectTransform);
             if (first.HasValue && PrefabThumbnails.Cache.TryGet(first.Value.Id, out var texture) && texture != null)
@@ -504,7 +515,7 @@ public static class EditorPalette
                 CenteredLabel(parts.Fill.rectTransform, font, FontSize).text = category?.ShortLabel() ?? "All";
             }
 
-            _tabs.Add(new Tab { Rect = parts.Outer, Border = parts.Border, Fill = parts.Fill, Category = category, Label = category?.Label() ?? "All" });
+            _tabs.Add(new Tab { Rect = parts.Outer, Border = parts.Border, Fill = parts.Fill, Seam = seamImage, Category = category, Label = category?.Label() ?? "All" });
         }
     }
 
@@ -625,7 +636,8 @@ public static class EditorPalette
         foreach (var tab in _tabs)
         {
             tab.Border.color = tab.Category == _category ? ActiveTabBorder : PanelBorder;
-            tab.Fill.color = tab.Category == _category ? PanelFill : TabFill;
+            tab.Fill.color = tab.Category == _category ? ActiveTabFill : TabFill;
+            tab.Seam.color = tab.Category == _category ? ActiveTabFill : PanelBorder;
         }
 
         UpdateSlotColors(null);
