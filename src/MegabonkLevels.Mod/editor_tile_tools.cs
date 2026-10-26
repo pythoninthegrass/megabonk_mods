@@ -327,7 +327,7 @@ public static class EditorTileTools
     private static void CentreToolbar()
     {
         var freeWidth = Screen.width - EditorPalette.Width - OverlayWidth;
-        _toolbarRect.anchoredPosition = new Vector2(EditorPalette.Width + freeWidth / 2f - Screen.width / 2f, 0f);
+        _toolbarRect.anchoredPosition = new Vector2(EditorPalette.Width + freeWidth / 2f - Screen.width / 2f, -EditorUi.TopInset);
     }
 
     private static void BuildToolbar()
@@ -384,7 +384,7 @@ public static class EditorTileTools
         loadRect.anchorMax = new Vector2(1f, 1f);
         loadRect.pivot = new Vector2(1f, 1f);
         loadRect.sizeDelta = new Vector2(OverlayWidth, OverlayRowHeight * (MaxListedLevels + 1) + OverlayPadding * 2);
-        loadRect.anchoredPosition = new Vector2(0f, -8f);
+        loadRect.anchoredPosition = new Vector2(0f, -EditorUi.TopInset);
         loadRect.gameObject.AddComponent<Image>().color = PanelColor;
 
         var loadLabelRect = EditorUi.NewRect("LoadText", loadRect);
@@ -410,7 +410,7 @@ public static class EditorTileTools
         rect.anchorMax = new Vector2(0.5f, 1f);
         rect.pivot = new Vector2(0.5f, 1f);
         rect.sizeDelta = new Vector2(width, OverlayRowHeight);
-        rect.anchoredPosition = new Vector2(x, -(ToolbarHeight + ToastGap + index * (OverlayRowHeight + ToastGap)));
+        rect.anchoredPosition = new Vector2(x, -(EditorUi.TopInset + ToolbarHeight + ToastGap + index * (OverlayRowHeight + ToastGap)));
         _clickRegions.Add(new ClickRegion { Rect = rect, OnClick = () => _toasts.Dismiss(index), Enabled = () => index < _toasts.Items.Count });
 
         var background = rect.gameObject.AddComponent<Image>();

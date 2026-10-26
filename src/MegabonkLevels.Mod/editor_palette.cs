@@ -356,7 +356,7 @@ public static class EditorPalette
         _panel.anchorMin = new Vector2(0f, 1f);
         _panel.anchorMax = new Vector2(0f, 1f);
         _panel.pivot = new Vector2(0f, 1f);
-        _panel.anchoredPosition = new Vector2(TabWidth, -Margin);
+        _panel.anchoredPosition = new Vector2(TabWidth, -EditorUi.TopInset);
         _panel.sizeDelta = new Vector2(0f, panelHeight);
 
         _titleRect = EditorUi.NewRect("Title", _panel);
@@ -489,7 +489,7 @@ public static class EditorPalette
         var categories = new List<PaletteCategory?> { null };
         categories.AddRange(PaletteFilter.Categories(entries).Select(category => (PaletteCategory?)category));
         _tabColumn = EditorUi.NewRect("Tabs", _root.transform);
-        PlaceTopLeft(_tabColumn, 0f, Margin, TabWidth, categories.Count * TabHeight);
+        PlaceTopLeft(_tabColumn, 0f, EditorUi.TopInset, TabWidth, categories.Count * TabHeight);
         for (var i = 0; i < categories.Count; i++)
         {
             var category = categories[i];

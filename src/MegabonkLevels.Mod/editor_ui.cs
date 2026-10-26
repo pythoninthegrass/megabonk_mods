@@ -8,6 +8,9 @@ public static class EditorUi
 {
     public const string FontName = "RobotoMono";
 
+    // Distance from the top of the window to the first overlay row, clearing the viewport border and the screen notch.
+    public const float TopInset = 26f;
+
     public static GameObject NewCanvas(string name)
     {
         var root = new GameObject(name);
