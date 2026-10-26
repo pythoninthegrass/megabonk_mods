@@ -159,6 +159,11 @@ public static class EditorTileTools
             InvalidateValidation();
         }
 
+        if (_toolbarRect != null)
+        {
+            CentreToolbar();
+        }
+
         _textInputCaptured = _saveInputFocused || EditorPalette.TextInputCaptured;
         HandleOverlayInput();
         _textInputCaptured |= _saveInputFocused;
@@ -318,6 +323,13 @@ public static class EditorTileTools
         _outline.enabled = true;
     }
 
+    // The toolbar sits centred between the palette and the load overlay, so it follows the palette width.
+    private static void CentreToolbar()
+    {
+        var freeWidth = Screen.width - EditorPalette.Width - OverlayWidth;
+        _toolbarRect.anchoredPosition = new Vector2(EditorPalette.Width + freeWidth / 2f - Screen.width / 2f, 0f);
+    }
+
     private static void BuildToolbar()
     {
         _root = EditorUi.NewCanvas("MegabonkLevelsTileTools");
@@ -326,8 +338,7 @@ public static class EditorTileTools
         panel.anchorMin = new Vector2(0.5f, 1f);
         panel.anchorMax = new Vector2(0.5f, 1f);
         panel.pivot = new Vector2(0.5f, 1f);
-        var freeWidth = Screen.width - EditorPalette.Width - OverlayWidth;
-        panel.anchoredPosition = new Vector2(EditorPalette.Width + freeWidth / 2f - Screen.width / 2f, 0f);
+        CentreToolbar();
         panel.gameObject.AddComponent<Image>().color = PanelColor;
 
         var labelRect = EditorUi.NewRect("Label", panel);

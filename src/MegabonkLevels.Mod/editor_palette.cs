@@ -23,9 +23,11 @@ public static class EditorPalette
     private const float Border = 2f;
     private const float TabWidth = 56f;
     private const float TabHeight = 48f;
-    private const int Columns = 4;
-    private const int Rows = 6;
-    private const int PerPage = Columns * Rows;
+    private const float ButtonWidth = 40f;
+    private const float ChevronTop = 4f;
+    private const int MagnifierPixels = 24;
+    private const float ExpandedInnerWidth = PaletteLayout.ExpandedColumns * SlotSize + (PaletteLayout.ExpandedColumns - 1) * SlotGap;
+    private const float CompactInnerWidth = ButtonWidth * 2f + SlotGap;
 
     private static readonly Color PanelBorder = Gray(0.55f);
     private static readonly Color PanelFill = Gray(0.36f, 0.95f);
@@ -40,6 +42,7 @@ public static class EditorPalette
 
     private static readonly List<Slot> _slots = new();
     private static readonly List<Tab> _tabs = new();
+    private static readonly PaletteLayout _layout = new();
     private static readonly PaletteSearchInput _search = new();
     private static readonly EditorCaretInput _caretInput = new();
     private static TextFieldView _searchView;
@@ -49,6 +52,13 @@ public static class EditorPalette
     private static RectTransform _searchRect;
     private static TextMeshProUGUI _searchLabel;
     private static Image _searchFill;
+    private static RectTransform _titleRect;
+    private static RectTransform _pageRect;
+    private static RectTransform _emptyRect;
+    private static RectTransform _chevronRect;
+    private static TextMeshProUGUI _chevronLabel;
+    private static RectTransform _magnifierRect;
+    private static Texture2D _magnifierTexture;
     private static RectTransform _previousRect;
     private static RectTransform _nextRect;
     private static TextMeshProUGUI _pageLabel;
@@ -160,7 +170,8 @@ public static class EditorPalette
         PointerOverPanel = Contains(_panel, mouse) || Contains(_tabColumn, mouse);
         var clicked = EditorInput.GetMouseButtonDown(0);
         var queryBefore = _search.Query;
-        _search.Step(clicked, Contains(_searchRect, mouse), EditorInput.GetKeyDown(KeyCode.Escape), EditorInput.InputString,
+        var overSearch = _layout.Compact ? Contains(_magnifierRect, mouse) : Contains(_searchRect, mouse);
+        _search.Step(clicked, overSearch, EditorInput.GetKeyDown(KeyCode.Escape), EditorInput.InputString,
             EditorInput.GetKey(KeyCode.LeftControl) || EditorInput.GetKey(KeyCode.RightControl), _caretInput.Read());
         if (queryBefore != _search.Query)
         {
@@ -188,7 +199,11 @@ public static class EditorPalette
             return;
         }
 
-        if (Contains(_previousRect, mouse))
+        if (Contains(_chevronRect, mouse) || (_layout.Compact && Contains(_magnifierRect, mouse)))
+        {
+            SetCompact(!_layout.Compact);
+        }
+        else if (Contains(_previousRect, mouse))
         {
             SetPage(PalettePager.Step(_page, -1f, PageCount));
         }
@@ -207,7 +222,11 @@ public static class EditorPalette
         }
     }
 
+    private static int PerPage => _layout.PerPage;
+
     private static int PageCount => PalettePager.PageCount(_filtered.Count, PerPage);
+
+    private static float PanelWidth => 2f * Margin + (_layout.Compact ? CompactInnerWidth : ExpandedInnerWidth);
 
     private static void Rebuild()
     {
@@ -222,6 +241,7 @@ public static class EditorPalette
         _search.Reset();
         _category = null;
         _page = 0;
+        _layout.Reset();
 
         var mapData = MapController.currentMap;
         if (mapData == null)
@@ -322,44 +342,55 @@ public static class EditorPalette
     {
         _root = EditorUi.NewCanvas("MegabonkLevelsPalette");
         var font = PositionLabel.FindFontAsset(EditorUi.FontName);
-        var panelWidth = Columns * SlotSize + (Columns - 1) * SlotGap + Margin * 2f;
         var gridTop = TitleHeight + ControlHeight + Margin;
-        var footerTop = gridTop + Rows * (SlotSize + SlotGap);
+        var footerTop = gridTop + PaletteLayout.Rows * (SlotSize + SlotGap);
         var panelHeight = footerTop + ControlHeight + Margin;
-        Width = TabWidth + panelWidth;
 
         var panel = Bordered("Panel", _root.transform, PanelBorder, PanelFill);
         _panel = panel.Outer;
-        PlaceTopLeft(_panel, TabWidth, Margin, panelWidth, panelHeight);
+        _panel.anchorMin = new Vector2(0f, 1f);
+        _panel.anchorMax = new Vector2(0f, 1f);
+        _panel.pivot = new Vector2(0f, 1f);
+        _panel.anchoredPosition = new Vector2(TabWidth, -Margin);
+        _panel.sizeDelta = new Vector2(0f, panelHeight);
 
-        var titleRect = EditorUi.NewRect("Title", _panel);
-        PlaceTopLeft(titleRect, Margin, 4f, panelWidth - Margin * 2f, TitleHeight - 4f);
-        _title = EditorUi.NewLabel(titleRect, font, TextAlignmentOptions.TopLeft, FontSize);
+        _titleRect = EditorUi.NewRect("Title", _panel);
+        _title = EditorUi.NewLabel(_titleRect, font, TextAlignmentOptions.TopLeft, FontSize);
 
         var search = Bordered("Search", _panel, SlotBorder, SearchFill);
         _searchRect = search.Outer;
         _searchFill = search.Fill;
-        PlaceTopLeft(_searchRect, Margin, TitleHeight, panelWidth - Margin * 2f, ControlHeight);
         _searchLabel = ControlLabel(_searchRect, font, "Search name or id...");
         EditorUi.FixInputBaseline(_searchLabel);
         _searchView = new TextFieldView(_searchLabel);
 
+        var magnifier = Bordered("Magnifier", _panel, SlotBorder, SearchFill);
+        _magnifierRect = magnifier.Outer;
+        var magnifierImage = AddThumb(magnifier.Fill.rectTransform);
+        magnifierImage.texture = MagnifierTexture();
+        magnifierImage.enabled = true;
+        var iconRect = magnifierImage.rectTransform;
+        iconRect.anchorMin = iconRect.anchorMax = iconRect.pivot = new Vector2(0.5f, 0.5f);
+        iconRect.anchoredPosition = Vector2.zero;
+        iconRect.sizeDelta = new Vector2(MagnifierPixels, MagnifierPixels);
+
+        _chevronRect = BuildButton("Chevron", "<<", font);
+        _chevronLabel = _chevronRect.GetComponentInChildren<TextMeshProUGUI>();
+
         BuildTabs(entries, font);
-        for (var i = 0; i < PerPage; i++)
+        for (var i = 0; i < PaletteLayout.ExpandedColumns * PaletteLayout.Rows; i++)
         {
-            BuildSlot(i, gridTop, font);
+            BuildSlot(font);
         }
 
-        _previousRect = BuildButton("PreviousPage", "<", Margin, footerTop, font);
-        _nextRect = BuildButton("NextPage", ">", panelWidth - Margin - 40f, footerTop, font);
-        var pageRect = EditorUi.NewRect("Page", _panel);
-        PlaceTopLeft(pageRect, Margin + 44f, footerTop, panelWidth - Margin * 2f - 88f, ControlHeight);
-        _pageLabel = ControlLabel(pageRect, font, "1/1");
+        _previousRect = BuildButton("PreviousPage", "<", font);
+        _nextRect = BuildButton("NextPage", ">", font);
+        _pageRect = EditorUi.NewRect("Page", _panel);
+        _pageLabel = ControlLabel(_pageRect, font, "1/1");
         _pageLabel.alignment = TextAlignmentOptions.Center;
 
-        var emptyRect = EditorUi.NewRect("NoResults", _panel);
-        PlaceTopLeft(emptyRect, Margin, gridTop, panelWidth - Margin * 2f, ControlHeight);
-        _emptyLabel = ControlLabel(emptyRect, font, "No matching entries");
+        _emptyRect = EditorUi.NewRect("NoResults", _panel);
+        _emptyLabel = ControlLabel(_emptyRect, font, "No matching entries");
 
         _tooltip = EditorUi.NewRect("Tooltip", _root.transform);
         _tooltip.anchorMin = new Vector2(0f, 1f);
@@ -368,7 +399,83 @@ public static class EditorPalette
         _tooltip.gameObject.AddComponent<Image>().color = Gray(0.08f, 0.95f);
         _tooltipLabel = ControlLabel(_tooltip, font, "");
         _tooltip.gameObject.SetActive(false);
+        ApplyLayout();
         ApplyFilter();
+    }
+
+    private static Texture2D MagnifierTexture()
+    {
+        if (_magnifierTexture != null)
+        {
+            return _magnifierTexture;
+        }
+
+        var mask = MagnifierIcon.Mask(MagnifierPixels);
+        var texture = new Texture2D(MagnifierPixels, MagnifierPixels, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
+        for (var row = 0; row < MagnifierPixels; row++)
+        {
+            for (var column = 0; column < MagnifierPixels; column++)
+            {
+                texture.SetPixel(column, MagnifierPixels - 1 - row, mask[row, column] ? Color.white : Color.clear);
+            }
+        }
+
+        texture.Apply();
+        _magnifierTexture = texture;
+        return texture;
+    }
+
+    // Positions every panel-width dependent element for the current compact state and republishes Width.
+    private static void ApplyLayout()
+    {
+        var compact = _layout.Compact;
+        var panelWidth = PanelWidth;
+        var innerWidth = panelWidth - Margin * 2f;
+        var gridTop = TitleHeight + ControlHeight + Margin;
+        var footerTop = gridTop + PaletteLayout.Rows * (SlotSize + SlotGap);
+        Width = TabWidth + panelWidth;
+        _panel.sizeDelta = new Vector2(panelWidth, _panel.sizeDelta.y);
+
+        _titleRect.gameObject.SetActive(!compact);
+        PlaceTopLeft(_titleRect, Margin, ChevronTop, innerWidth - ButtonWidth - Margin, TitleHeight - ChevronTop);
+        _searchRect.gameObject.SetActive(!compact);
+        PlaceTopLeft(_searchRect, Margin, TitleHeight, innerWidth, ControlHeight);
+        _magnifierRect.gameObject.SetActive(compact);
+        PlaceTopLeft(_magnifierRect, Margin, TitleHeight, innerWidth, ControlHeight);
+        PlaceTopLeft(_chevronRect, compact ? Margin + (innerWidth - ButtonWidth) / 2f : panelWidth - Margin - ButtonWidth, ChevronTop, ButtonWidth, ControlHeight);
+        _chevronLabel.text = compact ? ">>" : "<<";
+
+        var columns = _layout.Columns;
+        var slotsWidth = columns * SlotSize + (columns - 1) * SlotGap;
+        var slotsLeft = Margin + (innerWidth - slotsWidth) / 2f;
+        for (var i = 0; i < _slots.Count; i++)
+        {
+            PlaceTopLeft(_slots[i].Rect, slotsLeft + i % columns * (SlotSize + SlotGap), gridTop + i / columns * (SlotSize + SlotGap), SlotSize, SlotSize);
+        }
+
+        PlaceTopLeft(_previousRect, Margin, footerTop, ButtonWidth, ControlHeight);
+        PlaceTopLeft(_nextRect, panelWidth - Margin - ButtonWidth, footerTop, ButtonWidth, ControlHeight);
+        _pageRect.gameObject.SetActive(!compact);
+        PlaceTopLeft(_pageRect, Margin + ButtonWidth + SlotGap, footerTop, innerWidth - (ButtonWidth + SlotGap) * 2f, ControlHeight);
+        PlaceTopLeft(_emptyRect, Margin, gridTop, innerWidth, ControlHeight);
+        _emptyLabel.text = compact ? "None" : "No matching entries";
+    }
+
+    private static void SetCompact(bool compact)
+    {
+        if (compact == _layout.Compact)
+        {
+            return;
+        }
+
+        if (compact)
+        {
+            _search.Blur();
+        }
+
+        _page = _layout.SetCompact(compact, _page);
+        ApplyLayout();
+        RefreshSelection();
     }
 
     private static void BuildTabs(IReadOnlyList<PaletteEntry> entries, TMP_FontAsset font)
@@ -398,10 +505,9 @@ public static class EditorPalette
         }
     }
 
-    private static void BuildSlot(int index, float gridTop, TMP_FontAsset font)
+    private static void BuildSlot(TMP_FontAsset font)
     {
         var parts = Bordered("Slot", _panel, SlotBorder, SlotFill);
-        PlaceTopLeft(parts.Outer, Margin + index % Columns * (SlotSize + SlotGap), gridTop + index / Columns * (SlotSize + SlotGap), SlotSize, SlotSize);
         _slots.Add(new Slot
         {
             Rect = parts.Outer,
@@ -412,10 +518,9 @@ public static class EditorPalette
         });
     }
 
-    private static RectTransform BuildButton(string name, string text, float x, float y, TMP_FontAsset font)
+    private static RectTransform BuildButton(string name, string text, TMP_FontAsset font)
     {
         var parts = Bordered(name, _panel, SlotBorder, SlotFill);
-        PlaceTopLeft(parts.Outer, x, y, 40f, ControlHeight);
         CenteredLabel(parts.Fill.rectTransform, font, FontSize).text = text;
         return parts.Outer;
     }
@@ -549,6 +654,14 @@ public static class EditorPalette
         else if (TabAt(mouse) is { } tab)
         {
             text = tab.Label;
+        }
+        else if (Contains(_chevronRect, mouse))
+        {
+            text = _layout.Compact ? "Expand palette" : "Collapse palette";
+        }
+        else if (_layout.Compact && Contains(_magnifierRect, mouse))
+        {
+            text = "Search";
         }
 
         if (text == null)
