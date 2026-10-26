@@ -1,10 +1,10 @@
 ---
 id: TASK-005.08
 title: Palette thumbnails and icon grid
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-10 06:23'
-updated_date: '2026-10-26T20:20:00Z'
+updated_date: '2026-10-26T20:37:00Z'
 labels:
   - level-editor
 dependencies:
@@ -52,7 +52,7 @@ This task renders a thumbnail per palette entry and shows the palette as a paged
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -72,4 +72,12 @@ This task renders a thumbnail per palette entry and shows the palette as a paged
 Runtime check on Forest (75 entries): thumbnails visible in the grid and on tabs; first entry rendered 75 thumbnails in 716 ms, second entry rendered 0 (cached 75); slot click selects with white border; page arrows 1/3 -> 2/3; Flat tiles tab 1/1 with tooltip showing name, id and stage; search 'shrine' filtered to 5 slots and the hidden selection stayed selected; no ERROR/Exception in Latest.log. Four Forest prefabs (Forest0_Prefab4/5, Forest2_Prefab4/5) show the name fallback; the cause per prefab was not checked.
 
 Not verified: physical Esc sequence in the search field (Tick search/Esc code is unchanged but the new layout was only checked through the harness), wheel paging (harness mouse tool has no wheel), and Desert.
+
+2026-10-26: Follow-up requested by Lance: grid reduced to 4 columns with 10% larger slots (61.6 px, slot name font 12), and the search and level-save fields gained a caret (arrows with repeat, Home, End, Delete, insertion at the caret) with horizontal scrolling. The caret was first drawn below the text; lifted by 0.3 of the font size to sit on the baseline. Verified in game on Forest with long text in both fields. Committed as 5ef60bf (feat(editor): add caret navigation and horizontal scroll to text fields). Lance verified the behaviour in game and asked to close the task.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Replaced the text list palette with a paged grid of 4 columns by 6 rows of icon slots (61.6 px), a category tab column, and a footer with `<`, `n/m` and `>`. Thumbnails are rendered by PrefabThumbnails from a proxy copy of each prefab's meshes on layer 31 (no Instantiate), cached per catalogId in ThumbnailCache; 75 Forest thumbnails took about 0.7 s on the first editor entry and none on re-entry. Prefabs that cannot be rendered show their name. Tabs are All plus one per category; the stage is shown in the tooltip. Grayscale scheme with a white border on the selected slot. PaletteScroll and the group cycling were removed. Search and the level-save field share a TextFieldModel with caret movement, key repeat and horizontal scrolling (TextWindow, TextFieldView). Pure logic is unit tested (PalettePager, ThumbnailCache, category filter, TextFieldModel, TextWindow, KeyRepeater). Commits 0cc82dc and 5ef60bf. task check passes; Lance confirmed the behaviour in the running game.
+<!-- SECTION:FINAL_SUMMARY:END -->
