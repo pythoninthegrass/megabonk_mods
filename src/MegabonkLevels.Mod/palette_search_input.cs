@@ -4,16 +4,25 @@ public sealed class PaletteSearchInput
 {
     public const int MaxLength = 128;
 
-    public string Query { get; private set; } = "";
+    private readonly TextFieldModel _field = new(MaxLength);
+
+    public TextFieldModel Field => _field;
+    public string Query => _field.Text;
+    public int Caret => _field.Caret;
     public bool Focused { get; private set; }
     public bool CapturesKeyboard { get; private set; }
 
-    public void Step(bool clicked, bool overSearch, bool escape, string text, bool controlHeld = false)
+    public void Step(bool clicked, bool overSearch, bool escape, string text, bool controlHeld = false, CaretKeys keys = default)
     {
         CapturesKeyboard = Focused;
         if (clicked)
         {
+            var wasFocused = Focused;
             Focused = overSearch;
+            if (Focused && !wasFocused)
+            {
+                _field.Navigate(new CaretKeys(End: true));
+            }
         }
 
         CapturesKeyboard |= Focused;
@@ -27,27 +36,18 @@ public sealed class PaletteSearchInput
             return;
         }
 
-        foreach (var c in text)
+        if (_field.Type(text))
         {
-            if (c == '\b' && Query.Length > 0)
-            {
-                Query = Query.Substring(0, Query.Length - 1);
-            }
-            else if (c == '\r' || c == '\n')
-            {
-                Focused = false;
-                break;
-            }
-            else if (!char.IsControl(c) && Query.Length < MaxLength)
-            {
-                Query += c;
-            }
+            Focused = false;
+            return;
         }
+
+        _field.Navigate(keys);
     }
 
     public void Reset()
     {
-        Query = "";
+        _field.Clear();
         Focused = false;
         CapturesKeyboard = false;
     }

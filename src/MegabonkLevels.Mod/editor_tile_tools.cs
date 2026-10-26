@@ -65,7 +65,9 @@ public static class EditorTileTools
     private static float _ctrlHeldSince = -1f;
     private static bool _saveInputFocused;
     private static bool _textInputCaptured;
-    private static string _saveName = "";
+    private static readonly TextFieldModel _saveField = new(SaveNameMaxChars);
+    private static readonly EditorCaretInput _saveCaretInput = new();
+    private static TextFieldView _saveView;
     private static int _lastSavedEditCount;
 
     private sealed class ToastSlot
@@ -88,11 +90,11 @@ public static class EditorTileTools
 
     public static bool SaveInputFocused => _saveInputFocused;
 
-    public static bool SaveInputHasText => _saveName.Length > 0;
+    public static bool SaveInputHasText => _saveField.Text.Length > 0;
 
     public static void BlurSaveInput() => _saveInputFocused = false;
 
-    public static void ClearSaveInput() => _saveName = "";
+    public static void ClearSaveInput() => _saveField.Clear();
 
     public static void OnEditorEntered(MelonLogger.Instance logger)
     {
@@ -128,6 +130,7 @@ public static class EditorTileTools
         _status = null;
         _loadList = null;
         _saveInputText = null;
+        _saveView = null;
         _savePlaceholderText = null;
         _saveInputRect = null;
         _undoButtonBg = null;
@@ -144,7 +147,7 @@ public static class EditorTileTools
         _ctrlHeldSince = -1f;
         _saveInputFocused = false;
         _textInputCaptured = false;
-        _saveName = "";
+        _saveField.Clear();
         _clickRegions.Clear();
         ClearUnreachable();
     }
@@ -280,13 +283,13 @@ public static class EditorTileTools
 
         if (_saveInputText != null)
         {
-            _saveInputText.text = _saveName;
+            _saveView?.Render(_saveField, _saveInputFocused, null);
             _saveInputText.color = _saveInputFocused ? Color.white : new Color(0.85f, 0.85f, 0.85f, 1f);
         }
 
         if (_savePlaceholderText != null)
         {
-            _savePlaceholderText.enabled = EditorInputModel.PlaceholderVisible(_saveName);
+            _savePlaceholderText.enabled = EditorInputModel.PlaceholderVisible(_saveField.Text);
         }
 
         if (_toastSlots.Count > 0)
@@ -629,7 +632,7 @@ public static class EditorTileTools
             return false;
         }
 
-        var fileName = EditorFileNaming.NormalizeLevelFileName(_saveName);
+        var fileName = EditorFileNaming.NormalizeLevelFileName(_saveField.Text);
         var path = Path.Combine(LiveEditPatch.LevelsDirectoryPath(), fileName);
         try
         {
@@ -644,7 +647,7 @@ public static class EditorTileTools
         _lastSavedEditCount = _session.CurrentEdits.Count;
         _validateSummary = $"saved {fileName}";
         ShowTransientStatus($"saved: {fileName}");
-        _saveName = fileName.Substring(0, fileName.Length - ".mblevel.json".Length);
+        _saveField.Set(fileName.Substring(0, fileName.Length - ".mblevel.json".Length));
 
         RefreshLoadList(fileName);
         return true;
@@ -838,7 +841,12 @@ public static class EditorTileTools
             handled = TrySelectLoadRow(mouse);
         }
 
+        var wasSaveFocused = _saveInputFocused;
         _saveInputFocused = _saveInputRect != null && RectTransformUtility.RectangleContainsScreenPoint(_saveInputRect, mouse, null);
+        if (_saveInputFocused && !wasSaveFocused)
+        {
+            _saveField.Navigate(new CaretKeys(End: true));
+        }
     }
 
     private static void ScrollLoadList()
@@ -855,7 +863,7 @@ public static class EditorTileTools
         }
 
         _selectedLevel = selected;
-        _saveName = EditorFileNaming.StemForForm(_levelFiles[selected], SaveNameMaxChars);
+        _saveField.Set(EditorFileNaming.StemForForm(_levelFiles[selected], SaveNameMaxChars));
     }
 
     private static void HandleSaveTyping()
@@ -865,24 +873,12 @@ public static class EditorTileTools
             return;
         }
 
-        foreach (var c in EditorInput.InputString)
+        if (_saveField.Type(EditorInput.InputString))
         {
-            if (c == '\b')
-            {
-                if (_saveName.Length > 0)
-                {
-                    _saveName = _saveName.Substring(0, _saveName.Length - 1);
-                }
-            }
-            else if (c == '\n' || c == '\r')
-            {
-                Save();
-            }
-            else if (!char.IsControl(c) && _saveName.Length < SaveNameMaxChars)
-            {
-                _saveName += c;
-            }
+            Save();
         }
+
+        _saveField.Navigate(_saveCaretInput.Read());
 
         if (EditorInput.GetKeyDown(KeyCode.Escape))
         {
@@ -916,7 +912,7 @@ public static class EditorTileTools
         }
 
         _selectedLevel = index;
-        _saveName = EditorFileNaming.StemForForm(_levelFiles[index], SaveNameMaxChars);
+        _saveField.Set(EditorFileNaming.StemForForm(_levelFiles[index], SaveNameMaxChars));
         return true;
     }
 
@@ -961,6 +957,7 @@ public static class EditorTileTools
         textRect.offsetMax = new Vector2(-8f, 0f);
         _saveInputText = EditorUi.NewLabel(textRect, PositionLabel.FindFontAsset(EditorUi.FontName), TextAlignmentOptions.MidlineLeft, OverlayFontSize);
         EditorUi.FixInputBaseline(_saveInputText);
+        _saveView = new TextFieldView(_saveInputText);
         _saveInputText.text = placeholder;
 
         var phRect = EditorUi.NewRect("Placeholder", rect);
@@ -972,7 +969,7 @@ public static class EditorTileTools
         EditorUi.FixInputBaseline(_savePlaceholderText);
         _savePlaceholderText.text = placeholder;
         _savePlaceholderText.color = new Color(0.6f, 0.6f, 0.6f, 1f);
-        _saveName = "";
+        _saveField.Clear();
     }
 
     private static LineRenderer NewOverlayLine(Color color, float width, bool loop, int points)

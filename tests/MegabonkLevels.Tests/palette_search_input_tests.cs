@@ -77,3 +77,40 @@ public class PaletteSearchInputTests
         Assert.False(input.CapturesKeyboard);
     }
 }
+
+public class PaletteSearchInputCaretTests
+{
+    [Fact]
+    public void Arrows_MoveTheCaretSoTypingInsertsInTheMiddle()
+    {
+        var input = new PaletteSearchInput();
+        input.Step(true, true, false, "rck");
+        input.Step(false, false, false, "", keys: new CaretKeys(Left: 2));
+        input.Step(false, false, false, "o");
+
+        Assert.Equal("rock", input.Query);
+        Assert.Equal(2, input.Caret);
+    }
+
+    [Fact]
+    public void Arrows_AreIgnoredWhenNotFocused()
+    {
+        var input = new PaletteSearchInput();
+        input.Step(true, true, false, "ab");
+        input.Blur();
+        input.Step(false, false, false, "", keys: new CaretKeys(Left: 1));
+
+        Assert.Equal(2, input.Caret);
+    }
+
+    [Fact]
+    public void Focusing_PutsTheCaretAtTheEnd()
+    {
+        var input = new PaletteSearchInput();
+        input.Step(true, true, false, "abc");
+        input.Step(true, false, false, "");
+        input.Step(true, true, false, "");
+
+        Assert.Equal(3, input.Caret);
+    }
+}

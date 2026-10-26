@@ -61,6 +61,9 @@
     <Compile Include="../../src/MegabonkLevels.Mod/palette_pick.cs" Link="palette_pick.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/tile_outline.cs" Link="tile_outline.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/palette_pager.cs" Link="palette_pager.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/text_field_model.cs" Link="text_field_model.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/text_window.cs" Link="text_window.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/key_repeater.cs" Link="key_repeater.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/thumbnail_cache.cs" Link="thumbnail_cache.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/editor_editing_support.cs" Link="editor_editing_support.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/editor_edit_session.cs" Link="editor_edit_session.cs" />

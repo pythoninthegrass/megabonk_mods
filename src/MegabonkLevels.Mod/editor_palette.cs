@@ -17,13 +17,13 @@ public static class EditorPalette
     private const float TitleHeight = 48f;
     private const float ControlHeight = 30f;
     private const float FontSize = 16f;
-    private const float SlotFontSize = 11f;
-    private const float SlotSize = 56f;
+    private const float SlotFontSize = 12f;
+    private const float SlotSize = 61.6f;
     private const float SlotGap = 4f;
     private const float Border = 2f;
     private const float TabWidth = 56f;
     private const float TabHeight = 48f;
-    private const int Columns = 5;
+    private const int Columns = 4;
     private const int Rows = 6;
     private const int PerPage = Columns * Rows;
 
@@ -41,6 +41,8 @@ public static class EditorPalette
     private static readonly List<Slot> _slots = new();
     private static readonly List<Tab> _tabs = new();
     private static readonly PaletteSearchInput _search = new();
+    private static readonly EditorCaretInput _caretInput = new();
+    private static TextFieldView _searchView;
     private static IReadOnlyList<PaletteEntry> _filtered = new List<PaletteEntry>();
     private static PaletteCategory? _category;
     private static int _page;
@@ -159,13 +161,13 @@ public static class EditorPalette
         var clicked = EditorInput.GetMouseButtonDown(0);
         var queryBefore = _search.Query;
         _search.Step(clicked, Contains(_searchRect, mouse), EditorInput.GetKeyDown(KeyCode.Escape), EditorInput.InputString,
-            EditorInput.GetKey(KeyCode.LeftControl) || EditorInput.GetKey(KeyCode.RightControl));
+            EditorInput.GetKey(KeyCode.LeftControl) || EditorInput.GetKey(KeyCode.RightControl), _caretInput.Read());
         if (queryBefore != _search.Query)
         {
             ApplyFilter();
         }
 
-        _searchLabel.text = _search.Query.Length == 0 ? "Search name or id..." : _search.Query;
+        _searchView.Render(_search.Field, _search.Focused, "Search name or id...");
         _searchLabel.color = Color.white;
         _searchFill.color = _search.Focused ? SelectedFill : SearchFill;
         var hover = SlotAt(mouse);
@@ -340,6 +342,7 @@ public static class EditorPalette
         PlaceTopLeft(_searchRect, Margin, TitleHeight, panelWidth - Margin * 2f, ControlHeight);
         _searchLabel = ControlLabel(_searchRect, font, "Search name or id...");
         EditorUi.FixInputBaseline(_searchLabel);
+        _searchView = new TextFieldView(_searchLabel);
 
         BuildTabs(entries, font);
         for (var i = 0; i < PerPage; i++)
