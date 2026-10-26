@@ -49,7 +49,30 @@ public static class EditorUi
         label.overflowMode = TextOverflowModes.Ellipsis;
         label.color = Color.white;
         label.raycastTarget = false;
+        StripEffects(label);
         return label;
+    }
+
+    // The game's font material has underlay (drop shadow) on and zero sharpness, which draws gray boxes behind small glyphs.
+    private static void StripEffects(TextMeshProUGUI label)
+    {
+        var material = label.fontMaterial;
+        material.DisableKeyword("UNDERLAY_ON");
+        material.DisableKeyword("OUTLINE_ON");
+        foreach (var property in new[] { "_OutlineWidth", "_UnderlaySoftness", "_UnderlayDilate", "_FaceDilate" })
+        {
+            if (material.HasProperty(property))
+            {
+                material.SetFloat(property, 0f);
+            }
+        }
+
+        if (material.HasProperty("_UnderlayColor"))
+        {
+            material.SetColor("_UnderlayColor", Color.clear);
+        }
+
+        material.SetFloat("_Sharpness", 1f);
     }
 
     public static void FixInputBaseline(TextMeshProUGUI label)
