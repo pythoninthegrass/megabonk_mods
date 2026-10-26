@@ -4,6 +4,7 @@ title: In-game editor UI
 status: To Do
 assignee: []
 created_date: '2026-10-06 21:42'
+updated_date: '2026-10-26T17:06:00Z'
 labels:
   - level-editor
 dependencies:
@@ -33,7 +34,7 @@ Read TASK-003's `docs/level-format.md` and TASK-004's integration docs before st
 - [ ] #4 Undo/redo is exposed in the UI and backed by TASK-003's EditStack
 - [ ] #5 A validate action highlights unreachable tiles using TASK-003's reachability validator
 - [ ] #6 A level can be saved to and loaded from disk via the UI, using TASK-003's file format and TASK-004's load/apply machinery
-- [ ] #7 A playtest action reloads the stage with the current edits applied and lets the player walk it immediately, without leaving the game
+- [ ] #7 F8 toggles editing and live playtesting of the same run with unsaved edits applied, preserving edit history without a stage reload
 <!-- AC:END -->
 
 ## Definition of Done

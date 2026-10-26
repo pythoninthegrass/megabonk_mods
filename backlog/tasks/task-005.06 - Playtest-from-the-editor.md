@@ -1,11 +1,11 @@
 ---
 id: TASK-005.06
 title: Playtest from the editor
-status: Done
+status: In Progress
 assignee:
-  - lance
+  - '@Assistant'
 created_date: '2026-10-06 21:43'
-updated_date: '2026-10-26T16:01:00Z'
+updated_date: '2026-10-26T17:21:00Z'
 labels:
   - level-editor
 dependencies:
@@ -19,18 +19,15 @@ ordinal: 28000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Read parent TASK-005 first for full context.
-
-Implement a "playtest" action in the editor UI that takes the current (possibly unsaved) edit state, reloads the stage with it applied (reusing TASK-004's load/apply/navmesh-rebuild pipeline directly against the in-memory edit list rather than requiring a save-to-disk round-trip first), restores normal gameplay (un-pauses, re-enables player control/damage, restores the normal camera), and lets the player walk/fight through it like a real run. Provide a clear way to return to the editor afterward (e.g. re-pressing the editor keybind) without losing the edit history that was being playtested.
-
-Verify the leaderboard/achievement/stats guard from TASK-004.04 also applies during a playtest session, since a playtest run should never be treated as a legitimate scored run either.
+F8 is the single toggle between frozen in-game editing and live playtesting of the same run. Edits already apply live; do not restart the stage or require saving. Remove the separate Playtest button and restart-specific session restoration. Preserve unsaved edits, undo/redo and save bookkeeping across toggles; resume the normal player camera/gameplay. Any run entered into the editor must remain excluded from leaderboard, achievement and stats writes until a new normal run starts. User approved replacing the original fresh-run playtest contract with same-run continuation (player position, health, enemies and timer retained).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A playtest action applies the current in-memory edit state (not requiring a prior save) and restores normal gameplay so the player can walk/fight through it
-- [ ] #2 Returning to the editor after a playtest preserves the edit history that was being tested
-- [ ] #3 The leaderboard/achievement/stats guard from TASK-004.04 is confirmed active during playtest sessions
+- [x] #1 F8 alternates editing and live gameplay in the same run with current unsaved edits, without a Playtest button or stage reload
+- [ ] #2 Repeated F8 toggles preserve undo/redo and save state and restore the normal follow camera, movement and combat
+- [x] #3 Editor-used runs suppress leaderboard/achievement/stats writes until a new normal run starts
+- [x] #4 Raised/lowered statically batched tiles have visible ground at the edited height matching collision, including undo/redo and live F8 playtests
 <!-- AC:END -->
 
 ## Definition of Done
@@ -44,52 +41,13 @@ Verify the leaderboard/achievement/stats guard from TASK-004.04 also applies dur
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-## Goal
-Add a Playtest action to the editor that replays the current in-memory edits as a fresh, playable run, and returns to the editor on F8 with the undo/redo history intact.
+1. Write regression tests for sticky editor-used scoring guard and same-generation edit session selection.
+2. Remove Playtest toolbar action and restart-specific coordinator; retain F8's same-run exit/entry and generation-based session reset.
+3. Mark the current run custom/unscored on editor entry, preserving guard until next run.
+4. Update controls docs; run task check.
+5. Rebuild/relaunch via harness and verify repeated F8 transitions, raised/enclosed terrain, camera follow, undo/redo, gameplay and scoring guard. Record actual evidence; do not claim unverified behavior.
 
-## Key facts from the codebase
-- `EditorTileTools._session` is an `EditorEditSession` (undo/redo stack + save-state bookkeeping). It lives in `editor_tile_tools.cs` and is reset only in `OnEditorEntered` when `_sessionRunGeneration != RunGeneration`, and in `LoadSelected`.
-- `EditorTileTools.OnEditorEntered` is called from `EditorMode.Enter`. During playtest the editor is off, so `EditorTileTools.Tick`/`OnEditorEntered` do NOT run, meaning `_session` is preserved across the reload — the only reset is on return.
-- `LiveEditPatch` holds its own runtime `_session` (planner/applier/grid/objects), recreated in `OnGenerationComplete` each generation. `SeedEdits` returns its seeded edits. `SnapshotLevelFile(edits)` builds a `LevelFile` from the current map/stage/tier/seed + edits.
-- `LevelLoaderPatch.LoadAndStart(path, logger)` deserializes from disk, forces the seed, calls `SetPendingEdits` + `CustomLevelState.MarkPendingStart`, then `MapController.StartNewMap`. This is the shared start path to reuse.
-- `CustomLevelState.IsActive` is set true by the `StartNewMap` Harmony prefix when `_pendingStart` was marked, and `SteamWriteGuard` suppresses leaderboard/achievement/stats writes while `IsActive`. Reusing the same start path arms the guard automatically.
-- `PlayerInvulnerability` is harness-driven (Mirror item). A new run builds a new inventory, so the player is vulnerable by default, but the old inventory's Mirror must be cleared.
-- Open tile maps bake no navmesh; enemy movement is Rigidbody-based (see docs/runtime-map-structure.md), so tile edits need no navmesh rebuild.
-
-## Design
-1. `LevelLoaderPatch`:
-   - Extract the validated start logic into `Start(LevelFile level, MelonLogger.Instance logger)` returning bool (true once `StartNewMap` is reached).
-   - Keep `LoadAndStart(path, logger)` as a thin wrapper that deserializes and calls `Start`.
-   - The bool lets the editor report failure without a save-to-disk round-trip.
-
-2. `EditorTileTools`:
-   - Add a `PlaytestState` holding the preserved `EditorEditSession` and `_lastSavedEditCount`.
-   - Add `Playtest(logger)`: build the `LevelFile` via `SnapshotLevelFile(_session.CurrentEdits)`; capture `_playtest`; start via `LevelLoaderPatch.Start`; clear invulnerability; exit editor mode. On any failure, restore `_playtest`/editor state and report via toast.
-   - Modify `OnEditorEntered`: when `_playtest != null`, restore the preserved session (`_session`, `_sessionRunGeneration = RunGeneration`, `_lastSavedEditCount`) instead of resetting; clear `_playtest`. Otherwise keep the existing generation-change reset.
-   - Add a Playtest toolbar button (disabled while loading / no live session).
-
-3. `EditorMode`:
-   - No behavior change; F8 re-entry already works via `EditorReenterPolicy`. Returning triggers `OnEditorEntered`, which restores the session.
-
-## Tests (Unity-free, written first)
-- `editor_playtest_tests.cs`:
-  - `SnapshotLevelFile` includes current edits, excludes undone edits, needs no save.
-  - `Playtest` captures the session so undo/redo survive a reload; an unrelated run clears the retained session; duplicate clicks cannot start overlapping reloads; invalid snapshot/failed start leaves history intact and reports failure.
-  - `OnEditorEntered` restores the preserved session when `_playtest` is set, and resets normally otherwise.
-  - `CustomLevelState` guard: marking pending start arms `IsActive` (reuse existing `custom_level_state_tests` pattern).
-
-## Verify in the running game (docs/development.md harness)
-1. Make unsaved terrain + object edits; leave an op for redo.
-2. Playtest; confirm the fresh run contains the edits.
-3. Confirm normal camera, movement, combat, damage, edited-ground collision.
-4. Press F8; confirm undo/redo/save still work.
-5. Repeat playtest; test an unrelated run to catch stale-session reuse.
-6. Confirm leaderboard/achievement/stats writes are suppressed during playtest.
-
-## Finish
-- Update docs/development.md (playtest controls, harness notes) and user controls docs.
-- `task check`.
-- Record evidence + plan in Backlog; conventional commit, no attribution.
+User approved including missing-ground fix. Live TileRender diagnostics confirmed staticBatch=True and render bounds remaining at y=-20 after transform moved to y=0. Add Unity-free placement-policy tests, replace batched tiles instead of moving them, remove temporary diagnostics, verify surface/collision at edited height plus undo/redo and enclosed terrain.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -106,14 +64,35 @@ editor_tile_tools.cs: Playtest(logger) builds SnapshotLevelFile(_session.Current
 Tests: editor_playtest_tests.cs (8 tests) covering CurrentEdits excludes undone ops, coordinator restore/discard, pick restore/reset/keep-after-discard. All 686 tests pass; mod builds clean with 0 warnings.
 
 docs/development.md: toolbar controls table Playtest row plus a full playtest paragraph (in-memory LevelFile, guard active, session preserved, invulnerability cleared).
+
+## Regression discovered post-merge: playtest camera does not revert to the follow camera
+
+After the task was marked Done, a regression was reported and is under investigation:
+hitting Playtest leaves the gameplay camera stuck instead of reverting to the game's
+follow camera that tracks Tony. The user confirmed this is the real bug, distinct from
+the black window and from the fall.
+
+Dev-harness findings so far:
+- Camera DOES follow Tony after recovery (teleport to a distant cell keeps the view centered on the player).
+- No fall reproduces on normal terrain — player rests at spawn Y≈1.925 (feet at transform.position.y - 1.925).
+- The ~1.6s black window at playtest start is the in-place reload window (StartNewMap → A_GenerationComplete), NOT the camera stuck in terrain.
+- F8 return-to-editor still works correctly (editor=true, run frozen, palette intact, 75 entries) — unaffected.
+- Playtest handoff order: Playtest() → LevelLoaderPatch.Start → StartNewMap → PlayerInvulnerability.Set(false) → EditorMode.Set(false)/Exit → CameraOverride.Clear().
+- CameraOverride.Clear() reverts to the game default (saves the game follow pose before the first override, restores on exit) and fires at t=0, ~1.6s BEFORE A_GenerationComplete — the restore lands mid-recreation, which is the suspected handoff failure.
+
+Still open: reproduce with the user's exact repro (modified terrain — plateau or a 4-wall pit). Load a level file with the modification, playtest, and watch the camera immediately after recovery. The 5×5 level-1 plateau test spawned the player at Y=-1.75 (below the raised surface), so spawn position is terrain-sensitive. Fix scope is the camera handoff only — no terrain/spawn/loading-screen work.
+
+User approved revised same-run F8 contract. Existing task file has pre-existing local investigation notes; retaining them. Unrelated untracked task and scratch levels are left untouched.
+
+First live F8 round-trip found editor auto-entry can precede generation complete, leaving a stale session generation. Added SynchronizeSession on editor ticks so the new generation is adopted before accepting edits; retest preserved dirty state and undo/redo. Terrain rendering also failed: moved batched tile collider follows transform but render bounds stay at original height. User explicitly approved including terrain rendering fix.
+
+Implemented F8-only same-run playtesting: removed Playtest toolbar action and PlaytestCoordinator, retained same-run history/save bookkeeping, reset only on run generation changes. Editor entry immediately marks current run unscored; no exit path clears it. Batched tile renderers now trigger prefab replacement, while subsequent unbatched height changes can move directly. Temporary TileRender diagnostics removed.
+
+Verification: task check passes (690 C# tests, 185 Python tests, markdownlint/ruff); mod builds with zero warnings. Regression tests written before new APIs. Live MCP: two unsaved raises at (9,6), F8 play and return, undo lowered surface, redo raised it again, subsequent F8 cycles retained dirty count/history. Logs show one map-generation/index event, no reload between toggles. Player on raised level-1 surface stable at body y=21.925 with visible grass underneath. Evidence: .tools/evidence/megabonk-1793034950591766000.png (live platform), megabonk-1793034965676706000.png (undo with dirty 1/redo ready).
+
+Enclosed-pit test: .tools/evidence/f8-pit.mblevel.json raises four neighbors of (10,7) to level 3, with center level 0. F8 restored normal camera inside pit, visible floor/walls, player stable at y=1.925; teleport within pit and repeated F8 succeeded. Evidence: .tools/evidence/megabonk-1793035026994706000.png. New run replaced previous dirty edit history with 5 saved seed edits. SteamWriteGuard suppressions observed during gameplay; unit tests confirm editor-used normal runs are guarded immediately and next normal run clears guard. No game errors/exceptions during final pit test.
+
+AC2 left unchecked pending hands-on normal keyboard movement/damage review: harness keys drive editor input only, not Rewired gameplay movement. Camera/freeze, terrain physics, combat/enemy activity, same-run persistence and undo/redo verified live; save bookkeeping verified in unit tests. Final handoff: fresh example forest in editor, unsaved raised platform at (9,6), player on platform, harness invulnerability disabled. Press F8 to walk/test damage and F8 again to edit. Task remains In Progress rather than declaring untested interaction complete.
+
+Implementation committed as 0e2b50a (fix(editor): use F8 live playtests and replace batched terrain). Task remains In Progress pending hands-on AC2 review, not a known failing automated check.
 <!-- SECTION:NOTES:END -->
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Playtest action added to the editor toolbar. It builds a LevelFile from the editor's in-memory edit list (SnapshotLevelFile), starts a fresh run via the new LevelLoaderPatch.Start(LevelFile, logger) entry point, clears invulnerability, and exits editor mode. Returning to the editor on F8 restores the preserved undo/redo session (PlaytestCoordinator + EditorSessionPick.Pick) instead of resetting on the generation change. Because Start reuses the disk-load path (seed forcing, SetPendingEdits, CustomLevelState.MarkPendingStart), the TASK-004.04 custom-run guard arms automatically, so leaderboard/achievement/stats writes stay suppressed during playtest.
-
-Verification (dev harness, example-forest): raised tile (10,7), Playtest -> fresh run with the raised platform visible, player vulnerable with normal HUD/enemies, 68 SteamWriteGuard suppressions during the run; F8 returned to editor with the session intact, and Ctrl+Z/Ctrl+Y both worked.
-
-Tests: 8 new tests in editor_playtest_tests.cs (Unity-free coordinator + session-pick logic); 686 total pass. Mod builds clean (0 warnings). task check (build + test + lint) passes. docs/development.md updated (toolbar row + playtest paragraph). Commit 8fce8e4.
-<!-- SECTION:FINAL_SUMMARY:END -->
