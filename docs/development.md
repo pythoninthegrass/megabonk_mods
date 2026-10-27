@@ -218,14 +218,13 @@ The stub is generated from the game's own shim, built with mingw-w64, and deploy
 
 ```sh
 task game:mingw:install                 # mingw-w64 x86_64 GCC, if not already present
-python3 tools/steamstub/generate_stub.py "<game dir>/Megabonk_Data/Plugins/x86_64/steam_api64.dll" \
-    > tools/steamstub/steamstub.c       # regenerates the source from the shim's exports
-bash tools/steamstub/build.sh           # builds tools/steamstub/steam_api64.dll
-python3 scripts/swap_steam_stub.py status # report active vs stub, and the backup
-python3 scripts/swap_steam_stub.py install  # back up the real shim, drop in the stub
+task steamstub:generate                 # regenerates steamstub.c from the original shim's exports
+task steamstub:build                    # builds tools/steamstub/steam_api64.dll
+task steamstub:status                   # report active vs stub, and the backup
+task steamstub:install                  # build if needed, back up the real shim, drop in the stub
 ```
 
-`swap_steam_stub.py` resolves the game directory the same way `game_paths.py` does (process environment, then the nearest `.env`, then the built-in default). The game must be quit before install or restore, because a loaded DLL cannot be overwritten. `install` copies the current shim to `<shim>.steamstub.bak` before replacing it; `restore` puts the backup back. `status` prints the shim hash, the stub hash, the backup path, and whether the active file is the stub or the original.
+`scripts/swap_steam_stub.py`, wrapped by the `steamstub:` tasks, resolves the game directory the same way `game_paths.py` does (process environment, then the nearest `.env`, then the built-in default). The game must be quit before install or restore, because a loaded DLL cannot be overwritten. `install` copies the current shim to `<shim>.steamstub.bak` before replacing it; `restore` puts the backup back. `status` prints the shim hash, the stub hash, the backup path, and whether the active file is the stub or the original.
 
 ### Launching
 
@@ -242,14 +241,15 @@ uv run scripts/run.py relaunch            # quits, relaunches, loads the example
 uv run scripts/run.py load levels/example-forest.mblevel.json
 ```
 
-The stub is a drop-in, so a normal Steam install is unaffected: run `python3 scripts/swap_steam_stub.py restore` and relaunch to return to the logged-in path.
+The stub is a drop-in, so a normal Steam install is unaffected: run `task steamstub:restore` and relaunch to return to the logged-in path.
 
 ### The degraded-init verdict
 
 `MEGABONK_STEAM_FAIL_INIT=1` makes the stub's `SteamInternal_SteamAPI_Init` return `k_ESteamAPIInitResult_NoSteamClient` (3) and `SteamAPI_IsSteamRunning` return 0, exactly as it would with no Steam client, while `CreateInterface` still returns the fake interface. This is the intended way to confirm the game's degraded behaviour in a live run:
 
 ```sh
-MEGABONK_STEAM_FAIL_INIT=1 task game:run
+task steamstub:test:fail    # quit, relaunch with the variable set, print steam-ready and state
+task steamstub:test:ok      # same without it; expect ready:true
 ```
 
 Observed with Steam stopped:
@@ -282,7 +282,7 @@ With the stub, the game is playable but Steam is faked, so anything that would h
 
 ### Second Mac
 
-The stub swap is a one-file change in the game directory, so it copies along with the prefix (see "Setting up a second machine" above). A copied prefix already has the game's original shim; run `python3 scripts/swap_steam_stub.py install` once on the new machine, then `task game:run` with Steam stopped. The stub build is reproducible from the shim with `generate_stub.py` + `build.sh`, so it can be rebuilt there too if the deployed file is ever replaced.
+The stub swap is a one-file change in the game directory, so it copies along with the prefix (see "Setting up a second machine" above). A copied prefix already has the game's original shim; run `task steamstub:install` once on the new machine, then `task game:run` with Steam stopped. The stub build is reproducible from the shim with `task steamstub:generate` + `task steamstub:build`, so it can be rebuilt there too if the deployed file is ever replaced.
 
 ## Freezing gameplay
 

@@ -11,7 +11,7 @@ Usage:
     scripts/swap_steam_stub.py install     # back up the real shim, drop in the stub
     scripts/swap_steam_stub.py restore     # put the backed-up original back
 
-The stub is built by tools/steamstub/build.sh (needs mingw-w64). The game dir
+The stub is built by `task steamstub:build` (needs mingw-w64). The game dir
 comes from scripts/game_paths.py. The game must be quit before install/restore
 (a loaded DLL cannot be overwritten).
 """
@@ -58,7 +58,7 @@ def main() -> int:
 
     action = sys.argv[1]
     if not STUB.exists():
-        print(f"stub not found: {STUB} (build it: bash tools/steamstub/build.sh)")
+        print(f"stub not found: {STUB} (build it: task steamstub:build)")
         return 1
     game = game_dir()
     shim = shim_path(game)
