@@ -1,15 +1,19 @@
 ---
 id: TASK-007.05
 title: List pack bundle assets in the editor palette
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-10-26 23:05'
-updated_date: '2026-10-27 04:48'
+updated_date: '2026-10-27 06:02'
 labels:
   - level-editor
   - assets
 dependencies:
   - TASK-007.02
+  - TASK-007.05.01
+  - TASK-007.05.02
+  - TASK-007.05.03
 parent_task_id: TASK-007
 priority: low
 ordinal: 69000
@@ -50,6 +54,32 @@ Packs load once per session and the pack catalog caches misses, so a pack added 
 - [ ] #5 Each pack entry shows a thumbnail rendered through the existing PrefabThumbnails cache, falling back to the display name when the render fails, like other entries
 - [ ] #6 Selecting a pack entry and placing it uses the existing bundle: placement path, and the saved level contains the bundle: id and the packs map
 - [ ] #7 The entry-list logic is Unity-free and unit tested, written first, covering manifest-listed, manifest-absent, bundle-missing and no-pack cases, ordering, and name and pack-id search
-- [ ] #8 Verified in the running game with the test pack on at least two maps: the Packs tab, entry, thumbnail and tooltip appear, and the entry places and saves correctly
-- [ ] #9 docs/development.md (palette section) and docs/asset-bundles.md describe pack entries, their listing rules and the relaunch requirement for a newly installed pack, and the sentence saying pack assets are not listed in the palette is removed
+- [ ] #8 docs/development.md (palette section) and docs/asset-bundles.md describe pack entries, their listing rules and the relaunch requirement for a newly installed pack, and the sentence saying pack assets are not listed in the palette is removed
+- [ ] #9 Verified in the running game with the test pack: the Packs tab, entry, thumbnail and tooltip appear on every map the editor supports, and the entry places and saves correctly on Forest and Graveyard (and Hell if TASK-007.05.02 makes it loadable); Desert is refused by the editor
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Tests first (tests/MegabonkLevels.Tests/pack_palette_entries_tests.cs), confirm failing: manifest-listed, bundle-missing (warned, not listed), manifest-omitted (not listed), no-manifest/invalid lists all bundle assets, no packs, ordering by pack id then asset name, search by pack id and name, Pack category only when entries exist.
+2. Unity-free PackPaletteEntries.Build(packIds, loadAssetNames, loadManifest) in pack_palette_entries.cs returning PaletteEntry (bundle:<pack>/<asset>, name = asset, Pack, stage 0) plus manifest-listed names missing from the bundle.
+3. Add PaletteCategory.Pack; labels in PaletteGroup.Label, PaletteCategoryNames.Label/ShortLabel; treat Pack as stage-independent in PalettePick.
+4. Unity side: PackPrefabs.ListAssets() enumerating UserData/LevelPacks/ via the existing catalog (no placeholders); editor_palette.cs Rebuild appends pack entries; PrefabFor routes bundle: ids to PackPrefabs.Resolve so thumbnails use PrefabThumbnails.
+5. Docs: docs/development.md palette section; docs/asset-bundles.md replace the 'not listed' sentence with listing rules and relaunch requirement.
+6. Verify: task check; task mod:build + relaunch; test pack on two maps (tab, entry, thumbnail, tooltip, place, save); Forest still 75 entries with no packs.
+7. Commit: feat(editor): list pack assets in the palette, no attribution.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-27: tests written first (pack_palette_entries_tests.cs) and failing, then PackPaletteEntries, PaletteCategory.Pack, PackCatalog.AssetNames/ManifestOf, PackPrefabs.ListEntries and the editor_palette hookup added; 945 tests pass, mod builds. Docs updated (development.md palette section, asset-bundles.md 'Palette entries').
+
+Forest in game: palette built 77 entries (75 + TestProp, TestModel), Packs tab shows both thumbnails, tooltip shows name / bundle:testpack/TestProp / Packs, placed TestProp (log: place 'bundle:testpack/TestProp' -> object.place), saved level has the bundle: id and packs {testpack: 1.0.0}.
+
+Desert in game: palette shows the Packs entries with thumbnails and tooltip (bundle:testpack/TestModel), but placing does nothing: the log has 'GridShape: proceduralTiles is null' and 'could not resolve MapParameters', the kill floor never arms, and relaunch into a Desert level does not complete. Placement on Desert is blocked by the existing grid-shape resolution, not by this change. Not yet verified with no packs installed (Forest 75 / unchanged tabs).
+
+Placement on non-Forest maps is blocked by grid-shape resolution; AC #8 now waits on subtasks TASK-007.05.01 (Desert), .02 (Hell) and .03 (Graveyard), which are dependencies of this task.
+
+2026-10-27: Desert is a ProceduralMesh map and is refused by the editor (TASK-007.05.01); supporting it is TASK-007.06 and does not block this task. Graveyard is a Tiles map (TASK-007.05.03 verifies it). Hell fails to load with 'no MapData found' (TASK-007.05.02). AC #8 was reworded to match; the old AC #8 was removed and the reworded one is now #9, with the docs criterion at #8.
+<!-- SECTION:NOTES:END -->
