@@ -43,6 +43,11 @@ public class MegabonkLevelsMod : MelonMod
         PositionLabel.Tick();
         EditorMode.Tick(LoggerInstance);
 
+        if (DevHarness.Enabled && EditorMode.Active)
+        {
+            EditorInput.LogRealTextInput(LoggerInstance, EditorTileTools.TextInputFocused);
+        }
+
         if (EditorInput.GetKeyDown(KeyCode.F9))
         {
             SeedForcePatch.CycleMode();

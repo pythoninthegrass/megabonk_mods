@@ -1,3 +1,4 @@
+using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -26,4 +27,18 @@ public static class EditorInput
     public static bool GetMouseButtonUp(int button) => Input.GetMouseButtonUp(button) || Queue.WasMouseReleasedThisFrame(button);
 
     public static float GetAxisRaw(string axis) => Input.GetAxisRaw(axis);
+
+    // Logs the real keyboard only, bypassing Queue, so a keypress that the game never receives shows up as a missing line.
+    public static void LogRealTextInput(MelonLogger.Instance logger, bool fieldFocused)
+    {
+        var line = RealInputDiagnostic.Describe(
+            Input.inputString,
+            Input.GetKeyDown(KeyCode.Backspace),
+            Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter),
+            fieldFocused);
+        if (line != null)
+        {
+            logger.Msg(line);
+        }
+    }
 }
