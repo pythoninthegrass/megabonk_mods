@@ -4,6 +4,7 @@ import base64
 import json
 import mcp_server
 import pytest
+import re
 import struct
 import threading
 import time
@@ -16,12 +17,12 @@ pytestmark = pytest.mark.anyio
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
-def tiny_png() -> bytes:
+def tiny_png(width: int = 1, height: int = 1) -> bytes:
     def chunk(typ: bytes, data: bytes) -> bytes:
         return struct.pack(">I", len(data)) + typ + data + struct.pack(">I", zlib.crc32(typ + data) & 0xFFFFFFFF)
 
-    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
-    idat = chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00\x00"))
+    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+    idat = chunk(b"IDAT", zlib.compress((b"\x00" + b"\x00\x00\x00\x00" * width) * height))
     return PNG_SIGNATURE + ihdr + idat + chunk(b"IEND", b"")
 
 
@@ -38,6 +39,7 @@ def setup_harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     for folder in ("commands", "done", "rejected", "results"):
         (harness / folder).mkdir(parents=True)
     monkeypatch.setenv("MEGABONK_GAME_DIR", str(game))
+    monkeypatch.setattr(mcp_server, "DEFAULT_SCREENSHOT_DIR", tmp_path / "evidence")
     return harness
 
 
@@ -143,8 +145,9 @@ async def test_screenshot_returns_an_inline_png(tmp_path, monkeypatch) -> None:
     assert block.type == "image"
     assert block.mime_type == "image/png"
     assert base64.b64decode(block.data).startswith(PNG_SIGNATURE)
-    saved = list(tmp_path.glob("megabonk-*.png"))
+    saved = list((tmp_path / "evidence").glob("megabonk-*.png"))
     assert len(saved) == 1
+    assert not list(tmp_path.glob("*.png"))
     assert saved[0].stem.removeprefix("megabonk-").isdigit()
     assert saved[0].read_bytes() == base64.b64decode(block.data)
     assert result.content[1].text == f"Saved screenshot to {saved[0]}"
@@ -155,7 +158,7 @@ async def test_screenshot_destinations_and_unique_names(tmp_path, monkeypatch, d
     setup_harness(tmp_path, monkeypatch)
     monkeypatch.chdir(tmp_path)
     directory = str(tmp_path / "outside") if destination == "absolute" else destination
-    target = Path(directory).absolute() if directory else tmp_path
+    target = Path(directory).absolute() if directory else tmp_path / "evidence"
 
     async def request(harness, payload, timeout):
         host_path(payload["path"]).write_bytes(tiny_png())
@@ -383,3 +386,186 @@ async def test_invalid_arguments_are_rejected_before_anything_is_sent(tmp_path, 
     assert result.is_error
     assert message in result.content[0].text
     assert list((harness / "commands").iterdir()) == []
+
+
+async def test_paths_reports_the_game_harness_log_and_levels_directories(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    game = harness.parent
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("paths", {})
+    assert not result.is_error
+    assert json.loads(result.content[0].text) == {
+        "game_dir": str(game),
+        "harness": str(harness),
+        "latest_log": str(mcp_server.run.latest_log_path(game)),
+        "levels_dir": str(game / "UserData" / "Levels"),
+    }
+
+
+def write_log(harness: Path, text: str) -> Path:
+    log = mcp_server.run.latest_log_path(harness.parent)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text(text)
+    return log
+
+
+async def test_log_wait_returns_an_existing_matching_line(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    write_log(harness, "DevHarness: enabled\nKillFloor: armed\n")
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("log_wait", {"pattern": "KillFloor: arm"})
+    assert not result.is_error
+    assert result.content[0].text == "KillFloor: armed"
+
+
+async def test_log_wait_returns_a_line_that_appears_later(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    log = write_log(harness, "DevHarness: enabled\n")
+
+    def append_later() -> None:
+        time.sleep(0.3)
+        with log.open("a") as handle:
+            handle.write("KillFloor: armed\n")
+
+    threading.Thread(target=append_later, daemon=True).start()
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("log_wait", {"pattern": "KillFloor", "timeout": 5})
+    assert not result.is_error
+    assert result.content[0].text == "KillFloor: armed"
+
+
+async def test_log_wait_ignores_lines_from_before_the_last_launch(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    write_log(harness, "KillFloor: armed\nDevHarness: enabled\n")
+    async with Client(mcp_server.mcp) as client:
+        fresh = await client.call_tool("log_wait", {"pattern": "KillFloor", "timeout": 0.3})
+        every = await client.call_tool("log_wait", {"pattern": "KillFloor", "timeout": 0.3, "since_launch": False})
+    assert fresh.is_error
+    assert not every.is_error
+
+
+async def test_log_wait_times_out_with_a_tool_error(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    write_log(harness, "DevHarness: enabled\n")
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("log_wait", {"pattern": "never", "timeout": 0.3})
+    assert result.is_error
+    assert "never" in result.content[0].text
+    assert "timeout" in result.content[0].text
+
+
+async def test_log_wait_waits_for_a_log_that_does_not_exist_yet(tmp_path, monkeypatch) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("log_wait", {"pattern": "x", "timeout": 0.3})
+    assert result.is_error
+    assert "timeout" in result.content[0].text
+
+
+async def test_log_wait_rejects_an_invalid_regex(tmp_path, monkeypatch) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("log_wait", {"pattern": "(", "timeout": 0.3})
+    assert result.is_error
+    assert "pattern" in result.content[0].text
+
+
+def key_names_in_the_mod() -> set[str]:
+    source = (Path(__file__).resolve().parent.parent / "src" / "MegabonkLevels.Mod" / "key_names.cs").read_text()
+    named = set(re.findall(r'"([A-Za-z]+)"', source.split("Named =")[1].split("};")[0]))
+    return (
+        named
+        | {chr(c) for c in range(ord("A"), ord("Z") + 1)}
+        | {f"Alpha{i}" for i in range(10)}
+        | {f"Keypad{i}" for i in range(10)}
+        | {f"F{i}" for i in range(1, 13)}
+    )
+
+
+def test_key_name_mirror_matches_the_mod() -> None:
+    assert set(mcp_server.KEY_NAMES) == key_names_in_the_mod()
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        {"key": "Nope"},
+        {"key": "r"},
+        {"key": "R", "modifiers": ["Hyper"]},
+    ],
+)
+async def test_key_rejects_names_the_mod_does_not_accept_before_sending(tmp_path, monkeypatch, args) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("key", args)
+    assert result.is_error
+    assert "valid names" in result.content[0].text
+    assert list((harness / "commands").iterdir()) == []
+
+
+async def test_screenshot_overwrite_replaces_an_existing_file(tmp_path, monkeypatch) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    out = tmp_path / "final.png"
+    out.write_bytes(b"old evidence")
+
+    async def request(harness, payload, timeout):
+        host_path(payload["path"]).write_bytes(tiny_png())
+
+    monkeypatch.setattr(mcp_server, "_request", request)
+    async with Client(mcp_server.mcp) as client:
+        refused = await client.call_tool("screenshot", {"directory": str(tmp_path), "filename": out.name})
+        assert refused.is_error
+        assert out.read_bytes() == b"old evidence"
+        replaced = await client.call_tool("screenshot", {"directory": str(tmp_path), "filename": out.name, "overwrite": True})
+    assert not replaced.is_error
+    assert out.read_bytes() == tiny_png()
+    assert not list(tmp_path.glob(".megabonk-*"))
+
+
+def png_size(data: bytes) -> tuple[int, int]:
+    return struct.unpack(">II", data[16:24])
+
+
+async def screenshot_with(tmp_path, monkeypatch, args, size=(40, 20)):
+    setup_harness(tmp_path, monkeypatch)
+
+    async def request(harness, payload, timeout):
+        host_path(payload["path"]).write_bytes(tiny_png(*size))
+
+    monkeypatch.setattr(mcp_server, "_request", request)
+    async with Client(mcp_server.mcp) as client:
+        return await client.call_tool("screenshot", {"directory": str(tmp_path / "out"), **args})
+
+
+async def test_screenshot_scale_shrinks_the_inline_image_and_keeps_the_saved_capture(tmp_path, monkeypatch) -> None:
+    result = await screenshot_with(tmp_path, monkeypatch, {"filename": "s.png", "scale": 0.5})
+    assert not result.is_error
+    assert png_size(base64.b64decode(result.content[0].data)) == (20, 10)
+    assert png_size((tmp_path / "out" / "s.png").read_bytes()) == (40, 20)
+
+
+async def test_screenshot_crop_selects_a_pixel_rectangle(tmp_path, monkeypatch) -> None:
+    result = await screenshot_with(tmp_path, monkeypatch, {"filename": "c.png", "crop": [10, 5, 20, 10]})
+    assert not result.is_error
+    assert png_size(base64.b64decode(result.content[0].data)) == (20, 10)
+
+
+async def test_screenshot_crop_then_scale(tmp_path, monkeypatch) -> None:
+    result = await screenshot_with(tmp_path, monkeypatch, {"crop": [0, 0, 20, 10], "scale": 0.5})
+    assert png_size(base64.b64decode(result.content[0].data)) == (10, 5)
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        ({"scale": 0}, "scale"),
+        ({"scale": 1.5}, "scale"),
+        ({"crop": [0, 0, 10]}, "crop"),
+        ({"crop": [30, 0, 20, 10]}, "crop"),
+        ({"crop": [0, 0, 0, 10]}, "crop"),
+    ],
+)
+async def test_screenshot_rejects_bad_scale_and_crop(tmp_path, monkeypatch, args, message) -> None:
+    result = await screenshot_with(tmp_path, monkeypatch, args)
+    assert result.is_error
+    assert message in result.content[0].text

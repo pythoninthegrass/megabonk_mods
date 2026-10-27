@@ -5,6 +5,7 @@
 # dependencies = [
 #     "mcp>=2.3,<3",
 #     "python-decouple>=3.8",
+#     "pillow>=11",
 # ]
 # [tool.uv]
 # exclude-newer = "2026-10-31T00:00:00Z"
@@ -21,6 +22,8 @@ Run: uv run --script scripts/mcp_server.py
 """
 
 import anyio
+import io
+import os
 import re
 import sys
 import tempfile
@@ -34,9 +37,22 @@ import run
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context, Image
 from mcp.server.mcpserver.exceptions import ToolError
+from PIL import Image as PilImage
 
 TIMEOUT = 15.0
 LAUNCH_MARKER = "DevHarness: enabled"
+DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parent.parent / ".tools" / "evidence"
+LOG_POLL_INTERVAL = 0.2
+# Mirrors KeyNames.All in src/MegabonkLevels.Mod/key_names.cs; a test keeps the two in step.
+KEY_NAMES = (
+    *"ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    *(f"Alpha{i}" for i in range(10)),
+    *(f"Keypad{i}" for i in range(10)),
+    *(f"F{i}" for i in range(1, 13)),
+    "UpArrow", "DownArrow", "LeftArrow", "RightArrow",
+    "Escape", "Return", "Backspace", "Delete", "Space", "Tab",
+    "LeftShift", "RightShift", "LeftControl", "RightControl", "LeftAlt", "RightAlt",
+)  # fmt: skip
 
 mcp = MCPServer("megabonk")
 
@@ -56,6 +72,18 @@ async def _request(harness: Path, payload: dict[str, object], timeout: float) ->
         return result
     error = result.get("error") if result is not None else None
     raise ToolError(error if error else f"{payload['command']} {outcome}")
+
+
+@mcp.tool()
+async def paths() -> dict[str, str]:
+    """Return the resolved game_dir, harness folder, latest_log path and levels_dir (where the editor saves custom levels), so harness command files can be written without hand-typing the prefix path."""
+    game = _game_dir()
+    return {
+        "game_dir": str(game),
+        "harness": str(game / "harness"),
+        "latest_log": str(run.latest_log_path(game)),
+        "levels_dir": str(game / "UserData" / "Levels"),
+    }
 
 
 @mcp.tool()
@@ -99,8 +127,15 @@ async def quit() -> bool:
 
 
 @mcp.tool()
-async def screenshot(*, directory: str | None = None, filename: str | None = None) -> list[Image | str]:
-    """Save a PNG (default: timestamped name in server cwd), returning inline image and absolute path. Creates directories; never overwrites. filename must be a single .png basename."""
+async def screenshot(
+    *,
+    directory: str | None = None,
+    filename: str | None = None,
+    overwrite: bool = False,
+    scale: float | None = None,
+    crop: list[int] | None = None,
+) -> list[Image | str]:
+    """Save a PNG (default: timestamped name in the repo's gitignored .tools/evidence), returning inline image and absolute path. Creates directories; refuses to replace an existing file unless overwrite is true. filename must be a single .png basename. To cut token cost, crop [x, y, width, height] (screenshot pixels) and scale (0 to 1] shrink the inline image only; the saved file is the full capture."""
     if filename is not None and (
         not filename
         or any(c in filename for c in '/\\\x00<>:"|?*')
@@ -108,11 +143,15 @@ async def screenshot(*, directory: str | None = None, filename: str | None = Non
         or not filename.lower().endswith(".png")
     ):
         raise ToolError("screenshot: filename must be a single .png basename without path separators or invalid characters")
+    if scale is not None and not 0 < scale <= 1:
+        raise ToolError("screenshot: scale must be greater than 0 and at most 1")
+    if crop is not None and (len(crop) != 4 or crop[0] < 0 or crop[1] < 0 or crop[2] <= 0 or crop[3] <= 0):
+        raise ToolError("screenshot: crop must be [x, y, width, height] with x and y >= 0 and positive width and height")
     harness = _harness()
     try:
-        folder = Path(directory if directory is not None else Path.cwd()).resolve()
+        folder = Path(directory if directory is not None else DEFAULT_SCREENSHOT_DIR).resolve()
         out = folder / (filename if filename is not None else f"megabonk-{time.time_ns()}.png")
-        if out.exists() or out.is_symlink():
+        if not overwrite and (out.exists() or out.is_symlink()):
             raise FileExistsError(f"{out} already exists")
         folder.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix=".megabonk-", dir=folder) as staging:
@@ -121,13 +160,33 @@ async def screenshot(*, directory: str | None = None, filename: str | None = Non
             captured = await anyio.to_thread.run_sync(run.wait_for_png, capture, TIMEOUT)
             if not captured:
                 raise ToolError(f"screenshot: no valid PNG at {capture} after {TIMEOUT}s; retry the capture")
-            image = Image(data=capture.read_bytes(), format="png")
-            out.hardlink_to(capture)
+            image = Image(data=_shrink_png(capture.read_bytes(), scale, crop), format="png")
+            if overwrite:
+                os.replace(capture, out)
+            else:
+                out.hardlink_to(capture)
         return [image, f"Saved screenshot to {out}"]
     except FileExistsError as exc:
         raise ToolError(f"screenshot: destination exists; choose another filename or directory: {exc}") from exc
     except (OSError, ValueError) as exc:
         raise ToolError(f"screenshot: cannot save PNG; check directory, filename and write permissions: {exc}") from exc
+
+
+def _shrink_png(data: bytes, scale: float | None, crop: list[int] | None) -> bytes:
+    if scale is None and crop is None:
+        return data
+    with PilImage.open(io.BytesIO(data)) as source:
+        image = source.convert("RGBA")
+    if crop is not None:
+        x, y, width, height = crop
+        if x + width > image.width or y + height > image.height:
+            raise ToolError(f"screenshot: crop {crop} is outside the {image.width}x{image.height} capture")
+        image = image.crop((x, y, x + width, y + height))
+    if scale is not None:
+        image = image.resize((max(1, round(image.width * scale)), max(1, round(image.height * scale))), PilImage.LANCZOS)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 @mcp.tool()
@@ -177,6 +236,9 @@ async def key(key: str, modifiers: list[str] | None = None, action: Literal["tap
     """Inject a key for the editor (not the game's own input). Valid names are listed under "Key, mouse and type commands" in docs/development.md (A-Z, Alpha0-9, F1-F12, arrows, Escape, Return, Space, Tab, shift/control/alt). tap presses and releases over the next frames (one frame down, one up; with modifiers they are held around it, four frames); down holds until up. modifiers only apply to tap. Returns once the mod queued it, so take a screenshot after a moment to see the effect."""
     if modifiers and action != "tap":
         raise ToolError("key: modifiers are only valid with action=tap")
+    unknown = [name for name in (key, *(modifiers or [])) if name not in KEY_NAMES]
+    if unknown:
+        raise ToolError(f"key: the mod does not accept {unknown}; valid names: {', '.join(KEY_NAMES)}")
     return await _request(_harness(), run.build_key_command(action, key, modifiers), TIMEOUT)
 
 
@@ -266,6 +328,36 @@ async def log_tail(pattern: str | None = None, since_launch: bool = True, max_li
         regex = re.compile(pattern)
         lines = [line for line in lines if regex.search(line)]
     return lines[-max_lines:]
+
+
+@mcp.tool()
+async def log_wait(pattern: str, timeout: float = 30.0, since_launch: bool = True) -> str:
+    """Block until Latest.log has a line matching the regex pattern, then return that line; a tool error on timeout. since_launch (default true) only considers lines after the last `DevHarness: enabled`. Use it after load or relaunch instead of sleeping, e.g. pattern `KillFloor: armed`."""
+    try:
+        regex = re.compile(pattern)
+    except re.error as exc:
+        raise ToolError(f"log_wait: invalid pattern {pattern!r}: {exc}") from exc
+    log = run.latest_log_path(_game_dir())
+    deadline = time.monotonic() + timeout
+    while True:
+        match = await anyio.to_thread.run_sync(_first_log_match, log, regex, since_launch)
+        if match is not None:
+            return match
+        if time.monotonic() >= deadline:
+            raise ToolError(f"log_wait: timeout after {timeout}s waiting for {pattern!r} in {log}")
+        await anyio.sleep(LOG_POLL_INTERVAL)
+
+
+def _first_log_match(log: Path, regex: re.Pattern[str], since_launch: bool) -> str | None:
+    try:
+        lines = log.read_text(errors="ignore").splitlines()
+    except OSError:
+        return None
+    if since_launch:
+        starts = [i for i, line in enumerate(lines) if LAUNCH_MARKER in line]
+        if starts:
+            lines = lines[starts[-1] :]
+    return next((line for line in lines if regex.search(line)), None)
 
 
 if __name__ == "__main__":
