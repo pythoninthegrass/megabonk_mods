@@ -4,7 +4,7 @@ title: Typing in the editor save-name box does nothing
 status: In Progress
 assignee: []
 created_date: '2026-10-22T06:03:00Z'
-updated_date: '2026-10-27 04:01'
+updated_date: '2026-10-27 04:09'
 labels:
   - editor
   - bug
@@ -29,7 +29,7 @@ In editor mode, real-keyboard typing does not work in the editor's text fields: 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 A dev-only diagnostic logs, from the real-input layer of EditorInput (not the injected queue), each non-empty Input.inputString while an editor text field is focused (escaped, with char codes) and each real Backspace or Return key-down, so a real keypress shows in Latest.log whether or not the field accepts it
-- [ ] #2 With the diagnostic on, real keystrokes typed into the save-name box and the palette search box are tried in the running game and the log shows whether the game receives any characters from Wine, recorded as evidence in the task notes
+- [x] #2 With the diagnostic on, real keystrokes typed into the save-name box and the palette search box are tried in the running game and the log shows whether the game receives any characters from Wine, recorded as evidence in the task notes
 - [ ] #3 The cause is identified and recorded in docs/development.md, replacing the 'Real keyboard text' claim that typing works under plain Wine, including any runtime on which typing behaves differently
 - [ ] #4 Clicking the save-name box and typing on a real keyboard enters the typed characters, confirmed in the running game
 - [ ] #5 Clicking the palette search box and typing on a real keyboard enters the typed characters, confirmed in the running game
@@ -51,6 +51,10 @@ Harness caveats found while testing: type_text only treats real control characte
 Next step is the diagnostic in AC #1: log raw Input.inputString and real Backspace/Return key-down while a field is focused, then press keys on a real keyboard. Empty inputString on keypress means Wine or the window is not delivering text to Unity; non-empty inputString with an unchanged box means the field is not consuming it.
 
 Diagnostic landed (RealInputDiagnostic, EditorInput.LogRealTextInput, called from OnUpdate while DevHarness.Enabled and EditorMode.Active). It logs real keyboard frames whether or not a field has focus and records focused=true|false, which is slightly broader than AC #1 so a focus failure is distinguishable from a delivery failure. Usage is in docs/development.md under 'Real keyboard text'. Real-keyboard evidence for AC #2 is still to be collected.
+
+Evidence 2026-10-26 (macOS, Wine Devel 11, game window clicked first, diagnostic from 795011f): real W/A/S/D moved the editor camera and a tool hotkey worked, so Input.GetKey and Input.GetKeyDown receive real keys, but no RealInput line appeared for any of those letter keys, so Input.inputString stayed empty. A real Backspace logged 'RealInput: Backspace down, focused=false' with no field focused and 'Backspace down, focused=true' with the save-name box focused after typing abc, and abc produced no inputString line. A real Return logged nothing and made Wine show its window title bar, so Return is intercepted at the Wine or Unity window level and never reaches Input.GetKeyDown. An earlier attempt right after a relaunch logged nothing for any key and is discounted because the game window probably lacked OS focus.
+
+Conclusion so far: under this Wine setup the game receives key state but no text (Input.inputString is always empty), and Return does not arrive as a key-down. TextFieldModel.Type consumes characters, Backspace ('\b') and Return only from the text string, so none of the three can reach a text field. The earlier 'worked' retest is unexplained and may have used a different session state. Candidate fix: when inputString is empty, derive text from key-down state (letters, digits, punctuation, Shift) and take Backspace from GetKeyDown, with a US-layout assumption; Return needs a separate answer because Wine takes it.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
