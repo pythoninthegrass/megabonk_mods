@@ -62,7 +62,7 @@ Revision after in-game verification: the default target is MK/Toon/Built-in/Stan
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Pack materials are remapped at load time onto the game's toon shader. ShaderRemap (pure, 35 new tests) picks the target and property copies; PackShaderRemap applies them to each prefab in PackPrefabs.LoadBundleInto. Target is MK/Toon/Built-in/Standard/Simple + Outline with the keyword set every textured game material carries, because plain Simple lacks the textured variants in the build. Standard, Standard (Specular), Legacy, Unlit, URP and HDRP shaders are remapped (albedo, color, normal, emission copied); MK/Toon, Toon, Sprites and UI shaders are kept; missing or unknown shaders fall back to the default with one warning. Added a shader-report harness command (run.py shader-report) that lists resolvable shaders, scene material shaders and MK.Toon keyword sets, and a TestModel composite in PackBuilder. Verified in the Wine-hosted game: TestModel renders with brick texture, cel lighting and fog, no pink. Mapping table and findings in docs/asset-bundles.md."]
+Pack materials are remapped at load time onto the game's toon shader. ShaderRemap (pure, 27 new tests including the harness parse test) picks the target and property copies; PackShaderRemap applies them to each prefab in PackPrefabs.LoadBundleInto. Target is MK/Toon/Built-in/Standard/Simple + Outline with the keyword set every textured game material carries, because plain Simple lacks the textured variants in the build. Standard, Standard (Specular), Legacy, Unlit, URP and HDRP shaders are remapped (albedo, color, normal, emission copied); MK/Toon, Toon, Sprites and UI shaders are kept; missing or unknown shaders fall back to the default with one warning. Added a shader-report harness command (run.py shader-report) that lists resolvable shaders, scene material shaders and MK.Toon keyword sets, and a TestModel composite in PackBuilder. Verified in the Wine-hosted game: TestModel renders with brick texture, cel lighting and fog, no pink. Mapping table and findings in docs/asset-bundles.md.
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
@@ -70,5 +70,5 @@ Pack materials are remapped at load time onto the game's toon shader. ShaderRema
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
