@@ -182,6 +182,11 @@ public static class DevHarness
                 PositionLabel.SetCellLog(command.Enabled, _logger);
                 break;
             case HarnessCommandKind.Editor:
+                if (command.Enabled && EditorMode.CurrentMapSupport() is { Supported: false } unsupported)
+                {
+                    throw new InvalidOperationException(unsupported.Reason);
+                }
+
                 EditorMode.Set(command.Enabled, _logger);
                 break;
             case HarnessCommandKind.SteamReady:

@@ -47,6 +47,11 @@ public static class GenerationPatch
             objectRecords.Count,
             GenerationHash.Compute(objectRecords));
         logger.Msg(GenerationReport.Format(snapshot));
+        var support = EditorMode.CurrentMapSupport();
+        if (!support.Supported)
+        {
+            logger.Warning($"EditorMode: unsupported map: {support.Reason}");
+        }
     }
 
     private static List<SpawnRecord> CollectSpawnedObjects(MapGenerationController controller)

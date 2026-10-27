@@ -80,6 +80,13 @@ public static class EditorMode
             return;
         }
 
+        var support = CurrentMapSupport();
+        if (!support.Supported)
+        {
+            logger.Warning($"EditorMode: unsupported map: {support.Reason}");
+            return;
+        }
+
         if (!_session.Enter(MyTime.paused))
         {
             return;
@@ -95,6 +102,14 @@ public static class EditorMode
         EditorPalette.OnEditorEntered(logger);
         EditorTileTools.OnEditorEntered(logger);
         logger.Msg($"EditorMode: entered, MyTime.paused={MyTime.paused}.");
+    }
+
+    public static EditorMapSupportResult CurrentMapSupport()
+    {
+        var map = Il2CppAssets.Scripts.Managers.MapController.currentMap;
+        return map == null
+            ? new EditorMapSupportResult(true, "")
+            : EditorMapSupport.Check(map.name, (int)map.mapType);
     }
 
     private static void Exit(MelonLogger.Instance logger)

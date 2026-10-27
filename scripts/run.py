@@ -70,6 +70,8 @@ MACOS_RUNTIMES = ("wine", "crossover")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 POLL_SECONDS = 0.1
 RELAUNCH_READY_TIMEOUT = 60.0
+KILL_FLOOR_ARMED_LINE = "KillFloor: armed"
+EDITOR_UNSUPPORTED_LINE = "EditorMode: unsupported map"
 STEAM_READY_POLL_SECONDS = 1.0
 GAME_COMMAND = re.compile(r"^(?:[A-Za-z]:\\(?:.*\\)?Megabonk\.exe|(?:\S*/)?Megabonk\.x86_64)(?:\s|$)")
 GAME_IMAGE_WINDOWS = "Megabonk.exe"
@@ -231,17 +233,25 @@ def wait_for_png(path: Path, timeout: float) -> bool:
     return True
 
 
-def wait_for_log_line(log: Path, line: str, newer_than: float, timeout: float) -> bool:
+def wait_for_any_log_line(log: Path, lines: list[str], newer_than: float, timeout: float) -> str | None:
+    """The first of `lines` found in the log once it is newer than `newer_than`, or None on timeout."""
     deadline = time.monotonic() + timeout
     while True:
         try:
-            if log.stat().st_mtime > newer_than and line in log.read_text(errors="ignore"):
-                return True
+            if log.stat().st_mtime > newer_than:
+                text = log.read_text(errors="ignore")
+                for line in lines:
+                    if line in text:
+                        return line
         except OSError:
             pass
         if time.monotonic() >= deadline:
-            return False
+            return None
         time.sleep(POLL_SECONDS)
+
+
+def wait_for_log_line(log: Path, line: str, newer_than: float, timeout: float) -> bool:
+    return wait_for_any_log_line(log, [line], newer_than, timeout) is not None
 
 
 def launch_game(task: str = "game:run") -> bool:
@@ -536,8 +546,18 @@ def relaunch(
             break
         on_step(f"relaunch: loading {level} (attempt {attempt}/5)")
         ok = send(harness, build_command("load-level", to_game_path(level.resolve())), timeout)
-        if ok and wait_for_log_line(latest_log_path(game_dir), "KillFloor: armed", started, relaunch_timeout(timeout)):
-            break
+        if ok:
+            seen = wait_for_any_log_line(
+                latest_log_path(game_dir),
+                [KILL_FLOOR_ARMED_LINE, EDITOR_UNSUPPORTED_LINE],
+                started,
+                relaunch_timeout(timeout),
+            )
+            if seen == EDITOR_UNSUPPORTED_LINE:
+                on_error("relaunch: the editor does not support this map; see the EditorMode warning in the game log")
+                return False
+            if seen:
+                break
         ok = True
     else:
         ok = False

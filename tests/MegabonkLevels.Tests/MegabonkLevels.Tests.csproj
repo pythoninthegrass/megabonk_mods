@@ -31,6 +31,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/catalog_route.cs" Link="catalog_route.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/pack_catalog.cs" Link="pack_catalog.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/pack_manifest.cs" Link="pack_manifest.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_map_support.cs" Link="editor_map_support.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/shader_remap.cs" Link="shader_remap.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/game_pack_version_check.cs" Link="game_pack_version_check.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/live_edit_plan.cs" Link="live_edit_plan.cs" />

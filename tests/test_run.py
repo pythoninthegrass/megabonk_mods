@@ -528,7 +528,7 @@ def test_request_result_prints_nothing(capsys) -> None:
         assert out.out == "" and out.err == ""
 
 
-def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_ready=True, kill_floor=True):
+def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_ready=True, kill_floor=True, unsupported=False):
     calls = []
     monkeypatch.setattr(run, "quit_game", lambda h, t: calls.append("quit") or True)
     monkeypatch.setattr(run, "launch_game", lambda task: calls.append(("launch", task)) or True)
@@ -537,11 +537,16 @@ def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_ready=True, kill_fl
 
     def wait_log(log, line, newer, timeout):
         calls.append(("log", line))
-        if line == "DevHarness: enabled":
-            return harness_ready
-        return kill_floor
+        return harness_ready
+
+    def wait_any_log(log, lines, newer, timeout):
+        calls.append(("log", lines[0]))
+        if unsupported:
+            return run.EDITOR_UNSUPPORTED_LINE
+        return run.KILL_FLOOR_ARMED_LINE if kill_floor else None
 
     monkeypatch.setattr(run, "wait_for_log_line", wait_log)
+    monkeypatch.setattr(run, "wait_for_any_log_line", wait_any_log)
     return calls
 
 
@@ -587,6 +592,30 @@ def test_relaunch_retries_the_load_and_gives_up_after_five_attempts(monkeypatch)
     assert len(loads) == 5
     assert ("send", "invulnerable") not in calls
     assert ("send", "editor") not in calls
+
+
+def test_relaunch_stops_at_once_when_the_editor_does_not_support_the_map(monkeypatch) -> None:
+    calls = relaunch_stubs(monkeypatch, unsupported=True)
+    errors = []
+    ok = run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=errors.append)
+    assert ok is False
+    assert [c for c in calls if c == ("send", "load-level")] == [("send", "load-level")]
+    assert ("send", "invulnerable") not in calls
+    assert ("send", "editor") not in calls
+    assert errors == ["relaunch: the editor does not support this map; see the EditorMode warning in the game log"]
+
+
+def test_wait_for_any_log_line_returns_the_first_line_found(tmp_path) -> None:
+    log = tmp_path / "Latest.log"
+    log.write_text("start\nEditorMode: unsupported map Desert\n")
+    found = run.wait_for_any_log_line(log, ["KillFloor: armed", "EditorMode: unsupported map"], 0, 1)
+    assert found == "EditorMode: unsupported map"
+
+
+def test_wait_for_any_log_line_returns_none_on_timeout(tmp_path) -> None:
+    log = tmp_path / "Latest.log"
+    log.write_text("nothing relevant\n")
+    assert run.wait_for_any_log_line(log, ["KillFloor: armed"], 0, 0) is None
 
 
 def test_build_key_command_tap_carries_modifiers_only_when_given() -> None:
