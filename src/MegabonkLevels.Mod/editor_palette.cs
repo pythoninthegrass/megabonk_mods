@@ -223,6 +223,33 @@ public static class EditorPalette
         }
     }
 
+    // Specific widgets come before the panels that contain them, so UiWidgets.At reports the innermost one.
+    public static IEnumerable<UiWidget> ListWidgets()
+    {
+        if (!_open || _root == null)
+        {
+            return Enumerable.Empty<UiWidget>();
+        }
+
+        var widgets = new List<UiWidget?>();
+        foreach (var slot in _slots.Where(slot => slot.Entry.HasValue))
+        {
+            widgets.Add(ToWidget($"Palette:{slot.Entry.Value.Id.Serialize()}", slot.Rect));
+        }
+
+        foreach (var tab in _tabs)
+        {
+            widgets.Add(ToWidget($"Tab:{tab.Label}", tab.Rect));
+        }
+
+        widgets.Add(ToWidget("PaletteChevron", _chevronRect));
+        widgets.Add(ToWidget("PalettePrevious", _previousRect));
+        widgets.Add(ToWidget("PaletteNext", _nextRect));
+        widgets.Add(ToWidget("PaletteSearch", _layout.Compact ? _magnifierRect : _searchRect));
+        widgets.Add(ToWidget("PalettePanel", _panel));
+        return widgets.Where(widget => widget.HasValue).Select(widget => widget.Value);
+    }
+
     private static int PerPage => _layout.PerPage;
 
     private static int PageCount => PalettePager.PageCount(_filtered.Count, PerPage);

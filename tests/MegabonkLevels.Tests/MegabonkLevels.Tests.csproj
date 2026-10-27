@@ -79,6 +79,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/editor_session_pick.cs" Link="editor_session_pick.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/injected_input.cs" Link="injected_input.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/screen_point.cs" Link="screen_point.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/ui_widgets.cs" Link="ui_widgets.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/toast_stack.cs" Link="toast_stack.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/hover_delay.cs" Link="hover_delay.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/real_input_diagnostic.cs" Link="real_input_diagnostic.cs" />

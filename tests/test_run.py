@@ -663,6 +663,26 @@ def test_build_mouse_command_includes_only_the_given_fields() -> None:
     assert run.build_mouse_command("down", None, 2) == {"command": "mouse", "action": "down", "button": 2}
 
 
+def test_build_click_widget_command_carries_the_name() -> None:
+    assert run.build_click_widget_command("Save") == {"command": "click-widget", "name": "Save"}
+
+
+def test_build_ui_tree_command_includes_the_point_only_when_given() -> None:
+    assert run.build_ui_tree_command() == {"command": "ui-tree"}
+    assert run.build_ui_tree_command((10.0, 20.0)) == {"command": "ui-tree", "x": 10.0, "y": 20.0}
+
+
+def test_widget_payloads_map_the_subcommands() -> None:
+    assert run.click_widget_payload(run.parse_args(["click-widget", "Tool:Raise"])) == {"command": "click-widget", "name": "Tool:Raise"}
+    assert run.ui_tree_payload(run.parse_args(["ui-tree"])) == {"command": "ui-tree"}
+    assert run.ui_tree_payload(run.parse_args(["ui-tree", "5", "6"])) == {"command": "ui-tree", "x": 5.0, "y": 6.0}
+
+
+def test_ui_tree_payload_rejects_half_a_point() -> None:
+    with pytest.raises(SystemExit, match="both X and Y"):
+        run.ui_tree_payload(run.parse_args(["ui-tree", "5"]))
+
+
 def test_mouse_payload_maps_the_subcommands() -> None:
     assert run.mouse_payload(run.parse_args(["mouse", "move", "960", "540"])) == {
         "command": "mouse",

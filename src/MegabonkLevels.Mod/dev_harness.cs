@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -208,6 +209,10 @@ public static class DevHarness
             case HarnessCommandKind.Type:
                 EditorInput.Queue.EnqueueText(command.Input.Text);
                 break;
+            case HarnessCommandKind.UiTree:
+                return UiTree(command.Input);
+            case HarnessCommandKind.ClickWidget:
+                return ClickWidget(command.Input.Text);
             case HarnessCommandKind.Teleport:
                 return Teleport(command.Teleport);
             case HarnessCommandKind.DismissLevelUp:
@@ -252,6 +257,44 @@ public static class DevHarness
         {
             bundle.Unload(true);
         }
+    }
+
+    private static List<UiWidget> EditorWidgets()
+    {
+        if (!EditorMode.Active)
+        {
+            throw new InvalidOperationException("editor mode is off: the widgets only exist inside the editor");
+        }
+
+        return EditorTileTools.ListWidgets().Concat(EditorPalette.ListWidgets()).ToList();
+    }
+
+    private static JsonObject WidgetJson(UiWidget widget) =>
+        new() { ["name"] = widget.Name, ["x"] = widget.X, ["y"] = widget.Y, ["width"] = widget.Width, ["height"] = widget.Height };
+
+    private static JsonObject UiTree(InputArgs input)
+    {
+        var widgets = EditorWidgets();
+        var result = new JsonObject { ["widgets"] = new JsonArray(widgets.Select(widget => (JsonNode)WidgetJson(widget)).ToArray()) };
+        if (input.X is float x && input.Y is float y)
+        {
+            result["at"] = UiWidgets.At(widgets, x, y)?.Name;
+        }
+
+        return result;
+    }
+
+    private static JsonObject ClickWidget(string name)
+    {
+        if (!UiWidgets.TryFind(EditorWidgets(), name, out var widget, out var error))
+        {
+            throw new InvalidOperationException(error);
+        }
+
+        var (x, y) = widget.Centre;
+        QueueMouse(new InputArgs { Action = "click", X = x, Y = y });
+        _logger.Msg($"DevHarness: click-widget '{widget.Name}' at ({x}, {y}).");
+        return WidgetJson(widget);
     }
 
     private static JsonObject Teleport(TeleportArgs args)

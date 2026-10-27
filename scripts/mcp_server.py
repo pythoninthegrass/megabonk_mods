@@ -198,6 +198,21 @@ async def mouse(
 
 
 @mcp.tool()
+async def ui_tree(x: float | None = None, y: float | None = None) -> dict | None:
+    """List the editor's widgets (toolbar buttons and tools, load list, palette entries and tabs) as {name, x, y, width, height} in screenshot pixels, the space of the screenshot and mouse tools. Give both x and y to also get `at`, the name of the first listed widget under that pixel (null over the world). Names are what click_widget takes; a disabled button (Undo with nothing to undo) and anything on another palette page is not listed. Needs editor mode."""
+    if (x is None) != (y is None):
+        raise ToolError("ui_tree: give both or neither of x and y")
+    position = (x, y) if x is not None and y is not None else None
+    return await _request(_harness(), run.build_ui_tree_command(position), TIMEOUT)
+
+
+@mcp.tool()
+async def click_widget(name: str) -> dict | None:
+    """Left-click the centre of the named editor widget, e.g. Save, Undo, Tool:Raise, Tab:All, Palette:<entry id>; take names from ui_tree (case-insensitive). Returns the widget's rect. An unknown name is an error that lists the known names. Like mouse click, the effect lands over the next frames, so read state or take a screenshot after a moment. Needs editor mode."""
+    return await _request(_harness(), run.build_click_widget_command(name), TIMEOUT)
+
+
+@mcp.tool()
 async def type_text(text: str) -> dict | None:
     """Type 1 to 200 characters into the focused editor text field, one character per frame; \\b is backspace and \\n is return. A screenshot straight after may show only part of the text."""
     return await _request(_harness(), run.build_type_command(text), TIMEOUT)

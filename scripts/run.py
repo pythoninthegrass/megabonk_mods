@@ -37,6 +37,8 @@ Usage:
     run.py mouse move X Y          Move the injected mouse to screenshot pixels (origin top left)
     run.py mouse click|down|up [--button N] [X Y]  Click or press/release a button (0 left, 1 right, 2 middle), moving first when X Y is given
     run.py mouse clear             Return the mouse to the real pointer
+    run.py ui-tree [X Y]           Print the editor widgets and their rects in screenshot pixels, and the widget at X Y when given
+    run.py click-widget <name>     Click an editor widget by name (names come from ui-tree), without pixel coordinates
     run.py type <text>             Type text into the focused field (\\b is backspace, \\n is return), at most 200 characters
     run.py teleport X Y Z          Move the player's feet to a world position and print the position reached
     run.py teleport --cell CX CY   Move the player to a grid cell's centre, on the tile surface there
@@ -163,6 +165,17 @@ def build_mouse_command(action: str, position: tuple[float, float] | None = None
         payload["x"], payload["y"] = position
     if button is not None:
         payload["button"] = button
+    return payload
+
+
+def build_click_widget_command(name: str) -> dict[str, object]:
+    return {"command": "click-widget", "name": name}
+
+
+def build_ui_tree_command(position: tuple[float, float] | None = None) -> dict[str, object]:
+    payload: dict[str, object] = {"command": "ui-tree"}
+    if position is not None:
+        payload["x"], payload["y"] = position
     return payload
 
 
@@ -460,6 +473,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     mouse.add_argument("verb", choices=["move", "click", "down", "up", "clear"])
     mouse.add_argument("position", type=float, nargs="*", metavar="X Y", help="screenshot pixels, origin top left")
     mouse.add_argument("--button", type=int, choices=[0, 1, 2], help="0 left (default), 1 right, 2 middle")
+    ui_tree = sub.add_parser("ui-tree")
+    ui_tree.add_argument("position", type=float, nargs="*", metavar="X Y", help="screenshot pixels, origin top left")
+    click_widget = sub.add_parser("click-widget")
+    click_widget.add_argument("name")
     teleport = sub.add_parser("teleport")
     teleport.add_argument("position", type=float, nargs="*", metavar="X Y Z", help="world units, the player's feet point")
     teleport.add_argument("--cell", type=int, nargs=2, metavar=("CX", "CY"), help="grid cell to stand at the centre of")
@@ -515,6 +532,16 @@ def mouse_payload(args: argparse.Namespace) -> dict[str, object]:
         raise SystemExit("mouse clear takes no coordinates or button")
     position = (args.position[0], args.position[1]) if args.position else None
     return build_mouse_command(args.verb, position, args.button)
+
+
+def ui_tree_payload(args: argparse.Namespace) -> dict[str, object]:
+    if len(args.position) not in (0, 2):
+        raise SystemExit("ui-tree: give both X and Y, or neither")
+    return build_ui_tree_command((args.position[0], args.position[1]) if args.position else None)
+
+
+def click_widget_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_click_widget_command(args.name)
 
 
 def teleport_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -654,6 +681,10 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, build_command("state"), args.timeout)
         case "shader-report":
             ok = send_printing_result(harness, build_command("shader-report"), args.timeout)
+        case "ui-tree":
+            ok = send_printing_result(harness, ui_tree_payload(args), args.timeout)
+        case "click-widget":
+            ok = send_printing_result(harness, click_widget_payload(args), args.timeout)
         case "teleport":
             ok = send_printing_result(harness, teleport_payload(args), args.timeout)
         case "dismiss-levelup":

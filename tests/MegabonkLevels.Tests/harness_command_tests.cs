@@ -488,4 +488,54 @@ public class HarnessCommandTests
         Assert.False(KeyNames.IsValid("a"));
         Assert.False(KeyNames.IsValid(null));
     }
+
+    [Fact]
+    public void TryParse_ClickWidget_ReadsTheName()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"click-widget","name":"Save"}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.ClickWidget, command.Kind);
+        Assert.Equal("Save", command.Input.Text);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"click-widget"}""")]
+    [InlineData("""{"command":"click-widget","name":""}""")]
+    public void TryParse_ClickWidget_RejectsAMissingName(string json)
+    {
+        Assert.False(HarnessCommand.TryParse(json, out _, out var error));
+        Assert.Contains("'name'", error);
+    }
+
+    [Fact]
+    public void TryParse_UiTree_NeedsNoArguments()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"ui-tree"}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Equal(HarnessCommandKind.UiTree, command.Kind);
+        Assert.Null(command.Input.X);
+        Assert.Null(command.Input.Y);
+    }
+
+    [Fact]
+    public void TryParse_UiTree_ReadsAPoint()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"ui-tree","x":120,"y":35.5}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Equal(120f, command.Input.X);
+        Assert.Equal(35.5f, command.Input.Y);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"ui-tree","x":1}""")]
+    [InlineData("""{"command":"ui-tree","y":1}""")]
+    public void TryParse_UiTree_RejectsAHalfPoint(string json)
+    {
+        Assert.False(HarnessCommand.TryParse(json, out _, out var error));
+        Assert.Contains("missing number field", error);
+    }
 }

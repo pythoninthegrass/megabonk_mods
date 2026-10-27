@@ -305,6 +305,9 @@ INPUT_TOOL_CASES = [
         {"command": "mouse", "action": "click", "x": 960, "y": 540, "button": 1},
     ),
     ("mouse", {"action": "clear"}, {"command": "mouse", "action": "clear"}),
+    ("click_widget", {"name": "Save"}, {"command": "click-widget", "name": "Save"}),
+    ("ui_tree", {}, {"command": "ui-tree"}),
+    ("ui_tree", {"x": 120, "y": 35}, {"command": "ui-tree", "x": 120, "y": 35}),
     ("type_text", {"text": "chest"}, {"command": "type", "text": "chest"}),
     ("teleport", {"position": [1.5, 0, -3]}, {"command": "teleport", "position": [1.5, 0, -3]}),
     ("teleport", {"cell": [4, 7]}, {"command": "teleport", "cell": [4, 7]}),
@@ -366,6 +369,7 @@ async def test_input_tool_rejection_surfaces_the_error(tmp_path, monkeypatch, to
         ("mouse", {"action": "move"}, "x and y"),
         ("mouse", {"action": "move", "x": 5}, "x and y"),
         ("mouse", {"action": "click", "x": 5}, "both or neither"),
+        ("ui_tree", {"x": 5}, "both or neither"),
         ("key", {"key": "R", "modifiers": ["LeftShift"], "action": "down"}, "modifiers"),
     ],
 )

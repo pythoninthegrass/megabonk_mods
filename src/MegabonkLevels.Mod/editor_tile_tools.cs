@@ -107,6 +107,7 @@ public static class EditorTileTools
 
     private sealed class ClickRegion
     {
+        public string Name;
         public RectTransform Rect;
         public Action OnClick;
         public Func<bool> Enabled;
@@ -502,7 +503,7 @@ public static class EditorTileTools
         rect.pivot = new Vector2(0.5f, 1f);
         rect.sizeDelta = new Vector2(width, OverlayRowHeight);
         rect.anchoredPosition = new Vector2(x, -(EditorUi.TopInset + ToolbarHeight + ToastGap + index * (OverlayRowHeight + ToastGap)));
-        _clickRegions.Add(new ClickRegion { Rect = rect, OnClick = () => _toasts.Dismiss(index), Enabled = () => index < _toasts.Items.Count });
+        _clickRegions.Add(new ClickRegion { Name = $"Toast{index}", Rect = rect, OnClick = () => _toasts.Dismiss(index), Enabled = () => index < _toasts.Items.Count });
 
         var background = rect.gameObject.AddComponent<Image>();
         background.color = PanelColor;
@@ -914,6 +915,27 @@ public static class EditorTileTools
 
     private static void ShowTransientStatus(string text) => _toasts.Push(text, false, Time.unscaledTime);
 
+    // Specific widgets come before the panels that contain them, so UiWidgets.At reports the innermost one.
+    public static IEnumerable<UiWidget> ListWidgets()
+    {
+        var widgets = new List<UiWidget?>();
+        for (var i = 0; i < _toolSlots.Count; i++)
+        {
+            widgets.Add(ToWidget($"Tool:{EditorTools.All[i]}", _toolSlots[i].Rect));
+        }
+
+        widgets.AddRange(_clickRegions.Where(region => region.Enabled == null || region.Enabled()).Select(region => ToWidget(region.Name, region.Rect)));
+        widgets.Add(ToWidget("SaveInput", _saveInputRect));
+        for (var i = 0; i < _loadRows.Count; i++)
+        {
+            widgets.Add(ToWidget($"LoadRow{i}", _loadRows[i].Rect));
+        }
+
+        widgets.Add(ToWidget("Toolbar", _toolbarRect));
+        widgets.Add(ToWidget("LoadPanel", _loadRect));
+        return widgets.Where(widget => widget.HasValue).Select(widget => widget.Value);
+    }
+
     private static bool PointerOverOverlay() =>
         (_toolbarRect != null && RectTransformUtility.RectangleContainsScreenPoint(_toolbarRect, EditorInput.MousePosition, null))
         || PointerOverToast()
@@ -1030,7 +1052,7 @@ public static class EditorTileTools
         var parts = Bordered(name, parent, SlotBorder, SlotFill);
         var rect = parts.Outer;
         PlaceTopLeft(rect, x, y, width, height);
-        _clickRegions.Add(new ClickRegion { Rect = rect, OnClick = onClick, Enabled = enabled });
+        _clickRegions.Add(new ClickRegion { Name = name, Rect = rect, OnClick = onClick, Enabled = enabled });
 
         var labelRect = EditorUi.NewRect("Text", rect);
         labelRect.anchorMin = Vector2.zero;

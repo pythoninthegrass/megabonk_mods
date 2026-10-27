@@ -29,6 +29,8 @@ public enum HarnessCommandKind
     Type,
     Teleport,
     DismissLevelUp,
+    ClickWidget,
+    UiTree,
 }
 
 // World-space camera position and euler rotation in degrees.
@@ -152,6 +154,10 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseMouse(root, out command, out error);
             case "type":
                 return TryParseType(root, out command, out error);
+            case "click-widget":
+                return TryParseClickWidget(root, out command, out error);
+            case "ui-tree":
+                return TryParseUiTree(root, out command, out error);
             case "teleport":
                 return TryParseTeleport(root, out command, out error);
             case "dismiss-levelup":
@@ -445,6 +451,35 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
             return false;
         }
 
+        return true;
+    }
+
+    private static bool TryParseClickWidget(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        if (!TryGetString(root, "name", out var name) || name.Length == 0)
+        {
+            error = "missing non-empty string field 'name'";
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.ClickWidget, null, Input: new InputArgs { Action = "click-widget", Text = name });
+        error = null;
+        return true;
+    }
+
+    private static bool TryParseUiTree(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        if (!TryReadCoordinate(root, "x", root.ContainsKey("y"), out var x, out error)
+            || !TryReadCoordinate(root, "y", root.ContainsKey("x"), out var y, out error))
+        {
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.UiTree, null, Input: new InputArgs { Action = "ui-tree", X = x, Y = y });
         return true;
     }
 
