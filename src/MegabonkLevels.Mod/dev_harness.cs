@@ -20,7 +20,7 @@ namespace MegabonkLevels;
 public static class DevHarness
 {
     private const float PollIntervalSeconds = 0.5f;
-    private const float PlayerBodyOffsetY = 1.925f;
+    private const float PlayerBodyOffsetY = TeleportTarget.PlayerBodyOffsetY;
     private const float TeleportCameraPitch = 20f;
 
     private static MelonLogger.Instance _logger;

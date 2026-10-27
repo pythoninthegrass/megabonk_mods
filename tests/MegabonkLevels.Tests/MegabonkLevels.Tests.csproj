@@ -86,6 +86,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/real_input_diagnostic.cs" Link="real_input_diagnostic.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/key_names.cs" Link="key_names.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/key_text_mapper.cs" Link="key_text_mapper.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/overview_target.cs" Link="overview_target.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/teleport_target.cs" Link="teleport_target.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/object_query.cs" Link="object_query.cs" />
   </ItemGroup>

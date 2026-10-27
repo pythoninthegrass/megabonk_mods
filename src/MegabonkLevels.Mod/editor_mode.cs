@@ -23,6 +23,9 @@ public static class EditorMode
     private static bool _looking;
     private static bool _reenterRequested;
 
+    // The editor can be entered before the grid session exists, so the grid-aware overview is applied once the grid appears.
+    private static bool _overviewAwaitsGrid;
+
     public static bool Active => _session.Active;
 
     public static void Tick(MelonLogger.Instance logger)
@@ -95,8 +98,8 @@ public static class EditorMode
         CustomLevelState.MarkEditorUsed();
         MyTime.Pause();
         ReadLookSettings();
-        var player = MyPlayer.Instance.transform.position;
-        _pose = FreeFlyCamera.OverviewPose(player.x, player.y, player.z);
+        _pose = OverviewPoseForPlayer();
+        _overviewAwaitsGrid = LiveEditPatch.Grid == null;
         CameraOverride.Set(_pose);
         EditorEscapeInput.Reset();
         EditorPalette.OnEditorEntered(logger);
@@ -146,10 +149,15 @@ public static class EditorMode
             _looking = !EditorPalette.PointerOverPanel && !EditorTileTools.PointerOverEditorOverlay;
         }
 
+        if (_overviewAwaitsGrid && LiveEditPatch.Grid != null)
+        {
+            _overviewAwaitsGrid = false;
+            _pose = OverviewPoseForPlayer();
+        }
+
         if (CenterRequested())
         {
-            var player = MyPlayer.Instance.transform.position;
-            _pose = FreeFlyCamera.OverviewPose(player.x, player.y, player.z);
+            _pose = OverviewPoseForPlayer();
         }
 
         var look = _looking && EditorInput.GetMouseButton(1);
@@ -172,6 +180,19 @@ public static class EditorMode
         _settings = DefaultSettings with { LookDegreesPerUnit = (controls?.sensitivity ?? DefaultSettings.LookDegreesPerUnit) * LookSensitivityScale };
         _horizontalSign = controls?.inverted_horizontal_axis == 1 ? -1f : 1f;
         _verticalSign = controls?.inverted_vertical_axis == 1 ? -1f : 1f;
+    }
+
+    private static CameraPose OverviewPoseForPlayer()
+    {
+        var player = MyPlayer.Instance.transform.position;
+        if (LiveEditPatch.Grid is not { } grid)
+        {
+            return FreeFlyCamera.OverviewPose(player.x, player.y, player.z);
+        }
+
+        var (centreX, centreZ) = OverviewTarget.CentreCell(grid.Width, grid.Depth);
+        var (x, y, z) = OverviewTarget.Of(player.x, player.y, player.z, grid.Width, grid.Depth, grid.Spacing, grid.TileHeight, LiveEditPatch.TileAt(centreX, centreZ));
+        return FreeFlyCamera.OverviewPose(x, y, z);
     }
 
     private static float Axis(KeyCode positive, KeyCode negative) =>
