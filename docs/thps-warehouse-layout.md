@@ -54,8 +54,8 @@ Catalog IDs follow level-format.md. A thumbnail-only identification is marked "t
 | Enclosure (west, north and the cut-away sides) | reuse | ring of cells raised two levels (`SetTileHeight`); the game builds the cliff walls |
 | Raised north-east block M14 and the two sloped lanes | reuse | `SetTileHeight` +1 for the block, `SetTileSlope` North or East for the lane cells; one level is about 4.5 m |
 | Dark pit M13 | reuse | `RemoveTile` on one cell, left as a hole with the kill floor under it |
-| Big rail M15, high rail, ledge rails | reuse | `interactable/rail/0` (straight, thumb), scaled with `PlaceObject` Scale; `interactable/rail/1` to `5` are curved variants (thumb) |
-| Box piles and cardboard heaps | reuse | `forest/stage0/stageTilePrefabs/flat/7` (a wooden crate, thumb); whether a flat-tile prefab can be placed as an object is untested |
+| Big rail M15, high rail, ledge rails | reuse | `interactable/rail/1` (about 50 units long at scale 1, with a bend) for the big rail; `interactable/rail/0` (a straight bar about 28 units long at scale 1) for the ledge and high rails; `rail/2` to `5` are curved variants not yet placed |
+| Box piles and cardboard heaps | new | the Forest palette has no crate or cardboard prop; the box pile collectibles are chests (below) and the cardboard heaps are decorative only |
 | West bank M1, north bank M6, middle pipe M7, channel pipe M8, back pipe M9, notch pipe M10 | new | the palette has no ramp or curved transition prop; a slope tile is 40 units wide and rises 20, too coarse |
 | Platform M2, deck M9, ledge M11 | new | no low solid block prop; rocks and logs are the wrong shape and their colliders are unchecked |
 | Half pipe M4 | new | two opposed transitions with a flat between; built from the same quarter pipe asset if it can be mirrored |
@@ -97,7 +97,39 @@ Positions are the map's floating-icon positions mapped through the low-confidenc
 - **Jump height is unmeasured.** Every height rule above is an assumption. It needs a measurement of the player's jump on this build.
 - **Block choice.** The 4x3 block has to be chosen from a height dump of seed `20261007` to keep terrain edits small.
 - **Generated clutter.** The seed spawns trees, rocks and shrines inside the block, which have to be removed with `RemoveObject` (`gen:` ids) or the block placed where there are few.
-- **Placing flat-tile prefabs as objects is untested**, so the crate identification and the box pile stand-in are unconfirmed.
-- **Rail behaviour is unconfirmed.** The rail prefabs are identified by thumbnail only; whether they can be grinded at a placed position, and how a scaled rail behaves, is untested.
+- **Rail grinding is unconfirmed.** `rail/0` and `rail/1` place and render at a scaled size, but nobody has grinded them in a run.
 - **New assets are the bulk of the work.** Eleven structures need a custom prefab; the asset pack route is proven for a cube and a four-part model only, and scripts cannot ship in a bundle.
 - **The structure map itself is low confidence.** Box pile numbering, the start block's role and the exact positions are ambiguous in the source analysis; see its Unresolved list.
+
+## Building the level
+
+`levels/thps.mblevel.json` is generated, not hand-edited: `scripts/build_thps_level.py` writes it (`uv run scripts/build_thps_level.py`) and `tests/test_build_thps_level.py` covers the generator. `ThpsLevelTests` in `tests/MegabonkLevels.Tests` replays the saved file through `EditStack` and `ReachabilityValidator` and checks that every arena tile is reachable from the generated spawn cell. Regenerate and reload with `uv run scripts/build_thps_level.py` then `relaunch(level="levels/thps.mblevel.json")`.
+
+What the file contains:
+
+- A 3 tile by 4 tile arena at cells x 8-10, z 4-7, flat at height 0, wrapped by a one-cell ring at height 2 (cells x 7-11, z 3-8). Every other cell of the 15x15 grid is removed. Each kept cell gets an explicit `SetTileHeight` and `SetTileSlope`, so nothing depends on the generated heights.
+- The raised north-east block (two cells at height 1) and the two slope cells that climb to it.
+- Removal of every generator object except the spawn portal, the boss spawner and the particles, from the per-category counts the seed produces. The boss spawner is moved into the arena.
+- The three rails from the structure table.
+
+Deviations from the spec above, and findings:
+
+- **Block position.** The player is placed at the generator's spawn (world (120, 2, -3), cell (10, 7)) before edits apply, and moving the spawn portal with `MoveObject` does not move the player. The arena therefore sits over cell (10, 7) at ground level, in the north-east corner next to the raised block, instead of anywhere in the grid.
+- **Dark pit omitted.** The removed cell would fall under the south 100 pickup and the S shrine at the 4.4 units per metre scale, and the structure is unidentified, so the pit is not built.
+- **Flat-tile prefabs are whole tiles.** `forest/stage0/stageTilePrefabs/flat/7` placed a flat slab with a ruined stone tower and blocks, not a crate. The palette thumbnail was misleading. Do not use the flat-tile entries as props.
+- **Rails.** `rail/0` and `rail/1` place with a `PlaceObject` and honour rotation and uniform scale. The big rail is `rail/1` at scale 0.75 and yaw 90, the ledge rail `rail/0` at scale 0.4 and the high rail `rail/0` at scale 0.5, 12 units up. The high rail floats until the west bank asset exists.
+- **Editor camera.** In editor mode the editor owns the camera, so the harness `camera` command has no effect there. For screenshots call `editor(on=false)`, `freeze()` and then `camera(...)`.
+- **Validate.** The editor's Validate button produces no visible result in the toolbar or the log on this level, so reachability is checked by `ThpsLevelTests` instead.
+- **Save names.** The editor save writes to `UserData/Levels/<name>.mblevel.json`; use a new name so no existing custom level is overwritten.
+
+### Check against the reference frames
+
+Built overview (a high three-quarter shot of the arena) against frame 12, the intro flyover:
+
+- Present: a closed, walled floor, the raised block with its two lanes at the north-east end, a rail in the middle, and the boss spawner ring in place of the start block.
+- Missing: every ramp, deck, ledge, kicker, the half pipe, the taxi, the glass corridor and the doors, windows, trusses and graffiti, all of which need new assets.
+- Different: the walls are 40 units of grass-and-dirt cliff under a bright sky, not stained concrete under a steel ceiling; the lighting and fog are Forest's; and the arena reads small and bare because the 4.4 units per metre scale puts a 2-3 m ramp at 9-13 units against walls of 40.
+- Rails: the bent `rail/1` resembles the big rail's bend in frame 24, but it is a bare bar on short posts, with no platform, trench or barricades.
+- Spawn: the player starts in the arena just east of the raised block on the same northern row, near where the start arrow is on the map, and the boss portal stands next to the spawn.
+
+A run on the level starts and, over the first 30 seconds with the harness's invulnerability on, the player stays at spawn at ground level with enemies spawning around the arena and no kill floor event logged. A run without invulnerability was not played. One enemy was seen standing on top of a ring wall.

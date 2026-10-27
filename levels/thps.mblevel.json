@@ -1,0 +1,5726 @@
+{
+  "schemaVersion": 2,
+  "gameBuildId": "21750826",
+  "map": 1,
+  "stageIndex": 0,
+  "tier": 0,
+  "seed": 20261007,
+  "packs": {},
+  "edits": [
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":1}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":2}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":3}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":3}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":3}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":3}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":3}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":3}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":3}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":3,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":3,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":3,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":3,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":3,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":3,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":3,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":3,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":3,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":3,\"direction\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":3}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":3}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":3}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":4}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":4}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":4}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":4}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":4}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":4}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":4}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":4,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":4,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":4,\"height\":0}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":4,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":4,\"height\":0}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":4,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":4,\"height\":0}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":4,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":4,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":4,\"direction\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":4}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":4}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":4}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":5}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":5}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":5}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":5}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":5}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":5}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":5}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":5,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":5,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":5,\"height\":0}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":5,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":5,\"height\":0}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":5,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":5,\"height\":0}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":5,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":5,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":5,\"direction\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":5}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":5}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":5}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":6}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":6}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":6}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":6}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":6}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":6}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":6}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":6,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":6,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":6,\"height\":0}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":6,\"direction\":1}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":6,\"height\":0}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":6,\"direction\":1}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":6,\"height\":0}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":6,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":6,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":6,\"direction\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":6}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":6}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":6}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":7}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":7}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":7}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":7}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":7}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":7}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":7}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":7,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":7,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":7,\"height\":1}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":7,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":7,\"height\":1}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":7,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":7,\"height\":0}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":7,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":7,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":7,\"direction\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":7}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":7}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":7}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":8}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":8}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":8}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":8}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":8}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":8}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":8}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":8,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":8,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":8,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":8,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":8,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":8,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":8,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":8,\"direction\":0}"
+    },
+    {
+      "opType": "tile.setHeight",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":8,\"height\":2}"
+    },
+    {
+      "opType": "tile.setSlope",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":8,\"direction\":0}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":8}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":8}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":8}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":9}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":10}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":11}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":12}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":13}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":0,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":1,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":2,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":3,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":4,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":5,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":6,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":7,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":8,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":9,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":10,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":11,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":12,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":13,\"z\":14}"
+    },
+    {
+      "opType": "tile.remove",
+      "target": "",
+      "payload": "{\"x\":14,\"z\":14}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0015",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0016",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0017",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0018",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0019",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0020",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0021",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0022",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0023",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0024",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0025",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0026",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0027",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0028",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0029",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0030",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0031",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0032",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0033",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0034",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0035",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0036",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0037",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:tileObject:0038",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0015",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0016",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0017",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0018",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0019",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0020",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0021",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0022",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0023",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0024",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0025",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0026",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0027",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0028",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0029",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0030",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0031",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0032",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0033",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0034",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0035",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0036",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0037",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0038",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0039",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0040",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0041",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0042",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0043",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0044",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0045",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0046",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0047",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0048",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0049",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0050",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0051",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0052",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0053",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0054",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0055",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0056",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0057",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0058",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0059",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0060",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0061",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0062",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0063",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0064",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0065",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0066",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0067",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0068",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0069",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0070",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0071",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0072",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0073",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0074",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0075",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0076",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0077",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0078",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0079",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0080",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0081",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0082",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0083",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0084",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0085",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0086",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0087",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0088",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0089",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0090",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0091",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0092",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0093",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0094",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0095",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0096",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0097",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0098",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0099",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0100",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0101",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0102",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0103",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0104",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0105",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0106",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0107",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0108",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0109",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0110",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0111",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0112",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0113",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0114",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0115",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0116",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0117",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0118",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0119",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0120",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0121",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0122",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0123",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0124",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0125",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0126",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0127",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0128",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0129",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0130",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0131",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0132",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0133",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0134",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0135",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0136",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0137",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0138",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0139",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0140",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0141",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0142",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0143",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0144",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0145",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0146",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0147",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0148",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0149",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0150",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0151",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0152",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0153",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0154",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0155",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0156",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0157",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0158",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0159",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0160",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0161",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0162",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0163",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0164",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0165",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0166",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0167",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0168",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0169",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0170",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0171",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0172",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0173",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0174",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0175",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0176",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0177",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0178",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0179",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0180",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0181",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0182",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0183",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0184",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0185",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0186",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0187",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0188",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0189",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0190",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0191",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0192",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0193",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0194",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0195",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0196",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0197",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0198",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0199",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0200",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0201",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0202",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0203",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0204",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0205",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0206",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0207",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0208",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0209",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0210",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0211",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0212",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0213",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0214",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0215",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0216",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0217",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0218",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0219",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0220",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0221",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0222",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0223",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0224",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0225",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0226",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0227",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0228",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0229",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0230",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0231",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0232",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0233",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0234",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0235",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0236",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0237",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0238",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0239",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0240",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0241",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0242",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0243",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0244",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0245",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0246",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0247",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0248",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0249",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0250",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0251",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0252",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0253",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0254",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0255",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0256",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0257",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0258",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0259",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0260",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0261",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0262",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0263",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0264",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0265",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0266",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0267",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0268",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0269",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0270",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0271",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0272",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0273",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0274",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0275",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0276",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0277",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0278",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0279",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0280",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0281",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0282",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0283",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0284",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0285",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0286",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0287",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0288",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0289",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0290",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0291",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0292",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0293",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0294",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0295",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0296",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0297",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0298",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Tree0:0299",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0015",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0016",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0017",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0018",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0019",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0020",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0021",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0022",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0023",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0024",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0025",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0026",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0027",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0028",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0029",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0030",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0031",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0032",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0033",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0034",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0035",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0036",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0037",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0038",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Log0:0039",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0015",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0016",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0017",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0018",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0019",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0020",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0021",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0022",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0023",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0024",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0025",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0026",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0027",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0028",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0029",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0030",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0031",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0032",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0033",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0034",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0035",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0036",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0037",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0038",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0039",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0040",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0041",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0042",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0043",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0044",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0045",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0046",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0047",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0048",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0049",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0050",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0051",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0052",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0053",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0054",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0055",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0056",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0057",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0058",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0059",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0060",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0061",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0062",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0063",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0064",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0065",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0066",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0067",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0068",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0069",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0070",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0071",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0072",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0073",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0074",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0075",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0076",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0077",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0078",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0079",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0080",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0081",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0082",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0083",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0084",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0085",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0086",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0087",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0088",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0089",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0090",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0091",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0092",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0093",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0094",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0095",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0096",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0097",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0098",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush0:0099",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0015",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0016",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0017",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0018",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0019",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0020",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0021",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0022",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0023",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_01:0024",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0015",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0016",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0017",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0018",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0019",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0020",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0021",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0022",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_05:0023",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0015",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0016",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0017",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0018",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0019",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0020",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0021",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0022",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0023",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0024",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0025",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_01:0026",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0015",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0016",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0017",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0018",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0019",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0020",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0021",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0022",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0023",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0024",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_02:0025",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0015",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0016",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0017",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0018",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0019",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0020",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0021",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0022",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0023",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0024",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0025",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0026",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_medium_03:0027",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0015",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0016",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0017",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0018",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:rock_small_02:0019",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0015",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0016",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0017",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0018",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0019",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0020",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0021",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0022",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0023",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0024",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0025",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0026",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0027",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0028",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0029",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0030",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0031",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0032",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0033",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0034",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0035",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0036",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0037",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0038",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0039",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0040",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0041",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0042",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0043",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0044",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0045",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0046",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0047",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0048",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0049",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0050",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0051",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0052",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0053",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0054",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0055",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0056",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0057",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0058",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0059",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0060",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0061",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0062",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0063",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0064",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0065",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0066",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0067",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0068",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0069",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0070",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0071",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0072",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0073",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0074",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0075",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0076",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0077",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0078",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0079",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0080",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0081",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0082",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0083",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0084",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0085",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0086",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0087",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0088",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0089",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0090",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0091",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0092",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0093",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0094",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0095",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0096",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0097",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0098",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Bush1:0099",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Boulder:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Boulder:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Boulder:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Boulder:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Boulder:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Boulder:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Boulder:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Boulder:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChargeShrine:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:GreedShrine:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:GreedShrine:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:GreedShrine:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:GreedShrine:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:GreedShrine:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:GreedShrine:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:GreedShrine:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:GreedShrine:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Microwave:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Microwave:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0015",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0016",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0017",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0018",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0019",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0020",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0021",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0022",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0023",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0024",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0025",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0026",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0027",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0028",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0029",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0030",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0031",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0032",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0033",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0034",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0035",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0036",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0037",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0038",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmall:0039",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBig:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmallSilver:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmallSilver:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmallSilver:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmallSilver:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmallSilver:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotSmallSilver:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:PotBigSilver:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0004",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0005",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0006",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0007",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0008",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0009",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0010",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0011",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0012",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0013",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0014",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0015",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0016",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0017",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0018",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0019",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0020",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0021",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0022",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0023",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0024",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0025",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0026",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0027",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0028",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0029",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0030",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0031",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0032",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0033",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0034",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0035",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0036",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0037",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0038",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0039",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0040",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0041",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0042",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0043",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0044",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:Chest:0045",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ShrineMaoi:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ShrineMaoi:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ShrineMaoi:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ShrineMaoi:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:CursedShrine:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:CursedShrine:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:CursedShrine:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:CursedShrine:0003",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:MagnetShrine:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:MagnetShrine:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:MagnetShrine:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChallengeShrine:0000",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChallengeShrine:0001",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.remove",
+      "target": "gen:object:ChallengeShrine:0002",
+      "payload": "{}"
+    },
+    {
+      "opType": "object.move",
+      "target": "gen:object:BossSpawner:0000",
+      "payload": "{\"newTransform\":{\"position\":{\"x\":120,\"y\":0.0,\"z\":-20},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/1\",\"position\":{\"x\":86,\"y\":0.0,\"z\":-85},\"rotation\":{\"x\":0.0,\"y\":90.0,\"z\":0.0},\"scale\":{\"x\":0.75,\"y\":0.75,\"z\":0.75}}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":40,\"y\":0.0,\"z\":-106},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":0.4,\"y\":0.4,\"z\":0.4}}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":34,\"y\":12.0,\"z\":-126},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":0.5,\"y\":0.5,\"z\":0.5}}"
+    }
+  ]
+}
