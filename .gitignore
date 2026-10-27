@@ -305,3 +305,8 @@ unity/*/Assets/TestProp/
 unity/*/Assets/TestProp.meta
 unity/*/Assets/TestModel/
 unity/*/Assets/TestModel.meta
+
+# THPS warehouse reference material
+tools/thps_warehouse_*_map.png
+tools/thps_warehouse_frames/
+tools/thps1_100_playthrough.mkv
