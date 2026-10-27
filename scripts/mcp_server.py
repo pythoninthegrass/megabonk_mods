@@ -282,7 +282,7 @@ async def list_levels() -> dict | None:
 
 @mcp.tool()
 async def click_widget(name: str) -> dict | None:
-    """Left-click the centre of the named editor widget, e.g. Save, Undo, Tab:All, Palette:<entry id>; take names from ui_tree (case-insensitive). Returns the widget's rect. An unknown name is an error that lists the known names, and a disabled widget is an error too. Like mouse click, the effect lands over the next frames, so read state or take a screenshot after a moment. Tools are not widgets: switch them with key (Alpha1 to Alpha6). Needs editor mode."""
+    """Left-click the centre of the named editor widget, e.g. Save, Undo, Tool:Place, Tab:All, Palette:<entry id>; take names from ui_tree (case-insensitive). Returns the widget's rect. An unknown name is an error that lists the known names, and a disabled widget is an error too. Like mouse click, the effect lands over the next frames, so read state or take a screenshot after a moment. Tool:<tool> selects that tool, same as its hotkey (key Alpha1 to Alpha6). Needs editor mode."""
     return await _request(_harness(), run.build_click_widget_command(name), TIMEOUT)
 
 

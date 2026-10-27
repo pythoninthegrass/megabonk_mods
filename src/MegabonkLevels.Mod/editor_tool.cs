@@ -35,6 +35,8 @@ public static class EditorTools
         return tool == current ? $"<color={CurrentToolColor}>[{label}]</color>" : label;
     }
 
+    public static string WidgetName(EditorTool tool) => $"Tool:{tool}";
+
     public static string ToolbarText(EditorTool current) => string.Join("   ", Tools.Select(tool => ToolLabel(tool, current)));
 
     public static string Description(EditorTool tool) => tool switch

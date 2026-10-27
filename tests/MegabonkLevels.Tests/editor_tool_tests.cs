@@ -4,6 +4,18 @@ public class EditorToolTests
 {
     private const int LowestLevel = -3;
 
+    [Theory]
+    [InlineData(EditorTool.Raise, "Tool:Raise")]
+    [InlineData(EditorTool.Lower, "Tool:Lower")]
+    [InlineData(EditorTool.Slope, "Tool:Slope")]
+    [InlineData(EditorTool.Remove, "Tool:Remove")]
+    [InlineData(EditorTool.Place, "Tool:Place")]
+    [InlineData(EditorTool.Select, "Tool:Select")]
+    public void WidgetName_PrefixesTheToolName(EditorTool tool, string expected)
+    {
+        Assert.Equal(expected, EditorTools.WidgetName(tool));
+    }
+
     [Fact]
     public void Build_ObjectTools_HaveNoTileOp()
     {

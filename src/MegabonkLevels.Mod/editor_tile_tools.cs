@@ -412,6 +412,8 @@ public static class EditorTileTools
             toolText.ForceMeshUpdate();
             toolWidths.Add(toolText.preferredWidth);
             _toolSlots.Add(new ToolSlot { Rect = toolRect, Text = toolText });
+            var selected = tool;
+            _clickRegions.Add(new ClickRegion { Name = EditorTools.WidgetName(tool), Rect = toolRect, OnClick = () => SetTool(selected) });
         }
 
 
