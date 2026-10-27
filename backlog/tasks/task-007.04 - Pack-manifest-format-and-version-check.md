@@ -1,10 +1,10 @@
 ---
 id: TASK-007.04
 title: Pack manifest format and version check
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-06 21:44'
-updated_date: '2026-10-27 03:48'
+updated_date: '2026-10-27 03:52'
 labels:
   - level-editor
   - assets
@@ -78,10 +78,16 @@ In-game check on macOS (free Wine, branch DLL): level recording testpack 0.9.0 a
 In-game editor save (harness-injected text, Save button): a level holding one bundle:testpack/TestProp placement saved as schemaVersion 2 with packs {testpack: 1.0.0}, so LiveEditPatch.BuildPacks writes the installed manifest version. Real-keyboard typing and Backspace in the editor text fields did not work in this session under Wine (see docs/development.md 'Real keyboard text').
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Pack manifests (id, name, author, version, assets) are parsed and validated in Unity-free code, with the id required to match the pack folder. PackCatalog.Resolve filters a pack's assets by its manifest, so an unlisted asset spawns the Missing placeholder. Levels gain an optional packs map (schemaVersion 2, migration from 1, empty map when absent) that editor save fills from installed manifests, and GamePackVersionCheck warns on an exact-string version mismatch without blocking the run. Verified: task check green on main; in game (free Wine on macOS) a 0.9.0 level against a 1.0.0 manifest logged the warning and still spawned the asset, a manifest omitting TestProp produced the placeholder, and editor save wrote packs {testpack: 1.0.0}. An unattended gnhf run produced the first pass; review found the manifest filter unwired, no folder-id check, and two net6 compile errors the net10 tests could not see, all fixed before merge. Open: real-keyboard text input in the editor fields still fails under Wine in this setup; clicking the game window does not help.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
