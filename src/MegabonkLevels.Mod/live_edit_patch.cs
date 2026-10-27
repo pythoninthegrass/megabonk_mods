@@ -71,9 +71,12 @@ public static class LiveEditPatch
     }
 
     // The session is kept until the next generation completes, so its tile generator is destroyed while a reloaded level generates.
-    private static Session LiveSession => _session is { } session && session.TileGen != null ? session : null;
+    private static Session LiveSession => _session is { } session && session.Controller != null ? session : null;
 
-    public static LiveGrid? Grid =>LiveSession?.Grid;
+    public static LiveGrid? Grid => LiveSession?.Grid;
+
+    // True on a ProceduralMesh map, where there is no tile grid and only objects can be edited.
+    public static bool IsTerrainMap => LiveSession is { } session && session.TileGen == null;
 
     public static IReadOnlyList<EditOp> SeedEdits => LiveSession?.SeedEdits ?? Array.Empty<EditOp>();
 
@@ -83,7 +86,7 @@ public static class LiveEditPatch
     public static LevelState CurrentState() => LiveSession?.Planner.State;
 
     // The baked ground collision, replaced after every terrain edit.
-    public static MeshCollider GroundCollider() => LiveSession?.TileGen.collider?.GetComponent<MeshCollider>();
+    public static MeshCollider GroundCollider() => LiveSession?.GroundCollider();
 
     // The editor-pickable object whose hierarchy contains hit, or null: tiles, walls and fill pieces never resolve.
     public static ObjectTarget? TargetOf(Transform hit) => LiveSession?.Applier.TargetOf(hit);
@@ -198,7 +201,7 @@ public static class LiveEditPatch
             Map: (EMap)(int)map.eMap,
             StageIndex: stageIndex,
             Tier: MapController.runConfig?.mapTierIndex ?? 0,
-            Seed: session.TileGen.debugSeed,
+            Seed: session.TileGen?.debugSeed ?? 0,
             Packs: BuildPacks(edits),
             Edits: edits.ToList());
     }
@@ -395,12 +398,7 @@ public static class LiveEditPatch
         var tileGen = controller.proceduralTileGeneration;
         if (tileGen?.proceduralTiles == null)
         {
-            if (edits != null && edits.Count > 0)
-            {
-                logger.Warning("LiveEdit: map has no tile grid (not a Tiles map); edits not applied");
-            }
-
-            KillFloorWatcher.Disarm();
+            OnTerrainGenerationComplete(logger, controller, index, edits);
             return;
         }
 
@@ -422,8 +420,39 @@ public static class LiveEditPatch
         KillFloorWatcher.Arm(tileGen, logger);
     }
 
+    // A ProceduralMesh map: the session holds only objects, over an empty tile baseline.
+    private static void OnTerrainGenerationComplete(MelonLogger.Instance logger, MapGenerationController controller, Dictionary<string, GameObject> index, IReadOnlyList<EditOp> edits)
+    {
+        var baseline = LevelState.FromTiles(new Dictionary<(int X, int Z), TileState>());
+        var session = new Session(logger, controller, index, baseline, edits != null ? edits.ToList() : new List<EditOp>());
+        if (edits != null && edits.Count > 0)
+        {
+            ApplyEdits(session, baseline, edits);
+        }
+
+        _session = session;
+        if (edits == null || session.GroundCollider() is not { } ground)
+        {
+            KillFloorWatcher.Disarm();
+            return;
+        }
+
+        KillFloorWatcher.ArmTerrain(ground.bounds.min.y, logger);
+    }
+
     private static void ApplyEdits(Session session, LevelState baseline, IReadOnlyList<EditOp> edits)
     {
+        if (session.TileGen == null)
+        {
+            var (kept, rejected) = TerrainEdits.Split(edits);
+            if (rejected.Count > 0)
+            {
+                session.Logger.Warning($"LiveEdit: {rejected.Count} tile edit(s) skipped, a terrain map has no tile grid");
+            }
+
+            edits = kept;
+        }
+
         IReadOnlyList<LiveAction> plan;
         try
         {
@@ -462,7 +491,7 @@ public static class LiveEditPatch
         if (LiveEditPlan.ChangesTerrain(plan))
         {
             var touched = plan.Where(a => a.Kind is LiveActionKind.SetTile or LiveActionKind.RemoveTile).Select(a => (a.X, a.Z));
-            FillRegeneration.Regenerate(session.TileGen, session.Grid.Spacing, touched, session.Logger);
+            FillRegeneration.Regenerate(session.TileGen, session.Grid.Value.Spacing, touched, session.Logger);
             CollisionRebuild.Replace(session.TileGen, session.Logger);
         }
     }
@@ -567,8 +596,9 @@ public static class LiveEditPatch
     {
         public readonly MelonLogger.Instance Logger;
         public readonly MapGenerationController Controller;
+        // Both are null on a ProceduralMesh map.
         public readonly ProceduralTileGeneration TileGen;
-        public readonly LiveGrid Grid;
+        public readonly LiveGrid? Grid;
         public readonly Applier Applier;
         public LiveEditPlanner Planner;
         public IReadOnlyList<EditOp> SeedEdits;
@@ -579,16 +609,26 @@ public static class LiveEditPatch
         {
             Logger = logger;
             Controller = controller;
-            TileGen = controller.proceduralTileGeneration;
-            var columns = TileGen.proceduralTiles;
-            var mapParameters = TileGen.currentMapParameters ?? TileGen.currentStage?.mapParameters;
-            var lowestLevel = baseline.Tiles.Count == 0 ? 0 : baseline.Tiles.Values.Min(t => t.Height);
-            Grid = new LiveGrid(columns.Length, columns[0].Length, mapParameters.scaledTileWidth, mapParameters.scaledTileHeight, lowestLevel);
+            var tileGen = controller.proceduralTileGeneration;
+            if (tileGen?.proceduralTiles != null)
+            {
+                TileGen = tileGen;
+                var columns = TileGen.proceduralTiles;
+                var mapParameters = TileGen.currentMapParameters ?? TileGen.currentStage?.mapParameters;
+                var lowestLevel = baseline.Tiles.Count == 0 ? 0 : baseline.Tiles.Values.Min(t => t.Height);
+                Grid = new LiveGrid(columns.Length, columns[0].Length, mapParameters.scaledTileWidth, mapParameters.scaledTileHeight, lowestLevel);
+            }
+
             Baseline = baseline;
             Applier = new Applier(logger, controller, index);
             Planner = new LiveEditPlanner(baseline);
             SeedEdits = seedEdits;
         }
+
+        // The baked tile collision, or the heightmap mesh's collider on a ProceduralMesh map.
+        public MeshCollider GroundCollider() => TileGen != null
+            ? TileGen.collider?.GetComponent<MeshCollider>()
+            : Controller.proceduralMapMeshGenerator?.mesh?.GetComponentInChildren<MeshCollider>();
     }
 
     private sealed class Applier
@@ -609,7 +649,7 @@ public static class LiveEditPatch
             _logger = logger;
             _controller = controller;
             _tileGen = controller.proceduralTileGeneration;
-            _mapParameters = _tileGen.currentMapParameters ?? _tileGen.currentStage?.mapParameters;
+            _mapParameters = _tileGen?.currentMapParameters ?? _tileGen?.currentStage?.mapParameters;
             _index = index;
             foreach (var (genId, go) in index)
             {

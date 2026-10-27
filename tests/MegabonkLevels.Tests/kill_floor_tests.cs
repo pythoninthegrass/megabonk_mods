@@ -71,4 +71,24 @@ public class KillFloorTests
         Assert.False(KillFloor.ShouldKill(-66.5f, floor));
         Assert.True(KillFloor.ShouldKill(KillFloor.LowestPoint(-66.5f, -80f), floor));
     }
+
+    [Fact]
+    public void FloorYForTerrain_IsLowestTerrainMinusMargin()
+    {
+        Assert.Equal(-30f, KillFloor.FloorYForTerrain(10f, 40f, float.NegativeInfinity));
+    }
+
+    [Fact]
+    public void FloorYForTerrain_IsRaisedAboveTheCatchFloor()
+    {
+        Assert.Equal(-12f, KillFloor.FloorYForTerrain(10f, 40f, -20f));
+    }
+
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    public void FloorYForTerrain_NoTerrainHeight_NeverKills(float lowest)
+    {
+        Assert.Equal(float.NegativeInfinity, KillFloor.FloorYForTerrain(lowest, 40f, -100f));
+    }
 }

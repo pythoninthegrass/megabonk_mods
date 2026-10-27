@@ -27,6 +27,11 @@ public static class EditorTools
 
     public static bool IsObjectTool(EditorTool tool) => tool is EditorTool.Place or EditorTool.Select;
 
+    // A terrain map has no tile grid, so the tile tools are unavailable there.
+    public static bool IsAvailable(EditorTool tool, bool tileTools) => tileTools || IsObjectTool(tool);
+
+    public static string UnavailableMessage(EditorTool tool) => $"{tool} is unavailable: this is a terrain map with no tile grid, only objects can be edited";
+
     public static IReadOnlyList<EditorTool> All => Tools;
 
     public static string ToolLabel(EditorTool tool, EditorTool current)

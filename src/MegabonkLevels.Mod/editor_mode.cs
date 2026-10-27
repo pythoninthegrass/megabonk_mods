@@ -111,7 +111,7 @@ public static class EditorMode
     {
         var map = Il2CppAssets.Scripts.Managers.MapController.currentMap;
         return map == null
-            ? new EditorMapSupportResult(true, "")
+            ? new EditorMapSupportResult(true, true, "")
             : EditorMapSupport.Check(map.name, (int)map.mapType);
     }
 

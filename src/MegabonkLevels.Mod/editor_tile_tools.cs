@@ -66,6 +66,7 @@ public static class EditorTileTools
     private static EditorTool _tool = EditorTools.Default;
     private static (int X, int Z, TileState State)? _target;
     private static Vector3 _targetPoint;
+    private static bool _terrainHit;
     private static RectTransform _toolbarRect;
     private static RectTransform _loadRect;
     private static readonly ToastStack _toasts = new(ToastSeconds, MaxToasts);
@@ -224,7 +225,7 @@ public static class EditorTileTools
         _target = EditorPalette.PointerOverPanel || pointerOverToolbar ? null : FindTarget();
         if (EditorTools.IsObjectTool(_tool) && !pointerOverToolbar)
         {
-            if (EditorObjectTools.Tick(_tool, _target, _targetPoint) is { } requested)
+            if (EditorObjectTools.Tick(_tool, _target, _terrainHit, _targetPoint) is { } requested)
             {
                 SetTool(requested);
             }
@@ -240,6 +241,12 @@ public static class EditorTileTools
 
     private static void SetTool(EditorTool tool)
     {
+        if (!EditorTools.IsAvailable(tool, tileTools: !LiveEditPatch.IsTerrainMap))
+        {
+            Warn(EditorTools.UnavailableMessage(tool));
+            return;
+        }
+
         if (tool != _tool)
         {
             EditorObjectTools.OnToolChanged(tool);
@@ -250,15 +257,23 @@ public static class EditorTileTools
 
     private static (int X, int Z, TileState State)? FindTarget()
     {
+        _terrainHit = false;
         var camera = PlayerCamera.Instance?.camera;
         var ground = LiveEditPatch.GroundCollider();
-        if (camera == null || ground == null || LiveEditPatch.Grid is not { } grid)
+        if (camera == null || ground == null)
         {
             return null;
         }
 
         if (!ground.Raycast(camera.ScreenPointToRay(EditorInput.MousePosition), out var hit, RayLength))
         {
+            return null;
+        }
+
+        if (LiveEditPatch.Grid is not { } grid)
+        {
+            _targetPoint = hit.point;
+            _terrainHit = LiveEditPatch.IsTerrainMap;
             return null;
         }
 

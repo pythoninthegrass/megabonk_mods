@@ -21,6 +21,12 @@ public static class KillFloor
         return Math.Max(derived, catchFloorY + CatchFloorClearance);
     }
 
+    // A terrain map has one heightmap mesh instead of tile levels; the same margin and catch-floor rule apply to its lowest point.
+    public static float FloorYForTerrain(float lowestTerrainY, float margin, float catchFloorY) =>
+        float.IsFinite(lowestTerrainY)
+            ? Math.Max(lowestTerrainY - margin, catchFloorY + CatchFloorClearance)
+            : float.NegativeInfinity;
+
     public static bool ShouldKill(float y, float floorY) => y < floorY;
 
     // An actor's pivot can sit well above its feet, so a tall one standing on the catch floor never has a pivot below

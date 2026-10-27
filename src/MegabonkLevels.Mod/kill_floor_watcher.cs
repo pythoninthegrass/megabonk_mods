@@ -61,6 +61,18 @@ public static class KillFloorWatcher
         }
     }
 
+    // A ProceduralMesh map has no tile grid, so the floor comes from the lowest point of the terrain collider.
+    public static void ArmTerrain(float lowestTerrainY, MelonLogger.Instance logger)
+    {
+        var catchFloorY = CatchFloorY();
+        _floorY = KillFloor.FloorYForTerrain(lowestTerrainY, MarginBelowLowestTile, catchFloorY);
+        _logger = logger;
+        _playerKilled = false;
+        _armed = !float.IsNegativeInfinity(_floorY);
+        PositionLabel.Disarm();
+        logger.Msg(_armed ? $"KillFloor: armed at y={_floorY} (terrain low y={lowestTerrainY}, catch floor y={catchFloorY})" : "KillFloor: no terrain, not armed");
+    }
+
     // The environment variable sets the starting state; the harness commands change it while the game runs.
     public static void SetHeartbeat(bool enabled, MelonLogger.Instance logger)
     {

@@ -11,6 +11,8 @@ public static class EditorObjectTools
     private const float RayLength = 5000f;
     private const float OutlineLift = 0.5f;
     private const float NearestPickTiles = 0.125f;
+    private const float TerrainPickRadius = 2f;
+    private const float TerrainProbeHeight = 1000f;
     private const int OnTopRenderQueue = 4000;
     private const float FlatDecalEpsilon = 0.01f;
     private const float OutlineWidth = 0.8f;
@@ -37,6 +39,7 @@ public static class EditorObjectTools
     private static bool _dragActive;
     private static float _dragPressedAt;
     private static (float X, float Z) _dragGrab;
+    private static bool _onTerrain;
 
     public static ObjectTarget? Selected => _selected;
 
@@ -68,8 +71,9 @@ public static class EditorObjectTools
     }
 
     // Handles clicks and keys for the Place and Select tools; returns the tool to switch to after a pick-block click.
-    public static EditorTool? Tick(EditorTool tool, (int X, int Z, TileState State)? target, Vector3 point)
+    public static EditorTool? Tick(EditorTool tool, (int X, int Z, TileState State)? target, bool terrainHit, Vector3 point)
     {
+        _onTerrain = terrainHit;
         EditorTool? switchTo = null;
         var pointerFree = !EditorPalette.PointerOverPanel;
         pointerFree = pointerFree && !EditorTileTools.PointerOverEditorOverlay;
@@ -172,7 +176,7 @@ public static class EditorObjectTools
 
     private static void Place((int X, int Z, TileState State)? target, Vector3 point)
     {
-        if (target is not { } cell || LiveEditPatch.Grid is not { } grid)
+        if (CursorPosition(target, point, (0f, 0f)) is not { } position)
         {
             return;
         }
@@ -191,7 +195,6 @@ public static class EditorObjectTools
             return;
         }
 
-        var position = ObjectTools.PositionAt(cell.X, cell.Z, cell.State, grid.Width, grid.Depth, grid.Spacing, grid.TileHeight, point.x, point.z);
         if (IsStacked(prefab.name, position, null))
         {
             _logger.Msg($"EditorObjectTools: place ignored, '{prefab.name}' already stands at ({position.X:0.##}, {position.Y:0.##}, {position.Z:0.##})");
@@ -199,7 +202,7 @@ public static class EditorObjectTools
         }
 
         var op = ObjectTools.Place(id, position, ToData(prefab.transform.eulerAngles), ToData(prefab.transform.localScale), camera.transform.eulerAngles.y);
-        Apply(op, $"place '{id.Serialize()}' at ({position.X:0.##}, {position.Z:0.##}) in cell ({cell.X},{cell.Z})");
+        Apply(op, $"place '{id.Serialize()}' at ({position.X:0.##}, {position.Z:0.##}) {(target is { } cell ? $" in cell ({cell.X},{cell.Z})" : "")}");
     }
 
     // Pressing on an object selects it; holding picks it up. Pressing on nothing deselects.
@@ -217,7 +220,7 @@ public static class EditorObjectTools
         _dragOrigin = CurrentTransform(hit.Object);
         _dragActive = false;
         _dragPressedAt = Time.unscaledTime;
-        _dragGrab = target != null ? (_dragOrigin.Position.X - point.x, _dragOrigin.Position.Z - point.z) : (0f, 0f);
+        _dragGrab = target != null || _onTerrain ? (_dragOrigin.Position.X - point.x, _dragOrigin.Position.Z - point.z) : (0f, 0f);
         _dragLift = SurfaceYAt(_dragOrigin.Position) is { } surface ? _dragOrigin.Position.Y - surface : 0f;
         _logger.Msg($"EditorObjectTools: selected {hit.Target.Serialize()} '{hit.Object.name}' via {hit.Path}");
     }
@@ -250,7 +253,7 @@ public static class EditorObjectTools
 
         var final = ToData(go.transform.position);
         go.transform.position = new Vector3(_dragOrigin.Position.X, _dragOrigin.Position.Y, _dragOrigin.Position.Z);
-        if (!pointerFree || target == null || !ObjectTools.HasMoved(_dragOrigin.Position, final))
+        if (!pointerFree || (target == null && !_onTerrain) || !ObjectTools.HasMoved(_dragOrigin.Position, final))
         {
             return;
         }
@@ -276,16 +279,29 @@ public static class EditorObjectTools
     }
 
     // The cursor point plus the offset at which the object was grabbed, so it does not jump to the cursor.
-    private static Vector3Data? CursorPosition((int X, int Z, TileState State)? target, Vector3 point, (float X, float Z) grab) =>
-        target is { } cell && LiveEditPatch.Grid is { } grid
+    private static Vector3Data? CursorPosition((int X, int Z, TileState State)? target, Vector3 point, (float X, float Z) grab)
+    {
+        if (LiveEditPatch.Grid is not { } grid)
+        {
+            return _onTerrain ? new Vector3Data(point.x + grab.X, point.y, point.z + grab.Z) : null;
+        }
+
+        return target is { } cell
             ? ObjectTools.PositionAt(cell.X, cell.Z, cell.State, grid.Width, grid.Depth, grid.Spacing, grid.TileHeight, point.x + grab.X, point.z + grab.Z)
+            : null;
+    }
+
+    private static float? TerrainSurfaceY(Vector3Data world) =>
+        LiveEditPatch.GroundCollider() is { } ground
+        && ground.Raycast(new Ray(new Vector3(world.X, world.Y + TerrainProbeHeight, world.Z), Vector3.down), out var hit, 2f * TerrainProbeHeight)
+            ? hit.point.y
             : null;
 
     private static float? SurfaceYAt(Vector3Data world)
     {
         if (LiveEditPatch.Grid is not { } grid)
         {
-            return null;
+            return LiveEditPatch.IsTerrainMap ? TerrainSurfaceY(world) : null;
         }
 
         var cell = PositionReadout.CellOf(world.X, world.Z, grid.Width, grid.Depth, grid.Spacing);
@@ -400,7 +416,7 @@ public static class EditorObjectTools
     private static (ObjectTarget Target, GameObject Object, string Path)? PickAt()
     {
         var camera = PlayerCamera.Instance?.camera;
-        if (camera == null || LiveEditPatch.Grid is not { } grid)
+        if (camera == null)
         {
             return null;
         }
@@ -425,7 +441,7 @@ public static class EditorObjectTools
             positions.Add((p.x, p.z));
         }
 
-        var nearest = ObjectPicker.NearestIndex(positions, groundHit.point.x, groundHit.point.z, grid.Spacing * NearestPickTiles);
+        var nearest = ObjectPicker.NearestIndex(positions, groundHit.point.x, groundHit.point.z, LiveEditPatch.Grid is { } grid ? grid.Spacing * NearestPickTiles : TerrainPickRadius);
         return nearest < 0 ? null : (candidates[nearest].Target, candidates[nearest].Object, "nearest");
     }
 
@@ -597,6 +613,14 @@ public static class EditorObjectTools
     private static void RefreshGrid(EditorTool tool, (int X, int Z, TileState State)? target, Vector3 point)
     {
         var active = tool == EditorTool.Place || (tool == EditorTool.Select && _selected != null);
+        if (_gridLines != null && _placeMarker != null && active && _onTerrain)
+        {
+            SetEnabled(_gridLines, false);
+            SetRing(_placeMarker, point.x, point.y + OutlineLift, point.z, MarkerRadius);
+            _placeMarker.enabled = tool == EditorTool.Place;
+            return;
+        }
+
         if (_gridLines == null || _placeMarker == null || !active || target is not { } cell || LiveEditPatch.Grid is not { } grid)
         {
             SetEnabled(_gridLines, false);

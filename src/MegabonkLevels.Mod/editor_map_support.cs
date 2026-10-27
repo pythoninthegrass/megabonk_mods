@@ -1,15 +1,18 @@
 namespace MegabonkLevels;
 
-public readonly record struct EditorMapSupportResult(bool Supported, string Reason);
+// Supported means the editor can enter; TileTools is false on terrain maps, where only object editing works.
+public readonly record struct EditorMapSupportResult(bool Supported, bool TileTools, string Reason);
 
-// The editor edits the ProceduralTileGeneration grid, so only maps generated as tiles (EMapType.Tiles) are supported.
+// Tiles maps (EMapType.Tiles) expose the ProceduralTileGeneration grid; ProceduralMesh maps are one heightmap mesh and get object editing only.
 public static class EditorMapSupport
 {
     public const int TilesMapType = 0;
     public const int ProceduralMeshMapType = 1;
 
-    public static EditorMapSupportResult Check(string mapName, int mapType) =>
-        mapType == TilesMapType
-            ? new EditorMapSupportResult(true, "")
-            : new EditorMapSupportResult(false, $"{mapName} is not a tile map (mapType={mapType}); the editor needs a tile grid.");
+    public static EditorMapSupportResult Check(string mapName, int mapType) => mapType switch
+    {
+        TilesMapType => new EditorMapSupportResult(true, true, ""),
+        ProceduralMeshMapType => new EditorMapSupportResult(true, false, $"{mapName} is a terrain map (mapType={mapType}); the tile tools are disabled, objects can still be edited."),
+        _ => new EditorMapSupportResult(false, false, $"{mapName} has an unknown map type (mapType={mapType}); the editor cannot edit it."),
+    };
 }

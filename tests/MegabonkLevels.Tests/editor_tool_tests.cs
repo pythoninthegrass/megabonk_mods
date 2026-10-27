@@ -177,4 +177,31 @@ public class EditorToolTests
     {
         Assert.Null(EditorTools.FromHotkey(digit));
     }
+
+    [Theory]
+    [InlineData(EditorTool.Raise, false)]
+    [InlineData(EditorTool.Lower, false)]
+    [InlineData(EditorTool.Slope, false)]
+    [InlineData(EditorTool.Remove, false)]
+    [InlineData(EditorTool.Place, true)]
+    [InlineData(EditorTool.Select, true)]
+    public void IsAvailable_TerrainMap_AllowsOnlyObjectTools(EditorTool tool, bool expected)
+    {
+        Assert.Equal(expected, EditorTools.IsAvailable(tool, tileTools: false));
+    }
+
+    [Fact]
+    public void IsAvailable_TileMap_AllowsEveryTool()
+    {
+        Assert.All(EditorTools.All, tool => Assert.True(EditorTools.IsAvailable(tool, tileTools: true)));
+    }
+
+    [Fact]
+    public void UnavailableMessage_NamesTheToolAndTheReason()
+    {
+        var message = EditorTools.UnavailableMessage(EditorTool.Raise);
+
+        Assert.Contains("Raise", message);
+        Assert.Contains("terrain", message, StringComparison.OrdinalIgnoreCase);
+    }
 }
