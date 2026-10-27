@@ -53,7 +53,7 @@ Also correct `docs/level-format.md`, which still says nothing produces `bundle:`
 - [ ] #4 Editor save writes packs from the installed manifests of the packs the level references
 - [ ] #5 A level whose packs[<packId>] differs from the installed manifest version (exact string match) logs a warning and still starts; absent entries or versions produce no warning; covered by tests
 - [ ] #6 docs/level-format.md and docs/asset-bundles.md document the manifest format, the packs map, and the compatibility check, and the stale 'nothing produces these ids yet' line is corrected
-- [ ] #7 task check passes in the worktree with no edits to taskfile.yml, taskfiles/, the test project config, or lint config
+- [ ] #7 The Unity-free tests (task mod:test), the mod build with -p:ModInstanceFolder redirected to a temp directory, task lint and task scripts:test all pass, with no edits to taskfile.yml, taskfiles/, the test project config beyond Compile Include lines, or lint config
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -61,6 +61,12 @@ Also correct `docs/level-format.md`, which still says nothing produces `bundle:`
 <!-- SECTION:PLAN:BEGIN -->
 Unattended gnhf run. In-game verification is done by Lance afterwards: relaunch with a level referencing a test pack at matching and mismatching versions, confirm warnings in Latest.log and that a missing asset still spawns the placeholder.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Definition of Done item 'task check passes' cannot be run unattended because task check builds the mod and the csproj deploys into the live game's Mods folder. Satisfy it by running its parts: task mod:test, the dotnet build with -p:ModInstanceFolder redirected to an empty temp directory (trailing slash), task lint and task scripts:test. The in-game check (relaunch with a level referencing a test pack at matching and mismatching versions; warning in Latest.log; missing asset still spawns the placeholder) is an open item for a human; record it in the notes, do not claim it verified.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
