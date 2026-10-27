@@ -523,49 +523,60 @@ def relaunch(
     on_error: Callable[[str], None],
 ) -> bool:
     """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable and enter editor."""
-    ok = quit_game(harness, timeout)
     started = time.time()
-    if ok:
+
+    def prepare_harness() -> str | None:
+        """Quit, relaunch, and wait for the harness to enable; any step failing reports the same error."""
+        if not quit_game(harness, timeout):
+            return "relaunch: harness did not become ready"
         on_step("relaunch: starting game")
-        ok = launch_game(task)
-    if ok:
+        if not launch_game(task):
+            return "relaunch: harness did not become ready"
         on_step("relaunch: waiting for harness")
-        ok = wait_for_log_line(latest_log_path(game_dir), "DevHarness: enabled", started, relaunch_timeout(timeout))
-    if not ok:
-        on_error("relaunch: harness did not become ready")
-    if ok:
-        on_step("relaunch: waiting for Steamworks")
-        ok = wait_for_steamworks_ready(
-            lambda: send_steam_ready(harness, min(timeout, 2.0)),
-            relaunch_timeout(timeout),
+        return (
+            None
+            if wait_for_log_line(latest_log_path(game_dir), "DevHarness: enabled", started, relaunch_timeout(timeout))
+            else "relaunch: harness did not become ready"
         )
-    if not ok:
-        on_error("relaunch: Steamworks did not become ready")
+
+    def wait_for_steamworks() -> str | None:
+        on_step("relaunch: waiting for Steamworks")
+        return (
+            None
+            if wait_for_steamworks_ready(lambda: send_steam_ready(harness, min(timeout, 2.0)), relaunch_timeout(timeout))
+            else "relaunch: Steamworks did not become ready"
+        )
+
+    for step in (prepare_harness, wait_for_steamworks):
+        match step():
+            case str() as error:
+                on_error(error)
+                return False
+
+    loaded = False
     for attempt in range(1, 6):
-        if not ok:
-            break
         on_step(f"relaunch: loading {level} (attempt {attempt}/5)")
-        ok = send(harness, build_command("load-level", to_game_path(level.resolve())), timeout)
-        if ok:
+        if send(harness, build_command("load-level", to_game_path(level.resolve())), timeout):
             seen = wait_for_any_log_line(
                 latest_log_path(game_dir),
                 [KILL_FLOOR_ARMED_LINE, EDITOR_UNSUPPORTED_LINE],
                 started,
                 relaunch_timeout(timeout),
             )
-            if seen == EDITOR_UNSUPPORTED_LINE:
-                on_error("relaunch: the editor does not support this map; see the EditorMode warning in the game log")
-                return False
-            if seen:
-                break
-        ok = True
-    else:
-        ok = False
-    if ok:
-        ok = send(harness, build_command("invulnerable"), timeout)
-    if ok:
-        ok = send(harness, build_editor_command(True), timeout)
-    return ok
+            match seen:
+                case _ if seen == EDITOR_UNSUPPORTED_LINE:
+                    on_error("relaunch: the editor does not support this map; see the EditorMode warning in the game log")
+                    return False
+                case str():
+                    loaded = True
+                    break
+
+    if not loaded:
+        return False
+
+    send(harness, build_command("invulnerable"), timeout)
+    send(harness, build_editor_command(True), timeout)
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
