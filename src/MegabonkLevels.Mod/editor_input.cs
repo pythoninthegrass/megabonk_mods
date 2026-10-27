@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using MelonLoader;
 using UnityEngine;
 
@@ -10,7 +12,9 @@ public static class EditorInput
 
     public static Vector2 MousePosition => Queue.MousePosition is var (x, y) ? new Vector2(x, y) : Input.mousePosition;
 
-    public static string InputString => Input.inputString + Queue.InputStringThisFrame;
+    private static readonly (string Name, KeyCode Code)[] TextKeys = KeyTextMapper.Keys.Select(name => (name, Enum.Parse<KeyCode>(name))).ToArray();
+
+    public static string InputString => RealText() + Queue.InputStringThisFrame;
 
     public static Vector2 MouseScrollDelta => Input.mouseScrollDelta;
 
@@ -27,6 +31,19 @@ public static class EditorInput
     public static bool GetMouseButtonUp(int button) => Input.GetMouseButtonUp(button) || Queue.WasMouseReleasedThisFrame(button);
 
     public static float GetAxisRaw(string axis) => Input.GetAxisRaw(axis);
+
+    // Wine delivers key state but an empty Input.inputString, so text is rebuilt from this frame's key-downs when it is empty.
+    private static string RealText()
+    {
+        var delivered = Input.inputString;
+        if (delivered.Length > 0)
+        {
+            return delivered;
+        }
+
+        var shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+        return KeyTextMapper.TextFor(TextKeys.Where(key => Input.GetKeyDown(key.Code)).Select(key => key.Name), shift);
+    }
 
     // Logs the real keyboard only, bypassing Queue, so a keypress that the game never receives shows up as a missing line.
     public static void LogRealTextInput(MelonLogger.Instance logger, bool fieldFocused)
