@@ -5,7 +5,7 @@ status: Done
 assignee:
   - Claude
 created_date: '2026-10-27T20:09:00Z'
-updated_date: '2026-10-27T20:19:00Z'
+updated_date: '2026-10-27T20:30:00Z'
 labels:
   - mcp
   - dev-harness
@@ -62,4 +62,6 @@ The megabonk MCP server returns its structured results (state, paths, list_level
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Added `_encode` in scripts/mcp_server.py: every structured tool result goes through it, selected by `MEGABONK_MCP_ENCODING` (json default, json-min, toon). json keeps today's indented text plus structuredContent; the other two send text only. Errors, screenshots, log_tail, log_wait and quit are not re-encoded. toon-format pinned to 1.2.0 in the script header and taskfile; a test guards against the 0.1.0 stub. Live payloads (state, list_levels, ui_tree) are in tests/fixtures/mcp_payloads and round-trip through all three encodings. With the threshold fixed beforehand (total >=15% below minified JSON and no payload >5% worse), TOON saved 27.0% in total (cl100k_base proxy tokens) but was 22.0% worse on state, so the default stays json. The object query (TASK-020.01) does not exist yet; the uniform-rows case is noted in docs/development.md for re-measurement. `task check` passes (247 tests).
+
+Follow-up: the default was changed from json to json-min after a live check through Claude Code (state, list_levels, ui_tree, an error and a screenshot all behaved). TOON stays opt-in. Dict-returning tools no longer publish an outputSchema, and json-min omits structuredContent.
 <!-- SECTION:FINAL_SUMMARY:END -->
