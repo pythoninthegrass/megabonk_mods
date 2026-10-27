@@ -49,7 +49,7 @@ DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parent.parent / ".tools" / "ev
 LOG_POLL_INTERVAL = 0.2
 ENCODING_ENV = "MEGABONK_MCP_ENCODING"
 ENCODINGS = ("json", "json-min", "toon")
-DEFAULT_ENCODING = "json"
+DEFAULT_ENCODING = "json-min"
 # Mirrors KeyNames.All in src/MegabonkLevels.Mod/key_names.cs; a test keeps the two in step.
 KEY_NAMES = (
     *"ABCDEFGHIJKLMNOPQRSTUVWXYZ",

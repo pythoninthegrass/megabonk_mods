@@ -592,11 +592,19 @@ async def call_state(tmp_path, monkeypatch, result_body):
         stop.set()
 
 
-async def test_default_encoding_is_indented_json_with_structured_content(tmp_path, monkeypatch) -> None:
+async def test_json_encoding_is_indented_with_structured_content(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("MEGABONK_MCP_ENCODING", "json")
     result = await call_state(tmp_path, monkeypatch, {"a": 1})
     body = {"command": "state", "ok": True, "result": {"a": 1}}
     assert result.content[0].text == json.dumps(body, indent=2)
     assert result.structured_content == {"result": body}
+
+
+async def test_default_encoding_is_json_min_whatever_dot_env_says(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(mcp_server.run, "find_env_file", lambda *args, **kwargs: None)
+    result = await call_state(tmp_path, monkeypatch, {"a": 1})
+    assert result.content[0].text == '{"command":"state","ok":true,"result":{"a":1}}'
+    assert result.structured_content is None
 
 
 async def test_json_min_encoding_is_compact_text_only(tmp_path, monkeypatch) -> None:

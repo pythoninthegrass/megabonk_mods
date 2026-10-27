@@ -132,8 +132,8 @@ Structured tool results (every tool that returns the harness result, plus `paths
 
 | Value | Text content | `structuredContent` |
 | --- | --- | --- |
-| `json` (default, also when unset) | indented JSON | present, identical to the payload |
-| `json-min` | JSON without whitespace | omitted |
+| `json` | indented JSON | present, identical to the payload |
+| `json-min` (default, also when unset) | JSON without whitespace | omitted |
 | `toon` | [TOON](https://github.com/toon-format/toon) | omitted |
 
 `json-min` and `toon` omit `structuredContent` because a client that forwards it would send the payload twice and cancel the saving. An unknown value is a tool error raised before the command is sent, so a bad setting does not follow a game action. Errors, screenshots (image content), `log_tail`, `log_wait` and `quit` are never re-encoded.
@@ -149,7 +149,7 @@ The default was chosen by a rule fixed before measuring: switch to TOON only if 
 | `ui_tree` (54 widgets) | 3128 | 1979 | 1375 | 30.5% better |
 | Total | 3399 | 2148 | 1568 | 27.0% better |
 
-TOON wins on the uniform array of widgets and loses on the small nested `state` object, so the total passes the 15% bar and the per-payload bar fails. The default stays `json`. Set `MEGABONK_MCP_ENCODING=toon` for sessions that read many `ui_tree` results. The uniform-rows case from the live-object query was not measured because that query does not exist yet; re-measure once it lands, since its rows are the shape TOON suits best.
+TOON wins on the uniform array of widgets and loses on the small nested `state` object, so the total passes the 15% bar and the per-payload bar fails. The default is therefore `json-min`, which was 37% below indented JSON in total on the same payloads (2148 tokens against 3399) and does worse than TOON only on `ui_tree`. Set `MEGABONK_MCP_ENCODING=toon` for sessions that read many `ui_tree` results, or `json` to get indented text with `structuredContent` back. `json-min` was checked live through Claude Code: `state`, `list_levels` and `ui_tree` return parseable compact JSON, errors stay plain text and `screenshot` still returns an image. The uniform-rows case from the live-object query was not measured because that query does not exist yet; re-measure once it lands, since its rows are the shape TOON suits best.
 
 ## Launching under Wine (macOS)
 
