@@ -35,19 +35,22 @@ public static class CatalogPrefabs
         };
     }
 
-    public static MapData FindMap(EMap map)
+    // DataManager.maps omits Hell and Dungeon, so look maps up through the loaded MapData assets.
+    public static MapData TryFindMap(EMap map)
     {
-        var maps = DataManager.Instance.maps;
-        for (var i = 0; i < maps.Count; i++)
+        foreach (var candidate in Resources.FindObjectsOfTypeAll<MapData>())
         {
-            if ((int)maps[i].eMap == (int)map)
+            if ((int)candidate.eMap == (int)map)
             {
-                return maps[i];
+                return candidate;
             }
         }
 
-        throw new ArgumentException($"No MapData for map {map}.");
+        return null;
     }
+
+    public static MapData FindMap(EMap map) =>
+        TryFindMap(map) ?? throw new ArgumentException($"No MapData for map {map}.");
 
     public static PaletteMapCatalog Describe(MapData mapData, SpawnInteractables interactables)
     {

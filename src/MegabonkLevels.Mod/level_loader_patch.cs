@@ -142,16 +142,5 @@ public static class LevelLoaderPatch
         logger.Error($"LevelLoader: load failed: no MapData found for map={map} ({(int)map}); available: {string.Join(", ", available)}");
     }
 
-    private static MapData FindMapData(EMap map)
-    {
-        foreach (var candidate in Resources.FindObjectsOfTypeAll<MapData>())
-        {
-            if ((int)candidate.eMap == (int)map)
-            {
-                return candidate;
-            }
-        }
-
-        return null;
-    }
+    private static MapData FindMapData(EMap map) => CatalogPrefabs.TryFindMap(map);
 }
