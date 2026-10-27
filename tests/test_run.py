@@ -667,6 +667,14 @@ def test_build_click_widget_command_carries_the_name() -> None:
     assert run.build_click_widget_command("Save") == {"command": "click-widget", "name": "Save"}
 
 
+def test_level_commands_carry_the_optional_level() -> None:
+    assert run.build_save_level_command() == {"command": "save-level"}
+    assert run.build_save_level_command("my level") == {"command": "save-level", "level": "my level"}
+    assert run.build_command("list-levels") == {"command": "list-levels"}
+    assert run.save_level_payload(run.parse_args(["save-level"])) == {"command": "save-level"}
+    assert run.save_level_payload(run.parse_args(["save-level", "my"])) == {"command": "save-level", "level": "my"}
+
+
 def test_build_ui_tree_command_includes_the_point_only_when_given() -> None:
     assert run.build_ui_tree_command() == {"command": "ui-tree"}
     assert run.build_ui_tree_command((10.0, 20.0)) == {"command": "ui-tree", "x": 10.0, "y": 20.0}

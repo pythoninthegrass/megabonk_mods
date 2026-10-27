@@ -31,6 +31,8 @@ public enum HarnessCommandKind
     DismissLevelUp,
     ClickWidget,
     UiTree,
+    SaveLevel,
+    ListLevels,
 }
 
 // World-space camera position and euler rotation in degrees.
@@ -156,6 +158,12 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseType(root, out command, out error);
             case "click-widget":
                 return TryParseClickWidget(root, out command, out error);
+            case "save-level":
+                return TryParseSaveLevel(root, out command, out error);
+            case "list-levels":
+                command = new HarnessCommand(HarnessCommandKind.ListLevels, null);
+                error = null;
+                return true;
             case "ui-tree":
                 return TryParseUiTree(root, out command, out error);
             case "teleport":
@@ -465,6 +473,23 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.ClickWidget, null, Input: new InputArgs { Action = "click-widget", Text = name });
+        error = null;
+        return true;
+    }
+
+    private static bool TryParseSaveLevel(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+        string level = null;
+
+        if (root.TryGetPropertyValue("level", out var node) && node != null
+            && (node is not JsonValue value || !value.TryGetValue(out level) || level.Trim().Length == 0))
+        {
+            error = "field 'level' must be a non-empty string";
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.SaveLevel, level);
         error = null;
         return true;
     }

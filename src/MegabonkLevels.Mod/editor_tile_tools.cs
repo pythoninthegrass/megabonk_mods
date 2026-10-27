@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using Il2Cpp;
 using Il2CppTMPro;
 using MelonLoader;
@@ -726,6 +727,32 @@ public static class EditorTileTools
 
     public static EditsSnapshot ReadEdits() =>
         new(_session?.CurrentEdits.Count ?? 0, IsDirty(), _lastSavedName, _saveStatus);
+
+    // Saves like the Save button; a non-null rawName replaces the save field's text, and a failure throws so the harness reports it.
+    public static JsonObject SaveLevel(string rawName)
+    {
+        if (!EditorMode.Active)
+        {
+            throw new InvalidOperationException("editor mode is off");
+        }
+
+        if (rawName != null)
+        {
+            _saveField.Set(rawName);
+        }
+
+        if (!Save())
+        {
+            throw new InvalidOperationException(_validateSummary ?? "save failed");
+        }
+
+        return new JsonObject
+        {
+            ["name"] = _lastSavedName,
+            ["path"] = Path.Combine(LiveEditPatch.LevelsDirectoryPath(), _lastSavedName),
+            ["edits"] = _lastSavedEditCount,
+        };
+    }
 
     private static bool Save()
     {

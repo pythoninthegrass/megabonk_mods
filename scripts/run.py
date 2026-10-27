@@ -38,6 +38,8 @@ Usage:
     run.py mouse click|down|up [--button N] [X Y]  Click or press/release a button (0 left, 1 right, 2 middle), moving first when X Y is given
     run.py mouse clear             Return the mouse to the real pointer
     run.py ui-tree [X Y]           Print the editor widgets and their rects in screenshot pixels, and the widget at X Y when given
+    run.py save-level [name]       Save the editor's level, as <name> when given, and print the file written
+    run.py list-levels             Print the saved custom-level files and their directory
     run.py click-widget <name>     Click an editor widget by name (names come from ui-tree), without pixel coordinates
     run.py type <text>             Type text into the focused field (\\b is backspace, \\n is return), at most 200 characters
     run.py teleport X Y Z          Move the player's feet to a world position and print the position reached
@@ -170,6 +172,13 @@ def build_mouse_command(action: str, position: tuple[float, float] | None = None
 
 def build_click_widget_command(name: str) -> dict[str, object]:
     return {"command": "click-widget", "name": name}
+
+
+def build_save_level_command(level: str | None = None) -> dict[str, object]:
+    payload: dict[str, object] = {"command": "save-level"}
+    if level is not None:
+        payload["level"] = level
+    return payload
 
 
 def build_ui_tree_command(position: tuple[float, float] | None = None) -> dict[str, object]:
@@ -475,6 +484,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     mouse.add_argument("--button", type=int, choices=[0, 1, 2], help="0 left (default), 1 right, 2 middle")
     ui_tree = sub.add_parser("ui-tree")
     ui_tree.add_argument("position", type=float, nargs="*", metavar="X Y", help="screenshot pixels, origin top left")
+    save_level = sub.add_parser("save-level")
+    save_level.add_argument("level", nargs="?", help="level name to save as; defaults to the editor's save field")
+    sub.add_parser("list-levels")
     click_widget = sub.add_parser("click-widget")
     click_widget.add_argument("name")
     teleport = sub.add_parser("teleport")
@@ -538,6 +550,10 @@ def ui_tree_payload(args: argparse.Namespace) -> dict[str, object]:
     if len(args.position) not in (0, 2):
         raise SystemExit("ui-tree: give both X and Y, or neither")
     return build_ui_tree_command((args.position[0], args.position[1]) if args.position else None)
+
+
+def save_level_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_save_level_command(args.level)
 
 
 def click_widget_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -683,6 +699,10 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, build_command("shader-report"), args.timeout)
         case "ui-tree":
             ok = send_printing_result(harness, ui_tree_payload(args), args.timeout)
+        case "save-level":
+            ok = send_printing_result(harness, save_level_payload(args), args.timeout)
+        case "list-levels":
+            ok = send_printing_result(harness, build_command("list-levels"), args.timeout)
         case "click-widget":
             ok = send_printing_result(harness, click_widget_payload(args), args.timeout)
         case "teleport":

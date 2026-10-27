@@ -207,6 +207,18 @@ async def ui_tree(x: float | None = None, y: float | None = None) -> dict | None
 
 
 @mcp.tool()
+async def save_level(level: str | None = None) -> dict | None:
+    """Save the editor's level like the Save button, optionally as `level` (normalized to a safe *.mblevel.json file name; omitted, the save field's text is used). Returns {name, path, edits}. Needs editor mode with a live run; a failed write is an error."""
+    return await _request(_harness(), run.build_save_level_command(level), TIMEOUT)
+
+
+@mcp.tool()
+async def list_levels() -> dict | None:
+    """List the saved custom-level files as {directory, levels}; the names are what the editor's Load list shows and what a load needs after the directory."""
+    return await _request(_harness(), run.build_command("list-levels"), TIMEOUT)
+
+
+@mcp.tool()
 async def click_widget(name: str) -> dict | None:
     """Left-click the centre of the named editor widget, e.g. Save, Undo, Tab:All, Palette:<entry id>; take names from ui_tree (case-insensitive). Returns the widget's rect. An unknown name is an error that lists the known names, and a disabled widget is an error too. Like mouse click, the effect lands over the next frames, so read state or take a screenshot after a moment. Tools are not widgets: switch them with key (Alpha1 to Alpha6). Needs editor mode."""
     return await _request(_harness(), run.build_click_widget_command(name), TIMEOUT)

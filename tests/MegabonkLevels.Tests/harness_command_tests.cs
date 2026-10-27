@@ -510,6 +510,34 @@ public class HarnessCommandTests
     }
 
     [Fact]
+    public void TryParse_SaveLevel_LevelIsOptional()
+    {
+        Assert.True(HarnessCommand.TryParse("""{"command":"save-level"}""", out var bare, out _));
+        Assert.Equal(HarnessCommandKind.SaveLevel, bare.Kind);
+        Assert.Null(bare.Path);
+
+        Assert.True(HarnessCommand.TryParse("""{"command":"save-level","level":"my level"}""", out var named, out var error));
+        Assert.Null(error);
+        Assert.Equal("my level", named.Path);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"save-level","level":""}""")]
+    [InlineData("""{"command":"save-level","level":5}""")]
+    public void TryParse_SaveLevel_RejectsABadLevel(string json)
+    {
+        Assert.False(HarnessCommand.TryParse(json, out _, out var error));
+        Assert.Contains("'level'", error);
+    }
+
+    [Fact]
+    public void TryParse_ListLevels_NeedsNoArguments()
+    {
+        Assert.True(HarnessCommand.TryParse("""{"command":"list-levels"}""", out var command, out _));
+        Assert.Equal(HarnessCommandKind.ListLevels, command.Kind);
+    }
+
+    [Fact]
     public void TryParse_UiTree_NeedsNoArguments()
     {
         var ok = HarnessCommand.TryParse("""{"command":"ui-tree"}""", out var command, out _);

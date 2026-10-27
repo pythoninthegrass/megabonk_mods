@@ -213,6 +213,10 @@ public static class DevHarness
                 return UiTree(command.Input);
             case HarnessCommandKind.ClickWidget:
                 return ClickWidget(command.Input.Text);
+            case HarnessCommandKind.SaveLevel:
+                return EditorTileTools.SaveLevel(command.Path);
+            case HarnessCommandKind.ListLevels:
+                return ListLevels();
             case HarnessCommandKind.Teleport:
                 return Teleport(command.Teleport);
             case HarnessCommandKind.DismissLevelUp:
@@ -300,6 +304,17 @@ public static class DevHarness
         QueueMouse(new InputArgs { Action = "click", X = x, Y = y });
         _logger.Msg($"DevHarness: click-widget '{widget.Name}' at ({x}, {y}).");
         return WidgetJson(widget);
+    }
+
+    private static JsonObject ListLevels()
+    {
+        var levels = new JsonArray();
+        foreach (var name in LiveEditPatch.ListLevelFiles())
+        {
+            levels.Add(name);
+        }
+
+        return new JsonObject { ["directory"] = LiveEditPatch.LevelsDirectoryPath(), ["levels"] = levels };
     }
 
     private static JsonObject Teleport(TeleportArgs args)
