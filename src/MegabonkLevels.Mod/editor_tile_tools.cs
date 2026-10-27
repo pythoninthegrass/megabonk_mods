@@ -890,6 +890,8 @@ public static class EditorTileTools
         _toasts.Push(message, true, Time.unscaledTime);
     }
 
+    public static void Warn(string message) => _toasts.Push(message, true, Time.unscaledTime);
+
     private static void ShowTransientStatus(string text) => _toasts.Push(text, false, Time.unscaledTime);
 
     private static bool PointerOverOverlay() =>

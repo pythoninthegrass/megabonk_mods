@@ -33,6 +33,18 @@ The MelonLoader interop assemblies cannot call the synchronous loaders, and the 
 - `LoadAssetAsync`, `LoadFromFileAsync`, `LoadAllAssetsAsync(Type)` and `Unload` have native bodies in `GameAssembly` and work. The parameterless `LoadAllAssetsAsync()` has none and fails with `Invalid call to method`, so use the `Type` overload with `Il2CppType.Of<UnityEngine.Object>()`.
 - Reading `AssetBundleCreateRequest.assetBundle` and `AssetBundleRequest.allAssets` blocks until the load completes, which makes the async API usable from a synchronous command handler.
 
+## Packs and `bundle:` catalogIds
+
+A pack is a directory `UserData/LevelPacks/<pack>/` in the game folder. Every file in it with no extension or a `.bundle` extension is loaded as an AssetBundle; other files are ignored. A bundle is platform-specific, so a bundle built for the wrong platform fails to load and is logged as a warning for that file only.
+
+A catalogId `bundle:<pack>/<asset>` resolves to the `GameObject` named `<asset>` in any bundle of pack `<pack>`. The pack is loaded the first time an ID references it and stays loaded for the session, because instantiated prefabs depend on the bundle's data. `Applier.ResolvePrefab` is the single resolver: game-asset IDs go through `CatalogRoute`, and `bundle:` IDs go through `PackPrefabs`, so placing, undoing and saving a pack object use the same edit pipeline as a game prefab. The pure lookup and caching live in `PackCatalog`, which is unit tested without Unity.
+
+### Missing packs and assets
+
+If the pack directory does not exist, or the asset is not in it, `PackPrefabs.Resolve` returns a placeholder cube named `Missing:<catalogId>`, logs one warning per catalogId and shows an editor toast. Nothing throws. The placeholder is spawned like any object, so the original catalogId stays in the level and is saved unchanged.
+
+Assets in a pack are not listed in the editor palette yet; place them through a level file or the harness.
+
 ## Not yet established
 
 - The Linux bundle builds but has not been loaded. MelonLoader segfaults the native Linux build, so there is no mod-side harness there to run it.

@@ -659,7 +659,7 @@ public static class LiveEditPatch
                 ? CatalogId.Parse(id)
                 : null;
 
-        public GameObject PrefabFor(CatalogId id) => ResolvePrefab(CatalogRoute.Parse(id));
+        public GameObject PrefabFor(CatalogId id) => ResolvePrefab(id);
 
         public void Apply(LiveAction action)
         {
@@ -765,7 +765,7 @@ public static class LiveEditPatch
 
         private void SpawnObject(LiveAction action)
         {
-            var prefab = ResolvePrefab(CatalogRoute.Parse(CatalogId.Parse(action.CatalogId)));
+            var prefab = ResolvePrefab(CatalogId.Parse(action.CatalogId));
             var t = action.Transform.Value;
             var spawned = UnityEngine.Object.Instantiate(prefab, ToVector(t.Position), Quaternion.Euler(ToVector(t.Rotation)));
             spawned.transform.localScale = ToVector(t.Scale);
@@ -819,8 +819,10 @@ public static class LiveEditPatch
             return found;
         }
 
-        private GameObject ResolvePrefab(CatalogRoute route) =>
-            CatalogPrefabs.Resolve(route, _controller.interactablesSpawner);
+        private GameObject ResolvePrefab(CatalogId id) =>
+            id.Namespace == CatalogNamespace.Bundle
+                ? PackPrefabs.Resolve(id)
+                : CatalogPrefabs.Resolve(CatalogRoute.Parse(id), _controller.interactablesSpawner);
 
         private static Vector3 ToVector(Vector3Data v) => new(v.X, v.Y, v.Z);
 

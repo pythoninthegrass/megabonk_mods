@@ -23,6 +23,7 @@ public class MegabonkLevelsMod : MelonMod
         GridShapePatch.Install(LoggerInstance);
         NavMeshPatch.Install(LoggerInstance);
         LiveEditPatch.Install(LoggerInstance);
+        PackPrefabs.Initialize(LoggerInstance);
         SceneTransitionProbe.Install(LoggerInstance);
         CustomLevelStatePatch.Install(LoggerInstance);
         SteamWriteGuard.Install(LoggerInstance);

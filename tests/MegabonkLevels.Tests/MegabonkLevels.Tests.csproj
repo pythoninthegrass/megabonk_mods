@@ -29,6 +29,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/game_build_id_check.cs" Link="game_build_id_check.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/gen_id_assigner.cs" Link="gen_id_assigner.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/catalog_route.cs" Link="catalog_route.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/pack_catalog.cs" Link="pack_catalog.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/live_edit_plan.cs" Link="live_edit_plan.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/tile_placement.cs" Link="tile_placement.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/kill_floor.cs" Link="kill_floor.cs" />
