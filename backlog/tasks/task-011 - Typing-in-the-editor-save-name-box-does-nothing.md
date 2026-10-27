@@ -4,7 +4,7 @@ title: Typing in the editor save-name box does nothing
 status: In Progress
 assignee: []
 created_date: '2026-10-22T06:03:00Z'
-updated_date: '2026-10-27 04:09'
+updated_date: '2026-10-27 04:16'
 labels:
   - editor
   - bug
@@ -23,18 +23,18 @@ ordinal: 61000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-In editor mode, real-keyboard typing does not work in the editor's text fields: characters and Backspace are rejected in the level-name (save) box and in the palette search box, so a level cannot be saved under a chosen name or searched for by typing from a real keyboard. Harness-injected text works in the same boxes, so the box focus and the text-handling code in EditorTileTools.HandleSaveTyping and TextFieldModel.Type are fine; the failure is on the real-input half of EditorInput (Input.inputString and key state), which the injected path bypasses. Observed on macOS under plain Wine (Wine Devel 11) with the game started through scripts/run.py relaunch, on a build with the TASK-007.04 pack changes (which do not touch input) and earlier on main at 833a39f (before the input seam), so it predates both. Clicking the game window first, to give it OS focus, does not help. An earlier retest found real-keyboard typing working on the same setup and closed this as unreproduced, so the failure is intermittent or depends on session state; the cause is unconfirmed. Typing in the boxes is needed for manual editor checks.
+In editor mode, real-keyboard typing did not work in the editor's text fields: characters and Backspace were rejected in the level-name (save) box and in the palette search box, so a level could not be saved under a chosen name or searched for by typing from a real keyboard. Harness-injected text worked in the same boxes, so the box focus and the text-handling code in EditorTileTools.HandleSaveTyping and TextFieldModel.Type were fine. Cause (confirmed with the RealInput diagnostic): under plain Wine (Wine Devel 11) on macOS the game receives key state through Input.GetKey and Input.GetKeyDown but Input.inputString is always empty, and TextFieldModel.Type reads characters, Backspace and Return only from that string. Return also never arrives as a key-down there (Wine shows its window title bar). It predates the TASK-007.04 pack changes and the input seam (seen on main at 833a39f). Clicking the game window did not help. An earlier retest that found typing working on the same setup is unexplained. Typing in the boxes is needed for manual editor checks.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 A dev-only diagnostic logs, from the real-input layer of EditorInput (not the injected queue), each non-empty Input.inputString while an editor text field is focused (escaped, with char codes) and each real Backspace or Return key-down, so a real keypress shows in Latest.log whether or not the field accepts it
 - [x] #2 With the diagnostic on, real keystrokes typed into the save-name box and the palette search box are tried in the running game and the log shows whether the game receives any characters from Wine, recorded as evidence in the task notes
-- [ ] #3 The cause is identified and recorded in docs/development.md, replacing the 'Real keyboard text' claim that typing works under plain Wine, including any runtime on which typing behaves differently
-- [ ] #4 Clicking the save-name box and typing on a real keyboard enters the typed characters, confirmed in the running game
-- [ ] #5 Clicking the palette search box and typing on a real keyboard enters the typed characters, confirmed in the running game
+- [x] #3 The cause is identified and recorded in docs/development.md, replacing the 'Real keyboard text' claim that typing works under plain Wine, including any runtime on which typing behaves differently
+- [x] #4 Clicking the save-name box and typing on a real keyboard enters the typed characters, confirmed in the running game
+- [x] #5 Clicking the palette search box and typing on a real keyboard enters the typed characters, confirmed in the running game
 - [ ] #6 Backspace removes the last character and Enter saves the level under the typed name, confirmed in the running game
-- [ ] #7 Any testable logic changed has a failing test written first
+- [x] #7 Any testable logic changed has a failing test written first
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -55,6 +55,12 @@ Diagnostic landed (RealInputDiagnostic, EditorInput.LogRealTextInput, called fro
 Evidence 2026-10-26 (macOS, Wine Devel 11, game window clicked first, diagnostic from 795011f): real W/A/S/D moved the editor camera and a tool hotkey worked, so Input.GetKey and Input.GetKeyDown receive real keys, but no RealInput line appeared for any of those letter keys, so Input.inputString stayed empty. A real Backspace logged 'RealInput: Backspace down, focused=false' with no field focused and 'Backspace down, focused=true' with the save-name box focused after typing abc, and abc produced no inputString line. A real Return logged nothing and made Wine show its window title bar, so Return is intercepted at the Wine or Unity window level and never reaches Input.GetKeyDown. An earlier attempt right after a relaunch logged nothing for any key and is discounted because the game window probably lacked OS focus.
 
 Conclusion so far: under this Wine setup the game receives key state but no text (Input.inputString is always empty), and Return does not arrive as a key-down. TextFieldModel.Type consumes characters, Backspace ('\b') and Return only from the text string, so none of the three can reach a text field. The earlier 'worked' retest is unexplained and may have used a different session state. Candidate fix: when inputString is empty, derive text from key-down state (letters, digits, punctuation, Shift) and take Backspace from GetKeyDown, with a US-layout assumption; Return needs a separate answer because Wine takes it.
+
+Fix 9bcc0cf: EditorInput.InputString falls back to KeyTextMapper (US layout, Unity-free, 61 tests written first) over this frame's key-downs when Input.inputString is empty. Confirmed in the running game on macOS Wine Devel 11 with the real keyboard: typing with Shift and Backspace works in the save-name box and typing filters the palette search box. The log still shows only the Backspace key-down as RealInput, confirming the text came from the fallback. docs/development.md 'Real keyboard text' now records the cause and the fallback.
+
+Open for AC #6: Backspace is confirmed. Enter-to-save is not: Return never arrives as a key-down under this Wine (it shows the Wine title bar) and the test keyboard has no numpad to try keypad Enter. Saving works through the Save button. Decide whether AC #6 should be narrowed to Backspace plus the Save button on Wine, or whether Return needs a Wine-side fix. Key repeat while holding a key is not implemented, because only key-downs are read.
+
+Correction: the KeyTextMapper change added 51 tests (856 to 907), not 61.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
