@@ -1,10 +1,10 @@
 ---
 id: TASK-007
 title: Custom asset packs
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-06 21:43'
-updated_date: '2026-10-26T22:15:00Z'
+updated_date: '2026-10-27T22:25:00Z'
 labels:
   - level-editor
   - assets
@@ -31,23 +31,31 @@ This whole parent task is exploratory/lower-confidence compared to TASK-001 thro
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A documented, repeatable pipeline exists for building a Unity AssetBundle targeting Megabonk's exact engine version and render pipeline (built-in, not URP)
-- [ ] #2 A pack loader can load an AssetBundle at runtime and make its contained prefabs available under a bundle: catalogId, resolvable by TASK-004.02's existing catalogId resolution logic
-- [ ] #3 Materials/shaders from an imported asset render correctly in-game via a shader remap step, verified visually on at least one non-trivial imported model
-- [ ] #4 A pack manifest format exists covering pack identity, version, and the assets it provides, with a basic compatibility/version check comparable to the level file's gameBuildId check
-- [ ] #5 Risks or design gaps discovered during this task that need Lance's input are explicitly flagged rather than silently resolved with a guess
+- [x] #1 A documented, repeatable pipeline exists for building a Unity AssetBundle targeting Megabonk's exact engine version and render pipeline (built-in, not URP)
+- [x] #2 A pack loader can load an AssetBundle at runtime and make its contained prefabs available under a bundle: catalogId, resolvable by TASK-004.02's existing catalogId resolution logic
+- [x] #3 Materials/shaders from an imported asset render correctly in-game via a shader remap step, verified visually on at least one non-trivial imported model
+- [x] #4 A pack manifest format exists covering pack identity, version, and the assets it provides, with a basic compatibility/version check comparable to the level file's gameBuildId check
+- [x] #5 Risks or design gaps discovered during this task that need Lance's input are explicitly flagged rather than silently resolved with a guess
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
+- [x] #1 task check passes
 - [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-10-26: started ahead of TASK-006 at Lance's request. TASK-007 depends only on TASK-004 (Done). First subtask is TASK-007.01.
+
+2026-10-27: all subtasks 007.01-007.07 Done. AC3 accepted on the TestModel composite (brick texture, cel lighting, fog). DoD #2 left unchecked at parent level: it is satisfied per subtask where logic was testable.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Custom asset packs work end to end: a repeatable Unity 2023.2.22f1 built-in-pipeline AssetBundle build (task pack:build), a pack loader resolving bundle:<pack>/<asset> catalog ids through the same edit pipeline as game prefabs, a toon-shader remap for imported materials, and a pack manifest with a level-side version check. Packs list in the editor palette, and editor object editing was confirmed on Tiles maps and on the ProceduralMesh maps Desert and Hell (007.07 fixed a MapData lookup that omitted Hell). Everything is documented in docs/asset-bundles.md and docs/development.md. Open items: the Linux bundle has not been loaded, other editor versions are untried, and pack placement has not been run on Hell.
+<!-- SECTION:FINAL_SUMMARY:END -->

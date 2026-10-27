@@ -5,7 +5,7 @@ status: Done
 assignee:
   - Claude
 created_date: '2026-10-27T22:13:00Z'
-updated_date: '2026-10-27T22:20:00Z'
+updated_date: '2026-10-27T22:25:00Z'
 labels:
   - level-editor
 dependencies:
@@ -51,6 +51,8 @@ Follow-up to TASK-007.06. Hell is `EMapType.ProceduralMesh` (`MapHell`, `eMap=64
 
 <!-- SECTION:NOTES:BEGIN -->
 Hell has a populated MapGenerator.mesh with a MeshCollider: KillFloor armed at y=-12 (terrain low y=-6.31, catch floor -20). Place, rotate, drag-move, remove, undo/redo, save (3 edits) and reload via relaunch all verified in the running game (CrossOver). One difference from Desert: CatalogPrefabs.FindMap read DataManager.maps, which omits Hell, so placing threw 'No MapData for map Hell'. Fixed by looking maps up through Resources.FindObjectsOfTypeAll<MapData>() (CatalogPrefabs.TryFindMap), shared with LevelLoader. The fix is Il2Cpp-bound and has no C# unit-test project, so DoD #2 is unchecked.
+
+Correction: the repo does have a C# test project (tests/MegabonkLevels.Tests, 1024 tests passing). DoD #2 stays unchecked because TryFindMap calls Resources.FindObjectsOfTypeAll and needs the running game, not because no test project exists.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
