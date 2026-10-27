@@ -157,9 +157,7 @@ def build_key_command(action: str, key: str, modifiers: list[str] | None = None)
     return payload
 
 
-def build_mouse_command(
-    action: str, position: tuple[float, float] | None = None, button: int | None = None
-) -> dict[str, object]:
+def build_mouse_command(action: str, position: tuple[float, float] | None = None, button: int | None = None) -> dict[str, object]:
     payload: dict[str, object] = {"command": "mouse", "action": action}
     if position is not None:
         payload["x"], payload["y"] = position

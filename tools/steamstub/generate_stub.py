@@ -13,6 +13,7 @@ Usage:
 The shim path is resolved from the game dir when --game-dir is given; otherwise
 pass the shim on the command line.
 """
+
 import re
 import struct
 import sys
@@ -128,7 +129,7 @@ def main():
     for name in exports:
         if not name.startswith("SteamAPI_"):
             continue
-        rest = name[len("SteamAPI_"):]
+        rest = name[len("SteamAPI_") :]
         # Only the interface-method family: ISteamXxx_Method. Skip the runtime
         # entry points (SteamClient_, InitSafe, etc.) -- handled by hand above.
         m = re.match(r"I(Steam\w+)_(\w+)$", rest)
@@ -203,8 +204,7 @@ def embrace_wrapper(name, method):
     if method in ("GetCurrentBetaName", "GetAPICallErrorString", "GetLatestClientVersion"):
         return f"long long {name}(void) {{ return (long long)&g_empty[0]; }}"
     if method in ("GetAppInstallDir", "GetUserDataFolder"):
-        return (f"long long {name}(void *inst, char *buf, long long size) "
-                f"{{ return write_buffer(buf, size, g_install_dir); }}")
+        return f"long long {name}(void *inst, char *buf, long long size) {{ return write_buffer(buf, size, g_install_dir); }}"
     return f"long long {name}(void) {{ return 0; }}"
 
 
@@ -212,13 +212,13 @@ def parse_exports(shim):
     data = open(shim, "rb").read()
     if data[:2] != b"MZ":
         raise SystemExit(f"{shim}: not a PE file")
-    pe = struct.unpack_from("<I", data, 0x3c)[0]
+    pe = struct.unpack_from("<I", data, 0x3C)[0]
     nsec = struct.unpack_from("<H", data, pe + 6)[0]
     sizeopt = struct.unpack_from("<H", data, pe + 20)[0]
     opt = pe + 24
     magic = struct.unpack_from("<H", data, opt)[0]
     section_hdr = opt + sizeopt
-    dd_off = opt + (112 if magic == 0x20b else 96)
+    dd_off = opt + (112 if magic == 0x20B else 96)
     rva = struct.unpack_from("<I", data, dd_off)[0]
 
     def to_off(rva):
@@ -239,7 +239,7 @@ def parse_exports(shim):
     for i in range(num_names):
         na = struct.unpack_from("<I", data, names + 4 * i)[0]
         no = struct.unpack_from("<H", data, ords + 2 * i)[0]
-        nm = data[to_off(na):to_off(na) + 256].split(b"\0")[0].decode()
+        nm = data[to_off(na) : to_off(na) + 256].split(b"\0")[0].decode()
         names_out.append((no, nm))
     names_out.sort()
     return [nm for _, nm in names_out]

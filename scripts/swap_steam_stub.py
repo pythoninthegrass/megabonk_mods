@@ -15,6 +15,7 @@ The stub is built by `task steamstub:build` (needs mingw-w64). The game dir
 comes from scripts/game_paths.py. The game must be quit before install/restore
 (a loaded DLL cannot be overwritten).
 """
+
 import hashlib
 import shutil
 import subprocess
@@ -29,9 +30,12 @@ BACKUP = None  # set below from game dir
 def game_dir() -> Path:
     out = subprocess.run(
         [sys.executable, str(REPO / "scripts" / "game_paths.py")],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout
     import json
+
     return Path(json.loads(out)["game_dir"])
 
 

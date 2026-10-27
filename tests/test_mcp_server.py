@@ -175,7 +175,20 @@ async def test_screenshot_destinations_and_unique_names(tmp_path, monkeypatch, d
     assert not list(target.glob(".megabonk-*"))
 
 
-@pytest.mark.parametrize("filename", ["", "../escape.png", "/absolute.png", "nested/file.png", "nested\\file.png", "no-extension", "bad.jpg", "bad\x00.png", "bad:drive.png"])
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "",
+        "../escape.png",
+        "/absolute.png",
+        "nested/file.png",
+        "nested\\file.png",
+        "no-extension",
+        "bad.jpg",
+        "bad\x00.png",
+        "bad:drive.png",
+    ],
+)
 async def test_screenshot_invalid_filename_is_actionable(tmp_path, monkeypatch, filename) -> None:
     harness = setup_harness(tmp_path, monkeypatch)
     monkeypatch.chdir(tmp_path)
@@ -226,8 +239,10 @@ async def test_screenshot_failures_are_actionable_and_leave_no_final_file(tmp_pa
     if failure == "directory":
         directory.write_bytes(b"not a directory")
     elif failure == "permission":
+
         def denied(*args, **kwargs):
             raise PermissionError("permission denied")
+
         monkeypatch.setattr(mcp_server.tempfile, "TemporaryDirectory", denied)
 
     async def request(harness, payload, timeout):
@@ -299,9 +314,7 @@ INPUT_TOOL_CASES = [
 
 
 @pytest.mark.parametrize(("tool", "args", "expected"), INPUT_TOOL_CASES)
-async def test_input_tool_writes_the_harness_payload_and_returns_the_result(
-    tmp_path, monkeypatch, tool, args, expected
-) -> None:
+async def test_input_tool_writes_the_harness_payload_and_returns_the_result(tmp_path, monkeypatch, tool, args, expected) -> None:
     harness = setup_harness(tmp_path, monkeypatch)
     seen = []
 
@@ -356,9 +369,7 @@ async def test_input_tool_rejection_surfaces_the_error(tmp_path, monkeypatch, to
         ("key", {"key": "R", "modifiers": ["LeftShift"], "action": "down"}, "modifiers"),
     ],
 )
-async def test_invalid_arguments_are_rejected_before_anything_is_sent(
-    tmp_path, monkeypatch, tool, args, message
-) -> None:
+async def test_invalid_arguments_are_rejected_before_anything_is_sent(tmp_path, monkeypatch, tool, args, message) -> None:
     harness = setup_harness(tmp_path, monkeypatch)
     async with Client(mcp_server.mcp) as client:
         result = await client.call_tool(tool, args)

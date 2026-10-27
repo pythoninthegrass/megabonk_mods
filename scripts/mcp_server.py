@@ -75,9 +75,7 @@ async def relaunch(ctx: Context, level: str | None = None) -> dict | None:
         except Exception:
             pass
 
-    ok = await anyio.to_thread.run_sync(
-        run.relaunch, harness, game_dir, level_path, TIMEOUT, task, on_step, errors.append
-    )
+    ok = await anyio.to_thread.run_sync(run.relaunch, harness, game_dir, level_path, TIMEOUT, task, on_step, errors.append)
     if not ok:
         raise ToolError("; ".join(errors) if errors else "relaunch failed")
     return await _request(harness, run.build_command("state"), TIMEOUT)
@@ -163,9 +161,7 @@ async def invulnerable(on: bool) -> dict | None:
 
 
 @mcp.tool()
-async def camera(
-    position: list[float] | None = None, rotation: list[float] | None = None, clear: bool = False
-) -> dict | None:
+async def camera(position: list[float] | None = None, rotation: list[float] | None = None, clear: bool = False) -> dict | None:
     """Hold the camera at a world pose (position and rotation euler degrees), or return it to the game with clear."""
     if clear:
         payload = run.build_command("camera-clear")

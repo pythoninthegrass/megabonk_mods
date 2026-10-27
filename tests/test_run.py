@@ -350,7 +350,10 @@ def test_build_dismiss_levelup_command_carries_the_choice() -> None:
 
 
 def test_teleport_payload_takes_xyz_or_cell() -> None:
-    assert run.teleport_payload(run.parse_args(["teleport", "1", "2", "3"])) == {"command": "teleport", "position": [1.0, 2.0, 3.0]}
+    assert run.teleport_payload(run.parse_args(["teleport", "1", "2", "3"])) == {
+        "command": "teleport",
+        "position": [1.0, 2.0, 3.0],
+    }
     assert run.teleport_payload(run.parse_args(["teleport", "--cell", "3", "12"])) == {"command": "teleport", "cell": [3, 12]}
 
 
@@ -365,7 +368,10 @@ def test_teleport_payload_rejects_missing_partial_or_both_targets() -> None:
 
 def test_dismiss_levelup_payload_defaults_to_the_first_offer() -> None:
     assert run.dismiss_levelup_payload(run.parse_args(["dismiss-levelup"])) == {"command": "dismiss-levelup", "choice": 0}
-    assert run.dismiss_levelup_payload(run.parse_args(["dismiss-levelup", "--choice", "2"])) == {"command": "dismiss-levelup", "choice": 2}
+    assert run.dismiss_levelup_payload(run.parse_args(["dismiss-levelup", "--choice", "2"])) == {
+        "command": "dismiss-levelup",
+        "choice": 2,
+    }
 
 
 def test_teleport_prints_the_result_json(capsys) -> None:
@@ -552,9 +558,7 @@ def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_ready=True, kill_fl
 
 def test_relaunch_runs_every_step_in_order_and_returns_true(monkeypatch) -> None:
     calls = relaunch_stubs(monkeypatch)
-    ok = run.relaunch(
-        Path("/h"), Path("/g"), Path("/lvl.json"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None
-    )
+    ok = run.relaunch(Path("/h"), Path("/g"), Path("/lvl.json"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None)
     assert ok is True
     assert calls == [
         "quit",
