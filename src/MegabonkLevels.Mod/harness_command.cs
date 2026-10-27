@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -74,7 +75,7 @@ public sealed class QueryArgs
 }
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default)
 {
     public const int MaxTypeLength = 200;
 
@@ -184,7 +185,7 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
             case "camera":
                 return TryParseCamera(root, out command, out error);
             case "load-level":
-                return TryParseWithPath(root, HarnessCommandKind.LoadLevel, out command, out error);
+                return TryParseLoadLevel(root, out command, out error);
             case "load-bundle":
                 return TryParseWithPath(root, HarnessCommandKind.LoadBundle, out command, out error);
             case "shader-report":
@@ -610,6 +611,53 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         command = new HarnessCommand(kind, path);
         error = null;
         return true;
+    }
+
+    private static bool TryParseLoadLevel(JsonObject root, out HarnessCommand command, out string error)
+    {
+        if (!TryParseWithPath(root, HarnessCommandKind.LoadLevel, out command, out error))
+        {
+            return false;
+        }
+
+        if (!TryGetOptionalInt(root, "map", out var map, out error)
+            || !TryGetOptionalInt(root, "stageIndex", out var stageIndex, out error)
+            || !TryGetOptionalInt(root, "tier", out var tier, out error)
+            || !TryGetOptionalInt(root, "seed", out var seed, out error))
+        {
+            command = default;
+            return false;
+        }
+
+        if (map is int value && !Enum.IsDefined(typeof(EMap), value))
+        {
+            command = default;
+            error = $"field 'map' must be one of {string.Join(", ", Enum.GetValues<EMap>().Select(m => (int)m))}, got {value}";
+            return false;
+        }
+
+        command = command with { Overrides = new LoadOverrides(map, stageIndex, tier, seed) };
+        return true;
+    }
+
+    private static bool TryGetOptionalInt(JsonObject root, string field, out int? value, out string error)
+    {
+        value = null;
+        error = null;
+
+        if (!root.TryGetPropertyValue(field, out var node))
+        {
+            return true;
+        }
+
+        if (node is JsonValue jsonValue && jsonValue.TryGetValue(out int parsed))
+        {
+            value = parsed;
+            return true;
+        }
+
+        error = $"field '{field}' must be an integer";
+        return false;
     }
 
     private static bool TryGetString(JsonObject root, string field, out string value)

@@ -28,12 +28,12 @@ public static class LevelLoaderPatch
     // Reads a .mblevel.json from disk and registers the matching run. MapData may not exist yet when
     // this is called (e.g. a load-level issued right after launch), so the load is queued and Pump()
     // attempts it each frame until the map is available. Read/parse failures return false at once.
-    public static bool LoadAndStart(string path, MelonLogger.Instance logger)
+    public static bool LoadAndStart(string path, MelonLogger.Instance logger, LoadOverrides overrides = default)
     {
         LevelFile level;
         try
         {
-            level = LevelFileSerializer.DeserializeWithMigration(File.ReadAllText(path));
+            level = overrides.Apply(LevelFileSerializer.DeserializeWithMigration(File.ReadAllText(path)));
         }
         catch (Exception ex)
         {
@@ -92,7 +92,7 @@ public static class LevelLoaderPatch
 
         if (level.StageIndex < 0 || level.StageIndex >= mapData.stages.Length)
         {
-            logger.Error($"LevelLoader: stageIndex {level.StageIndex} out of range for {level.Map} ({mapData.stages.Length} stages)");
+            logger.Error($"LevelLoader: load failed: stageIndex {level.StageIndex} out of range for {level.Map} ({mapData.stages.Length} stages)");
             return true;
         }
 

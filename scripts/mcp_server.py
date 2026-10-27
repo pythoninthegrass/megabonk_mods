@@ -127,8 +127,15 @@ async def paths() -> CallToolResult:
 
 
 @mcp.tool()
-async def relaunch(ctx: Context, level: str | None = None) -> CallToolResult:
-    """Quit and relaunch the game, load a level, go invulnerable and enter editor; returns the final state."""
+async def relaunch(
+    ctx: Context,
+    level: str | None = None,
+    map: int | None = None,
+    stage: int | None = None,
+    tier: int | None = None,
+    seed: int | None = None,
+) -> CallToolResult:
+    """Quit and relaunch the game, load a level, go invulnerable and enter editor; returns the final state. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only."""
     game_dir = _game_dir()
     harness = game_dir / "harness"
     level_path = Path(level) if level else run.TEST_FOREST_LEVEL
@@ -143,16 +150,25 @@ async def relaunch(ctx: Context, level: str | None = None) -> CallToolResult:
         except Exception:
             pass
 
-    ok = await anyio.to_thread.run_sync(run.relaunch, harness, game_dir, level_path, TIMEOUT, task, on_step, errors.append)
+    overrides = {k: v for k, v in (("map", map), ("stage", stage), ("tier", tier), ("seed", seed)) if v is not None}
+    ok = await anyio.to_thread.run_sync(
+        run.relaunch, harness, game_dir, level_path, TIMEOUT, task, on_step, errors.append, overrides
+    )
     if not ok:
         raise ToolError("; ".join(errors) if errors else "relaunch failed")
     return await _command(harness, run.build_command("state"), TIMEOUT)
 
 
 @mcp.tool()
-async def load(level: str) -> CallToolResult:
-    """Load a level file and start it."""
-    payload = run.build_command("load-level", run.to_game_path(Path(level).resolve()))
+async def load(
+    level: str,
+    map: int | None = None,
+    stage: int | None = None,
+    tier: int | None = None,
+    seed: int | None = None,
+) -> CallToolResult:
+    """Load a level file and start it. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only; the file is not modified."""
+    payload = run.build_load_level_command(run.to_game_path(Path(level).resolve()), map, stage, tier, seed)
     return await _command(_harness(), payload, TIMEOUT)
 
 

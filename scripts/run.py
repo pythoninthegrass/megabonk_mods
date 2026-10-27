@@ -18,7 +18,8 @@ Drives the MegabonkLevels dev harness (see docs/development.md) by dropping JSON
 Usage:
     run.py enable                  Create the harness marker; takes effect on the next game launch
     run.py disable                 Remove the harness marker
-    run.py load <level>            Load a level file and start it
+    run.py load <level> [--map N] [--stage N] [--tier N] [--seed N]
+                                   Load a level file and start it, optionally replacing those fields for this load
     run.py screenshot <out.png>    Save the game's rendered frame
     run.py freeze                  Pause gameplay through MyTime.Pause
     run.py resume                  Unpause gameplay through MyTime.Unpause
@@ -66,7 +67,7 @@ import signal
 import subprocess
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from decouple import Config, RepositoryEmpty, RepositoryEnv
 from game_paths import latest_log_path, resolve_game_dir as _resolve_game_dir
 from pathlib import Path
@@ -137,6 +138,32 @@ def build_command(command: str, path: str | None = None) -> dict[str, str]:
     if path is not None:
         payload["path"] = path
     return payload
+
+
+def build_load_level_command(
+    path: str,
+    map: int | None = None,
+    stage: int | None = None,
+    tier: int | None = None,
+    seed: int | None = None,
+) -> dict[str, object]:
+    """A load-level command whose supplied overrides replace those fields of the level file for this load only."""
+    payload: dict[str, object] = dict(build_command("load-level", path))
+    for field, value in (("map", map), ("stageIndex", stage), ("tier", tier), ("seed", seed)):
+        if value is not None:
+            payload[field] = value
+    return payload
+
+
+def add_load_overrides(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--map", type=int, help="replace the level's map (eMap value, e.g. 64 for Hell)")
+    parser.add_argument("--stage", type=int, help="replace the level's stage index")
+    parser.add_argument("--tier", type=int, help="replace the level's tier")
+    parser.add_argument("--seed", type=int, help="replace the level's debug seed")
+
+
+def load_overrides(args: argparse.Namespace) -> dict[str, int]:
+    return {k: v for k in ("map", "stage", "tier", "seed") if (v := getattr(args, k)) is not None}
 
 
 def build_heartbeat_command(enabled: bool) -> dict[str, object]:
@@ -503,6 +530,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     type_.add_argument("text")
     load = sub.add_parser("load")
     load.add_argument("level", type=Path)
+    add_load_overrides(load)
     bundle = sub.add_parser("bundle")
     bundle.add_argument("bundle", type=Path)
     shot = sub.add_parser("screenshot")
@@ -522,6 +550,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     cycle.add_argument("--settle", type=float, default=5.0, help="seconds between load and screenshot")
     relaunch = sub.add_parser("relaunch")
     relaunch.add_argument("level", type=Path, nargs="?", default=TEST_FOREST_LEVEL)
+    add_load_overrides(relaunch)
     return parser.parse_args(argv)
 
 
@@ -613,6 +642,7 @@ def relaunch(
     task: str,
     on_step: Callable[[str], None],
     on_error: Callable[[str], None],
+    overrides: Mapping[str, int] | None = None,
 ) -> bool:
     """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable and enter editor."""
     started = time.time()
@@ -648,7 +678,7 @@ def relaunch(
     loaded = False
     for attempt in range(1, 6):
         on_step(f"relaunch: loading {level} (attempt {attempt}/5)")
-        if send(harness, build_command("load-level", to_game_path(level.resolve())), timeout):
+        if send(harness, build_load_level_command(to_game_path(level.resolve()), **(overrides or {})), timeout):
             seen = wait_for_any_log_line(
                 latest_log_path(game_dir),
                 [KILL_FLOOR_ARMED_LINE, EDITOR_UNSUPPORTED_LINE, LOAD_FAILED_LINE],
@@ -690,7 +720,8 @@ def main(argv: list[str] | None = None) -> int:
 
     match args.action:
         case "load":
-            ok = send(harness, build_command("load-level", to_game_path(args.level.resolve())), args.timeout)
+            payload = build_load_level_command(to_game_path(args.level.resolve()), **load_overrides(args))
+            ok = send(harness, payload, args.timeout)
         case "bundle":
             ok = send_printing_result(harness, build_command("load-bundle", to_game_path(args.bundle.resolve())), args.timeout)
         case "screenshot":
@@ -751,6 +782,7 @@ def main(argv: list[str] | None = None) -> int:
                 launch_task(resolve_macos_runtime(load_lookup())),
                 on_step=print,
                 on_error=lambda m: print(m, file=sys.stderr),
+                overrides=load_overrides(args),
             )
     return 0 if ok else 1
 

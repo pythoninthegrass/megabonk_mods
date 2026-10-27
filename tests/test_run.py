@@ -793,3 +793,66 @@ def test_relaunch_fails_fast_when_the_level_fails_to_load(monkeypatch) -> None:
     assert ok is False
     assert len([c for c in calls if c == ("send", "load-level")]) == 1
     assert errors == ["relaunch: the level failed to load; see the LevelLoader line in the game log"]
+
+
+def test_build_load_level_command_without_overrides_matches_the_plain_command() -> None:
+    assert run.build_load_level_command("Z:\\a.json") == run.build_command("load-level", "Z:\\a.json")
+
+
+def test_build_load_level_command_adds_only_the_supplied_overrides() -> None:
+    assert run.build_load_level_command("p", map=64, stage=1, seed=0) == {
+        "command": "load-level",
+        "path": "p",
+        "map": 64,
+        "stageIndex": 1,
+        "seed": 0,
+    }
+
+
+def test_parse_args_load_and_relaunch_take_integer_overrides() -> None:
+    for action in ("load", "relaunch"):
+        args = run.parse_args([action, "a.json", "--map", "64", "--stage", "1", "--tier", "2", "--seed", "7"])
+        assert (args.map, args.stage, args.tier, args.seed) == (64, 1, 2, 7)
+
+
+def test_parse_args_overrides_default_to_none() -> None:
+    args = run.parse_args(["load", "a.json"])
+    assert (args.map, args.stage, args.tier, args.seed) == (None, None, None, None)
+
+
+def test_parse_args_rejects_a_non_integer_override(capsys) -> None:
+    with pytest.raises(SystemExit):
+        run.parse_args(["load", "a.json", "--stage", "one"])
+    assert "--stage" in capsys.readouterr().err
+
+
+def test_load_sends_the_overrides_and_leaves_the_level_file_alone() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        level = Path(tmp) / "level.mblevel.json"
+        level.write_text('{"map":1}')
+        game = fake_game(tmp, '{"command":"load-level","ok":true}')
+        assert run_main(game, "load", str(level), "--map", "64", "--seed", "9") == 0
+        sent = json.loads(next((game / "harness" / "done").glob("*.json")).read_text())
+        assert (sent["map"], sent["seed"]) == (64, 9)
+        assert "stageIndex" not in sent and "tier" not in sent
+        assert level.read_text() == '{"map":1}'
+        assert sorted(p.name for p in Path(tmp).glob("*.json")) == ["level.mblevel.json"]
+
+
+def test_relaunch_forwards_the_overrides_to_the_load(monkeypatch) -> None:
+    relaunch_stubs(monkeypatch)
+    sent = []
+    monkeypatch.setattr(run, "send", lambda h, payload, t: sent.append(payload) or True)
+    ok = run.relaunch(
+        Path("/h"),
+        Path("/g"),
+        Path("/l"),
+        5,
+        "game:run",
+        on_step=lambda m: None,
+        on_error=lambda m: None,
+        overrides={"map": 64, "stage": 1},
+    )
+    assert ok is True
+    load = next(p for p in sent if p["command"] == "load-level")
+    assert (load["map"], load["stageIndex"]) == (64, 1)

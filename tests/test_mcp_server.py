@@ -777,3 +777,48 @@ async def test_query_objects_rejects_an_empty_type_or_field(tmp_path, monkeypatc
         result, seen = await query_objects(tmp_path / str(index), monkeypatch, arguments)
         assert result.is_error
         assert seen == []
+
+
+async def test_load_tool_sends_the_overrides(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def responder(payload):
+        seen.append(payload)
+        return ok_result(payload)
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("load", {"level": "a.json", "map": 64, "stage": 1, "tier": 2, "seed": 7})
+    finally:
+        stop.set()
+    assert not result.is_error
+    assert (seen[0]["map"], seen[0]["stageIndex"], seen[0]["tier"], seen[0]["seed"]) == (64, 1, 2, 7)
+
+
+async def test_load_tool_rejects_a_non_integer_override(tmp_path, monkeypatch) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("load", {"level": "a.json", "stage": "one"})
+    assert result.is_error
+    assert "stage" in result.content[0].text
+
+
+async def test_relaunch_tool_forwards_the_overrides(tmp_path, monkeypatch) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    seen = {}
+
+    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None):
+        seen["overrides"] = overrides
+        return True
+
+    monkeypatch.setattr(mcp_server.run, "relaunch", fake_relaunch)
+
+    async def fake_command(harness, payload, timeout):
+        return mcp_server._encode({"ok": True})
+
+    monkeypatch.setattr(mcp_server, "_command", fake_command)
+    async with Client(mcp_server.mcp) as client:
+        await client.call_tool("relaunch", {"map": 2, "seed": 3})
+    assert seen["overrides"] == {"map": 2, "seed": 3}

@@ -123,7 +123,7 @@ public static class DevHarness
                 {
                     path = Path.Combine(Environment.CurrentDirectory, path);
                 }
-                LevelLoaderPatch.LoadAndStart(path, _logger);
+                LevelLoaderPatch.LoadAndStart(path, _logger, command.Overrides);
                 // After loading, request editor auto-reenter so the run starts in editor mode for Forest.
                 EditorMode.RequestReenter(_logger);
                 break;
