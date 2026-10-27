@@ -18,15 +18,45 @@ What the Tony Hawk's Pro Skater Warehouse level physically contains, read from a
 - 163-173: goal-camera flyover at the end of the first run.
 - 188-217: gameplay of the second run.
 
+### Map and guide
+
+- `tools/thps_warehouse_items_map.png` (with collectible markers) and `tools/thps_warehouse_itemless_map.png` (without), both 973x767, gitignored. Pixel positions below are in that image, x to the right and y down, read from the items map unless stated.
+- `tools/thps_warehouse_strategywiki.md`, a saved copy of the StrategyWiki page `https://strategywiki.org/wiki/Tony_Hawk's_Pro_Skater/Warehouse`. It is the only source for the collectible descriptions and the gap names.
+- The maps are an isometric (not top-down) render: floor and the two far walls are visible, the near sides are cut away, and everything raised appears shifted up the screen by its height.
+
 ## Scale
 
 - The skater is the main ruler, taken as 1.8 m. Frame 188 and frame 71 show the skater beside doors, cones and barricades.
 - Cross-checks: orange cone about 0.7 m, A-frame barricade about 1.1 m tall and 2 m wide, wooden crate about 1 m, steel pipe of the big rail about 0.1-0.15 m across.
 - Perspective inflates anything nearer the camera than the skater, so every height and width below is a rough ratio, not a measurement. Numbers marked "low" were estimated from a single oblique view.
 
+## Map orientation and scale
+
+### Headings
+
+The video cannot give compass headings, so the map defines its own. They are map headings, not real compass directions.
+
+- **N** is up-right on screen, along the long far wall. **S** is down-left.
+- **W** is up-left on screen, toward that long far wall. **E** is down-right.
+- The long far wall (screen edge from about (25,375) to (460,110)) is the **west wall**. It carries a black-and-yellow "SKATEBOARDING" sign near its south end, at about (110,388), and brown wooden pilasters at about x 190-215 and x 385-410. A short **north wall** continues from (460,110) to (550,185).
+- The south-west and south-east edges of the floor are cut away and show only the slab's thickness, so no south or east wall is shown.
+
+### Scale
+
+- Anchoring the half pipe's flat bottom at about 8 m against its width on the map (about 170 px between the two coping lines) gives roughly 20-25 px per metre along both floor axes. This is a single-anchor estimate, low confidence.
+- The big rail is a thin line on the itemless map through the centre box pile, from about (428,572) to (603,490), about 195 px, so about 8-10 m. This agrees with the frame estimate of at least 8-12 m.
+- The west wall is about 510 px, so about 20-25 m. The cut-away south-west edge from (25,375) to (250,660) is about 360 px, so about 14-17 m. The main room is therefore roughly 20-25 m by 14-17 m before the raised north-east block.
+- A 14-17 m side matches the frame-derived door wall: two door sets of 7-8 m each plus a pillar. So the door wall is probably a cut-away side or the north-east side, not the west wall.
+
+### Discrepancies with the frame analysis
+
+- The map's sign reads "SKATEBOARDING". The frames' sign wall carries the "RENSSELAER HYDRANT CO." sign. They are different signs, so the map's west wall cannot be matched to the frames' sign wall with confidence, and may be the same wall with a second sign out of the frames' view.
+- The frame analysis calls the half pipe's sides "left and back" only. The map shows two parallel coping lines about 170 px apart with a flat floor between them, so it has two opposing sides, which the frames did not show.
+- Heights cannot be read from the map. Vertical screen offset mixes height with floor position, so heights stay as in the frame analysis and the guide text.
+
 ## Landmarks
 
-Compass headings cannot be taken from the frames. Walls are named by what is on them.
+Walls are named by what is on them.
 
 - **Sign wall**: the long far wall with the painted "RENSSELAER HYDRANT CO. EST 1922" sign, a band of graffiti (KDR, JOSH, 518) at head height above the ramps, and a perforated X-braced gate beside the sign (frames 4, 119, 166, 167).
 - **Window wall**: the long wall of tall steel-sash windows, three tiers high, with a red truck visible outside (frames 12, 101, 123, 169).
@@ -146,7 +176,115 @@ The room has several distinct quarter pipes along its walls. The frames do not g
 
 - Letters are floating neon icons, visible in the flyover only: S between the corner kickers (9, 11, 12), K above the wide ramp (4 and 33 area), A near the taxi (4, 12), T above the half pipe (12, 73), E over the second deck (25-27).
 - Hydrant markers (neon blue icons) float above several ramps (108-111). The tape icon floats inside the corridor (4).
-- The positions of the letters relative to each other are in the sibling wiki analysis, not in the frames.
+- Positions on the map are in the Collectibles section.
+
+## Floor plan
+
+Feature codes (M1-M15) are used by the Collectibles and Gaps sections. Pixel boxes are x range, y range on the 973x767 map. Headings are the map headings defined above.
+
+### Perimeter
+
+- The west wall runs about 20-25 m from its south end at (25,375) to the north-west corner at (460,110). The wall is plain grey brick with pilasters, the sign, and a perforated gate at about (300,330) behind the half pipe.
+- A short north wall steps out to the north-east at (460,110)-(550,185), then the outline jogs again and rises into the raised north-east block at (680-940,20-250).
+- The east side is a stepped cut-away edge: from the south corner at about (250,660) the floor edge runs east, jogs out into a south tab (about (310-480,600-750)), then continues north-east along the south-east edge to (730,570), up the tall wall face at (685-730,440-600), and on to the east deck at about (890,400).
+- Cut-away edges mean the room continues past the map on the south and east sides in the frames' view; the map shows no walls there.
+
+### Interior features
+
+- **M1 West bank**: brown plywood quarter pipe against the south end of the west wall, about (60-170,400-490), with a curved end that wraps around the south-west corner at about (75,475). The SKATEBOARDING sign is directly above it. Painted text on its face reads "FIRM".
+- **M2 West platform**: an L-shaped raised concrete platform north-east of M1, about (165-250,380-430), with a lipped front edge facing south-east. A box pile sits on it. A flat floor with cardboard sheets lies in front, at about (140-270,415-480).
+- **M3 Taxi**: a yellow cab shell on the floor, about (265,505), surrounded by flattened cardboard. It is the only yellow object on the itemless map, so the funbox in the frames is the taxi.
+- **M4 Half pipe**: a long channel running along the E axis from the west wall to the middle of the room. Two parallel yellow-and-black coping lines, one along (385,320)-(540,445) (north-east side) and one along (245,350)-(415,520) (south-west side), bound a flat floor with the T icon over it. The ramp face on the north-east side is a smooth brown surface; the south-west side is a grey sloped face with seams.
+- **M5 Hanging corridor**: a dark box on a black steel frame with two diagonal black beams rising toward the west wall, about (285-375,265-350), directly above the north end of M4. The tape icon sits at its south-east end at (355,322).
+- **M6 North bank**: a plywood quarter pipe under the north wall, about (440-540,225-320), with yellow-and-black coping along its top edge and a red graffiti mark on the wall above it at about (440,190).
+- **M7 Middle quarter pipe and pillar**: a small quarter pipe at about (570-640,340-400) with a tall grey pillar behind it at about (600-650,230-370) carrying yellow graffiti.
+- **M8 East channel quarter pipe**: a quarter pipe at about (665-760,415-500) running down to the east, with a dark vertical wall face at (685-730,440-540) on its south side.
+- **M9 East deck and back pipe**: a flat deck at about (740-880,400-460) holding a box pile, with a second, taller plywood quarter pipe behind it at about (780-890,320-420) against the east end.
+- **M10 South notch quarter pipe**: a small curved quarter pipe at about (350-390,600-650) at the end of the south tab, with a box pile on the ledge in front at (330,615).
+- **M11 South-east ledge**: a low ledge in the notch at the foot of M8's wall, about (680-720,570-610), holding a box pile at (695,598).
+- **M12 Plywood kickers**: two flat plywood sheets on low frames, one at about (540-585,605-630) and one at about (480-520,640-675). The S icon floats between them at (525,625).
+- **M13 Dark pit**: a dark, textured, shadowed area at about (470-580,650-720) at the south-east end of the kickers. It reads as a hollow or dark ramp and is not identified.
+- **M14 Raised north-east block**: a large brown curved mass at about (680-940,20-250) with wall pilasters on its north-east face and a dark gap under it at about (660-800,140-260). The start arrow sits on its floor at (855,210).
+- **M15 Big rail and box pile**: a thin dark rail line through a heap of cardboard, from (428,572) to (603,490), runs roughly along the N axis at about the middle of the room. The same heap exists on the itemless map.
+- **Two sloped channels**: a wide grey slope rises from about (600,360) toward the dark gap under M14. It is divided into two lanes by the middle quarter pipe M7. M6, M7 and M8 flank the two lanes, which matches the guide's channel: three quarter pipes sandwiching both entrances.
+
+### ASCII sketch
+
+The sketch is schematic (map headings, not to scale). N is up, E is right.
+
+```text
+              N
+   +----------------------------+
+   | W wall: sign, pilasters    |  M14 raised block (NE)
+   |  M1 bank   M2 platform     |    start arrow
+   |   M3 taxi   M5 corridor    |  M6 bank   lanes
+   |             M4 half pipe   |  M7 pillar+QP
+   |   K        M15 rail+pile   |  M8 QP, M9 deck+back QP (E)
+   |          S kickers  M13    |  M11 ledge
+   |  M10 notch                 |
+   +----------------------------+
+              S
+```
+
+## Collectibles
+
+Positions are pixels on the 973x767 items map. Every icon floats above its true floor position by an unknown height, so the floor position is only known to within about the icon's height in screen terms. Heights are from the guide text and the frame analysis.
+
+### Box piles
+
+The red circles. The guide's order cannot be matched to the circles with confidence; the match given is the best reading.
+
+| Circle | Pixel | On | Guide entry | Height | Confidence |
+| --- | --- | --- | --- | --- | --- |
+| R1 | (200,400) | M2 west platform | 2 (platform with rail by the taxi), or 3 (U-shape on the winding quarter pipe) | on the platform, about 1-1.5 m, at the lip of M1 | the guide's #2 and #3 both fit here |
+| R2 | (330,615) | M10 ledge in the south notch | 4 (ledge in a corner near the two kickers) | on a ledge about 1 m above the floor | probable |
+| R3 | (695,598) | M11 south-east ledge | 4 (corner ledge near the kickers) or 1 (turn right from start) | low ledge at the foot of the wall | the guide's #4 fits R2 and R3 |
+| R4 | (790,457) | M9 east deck, in front of the back pipe | 5 (deck with a second quarter pipe behind) | deck level, about 1.5-2 m | probable, shares its spot with E |
+| R5 | (695,155) | the dark gap under M14, beside M6 | 1 or 3 | unknown, in shadow | uncertain |
+
+### Letters
+
+| Letter | Pixel | Over | Height relative to nearby structures | Guide wording |
+| --- | --- | --- | --- | --- |
+| S | (525,625) | floor between the two kickers M12 | in the air, above the kicker lips, reached by an ollie | between two makeshift ramps |
+| K | (165,562) | floor in the south-west corner, south of M3 | high above the wide quarter pipe, reached by launching from it | end of the room, above the wide quarter pipe, behind the taxi |
+| A | (267,505) | directly above the taxi M3 | an ollie above the taxi roof | above the taxi funbox |
+| T | (405,382) | over the M4 half pipe floor | above the half pipe, reached from the ramp at speed | above the half pipe, next to the glass corridor |
+| E | (757,433) | M8 and M9, over the end of the quarter pipe | just past the quarter pipe's lip | corner quarter pipe, with a deck and another quarter pipe behind |
+
+### Tape and 100-point pickups
+
+| Item | Pixel | Over | Height | Guide wording |
+| --- | --- | --- | --- | --- |
+| Secret tape | (355,322) | south-east end of M5, above the north end of M4 | inside the corridor, about 3 m above the floor | floating inside the room above the half pipe |
+| 100 (north) | (570,303) | lane between M6 and M7 | in the air in the channel between two quarter pipes | in front of the left roll-in, between two quarter pipes |
+| 100 (east) | (668,382) | lane between M7 and M8 | same, in the other lane | the same, near the right roll-in |
+| 100 (south) | (398,686) | above M10 at the end of the south tab | above the wide quarter pipe, reached by launching from it | above the wide quarter pipe at the two-kicker corner |
+
+## Gaps and rails
+
+The guide's gaps with the structures they connect. Map codes are the best reading and marked "probable" where the guide wording does not pin a single structure.
+
+| Gap | From | To | Map reading |
+| --- | --- | --- | --- |
+| Big Rail | one end of the big rail | the far end | M15, grind the whole rail |
+| Channel Gap | quarter pipe on one side of an entrance | quarter pipe on the other side | M6/M7 or M7/M8, either lane |
+| Deck 2 Rail | the deck holding another quarter pipe | the big rail | M9 deck to M15 |
+| Face Plant | the same quarter pipe | the wall beyond both pipes | M9 back pipe to the east wall, needs high speed |
+| High Rail | the winding quarter pipe | the high rail under the "skateboarding" sign | M1 to a high rail on the west wall above the sign |
+| Holy Shi... | a rail by the half pipe | the whole wide quarter pipe | M4 ramp to a rail on the wide pipe, then grind the pipe edge (the guide does not say which pipe in map terms; probable M6) |
+| Kicker 2 Ledge | the kicker facing away from the wall | the grey ledge at the corner | M12 to M11 |
+| Kicker Gap | one kicker | the other kicker | M12, short plank to plank |
+| Monster Grind | the high rail | the quarter pipe edge, then the ledge rail at its end | M1 high rail, down M1, then the M2 platform rail |
+| Over the Pipe | the large ramp on one side of the half pipe | the large ramp on the other side | the two sides of M4 |
+| Secret Room | one ramp | the other ramp, through the corridor | M4 sides, through M5 |
+| Taxi 2 Ledge | the taxi funbox | the ledge with the short rail on top | M3 to the M2 platform edge |
+| Taxi 2 Rail | the taxi funbox | the big rail | M3 to M15 |
+| Taxi Gap | the taxi funbox | the middle of the half pipe | M3 to the M4 floor |
+| Transfer | one side of the U-bend in the wide quarter pipe | the other side | the U-shape on the wide quarter pipe (probable M1 or M6) |
+| Transition Grind | the quarter pipe between a roll-in and a wall | the wall, then the half pipe edge | a lane-side pipe (probable M6) along the wall, wallride, then the M4 coping |
+
+Rails named in the guide: the big rail (M15); the short rail on the ledge by the taxi (M2); the high rail under the "skateboarding" sign (west wall, not visible as geometry on the map because it is above the wall line); the rail at the other side of the half pipe (not identified on the map).
 
 ## Look
 
@@ -161,13 +299,19 @@ The room has several distinct quarter pipes along its walls. The frames do not g
 
 ## Unresolved
 
-- **Room dimensions and layout**: no frame gives an overall plan. The relative position of the door wall, sign wall and window wall is unresolved, and so are all headings. The maps in `tools/` (see the sibling analysis) are needed.
-- **Half pipe**: frames 134-146 show transitions on the left and back only. Whether a matching opposing wall exists, and whether this bay is the same structure as the wide plywood quarter pipe, is not shown.
-- **Taxi funbox**: the car shell in 156 and the mound in 71 are likely the same object, but no yellow paint or taxi roof sign is ever visible.
-- **Relationship between the wide plywood and wide slotted quarter pipes**: both sit below the same graffiti band, but their order and extent along the wall are not shown.
-- **The "large ramp slope with lattice shadows"** at the right of frames 154, 155 and 191: what it is, and where it sits relative to the rail, is unresolved.
-- **Glass corridor versus secret room**: whether they are one space or two, and the tape room's exact access point, are not shown. The interior length is unmeasured.
+- **Walls and headings**: the map defines its own headings. The door wall, window wall and graffiti brick corner are not placed on it, since the south and east sides are cut away. The map's "SKATEBOARDING" wall is not confirmed to be the frames' sign wall.
+- **Room dimensions**: the 20-25 m by 14-17 m extent comes from one anchor (the half pipe flat at about 8 m) and is low confidence. The height of the raised north-east block and of every wall is not shown.
+- **Box pile numbering**: the guide's five piles cannot be matched one to one to the five circles. R1 fits guide piles 2 and 3, R2 and R3 both fit pile 4, and R5 sits in shadow under the north-east block.
+- **Floating icon heights**: all icons are drawn above their floor position by an unknown height, so ground positions and heights come from the guide text only.
+- **Start position and roll-ins**: the blue start arrow is on the raised north-east block, and the guide's "left" and "right" roll-ins are not matched to the two lanes with confidence. The function of the block (roof, ramp or platform) is not shown.
+- **Dark pit M13**: unidentified; it may be a hollow, a dark ramp or a drain.
+- **Floor line near K**: a thin dark line with three ticks at about (120,490)-(180,540) in the south-west bay is either a floor marking or a low rail; unresolved.
+- **Quarter pipe naming**: the guide's "wide", "winding" and "U-shaped" quarter pipes are not mapped to M1, M6 and M8 with confidence. M1 is the best fit for the winding pipe (curved end). The U-shape on the guide's wide pipe is not visible on the map.
+- **Half pipe sides**: the map shows two coping lines, but not whether both sides are full-height transitions of the same size.
+- **Relationship between the wide plywood and wide slotted quarter pipes**: the frames and the map do not settle which map structure is which.
+- **The "large ramp slope with lattice shadows"** at the right of frames 154, 155 and 191: possibly the sloped lanes under the north-east block, not confirmed.
+- **Glass corridor versus secret room**: the map shows one hanging box (M5), so they are probably one space. The tape room's exact access point and the interior length are not shown.
 - **Exact heights and widths**: every size is a skater-scale ratio from an oblique view and is low confidence. The tallest ramps never show their coping in frame.
 - **Frames 215 and 216**: extreme top-down camera angles that do not map to a known structure.
-- **Remake versus original differences**: which props and textures are remake-only is not known. Layout is assumed to match the original, which the frames cannot confirm.
-- **Hidden surfaces**: backs of the ramps, the underside of the decks and the space behind the mezzanine are never on camera.
+- **Remake versus original differences**: the map render is also a remake render. Which props and textures are remake-only is not known. Layout is assumed to match the original.
+- **Hidden surfaces**: backs of the ramps, the underside of the decks and the space behind the mezzanine and the north-east block are never on camera.
