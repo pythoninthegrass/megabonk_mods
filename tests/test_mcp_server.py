@@ -8,6 +8,7 @@ import re
 import struct
 import threading
 import time
+import toon_format
 import zlib
 from mcp.client import Client
 from pathlib import Path
@@ -569,3 +570,126 @@ async def test_screenshot_rejects_bad_scale_and_crop(tmp_path, monkeypatch, args
     result = await screenshot_with(tmp_path, monkeypatch, args)
     assert result.is_error
     assert message in result.content[0].text
+
+
+TRICKY = {
+    "quote": 'say "hi"',
+    "comma": "a,b,c",
+    "colon": "key: value",
+    "newline": "line1\nline2",
+    "rows": [{"name": "a,b", "x": 1}, {"name": 'q"', "x": 2}],
+    "none": None,
+}
+
+
+async def call_state(tmp_path, monkeypatch, result_body):
+    harness = setup_harness(tmp_path, monkeypatch)
+    stop = start_fake_mod(harness, lambda p: ok_result(p, result_body))
+    try:
+        async with Client(mcp_server.mcp) as client:
+            return await client.call_tool("state", {})
+    finally:
+        stop.set()
+
+
+async def test_default_encoding_is_indented_json_with_structured_content(tmp_path, monkeypatch) -> None:
+    result = await call_state(tmp_path, monkeypatch, {"a": 1})
+    body = {"command": "state", "ok": True, "result": {"a": 1}}
+    assert result.content[0].text == json.dumps(body, indent=2)
+    assert result.structured_content == {"result": body}
+
+
+async def test_json_min_encoding_is_compact_text_only(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("MEGABONK_MCP_ENCODING", "json-min")
+    result = await call_state(tmp_path, monkeypatch, TRICKY)
+    assert not result.is_error
+    assert "\n  " not in result.content[0].text
+    assert json.loads(result.content[0].text)["result"] == TRICKY
+    assert result.structured_content is None
+
+
+async def test_toon_encoding_round_trips_tricky_strings(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("MEGABONK_MCP_ENCODING", "toon")
+    result = await call_state(tmp_path, monkeypatch, TRICKY)
+    assert not result.is_error
+    assert toon_format.decode(result.content[0].text)["result"] == TRICKY
+    assert result.structured_content is None
+
+
+@pytest.mark.parametrize("encoding", ["json", "json-min", "toon"])
+async def test_none_result_has_no_content(tmp_path, monkeypatch, encoding) -> None:
+    monkeypatch.setenv("MEGABONK_MCP_ENCODING", encoding)
+    harness = setup_harness(tmp_path, monkeypatch)
+    stop = start_fake_mod(harness, lambda p: ("done", None))
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("state", {})
+    finally:
+        stop.set()
+    assert not result.is_error
+    assert result.content == []
+
+
+async def test_unknown_encoding_is_a_tool_error(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("MEGABONK_MCP_ENCODING", "yaml")
+    result = await call_state(tmp_path, monkeypatch, {"a": 1})
+    assert result.is_error
+    assert "MEGABONK_MCP_ENCODING" in result.content[0].text
+    assert "yaml" in result.content[0].text
+
+
+async def test_errors_are_not_re_encoded(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("MEGABONK_MCP_ENCODING", "toon")
+    harness = setup_harness(tmp_path, monkeypatch)
+    rejected = json.dumps({"command": "state", "ok": False, "error": "no player here"})
+    stop = start_fake_mod(harness, lambda p: ("rejected", rejected))
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("state", {})
+    finally:
+        stop.set()
+    assert result.is_error
+    assert result.content[0].text == "Error executing tool state: no player here"
+
+
+async def test_paths_tool_goes_through_the_encoding(tmp_path, monkeypatch) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    monkeypatch.setenv("MEGABONK_MCP_ENCODING", "toon")
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("paths", {})
+    decoded = toon_format.decode(result.content[0].text)
+    assert set(decoded) == {"game_dir", "harness", "latest_log", "levels_dir"}
+
+
+async def test_log_tools_stay_plain_text_under_toon(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    monkeypatch.setenv("MEGABONK_MCP_ENCODING", "toon")
+    log = mcp_server.run.latest_log_path(harness.parent)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text("DevHarness: enabled\nKillFloor: armed\n")
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("log_wait", {"pattern": "KillFloor"})
+    assert result.content[0].text == "KillFloor: armed"
+
+
+def test_toon_encode_is_not_the_stub_release() -> None:
+    assert toon_format.encode({"a": [{"x": 1}, {"x": 2}]}) == "a[2]{x}:\n  1\n  2"
+
+
+FIXTURES = sorted((Path(__file__).parent / "fixtures" / "mcp_payloads").glob("*.json"))
+
+
+@pytest.mark.parametrize("fixture", FIXTURES, ids=lambda f: f.stem)
+@pytest.mark.parametrize("encoding", ["json", "json-min", "toon"])
+async def test_captured_payloads_round_trip(tmp_path, monkeypatch, fixture, encoding) -> None:
+    monkeypatch.setenv("MEGABONK_MCP_ENCODING", encoding)
+    body = json.loads(fixture.read_text())
+    harness = setup_harness(tmp_path, monkeypatch)
+    stop = start_fake_mod(harness, lambda p: ("done", json.dumps(body)))
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("state", {})
+    finally:
+        stop.set()
+    text = result.content[0].text
+    assert (toon_format.decode(text) if encoding == "toon" else json.loads(text)) == body

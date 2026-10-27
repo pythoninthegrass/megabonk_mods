@@ -6,6 +6,7 @@
 #     "mcp>=2.3,<3",
 #     "python-decouple>=3.8",
 #     "pillow>=11",
+#     "toon-format==1.2.0",
 # ]
 # [tool.uv]
 # exclude-newer = "2026-10-31T00:00:00Z"
@@ -23,11 +24,13 @@ Run: uv run --script scripts/mcp_server.py
 
 import anyio
 import io
+import json
 import os
 import re
 import sys
 import tempfile
 import time
+import toon_format
 from pathlib import Path
 from typing import Literal
 
@@ -37,12 +40,15 @@ import run
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context, Image
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp_types import CallToolResult, TextContent
 from PIL import Image as PilImage
 
 TIMEOUT = 15.0
 LAUNCH_MARKER = "DevHarness: enabled"
 DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parent.parent / ".tools" / "evidence"
 LOG_POLL_INTERVAL = 0.2
+ENCODING_ENV = "MEGABONK_MCP_ENCODING"
+ENCODINGS = ("json", "json-min", "toon")
 # Mirrors KeyNames.All in src/MegabonkLevels.Mod/key_names.cs; a test keeps the two in step.
 KEY_NAMES = (
     *"ABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -65,6 +71,28 @@ def _harness() -> Path:
     return _game_dir() / "harness"
 
 
+def _encoding() -> str:
+    encoding = os.environ.get(ENCODING_ENV, "json") or "json"
+    if encoding not in ENCODINGS:
+        raise ToolError(f"{ENCODING_ENV} must be one of {', '.join(ENCODINGS)}, got {encoding!r}")
+    return encoding
+
+
+def _encode(payload: dict | None, wrap: bool = True) -> CallToolResult:
+    """Encode a structured tool result per MEGABONK_MCP_ENCODING; json keeps indented text plus structured_content, the others send text only."""
+    encoding = _encoding()
+    if payload is None:
+        return CallToolResult(content=[], structured_content={"result": None} if encoding == "json" and wrap else None)
+    if encoding == "toon":
+        text = toon_format.encode(payload)
+    elif encoding == "json-min":
+        text = json.dumps(payload, separators=(",", ":"))
+    else:
+        text = json.dumps(payload, indent=2)
+    structured = ({"result": payload} if wrap else payload) if encoding == "json" else None
+    return CallToolResult(content=[TextContent(type="text", text=text)], structured_content=structured)
+
+
 async def _request(harness: Path, payload: dict[str, object], timeout: float) -> dict | None:
     """Send a harness command off the event loop; raise ToolError on a rejection, a timeout or an ok:false result."""
     outcome, result = await anyio.to_thread.run_sync(run.request_result, harness, payload, timeout)
@@ -74,20 +102,29 @@ async def _request(harness: Path, payload: dict[str, object], timeout: float) ->
     raise ToolError(error if error else f"{payload['command']} {outcome}")
 
 
+async def _command(harness: Path, payload: dict[str, object], timeout: float) -> CallToolResult:
+    """Send a harness command and encode its result; the encoding is validated first so a bad setting does not follow a game action."""
+    _encoding()
+    return _encode(await _request(harness, payload, timeout))
+
+
 @mcp.tool()
-async def paths() -> dict[str, str]:
+async def paths() -> CallToolResult:
     """Return the resolved game_dir, harness folder, latest_log path and levels_dir (where the editor saves custom levels), so harness command files can be written without hand-typing the prefix path."""
     game = _game_dir()
-    return {
-        "game_dir": str(game),
-        "harness": str(game / "harness"),
-        "latest_log": str(run.latest_log_path(game)),
-        "levels_dir": str(game / "UserData" / "Levels"),
-    }
+    return _encode(
+        {
+            "game_dir": str(game),
+            "harness": str(game / "harness"),
+            "latest_log": str(run.latest_log_path(game)),
+            "levels_dir": str(game / "UserData" / "Levels"),
+        },
+        wrap=False,
+    )
 
 
 @mcp.tool()
-async def relaunch(ctx: Context, level: str | None = None) -> dict | None:
+async def relaunch(ctx: Context, level: str | None = None) -> CallToolResult:
     """Quit and relaunch the game, load a level, go invulnerable and enter editor; returns the final state."""
     game_dir = _game_dir()
     harness = game_dir / "harness"
@@ -106,14 +143,14 @@ async def relaunch(ctx: Context, level: str | None = None) -> dict | None:
     ok = await anyio.to_thread.run_sync(run.relaunch, harness, game_dir, level_path, TIMEOUT, task, on_step, errors.append)
     if not ok:
         raise ToolError("; ".join(errors) if errors else "relaunch failed")
-    return await _request(harness, run.build_command("state"), TIMEOUT)
+    return await _command(harness, run.build_command("state"), TIMEOUT)
 
 
 @mcp.tool()
-async def load(level: str) -> dict | None:
+async def load(level: str) -> CallToolResult:
     """Load a level file and start it."""
     payload = run.build_command("load-level", run.to_game_path(Path(level).resolve()))
-    return await _request(_harness(), payload, TIMEOUT)
+    return await _command(_harness(), payload, TIMEOUT)
 
 
 @mcp.tool()
@@ -190,37 +227,37 @@ def _shrink_png(data: bytes, scale: float | None, crop: list[int] | None) -> byt
 
 
 @mcp.tool()
-async def state() -> dict | None:
+async def state() -> CallToolResult:
     """Return the game's current state (level, editor, player, tool, selection)."""
-    return await _request(_harness(), run.build_command("state"), TIMEOUT)
+    return await _command(_harness(), run.build_command("state"), TIMEOUT)
 
 
 @mcp.tool()
-async def editor(on: bool) -> dict | None:
+async def editor(on: bool) -> CallToolResult:
     """Enter or leave editor mode (frozen run, free-fly camera), like pressing F8."""
-    return await _request(_harness(), run.build_editor_command(on), TIMEOUT)
+    return await _command(_harness(), run.build_editor_command(on), TIMEOUT)
 
 
 @mcp.tool()
-async def freeze() -> dict | None:
+async def freeze() -> CallToolResult:
     """Pause gameplay through MyTime.Pause."""
-    return await _request(_harness(), run.build_command("freeze"), TIMEOUT)
+    return await _command(_harness(), run.build_command("freeze"), TIMEOUT)
 
 
 @mcp.tool()
-async def resume() -> dict | None:
+async def resume() -> CallToolResult:
     """Unpause gameplay through MyTime.Unpause."""
-    return await _request(_harness(), run.build_command("resume"), TIMEOUT)
+    return await _command(_harness(), run.build_command("resume"), TIMEOUT)
 
 
 @mcp.tool()
-async def invulnerable(on: bool) -> dict | None:
+async def invulnerable(on: bool) -> CallToolResult:
     """Make the player survive enemy damage (on) or restore normal damage (off)."""
-    return await _request(_harness(), run.build_command("invulnerable" if on else "vulnerable"), TIMEOUT)
+    return await _command(_harness(), run.build_command("invulnerable" if on else "vulnerable"), TIMEOUT)
 
 
 @mcp.tool()
-async def camera(position: list[float] | None = None, rotation: list[float] | None = None, clear: bool = False) -> dict | None:
+async def camera(position: list[float] | None = None, rotation: list[float] | None = None, clear: bool = False) -> CallToolResult:
     """Hold the camera at a world pose (position and rotation euler degrees), or return it to the game with clear."""
     if clear:
         payload = run.build_command("camera-clear")
@@ -228,18 +265,18 @@ async def camera(position: list[float] | None = None, rotation: list[float] | No
         payload = run.build_camera_command(tuple(position), tuple(rotation))
     else:
         raise ToolError("camera: give position and rotation, or clear=true")
-    return await _request(_harness(), payload, TIMEOUT)
+    return await _command(_harness(), payload, TIMEOUT)
 
 
 @mcp.tool()
-async def key(key: str, modifiers: list[str] | None = None, action: Literal["tap", "down", "up"] = "tap") -> dict | None:
+async def key(key: str, modifiers: list[str] | None = None, action: Literal["tap", "down", "up"] = "tap") -> CallToolResult:
     """Inject a key for the editor (not the game's own input). Valid names are listed under "Key, mouse and type commands" in docs/development.md (A-Z, Alpha0-9, F1-F12, arrows, Escape, Return, Space, Tab, shift/control/alt). tap presses and releases over the next frames (one frame down, one up; with modifiers they are held around it, four frames); down holds until up. modifiers only apply to tap. Returns once the mod queued it, so take a screenshot after a moment to see the effect."""
     if modifiers and action != "tap":
         raise ToolError("key: modifiers are only valid with action=tap")
     unknown = [name for name in (key, *(modifiers or [])) if name not in KEY_NAMES]
     if unknown:
         raise ToolError(f"key: the mod does not accept {unknown}; valid names: {', '.join(KEY_NAMES)}")
-    return await _request(_harness(), run.build_key_command(action, key, modifiers), TIMEOUT)
+    return await _command(_harness(), run.build_key_command(action, key, modifiers), TIMEOUT)
 
 
 @mcp.tool()
@@ -248,7 +285,7 @@ async def mouse(
     x: float | None = None,
     y: float | None = None,
     button: int = 0,
-) -> dict | None:
+) -> CallToolResult:
     """Inject mouse input for the editor. x and y are screenshot pixels with the origin at the top left, the same space as the screenshot tool and the screen field of state. move needs x and y; click, down and up take an optional x and y (both or neither) that move the pointer first, and button 0 left, 1 right, 2 middle; clear returns the pointer to the real cursor. A click is one frame down then one frame up, so a screenshot straight after may predate its effect."""
     if (x is None) != (y is None):
         raise ToolError("mouse: give both or neither of x and y")
@@ -256,44 +293,44 @@ async def mouse(
         raise ToolError("mouse: move needs x and y")
     position = (x, y) if x is not None and y is not None else None
     payload = run.build_mouse_command(action, position, button if action in ("click", "down", "up") else None)
-    return await _request(_harness(), payload, TIMEOUT)
+    return await _command(_harness(), payload, TIMEOUT)
 
 
 @mcp.tool()
-async def ui_tree(x: float | None = None, y: float | None = None) -> dict | None:
+async def ui_tree(x: float | None = None, y: float | None = None) -> CallToolResult:
     """List the editor's widgets (toolbar buttons and tools, load list, palette entries and tabs) as {name, x, y, width, height, enabled} in screenshot pixels, the space of the screenshot and mouse tools. Give both x and y to also get `at`, the name of the first listed widget under that pixel (null over the world). Names are what click_widget takes; enabled is false for a button that ignores clicks (Undo with nothing to undo); anything on another palette page is not listed. Needs editor mode."""
     if (x is None) != (y is None):
         raise ToolError("ui_tree: give both or neither of x and y")
     position = (x, y) if x is not None and y is not None else None
-    return await _request(_harness(), run.build_ui_tree_command(position), TIMEOUT)
+    return await _command(_harness(), run.build_ui_tree_command(position), TIMEOUT)
 
 
 @mcp.tool()
-async def save_level(level: str | None = None) -> dict | None:
+async def save_level(level: str | None = None) -> CallToolResult:
     """Save the editor's level like the Save button, optionally as `level` (normalized to a safe *.mblevel.json file name; omitted, the save field's text is used). Returns {name, path, edits}. Needs editor mode with a live run; a failed write is an error."""
-    return await _request(_harness(), run.build_save_level_command(level), TIMEOUT)
+    return await _command(_harness(), run.build_save_level_command(level), TIMEOUT)
 
 
 @mcp.tool()
-async def list_levels() -> dict | None:
+async def list_levels() -> CallToolResult:
     """List the saved custom-level files as {directory, levels}; the names are what the editor's Load list shows and what a load needs after the directory."""
-    return await _request(_harness(), run.build_command("list-levels"), TIMEOUT)
+    return await _command(_harness(), run.build_command("list-levels"), TIMEOUT)
 
 
 @mcp.tool()
-async def click_widget(name: str) -> dict | None:
+async def click_widget(name: str) -> CallToolResult:
     """Left-click the centre of the named editor widget, e.g. Save, Undo, Tool:Place, Tab:All, Palette:<entry id>; take names from ui_tree (case-insensitive). Returns the widget's rect. An unknown name is an error that lists the known names, and a disabled widget is an error too. Like mouse click, the effect lands over the next frames, so read state or take a screenshot after a moment. Tool:<tool> selects that tool, same as its hotkey (key Alpha1 to Alpha6). Needs editor mode."""
-    return await _request(_harness(), run.build_click_widget_command(name), TIMEOUT)
+    return await _command(_harness(), run.build_click_widget_command(name), TIMEOUT)
 
 
 @mcp.tool()
-async def type_text(text: str) -> dict | None:
+async def type_text(text: str) -> CallToolResult:
     """Type 1 to 200 characters into the focused editor text field, one character per frame; \\b is backspace and \\n is return. A screenshot straight after may show only part of the text."""
-    return await _request(_harness(), run.build_type_command(text), TIMEOUT)
+    return await _command(_harness(), run.build_type_command(text), TIMEOUT)
 
 
 @mcp.tool()
-async def teleport(position: list[float] | None = None, cell: list[int] | None = None) -> dict | None:
+async def teleport(position: list[float] | None = None, cell: list[int] | None = None) -> CallToolResult:
     """Move the player. Give exactly one of position (world [x, y, z], the feet point) or cell ([cx, cz], the grid used by state; needs a loaded custom level). Returns the body position and cell at the moment of the call; the transform catches up within about a second, so wait before reading state. Targets below the kill floor are rejected."""
     if (position is None) == (cell is None):
         raise ToolError("teleport: give exactly one of position or cell")
@@ -304,13 +341,13 @@ async def teleport(position: list[float] | None = None, cell: list[int] | None =
     payload = run.build_teleport_command(
         tuple(position) if position is not None else None, tuple(cell) if cell is not None else None
     )
-    return await _request(_harness(), payload, TIMEOUT)
+    return await _command(_harness(), payload, TIMEOUT)
 
 
 @mcp.tool()
-async def dismiss_levelup(choice: int = 0) -> dict | None:
+async def dismiss_levelup(choice: int = 0) -> CallToolResult:
     """Pick the upgrade at the zero-based index choice in the open level-up dialog without a click. With no dialog open it succeeds and changes nothing (dialogWasOpen false)."""
-    return await _request(_harness(), run.build_dismiss_levelup_command(choice), TIMEOUT)
+    return await _command(_harness(), run.build_dismiss_levelup_command(choice), TIMEOUT)
 
 
 @mcp.tool()

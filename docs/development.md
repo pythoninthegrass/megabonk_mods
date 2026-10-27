@@ -126,6 +126,31 @@ If a step fails, `log_tail(pattern="Harness|Error")` shows whether the mod saw t
 
 Register it by adding the `megabonk` entry under `mcpServers` in `.mcp.json` (command `uv`, args `["run", "--script", "scripts/mcp_server.py"]`); the repo ships it already. Confirm it with `/mcp`, which lists `megabonk` as connected.
 
+### Result encoding
+
+Structured tool results (every tool that returns the harness result, plus `paths`) pass through one function, `_encode` in `scripts/mcp_server.py`. The `MEGABONK_MCP_ENCODING` environment variable, set in the `megabonk` entry of `.mcp.json`, selects the format:
+
+| Value | Text content | `structuredContent` |
+| --- | --- | --- |
+| `json` (default, also when unset) | indented JSON | present, identical to the payload |
+| `json-min` | JSON without whitespace | omitted |
+| `toon` | [TOON](https://github.com/toon-format/toon) | omitted |
+
+`json-min` and `toon` omit `structuredContent` because a client that forwards it would send the payload twice and cancel the saving. An unknown value is a tool error raised before the command is sent, so a bad setting does not follow a game action. Errors, screenshots (image content), `log_tail`, `log_wait` and `quit` are never re-encoded.
+
+`toon-format` is pinned to `1.2.0` in the script header and in the `scripts:test` command. An unpinned install resolves to `0.1.0`, a stub whose `encode()` raises `NotImplementedError`; `test_toon_encode_is_not_the_stub_release` fails on it.
+
+The default was chosen by a rule fixed before measuring: switch to TOON only if its total token count is at least 15% below minified JSON across the captured `state`, `list_levels` and `ui_tree` payloads, and no single payload is more than 5% worse than minified JSON. The payloads are in `tests/fixtures/mcp_payloads/`, captured from a live editor session on the example forest level. Tokens were counted with tiktoken `cl100k_base`, a proxy for Claude's tokenizer, so treat the percentages as approximate.
+
+| Payload | JSON (indented) | JSON (minified) | TOON | TOON vs minified |
+| --- | --- | --- | --- | --- |
+| `state` | 176 | 100 | 122 | 22.0% worse |
+| `list_levels` | 95 | 69 | 71 | 2.9% worse |
+| `ui_tree` (54 widgets) | 3128 | 1979 | 1375 | 30.5% better |
+| Total | 3399 | 2148 | 1568 | 27.0% better |
+
+TOON wins on the uniform array of widgets and loses on the small nested `state` object, so the total passes the 15% bar and the per-payload bar fails. The default stays `json`. Set `MEGABONK_MCP_ENCODING=toon` for sessions that read many `ui_tree` results. The uniform-rows case from the live-object query was not measured because that query does not exist yet; re-measure once it lands, since its rows are the shape TOON suits best.
+
 ## Launching under Wine (macOS)
 
 Plain Wine is the default macOS runtime. It runs against the Wine prefix named by `MEGABONK_WINE_PREFIX` (default `~/.local/share/megabonk/wine`), which has to hold a Windows Steam install with Megabonk; the repo does not create or populate a prefix. To reuse the bottle CrossOver created, set `MEGABONK_WINE_PREFIX=~/Library/Application Support/CrossOver/Bottles/Steam` in `.env`, and its saves, Steam login and installed game carry over. The setup was verified with Wine 11.18 and DXVK-macOS on Apple silicon with Rosetta, using that bottle as the prefix.
