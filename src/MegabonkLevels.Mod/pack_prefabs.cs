@@ -42,6 +42,28 @@ public static class PackPrefabs
         return PlaceholderFor(key);
     }
 
+    // The Packs palette entries for every pack directory; manifest-listed assets absent from the bundle are warned about once and not listed.
+    public static IReadOnlyList<PaletteEntry> ListEntries()
+    {
+        var root = Path.Combine(MelonEnvironment.GameRootDirectory, "UserData", PacksDirectoryName);
+        if (!Directory.Exists(root))
+        {
+            return Array.Empty<PaletteEntry>();
+        }
+
+        var packs = Directory.GetDirectories(root).Select(Path.GetFileName).ToArray();
+        var listing = PackPaletteEntries.Build(packs, Catalog.AssetNames, Catalog.ManifestOf);
+        foreach (var (pack, asset) in listing.MissingFromBundle)
+        {
+            if (Warned.Add($"manifest-asset:{pack}/{asset}"))
+            {
+                _logger.Warning($"Packs: manifest of '{pack}' lists '{asset}' but its bundle does not hold it; not listed in the palette.");
+            }
+        }
+
+        return listing.Entries;
+    }
+
     private static IReadOnlyDictionary<string, GameObject> LoadPack(string pack)
     {
         var directory = PackDirectory(pack);

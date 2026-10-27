@@ -254,7 +254,7 @@ public static class EditorPalette
 
         var interactables = Object.FindObjectOfType<MapGenerationController>()?.interactablesSpawner;
         var catalog = CatalogPrefabs.Describe(mapData, interactables);
-        var entries = PaletteCatalogBuilder.Build(catalog, id => PrefabName(id, interactables));
+        var entries = PaletteCatalogBuilder.Build(catalog, id => PrefabName(id, interactables)).Concat(PackPrefabs.ListEntries()).ToList();
         Selection.Replace(entries);
         _mapLabel = catalog.Map.ToString();
         RenderThumbnails(entries, interactables);
@@ -279,6 +279,11 @@ public static class EditorPalette
     {
         try
         {
+            if (id.Namespace == CatalogNamespace.Bundle)
+            {
+                return PackPrefabs.Resolve(id);
+            }
+
             return CatalogPrefabs.Resolve(CatalogRoute.Parse(id), interactables);
         }
         catch (System.Exception)

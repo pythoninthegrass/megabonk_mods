@@ -14,6 +14,7 @@ public readonly record struct PaletteGroup(int Stage, PaletteCategory Category)
         PaletteCategory.FlatTile => $"Stage {Stage} flat tiles",
         PaletteCategory.SpecificTile => $"Stage {Stage} specific tiles",
         PaletteCategory.Shrine => "Shrines",
+        PaletteCategory.Pack => "Packs",
         _ => "Interactables",
     };
 }
@@ -37,6 +38,7 @@ public static class PaletteCategoryNames
         PaletteCategory.FlatTile => "Flat tiles",
         PaletteCategory.SpecificTile => "Specific tiles",
         PaletteCategory.Shrine => "Shrines",
+        PaletteCategory.Pack => "Packs",
         _ => "Interactables",
     };
 
@@ -46,6 +48,7 @@ public static class PaletteCategoryNames
         PaletteCategory.FlatTile => "Flat",
         PaletteCategory.SpecificTile => "Spec",
         PaletteCategory.Shrine => "Shrn",
+        PaletteCategory.Pack => "Pack",
         _ => "Item",
     };
 }

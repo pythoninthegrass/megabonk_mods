@@ -37,6 +37,24 @@ public sealed class PackCatalog<T> where T : class
         _loadManifest = loadManifest ?? (_ => null);
     }
 
+    // The pack's bundle asset names, or null when the pack is not installed; loads the pack on first use.
+    public IReadOnlyCollection<string> AssetNames(string pack) => Load(pack).Assets?.Keys.ToArray();
+
+    // The pack's valid manifest, or null when it has none or is not installed.
+    public PackManifest? ManifestOf(string pack) => Load(pack).Manifest;
+
+    private (IReadOnlyDictionary<string, T> Assets, PackManifest? Manifest) Load(string pack)
+    {
+        if (!_packs.TryGetValue(pack, out var loaded))
+        {
+            var assets = _loadPack(pack);
+            loaded = (assets, assets is null ? null : _loadManifest(pack));
+            _packs[pack] = loaded;
+        }
+
+        return loaded;
+    }
+
     public PackLookup<T> Resolve(CatalogId id)
     {
         if (id.Namespace != CatalogNamespace.Bundle)
@@ -45,12 +63,7 @@ public sealed class PackCatalog<T> where T : class
         }
 
         var pack = id.Segments[0];
-        if (!_packs.TryGetValue(pack, out var loaded))
-        {
-            var assets = _loadPack(pack);
-            loaded = (assets, assets is null ? null : _loadManifest(pack));
-            _packs[pack] = loaded;
-        }
+        var loaded = Load(pack);
 
         if (loaded.Assets is null)
         {

@@ -32,5 +32,5 @@ public static class PalettePick
     public static PaletteEntry? FindByCatalogId(IReadOnlyList<PaletteEntry> entries, CatalogId id) =>
         entries.Cast<PaletteEntry?>().FirstOrDefault(e => e.Value.Id.Equals(id));
 
-    private static bool IsStageIndependent(PaletteEntry entry) => entry.Category is PaletteCategory.Shrine or PaletteCategory.Interactable;
+    private static bool IsStageIndependent(PaletteEntry entry) => entry.Category is PaletteCategory.Shrine or PaletteCategory.Interactable or PaletteCategory.Pack;
 }

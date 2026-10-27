@@ -69,7 +69,9 @@ An author who wants full control can assign an MK.Toon material in the authoring
 
 If the pack directory does not exist, or the asset is not in it, `PackPrefabs.Resolve` returns a placeholder cube named `Missing:<catalogId>`, logs one warning per catalogId and shows an editor toast. Nothing throws. The placeholder is spawned like any object, so the original catalogId stays in the level and is saved unchanged.
 
-Assets in a pack are not listed in the editor palette yet; place them through a level file or the harness.
+### Palette entries
+
+The editor palette lists installed pack assets in one `Packs` tab on every map, as `bundle:<pack>/<asset>` entries named after the asset and ordered by pack id, then asset name; the pack id is searchable and shown in the tooltip's `catalogId`. A pack with a valid manifest lists the assets that the manifest names and the bundle holds. A manifest asset the bundle lacks is logged as a warning and not listed, and a bundle asset the manifest omits is not listed. A pack with no manifest, or an invalid one, lists every prefab in its bundle. Packs load once per session, so a pack installed while the game runs appears in the palette only after a relaunch.
 
 ### Manifests and pack versions
 

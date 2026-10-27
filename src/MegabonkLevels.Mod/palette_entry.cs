@@ -7,6 +7,7 @@ public enum PaletteCategory
     SpecificTile,
     Shrine,
     Interactable,
+    Pack,
 }
 
 // Stage is 0 for entries that are not stage-scoped (shrines, interactables).
