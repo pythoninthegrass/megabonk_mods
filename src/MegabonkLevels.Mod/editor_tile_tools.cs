@@ -781,6 +781,15 @@ public static class EditorTileTools
             _logger.Warning(warning);
         }
 
+        foreach (var (packId, recordedVersion) in level.Packs)
+        {
+            var packWarning = GamePackVersionCheck.MismatchWarning(packId, recordedVersion, PackPrefabs.ManifestVersion(packId));
+            if (packWarning != null)
+            {
+                _logger.Warning(packWarning);
+            }
+        }
+
         if (!LiveEditPatch.ResetAndApplyEdits(level.Edits, _logger))
         {
             Fail("load failed: no active run");

@@ -199,7 +199,39 @@ public static class LiveEditPatch
             StageIndex: stageIndex,
             Tier: MapController.runConfig?.mapTierIndex ?? 0,
             Seed: session.TileGen.debugSeed,
+            Packs: BuildPacks(edits),
             Edits: edits.ToList());
+    }
+
+    // The packs referenced by the level's edits, mapped to the version recorded in each installed
+    // manifest (a pack with no manifest is skipped). Editor save writes this so the level-side version
+    // check can warn when a pack was updated since the level was saved.
+    private static IReadOnlyDictionary<string, string> BuildPacks(IReadOnlyList<EditOp> edits)
+    {
+        var referenced = new Dictionary<string, string>();
+        foreach (var op in edits)
+        {
+            if (op.OpType != PlaceObject.OpType)
+            {
+                continue;
+            }
+
+            var place = PlaceObject.FromEditOp(op);
+            if (CatalogId.TryParse(place.CatalogId, out var id, out _) && id.Namespace == CatalogNamespace.Bundle)
+            {
+                var pack = id.Segments[0];
+                if (!referenced.ContainsKey(pack))
+                {
+                    var version = PackPrefabs.ManifestVersion(pack);
+                    if (version != null)
+                    {
+                        referenced[pack] = version;
+                    }
+                }
+            }
+        }
+
+        return referenced;
     }
 
     public static string LevelsDirectoryPath()

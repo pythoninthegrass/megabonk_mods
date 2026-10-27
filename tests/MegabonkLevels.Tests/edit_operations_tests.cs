@@ -228,6 +228,7 @@ public class EditOperationsInLevelFileTests
             StageIndex: 0,
             Tier: 1,
             Seed: 20261007,
+            Packs: new Dictionary<string, string>(),
             Edits:
             [
                 new SetTileHeight(0, 0, 2).ToEditOp(),

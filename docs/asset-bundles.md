@@ -45,6 +45,28 @@ If the pack directory does not exist, or the asset is not in it, `PackPrefabs.Re
 
 Assets in a pack are not listed in the editor palette yet; place them through a level file or the harness.
 
+### Manifests and pack versions
+
+Every pack directory holds a `manifest.json` (`UserData/LevelPacks/<packId>/manifest.json`) describing the pack. `PackManifest.Parse` reads and validates it in Unity-free code (`pack_manifest.cs`), unit tested for malformed JSON, missing fields, a non-string field, a non-list `assets`, and an `id` that differs from the folder name. The fields are:
+
+| field | type | meaning |
+| --- | --- | --- |
+| `id` | string | Must equal the pack folder name and the `<pack>` segment of the `bundle:<pack>/<asset>` catalogIds this pack serves. `PackManifest.Parse` takes the folder name and rejects a manifest whose `id` differs from it. |
+| `name` | string | Human-readable pack name. |
+| `author` | string | Pack author. |
+| `version` | string | Pack version, compared against the level's recorded version (see below). |
+| `assets` | string[] | The asset (prefab) names the pack provides, matching the `<asset>` segment of its catalogIds. |
+
+`PackCatalog.Resolve` (in `pack_catalog.cs`) reads a pack's manifest once, when it first loads the pack, through the manifest loader `PackPrefabs` supplies. For a pack with a manifest, an asset absent from the manifest `assets` list resolves as `AssetMissing` even when the bundle holds it, so it produces the `Missing:<catalogId>` placeholder, warning, and toast. This keeps the manifest authoritative: a pack that ships a bundle but forgets to list an asset surfaces the placeholder instead of silently loading it. A pack with no `manifest.json` is not filtered. A `manifest.json` that fails validation (including an `id` that differs from the folder) is logged once as a warning and leaves the pack unfiltered, the same as having none.
+
+`PackPrefabs.ManifestVersion` returns a pack's manifest `version` for the level-side check, or null when the pack has no valid manifest.
+
+### Level-side pack versions
+
+The level schema carries an optional top-level `packs` map (`{"<packId>": "<version>"}`), added at schema version 2. `LevelFileSerializer` migrates a version 1 level (no `packs`) to version 2 with an empty `packs` map; a version 2 level keeps its `packs` as-is. The editor save fills `packs` from the installed manifests of the packs the level references: `LiveEditPatch.SnapshotLevelFile` collects the `bundle:` catalogIds in the edit list and records each referenced pack's manifest version (`LiveEditPatch.BuildPacks`). A level with no `bundle:` edits has an empty `packs` map.
+
+`GamePackVersionCheck.MismatchWarning` (in `game_pack_version_check.cs`, mirroring `GameBuildIdCheck`) compares the level's `packs[<packId>]` to the installed manifest version by exact string match and returns a warning string, or null when they match, or when either side is absent. A level with no `packs` entry for a pack, or a pack with no recorded version, produces no warning. The check runs in both load paths — `LevelLoaderPatch.Start` (disk load) and `EditorTileTools.LoadSelected` (editor load) — logs a warning, and the run still starts; it never blocks or crashes. A missing pack version just means there is nothing to compare, so no warning.
+
 ## Not yet established
 
 - The Linux bundle builds but has not been loaded. MelonLoader segfaults the native Linux build, so there is no mod-side harness there to run it.

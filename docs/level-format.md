@@ -22,19 +22,24 @@ One consequence of staying in the same project: the Mod project compiles against
 | `stageIndex` | `int` | Which stage within the map. |
 | `tier` | `int` | Difficulty tier. |
 | `seed` | `int` | **The Tiles-map `debugSeed`** (see [map-generation-determinism.md](map-generation-determinism.md)) — the only field confirmed to control reproducible generation. **Never** `MapGenerationController.mapSeed`: that field varies freely per run and has no effect on layout. `ProceduralMesh` maps (Desert) don't yet have a confirmed-controllable seed field at all; storing a `seed` for those maps is "reproducible in practice so far" per that doc, not guaranteed. |
+| `packs` | `IReadOnlyDictionary<string, string>` | Optional map from a referenced pack id to the manifest `version` recorded at save time, used by the pack-version compatibility check (see "Pack versions" below). A level with no `bundle:` edits has an empty map. |
 | `edits` | `EditOp[]` | Ordered list of edit operations applied on top of the generated map. `EditOp(OpType, Target, Payload)` is a minimal shape (string opcode + string target id + a JSON-string payload) that round-trips and migrates correctly independent of any particular operation's payload shape — see "Edit operation types" below. |
 
 ## Migration mechanism
 
 `SchemaMigrator.Migrate` (`level_file_migration.cs`) takes a parsed `JsonObject`, a target version, and a `IReadOnlyDictionary<int, MigrationStep>` keyed by *from*-version. It loops: look up the step registered for the document's current `schemaVersion`, apply it (the step returns a new `JsonObject` with its own, incremented `schemaVersion`), repeat until the target version is reached. Reaching a version with no registered step throws.
 
-`LevelFileSerializer.DeserializeWithMigration` (`level_file_serialization.cs`) calls this with `LevelFile.CurrentSchemaVersion` and a `ProductionSteps` dictionary that is **empty today** — schema version 1 is the only version that has ever shipped, so there is nothing to migrate from yet. Adding a real version 2 later means adding one `[1] = step` entry to `ProductionSteps`; the loop and the public API do not change.
+`LevelFileSerializer.DeserializeWithMigration` (`level_file_serialization.cs`) calls this with `LevelFile.CurrentSchemaVersion` and a `ProductionSteps` dictionary. The only real step is `1 -> 2`, which copies every field across and carries an existing `packs` object over (or writes an empty one) while bumping `schemaVersion` to 2. `SchemaMigrator` reuses the same loop and public API for any future version: adding one `[from] = step` entry to `ProductionSteps` is the whole change.
 
-Since there is no real version 2 to migrate from/to yet, the mechanism itself is exercised directly in `tests/MegabonkLevels.Tests/level_file_tests.cs` (`SchemaMigrator_AppliesRegisteredStepUntilTargetVersionReached`) with a synthetic, test-local step (renaming a field and bumping to a made-up version `2`) — this proves the loop/registry mechanism works without implying a real version 2 schema exists. `SchemaMigrator_MissingStepForOlderVersion_Throws` covers the "no step registered" failure path.
+`SchemaMigrator_AppliesRegisteredStepUntilTargetVersionReached` in `tests/MegabonkLevels.Tests/level_file_tests.cs` still exercises the mechanism with a synthetic, test-local step (renaming a field and bumping to a made-up version `2`), and `SchemaMigrator_MissingStepForOlderVersion_Throws` covers the "no step registered" failure path. The real `1 -> 2` migration is covered by `DeserializeWithMigration_V1WithoutPacks_MigratesToEmptyPacks` and `DeserializeWithMigration_V2WithPacks_PreservesPacks`.
 
 ## Round-trip
 
-`LevelFileSerializer.Serialize`/`Deserialize` round-trip a `LevelFile` through `System.Text.Json`; `level_file_tests.cs`'s `RoundTrip_SerializeThenDeserialize_ProducesEqualLevel` covers this. `LevelFile` overrides `Equals`/`GetHashCode` to compare `Edits` by sequence (the default record-struct equality would otherwise compare the `IReadOnlyList<EditOp>` reference, which differs after a deserialize produces a new list instance).
+`LevelFileSerializer.Serialize`/`Deserialize` round-trip a `LevelFile` through `System.Text.Json`; `level_file_tests.cs`'s `RoundTrip_SerializeThenDeserialize_ProducesEqualLevel` covers this. `LevelFile` overrides `Equals`/`GetHashCode` to compare `Edits` by sequence (the default record-struct equality would otherwise compare the `IReadOnlyList<EditOp>` reference, which differs after a deserialize produces a new list instance). `Packs` is compared as a dictionary by key/value pairs, not by reference, for the same reason.
+
+## Pack versions
+
+The level records the manifest `version` of each pack it references, so a run can warn when a pack changed since the level was saved. The recorded values come from the installed manifests at save time, not from the catalogIds, so the map is `"<packId>": "<manifest version>"`. The compatibility check (`GamePackVersionCheck.MismatchWarning`, mirroring `GameBuildIdCheck`) compares each recorded version to the installed manifest version by exact string match: a mismatch logs a warning and the run still starts, and an absent recorded version or absent installed manifest produces no warning. It runs in both load paths (`LevelLoaderPatch.Start` and `EditorTileTools.LoadSelected`). The editor save fills the map from the manifests of the packs the level references (`LiveEditPatch.BuildPacks`), reading each referenced pack's manifest version (`PackPrefabs.ManifestVersion`).
 
 ## Edit operation types
 
@@ -85,7 +90,7 @@ Rules, checked in this order by `CatalogId.TryParse`/`Parse`:
 3. The (post-prefix) body is split on `/`. Every segment must be non-empty (catches a leading/trailing/doubled `/`) and match `^[A-Za-z0-9_-]+$` (letters, digits, `_`, `-` only).
 4. At least 2 segments are required in both namespaces.
 
-`Bundle` is reserved for future custom AssetBundle packs — nothing produces these ids yet, but the grammar accepts them now so a future pack-loading feature doesn't need to revisit this validator.
+`Bundle` is reserved for custom AssetBundle packs (see "Manifests and pack versions" in [asset-bundles.md](asset-bundles.md)). The grammar accepts `bundle:` ids now, and a pack's assets are validated against its manifest before any bundle is loaded.
 
 **Game-asset segment shapes**, cross-checked against the confirmed runtime catalog organization (`DataManager.Instance.maps[] : MapData` → `stages[] : StageData` → `randomMapObjects[] : RandomMapObject` → `.prefabs[] : GameObject[]`; `StageData.stageTilePrefabs : StageTilePrefabs` with `flatTilePrefabs[]`/`mapSpecificTilesPrefabs[]`; `MapData.shrines[]`, map-scoped not stage-scoped; `SpawnInteractables`'s singular `chest`/`chestFree` fields and `rails[]`) rather than invented independently:
 

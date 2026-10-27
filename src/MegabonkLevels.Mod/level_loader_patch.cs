@@ -47,6 +47,15 @@ public static class LevelLoaderPatch
             logger.Warning(warning);
         }
 
+        foreach (var (packId, recordedVersion) in level.Packs)
+        {
+            var packWarning = GamePackVersionCheck.MismatchWarning(packId, recordedVersion, PackPrefabs.ManifestVersion(packId));
+            if (packWarning != null)
+            {
+                logger.Warning(packWarning);
+            }
+        }
+
         var mapData = FindMapData(level.Map);
         if (mapData == null)
         {

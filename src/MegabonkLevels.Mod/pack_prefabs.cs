@@ -14,7 +14,7 @@ public static class PackPrefabs
 {
     private const string PacksDirectoryName = "LevelPacks";
 
-    private static readonly PackCatalog<GameObject> Catalog = new(LoadPack);
+    private static readonly PackCatalog<GameObject> Catalog = new(LoadPack, ReadManifest);
     private static readonly Dictionary<string, GameObject> Placeholders = new();
     private static readonly HashSet<string> Warned = new();
     private static GameObject _hiddenRoot;
@@ -44,7 +44,7 @@ public static class PackPrefabs
 
     private static IReadOnlyDictionary<string, GameObject> LoadPack(string pack)
     {
-        var directory = Path.Combine(MelonEnvironment.GameRootDirectory, "UserData", PacksDirectoryName, pack);
+        var directory = PackDirectory(pack);
         if (!Directory.Exists(directory))
         {
             return null;
@@ -66,6 +66,36 @@ public static class PackPrefabs
         _logger.Msg($"Packs: loaded pack '{pack}' with {assets.Count} prefab(s).");
         return assets;
     }
+
+    // The version recorded in the pack's manifest, or null when it has no valid manifest. Editor save writes it into the level so a later load can warn if the pack changed.
+    public static string ManifestVersion(string pack) => ReadManifest(pack)?.Version;
+
+    // The pack's parsed manifest.json, or null when the file is absent or invalid; an invalid one is warned about once and leaves the pack unfiltered.
+    private static PackManifest? ReadManifest(string pack)
+    {
+        var manifestPath = Path.Combine(PackDirectory(pack), PackManifest.FileName);
+        if (!File.Exists(manifestPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            return PackManifest.Parse(File.ReadAllText(manifestPath), pack);
+        }
+        catch (Exception e)
+        {
+            if (Warned.Add($"manifest:{pack}"))
+            {
+                _logger.Warning($"Packs: ignoring manifest for '{pack}': {e.Message}");
+            }
+
+            return null;
+        }
+    }
+
+    private static string PackDirectory(string pack) =>
+        Path.Combine(MelonEnvironment.GameRootDirectory, "UserData", PacksDirectoryName, pack);
 
     // Bundles stay loaded for the session because instantiated prefabs depend on their data. The async API is used because the synchronous loaders fail in the Il2Cpp interop.
     private static void LoadBundleInto(string path, Dictionary<string, GameObject> assets)
