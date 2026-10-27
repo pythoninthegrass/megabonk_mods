@@ -1,7 +1,7 @@
 ---
 id: TASK-020.04
 title: Filter log_tail by regex
-status: In Progress
+status: Done
 assignee:
   - Claude
 created_date: '2026-10-27T20:07:00Z'
@@ -37,7 +37,7 @@ The game log is long and mostly noise for a given question. Diagnosing the Hell 
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
