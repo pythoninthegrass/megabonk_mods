@@ -1,11 +1,11 @@
 ---
 id: TASK-015
 title: Explore static recomp of GameAssembly.dll
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-10-23T17:43:00Z'
-updated_date: '2026-10-27T05:40:00Z'
+updated_date: '2026-10-27T05:56:00Z'
 labels:
   - research
   - native
@@ -28,6 +28,15 @@ A static recomp of `GameAssembly.dll` is a large lift (114,472 methods, ~18,200 
 This task is an exploration, not an implementation. The goal is to produce a concrete feasibility assessment and a recommended path, not to ship a recomp.
 <!-- SECTION:DESCRIPTION:END -->
 
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [x] #1 The entry point is mapped: how a recomp would get control (`version.dll`/`game.dll` proxy, `dllmain`, or a hook into the native executable) and what the first call back into the game must be
+- [x] #2 The interop surface is scoped: which game types/methods the mod needs to bind (Il2Cpp reflection, `Il2CppSystem.Type`, delegate marshalling, `Il2CppString`), and whether they are reachable from a native library
+- [x] #3 The Steamworks question is resolved: whether the game's own code calls Steamworks at startup in a way a recomp must replicate or avoid, and what the non-throwing readiness probe would be
+- [x] #4 The build/relink question is resolved: whether the recomp would be a plain DLL, a plugin, or a patched executable, and how it links against the game's runtime
+- [x] #5 A written feasibility assessment in `docs/development.md` with a recommended path (recomp vs. keep MelonLoader vs. hybrid), rough effort, and the smallest first step to de-risk it
+<!-- AC:END -->
+
 ## Background
 
 <!-- SECTION:BACKGROUND:BEGIN -->
@@ -35,15 +44,6 @@ This task is an exploration, not an implementation. The goal is to produce a con
 - The game tolerates a missing Steamworks client: `Steamworks.SteamApps.GetAppBuildId()` throws `InvalidOperationException: Steamworks is not initialized` under Wine, and the mod already retries through that failure.
 - MelonLoader loads the mod DLL via `LD_PRELOAD` (Linux native) or a `version.dll` override (CrossOver); a recomp would need a proxy entry point and a way to bind the game's managed types.
 <!-- SECTION:BACKGROUND:END -->
-
-## Acceptance Criteria
-<!-- AC:BEGIN -->
-- [ ] #1 The entry point is mapped: how a recomp would get control (`version.dll`/`game.dll` proxy, `dllmain`, or a hook into the native executable) and what the first call back into the game must be
-- [ ] #2 The interop surface is scoped: which game types/methods the mod needs to bind (Il2Cpp reflection, `Il2CppSystem.Type`, delegate marshalling, `Il2CppString`), and whether they are reachable from a native library
-- [ ] #3 The Steamworks question is resolved: whether the game's own code calls Steamworks at startup in a way a recomp must replicate or avoid, and what the non-throwing readiness probe would be
-- [ ] #4 The build/relink question is resolved: whether the recomp would be a plain DLL, a plugin, or a patched executable, and how it links against the game's runtime
-- [ ] #5 A written feasibility assessment in `docs/development.md` with a recommended path (recomp vs. keep MelonLoader vs. hybrid), rough effort, and the smallest first step to de-risk it
-<!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
@@ -83,38 +83,27 @@ Steps:
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Probe B (2026-10-27): `Megabonk_Data/globalgamemanagers` PlayerSettings has `forceSingleInstance` False, `runInBackground` True. Unity itself does not block a second copy on one machine; only Steam's single session does. (UnityPy needs `--python 3.12`; the free-threaded 3.14t fails to build brotli. `parse_as_dict(check_read=False)` is needed: the PlayerSettings typetree reads 804 of 805 bytes.)
-
-Probe A (Steam startup), 2026-10-27, static only (GameAssembly.dll in Ghidra via REA, callees resolved through dump.cs, RVA = VA - 0x180000000).
-
-Verdict: degraded. The game's own code runs without Steam: a failed SteamAPI.Init() logs and continues, with no Application.Quit and no throw. Not run-time verified.
-
-SteamManager statics (dump.cs): initialized +0x0, Instance +0x8, APP_ID +0x10 (cctor 0x52B3B0 sets 3405340, clears steamId), A_UpdateComponents +0x18, A_Initialized +0x20, steamId +0x28, A_PlayerInformationArrived +0x30.
-
-Load (0x52AC00), in order:
-1. UnityEngine.Object.op_Inequality(Instance, null) (0x22B3B70) true: Object.Destroy(gameObject) (0x22B1180, get_gameObject 0x22A7010), return (duplicate manager).
-2. Instance = this. If `initialized` already set: throw (noreturn 0x2698D0), only on a second Load after a successful init.
-3. Object.DontDestroyOnLoad (0x22B12C0). Packsize.Test() (0x5E9750) false: Debug.LogError(msg, this) (0x226F5B0). DllCheck.Test() (0x383DB0) false: Debug.LogError(msg, this). Both continue.
-4. SteamAPI.RestartAppIfNecessary (0x5E63E0), the only call site in code is 0x18052ADF5 inside Load. Argument is AppId_t.Invalid (AppId_t TypeInfo static +0x0, i.e. 0), not SteamManager.APP_ID. A true result calls Debug.LogError(msg) (0x226F680) and returns: no Application.Quit, `initialized` stays false. Whether Steam returns false for an invalid id is not verified here.
-5. initialized = SteamAPI.Init() (0x5EB1C0). False: Debug.LogError(msg, this) (0x226F5B0), return. No Quit, no throw, no retry; steamId stays 0 and InitComponents never runs.
-6. True: InitComponents (0x52AA20) = SteamAchievementsManager.Init 0x3EB8C0, SteamStatsManager.Init 0x3EE690, SteamRichPresenceManager.Init 0x3ED850, SteamLeaderboardsManagerNew.Init 0x5288D0 (subscribes to A_UpdateComponents), then registers Callback<PersonaStateChange_t> -> OnPersonaStateChange 0x52B2A0. Then initialized = true, steamId = SteamUser.GetSteamID() (0x5F2A20), invoke A_Initialized if subscribed, LogInBuild (0x3E4EF0).
-
-Other methods: InitOnPlayMode 0x52AB30 only resets statics (initialized false, Instance null). IsInitialized 0x52ABB0 returns the `initialized` byte, no side effects. Update 0x52B310: if initialized, SteamAPI.RunCallbacks (0x5EB1F0) then invoke A_UpdateComponents; otherwise nothing.
-
-Callers of the flag. The compiler inlined IsInitialized: its only xrefs are two data addresses (0x182F20580, 0x183487788, method-table entries), so callers were found by xref on the SteamManager TypeInfo (0x182F88468) and named through dump.cs (nearest preceding method; names approximate):
-- LanguageStartup.CheckSteamLanguage 0x569990 and SetSystemLanguage 0x56A9F0: not initialized skips the Steam language (SteamApps.GetCurrentGameLanguage 0x58ADE0), falls back. Degrades.
-- PauseHandler.Start 0x5566C0 and DiscordRichPresence.RunStarted 0x4A8F60: the Steam parts (callback registration, GetServerRealTime 0x5F48F0) run only if initialized.
-- VersionNumber.Start 0x52DF70 / OnDestroy 0x52DDA0: subscribe to and unsubscribe from A_Initialized. Chatbox.SendMessage 0x52EFA0: passes steamId to AppendMessage 0x52E960 (sender id 0 without Steam).
-- SaveManager.Load(bool) 0x523C90: passes steamId to Load(ulong steamId, bool, out, out) 0x523E00. With Steam absent it uses steamId 0; whether that path finds the existing save is unverified.
-- Leaderboards.UploadScore 0x3E2820, SteamLeaderboardNew.OnDownloadResultsFriends 0x3EC1B0, SteamStatsManager (Init, OnDestroy, OnUserStatsReceived), SteamLeaderboardsManagerNew (Init, OnDestroy), LeaderboardEntryUi Awake/OnDestroy 0x56AE60/0x56B000: Steam-only features.
-No caller was found that blocks the main menu, level load or gameplay on initialized.
-
-xrefs: Steamworks.NET SteamApps.GetAppBuildId (0x58A960) has only two data refs and no code callers. SteamAPI.IsSteamRunning (0x5E5F10) has only three data refs and no code callers. The game never uses either.
-
-Non-throwing readiness probe for the mod: SteamManager.IsInitialized() (0x52ABB0, static bool). It reports the game's own Init result and cannot throw (class-init check, static read). SteamAPI.IsSteamRunning only reports whether a Steam client process exists, not whether Init succeeded, and the game does not call it.
-
-Not covered: any DRM wrapper outside GameAssembly (UnityPlayer.dll, exe), what Steam returns for RestartAppIfNecessary(0), and the actual save path. Confirm in a live run once the Steam session is free.
+Exploration complete. docs/development.md 'Static recomp' section rewritten: corrected scale (73 images, 54.8 MB, ~18,200 types are the game's not the mod's, no separate runtime to embed, MelonLoader/Il2CppInterop-style bridge); added 'Steamworks and the offline gate' (Probe A: SteamManager static analysis shows the game tolerates failed SteamAPI.Init() - degraded, not runtime-verified; Probe B: forceSingleInstance False; the single-session conflict is the real multi-copy gate; readiness probe is SteamManager.IsInitialized()); added Routes A/B/C and a Recommendation (keep MelonLoader; de-risk the offline Steam-free copy first, macOS-native build is a separate lift). Follow-ups created: TASK-016 (launch without a Steam session) and TASK-017 (macOS-native route spike). Live-run confirmation of the Steam verdict and the save path with steamId 0 is delegated to TASK-016.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: lance
+created: 2026-10-27T05:56:00Z
+
+---
+
+Probe A verdict is **static analysis only** (binary closed, no snapshot of UnityPlayer.dll/exe). The game tolerates a failed `SteamAPI.Init()` per the `SteamManager` decompilation, but this and the `steamId 0` save path need a live run to confirm - see follow-up TASK-016.
+
+---
+<!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Static-recomp exploration done. Probe A (SteamManager, static via Ghidra/REA + dump.cs) shows the game tolerates a failed SteamAPI.Init() - degraded, no quit/throw/retry - so it runs without Steam; the non-throwing readiness probe is SteamManager.IsInitialized(). Probe B shows forceSingleInstance False, so Unity allows a second copy; only Steam's single-session rule blocks multi-machine dev. docs/development.md 'Static recomp' now records the corrected scale, the offline gate, Routes A/B/C and the recommendation (keep MelonLoader; de-risk the offline Steam-free copy first - it needs no recomp and unblocks several Macs - and treat the macOS-native build as a separate lift). Follow-ups TASK-016 (launch Megabonk without a Steam session, runtime-verified) and TASK-017 (macOS-native route spike) created. The Steam verdict and the steamId-0 save path are static-only and still need a live run once the Steam session is free.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Exploration Notes (AC 1–4)
 <!-- SECTION:NOTES:BEGIN -->

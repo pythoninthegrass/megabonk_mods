@@ -593,11 +593,11 @@ Pressed and released flags are true for exactly one frame. A held key or button 
 
 ## Static recomp
 
-The mod runs inside the game through MelonLoader, which loads the mod DLL into the Il2Cpp runtime. A static recomp of `GameAssembly.dll` — rebuilding the game code into a separate native library so the mod can run without Steam or MelonLoader — is a large lift and not yet implemented. This section records the exploration (backlog TASK-015).
+The mod runs inside the game through MelonLoader, which loads the mod DLL into the Il2Cpp runtime. A static recomp of `GameAssembly.dll` — rebuilding the game code into a separate native library so the mod can run without Steam or MelonLoader — is a large lift and not yet implemented. This section records the exploration and the path to an offline, macOS-native dev copy.
 
 ### Scale
 
-`GameAssembly.dll` is a Windows x86_64 il2Cpp assembly (52 MB). The dump `.tools/il2cpp_dump/dump.cs` lists 114,472 methods across 58 images (`Image 3: Assembly-CSharp.dll` is the game code; the rest are Unity modules, Rewired, Steam, etc.). The mod source (`src/MegabonkLevels.Mod/`, net6.0, ~14k lines) binds ~18,200 types. REA + Ghidra analysis of the binary takes ~12 minutes per session. REA (`/morluto/rea`) is an analysis CLI/MCP (decompile, xrefs, def-use tracing); it does not emit compilable source — reconstruction is hand-authored. The game ships a native Linux build, so a recomp buys no portability; the only reason to build one is to drop Steam/MelonLoader from the dev loop.
+`GameAssembly.dll` is a Windows x86_64 il2Cpp assembly (54.8 MB). The dump `.tools/il2cpp_dump/dump.cs` lists 114,472 methods across 73 images. Image 3, `Assembly-CSharp.dll`, is the game code: 1,221 types and 8,697 methods, of which 841 are the shared empty stub at RVA `0x3321E0`/`0x3321F0`, leaving about 7,850 real bodies. The other 72 images are Unity modules and third-party packages (Rewired, `com.rlabrecque.steamworks.net`, Discord, Newtonsoft, ProBuilder, TextMeshPro, Localization, Splines, Postprocessing, MK.Toon, Coffee.UIParticle, …). The ~18,200 types in the dump are the game's, not the mod's; the mod source (`src/MegabonkLevels.Mod/`, net6.0, ~14k lines) binds a small subset. libil2cpp is statically linked into `GameAssembly.dll` (it exports 240 `il2cpp_*` functions), so there is no separate runtime to embed. REA + Ghidra analysis of the binary takes ~12 minutes per session. REA (`/morluto/rea`) is an analysis CLI/MCP (decompile, xrefs, def-use tracing); it does not emit compilable source — reconstruction is hand-authored. The Mac runs the Windows build under CrossOver, so a recomp buys macOS-native execution and drops Steam/MelonLoader from the dev loop rather than cross-platform portability (the game already ships Linux and Windows builds).
 
 ### Entry point
 
@@ -605,21 +605,48 @@ The mod is a MelonLoader plugin: `megabonk_levels_mod.cs` carries `[assembly: Me
 
 ### Interop surface
 
-The mod already mirrors the game's `EMap` flags enum by value (`level_file.cs`) and binds `Il2Cpp`, `Il2CppAssets.Scripts.*` (Managers, Actors/Player, Steam, MapGeneration/ProceduralTiles, Game/Other), `Il2CppTMPro`, `Il2Cppcom.rlabrecque.steamworks.net`, `Il2CppSystem.Action`, `Il2CppSystem.Collections.Generic.List<GameObject>`, `Il2CppReferenceArray<T>`, and `Il2CppConsistentRandom`. The dump confirms methods carry `// RVA: 0x... Offset: 0x... VA: 0x18...` (VA = image base + RVA). The interop surface spans every Unity module plus Rewired, Discord, Newtonsoft, and ProBuilder. A recomp must reproduce the Il2Cpp runtime's managed/native bridge (IL2CPPLauncher-style type resolution, delegate marshalling, Il2CppString) or the mod code cannot bind — this is the single largest chunk.
+The mod already mirrors the game's `EMap` flags enum by value (`level_file.cs`) and binds `Il2Cpp`, `Il2CppAssets.Scripts.*` (Managers, Actors/Player, Steam, MapGeneration/ProceduralTiles, Game/Other), `Il2CppTMPro`, `Il2Cppcom.rlabrecque.steamworks.net`, `Il2CppSystem.Action`, `Il2CppSystem.Collections.Generic.List<GameObject>`, `Il2CppReferenceArray<T>`, and `Il2CppConsistentRandom`. The dump confirms methods carry `// RVA: 0x... Offset: 0x... VA: 0x18...` (VA = image base + RVA). The interop surface spans every Unity module plus Rewired, Discord, Newtonsoft, and ProBuilder. A recomp must reproduce the Il2Cpp runtime's managed/native bridge (MelonLoader/Il2CppInterop-style type resolution, delegate marshalling, Il2CppString) or the mod code cannot bind — this is the single largest chunk.
 
-### Steamworks
+### Steamworks and the offline gate
 
-The game initializes Steam itself before mod code runs (`steam-ready: done` after retries). The mod's only Steam coupling is `Il2CppSteamworks.SteamApps.GetAppBuildId()` in `game_build_id_patch.cs`, called from the harness `SteamReady` case and from level load and save. The game tolerates a missing Steamworks client (it retries and proceeds), so a recomp does not need to reimplement Steam: the first step is to confirm whether the game calls Steam at startup in a way that hard-fails when the client is absent, or only lazily (as `GetAppBuildId` does). The non-throwing readiness probe is `SteamClient.IsValid()` / `SteamAPI.IsSteamRunning()` from `com.rlabrecque.steamworks.net` instead of calling `GetAppBuildId()` blind.
+The game initializes Steam itself before mod code runs (`steam-ready: done` after retries). The mod's only Steam coupling is `Il2CppSteamworks.SteamApps.GetAppBuildId()` in `game_build_id_patch.cs`, called from the harness `SteamReady` case and from level load and save.
 
-The startup `GetAppBuildId` fault is handled by the `SteamReady` harness command; see "Steamworks readiness" above. Level load and save call `GameBuildIdPatch.CurrentBuildId()` unguarded, so they throw if run before Steamworks is up.
+Static analysis of the `SteamManager` methods (`SteamManager.Load` `0x18052AC00`, `IsInitialized` `0x18052ABB0`, `Update` `0x18052B310`, `.cctor` `0x18052B3B0`, with callees resolved through `dump.cs`, RVA = VA − 0x180000000) shows the game tolerates a failed `SteamAPI.Init()`: a false result logs `Debug.LogError` and returns, with no `Application.Quit`, no throw and no retry, so `initialized` stays false and `InitComponents` never runs. The main menu, level load and gameplay are not gated on `initialized`. What degrades without Steam: language falls back to a non-Steam default; achievements, stats and leaderboards never init; Discord rich presence and server-real-time skip their Steam parts; `Chatbox` passes a `steamId` of 0; and `SaveManager.Load(bool)` forwards that 0 into `Load(ulong, …)`, where whether it still finds the existing save is unverified. `RestartAppIfNecessary` is called once from `Load` with `AppId_t.Invalid` (0) rather than the real `APP_ID` (3405340, set in the `.cctor`); a true result logs and returns with no quit, but what Steam returns for an invalid id is not verified here. No caller calls `SteamAPI.IsSteamRunning()` or `SteamApps.GetAppBuildId()` — both have only data refs and no code callers.
+
+The verdict is *degraded*, not runtime-verified: the game runs without Steam, but several paths need a live run to confirm. Not covered by this analysis is any DRM or Steam wrapper outside `GameAssembly.dll` (the `UnityPlayer.dll` or the exe); a snapshot of those binaries would be needed.
+
+The non-throwing readiness probe is the game's own `SteamManager.IsInitialized()` (`0x18052ABB0`): it reports the game's own Init result, cannot throw (class-init check plus a static read), and is what the harness's `steam-ready` command targets. `SteamAPI.IsSteamRunning()` only says a Steam client process exists, not that Init succeeded, and the game never calls it. (`SteamClient.IsValid()` is the Facepunch Steamworks API and is not in this game, which uses `com.rlabrecque.steamworks.net`.)
+
+A UnityPy read of `Megabonk_Data/globalgamemanagers` shows `PlayerSettings.forceSingleInstance` False and `runInBackground` True, so Unity itself allows a second copy on one machine; only Steam's single-session-per-account rule blocks it. That single-session conflict is the real gate for running several copies at once:
+
+- A native build launched through Steam still conflicts — one session per account across all devices.
+- Several copies at work therefore need either (1) the game running without a Steam session, which counts only if the game tolerates a failed `SteamAPI.Init()` and never calls `RestartAppIfNecessary` with a real id — the offline dev copy below — or (2) separate accounts or licences.
+- If (1) holds, several copies already work today on CrossOver, Linux and the Windows VM, with no recomp.
+
+So the offline dev copy (drop Steam from the session) and the macOS-native build (drop CrossOver) are two separate goals: the first unblocks multi-machine development now and needs no recomp; the second is a larger, independent lift.
 
 ### Build / relink
 
 The mod builds to `MegabonkLevels.Mod.dll` + `.pdb`, deployed to `$(GameFolder)/Mods/` by the csproj `CopyOutputToModsFolder` target; it references `MelonLoader.dll`, `0Harmony.dll`, `Il2CppInterop.Runtime.dll`, and the Il2Cpp stub assemblies as `<Reference>` (not copied, `<Private>False`). A recomp's output is a native DLL (or patched executable), not a managed assembly, and the linking decision gates everything: if it links the game's own native runtime, it must be loaded by the patched exe; if it bundles a runtime, it is effectively a redistributable.
 
+### Routes
+
+Three ways to a macOS-native, Steam-free build, largest first:
+
+- **A — Full static recomp of the Linux build.** XenonRecomp-style recompile of the Linux `UnityPlayer.so` and `GameAssembly.so` (SysV ABI, Vulkan), plus a Linux-to-macOS shim for libc, windowing and Vulkan-through-MoltenVK. About 85 MB of x86-64 to lift, and no maintained lifter produces rebuildable code at this scale (McSema is archived; remill lifts but its output does not rebuild here). Largest.
+- **B — Re-host `GameAssembly` only.** Translate the Linux `GameAssembly.so` into a macOS x86-64 dylib (running under Rosetta) paired with Unity's official 2023.2.22f1 macOS player, reusing `global-metadata.dat` and resolving icalls by name. Blockers: libil2cpp's Linux OS layer (Boehm GC thread suspension, signals) ported to macOS, and shaders — the shipped data is DX11/12 or Vulkan/GL blobs while macOS needs Metal (SPIR-V → MSL via SPIRV-Cross, repacked). Count shader variants with UnityPy.
+- **C — pt-pc-style reimplementation.** AssetRipper export, reimplement the ~7,850 `Assembly-CSharp` bodies in C# from `dump.cs` and Ghidra pseudocode, add the packages (TMP, ProBuilder, Localization, Addressables, Splines, PostProcessing, AI Navigation, Steamworks.NET and Coffee.UIParticle are free or OSS; Rewired and MK.Toon are paid), and build for macOS. The mod becomes source in the project with no loader. Risk is behaviour drifting from the shipped game. The pt-pc project (github.com/LoreanXavier/pt-pc) is a reimplementation on its own engine reading the original assets, not a static recomp — the model for this route. AssetRipper's weak spot is shaders.
+
+### Recommendation
+
+Keep MelonLoader for the dev loop. It is proven and works today, and a recomp is a large, hand-authored lift whose make-or-break is the Il2Cpp runtime bridge, not per-function reconstruction. The two goals split cleanly:
+
+- **Offline copy (drop Steam)** — unblocks multi-machine development now and needs no recomp. De-risk it first: confirm in a live run that the game tolerates a failed `SteamAPI.Init()` and that level load/save work with a `steamId` of 0 (or a Steamworks stub that answers `GetAppBuildId`). This is the direct path to "several Macs at once".
+- **macOS-native build (drop CrossOver)** — a separate cost-benefit choice between routes B and C, A last. Only worth it if running under CrossOver/Wine is itself the bottleneck.
+
 ### Effort / de-risking
 
-The interop/runtime bridge is the make-or-break; per-function reconstruction is tedious but bounded. Smallest first steps: (1) confirm the game's startup Steamworks behavior under a non-Steam launch — hard-fail or lazy? — which gates whether the Steam question is a blocker; (2) confirm a recomp can bind the game runtime by symbol (a single native call into `Assembly-CSharp`) with a "hello world" function decompiled from `dump.cs`.
+The Il2Cpp runtime bridge is the make-or-break; per-function reconstruction is tedious but bounded. Smallest first steps: (1) confirm the game's startup Steamworks behavior under a non-Steam launch — hard-fail or lazy? — which gates whether the offline copy is possible; (2) confirm a recomp can bind the game runtime by symbol (a single native call into `Assembly-CSharp`) with a "hello world" function decompiled from `dump.cs`.
 
 ### Real keyboard text
 
