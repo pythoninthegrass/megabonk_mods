@@ -77,7 +77,7 @@ tasks:
     desc: "Launch with the stub's Init succeeding and probe Steamworks readiness (expect ready:true)"
     cmds:
       - uv run scripts/run.py quit || true
-      - task: game:run
+      - task: :game:run
       - task: probe
 
   test:fail:
