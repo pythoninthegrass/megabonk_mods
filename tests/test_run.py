@@ -339,6 +339,15 @@ def test_editor_payload_maps_the_state_to_the_wire_command() -> None:
     assert run.editor_payload(run.parse_args(["editor", "off"])) == {"command": "editor", "enabled": False}
 
 
+def test_build_query_objects_command_carries_the_type_and_fields() -> None:
+    assert run.build_query_objects_command("MapData", ["eMap"]) == {
+        "command": "query-objects",
+        "type": "MapData",
+        "fields": ["eMap"],
+    }
+    assert run.build_query_objects_command("MapData") == {"command": "query-objects", "type": "MapData", "fields": []}
+
+
 def test_build_teleport_command_carries_a_position_or_a_cell() -> None:
     assert run.build_teleport_command(position=(1.5, 0.0, -200.0)) == {"command": "teleport", "position": [1.5, 0.0, -200.0]}
     assert run.build_teleport_command(cell=(3, 12)) == {"command": "teleport", "cell": [3, 12]}

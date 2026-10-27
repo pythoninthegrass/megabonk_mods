@@ -3,6 +3,7 @@
 # /// script
 # requires-python = ">=3.13,<3.14"
 # dependencies = [
+#     "jq>=1.8",
 #     "mcp>=2.3,<3",
 #     "python-decouple>=3.8",
 #     "pillow>=11",
@@ -24,6 +25,7 @@ Run: uv run --script scripts/mcp_server.py
 
 import anyio
 import io
+import jq
 import json
 import os
 import re
@@ -79,7 +81,7 @@ def _encoding() -> str:
     return encoding
 
 
-def _encode(payload: dict | None, wrap: bool = True) -> CallToolResult:
+def _encode(payload: object, wrap: bool = True) -> CallToolResult:
     """Encode a structured tool result per MEGABONK_MCP_ENCODING; json keeps indented text plus structured_content, the others send text only."""
     encoding = _encoding()
     if payload is None:
@@ -343,6 +345,35 @@ async def teleport(position: list[float] | None = None, cell: list[int] | None =
         tuple(position) if position is not None else None, tuple(cell) if cell is not None else None
     )
     return await _command(_harness(), payload, TIMEOUT)
+
+
+def _compile_jq(expression: str) -> "jq._Program":
+    try:
+        return jq.compile(expression)
+    except ValueError as exc:
+        raise ToolError(f"query_objects: invalid jq expression {expression!r}: {exc}") from exc
+
+
+def _run_jq(program: "jq._Program", data: object) -> object:
+    try:
+        outputs = program.input_value(data).all()
+    except ValueError as exc:
+        raise ToolError(f"query_objects: jq failed: {exc}") from exc
+    return outputs[0] if len(outputs) == 1 else outputs
+
+
+@mcp.tool()
+async def query_objects(type: str, fields: list[str] | None = None, jq: str | None = None) -> CallToolResult:
+    """List every loaded UnityEngine.Object of the named type (short or full class name, e.g. MapData) as {type, count, objects: [{name, ...fields}]}, reading the live game with no rebuild. fields are public field or property names to read besides name; enums come back as their integer value, so a live asset that disagrees with the Il2Cpp dump shows. An unknown type or field is an error naming it. Read-only; works with a run active or frozen. jq is an optional jq expression applied to that result before it is returned, e.g. `.objects[] | select(.eMap == 64) | .name`: one output is returned as is, several or none as a list."""
+    if not type:
+        raise ToolError("query_objects: type must not be empty")
+    if any(not name for name in fields or []):
+        raise ToolError("query_objects: fields must not contain an empty name")
+    program = _compile_jq(jq) if jq is not None else None
+    _encode(None)
+    reply = await _request(_harness(), run.build_query_objects_command(type, fields), TIMEOUT)
+    result = reply.get("result") if reply else None
+    return _encode(_run_jq(program, result) if program is not None else result)
 
 
 @mcp.tool()

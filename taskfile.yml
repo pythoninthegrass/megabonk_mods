@@ -53,6 +53,7 @@ tasks:
           --with "python-decouple>=3.8" \
           --with "mcp>=2.3,<3" \
           --with "toon-format==1.2.0" \
+          --with "jq>=1.8" \
           --with "pillow>=11" \
           pytest
 

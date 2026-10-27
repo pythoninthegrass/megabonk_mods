@@ -33,6 +33,7 @@ public enum HarnessCommandKind
     UiTree,
     SaveLevel,
     ListLevels,
+    QueryObjects,
 }
 
 // World-space camera position and euler rotation in degrees.
@@ -64,8 +65,16 @@ public sealed class TeleportArgs
     public int[] Cell { get; init; }
 }
 
+// The type to enumerate and the public fields to read besides name.
+public sealed class QueryArgs
+{
+    public string TypeName { get; init; }
+
+    public IReadOnlyList<string> Fields { get; init; } = Array.Empty<string>();
+}
+
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null)
 {
     public const int MaxTypeLength = 200;
 
@@ -164,6 +173,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 command = new HarnessCommand(HarnessCommandKind.ListLevels, null);
                 error = null;
                 return true;
+            case "query-objects":
+                return TryParseQueryObjects(root, out command, out error);
             case "ui-tree":
                 return TryParseUiTree(root, out command, out error);
             case "teleport":
@@ -490,6 +501,41 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.SaveLevel, level);
+        error = null;
+        return true;
+    }
+
+    private static bool TryParseQueryObjects(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        if (!TryGetString(root, "type", out var typeName) || typeName.Length == 0)
+        {
+            error = "missing non-empty string field 'type'";
+            return false;
+        }
+
+        var fields = new List<string>();
+        if (root.TryGetPropertyValue("fields", out var node) && node != null)
+        {
+            error = "field 'fields' must be an array of non-empty field names";
+            if (node is not JsonArray array)
+            {
+                return false;
+            }
+
+            foreach (var item in array)
+            {
+                if (item is not JsonValue value || !value.TryGetValue(out string field) || field.Length == 0)
+                {
+                    return false;
+                }
+
+                fields.Add(field);
+            }
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.QueryObjects, null, Query: new QueryArgs { TypeName = typeName, Fields = fields });
         error = null;
         return true;
     }

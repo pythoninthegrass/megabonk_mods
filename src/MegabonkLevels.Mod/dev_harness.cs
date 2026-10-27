@@ -217,6 +217,8 @@ public static class DevHarness
                 return EditorTileTools.SaveLevel(command.Path);
             case HarnessCommandKind.ListLevels:
                 return ListLevels();
+            case HarnessCommandKind.QueryObjects:
+                return QueryObjects(command.Query);
             case HarnessCommandKind.Teleport:
                 return Teleport(command.Teleport);
             case HarnessCommandKind.DismissLevelUp:
@@ -315,6 +317,37 @@ public static class DevHarness
         }
 
         return new JsonObject { ["directory"] = LiveEditPatch.LevelsDirectoryPath(), ["levels"] = levels };
+    }
+
+    private static JsonObject QueryObjects(QueryArgs args)
+    {
+        var type = ObjectQuery.ResolveType(UnityObjectTypes(), args.TypeName);
+        var items = Resources.FindObjectsOfTypeAll(Il2CppType.From(type)).Select(found => Activator.CreateInstance(type, found.Pointer)).ToList();
+        return ObjectQuery.Read(type, items, args.Fields);
+    }
+
+    private static IEnumerable<Type> UnityObjectTypes()
+    {
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            Type[] types;
+            try
+            {
+                types = assembly.GetTypes();
+            }
+            catch (System.Reflection.ReflectionTypeLoadException ex)
+            {
+                types = ex.Types.Where(type => type != null).ToArray();
+            }
+
+            foreach (var type in types)
+            {
+                if (typeof(UnityEngine.Object).IsAssignableFrom(type))
+                {
+                    yield return type;
+                }
+            }
+        }
     }
 
     private static JsonObject Teleport(TeleportArgs args)

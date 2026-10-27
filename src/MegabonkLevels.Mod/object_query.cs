@@ -1,0 +1,73 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Text.Json.Nodes;
+
+namespace MegabonkLevels;
+
+// Reads named public fields and properties off live objects by reflection, for the query-objects harness command.
+public static class ObjectQuery
+{
+    private const BindingFlags Members = BindingFlags.Public | BindingFlags.Instance;
+
+    public static Type ResolveType(IEnumerable<Type> candidates, string name)
+    {
+        var matches = candidates.Where(type => type.Name == name || type.FullName == name).ToList();
+        return matches.Count switch
+        {
+            0 => throw new InvalidOperationException($"unknown type '{name}'"),
+            1 => matches[0],
+            _ => throw new InvalidOperationException($"type name '{name}' is ambiguous; use one of: {string.Join(", ", matches.Select(type => type.FullName))}"),
+        };
+    }
+
+    // Checks the field names against the type first so an unknown one fails even when no instance is loaded.
+    public static JsonObject Read(Type type, IEnumerable<object> items, IReadOnlyList<string> fields)
+    {
+        var names = fields.Prepend("name").Distinct().ToList();
+        var readers = names.Select(name => (name, reader: FindReader(type, name))).ToList();
+
+        var rows = new JsonArray();
+        foreach (var item in items)
+        {
+            var row = new JsonObject();
+            foreach (var (name, reader) in readers)
+            {
+                row[name] = ToJson(reader(item));
+            }
+
+            rows.Add(row);
+        }
+
+        return new JsonObject { ["type"] = type.Name, ["count"] = rows.Count, ["objects"] = rows };
+    }
+
+    private static Func<object, object> FindReader(Type type, string name)
+    {
+        if (type.GetProperty(name, Members) is { } property && property.GetIndexParameters().Length == 0)
+        {
+            return property.GetValue;
+        }
+
+        if (type.GetField(name, Members) is { } field)
+        {
+            return field.GetValue;
+        }
+
+        throw new InvalidOperationException($"type '{type.Name}' has no public field '{name}'");
+    }
+
+    private static JsonNode ToJson(object value) => value switch
+    {
+        null => null,
+        Enum e => JsonValue.Create(Convert.ToInt64(e)),
+        string s => JsonValue.Create(s),
+        bool b => JsonValue.Create(b),
+        sbyte or byte or short or ushort or int or uint or long => JsonValue.Create(Convert.ToInt64(value)),
+        ulong u => JsonValue.Create(u),
+        float f => JsonValue.Create(f),
+        double d => JsonValue.Create(d),
+        _ => JsonValue.Create(value.ToString()),
+    };
+}

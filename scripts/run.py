@@ -202,6 +202,10 @@ def build_teleport_command(position: tuple[float, ...] | None = None, cell: tupl
     return payload
 
 
+def build_query_objects_command(type_name: str, fields: list[str] | None = None) -> dict[str, object]:
+    return {"command": "query-objects", "type": type_name, "fields": list(fields or [])}
+
+
 def build_dismiss_levelup_command(choice: int) -> dict[str, object]:
     return {"command": "dismiss-levelup", "choice": choice}
 

@@ -566,4 +566,39 @@ public class HarnessCommandTests
         Assert.False(HarnessCommand.TryParse(json, out _, out var error));
         Assert.Contains("missing number field", error);
     }
+
+    [Fact]
+    public void TryParse_QueryObjects_ReadsTypeAndFields()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"query-objects","type":"MapData","fields":["eMap","icon"]}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.QueryObjects, command.Kind);
+        Assert.Equal("query-objects", command.Name);
+        Assert.Equal("MapData", command.Query.TypeName);
+        Assert.Equal(new[] { "eMap", "icon" }, command.Query.Fields);
+    }
+
+    [Fact]
+    public void TryParse_QueryObjects_FieldsDefaultToNone()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"query-objects","type":"MapData"}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Empty(command.Query.Fields);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"query-objects"}""", "type")]
+    [InlineData("""{"command":"query-objects","type":""}""", "type")]
+    [InlineData("""{"command":"query-objects","type":5}""", "type")]
+    [InlineData("""{"command":"query-objects","type":"MapData","fields":"eMap"}""", "fields")]
+    [InlineData("""{"command":"query-objects","type":"MapData","fields":[1]}""", "fields")]
+    [InlineData("""{"command":"query-objects","type":"MapData","fields":[""]}""", "fields")]
+    public void TryParse_QueryObjectsWithUnusableArguments_FailsNamingTheField(string json, string expectedFragment)
+    {
+        Assert.False(HarnessCommand.TryParse(json, out _, out var error));
+        Assert.Contains(expectedFragment, error);
+    }
 }

@@ -701,3 +701,79 @@ async def test_captured_payloads_round_trip(tmp_path, monkeypatch, fixture, enco
         stop.set()
     text = result.content[0].text
     assert (toon_format.decode(text) if encoding == "toon" else json.loads(text)) == body
+
+
+MAP_ROWS = {
+    "type": "MapData",
+    "count": 3,
+    "objects": [
+        {"name": "MapForest", "eMap": 1},
+        {"name": "MapGraveyard", "eMap": 8},
+        {"name": "MapHell", "eMap": 64},
+    ],
+}
+
+
+async def query_objects(tmp_path, monkeypatch, arguments, responder=None):
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def default_responder(payload):
+        seen.append(payload)
+        return ok_result(payload, MAP_ROWS)
+
+    stop = start_fake_mod(harness, responder or default_responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("query_objects", arguments)
+    finally:
+        stop.set()
+    return result, seen
+
+
+async def test_query_objects_sends_the_type_and_fields_and_returns_the_result(tmp_path, monkeypatch) -> None:
+    result, seen = await query_objects(tmp_path, monkeypatch, {"type": "MapData", "fields": ["eMap"]})
+    assert not result.is_error
+    assert seen == [{"command": "query-objects", "type": "MapData", "fields": ["eMap"]}]
+    assert json.loads(result.content[0].text) == MAP_ROWS
+
+
+async def test_query_objects_applies_the_jq_filter_to_the_result(tmp_path, monkeypatch) -> None:
+    result, _ = await query_objects(
+        tmp_path, monkeypatch, {"type": "MapData", "fields": ["eMap"], "jq": ".objects[] | select(.eMap == 64) | .name"}
+    )
+    assert not result.is_error
+    assert json.loads(result.content[0].text) == "MapHell"
+
+
+async def test_query_objects_jq_with_several_outputs_returns_a_list(tmp_path, monkeypatch) -> None:
+    result, _ = await query_objects(tmp_path, monkeypatch, {"type": "MapData", "jq": ".objects[].name"})
+    assert json.loads(result.content[0].text) == ["MapForest", "MapGraveyard", "MapHell"]
+
+
+async def test_query_objects_invalid_jq_is_a_toolerror_naming_the_parse_failure_and_sends_nothing(tmp_path, monkeypatch) -> None:
+    result, seen = await query_objects(tmp_path, monkeypatch, {"type": "MapData", "jq": ".objects[ | "})
+    assert result.is_error
+    assert "jq" in result.content[0].text
+    assert "syntax error" in result.content[0].text
+    assert seen == []
+
+
+async def test_query_objects_jq_runtime_failure_is_a_toolerror(tmp_path, monkeypatch) -> None:
+    result, _ = await query_objects(tmp_path, monkeypatch, {"type": "MapData", "jq": ".name | ascii_downcase | error"})
+    assert result.is_error
+    assert "jq" in result.content[0].text
+
+
+async def test_query_objects_unknown_type_surfaces_the_mods_error(tmp_path, monkeypatch) -> None:
+    rejected = json.dumps({"command": "query-objects", "ok": False, "error": "unknown type 'Nope'"})
+    result, _ = await query_objects(tmp_path, monkeypatch, {"type": "Nope"}, lambda p: ("done", rejected))
+    assert result.is_error
+    assert "unknown type 'Nope'" in result.content[0].text
+
+
+async def test_query_objects_rejects_an_empty_type_or_field(tmp_path, monkeypatch) -> None:
+    for index, arguments in enumerate(({"type": ""}, {"type": "MapData", "fields": [""]})):
+        result, seen = await query_objects(tmp_path / str(index), monkeypatch, arguments)
+        assert result.is_error
+        assert seen == []
