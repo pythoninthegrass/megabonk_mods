@@ -58,4 +58,19 @@ public class UiWidgetsTests
 
         Assert.Equal(new UiWidget("Save", 100f, 50f, 70f, 30f), widget);
     }
+
+    [Fact]
+    public void Widgets_AreEnabledUnlessMarkedOtherwise()
+    {
+        Assert.True(Widgets[0].Enabled);
+        Assert.False(UiWidgets.FromScreenRect("Undo", 0f, 0f, 1f, 1f, 10, enabled: false).Enabled);
+    }
+
+    [Fact]
+    public void At_ReportsADisabledWidget()
+    {
+        var disabled = new[] { new UiWidget("Undo", 0f, 0f, 10f, 10f, Enabled: false) };
+
+        Assert.Equal("Undo", UiWidgets.At(disabled, 5f, 5f)?.Name);
+    }
 }

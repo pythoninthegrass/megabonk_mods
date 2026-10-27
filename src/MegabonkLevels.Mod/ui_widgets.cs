@@ -4,8 +4,8 @@ using System.Linq;
 
 namespace MegabonkLevels;
 
-// An editor widget's rect in screenshot pixels (origin top left), the space the mouse command and the screenshot tool use.
-public readonly record struct UiWidget(string Name, float X, float Y, float Width, float Height)
+// An editor widget's rect in screenshot pixels (origin top left), the space the mouse command and the screenshot tool use; a disabled widget ignores clicks.
+public readonly record struct UiWidget(string Name, float X, float Y, float Width, float Height, bool Enabled = true)
 {
     public (float X, float Y) Centre => (X + Width / 2f, Y + Height / 2f);
 
@@ -15,8 +15,8 @@ public readonly record struct UiWidget(string Name, float X, float Y, float Widt
 public static class UiWidgets
 {
     // Unity screen rects have a bottom-left origin, so the top edge is the larger y.
-    public static UiWidget FromScreenRect(string name, float xMin, float yMin, float xMax, float yMax, int screenHeight) =>
-        new(name, xMin, screenHeight - yMax, xMax - xMin, yMax - yMin);
+    public static UiWidget FromScreenRect(string name, float xMin, float yMin, float xMax, float yMax, int screenHeight, bool enabled = true) =>
+        new(name, xMin, screenHeight - yMax, xMax - xMin, yMax - yMin, enabled);
 
     // The first match wins, so list specific widgets before the panels that contain them.
     public static UiWidget? At(IEnumerable<UiWidget> widgets, float x, float y) =>

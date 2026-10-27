@@ -5,7 +5,7 @@ status: Done
 assignee:
   - Claude
 created_date: '2026-10-27T07:23:00Z'
-updated_date: '2026-10-27T17:00:00Z'
+updated_date: '2026-10-27T17:04:00Z'
 labels:
   - dev-harness
   - tooling
@@ -55,7 +55,7 @@ Every `mouse` interaction needs guessed screenshot pixel coordinates. During TAS
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -72,5 +72,5 @@ Every `mouse` interaction needs guessed screenshot pixel coordinates. During TAS
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Added `ui-tree` and `click-widget` harness commands, `run.py` verbs and MCP tools `ui_tree(x?, y?)` and `click_widget(name)`. Widgets are named (`Tool:Raise`, `Save`, `Undo`, `Palette:<id>`, `Tab:<label>`, ...) and their rects reported in screenshot pixels; `click-widget` queues a normal mouse move and click at the widget centre. Unit tests (UiWidgets geometry and lookup, command parsing, Python builders and MCP payloads) written first. Verified in the real game: `ui-tree` listed 70+ widgets, `ui-tree 833 86` reported `SaveInput`, and `click-widget Save` changed `state.edits` from `saveStatus:none` to `saved` with `lastSavedName:level.mblevel.json`. An unknown name returns the list of known names. `task check` passes. Disabled buttons (Undo/Redo with nothing to undo) and off-page palette entries are not listed; documented in docs/development.md. The MCP server process must be restarted to pick up the new tools.
+Added `ui-tree` and `click-widget` harness commands, `run.py` verbs and MCP tools `ui_tree(x?, y?)` and `click_widget(name)`. Widgets are named (`Save`, `Undo`, `Palette:<id>`, `Tab:<label>`, ...) and their rects reported in screenshot pixels with an `enabled` flag; `click-widget` queues a normal mouse move and click at the widget centre and rejects a disabled widget. The toolbar tool labels are not widgets (the editor uses them only for hover hints; tools switch by hotkey), so they are not listed. Unit tests (UiWidgets geometry and lookup, command parsing, Python builders and MCP payloads) written first. Verified in the real game: `ui-tree 833 86` reported `SaveInput`, and `click-widget Save` changed `state.edits` from `saveStatus:none` to `saved`. An unknown name returns the list of known names. `task check` passes. Hidden widgets (off-page palette entries, unshown toasts) are not listed; documented in docs/development.md.
 <!-- SECTION:FINAL_SUMMARY:END -->

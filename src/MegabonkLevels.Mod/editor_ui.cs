@@ -25,7 +25,7 @@ public static class EditorUi
     public static Color Gray(float value, float alpha = 1f) => new(value, value, value, alpha);
 
     // The widget's rect in screenshot pixels; null while it or a parent is hidden. An overlay canvas keeps world space equal to screen space.
-    public static UiWidget? ToWidget(string name, RectTransform rect)
+    public static UiWidget? ToWidget(string name, RectTransform rect, bool enabled = true)
     {
         if (rect == null || !rect.gameObject.activeInHierarchy)
         {
@@ -35,7 +35,7 @@ public static class EditorUi
         var bounds = rect.rect;
         var min = rect.TransformPoint(new Vector3(bounds.xMin, bounds.yMin, 0f));
         var max = rect.TransformPoint(new Vector3(bounds.xMax, bounds.yMax, 0f));
-        return UiWidgets.FromScreenRect(name, min.x, min.y, max.x, max.y, Screen.height);
+        return UiWidgets.FromScreenRect(name, min.x, min.y, max.x, max.y, Screen.height, enabled);
     }
 
     public static GameObject NewCanvas(string name)

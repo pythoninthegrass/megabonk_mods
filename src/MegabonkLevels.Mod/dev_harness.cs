@@ -270,7 +270,7 @@ public static class DevHarness
     }
 
     private static JsonObject WidgetJson(UiWidget widget) =>
-        new() { ["name"] = widget.Name, ["x"] = widget.X, ["y"] = widget.Y, ["width"] = widget.Width, ["height"] = widget.Height };
+        new() { ["name"] = widget.Name, ["x"] = widget.X, ["y"] = widget.Y, ["width"] = widget.Width, ["height"] = widget.Height, ["enabled"] = widget.Enabled };
 
     private static JsonObject UiTree(InputArgs input)
     {
@@ -289,6 +289,11 @@ public static class DevHarness
         if (!UiWidgets.TryFind(EditorWidgets(), name, out var widget, out var error))
         {
             throw new InvalidOperationException(error);
+        }
+
+        if (!widget.Enabled)
+        {
+            throw new InvalidOperationException($"widget '{widget.Name}' is disabled");
         }
 
         var (x, y) = widget.Centre;

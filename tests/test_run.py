@@ -673,7 +673,7 @@ def test_build_ui_tree_command_includes_the_point_only_when_given() -> None:
 
 
 def test_widget_payloads_map_the_subcommands() -> None:
-    assert run.click_widget_payload(run.parse_args(["click-widget", "Tool:Raise"])) == {"command": "click-widget", "name": "Tool:Raise"}
+    assert run.click_widget_payload(run.parse_args(["click-widget", "Save"])) == {"command": "click-widget", "name": "Save"}
     assert run.ui_tree_payload(run.parse_args(["ui-tree"])) == {"command": "ui-tree"}
     assert run.ui_tree_payload(run.parse_args(["ui-tree", "5", "6"])) == {"command": "ui-tree", "x": 5.0, "y": 6.0}
 

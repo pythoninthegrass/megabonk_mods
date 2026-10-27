@@ -111,6 +111,7 @@ public static class EditorTileTools
         public RectTransform Rect;
         public Action OnClick;
         public Func<bool> Enabled;
+        public bool OmitWhenDisabled;
     }
 
     public static bool PointerOverEditorOverlay => PointerOverOverlay();
@@ -503,7 +504,7 @@ public static class EditorTileTools
         rect.pivot = new Vector2(0.5f, 1f);
         rect.sizeDelta = new Vector2(width, OverlayRowHeight);
         rect.anchoredPosition = new Vector2(x, -(EditorUi.TopInset + ToolbarHeight + ToastGap + index * (OverlayRowHeight + ToastGap)));
-        _clickRegions.Add(new ClickRegion { Name = $"Toast{index}", Rect = rect, OnClick = () => _toasts.Dismiss(index), Enabled = () => index < _toasts.Items.Count });
+        _clickRegions.Add(new ClickRegion { Name = $"Toast{index}", Rect = rect, OnClick = () => _toasts.Dismiss(index), Enabled = () => index < _toasts.Items.Count, OmitWhenDisabled = true });
 
         var background = rect.gameObject.AddComponent<Image>();
         background.color = PanelColor;
@@ -919,12 +920,15 @@ public static class EditorTileTools
     public static IEnumerable<UiWidget> ListWidgets()
     {
         var widgets = new List<UiWidget?>();
-        for (var i = 0; i < _toolSlots.Count; i++)
+        foreach (var region in _clickRegions)
         {
-            widgets.Add(ToWidget($"Tool:{EditorTools.All[i]}", _toolSlots[i].Rect));
+            var enabled = region.Enabled == null || region.Enabled();
+            if (enabled || !region.OmitWhenDisabled)
+            {
+                widgets.Add(ToWidget(region.Name, region.Rect, enabled));
+            }
         }
 
-        widgets.AddRange(_clickRegions.Where(region => region.Enabled == null || region.Enabled()).Select(region => ToWidget(region.Name, region.Rect)));
         widgets.Add(ToWidget("SaveInput", _saveInputRect));
         for (var i = 0; i < _loadRows.Count; i++)
         {

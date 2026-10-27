@@ -199,7 +199,7 @@ async def mouse(
 
 @mcp.tool()
 async def ui_tree(x: float | None = None, y: float | None = None) -> dict | None:
-    """List the editor's widgets (toolbar buttons and tools, load list, palette entries and tabs) as {name, x, y, width, height} in screenshot pixels, the space of the screenshot and mouse tools. Give both x and y to also get `at`, the name of the first listed widget under that pixel (null over the world). Names are what click_widget takes; a disabled button (Undo with nothing to undo) and anything on another palette page is not listed. Needs editor mode."""
+    """List the editor's widgets (toolbar buttons and tools, load list, palette entries and tabs) as {name, x, y, width, height, enabled} in screenshot pixels, the space of the screenshot and mouse tools. Give both x and y to also get `at`, the name of the first listed widget under that pixel (null over the world). Names are what click_widget takes; enabled is false for a button that ignores clicks (Undo with nothing to undo); anything on another palette page is not listed. Needs editor mode."""
     if (x is None) != (y is None):
         raise ToolError("ui_tree: give both or neither of x and y")
     position = (x, y) if x is not None and y is not None else None
@@ -208,7 +208,7 @@ async def ui_tree(x: float | None = None, y: float | None = None) -> dict | None
 
 @mcp.tool()
 async def click_widget(name: str) -> dict | None:
-    """Left-click the centre of the named editor widget, e.g. Save, Undo, Tool:Raise, Tab:All, Palette:<entry id>; take names from ui_tree (case-insensitive). Returns the widget's rect. An unknown name is an error that lists the known names. Like mouse click, the effect lands over the next frames, so read state or take a screenshot after a moment. Needs editor mode."""
+    """Left-click the centre of the named editor widget, e.g. Save, Undo, Tab:All, Palette:<entry id>; take names from ui_tree (case-insensitive). Returns the widget's rect. An unknown name is an error that lists the known names, and a disabled widget is an error too. Like mouse click, the effect lands over the next frames, so read state or take a screenshot after a moment. Tools are not widgets: switch them with key (Alpha1 to Alpha6). Needs editor mode."""
     return await _request(_harness(), run.build_click_widget_command(name), TIMEOUT)
 
 
