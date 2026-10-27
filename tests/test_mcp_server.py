@@ -292,6 +292,28 @@ async def test_log_tail_since_launch_trims_to_the_last_session(tmp_path, monkeyp
     assert [block.text for block in every.content] == ["old-session", "DevHarness: enabled", "fresh line"]
 
 
+async def test_log_tail_rejects_an_invalid_regex(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    log = mcp_server.run.latest_log_path(harness.parent)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text("DevHarness: enabled\n")
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("log_tail", {"pattern": "("})
+    assert result.is_error
+    assert "log_tail: invalid pattern" in result.content[0].text
+    assert "missing )" in result.content[0].text
+
+
+async def test_log_tail_caps_the_matches_not_the_session(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    log = mcp_server.run.latest_log_path(harness.parent)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text("DevHarness: enabled\nhit 1\nnoise\nhit 2\nnoise\nhit 3\nnoise\n")
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("log_tail", {"pattern": "hit", "max_lines": 2})
+    assert [block.text for block in result.content] == ["hit 2", "hit 3"]
+
+
 INPUT_TOOL_CASES = [
     ("key", {"key": "R"}, {"command": "key", "action": "tap", "key": "R"}),
     (

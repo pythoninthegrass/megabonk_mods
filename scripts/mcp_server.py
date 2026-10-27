@@ -401,16 +401,9 @@ async def dismiss_levelup(choice: int = 0) -> CallToolResult:
 @mcp.tool()
 async def log_tail(pattern: str | None = None, since_launch: bool = True, max_lines: int = 50) -> list[str]:
     """Read the game's Latest.log: filter to the current session, to lines matching a regex, and to the last N lines."""
-    try:
-        lines = run.latest_log_path(_game_dir()).read_text(errors="ignore").splitlines()
-    except OSError:
-        return []
-    if since_launch:
-        starts = [i for i, line in enumerate(lines) if LAUNCH_MARKER in line]
-        if starts:
-            lines = lines[starts[-1] :]
-    if pattern is not None:
-        regex = re.compile(pattern)
+    regex = _compile_pattern("log_tail", pattern) if pattern is not None else None
+    lines = _log_lines(run.latest_log_path(_game_dir()), since_launch)
+    if regex is not None:
         lines = [line for line in lines if regex.search(line)]
     return lines[-max_lines:]
 
@@ -418,10 +411,7 @@ async def log_tail(pattern: str | None = None, since_launch: bool = True, max_li
 @mcp.tool()
 async def log_wait(pattern: str, timeout: float = 30.0, since_launch: bool = True) -> str:
     """Block until Latest.log has a line matching the regex pattern, then return that line; a tool error on timeout. since_launch (default true) only considers lines after the last `DevHarness: enabled`. Use it after load or relaunch instead of sleeping, e.g. pattern `KillFloor: armed`."""
-    try:
-        regex = re.compile(pattern)
-    except re.error as exc:
-        raise ToolError(f"log_wait: invalid pattern {pattern!r}: {exc}") from exc
+    regex = _compile_pattern("log_wait", pattern)
     log = run.latest_log_path(_game_dir())
     deadline = time.monotonic() + timeout
     while True:
@@ -433,16 +423,27 @@ async def log_wait(pattern: str, timeout: float = 30.0, since_launch: bool = Tru
         await anyio.sleep(LOG_POLL_INTERVAL)
 
 
-def _first_log_match(log: Path, regex: re.Pattern[str], since_launch: bool) -> str | None:
+def _compile_pattern(tool: str, pattern: str) -> re.Pattern[str]:
+    try:
+        return re.compile(pattern)
+    except re.error as exc:
+        raise ToolError(f"{tool}: invalid pattern {pattern!r}: {exc}") from exc
+
+
+def _log_lines(log: Path, since_launch: bool) -> list[str]:
     try:
         lines = log.read_text(errors="ignore").splitlines()
     except OSError:
-        return None
+        return []
     if since_launch:
         starts = [i for i, line in enumerate(lines) if LAUNCH_MARKER in line]
         if starts:
             lines = lines[starts[-1] :]
-    return next((line for line in lines if regex.search(line)), None)
+    return lines
+
+
+def _first_log_match(log: Path, regex: re.Pattern[str], since_launch: bool) -> str | None:
+    return next((line for line in _log_lines(log, since_launch) if regex.search(line)), None)
 
 
 if __name__ == "__main__":
