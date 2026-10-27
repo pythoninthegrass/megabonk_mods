@@ -3,6 +3,7 @@
 .tools/
 CLAUDE.md
 scheduled_tasks.lock
+*.dxvk-cache
 
 # General
 .DS_Store
