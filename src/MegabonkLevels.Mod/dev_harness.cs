@@ -399,6 +399,7 @@ public static class DevHarness
             EditorTool: editor ? EditorTileTools.CurrentTool.ToString() : null,
             Selected: editor ? EditorObjectTools.Selected?.Serialize() : null,
             PaletteEntries: editor ? EditorPalette.Selection.Entries.Count : null,
+            Edits: editor ? EditorTileTools.ReadEdits() : null,
             ScreenWidth: Screen.width,
             ScreenHeight: Screen.height);
     }

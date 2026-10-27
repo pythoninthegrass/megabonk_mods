@@ -79,6 +79,7 @@ Before moving a command file to `done/` or `rejected/`, the mod writes `harness/
 | `editorTool` | string or null | The active tool name (`Raise`, `Lower`, `Slope`, `Remove`, `Place`, `Select`). `null` outside editor mode, where the tool is not read |
 | `selected` | string or null | The selected object as `gen:<genId>` or `placement:<id>`. `null` outside editor mode or when nothing is selected |
 | `paletteEntries` | int or null | The number of entries in the catalog palette. `null` outside editor mode, where the palette is not read |
+| `edits` | object or null | `{"count":n,"dirty":bool,"lastSavedName":s,"saveStatus":s}`. `count` is the number of edits on the stack, `dirty` is whether that differs from the last save or load, `lastSavedName` is the file name of the last save or load (`null` until one happens) and `saveStatus` is the outcome of the last save attempt: `none`, `saved` or `failed`. `null` outside editor mode |
 | `screen` | `[width, height]` | `Screen.width` and `Screen.height` in pixels; screen coordinates for input use this space |
 
 ## MCP server
@@ -386,7 +387,7 @@ Caveats:
 
 ## Not covered
 
-The harness does not press menu buttons or open the level-up dialog. Only `state`, `teleport` and `dismiss-levelup` return data; the other commands report success or failure and nothing else, and `state` does not report health, inventory, enemies, the level-up dialog or the edit stack. Use `freeze` to stop an idle player dying during a screenshot, or `invulnerable` when enemies must keep moving.
+The harness does not press menu buttons or open the level-up dialog. Only `state`, `teleport` and `dismiss-levelup` return data; the other commands report success or failure and nothing else, and `state` does not report health, inventory, enemies or the level-up dialog. Use `freeze` to stop an idle player dying during a screenshot, or `invulnerable` when enemies must keep moving.
 
 ## Character selection
 

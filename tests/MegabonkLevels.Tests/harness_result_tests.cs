@@ -80,6 +80,7 @@ public class HarnessResultTests
             EditorTool: "Select",
             Selected: "object:tree-1",
             PaletteEntries: 12,
+            Edits: new EditsSnapshot(3, true, "forest.mblevel.json", "saved"),
             ScreenWidth: 1920,
             ScreenHeight: 1080);
 
@@ -95,17 +96,21 @@ public class HarnessResultTests
         Assert.Equal("Select", (string?)root["editorTool"]);
         Assert.Equal("object:tree-1", (string?)root["selected"]);
         Assert.Equal(12, (int?)root["paletteEntries"]);
+        Assert.Equal(3, (int?)root["edits"]!["count"]);
+        Assert.True((bool?)root["edits"]!["dirty"]);
+        Assert.Equal("forest.mblevel.json", (string?)root["edits"]!["lastSavedName"]);
+        Assert.Equal("saved", (string?)root["edits"]!["saveStatus"]);
         Assert.Equal(new[] { 1920, 1080 }, root["screen"]!.AsArray().Select(n => (int)n!).ToArray());
     }
 
     [Fact]
     public void GameStateSnapshot_WithUnsourcedFields_SerializesJsonNulls()
     {
-        var snapshot = new GameStateSnapshot(false, false, false, false, false, null, null, null, null, 800, 600);
+        var snapshot = new GameStateSnapshot(false, false, false, false, false, null, null, null, null, null, 800, 600);
 
         var root = snapshot.ToJson();
 
-        foreach (var field in new[] { "player", "editorTool", "selected", "paletteEntries" })
+        foreach (var field in new[] { "player", "editorTool", "selected", "paletteEntries", "edits" })
         {
             Assert.True(root.ContainsKey(field), field);
             Assert.Null(root[field]);
@@ -115,11 +120,21 @@ public class HarnessResultTests
     [Fact]
     public void GameStateSnapshot_PlayerOutsideTheGrid_SerializesNullCell()
     {
-        var snapshot = new GameStateSnapshot(true, false, false, false, false, new PlayerSnapshot(0f, 0f, 0f, null), null, null, null, 800, 600);
+        var snapshot = new GameStateSnapshot(true, false, false, false, false, new PlayerSnapshot(0f, 0f, 0f, null), null, null, null, null, 800, 600);
 
         var player = snapshot.ToJson()["player"]!.AsObject();
 
         Assert.True(player.ContainsKey("cell"));
         Assert.Null(player["cell"]);
+    }
+
+    [Fact]
+    public void EditsSnapshot_BeforeAnySave_SerializesNullLastSavedName()
+    {
+        var edits = new EditsSnapshot(0, false, null, "none").ToJson();
+
+        Assert.True(edits.ContainsKey("lastSavedName"));
+        Assert.Null(edits["lastSavedName"]);
+        Assert.Equal("none", (string?)edits["saveStatus"]);
     }
 }

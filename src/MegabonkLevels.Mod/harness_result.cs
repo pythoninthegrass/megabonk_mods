@@ -27,6 +27,18 @@ public readonly record struct HarnessResult(string Command, bool Ok, JsonObject 
 
 public readonly record struct PlayerSnapshot(float X, float Y, float Z, GridCell? Cell);
 
+// The editor's edit count, whether it differs from the last save, and the outcome of the last save attempt ("none", "saved" or "failed").
+public readonly record struct EditsSnapshot(int Count, bool Dirty, string LastSavedName, string SaveStatus)
+{
+    public JsonObject ToJson() => new()
+    {
+        ["count"] = Count,
+        ["dirty"] = Dirty,
+        ["lastSavedName"] = LastSavedName,
+        ["saveStatus"] = SaveStatus,
+    };
+}
+
 // A null field is one the mod cannot source at that moment.
 public readonly record struct GameStateSnapshot(
     bool LevelLoaded,
@@ -38,6 +50,7 @@ public readonly record struct GameStateSnapshot(
     string EditorTool,
     string Selected,
     int? PaletteEntries,
+    EditsSnapshot? Edits,
     int ScreenWidth,
     int ScreenHeight)
 {
@@ -52,6 +65,7 @@ public readonly record struct GameStateSnapshot(
         ["editorTool"] = EditorTool,
         ["selected"] = Selected,
         ["paletteEntries"] = PaletteEntries,
+        ["edits"] = Edits?.ToJson(),
         ["screen"] = new JsonArray(ScreenWidth, ScreenHeight),
     };
 

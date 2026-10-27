@@ -82,6 +82,8 @@ public static class EditorTileTools
     private static readonly EditorCaretInput _saveCaretInput = new();
     private static TextFieldView _saveView;
     private static int _lastSavedEditCount;
+    private static string _lastSavedName;
+    private static string _saveStatus = "none";
 
     private sealed class ToastSlot
     {
@@ -298,7 +300,7 @@ public static class EditorTileTools
             var undo = _session?.CanUndo == true ? "ready" : "empty";
             var redo = _session?.CanRedo == true ? "ready" : "empty";
             var currentEdits = _session?.CurrentEdits.Count ?? 0;
-            var dirty = _session != null && currentEdits != _lastSavedEditCount;
+            var dirty = IsDirty();
             var saveState = dirty ? "dirty" : "saved";
             _status.text = $"undo: {undo}  redo: {redo}  save: {saveState} ({currentEdits} edits)\n{_validateSummary}";
             _status.color = _reachability == null ? WarnColor : Color.white;
@@ -718,6 +720,11 @@ public static class EditorTileTools
         return null;
     }
 
+    private static bool IsDirty() => _session != null && _session.CurrentEdits.Count != _lastSavedEditCount;
+
+    public static EditsSnapshot ReadEdits() =>
+        new(_session?.CurrentEdits.Count ?? 0, IsDirty(), _lastSavedName, _saveStatus);
+
     private static bool Save()
     {
         if (_session == null)
@@ -740,11 +747,14 @@ public static class EditorTileTools
         }
         catch (Exception ex)
         {
+            _saveStatus = "failed";
             Fail($"save failed: {ex.Message}");
             return false;
         }
 
         _lastSavedEditCount = _session.CurrentEdits.Count;
+        _lastSavedName = fileName;
+        _saveStatus = "saved";
         _validateSummary = $"saved {fileName}";
         ShowTransientStatus($"saved: {fileName}");
         _saveField.Set(fileName.Substring(0, fileName.Length - ".mblevel.json".Length));
@@ -799,6 +809,7 @@ public static class EditorTileTools
         _session = new EditorEditSession(level.Edits);
         _sessionRunGeneration = LiveEditPatch.RunGeneration;
         _lastSavedEditCount = level.Edits.Count;
+        _lastSavedName = name;
         InvalidateValidation();
         _validateSummary = $"loaded {name}";
         ShowTransientStatus($"loaded: {name}");
