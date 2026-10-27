@@ -128,7 +128,7 @@ Register it by adding the `megabonk` entry under `mcpServers` in `.mcp.json` (co
 
 ### Result encoding
 
-Structured tool results (every tool that returns the harness result, plus `paths`) pass through one function, `_encode` in `scripts/mcp_server.py`. The `MEGABONK_MCP_ENCODING` environment variable, set in the `megabonk` entry of `.mcp.json`, selects the format:
+Structured tool results (every tool that returns the harness result, plus `paths`) pass through one function, `_encode` in `scripts/mcp_server.py`. The `MEGABONK_MCP_ENCODING` environment variable, read through python-decouple (process environment, then `.env`; the `megabonk` entry of `.mcp.json` can also set it), selects the format:
 
 | Value | Text content | `structuredContent` |
 | --- | --- | --- |

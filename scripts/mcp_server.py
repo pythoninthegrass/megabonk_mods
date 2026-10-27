@@ -49,6 +49,7 @@ DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parent.parent / ".tools" / "ev
 LOG_POLL_INTERVAL = 0.2
 ENCODING_ENV = "MEGABONK_MCP_ENCODING"
 ENCODINGS = ("json", "json-min", "toon")
+DEFAULT_ENCODING = "json"
 # Mirrors KeyNames.All in src/MegabonkLevels.Mod/key_names.cs; a test keeps the two in step.
 KEY_NAMES = (
     *"ABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -72,7 +73,7 @@ def _harness() -> Path:
 
 
 def _encoding() -> str:
-    encoding = os.environ.get(ENCODING_ENV, "json") or "json"
+    encoding = run.load_lookup()(ENCODING_ENV) or DEFAULT_ENCODING
     if encoding not in ENCODINGS:
         raise ToolError(f"{ENCODING_ENV} must be one of {', '.join(ENCODINGS)}, got {encoding!r}")
     return encoding
