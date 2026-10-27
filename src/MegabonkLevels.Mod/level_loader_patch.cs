@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Il2Cpp;
 using Il2CppAssets.Scripts.Game.Other;
@@ -19,7 +20,14 @@ namespace MegabonkLevels;
 // MapController.IsMainMenu() stayed true before and after calling it) — it never actually starts a run.
 public static class LevelLoaderPatch
 {
-    // Reads a .mblevel.json from disk and starts the matching run.
+    // Levels whose MapData isn't loaded yet wait here and are retried each frame by Pump() until the
+    // main scene provides the map, so a load-level issued during startup doesn't fail with
+    // "no MapData found". Each entry is removed once the run starts or the load is fatally rejected.
+    private static readonly List<(LevelFile Level, MelonLogger.Instance Logger, string Path)> _pending = new();
+
+    // Reads a .mblevel.json from disk and registers the matching run. MapData may not exist yet when
+    // this is called (e.g. a load-level issued right after launch), so the load is queued and Pump()
+    // attempts it each frame until the map is available. Read/parse failures return false at once.
     public static bool LoadAndStart(string path, MelonLogger.Instance logger)
     {
         LevelFile level;
@@ -33,20 +41,6 @@ public static class LevelLoaderPatch
             return false;
         }
 
-        return Start(level, logger);
-    }
-
-    // Starts a run from an in-memory level file, reusing the same seed forcing, pending-edit and
-    // custom-run marking as a disk load. Returns false when the level cannot be started (missing
-    // map/stage, or StartNewMap threw). A build-id mismatch is logged but not fatal.
-    public static bool Start(LevelFile level, MelonLogger.Instance logger)
-    {
-        var warning = GameBuildIdCheck.MismatchWarning(level.GameBuildId, GameBuildIdPatch.CurrentBuildId());
-        if (warning != null)
-        {
-            logger.Warning(warning);
-        }
-
         foreach (var (packId, recordedVersion) in level.Packs)
         {
             var packWarning = GamePackVersionCheck.MismatchWarning(packId, recordedVersion, PackPrefabs.ManifestVersion(packId));
@@ -56,17 +50,45 @@ public static class LevelLoaderPatch
             }
         }
 
+        var buildWarning = GameBuildIdCheck.MismatchWarning(level.GameBuildId, GameBuildIdPatch.CurrentBuildId());
+        if (buildWarning != null)
+        {
+            logger.Warning(buildWarning);
+        }
+
+        _pending.Add((level, logger, path));
+        return true;
+    }
+
+    // Attempts every pending load, dropping each once it starts or is fatally rejected. A load whose
+    // MapData isn't available yet is left in place for the next Pump.
+    public static void Pump()
+    {
+        for (var i = _pending.Count - 1; i >= 0; i--)
+        {
+            var (level, logger, _) = _pending[i];
+            if (StartOnce(level, logger))
+            {
+                _pending.RemoveAt(i);
+            }
+        }
+    }
+
+    // Starts a run from an in-memory level file, reusing the same seed forcing, pending-edit and
+    // custom-run marking as a disk load. Returns false when the MapData isn't loaded yet (Pump
+    // retries); returns true once the run starts or the load is fatally rejected.
+    private static bool StartOnce(LevelFile level, MelonLogger.Instance logger)
+    {
         var mapData = FindMapData(level.Map);
         if (mapData == null)
         {
-            logger.Error($"LevelLoader: no MapData found for map={level.Map}");
             return false;
         }
 
         if (level.StageIndex < 0 || level.StageIndex >= mapData.stages.Length)
         {
             logger.Error($"LevelLoader: stageIndex {level.StageIndex} out of range for {level.Map} ({mapData.stages.Length} stages)");
-            return false;
+            return true;
         }
 
         SeedForcePatch.ForceLevelSeed(level.Seed);
@@ -95,7 +117,7 @@ public static class LevelLoaderPatch
         catch (Exception ex)
         {
             logger.Error($"LevelLoader: StartNewMap threw: {ex}");
-            return false;
+            return true;
         }
 
         return true;

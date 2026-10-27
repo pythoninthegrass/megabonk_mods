@@ -39,6 +39,7 @@ public class MegabonkLevelsMod : MelonMod
     {
         EditorInput.Queue.BeginFrame(Time.frameCount, Time.unscaledTime, (Input.mousePosition.x, Input.mousePosition.y));
         DevHarness.Poll();
+        LevelLoaderPatch.Pump();
         KillFloorWatcher.Tick();
         PositionLabel.Tick();
         EditorMode.Tick(LoggerInstance);
