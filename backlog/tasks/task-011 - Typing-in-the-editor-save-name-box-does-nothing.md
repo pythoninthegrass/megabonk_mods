@@ -1,10 +1,10 @@
 ---
 id: TASK-011
 title: Typing in the editor save-name box does nothing
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-22T06:03:00Z'
-updated_date: '2026-10-27 03:55'
+updated_date: '2026-10-27 04:01'
 labels:
   - editor
   - bug
@@ -28,7 +28,7 @@ In editor mode, real-keyboard typing does not work in the editor's text fields: 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A dev-only diagnostic logs, from the real-input layer of EditorInput (not the injected queue), each non-empty Input.inputString while an editor text field is focused (escaped, with char codes) and each real Backspace or Return key-down, so a real keypress shows in Latest.log whether or not the field accepts it
+- [x] #1 A dev-only diagnostic logs, from the real-input layer of EditorInput (not the injected queue), each non-empty Input.inputString while an editor text field is focused (escaped, with char codes) and each real Backspace or Return key-down, so a real keypress shows in Latest.log whether or not the field accepts it
 - [ ] #2 With the diagnostic on, real keystrokes typed into the save-name box and the palette search box are tried in the running game and the log shows whether the game receives any characters from Wine, recorded as evidence in the task notes
 - [ ] #3 The cause is identified and recorded in docs/development.md, replacing the 'Real keyboard text' claim that typing works under plain Wine, including any runtime on which typing behaves differently
 - [ ] #4 Clicking the save-name box and typing on a real keyboard enters the typed characters, confirmed in the running game
@@ -49,6 +49,8 @@ Retest on macOS plain Wine after a fresh relaunch: click on the level-name box, 
 Harness caveats found while testing: type_text only treats real control characters as Backspace (\b) and Return (\n); a literal backslash-n typed through the tool lands in the box as printable text. The key tool's Backspace and Return do not reach the text boxes, because TextFieldModel.Type reads text input rather than key state (only the caret keys use GetKeyDown). To clear a box through the harness, relaunch, or click Save instead of sending Return.
 
 Next step is the diagnostic in AC #1: log raw Input.inputString and real Backspace/Return key-down while a field is focused, then press keys on a real keyboard. Empty inputString on keypress means Wine or the window is not delivering text to Unity; non-empty inputString with an unchanged box means the field is not consuming it.
+
+Diagnostic landed (RealInputDiagnostic, EditorInput.LogRealTextInput, called from OnUpdate while DevHarness.Enabled and EditorMode.Active). It logs real keyboard frames whether or not a field has focus and records focused=true|false, which is slightly broader than AC #1 so a focus failure is distinguishable from a delivery failure. Usage is in docs/development.md under 'Real keyboard text'. Real-keyboard evidence for AC #2 is still to be collected.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
