@@ -1,9 +1,10 @@
 ---
 id: TASK-018
 title: Add MCP tools for save/reload verification and editor widget targeting
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-27T07:23:00Z'
+updated_date: '2026-10-27T19:10:00Z'
 labels:
   - dev-harness
   - tooling
@@ -30,17 +31,23 @@ Driving the editor through the megabonk MCP tools is slow and error-prone when v
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 An agent can locate the game directory, harness folder, latest log path and custom-level save directory without shelling out to a script.
-- [ ] #2 An agent can wait on a log line (log_wait) and gets a tool error on a bad key instead of a silent no-op.
-- [ ] #3 `state` reports the edit count and save status so a save is verifiable without reading the screenshot or the log.
-- [ ] #4 Editor widgets can be targeted by name and levels saved/listed without guessing screenshot pixel coordinates.
-- [ ] #5 All additions are tested and documented in docs/development.md.
+- [x] #1 An agent can locate the game directory, harness folder, latest log path and custom-level save directory without shelling out to a script.
+- [x] #2 An agent can wait on a log line (log_wait) and gets a tool error on a bad key instead of a silent no-op.
+- [x] #3 `state` reports the edit count and save status so a save is verifiable without reading the screenshot or the log.
+- [x] #4 Editor widgets can be targeted by name and levels saved/listed without guessing screenshot pixel coordinates.
+- [x] #5 All additions are tested and documented in docs/development.md.
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Subtasks 018.01 to 018.04 delivered: state reports edit count and save status, editor widgets are targeted by name (ui_tree, click_widget), levels are saved and listed through save_level and list_levels, and paths, log_wait, key name validation and screenshot overwrite/scale/crop work offline-tested. paths, log_wait, key validation, screenshot options and state were confirmed against the live game. Tests and docs/development.md cover each tool; task check passed.
+<!-- SECTION:FINAL_SUMMARY:END -->
