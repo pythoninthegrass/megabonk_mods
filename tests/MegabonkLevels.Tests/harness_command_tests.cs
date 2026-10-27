@@ -35,6 +35,17 @@ public class HarnessCommandTests
         Assert.Equal("load-bundle", command.Name);
     }
 
+    [Fact]
+    public void TryParse_ShaderReport_ReturnsKind()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"shader-report"}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.ShaderReport, command.Kind);
+        Assert.Equal("shader-report", command.Name);
+    }
+
     [Theory]
     [InlineData("""{"command":"state"}""", "state")]
     [InlineData("""{"command":"load-level","path":"a"}""", "load-level")]

@@ -16,7 +16,7 @@ Install Unity 2023.2.22f1 through Unity Hub (it is an archived version; install 
 task pack:build
 ```
 
-The task runs `PackBuilder.BuildTestPack` in batch mode. It creates a cube prefab with a Standard-shader material, assigns it to the `testprop` bundle, and calls `BuildPipeline.BuildAssetBundles` with `ChunkBasedCompression` (LZ4) once per target, writing `.tools/bundles/windows/testprop` and `.tools/bundles/linux/testprop`. Type trees are kept (the default). Set `UNITY_EDITOR` in `.env` to use another editor path. The licensing client prints `Code 10 while verifying Licensing Client signature` errors during the build; they are harmless.
+The task runs `PackBuilder.BuildTestPack` in batch mode. It creates two prefabs, assigns each to its own bundle, and calls `BuildPipeline.BuildAssetBundles` with `ChunkBasedCompression` (LZ4) once per target, writing `testprop` and `testmodel` under `.tools/bundles/windows/` and `.tools/bundles/linux/`. `TestProp` is a cube with a Standard-shader material. `TestModel` is a four-part composite: a body with a textured Standard material (a generated brick PNG), a cylinder with a `Legacy Shaders/Diffuse` material, a sphere with an emissive Standard material and a roof with a plain Standard material. It exercises the shader remap below. Type trees are kept (the default). Set `UNITY_EDITOR` in `.env` to use another editor path. The licensing client prints `Code 10 while verifying Licensing Client signature` errors during the build; they are harmless.
 
 A bundle is built per platform. The Windows build (used under CrossOver and Wine on macOS) needs the Windows bundle and the native Linux build needs the Linux one.
 
@@ -38,6 +38,32 @@ The MelonLoader interop assemblies cannot call the synchronous loaders, and the 
 A pack is a directory `UserData/LevelPacks/<pack>/` in the game folder. Every file in it with no extension or a `.bundle` extension is loaded as an AssetBundle; other files are ignored. A bundle is platform-specific, so a bundle built for the wrong platform fails to load and is logged as a warning for that file only.
 
 A catalogId `bundle:<pack>/<asset>` resolves to the `GameObject` named `<asset>` in any bundle of pack `<pack>`. The pack is loaded the first time an ID references it and stays loaded for the session, because instantiated prefabs depend on the bundle's data. `Applier.ResolvePrefab` is the single resolver: game-asset IDs go through `CatalogRoute`, and `bundle:` IDs go through `PackPrefabs`, so placing, undoing and saving a pack object use the same edit pipeline as a game prefab. The pure lookup and caching live in `PackCatalog`, which is unit tested without Unity.
+
+### Shader remap
+
+Materials in a bundle keep the shader they were authored with, and the game's build only holds the shaders and shader variants its own materials use. `PackShaderRemap.Apply` therefore runs on each prefab as its bundle loads (`PackPrefabs.LoadBundleInto`). It replaces the material on every renderer with a new material on the game's toon shader and copies the properties the rules map. The pure rules are in `shader_remap.cs` (`ShaderRemap.PlanFor`) and are unit tested.
+
+The target is `MK/Toon/Built-in/Standard/Simple + Outline`. In the forest level 1362 of the scene's materials use it, including every textured prop, and it is the only MK.Toon Standard variant with textured, opaque materials. Plain `MK/Toon/Built-in/Standard/Simple` was tried first and rendered an albedo texture as flat white: the keyword combination it needs was not in the build.
+
+| authoring shader | result |
+| --- | --- |
+| `Standard`, `Standard (Specular setup)`, `Legacy Shaders/*`, `Unlit/*`, `HDRP/*` | remapped, copying the Built-in properties below |
+| `Universal Render Pipeline/*` | remapped, copying the URP properties below |
+| `MK/Toon/*`, `Toon/*`, `Sprites/*`, `UI/*` | kept as authored |
+| missing, `Hidden/*` (the pink error shader) or any other name | remapped with the Built-in copies and one warning per prefab and shader |
+
+| from (authoring) | to (`Simple + Outline`) | note |
+| --- | --- | --- |
+| `_MainTex`, or `_BaseMap` for URP | `_AlbedoMap` | texture, scale and offset; enables `_MK_ALBEDO_MAP` when set |
+| `_Color`, or `_BaseColor` for URP | `_AlbedoColor` | |
+| `_BumpMap` | `_NormalMap` | copied only; the game has no material with a normal map, so its keyword is unverified |
+| `_EmissionMap`, `_EmissionColor` | `_EmissionMap`, `_EmissionColor` | enables `_MK_EMISSION` when the map is set or the color is not black |
+
+Every remapped material also gets the keywords every textured game material carries: `_MK_LIGHT_CEL`, `_MK_WRAPPED_DIFFUSE`, `_WRAPPEDLIGHTING_ON`, `_MK_RECEIVE_SHADOWS`, `_RECEIVESHADOWS_ON`, `_MK_ENVIRONMENT_REFLECTIONS_AMBIENT` and `_MK_ARTISTIC_ANIMATION_STUTTER`. Without them the shader runs a keyword combination the build stripped and ignores the albedo map. Smoothness, metallic, specular and every other property are not copied; the result is flat toon shading with cel bands, shadows and the level's fog.
+
+An author who wants full control can assign an MK.Toon material in the authoring project, but the project has no MK.Toon package, so a pack normally ships Standard materials and relies on the remap. Author in plain colors and one albedo texture per material; per-material tuning is not carried over.
+
+`run.py shader-report` (harness command `shader-report`) prints which candidate shaders `Shader.Find` resolves in the running game, the shaders and properties of the scene's materials, and the keyword sets of the MK.Toon materials. Use it to re-check the target after a game update. In the forest level `Unlit/Color`, `UnlitVertexColor` and `Standard (Specular setup)` do not resolve, while `Standard`, `Unlit/Texture`, `Legacy Shaders/Diffuse` and the MK.Toon and `Toon/Lit Tri Planar *` shaders do.
 
 ### Missing packs and assets
 
@@ -71,5 +97,4 @@ The level schema carries an optional top-level `packs` map (`{"<packId>": "<vers
 
 - The Linux bundle builds but has not been loaded. MelonLoader segfaults the native Linux build, so there is no mod-side harness there to run it.
 - A bundle built by a different editor version (Unity 6.6 was installed but has no Windows build module) has not been tried. Treat the exact 2023.2.22f1 match as required until a test says otherwise.
-- The test prop's Standard shader has not been rendered in the game, so whether built-in shaders survive the game's shader stripping is open.
 - Custom `MonoBehaviour` scripts cannot ship in a bundle for an IL2CPP game; any behaviour has to live in the mod.

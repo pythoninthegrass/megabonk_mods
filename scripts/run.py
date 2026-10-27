@@ -26,6 +26,7 @@ Usage:
     run.py vulnerable              Restore normal player damage
     run.py steam-ready             Check whether the in-game Steamworks client is ready
     run.py state                   Print the game's current state as JSON (level, editor, player, tool, selection)
+    run.py shader-report           Print which candidate shaders Shader.Find resolves and the shaders and properties of the scene's materials
     run.py heartbeat <on|off>      Start or stop the kill-floor heartbeat (actor counts and lowest heights every 5 seconds)
     run.py cells <on|off>          Start or stop logging the player's and boss-tier actors' grid cell on change
     run.py editor <on|off>         Enter or leave editor mode (frozen run, free-fly camera), like pressing F8
@@ -384,6 +385,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("vulnerable")
     sub.add_parser("steam-ready")
     sub.add_parser("state")
+    sub.add_parser("shader-report")
     heartbeat = sub.add_parser("heartbeat")
     heartbeat.add_argument("state", choices=["on", "off"])
     cells = sub.add_parser("cells")
@@ -575,6 +577,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send(harness, build_command(args.action), args.timeout)
         case "state":
             ok = send_printing_result(harness, build_command("state"), args.timeout)
+        case "shader-report":
+            ok = send_printing_result(harness, build_command("shader-report"), args.timeout)
         case "teleport":
             ok = send_printing_result(harness, teleport_payload(args), args.timeout)
         case "dismiss-levelup":

@@ -9,6 +9,7 @@ public enum HarnessCommandKind
 {
     LoadLevel,
     LoadBundle,
+    ShaderReport,
     Screenshot,
     ApplyPendingEdits,
     Quit,
@@ -161,6 +162,10 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseWithPath(root, HarnessCommandKind.LoadLevel, out command, out error);
             case "load-bundle":
                 return TryParseWithPath(root, HarnessCommandKind.LoadBundle, out command, out error);
+            case "shader-report":
+                command = new HarnessCommand(HarnessCommandKind.ShaderReport, null);
+                error = null;
+                return true;
             case "apply-pending-edits":
                 command = new HarnessCommand(HarnessCommandKind.ApplyPendingEdits, null);
                 error = null;

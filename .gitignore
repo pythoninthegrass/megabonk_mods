@@ -299,3 +299,5 @@ unity/*/*.csproj
 unity/*/*.sln
 unity/*/Assets/TestProp/
 unity/*/Assets/TestProp.meta
+unity/*/Assets/TestModel/
+unity/*/Assets/TestModel.meta

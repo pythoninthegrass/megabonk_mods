@@ -110,6 +110,7 @@ public static class PackPrefabs
         {
             if (asset.TryCast<GameObject>() is { } prefab)
             {
+                PackShaderRemap.Apply(prefab, _logger);
                 assets[prefab.name] = prefab;
             }
         }

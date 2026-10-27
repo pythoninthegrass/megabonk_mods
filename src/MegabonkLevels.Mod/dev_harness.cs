@@ -128,6 +128,8 @@ public static class DevHarness
                 break;
             case HarnessCommandKind.LoadBundle:
                 return LoadBundle(command.Path);
+            case HarnessCommandKind.ShaderReport:
+                return ShaderReport.Build();
             case HarnessCommandKind.Screenshot:
                 _logger.Msg($"DevHarness: screenshot '{command.Path}'.");
                 MelonCoroutines.Start(CaptureAtEndOfFrame(command.Path));
