@@ -204,6 +204,84 @@ Caveats:
 - The screenshot is the game's own frame at the game's render resolution, not a capture of the host screen.
 - Localhost networking was not tested; the file-drop channel needs only `System.IO`.
 
+## Launching without a Steam session
+
+Steam allows one session per account across every device, so a second Mac that starts Steam signs the account out on the first. The mod is load-only, but the level loader reads the app build id through Steamworks, so a game that cannot see a Steam session cannot `load-level`. `tools/steamstub/` provides a drop-in `steam_api64.dll` that stands in for the real shim so the game launches and plays with Steam stopped, no login, and no `SteamAppId`/`SteamGameId` environment variables.
+
+The game's managed Steamworks.NET resolves its P/Invokes against the native shim `Megabonk_Data/Plugins/x86_64/steam_api64.dll`. That shim normally loads the real `steamclient.dll` from the Steam install, which needs a running client. The stub exports the same symbol set, so every P/Invoke the runtime can already resolve still resolves; most interface methods return a safe default, while the few the game needs for init, `load-level` and the offline save path return real values (`GetAppBuildId` returns the depot build id `21750826`, matching every shipped level file so the loader records no mismatch).
+
+### Building and installing
+
+The stub is generated from the game's own shim, built with mingw-w64, and deployed by swapping the file in the game directory. The swap is fully reversible.
+
+```sh
+task game:mingw:install                 # mingw-w64 x86_64 GCC, if not already present
+python3 tools/steamstub/generate_stub.py "<game dir>/Megabonk_Data/Plugins/x86_64/steam_api64.dll" \
+    > tools/steamstub/steamstub.c       # regenerates the source from the shim's exports
+bash tools/steamstub/build.sh           # builds tools/steamstub/steam_api64.dll
+python3 scripts/swap_steam_stub.py status # report active vs stub, and the backup
+python3 scripts/swap_steam_stub.py install  # back up the real shim, drop in the stub
+```
+
+`swap_steam_stub.py` resolves the game directory the same way `game_paths.py` does (process environment, then the nearest `.env`, then the built-in default). The game must be quit before install or restore, because a loaded DLL cannot be overwritten. `install` copies the current shim to `<shim>.steamstub.bak` before replacing it; `restore` puts the backup back. `status` prints the shim hash, the stub hash, the backup path, and whether the active file is the stub or the original.
+
+### Launching
+
+With the stub installed and Steam stopped, launch through the normal task:
+
+```sh
+task game:run        # Megabonk.exe, detached; no Steam client, no SteamAppId variables needed
+```
+
+The game reaches the main menu, and `load-level` works:
+
+```sh
+uv run scripts/run.py relaunch            # quits, relaunches, loads the example level, enters editor
+uv run scripts/run.py load levels/example-forest.mblevel.json
+```
+
+The stub is a drop-in, so a normal Steam install is unaffected: run `python3 scripts/swap_steam_stub.py restore` and relaunch to return to the logged-in path.
+
+### The degraded-init verdict
+
+`MEGABONK_STEAM_FAIL_INIT=1` makes the stub's `SteamInternal_SteamAPI_Init` return `k_ESteamAPIInitResult_NoSteamClient` (3) and `SteamAPI_IsSteamRunning` return 0, exactly as it would with no Steam client, while `CreateInterface` still returns the fake interface. This is the intended way to confirm the game's degraded behaviour in a live run:
+
+```sh
+MEGABONK_STEAM_FAIL_INIT=1 task game:run
+```
+
+Observed with Steam stopped:
+
+- `steam-ready` returns `{"ready":false}` — the game's `SteamManager` logs the failed init and reports not-initialized, matching the static verdict that `SteamManager.Load` logs and continues rather than quitting.
+- The game still reaches the main menu with no quit loop, and `load-level` still starts a run, because the stub's `CreateInterface` returns a non-null `ISteamApps` whose `GetAppBuildId` returns the depot build id. The loader's `GameBuildIdPatch.CurrentBuildId()` therefore does not throw.
+
+The one degraded behaviour that does **not** appear this way is a `load-level` rejected with `Steamworks is not initialized`. That happens only when `CreateInterface` returns null, which is the real shim with no Steam client at all — not the stub. On this Mac the macOS Steam `ipcserver` (the process that provides the game's `SteamClient` interface to the real shim) respawns within about a second of being killed and is reparented to init, so the real shim's `Init` still succeeds even when the Steam app is stopped. The genuinely hard-degraded path — `steam-ready` `ready:false` and `load-level` rejected — is reproduced by the real shim only when that ipcserver is absent, which means quitting the macOS Steam app (and, like any Steam quit, signing the account out on every other machine).
+
+### Saving and reloading a custom level offline
+
+The mod's editor writes a custom level to `<game dir>/UserData/Levels/<name>.mblevel.json` — the offline, `steamId 0` save path. The name is whatever is in the editor's name field, normalized to letters, digits, `-` and `_` (the `.mblevel.json` suffix is stripped if present); an empty field normalizes to `level`, so the Save button overwrites `level.mblevel.json`. The field auto-saves its text while focused, but the level file itself is only written when the Save button is clicked.
+
+To save from the harness, click the Save button, which sits at the right end of the editor toolbar. Its center is at display coordinates about `(1001, 86)` on the 1512x982 frame (the toolbar is the gray bar across the top; the Save button is the wide button to the right of the name field, just left of Load). A click there overwrites `level.mblevel.json` with the current edits:
+
+```sh
+uv run scripts/run.py mouse click 1001 86
+```
+
+Mouse coordinates are the screenshot's top-left pixels (see the "Commands" table), so the value above is the on-screen position directly. Reload the saved file with `run.py load <path>`; the game reads it back through the same loader, and the edits are present on the next run. A level saved, then reloaded, then edited again, keeps the previously saved edits — confirming the round trip through the offline path.
+
+### Degraded and absent features
+
+With the stub, the game is playable but Steam is faked, so anything that would have talked to Steam returns a default or does nothing:
+
+- No authenticated Steam identity. `GetSteamID` returns 0, which is exactly what selects the offline `steamId 0` save path, so saves go to `UserData/Levels/` rather than any Steam cloud location.
+- Achievements, leaderboards and stats return defaults. The mod suppresses those writes entirely for mod-loaded levels anyway (see `steam_write_guard_patch.cs`), so this changes nothing for custom levels.
+- Steam cloud, remote storage,UGC, screenshots, chat and the overlay are unavailable; the game's code paths that would use them read a default or no-op.
+- `SteamAPI_RestartAppIfNecessary` returns 0, so the game never relaunches itself.
+
+### Second Mac
+
+The stub swap is a one-file change in the game directory, so it copies along with the prefix (see "Setting up a second machine" above). A copied prefix already has the game's original shim; run `python3 scripts/swap_steam_stub.py install` once on the new machine, then `task game:run` with Steam stopped. The stub build is reproducible from the shim with `generate_stub.py` + `build.sh`, so it can be rebuilt there too if the deployed file is ever replaced.
+
 ## Freezing gameplay
 
 `freeze` calls `MyTime.Pause()` and `resume` calls `MyTime.Unpause()`, the game's own time path, and each logs `MyTime.paused`. This is not `PauseUi.Pause()`, so no pause window appears in the frame. While frozen the run timer, enemies and the player stop, so an idle player cannot die. The harness still polls (MelonLoader's `OnUpdate` does not use the game's clock) and the screen still renders: clouds, grass and particles keep moving between two frozen screenshots, while the HUD timer, enemies and player do not.
