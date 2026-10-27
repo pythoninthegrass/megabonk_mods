@@ -620,6 +620,59 @@ def test_relaunch_stops_at_once_when_the_editor_does_not_support_the_map(monkeyp
     assert errors == ["relaunch: the editor does not support this map; see the EditorMode warning in the game log"]
 
 
+def test_log_line_containing_returns_the_full_matching_line(tmp_path) -> None:
+    log = tmp_path / "Latest.log"
+    log.write_text("DevHarness: enabled\n[12:00:01] LevelLoader: load failed: no MapData found for map=32\n")
+    assert run.log_line_containing(log, run.LOAD_FAILED_LINE) == "[12:00:01] LevelLoader: load failed: no MapData found for map=32"
+
+
+def test_log_line_containing_uses_only_the_last_session_and_its_first_match(tmp_path) -> None:
+    log = tmp_path / "Latest.log"
+    log.write_text(
+        "LevelLoader: load failed: old session\n"
+        "DevHarness: enabled\n"
+        "LevelLoader: load failed: first\n"
+        "DevHarness: enabled\n"
+        "LevelLoader: load failed: second\n"
+        "LevelLoader: load failed: third\n"
+    )
+    assert run.log_line_containing(log, run.LOAD_FAILED_LINE) == "LevelLoader: load failed: second"
+
+
+def test_log_line_containing_ignores_matches_before_the_last_launch_marker(tmp_path) -> None:
+    log = tmp_path / "Latest.log"
+    log.write_text("LevelLoader: load failed: old\nDevHarness: enabled\n")
+    assert run.log_line_containing(log, run.LOAD_FAILED_LINE) is None
+
+
+def test_log_line_containing_searches_the_whole_log_without_a_launch_marker(tmp_path) -> None:
+    log = tmp_path / "Latest.log"
+    log.write_text("EditorMode: unsupported map Desert\n")
+    assert run.log_line_containing(log, run.EDITOR_UNSUPPORTED_LINE) == "EditorMode: unsupported map Desert"
+
+
+def test_log_line_containing_returns_none_for_a_missing_log(tmp_path) -> None:
+    assert run.log_line_containing(tmp_path / "absent.log", run.LOAD_FAILED_LINE) is None
+
+
+def test_relaunch_load_failure_error_includes_the_log_line(monkeypatch) -> None:
+    relaunch_stubs(monkeypatch, load_failed=True)
+    monkeypatch.setattr(run, "log_line_containing", lambda log, marker: f"seen {marker}: no MapData found for map=32")
+    errors = []
+    ok = run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=errors.append)
+    assert ok is False
+    assert errors == ["relaunch: the level failed to load: seen LevelLoader: load failed: no MapData found for map=32"]
+
+
+def test_relaunch_unsupported_map_error_includes_the_log_line(monkeypatch) -> None:
+    relaunch_stubs(monkeypatch, unsupported=True)
+    monkeypatch.setattr(run, "log_line_containing", lambda log, marker: "EditorMode: unsupported map Desert")
+    errors = []
+    ok = run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=errors.append)
+    assert ok is False
+    assert errors == ["relaunch: the editor does not support this map: EditorMode: unsupported map Desert"]
+
+
 def test_wait_for_any_log_line_returns_the_first_line_found(tmp_path) -> None:
     log = tmp_path / "Latest.log"
     log.write_text("start\nEditorMode: unsupported map Desert\n")

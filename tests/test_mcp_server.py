@@ -822,3 +822,17 @@ async def test_relaunch_tool_forwards_the_overrides(tmp_path, monkeypatch) -> No
     async with Client(mcp_server.mcp) as client:
         await client.call_tool("relaunch", {"map": 2, "seed": 3})
     assert seen["overrides"] == {"map": 2, "seed": 3}
+
+
+async def test_relaunch_tool_error_carries_the_failing_log_line(tmp_path, monkeypatch) -> None:
+    setup_harness(tmp_path, monkeypatch)
+
+    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None):
+        on_error("relaunch: the level failed to load: LevelLoader: load failed: no MapData found for map=32")
+        return False
+
+    monkeypatch.setattr(mcp_server.run, "relaunch", fake_relaunch)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("relaunch", {})
+    assert result.is_error
+    assert "LevelLoader: load failed: no MapData found for map=32" in result.content[0].text

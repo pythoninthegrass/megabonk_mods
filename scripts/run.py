@@ -79,6 +79,11 @@ RELAUNCH_READY_TIMEOUT = 60.0
 KILL_FLOOR_ARMED_LINE = "KillFloor: armed"
 EDITOR_UNSUPPORTED_LINE = "EditorMode: unsupported map"
 LOAD_FAILED_LINE = "LevelLoader: load failed"
+HARNESS_ENABLED_LINE = "DevHarness: enabled"
+RELAUNCH_STOP_ERRORS = {
+    EDITOR_UNSUPPORTED_LINE: ("the editor does not support this map", "see the EditorMode warning in the game log"),
+    LOAD_FAILED_LINE: ("the level failed to load", "see the LevelLoader line in the game log"),
+}
 STEAM_READY_POLL_SECONDS = 1.0
 GAME_COMMAND = re.compile(r"^(?:[A-Za-z]:\\(?:.*\\)?Megabonk\.exe|(?:\S*/)?Megabonk\.x86_64)(?:\s|$)")
 GAME_IMAGE_WINDOWS = "Megabonk.exe"
@@ -306,6 +311,18 @@ def wait_for_any_log_line(log: Path, lines: list[str], newer_than: float, timeou
         if time.monotonic() >= deadline:
             return None
         time.sleep(POLL_SECONDS)
+
+
+def log_line_containing(log: Path, marker: str) -> str | None:
+    """The first full log line containing `marker` after the last harness-enabled line, or None."""
+    try:
+        lines = log.read_text(errors="ignore").splitlines()
+    except OSError:
+        return None
+    starts = [i for i, line in enumerate(lines) if HARNESS_ENABLED_LINE in line]
+    if starts:
+        lines = lines[starts[-1] :]
+    return next((line for line in lines if marker in line), None)
 
 
 def wait_for_log_line(log: Path, line: str, newer_than: float, timeout: float) -> bool:
@@ -657,7 +674,7 @@ def relaunch(
         on_step("relaunch: waiting for harness")
         return (
             None
-            if wait_for_log_line(latest_log_path(game_dir), "DevHarness: enabled", started, relaunch_timeout(timeout))
+            if wait_for_log_line(latest_log_path(game_dir), HARNESS_ENABLED_LINE, started, relaunch_timeout(timeout))
             else "relaunch: harness did not become ready"
         )
 
@@ -686,11 +703,10 @@ def relaunch(
                 relaunch_timeout(timeout),
             )
             match seen:
-                case _ if seen == EDITOR_UNSUPPORTED_LINE:
-                    on_error("relaunch: the editor does not support this map; see the EditorMode warning in the game log")
-                    return False
-                case _ if seen == LOAD_FAILED_LINE:
-                    on_error("relaunch: the level failed to load; see the LevelLoader line in the game log")
+                case _ if seen in RELAUNCH_STOP_ERRORS:
+                    reason, hint = RELAUNCH_STOP_ERRORS[seen]
+                    detail = log_line_containing(latest_log_path(game_dir), seen)
+                    on_error(f"relaunch: {reason}: {detail}" if detail else f"relaunch: {reason}; {hint}")
                     return False
                 case str():
                     loaded = True
