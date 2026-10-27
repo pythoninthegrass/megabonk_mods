@@ -6,6 +6,7 @@ vars:
   STUB_DIR: tools/steamstub
   STUB_SRC: tools/steamstub/steamstub.c
   STUB_DLL: tools/steamstub/steam_api64.dll
+  LAUNCH_MARKER: .tools/steamstub-launch.marker
   MINGW_CC: '{{.MINGW_CC | default "x86_64-w64-mingw32-gcc"}}'
 
 tasks:
@@ -64,12 +65,23 @@ tasks:
     cmds:
       - uv run scripts/swap_steam_stub.py restore
 
+  mark-launch:
+    internal: true
+    cmds:
+      - mkdir -p {{dir .LAUNCH_MARKER}}
+      - touch {{.LAUNCH_MARKER}}
+
   probe:
     internal: true
     cmds:
       - |
         log="$(uv run scripts/game_paths.py | jq -r .latest_log_path)"
-        until rg -q 'DevHarness: enabled' "$log"; do sleep 2; done
+        for _ in $(seq 90); do
+          [ "$log" -nt {{.LAUNCH_MARKER}} ] && rg -q 'DevHarness: enabled' "$log" && exit 0
+          sleep 2
+        done
+        echo "no fresh 'DevHarness: enabled' in $log within 180s; the game likely exited" >&2
+        exit 1
       - uv run scripts/run.py steam-ready
       - uv run scripts/run.py state
 
@@ -77,6 +89,7 @@ tasks:
     desc: "Launch with the stub's Init succeeding and probe Steamworks readiness (expect ready:true)"
     cmds:
       - uv run scripts/run.py quit || true
+      - task: mark-launch
       - task: :game:run
       - task: probe
 
@@ -84,5 +97,6 @@ tasks:
     desc: "Launch with MEGABONK_STEAM_FAIL_INIT=1 and probe Steamworks readiness (expect ready:false)"
     cmds:
       - uv run scripts/run.py quit || true
+      - task: mark-launch
       - cmd: MEGABONK_STEAM_FAIL_INIT=1 task game:run
       - task: probe
