@@ -1,11 +1,11 @@
 ---
 id: TASK-018.01
 title: Report editor edit count and save status through the state command
-status: In Progress
+status: Done
 assignee:
   - claude
 created_date: '2026-10-27T07:23:00Z'
-updated_date: '2026-10-27T16:54:00Z'
+updated_date: '2026-10-27T16:55:00Z'
 labels:
   - dev-harness
   - tooling
@@ -40,7 +40,7 @@ The `state` command returns editor tool, selection and palette count, but not th
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
