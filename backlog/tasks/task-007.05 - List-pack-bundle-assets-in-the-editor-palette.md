@@ -1,11 +1,11 @@
 ---
 id: TASK-007.05
 title: List pack bundle assets in the editor palette
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-10-26 23:05'
-updated_date: '2026-10-27 06:02'
+updated_date: '2026-10-27T21:47:00Z'
 labels:
   - level-editor
   - assets
@@ -37,26 +37,26 @@ Follow-up to TASK-007.02, building on the manifest from TASK-007.04. Loaded pack
 Packs load once per session and the pack catalog caches misses, so a pack added after launch appears only after a relaunch; record this in the docs.
 <!-- SECTION:DESCRIPTION:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
-<!-- DOD:END -->
-
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A Pack palette category adds a single Packs tab that appears only when at least one pack asset is listed; with no packs installed the palette is unchanged (Forest still has 75 entries and the same tabs)
-- [ ] #2 For a pack with a valid manifest.json the palette lists each name in the manifest assets list that the pack's bundle also holds; an asset the manifest lists but the bundle lacks is logged as a warning and not listed, and an asset the bundle holds but the manifest omits is not listed, matching PackCatalog.Resolve
-- [ ] #3 For a pack with no manifest, or one that fails validation, every prefab in its bundle is listed (the manifest failure warning from PackPrefabs is unchanged)
-- [ ] #4 Each pack entry has catalogId bundle:<pack>/<asset>, display name equal to the asset name, and stage 0; the tooltip shows the catalogId, search matches both the pack id and the name, entries are ordered by pack id then asset name, and they appear on every map
-- [ ] #5 Each pack entry shows a thumbnail rendered through the existing PrefabThumbnails cache, falling back to the display name when the render fails, like other entries
-- [ ] #6 Selecting a pack entry and placing it uses the existing bundle: placement path, and the saved level contains the bundle: id and the packs map
-- [ ] #7 The entry-list logic is Unity-free and unit tested, written first, covering manifest-listed, manifest-absent, bundle-missing and no-pack cases, ordering, and name and pack-id search
-- [ ] #8 docs/development.md (palette section) and docs/asset-bundles.md describe pack entries, their listing rules and the relaunch requirement for a newly installed pack, and the sentence saying pack assets are not listed in the palette is removed
-- [ ] #9 Verified in the running game with the test pack: the Packs tab, entry, thumbnail and tooltip appear on every map the editor supports, and the entry places and saves correctly on Forest and Graveyard (and Hell if TASK-007.05.02 makes it loadable); Desert is refused by the editor
+- [x] #1 A Pack palette category adds a single Packs tab that appears only when at least one pack asset is listed; with no packs installed the palette is unchanged (Forest still has 75 entries and the same tabs)
+- [x] #2 For a pack with a valid manifest.json the palette lists each name in the manifest assets list that the pack's bundle also holds; an asset the manifest lists but the bundle lacks is logged as a warning and not listed, and an asset the bundle holds but the manifest omits is not listed, matching PackCatalog.Resolve
+- [x] #3 For a pack with no manifest, or one that fails validation, every prefab in its bundle is listed (the manifest failure warning from PackPrefabs is unchanged)
+- [x] #4 Each pack entry has catalogId bundle:<pack>/<asset>, display name equal to the asset name, and stage 0; the tooltip shows the catalogId, search matches both the pack id and the name, entries are ordered by pack id then asset name, and they appear on every map
+- [x] #5 Each pack entry shows a thumbnail rendered through the existing PrefabThumbnails cache, falling back to the display name when the render fails, like other entries
+- [x] #6 Selecting a pack entry and placing it uses the existing bundle: placement path, and the saved level contains the bundle: id and the packs map
+- [x] #7 The entry-list logic is Unity-free and unit tested, written first, covering manifest-listed, manifest-absent, bundle-missing and no-pack cases, ordering, and name and pack-id search
+- [x] #8 docs/development.md (palette section) and docs/asset-bundles.md describe pack entries, their listing rules and the relaunch requirement for a newly installed pack, and the sentence saying pack assets are not listed in the palette is removed
+- [x] #9 Verified in the running game with the test pack: the Packs tab, entry, thumbnail and tooltip appear on every map the editor supports, and the entry places and saves correctly on Forest and Graveyard (and Hell if TASK-007.05.02 makes it loadable); Desert is refused by the editor
 <!-- AC:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
+<!-- DOD:END -->
 
 ## Implementation Plan
 
@@ -82,4 +82,12 @@ Desert in game: palette shows the Packs entries with thumbnails and tooltip (bun
 Placement on non-Forest maps is blocked by grid-shape resolution; AC #8 now waits on subtasks TASK-007.05.01 (Desert), .02 (Hell) and .03 (Graveyard), which are dependencies of this task.
 
 2026-10-27: Desert is a ProceduralMesh map and is refused by the editor (TASK-007.05.01); supporting it is TASK-007.06 and does not block this task. Graveyard is a Tiles map (TASK-007.05.03 verifies it). Hell fails to load with 'no MapData found' (TASK-007.05.02). AC #8 was reworded to match; the old AC #8 was removed and the reworded one is now #9, with the docs criterion at #8.
+
+2026-10-27 final verification: Graveyard with testpack shows 47 entries and a Packs tab (TestModel, TestProp); without packs 45 entries and no Packs tab; Forest without packs 75 entries and the same tabs. Placement, undo/redo, save and reload verified on Graveyard (TASK-007.05.03) and Forest. Desert and Hell are ProceduralMesh maps and the editor refuses them (`EditorMode: unsupported map`).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Editor palette lists pack bundle assets under a single Packs tab, shown only when at least one pack asset is listed. Entries are `bundle:<pack>/<asset>` with stage 0, ordered by pack id then asset name, and search matches pack id and name. A pack with a valid manifest lists the manifest names its bundle holds (a missing one is warned and skipped); a pack without a valid manifest lists its whole bundle. The listing logic is Unity-free and unit tested (`PackPaletteEntries`), thumbnails go through `PrefabThumbnails`, and placement and save reuse the existing `bundle:` path with the `packs` map. docs/development.md and docs/asset-bundles.md describe the entries, listing rules and the relaunch requirement for a newly installed pack. Verified in the running game: Forest 75 entries unchanged with no packs; with the test pack the Packs tab, thumbnails and tooltip appear and the entry places and saves on Forest and Graveyard, with undo/redo and reload on Graveyard. Desert and Hell are ProceduralMesh maps and the editor refuses them. Along the way the Graveyard off-grid spawn that hid the grid from the editor camera was fixed (TASK-007.05.03). Follow-up not done: supporting ProceduralMesh maps (TASK-007.06).
+<!-- SECTION:FINAL_SUMMARY:END -->
