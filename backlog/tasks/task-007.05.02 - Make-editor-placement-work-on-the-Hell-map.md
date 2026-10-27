@@ -4,7 +4,7 @@ title: Fix Hell level loading (no MapData found)
 status: To Do
 assignee: []
 created_date: '2026-10-27 05:47'
-updated_date: '2026-10-27 06:07'
+updated_date: '2026-10-27 06:08'
 labels:
   - level-editor
 dependencies: []
@@ -27,7 +27,10 @@ Found while verifying TASK-007.05: loading a level with `map: 4` (Hell) logs `Le
 - [ ] #4 If Hell is a Tiles map: in the editor, selecting a palette entry and clicking a tile places the object, and undo/redo and save work
 - [ ] #5 Forest behaviour is unchanged
 - [ ] #6 Unit tests cover any Unity-free logic added
+- [ ] #7 `run.py relaunch` into a level whose map fails to start (such as `no MapData found`) fails fast with that reason instead of retrying until timeout
 <!-- AC:END -->
+
+
 
 ## Implementation Notes
 
