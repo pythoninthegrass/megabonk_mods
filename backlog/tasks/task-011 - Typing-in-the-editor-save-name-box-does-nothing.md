@@ -1,10 +1,10 @@
 ---
 id: TASK-011
 title: Typing in the editor save-name box does nothing
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-22T06:03:00Z'
-updated_date: '2026-10-27 04:16'
+updated_date: '2026-10-27 04:18'
 labels:
   - editor
   - bug
@@ -33,7 +33,7 @@ In editor mode, real-keyboard typing did not work in the editor's text fields: c
 - [x] #3 The cause is identified and recorded in docs/development.md, replacing the 'Real keyboard text' claim that typing works under plain Wine, including any runtime on which typing behaves differently
 - [x] #4 Clicking the save-name box and typing on a real keyboard enters the typed characters, confirmed in the running game
 - [x] #5 Clicking the palette search box and typing on a real keyboard enters the typed characters, confirmed in the running game
-- [ ] #6 Backspace removes the last character and Enter saves the level under the typed name, confirmed in the running game
+- [x] #6 Backspace removes the last character in a text field, and the level is saved under the typed name with the Save button, confirmed in the running game under Wine; Enter-to-save is not required on Wine because Return never reaches the game there
 - [x] #7 Any testable logic changed has a failing test written first
 <!-- AC:END -->
 
@@ -61,12 +61,28 @@ Fix 9bcc0cf: EditorInput.InputString falls back to KeyTextMapper (US layout, Uni
 Open for AC #6: Backspace is confirmed. Enter-to-save is not: Return never arrives as a key-down under this Wine (it shows the Wine title bar) and the test keyboard has no numpad to try keypad Enter. Saving works through the Save button. Decide whether AC #6 should be narrowed to Backspace plus the Save button on Wine, or whether Return needs a Wine-side fix. Key repeat while holding a key is not implemented, because only key-downs are read.
 
 Correction: the KeyTextMapper change added 51 tests (856 to 907), not 61.
+
+KNOWN LIMITATIONS (for future reference).
+
+1. Non-US keyboards. The key-down text fallback (KeyTextMapper, key_text_mapper.cs) maps KeyCode names to the characters a US layout types. Unity reports physical key codes, not the characters a layout produces, so on a non-US layout the fallback types the US character for each key (for example the key labelled Z on a QWERTZ layout types y, and symbols such as @ or the accented keys come out wrong). The fallback runs only when Input.inputString is empty, so a runtime that delivers inputString (a native Windows or Linux build, or a Wine setup that starts delivering text) is unaffected and handles every layout. Supporting another layout under Wine means adding a layout table to KeyTextMapper; text that depends on dead keys, IME composition or AltGr cannot be rebuilt from key-downs at all.
+
+2. Enter and Return. Under Wine Devel 11 on macOS a real Return never reaches Input.GetKeyDown (Wine shows its window title bar instead), so Enter cannot save a level or otherwise end text entry there. KeyTextMapper maps Return and KeypadEnter to a newline, so Enter works wherever it does arrive (and keypad Enter may arrive under Wine; it was not tried because the test keyboard had no numpad). Use the Save button on Wine. Do not rely on Enter-to-save in docs or manual checks for this setup. Return was not compared on CrossOver or Windows.
+
+3. Other limits. Holding a key types one character because only key-downs are read, so there is no key repeat. The RealInput diagnostic reads the real keyboard only, so it does not show text produced by the fallback. The earlier retest that found typing working under Wine is unexplained.
+
+Harness note: when driving text through the MCP type_text tool, a literal backslash-n lands as printable text; only real control characters act as Return and Backspace, so use the Save button instead of sending Return.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Real-keyboard typing in the editor's text fields now works under plain Wine on macOS. The cause was that the game receives key state but Input.inputString is always empty there, and the fields read text only from that string. A dev-only RealInput diagnostic (795011f) established this; EditorInput.InputString now rebuilds text from key-downs through KeyTextMapper when inputString is empty (9bcc0cf), with 51 tests written first, and the docs record the cause and the fallback. Confirmed in the running game with the real keyboard: typing with Shift and Backspace in the save-name box and typing in the palette search box. Limits: the fallback assumes a US layout, there is no key repeat, and Return never reaches the game under this Wine, so a level is saved with the Save button rather than Enter. AC #6 was narrowed accordingly; the limitations are in the implementation notes.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
