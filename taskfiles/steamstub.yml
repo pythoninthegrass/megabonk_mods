@@ -82,7 +82,12 @@ tasks:
         done
         echo "no fresh 'DevHarness: enabled' in $log within 180s; the game likely exited" >&2
         exit 1
-      - uv run scripts/run.py steam-ready
+      - |
+        for _ in $(seq {{.READY_TRIES | default 30}}); do
+          uv run scripts/run.py steam-ready && exit 0
+          sleep 2
+        done
+        exit 1
       - uv run scripts/run.py state
 
   test:ok:
@@ -100,3 +105,4 @@ tasks:
       - task: mark-launch
       - cmd: MEGABONK_STEAM_FAIL_INIT=1 task game:run
       - task: probe
+        vars: {READY_TRIES: 1}
