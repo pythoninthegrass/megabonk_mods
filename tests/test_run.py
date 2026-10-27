@@ -706,3 +706,38 @@ def test_key_mouse_and_type_send_their_payloads() -> None:
             assert run_main(game, *argv) == 0
             sent = list((game / "harness" / "done").glob(f"*-{name}.json"))
             assert len(sent) == 1
+
+
+WINE_IDLE_LISTING = (
+    "  10 C:\\windows\\system32\\services.exe \n"
+    "  11 C:\\windows\\system32\\conhost.exe --server 0x94 \n"
+    "  12 C:\\windows\\system32\\explorer.exe /desktop \n"
+    "  13 C:\\windows\\system32\\svchost.exe -k LocalServiceNetworkRestricted \n"
+    "  14 C:\\windows\\system32\\lsass.exe \n"
+    "  99 /sbin/launchd\n"
+)
+
+
+def test_find_wine_leftovers_splits_system_stubs_from_other_windows_processes() -> None:
+    listing = WINE_IDLE_LISTING + '  20 C:\\Program Files (x86)\\Steam\\steam.exe -silent\n'
+    stubs, others = run.find_wine_leftovers(listing)
+    assert stubs == [10, 11, 12, 13, 14]
+    assert others == [20]
+
+
+def test_find_wine_leftovers_ignores_native_processes() -> None:
+    assert run.find_wine_leftovers("  1 /sbin/launchd\n") == ([], [])
+
+
+def test_reap_wine_leftovers_kills_idle_stubs() -> None:
+    killed: list[int] = []
+    assert run.reap_wine_leftovers(WINE_IDLE_LISTING, killed.append) == 5
+    assert killed == [10, 11, 12, 13, 14]
+
+
+def test_reap_wine_leftovers_leaves_everything_when_a_real_windows_process_runs(capsys) -> None:
+    killed: list[int] = []
+    listing = WINE_IDLE_LISTING + "  20 C:\\Program Files (x86)\\Steam\\steam.exe -silent\n"
+    assert run.reap_wine_leftovers(listing, killed.append) == 0
+    assert killed == []
+    assert "skipping" in capsys.readouterr().out

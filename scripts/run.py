@@ -41,7 +41,7 @@ Usage:
     run.py teleport X Y Z          Move the player's feet to a world position and print the position reached
     run.py teleport --cell CX CY   Move the player to a grid cell's centre, on the tile surface there
     run.py dismiss-levelup [--choice N]  Pick offer N (default 0) in the open level-up dialog; prints dialogWasOpen and chosen
-    run.py quit                    Quit the game and wait for the process to exit
+    run.py quit                    Quit the game, wait for the process to exit, and stop leftover Wine processes (macOS)
     run.py cycle <level> <out.png> Load, wait --settle seconds, screenshot, quit
                                    [--invulnerable] applies before the settle wait
                                    [--freeze] [--camera X Y Z RX RY RZ] apply before the screenshot
@@ -58,6 +58,7 @@ import json
 import os
 import platform
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -75,6 +76,11 @@ EDITOR_UNSUPPORTED_LINE = "EditorMode: unsupported map"
 STEAM_READY_POLL_SECONDS = 1.0
 GAME_COMMAND = re.compile(r"^(?:[A-Za-z]:\\(?:.*\\)?Megabonk\.exe|(?:\S*/)?Megabonk\.x86_64)(?:\s|$)")
 GAME_IMAGE_WINDOWS = "Megabonk.exe"
+WINDOWS_COMMAND = re.compile(r"^[A-Za-z]:\\")
+WINE_SYSTEM_COMMAND = re.compile(
+    r"^[A-Za-z]:\\windows\\system32\\(?:services|plugplay|conhost|explorer|rpcss|svchost|lsass|winedevice)\.exe(?:\s|$)",
+    re.IGNORECASE,
+)
 TEST_FOREST_LEVEL = Path(__file__).resolve().parents[1] / "levels" / "example-forest.mblevel.json"
 
 Lookup = Callable[[str], str | None]
@@ -319,17 +325,57 @@ def wait_for_exit(
     return True
 
 
+def find_wine_leftovers(ps_listing: str) -> tuple[list[int], list[int]]:
+    """Pids of Wine's idle system processes and of any other Windows process, from `ps -axo pid=,command=` output."""
+    stubs, others = [], []
+    for line in ps_listing.splitlines():
+        pid, _, command = line.strip().partition(" ")
+        command = command.strip()
+        if not pid.isdigit() or not WINDOWS_COMMAND.match(command):
+            continue
+        (stubs if WINE_SYSTEM_COMMAND.match(command) else others).append(int(pid))
+    return stubs, others
+
+
+def reap_wine_leftovers(ps_listing: str, kill: Callable[[int], None]) -> int:
+    """Kill the Wine system processes (and their console windows) that outlive a game, unless a real Windows process such as Steam is running."""
+    stubs, others = find_wine_leftovers(ps_listing)
+    if others:
+        print(f"quit: Windows processes still running (pids {others}), skipping Wine cleanup")
+        return 0
+    for pid in stubs:
+        kill(pid)
+    if stubs:
+        print(f"quit: stopped {len(stubs)} leftover Wine processes")
+    return len(stubs)
+
+
+def reap_wine_leftovers_on_host(system: str | None = None) -> None:
+    if (system or platform.system()) != "Darwin":
+        return
+
+    def kill(pid: int) -> None:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+
+    listing = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True, check=True).stdout
+    reap_wine_leftovers(listing, kill)
+
+
 def quit_game(harness: Path, timeout: float) -> bool:
     """Ask the game to quit and block until its process is gone; a game that is not running counts as quit."""
     if not running_game_pids():
         print("quit: game not running")
-        return True
-    if not send(harness, build_command("quit"), timeout):
+    elif not send(harness, build_command("quit"), timeout):
         return False
-    if not wait_for_exit(timeout=timeout):
+    elif not wait_for_exit(timeout=timeout):
         print(f"quit: game still running after {timeout}s (pids {running_game_pids()})", file=sys.stderr)
         return False
-    print("quit: game exited")
+    else:
+        print("quit: game exited")
+    reap_wine_leftovers_on_host()
     return True
 
 
