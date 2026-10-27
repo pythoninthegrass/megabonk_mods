@@ -534,7 +534,7 @@ def test_request_result_prints_nothing(capsys) -> None:
         assert out.out == "" and out.err == ""
 
 
-def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_ready=True, kill_floor=True, unsupported=False):
+def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_ready=True, kill_floor=True, unsupported=False, load_failed=False):
     calls = []
     monkeypatch.setattr(run, "quit_game", lambda h, t: calls.append("quit") or True)
     monkeypatch.setattr(run, "launch_game", lambda task: calls.append(("launch", task)) or True)
@@ -549,6 +549,8 @@ def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_ready=True, kill_fl
         calls.append(("log", lines[0]))
         if unsupported:
             return run.EDITOR_UNSUPPORTED_LINE
+        if load_failed:
+            return run.LOAD_FAILED_LINE
         return run.KILL_FLOOR_ARMED_LINE if kill_floor else None
 
     monkeypatch.setattr(run, "wait_for_log_line", wait_log)
@@ -773,3 +775,12 @@ def test_reap_wine_leftovers_leaves_everything_when_a_real_windows_process_runs(
     assert run.reap_wine_leftovers(listing, killed.append) == 0
     assert killed == []
     assert "skipping" in capsys.readouterr().out
+
+
+def test_relaunch_fails_fast_when_the_level_fails_to_load(monkeypatch) -> None:
+    calls = relaunch_stubs(monkeypatch, load_failed=True)
+    errors = []
+    ok = run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=errors.append)
+    assert ok is False
+    assert len([c for c in calls if c == ("send", "load-level")]) == 1
+    assert errors == ["relaunch: the level failed to load; see the LevelLoader line in the game log"]

@@ -4,14 +4,15 @@ using System.Linq;
 
 namespace MegabonkLevels;
 
-// Mirrors the game's EMap flags enum (.tools/il2cpp_dump/dump.cs) by value, not by reference to the Il2Cpp type.
+// Mirrors the eMap values of the game's MapData assets, not the Il2Cpp EMap enum (it lists Hell as 4, the MapHell asset holds 64).
 public enum EMap
 {
     None = 0,
     Forest = 1,
     Desert = 2,
-    Hell = 4,
     Graveyard = 8,
+    Dungeon = 16,
+    Hell = 64,
 }
 
 public readonly record struct EditOp(string OpType, string Target, string Payload);

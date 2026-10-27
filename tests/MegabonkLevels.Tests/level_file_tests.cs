@@ -166,4 +166,11 @@ public class LevelFileTests
         Assert.Throws<InvalidOperationException>(
             () => SchemaMigrator.Migrate(document, targetVersion: 1, new Dictionary<int, MigrationStep>()));
     }
+
+    [Fact]
+    public void EMap_HellAndDungeon_MatchLiveMapDataAssetValues()
+    {
+        Assert.Equal(64, (int)EMap.Hell);
+        Assert.Equal(16, (int)EMap.Dungeon);
+    }
 }

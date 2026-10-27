@@ -23,7 +23,7 @@ public static class LevelLoaderPatch
     // Levels whose MapData isn't loaded yet wait here and are retried each frame by Pump() until the
     // main scene provides the map, so a load-level issued during startup doesn't fail with
     // "no MapData found". Each entry is removed once the run starts or the load is fatally rejected.
-    private static readonly List<(LevelFile Level, MelonLogger.Instance Logger, string Path)> _pending = new();
+    private static readonly List<(LevelFile Level, MelonLogger.Instance Logger, string Path, float QueuedAt)> _pending = new();
 
     // Reads a .mblevel.json from disk and registers the matching run. MapData may not exist yet when
     // this is called (e.g. a load-level issued right after launch), so the load is queued and Pump()
@@ -56,7 +56,7 @@ public static class LevelLoaderPatch
             logger.Warning(buildWarning);
         }
 
-        _pending.Add((level, logger, path));
+        _pending.Add((level, logger, path, Time.realtimeSinceStartup));
         return true;
     }
 
@@ -66,9 +66,14 @@ public static class LevelLoaderPatch
     {
         for (var i = _pending.Count - 1; i >= 0; i--)
         {
-            var (level, logger, _) = _pending[i];
+            var (level, logger, _, queuedAt) = _pending[i];
             if (StartOnce(level, logger))
             {
+                _pending.RemoveAt(i);
+            }
+            else if (Time.realtimeSinceStartup - queuedAt > MapDataWaitSeconds)
+            {
+                RejectMissingMap(level.Map, logger);
                 _pending.RemoveAt(i);
             }
         }
@@ -121,6 +126,20 @@ public static class LevelLoaderPatch
         }
 
         return true;
+    }
+
+    // How long a load waits for its MapData before it is rejected as a permanent failure.
+    private const float MapDataWaitSeconds = 20f;
+
+    private static void RejectMissingMap(EMap map, MelonLogger.Instance logger)
+    {
+        var available = new List<string>();
+        foreach (var candidate in Resources.FindObjectsOfTypeAll<MapData>())
+        {
+            available.Add($"{candidate.name}={(int)candidate.eMap}");
+        }
+
+        logger.Error($"LevelLoader: load failed: no MapData found for map={map} ({(int)map}); available: {string.Join(", ", available)}");
     }
 
     private static MapData FindMapData(EMap map)

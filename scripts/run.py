@@ -77,6 +77,7 @@ POLL_SECONDS = 0.1
 RELAUNCH_READY_TIMEOUT = 60.0
 KILL_FLOOR_ARMED_LINE = "KillFloor: armed"
 EDITOR_UNSUPPORTED_LINE = "EditorMode: unsupported map"
+LOAD_FAILED_LINE = "LevelLoader: load failed"
 STEAM_READY_POLL_SECONDS = 1.0
 GAME_COMMAND = re.compile(r"^(?:[A-Za-z]:\\(?:.*\\)?Megabonk\.exe|(?:\S*/)?Megabonk\.x86_64)(?:\s|$)")
 GAME_IMAGE_WINDOWS = "Megabonk.exe"
@@ -646,13 +647,16 @@ def relaunch(
         if send(harness, build_command("load-level", to_game_path(level.resolve())), timeout):
             seen = wait_for_any_log_line(
                 latest_log_path(game_dir),
-                [KILL_FLOOR_ARMED_LINE, EDITOR_UNSUPPORTED_LINE],
+                [KILL_FLOOR_ARMED_LINE, EDITOR_UNSUPPORTED_LINE, LOAD_FAILED_LINE],
                 started,
                 relaunch_timeout(timeout),
             )
             match seen:
                 case _ if seen == EDITOR_UNSUPPORTED_LINE:
                     on_error("relaunch: the editor does not support this map; see the EditorMode warning in the game log")
+                    return False
+                case _ if seen == LOAD_FAILED_LINE:
+                    on_error("relaunch: the level failed to load; see the LevelLoader line in the game log")
                     return False
                 case str():
                     loaded = True

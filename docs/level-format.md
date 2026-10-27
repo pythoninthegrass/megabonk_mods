@@ -18,7 +18,7 @@ One consequence of staying in the same project: the Mod project compiles against
 | --- | --- | --- |
 | `schemaVersion` | `int` | Current value: `LevelFile.CurrentSchemaVersion` (`1`). |
 | `gameBuildId` | `string` | Game build the level was authored against (e.g. `"1.0.69"`). Compared against the running game's build for staleness warnings during runtime playback; not interpreted here. |
-| `map` | `EMap` | Mirrors the game's `EMap` flags enum by value (`None=0, Forest=1, Desert=2, Hell=4, Graveyard=8`, confirmed against `.tools/il2cpp_dump/dump.cs`) — a value-level mirror, not a reference to the real Il2Cpp type, since this library must stay Unity/Il2Cpp-free. |
+| `map` | `EMap` | Mirrors the `eMap` values of the game's `MapData` assets (`None=0, Forest=1, Desert=2, Graveyard=8, Dungeon=16, Hell=64`), read from the running game. The Il2Cpp `EMap` enum in `.tools/il2cpp_dump/dump.cs` lists Hell as `4` and has no Dungeon, but the `MapHell` asset holds `64` and `MapDungeon` `16` — a value-level mirror, not a reference to the real Il2Cpp type, since this library must stay Unity/Il2Cpp-free. |
 | `stageIndex` | `int` | Which stage within the map. |
 | `tier` | `int` | Difficulty tier. |
 | `seed` | `int` | **The Tiles-map `debugSeed`** (see [map-generation-determinism.md](map-generation-determinism.md)) — the only field confirmed to control reproducible generation. **Never** `MapGenerationController.mapSeed`: that field varies freely per run and has no effect on layout. `ProceduralMesh` maps (Desert) don't yet have a confirmed-controllable seed field at all; storing a `seed` for those maps is "reproducible in practice so far" per that doc, not guaranteed. |
