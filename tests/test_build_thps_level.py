@@ -168,48 +168,118 @@ def test_the_warehouse_is_the_only_pack_asset_the_level_places() -> None:
     assert {c for c in placed if c.startswith("bundle:")} == {f"bundle:{b.PACK_ID}/{b.WAREHOUSE_ASSET}"}
 
 
+needs_extract = pytest.mark.skipif(
+    not (b.NODES_PATH.exists() and b.OBJ_PATH.exists()), reason="needs the extraction under .tools/thps1/warehouse"
+)
+
+LETTER_SHRINES = {
+    "S": "forest/shrines/0",
+    "K": "forest/shrines/1",
+    "A": "forest/shrines/2",
+    "T": "forest/shrines/3",
+    "E": "forest/shrines/4",
+}
+
 
 def collectible_places() -> list[dict]:
     return [payload(e) for e in ops_of(b.collectible_edits(), "object.place")]
 
 
+def source_nodes() -> list[dict]:
+    return json.loads(b.NODES_PATH.read_text())["nodes"]
+
+
+@needs_extract
 def test_collectibles_cover_the_spec_with_the_confirmed_item_mapping() -> None:
-    ids = [c.catalog_id for c in b.COLLECTIBLES]
+    ids = [c.catalog_id for c in b.collectibles()]
     assert len(ids) == 14
     assert ids.count("interactable/chest") == 5
     assert ids.count("interactable/chestFree") == 4
     assert sorted(i for i in ids if i.startswith("forest/shrines/")) == [f"forest/shrines/{n}" for n in range(5)]
-    assert len({c.code for c in b.COLLECTIBLES}) == 14
+    assert len({c.code for c in b.collectibles()}) == 14
 
 
-def test_collectible_edits_place_each_item_at_its_world_position() -> None:
+@needs_extract
+def test_collectibles_come_from_the_extracted_nodes_with_the_confirmed_mapping() -> None:
+    nodes = {n["node"]: n for n in source_nodes()}
+    for c in b.collectibles():
+        node = nodes[c.node]
+        if node["type"] == "letter":
+            assert c.catalog_id == LETTER_SHRINES[node["name"]], c.code
+        elif node["type"] == "box_pile":
+            assert c.catalog_id == "interactable/chest", c.code
+        else:
+            assert node["type"] in ("tape", "bonus") and node["name"] in ("tape", "100"), c.code
+            assert c.catalog_id == "interactable/chestFree", c.code
+    assert {n["node"] for n in source_nodes() if n["type"] in ("letter", "box_pile", "tape")} <= {
+        c.node for c in b.collectibles()
+    }
+    assert len({c.node for c in b.collectibles()}) == 14
+
+
+@needs_extract
+def test_each_collectible_stays_within_the_stated_distance_of_its_source_node() -> None:
+    nodes = {n["node"]: n for n in source_nodes()}
+    for c in b.collectibles():
+        nx, _, nz = b.node_world(nodes[c.node]["position"])
+        bx, _, bz = b.base_point(c)
+        assert math.hypot(bx - nx, bz - nz) <= b.MAX_NODE_SHIFT, c.code
+
+
+@needs_extract
+def test_every_collectible_base_is_on_the_surface_below_it() -> None:
+    triangles = b.warehouse_triangles()
+    for c in b.collectibles():
+        bx, by, bz = b.base_point(c)
+        hit = b.ws.drop(triangles, bx, by + 1.0, bz)
+        assert hit is not None, c.code
+        assert abs(by - hit.y) <= 0.1, c.code
+
+
+@needs_extract
+def test_every_collectible_is_tilted_onto_the_surface_normal() -> None:
+    triangles = b.warehouse_triangles()
+    for c in b.collectibles():
+        bx, by, bz = b.base_point(c)
+        assert c.normal == pytest.approx(b.ws.drop(triangles, bx, by + 1.0, bz).normal, abs=1e-6), c.code
+        assert c.normal[1] >= math.cos(math.radians(b.MAX_SURFACE_TILT)), c.code
+
+
+@needs_extract
+def test_no_collectible_overlaps_collider_triangles_other_than_the_one_it_stands_on() -> None:
+    triangles = b.warehouse_triangles()
+    for c in b.collectibles():
+        bx, by, bz = b.base_point(c)
+        support = b.ws.drop(triangles, bx, by + 1.0, bz)
+        assert set(b.item_overlaps(c, triangles)) <= {support.index}, c.code
+
+
+@needs_extract
+def test_collectible_edits_place_each_item_at_its_pivot_with_the_surface_tilt() -> None:
     places = collectible_places()
-    assert [p["catalogId"] for p in places] == [c.catalog_id for c in b.COLLECTIBLES]
-    for c, p in zip(b.COLLECTIBLES, places, strict=True):
-        wx, wz = b.local_to_world(c.x, c.z)
-        assert (p["position"]["x"], p["position"]["y"], p["position"]["z"]) == (wx, c.y, wz), c.code
+    assert [p["catalogId"] for p in places] == [c.catalog_id for c in b.collectibles()]
+    for c, p in zip(b.collectibles(), places, strict=True):
+        assert (p["position"]["x"], p["position"]["y"], p["position"]["z"]) == (c.x, c.y, c.z), c.code
+        pitch, yaw, roll = b.ws.unity_euler(b.ws.item_rotation(c.normal, c.yaw))
+        assert (p["rotation"]["x"], p["rotation"]["y"], p["rotation"]["z"]) == pytest.approx((pitch, yaw, roll)), c.code
 
 
+@needs_extract
 def test_collectibles_stay_inside_the_arena_and_clear_of_the_player_spawn() -> None:
-    sx, sz = b.PLAYER_SPAWN_LOCAL
-    for c in b.COLLECTIBLES:
-        assert 0 <= c.x <= b.INNER_X * b.TILE and 0 <= c.z <= b.INNER_Z * b.TILE, c.code
+    sx, sz = b.local_to_world(*b.PLAYER_SPAWN_LOCAL)
+    x0, z0 = b.local_to_world(0, 0)
+    for c in b.collectibles():
+        assert x0 <= c.x <= x0 + b.INNER_X * b.TILE and z0 <= c.z <= z0 + b.INNER_Z * b.TILE, c.code
         assert max(abs(c.x - sx), abs(c.z - sz)) >= b.SPAWN_CLEARANCE, c.code
 
 
+@needs_extract
 def test_build_level_includes_collectibles_after_the_clutter_removals() -> None:
     edits = b.build_level()["edits"]
-    ids = {c.catalog_id for c in b.COLLECTIBLES}
+    ids = {c.catalog_id for c in b.collectibles()}
     placed = [i for i, e in enumerate(edits) if e["opType"] == "object.place" and payload(e)["catalogId"] in ids]
-    assert len(placed) == len(b.COLLECTIBLES)
+    assert len(placed) == len(b.collectibles())
     assert max(i for i, e in enumerate(edits) if e["opType"] == "object.remove") < min(placed)
-
-
-def test_collectibles_are_rotated_upright_because_the_prefabs_lie_on_their_side_at_zero() -> None:
-    for c, p in zip(b.COLLECTIBLES, collectible_places(), strict=True):
-        rot = p["rotation"]
-        assert rot["x"] == b.UPRIGHT_PITCH, c.code
-        assert rot["z"] == 0, c.code
 
 
 def warehouse_place() -> dict:
@@ -350,23 +420,31 @@ def test_the_hidden_rail_over_the_deck_rail_spans_the_bar_at_its_height() -> Non
 
 
 def test_the_pack_removes_the_floating_rail_leftovers_and_posts_the_deck_rail() -> None:
-    source = (Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "Assets" / "Editor" / "ThpsPack.cs").read_text()
+    source = (
+        Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "Assets" / "Editor" / "ThpsPack.cs"
+    ).read_text()
     assert "RailLeftoverBounds" in source
     assert "A53322CF" in source
 
 
 def test_the_mesh_rail_bar_is_kept_and_stands_on_posts_in_the_pack() -> None:
-    source = (Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "Assets" / "Editor" / "ThpsPack.cs").read_text()
+    source = (
+        Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "Assets" / "Editor" / "ThpsPack.cs"
+    ).read_text()
     assert "RailPosts" in source
     assert "IsMeshRailBar" not in source
 
 
 def test_the_pack_opens_the_intact_secret_room_windows_by_position_only() -> None:
-    source = (Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "Assets" / "Editor" / "ThpsPack.cs").read_text()
+    source = (
+        Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "Assets" / "Editor" / "ThpsPack.cs"
+    ).read_text()
     assert "PassThroughInRoomMaterials" in source
     assert "F2184063" in source
 
 
 def test_the_pack_opens_the_start_slope_windows_by_position_only() -> None:
-    source = (Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "Assets" / "Editor" / "ThpsPack.cs").read_text()
+    source = (
+        Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "Assets" / "Editor" / "ThpsPack.cs"
+    ).read_text()
     assert "StartSlopeWindowBounds" in source

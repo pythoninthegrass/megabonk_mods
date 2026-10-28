@@ -8,6 +8,9 @@ units from the south-west corner of the inner arena, x east and z north.
 
 import argparse
 import json
+import math
+import warehouse_surface as ws
+from functools import cache
 from pathlib import Path
 from typing import NamedTuple
 
@@ -123,35 +126,60 @@ SEED_SCENERY_COUNTS = {
 KEPT_OBJECT_CATEGORIES = ("BossSpawner", "PlayerSpawnPortal", "ForestParticles")
 
 
+EXTRACT_DIR = Path(__file__).resolve().parent.parent / ".tools" / "thps1" / "warehouse"
+NODES_PATH = EXTRACT_DIR / "warehouse_nodes.json"
+OBJ_PATH = EXTRACT_DIR / "warehouse.obj"
+
+# Letters map to the five Forest shrine prefabs one to one; box piles are chests; the tape and the lane 100 pickups are free chests.
+LETTER_SHRINES = {
+    "S": "forest/shrines/0",
+    "K": "forest/shrines/1",
+    "A": "forest/shrines/2",
+    "T": "forest/shrines/3",
+    "E": "forest/shrines/4",
+}
+# The three 100 pickups spread along the lanes; nodes 148 to 150 are a 100/200/500 cluster the confirmed mapping leaves out.
+LANE_BONUS_NODES = (15, 30, 31)
+
+# An item may slide this far in x and z from its node to find a supported, clear spot (a node can sit on a platform edge or over a quarter pipe).
+MAX_NODE_SHIFT = 10.5
+# An item never stands on a surface steeper than this.
+MAX_SURFACE_TILT = 45.0
+SHIFT_STEP = 0.5
+# Footprint corners must land within this of the surface plane under the item.
+SUPPORT_TOLERANCE = 0.3
+# The supported footprint is this fraction of the bounds' half extents, because a shrine's base is narrower than its bounds.
+SUPPORT_FOOTPRINT = 0.5
+# The overlap box starts this far above the base so the surface the item stands on does not count.
+BASE_CLEARANCE = 0.1
+
+
+class ItemMetrics(NamedTuple):
+    base_offset: float
+    half: tuple[float, float, float]
+
+
+# Pivot-to-base distance and upright half extents (x, y, z) of each prefab, read from the placed items' mesh bounds in the running game with query_objects.
+ITEM_METRICS = {
+    "interactable/chest": ItemMetrics(0.5, (1.7, 1.25, 1.6)),
+    "interactable/chestFree": ItemMetrics(0.5, (1.5, 1.3, 1.5)),
+    "forest/shrines/0": ItemMetrics(0.12, (2.64, 3.69, 2.53)),
+    "forest/shrines/1": ItemMetrics(0.05, (2.63, 3.43, 2.63)),
+    "forest/shrines/2": ItemMetrics(0.05, (2.2, 4.22, 1.78)),
+    "forest/shrines/3": ItemMetrics(0.02, (2.42, 2.45, 0.56)),
+    "forest/shrines/4": ItemMetrics(0.13, (2.6, 4.41, 2.53)),
+}
+
+
 class Collectible(NamedTuple):
     code: str
     catalog_id: str
+    node: int
     x: float
-    z: float
     y: float
+    z: float
+    normal: tuple[float, float, float]
     yaw: float = 0.0
-
-
-# Chest, shrine and merchant prefabs are authored lying down, so they stand up at pitch 270 (a lane tilts them back by its slope).
-UPRIGHT_PITCH = 270.0
-
-# Block-local positions and heights from the old hand-built layout; they are not yet anchored to the Warehouse mesh.
-COLLECTIBLES = (
-    Collectible("R1", "interactable/chest", 8, 34, 5.5),
-    Collectible("R2", "interactable/chest", 61, 16, 4),
-    Collectible("R3", "interactable/chest", 98, 67, 4),
-    Collectible("R4", "interactable/chest", 86, 100, 6),
-    Collectible("R5", "interactable/chest", 20, 88, 0),
-    Collectible("S", "forest/shrines/0", 84, 40, 0),
-    Collectible("K", "forest/shrines/1", 33, 2, 0),
-    Collectible("A", "forest/shrines/2", 34, 26, 5),
-    Collectible("T", "forest/shrines/3", 27, 60.5, 0),
-    Collectible("E", "forest/shrines/4", 86, 108, 6),
-    Collectible("Tape", "interactable/chestFree", 11, 67, 13),
-    Collectible("100N", "interactable/chestFree", 31, 99, 0),
-    Collectible("100E", "interactable/chestFree", 56, 99, 0),
-    Collectible("100S", "interactable/chestFree", 82, 13, 0),
-)
 
 
 def warehouse_footprint() -> tuple[float, float]:
@@ -165,6 +193,96 @@ def local_to_world(x: float, z: float) -> tuple[float, float]:
         GRID_ORIGIN + TILE * x0 - TILE // 2 + x,
         GRID_ORIGIN + TILE * z0 - TILE // 2 + z,
     )
+
+
+def warehouse_placement() -> ws.Placement:
+    wx, wz = local_to_world(INNER_X * TILE / 2, INNER_Z * TILE / 2)
+    _, centre = obj_mesh()
+    return ws.Placement(centre, WAREHOUSE_SCALE, wx, WAREHOUSE_LIFT, wz)
+
+
+@cache
+def obj_mesh() -> tuple[list[ws.Triangle], tuple[float, float]]:
+    return ws.read_obj(OBJ_PATH)
+
+
+@cache
+def warehouse_triangles() -> list[ws.Triangle]:
+    return warehouse_placement().triangles(obj_mesh()[0])
+
+
+def node_world(position: list[float]) -> ws.Vec:
+    """A node's (x, y down) OBJ position as a world point, y up."""
+    x, y, z = position
+    return warehouse_placement().point((x, -y, z))
+
+
+def base_point(c: Collectible) -> ws.Vec:
+    off = ITEM_METRICS[c.catalog_id].base_offset
+    return (c.x - c.normal[0] * off, c.y - c.normal[1] * off, c.z - c.normal[2] * off)
+
+
+def item_overlaps(c: Collectible, triangles: list[ws.Triangle]) -> list[int]:
+    """Triangles that cut into the item's box, which starts BASE_CLEARANCE above its base."""
+    metrics = ITEM_METRICS[c.catalog_id]
+    hx, hy, hz = metrics.half
+    height = hy - BASE_CLEARANCE / 2
+    bx, by, bz = base_point(c)
+    lift = BASE_CLEARANCE + height
+    centre = (bx + c.normal[0] * lift, by + c.normal[1] * lift, bz + c.normal[2] * lift)
+    return ws.box_hits(triangles, centre, ws.tilt_rotation(c.normal, c.yaw), (hx, height, hz))
+
+
+def anchor(code: str, catalog_id: str, node: int, position: list[float]) -> Collectible:
+    """Drop the item from its node onto the surface below, sliding the least distance that leaves it supported and clear."""
+    triangles = warehouse_triangles()
+    nx, ny, nz = node_world(position)
+    off = ITEM_METRICS[catalog_id].base_offset
+    hx, _, hz = ITEM_METRICS[catalog_id].half
+    steps = range(-int(MAX_NODE_SHIFT / SHIFT_STEP), int(MAX_NODE_SHIFT / SHIFT_STEP) + 1)
+    shifts = sorted(((i * SHIFT_STEP, k * SHIFT_STEP) for i in steps for k in steps), key=lambda d: math.hypot(*d))
+    for dx, dz in shifts:
+        if math.hypot(dx, dz) > MAX_NODE_SHIFT:
+            break
+        ax, az = nx + dx, nz + dz
+        hit = ws.drop(triangles, ax, ny, az)
+        if hit is None or hit.normal[1] < math.cos(math.radians(MAX_SURFACE_TILT)):
+            continue
+        rotation = ws.tilt_rotation(hit.normal, 0.0)
+        corners = [(sx * hx * SUPPORT_FOOTPRINT, sz * hz * SUPPORT_FOOTPRINT) for sx in (-1, 1) for sz in (-1, 1)]
+        if not all(supported(triangles, hit, ax, az, rotation, ox, oz) for ox, oz in corners):
+            continue
+        item = Collectible(
+            code, catalog_id, node, ax + hit.normal[0] * off, hit.y + hit.normal[1] * off, az + hit.normal[2] * off, hit.normal
+        )
+        if set(item_overlaps(item, triangles)) <= {hit.index}:
+            return item
+    raise ValueError(f"no supported spot for {code} within {MAX_NODE_SHIFT} units of node {node}")
+
+
+def supported(triangles: list[ws.Triangle], hit: ws.Hit, ax: float, az: float, rotation: ws.Matrix, ox: float, oz: float) -> bool:
+    """Whether the surface under a footprint corner lies on the plane through the anchor."""
+    dx, _, dz = (rotation[0][0] * ox + rotation[0][2] * oz, 0.0, rotation[2][0] * ox + rotation[2][2] * oz)
+    expected = hit.y - (hit.normal[0] * dx + hit.normal[2] * dz) / hit.normal[1]
+    below = ws.drop(triangles, ax + dx, expected + 1.0, az + dz)
+    return below is not None and abs(below.y - expected) <= SUPPORT_TOLERANCE
+
+
+@cache
+def collectibles() -> tuple[Collectible, ...]:
+    nodes = {n["node"]: n for n in json.loads(NODES_PATH.read_text())["nodes"]}
+
+    def by_type(kind: str) -> list[dict]:
+        return sorted((n for n in nodes.values() if n["type"] == kind), key=lambda n: n["node"])
+
+    items = [anchor(f"R{i}", "interactable/chest", n["node"], n["position"]) for i, n in enumerate(by_type("box_pile"), 1)]
+    items += [
+        anchor(n["name"], LETTER_SHRINES[n["name"]], n["node"], n["position"])
+        for n in sorted(by_type("letter"), key=lambda n: "SKATE".index(n["name"]))
+    ]
+    items += [anchor("Tape", "interactable/chestFree", n["node"], n["position"]) for n in by_type("tape")]
+    items += [anchor(f"100/{i}", "interactable/chestFree", i, nodes[i]["position"]) for i in LANE_BONUS_NODES]
+    return tuple(items)
 
 
 def cell_of_local(x: float, z: float) -> tuple[int, int]:
@@ -226,7 +344,10 @@ def transform(x: float, y: float, z: float, scale: float = 1.0, yaw: float = 0.0
 
 def spawn_moves() -> list[dict]:
     bx, bz = local_to_world(*BOSS_SPAWN_LOCAL)
-    payload = {"newTransform": transform(bx, BOSS_SPAWN_Y, bz, BOSS_SPAWN_SCALE, BOSS_SPAWN_YAW), "hiddenChildren": BOSS_HIDDEN_CHILDREN}
+    payload = {
+        "newTransform": transform(bx, BOSS_SPAWN_Y, bz, BOSS_SPAWN_SCALE, BOSS_SPAWN_YAW),
+        "hiddenChildren": BOSS_HIDDEN_CHILDREN,
+    }
     return [edit("object.move", payload, "gen:object:BossSpawner:0000")]
 
 
@@ -267,15 +388,15 @@ def warehouse_edits() -> list[dict]:
 
 def collectible_edits() -> list[dict]:
     edits = []
-    for c in COLLECTIBLES:
-        wx, wz = local_to_world(c.x, c.z)
+    for c in collectibles():
+        pitch, yaw, roll = ws.unity_euler(ws.item_rotation(c.normal, c.yaw))
         edits.append(
             edit(
                 "object.place",
                 {
                     "catalogId": c.catalog_id,
-                    "position": {"x": wx, "y": c.y, "z": wz},
-                    "rotation": {"x": UPRIGHT_PITCH, "y": c.yaw, "z": 0.0},
+                    "position": {"x": c.x, "y": c.y, "z": c.z},
+                    "rotation": {"x": pitch, "y": yaw, "z": roll},
                     "scale": {"x": 1.0, "y": 1.0, "z": 1.0},
                 },
             )

@@ -65,26 +65,39 @@ Confirmed as written: box piles are chests, letters are shrines, the tape and th
 
 Collectibles stay as normal Megabonk items. The Forest palette has `interactable/chest`, `interactable/chestFree` and five shrines `forest/shrines/0` to `4`, which is exactly one shrine per letter.
 
-| THPS item | Megabonk item | Block-local (x east, z north) and y, units | Source position (thps-warehouse.md) |
-| --- | --- | --- | --- |
-| Box pile R1 | `interactable/chest` | (8, 34), 5.5 | M2 |
-| Box pile R2 | `interactable/chest` | (61, 16), 4 | M10 |
-| Box pile R3 | `interactable/chest` | (98, 67), 4 | M11 |
-| Box pile R4 | `interactable/chest` | (86, 100), 6 | M9 |
-| Box pile R5 | `interactable/chest` | (20, 88), 4 | uncertain, see below |
-| Letter S | `forest/shrines/0` | (84, 40), 0 | M12 |
-| Letter K | `forest/shrines/1` | (33, 2), 0 | K |
-| Letter A | `forest/shrines/2` | (34, 26), 5 | M3 |
-| Letter T | `forest/shrines/3` | (27, 60.5), 0 | M4 |
-| Letter E | `forest/shrines/4` | (86, 108), 6 | M8, M9 |
-| Secret tape | `interactable/chestFree` | (11, 67), 13 | M5 |
-| 100 pickup, north | `interactable/chestFree` | (31, 99), 0 | north lane |
-| 100 pickup, east | `interactable/chestFree` | (56, 99), 0 | east lane |
-| 100 pickup, south | `interactable/chestFree` | (82, 13), 0 | M10 |
+The positions come from `warehouse_nodes.json` (the extraction in thps-warehouse.md), not from a hand-written table. `collectibles()` in `scripts/build_thps_level.py` maps each node and anchors it with `scripts/warehouse_surface.py`, which reads `warehouse.obj` the way the pack importer does:
 
-These are the `COLLECTIBLES` table in `scripts/build_thps_level.py`. Positions and heights are from the earlier hand-built layout, which the Warehouse mesh replaced, so they are not anchored to the mesh surfaces and an item can float or sit inside geometry until they are re-anchored:
+- Box piles (nodes 43, 107, 109, 111, 113) are `interactable/chest`, in node order as R1 to R5. Letters are `forest/shrines/0` to `4` for S, K, A, T, E. The tape (node 16) and the three lane 100 pickups (nodes 15, 30, 31, `LANE_BONUS_NODES`) are `interactable/chestFree`. The 100, 200 and 500 cluster at nodes 148 to 150 has no item in the confirmed mapping and stays unplaced.
+- An item stands on the highest collider surface at or below its node, found by a downward ray. Its tilt is the surface normal, and its pivot sits `base_offset` above the surface along that normal (`ITEM_METRICS`, measured from the placed items' mesh bounds with `query_objects`: 0.5 for both chests, 0.12, 0.05, 0.05, 0.02 and 0.13 for `forest/shrines/0` to `4`).
+- The spot has to be supported (the corners of half the item's bounds land on the same plane within 0.3), on a surface no steeper than 45 degrees (`MAX_SURFACE_TILT`), and clear of every collider triangle except the one it stands on (a box of the item's bounds starting 0.1 above its base). A node that fails slides in x and z by the least distance that passes, up to 10.5 units (`MAX_NODE_SHIFT`).
+- Tests check the base within 0.1 of the surface below, no overlap, the shift cap and the mapping. They skip when `.tools/thps1/warehouse` is absent.
 
-- The chest, shrine and merchant prefabs are authored lying down (the prefab asset's euler X is 270), so a placement at rotation 0 renders them on their side. Items are placed at X 270.
+Deviations from the source node positions (y is the node height, and "drop" is how far the item stands below it):
+
+| Item | Node | Megabonk item | Node x, y, z | Base x, y, z | Slide | Drop | Tilt (deg) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| R1 | 43 | `interactable/chest` | 139.9, 30.7, -82.5 | 137.4, 27.8, -82.5 | 2.5 | 2.9 | 0 |
+| R2 | 107 | `interactable/chest` | 50.7, 11.5, -49.1 | 50.7, 8.6, -49.1 | 0 | 2.9 | 0 |
+| R3 | 109 | `interactable/chest` | 28.5, 6.7, 13.8 | 28.5, 3.8, 13.8 | 0 | 2.9 | 0 |
+| R4 | 111 | `interactable/chest` | 84.0, 11.5, 96.8 | 82.5, 8.6, 96.8 | 1.5 | 2.9 | 0 |
+| R5 | 113 | `interactable/chest` | 174.5, 6.7, 69.6 | 174.5, 3.8, 69.6 | 0 | 2.9 | 0 |
+| S | 28 | `forest/shrines/0` | 45.3, 8.7, 55.1 | 45.3, 0.5, 55.1 | 0 | 8.2 | 0 |
+| K | 29 | `forest/shrines/1` | 108.0, 20.7, 120.0 | 108.0, 0.5, 110.0 | 10.0 | 20.2 | 0 |
+| A | 17 | `forest/shrines/2` | 128.1, 8.8, 78.9 | 125.1, 2.4, 82.9 | 5.0 | 6.4 | 19 |
+| T | 13 | `forest/shrines/3` | 129.6, 18.9, 26.2 | 129.6, -4.9, 26.2 | 0 | 23.8 | 0 |
+| E | 12 | `forest/shrines/4` | 60.6, 12.5, -46.2 | 60.6, 8.6, -46.2 | 0 | 3.9 | 0 |
+| Tape | 16 | `interactable/chestFree` | 156.9, 20.4, 26.2 | 156.9, 15.6, 26.2 | 0 | 4.7 | 0 |
+| 100 | 15 | `interactable/chestFree` | 129.6, 20.7, -26.5 | 129.6, 4.5, -26.5 | 0 | 16.2 | 34 |
+| 100 | 30 | `interactable/chestFree` | 90.2, 20.7, -26.5 | 90.2, 4.5, -26.5 | 0 | 16.2 | 34 |
+| 100 | 31 | `interactable/chestFree` | 52.7, 20.7, 100.4 | 52.7, 8.6, 101.9 | 1.5 | 12.2 | 0 |
+
+- R1 (node 43) sits on the very edge of the platform at x 140 with no floor beyond, so it slides 2.5 units onto the platform. R4 and the third 100 slide 1.5 units to clear a wall or an edge.
+- K hovers 20 units above the foot of the north quarter pipe, where the surface is steeper than the limit and the platform on top is too shallow for a shrine, so it stands on the flat floor 10 units south. A slides 5 units to a 19 degree slope.
+- T stands on the main half pipe floor, 23.8 units below its node, as the node's letter hovers in the air above the pipe.
+- The two lane 100 pickups stand on a 34 degree ramp, so their chests tilt with it, and a player standing there slides off.
+- Checked in game: every item's bounds sit on the predicted surface (bounds bottom within 0.05 of it), and the player dropped onto each base settles at the predicted height. R1 settles 0.04 above, and the two ramp chests rest about 0.1 above the model at the ramp foot after the player slides down. Close-ups of all 14 show none floating or clipping, and the tape chest's room shows no chest through its underside.
+
+- The chest, shrine and merchant prefabs are authored lying down (the prefab asset's euler X is 270), so a placement at rotation 0 renders them on their side. Items are placed at X 270 on flat ground, and the surface tilt is composed on top of that on a slope (`item_rotation` in `warehouse_surface.py`).
 - `forest/shrines/3` is the `ShadyGuy` prefab, the merchant NPC, not a shrine, and `forest/shrines/0` to `2` and `4` are the Challenge, Magnet, Maoi and Cursed shrines. The mapping stays one catalog entry per letter.
 
 ## Windows opened to the player
@@ -162,5 +175,4 @@ The frames in `tools/thps_warehouse_frames/` come from the 2020 remake, so the t
 - Present: the walled room, the main half pipe and its hanging box, the banks, decks and ledges, the rail bars, the windows and the boss portal.
 - Roof: the pack adds a flat dark roof (see "Warehouse roof" in asset-bundles.md), so a view from above the room shows the roof and not the interior; the items map and frame 12 are cut-away or interior views.
 - Lighting: the level uses Forest's fog and lighting, which tints the room teal and has none of the remake's window light shafts. Surfaces read grey-green and dark.
-- Collectibles: they keep their old-layout positions, so some float or sit inside geometry.
 - Not compared: a pitch-45 south-east overview matching the items map, because of the roof.
