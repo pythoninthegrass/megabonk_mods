@@ -19,7 +19,6 @@ public readonly record struct LiveGrid(int Width, int Depth, float Spacing, floa
 // for the genId scheme and where each category lives in the scene.
 public static class LiveEditPatch
 {
-    private const string CloneSuffix = "(Clone)";
     private const string TileObjectsParentName = "TileObjectsParent";
 
     private static IReadOnlyList<EditOp> _pendingEdits;
@@ -635,12 +634,12 @@ public static class LiveEditPatch
                 continue;
             }
 
-            if (!seenTileObjectsParent || !root.name.EndsWith(CloneSuffix, StringComparison.Ordinal))
+            var category = seenTileObjectsParent ? SceneRootCategory.Of(root.name) : null;
+            if (category == null)
             {
                 continue;
             }
 
-            var category = "object:" + root.name.Substring(0, root.name.Length - CloneSuffix.Length);
             if (!spawned.TryGetValue(category, out var list))
             {
                 spawned[category] = list = new List<GameObject>();

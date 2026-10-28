@@ -122,6 +122,7 @@ Sources are walked in the order the game populated them, never sorted. Where eac
 | `fillTile` | `ProceduralTileGeneration.fillTiles` | `fillTile:0203` |
 | `tileObject` | children of `GenerateTileObjects.tileObjectsParent` (`TileObjectsParent`), in sibling order | `tileObject:0001` |
 | `object:{prefabName}` | scene-root GameObjects named `<prefab>(Clone)` that come after the `TileObjectsParent` root, grouped by name in root order | `object:Tree0:0003`, `object:Chest:0000` |
+| `scenery:{name}` | scene-root GameObjects after the `TileObjectsParent` root whose name does not end in `(Clone)`, grouped by name in root order; tile prefab decoration such as ruined towers, crates, cubes, pillars and dead trees (`Castle`, `Crate (2)`, `Ruins (1)`, `Tree`). `FogOfWarSphere` is the one such root left out of the index (`SceneRootCategory`) | `scenery:Castle:0003`, `scenery:Crate (2):0000` |
 
 The `object:` category covers everything `RandomObjectPlacer` and `SpawnInteractables` spawn: trees, bushes, rocks, logs, pots, chests, shrines, the boss spawner and the player spawn portal. `RandomObjectPlacer` and `SpawnInteractables` have no children and expose no result list; their output is parented to the scene root, so the root order is the only record of spawn order. The prefab name is the cloned GameObject's name (no `RandomMapObject` name field exists). The index is a snapshot taken at `A_GenerationComplete`; objects the game creates later (enemies, projectiles, pickups) are not in it.
 

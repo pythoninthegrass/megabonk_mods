@@ -28,6 +28,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/reachability_validator.cs" Link="reachability_validator.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/game_build_id_check.cs" Link="game_build_id_check.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/gen_id_assigner.cs" Link="gen_id_assigner.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/scene_root_category.cs" Link="scene_root_category.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/catalog_route.cs" Link="catalog_route.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/pack_catalog.cs" Link="pack_catalog.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/pack_manifest.cs" Link="pack_manifest.cs" />
