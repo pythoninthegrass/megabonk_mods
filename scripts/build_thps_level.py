@@ -8,7 +8,6 @@ units from the south-west corner of the inner arena, x east and z north.
 
 import argparse
 import json
-import math
 from pathlib import Path
 from typing import NamedTuple
 
@@ -38,13 +37,6 @@ PLAYER_START = [109, 38, -120]
 
 PLAYER_SPAWN_LOCAL = (100, 137)
 SPAWN_CLEARANCE = 10
-BIG_RAIL_LOCAL = (66, 55)
-BIG_RAIL_YAW = 90.0
-BIG_RAIL_SCALE = 0.75
-LEDGE_RAIL_LOCAL = (12, 33)
-LEDGE_RAIL_SCALE = 0.4
-HIGH_RAIL_LOCAL = (3, 12)
-HIGH_RAIL_SCALE = 0.5
 
 # Game rails laid hidden along the Warehouse mesh's own rail bar (the straight run, then the bend), so the bar keeps its look and the game rails supply the grind. Each is (world position, yaw, scale), tuned against the bar.
 MESH_RAIL_CATALOG_ID = "interactable/rail/0"
@@ -65,9 +57,8 @@ MESH_RAILS = (
 MAX_SLOPE_ANGLE = 88
 
 PACK_ID = "thps"
-PACK_VERSION = "2.0.18"
+PACK_VERSION = "2.0.19"
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "packs" / PACK_ID / "manifest.json"
-STRUCTURE_ASSETS = ("QuarterPipe", "Kicker", "Block", "Taxi", "Corridor")
 WAREHOUSE_ASSET = "Warehouse"
 # The Warehouse floor sits this far above the level-0 tiles so it covers them.
 WAREHOUSE_LIFT = 0.5
@@ -79,12 +70,6 @@ WAREHOUSE_SCALE = UNITS_PER_METRE * METRES_PER_OBJ_UNIT
 # Horizontal extent of warehouse.obj in OBJ units; the prefab is centred on it.
 WAREHOUSE_OBJ_WIDTH = 2.518555 - 0.519531
 WAREHOUSE_OBJ_DEPTH = 3.533447 - 0.398926
-
-# Fraction of a quarter pipe's run that is the curved transition; the rest is a straight slope. Mirrors ThpsPack.cs.
-QUARTER_PIPE_TRANSITION = 0.4
-# The player's jump apex above the floor (the highest sample was 7.8), and PlayerMovement.maxSlopeAngle (45) less a margin.
-PLAYER_JUMP_APEX = 7.8
-MAX_RAMP_SLOPE_DEGREES = 41
 
 SEED = 20261007
 GAME_BUILD_ID = "21750826"
@@ -120,40 +105,22 @@ SEED_OBJECT_COUNTS = {
     "ForestParticles": 1,
 }
 SEED_TILE_OBJECTS = 39
+# Uncloned decoration roots (ruined towers, crates, pillars, dead trees) the tile prefabs spawn at the seed above, indexed as gen:scenery:<name>:<n>.
+SEED_SCENERY_COUNTS = {
+    "Castle": 14,
+    "Castle (1)": 6,
+    "CastleLying": 3,
+    "Crate (1)": 12,
+    "Crate (2)": 10,
+    "Cube": 2,
+    "Cube (1)": 4,
+    "Cube (3)": 9,
+    "Pillar": 4,
+    "Pillar (1)": 4,
+    "Ruins (1)": 8,
+    "Tree": 6,
+}
 KEPT_OBJECT_CATEGORIES = ("BossSpawner", "PlayerSpawnPortal", "ForestParticles")
-
-
-class Structure(NamedTuple):
-    code: str
-    asset: str
-    x: float
-    z: float
-    yaw: float
-    width: float
-    rise: float
-    depth: float
-    base_y: float = 0.0
-
-
-# Positions are block-local centres of the footprint at its base. width, rise and depth scale the unit prefab; a ramp rises toward its local +z, so yaw 0 climbs north, 90 east, 180 south and 270 west.
-STRUCTURES = (
-    Structure("M1", "QuarterPipe", 9, 12, 270, 24, 12, 18),
-    Structure("M2", "Block", 7, 33, 0, 14, 5.5, 14),
-    Structure("M3", "Taxi", 34, 25, 90, 8, 5, 20),
-    Structure("M4a", "QuarterPipe", 33, 35.5, 180, 30, 6, 9),
-    Structure("M4b", "QuarterPipe", 33, 54.5, 0, 30, 6, 9),
-    Structure("M5", "Corridor", 10, 66, 0, 18, 13, 28, 13),
-    Structure("M6", "QuarterPipe", 34, 71, 0, 20, 12, 18),
-    Structure("M7", "QuarterPipe", 58, 74, 0, 12, 8, 12),
-    Structure("M8", "QuarterPipe", 77, 72.5, 0, 18, 10, 15),
-    Structure("M9", "Block", 101, 103, 0, 38, 6, 24),
-    Structure("M9b", "QuarterPipe", 111, 103, 90, 24, 12, 18, 6),
-    Structure("M10", "QuarterPipe", 67, 4.5, 180, 20, 6, 9),
-    Structure("M10b", "Block", 60, 15, 0, 22, 4, 10),
-    Structure("M11", "Block", 99, 67, 0, 18, 4, 12),
-    Structure("M12a", "Kicker", 87, 46, 180, 12, 4.4, 6.3),
-    Structure("M12b", "Kicker", 87, 32, 0, 12, 2.6, 3.7),
-)
 
 
 class Collectible(NamedTuple):
@@ -162,32 +129,29 @@ class Collectible(NamedTuple):
     x: float
     z: float
     y: float
-    stands_on: str | None = None
     yaw: float = 0.0
 
 
 # Chest, shrine and merchant prefabs are authored lying down, so they stand up at pitch 270 (a lane tilts them back by its slope).
 UPRIGHT_PITCH = 270.0
 
-# Block-local positions; y is the surface the item stands on. Items on a lane cell use the lane's slope height.
+# Block-local positions and heights from the old hand-built layout; they are not yet anchored to the Warehouse mesh.
 COLLECTIBLES = (
-    Collectible("R1", "interactable/chest", 8, 34, 5.5, "M2"),
-    Collectible("R2", "interactable/chest", 61, 16, 4, "M10b"),
-    Collectible("R3", "interactable/chest", 98, 67, 4, "M11"),
-    Collectible("R4", "interactable/chest", 86, 100, 6, "M9"),
+    Collectible("R1", "interactable/chest", 8, 34, 5.5),
+    Collectible("R2", "interactable/chest", 61, 16, 4),
+    Collectible("R3", "interactable/chest", 98, 67, 4),
+    Collectible("R4", "interactable/chest", 86, 100, 6),
     Collectible("R5", "interactable/chest", 20, 88, 0),
     Collectible("S", "forest/shrines/0", 84, 40, 0),
     Collectible("K", "forest/shrines/1", 33, 2, 0),
-    Collectible("A", "forest/shrines/2", 34, 26, 5, "M3"),
+    Collectible("A", "forest/shrines/2", 34, 26, 5),
     Collectible("T", "forest/shrines/3", 27, 60.5, 0),
-    Collectible("E", "forest/shrines/4", 86, 108, 6, "M9"),
-    Collectible("Tape", "interactable/chestFree", 11, 67, 13, "M5"),
+    Collectible("E", "forest/shrines/4", 86, 108, 6),
+    Collectible("Tape", "interactable/chestFree", 11, 67, 13),
     Collectible("100N", "interactable/chestFree", 31, 99, 0),
     Collectible("100E", "interactable/chestFree", 56, 99, 0),
     Collectible("100S", "interactable/chestFree", 82, 13, 0),
 )
-HIGH_RAIL_HEIGHT = next(s.rise for s in STRUCTURES if s.code == "M1")
-LEDGE_RAIL_HEIGHT = next(s.rise for s in STRUCTURES if s.code == "M2")
 
 
 def warehouse_footprint() -> tuple[float, float]:
@@ -247,6 +211,8 @@ def clutter_removals() -> list[dict]:
         if name in KEPT_OBJECT_CATEGORIES:
             continue
         ids.extend(f"gen:object:{name}:{i:04d}" for i in range(count))
+    for name, count in SEED_SCENERY_COUNTS.items():
+        ids.extend(f"gen:scenery:{name}:{i:04d}" for i in range(count))
     return [edit("object.remove", {}, target) for target in ids]
 
 
@@ -280,58 +246,8 @@ def mesh_rail_edits() -> list[dict]:
     ]
 
 
-def place_rail(catalog_id: str, local: tuple[float, float], y: float, yaw: float, scale: float) -> dict:
-    wx, wz = local_to_world(*local)
-    return edit(
-        "object.place",
-        {
-            "catalogId": catalog_id,
-            "position": {"x": wx, "y": y, "z": wz},
-            "rotation": {"x": 0.0, "y": yaw, "z": 0.0},
-            "scale": {"x": scale, "y": scale, "z": scale},
-        },
-    )
-
-
 def rail_edits() -> list[dict]:
-    return [
-        place_rail("interactable/rail/1", BIG_RAIL_LOCAL, 0.0, BIG_RAIL_YAW, BIG_RAIL_SCALE),
-        place_rail("interactable/rail/0", LEDGE_RAIL_LOCAL, LEDGE_RAIL_HEIGHT, 0.0, LEDGE_RAIL_SCALE),
-        place_rail("interactable/rail/0", HIGH_RAIL_LOCAL, HIGH_RAIL_HEIGHT, 0.0, HIGH_RAIL_SCALE),
-        *mesh_rail_edits(),
-    ]
-
-
-def footprint(s: Structure) -> tuple[float, float, float, float]:
-    """Block-local (x0, x1, z0, z1) bounds of a structure whose yaw is a multiple of 90."""
-    half_x, half_z = (s.width / 2, s.depth / 2) if s.yaw % 180 == 0 else (s.depth / 2, s.width / 2)
-    return s.x - half_x, s.x + half_x, s.z - half_z, s.z + half_z
-
-
-def end_slope_degrees(s: Structure) -> float:
-    """Steepest slope of a QuarterPipe or Kicker after scaling."""
-    run_ratio = s.rise / s.depth
-    if s.asset == "QuarterPipe":
-        run_ratio /= 1 - QUARTER_PIPE_TRANSITION / 2
-    return math.degrees(math.atan(run_ratio))
-
-
-def structure_edits() -> list[dict]:
-    edits = []
-    for s in STRUCTURES:
-        wx, wz = local_to_world(s.x, s.z)
-        edits.append(
-            edit(
-                "object.place",
-                {
-                    "catalogId": f"bundle:{PACK_ID}/{s.asset}",
-                    "position": {"x": wx, "y": s.base_y, "z": wz},
-                    "rotation": {"x": 0.0, "y": s.yaw, "z": 0.0},
-                    "scale": {"x": s.width, "y": s.rise, "z": s.depth},
-                },
-            )
-        )
-    return edits
+    return mesh_rail_edits()
 
 
 def warehouse_edits() -> list[dict]:
@@ -347,11 +263,6 @@ def warehouse_edits() -> list[dict]:
             },
         )
     ]
-
-
-def surface_height(s: Structure) -> float:
-    """Height of the surface an item stands on: a block or taxi top, or a corridor floor."""
-    return s.base_y if s.asset == "Corridor" else s.base_y + s.rise
 
 
 def collectible_edits() -> list[dict]:

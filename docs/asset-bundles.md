@@ -97,7 +97,7 @@ The level schema carries an optional top-level `packs` map (`{"<packId>": "<vers
 
 ## THPS Warehouse pack
 
-`Assets/Editor/ThpsPack.cs` builds the `thps` pack: the structures of the THPS Warehouse level that have no Megabonk prop. It generates every mesh in code, so there are no model files to import. The generated `Assets/Thps/` folder is gitignored; the committed inputs are `ThpsPack.cs` and `unity/pack-authoring/packs/thps/manifest.json`.
+`Assets/Editor/ThpsPack.cs` builds the `thps` pack: one `Warehouse` prefab made from the THPS1 Warehouse level extracted into `.tools/thps1/warehouse` (`warehouse.obj`, `warehouse.mtl` and the PNGs; `-warehouseSource` overrides the directory). The generated `Assets/Thps/` folder and the extraction are gitignored; the committed inputs are `ThpsPack.cs`, its helpers in `Assets/Editor/` and `unity/pack-authoring/packs/thps/manifest.json`.
 
 ```sh
 task pack:thps
@@ -107,20 +107,28 @@ The task builds the bundle (`task pack:build PACK_METHOD=ThpsPack.Build`) and ru
 
 | asset | shape | collider |
 | --- | --- | --- |
-| `QuarterPipe` | a curved transition that eases into a straight slope, closed solid, rising toward +z | non-convex `MeshCollider` on the mesh |
-| `Kicker` | a straight wedge rising toward +z | `MeshCollider` |
-| `Block` | a box for platforms, decks and ledges | `MeshCollider` |
-| `Taxi` | a hull box and a cabin box, with a dark window band | `BoxCollider` per box, none on the windows |
-| `Corridor` | floor, roof and two side walls, open at both ends | `BoxCollider` per box |
+| `Warehouse` | the extracted level at OBJ scale, centred on its footprint with y = 0 at the floor and y up, one submesh per material; the level placement applies the scale (79.2 puts the 1.8 m skater at about 4.4 units per metre) | non-convex `MeshCollider` on a separate collision mesh |
 
 Authoring rules:
 
-- Every prefab is unit size with its origin at the bottom centre of the footprint: x is the width, y the height and z the depth, and a ramp rises toward +z. The level generator (`STRUCTURES` in `scripts/build_thps_level.py`) scales each placement to its real width, rise and depth, so one prefab serves every size. Yaw 0 climbs north, 90 east, 180 south and 270 west.
 - Set every GameObject of the prefab, children included, to layer 8. The generated tile ground (`TileGround`, `TileSlope`, `TileWall` and the combined collision mesh) is layer 8 and the player is layer 7. A placed object keeps the layer its prefab was saved with, because the mod does not touch the layer of what it spawns.
-- Keep a ramp's steepest slope under about 41 degrees after scaling. `PlayerMovement.maxSlopeAngle` is 45, and a player cannot run up a ramp whose face passes it: on a test pipe whose face reached 56 degrees the player could not climb past a body height of about 8 to 10. `QuarterPipe` has a fixed profile (`TransitionFraction` 0.4 in `ThpsPack.cs`, mirrored as `QUARTER_PIPE_TRANSITION` in the generator), so its steepest slope is `atan(rise / depth / 0.8)`; a rise of 12 needs a depth of 18 or more. `end_slope_degrees` in the generator computes it and a test checks every placed ramp.
-- Colour with plain `Standard` materials and let the shader remap above turn them into the toon shader. The pack has no textures.
+- Textures are the extracted PS1 PNGs, point-filtered with no mipmaps and repeat wrap, on materials the pack's shader remap turns into the toon shader. The PS1 transparency key (magenta) is baked to a dark glass colour (`TransparencyKey`, `KeyReplacement`) because the shader is opaque. The 41 faces with no texture share a flat concrete material.
 - Build through the explicit `AssetBundleBuild[]` overload of `BuildAssetBundles`, so a build of the pack does not rebuild the test bundles in the same project.
-- List every asset in `manifest.json`; an asset the manifest omits resolves as `Missing:` even when the bundle holds it. The generator checks the manifest against the assets it places.
+- List every asset in `manifest.json`; an asset the manifest omits resolves as `Missing:` even when the bundle holds it. The generator checks the manifest against the placement. Bump the manifest `version` and `PACK_VERSION` in `scripts/build_thps_level.py` together whenever the bundle changes.
+
+### Warehouse collision
+
+The `MeshCollider` is built from a separate `WarehouseCollision` mesh (`SaveCollisionMesh`) so the render and the collision can differ:
+
+- The windows of the secret room and the top of the starting slope render but do not collide, so the player and enemies pass through them. Faces of material `FA88F30D` are dropped everywhere; faces of `F2184063`, which solid windows elsewhere share, are dropped only inside the `OpenedWindowBounds` boxes. See "Windows opened to the player" in [thps-warehouse-layout.md](thps-warehouse-layout.md).
+
+### Floor patch
+
+The extraction left a gap in the floor against the west wall. The pack adds a patch over it on the floor material `F051E515`, with UVs fitted to the extracted floor (`FloorUvScaleU` and the related constants) so the texture continues, placed just under the floor plane so the grime decals around it stay on top.
+
+### Rail posts
+
+The mesh's rail bars were extracted floating, with small plates of the original posts left well below them. The rail-material faces inside `RailLeftoverBounds` are dropped from the mesh, and `ThpsPack.AddRailPosts` adds dark box posts under the bars (`RailPosts`), which are part of the mesh and its collision. The grind comes from hidden game rails placed along the bars by the level, described in thps-warehouse-layout.md under "Mesh rail near (75, 3, 28)".
 
 ### Warehouse mesh import
 

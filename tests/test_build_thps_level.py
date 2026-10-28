@@ -74,8 +74,17 @@ def test_clutter_removals_skip_spawn_portal_boss_spawner_and_particles() -> None
 
 def test_clutter_removal_count_matches_the_seed_index() -> None:
     kept = sum(b.SEED_OBJECT_COUNTS[c] for c in b.KEPT_OBJECT_CATEGORIES)
-    expected = sum(b.SEED_OBJECT_COUNTS.values()) - kept + b.SEED_TILE_OBJECTS
+    expected = sum(b.SEED_OBJECT_COUNTS.values()) - kept + b.SEED_TILE_OBJECTS + sum(b.SEED_SCENERY_COUNTS.values())
     assert len(b.clutter_removals()) == expected
+
+
+def test_clutter_removals_include_every_uncloned_scenery_root_but_not_the_fog_of_war_sphere() -> None:
+    ids = {e["target"] for e in b.clutter_removals()}
+    assert sum(b.SEED_SCENERY_COUNTS.values()) == 82
+    assert "gen:scenery:Castle:0013" in ids
+    assert "gen:scenery:Castle:0014" not in ids
+    assert "gen:scenery:Crate (2):0009" in ids
+    assert not any("FogOfWarSphere" in i for i in ids)
 
 
 def test_spawn_moves_only_relocate_the_boss_spawner_with_a_full_transform() -> None:
@@ -112,15 +121,12 @@ def test_write_level_round_trips_through_json(tmp_path: Path) -> None:
     assert json.loads(out.read_text()) == b.build_level()
 
 
-def test_rail_placements_use_the_rail_catalog_ids_with_the_big_rail_at_a_block_local_position() -> None:
+def test_the_only_rails_are_the_hidden_game_rails_along_the_mesh_bars() -> None:
     rails = ops_of(b.rail_edits(), "object.place")
-    ids = [payload(r)["catalogId"] for r in rails]
-    assert ids == ["interactable/rail/1"] + ["interactable/rail/0"] * 6
-    big = payload(rails[0])
-    wx, wz = b.local_to_world(*b.BIG_RAIL_LOCAL)
-    assert (big["position"]["x"], big["position"]["z"]) == (wx, wz)
-    assert big["rotation"]["y"] == b.BIG_RAIL_YAW
-    assert 0 < big["scale"]["x"] <= 1
+    assert len(rails) == len(b.MESH_RAILS)
+    for rail in rails:
+        assert payload(rail)["catalogId"] == b.MESH_RAIL_CATALOG_ID
+        assert payload(rail)["hidden"] is True
 
 
 def test_rails_sit_inside_the_inner_arena() -> None:
@@ -140,65 +146,6 @@ def test_build_level_includes_the_rails_after_the_clutter_removals() -> None:
     assert last_remove < first_place
 
 
-def structure_places() -> list[dict]:
-    return [payload(e) for e in ops_of(b.structure_edits(), "object.place")]
-
-
-def test_every_structure_is_a_thps_pack_asset_listed_in_the_manifest() -> None:
-    manifest = json.loads(Path(b.MANIFEST_PATH).read_text())
-    assets = {p["catalogId"] for p in structure_places()}
-    assert assets == {f"bundle:{b.PACK_ID}/{a}" for a in b.STRUCTURE_ASSETS}
-    assert set(b.STRUCTURE_ASSETS) | {b.WAREHOUSE_ASSET} == set(manifest["assets"])
-    assert manifest["id"] == b.PACK_ID
-    assert manifest["version"] == b.PACK_VERSION
-
-
-def test_structures_cover_every_spec_feature_that_needs_a_new_asset() -> None:
-    codes = {s.code for s in b.STRUCTURES}
-    assert {"M1", "M2", "M3", "M4a", "M4b", "M5", "M6", "M7", "M8", "M9", "M9b", "M10", "M11", "M12a", "M12b"} <= codes
-    assert len(structure_places()) == len(b.STRUCTURES)
-
-
-def test_half_pipe_is_two_opposed_quarter_pipes_with_a_flat_between() -> None:
-    by_code = {s.code: s for s in b.STRUCTURES}
-    a, c = by_code["M4a"], by_code["M4b"]
-    assert a.asset == c.asset == "QuarterPipe"
-    assert (a.yaw - c.yaw) % 360 == 180
-    assert a.x == c.x
-    near, far = sorted((a, c), key=lambda s: s.z)
-    assert far.z - near.z > near.depth / 2 + far.depth / 2
-
-
-def test_structures_stay_inside_the_inner_arena() -> None:
-    for s in b.STRUCTURES:
-        x0, x1, z0, z1 = b.footprint(s)
-        assert x0 >= 0 and x1 <= b.INNER_X * b.TILE, s.code
-        assert z0 >= 0 and z1 <= b.INNER_Z * b.TILE, s.code
-
-
-def test_structures_leave_the_player_spawn_area_clear() -> None:
-    sx, sz = b.PLAYER_SPAWN_LOCAL
-    for s in b.STRUCTURES:
-        x0, x1, z0, z1 = b.footprint(s)
-        assert not (
-            x0 - b.SPAWN_CLEARANCE < sx < x1 + b.SPAWN_CLEARANCE and z0 - b.SPAWN_CLEARANCE < sz < z1 + b.SPAWN_CLEARANCE
-        ), s.code
-
-
-def test_ramp_end_slopes_stay_under_the_player_max_slope_angle() -> None:
-    ramps = [s for s in b.STRUCTURES if s.asset in ("QuarterPipe", "Kicker")]
-    assert ramps
-    for s in ramps:
-        assert b.end_slope_degrees(s) <= b.MAX_RAMP_SLOPE_DEGREES, s.code
-    assert b.MAX_RAMP_SLOPE_DEGREES < 45
-
-
-def test_structures_that_hold_items_or_rails_are_no_taller_than_the_jump_apex() -> None:
-    for s in b.STRUCTURES:
-        if s.asset == "Block":
-            assert s.rise <= b.PLAYER_JUMP_APEX, s.code
-
-
 def test_build_level_disables_grass_so_it_does_not_grow_through_the_warehouse_floor() -> None:
     assert b.build_level()["noGrass"] is True
 
@@ -209,26 +156,17 @@ def test_build_level_raises_the_slope_limit_so_the_player_can_ride_the_half_pipe
     assert angle > 45
 
 
-def test_build_level_places_no_hand_built_structures_inside_the_warehouse() -> None:
+def test_the_pack_manifest_lists_only_the_warehouse_at_the_pack_version() -> None:
+    manifest = json.loads(Path(b.MANIFEST_PATH).read_text())
+    assert manifest["assets"] == [b.WAREHOUSE_ASSET]
+    assert manifest["id"] == b.PACK_ID
+    assert manifest["version"] == b.PACK_VERSION
+
+
+def test_the_warehouse_is_the_only_pack_asset_the_level_places() -> None:
     placed = {payload(e)["catalogId"] for e in b.build_level()["edits"] if e["opType"] == "object.place"}
-    assert placed.isdisjoint(f"bundle:{b.PACK_ID}/{a}" for a in b.STRUCTURE_ASSETS)
+    assert {c for c in placed if c.startswith("bundle:")} == {f"bundle:{b.PACK_ID}/{b.WAREHOUSE_ASSET}"}
 
-
-def test_ledge_and_high_rails_sit_on_the_structures_they_belong_to() -> None:
-    by_code = {s.code: s for s in b.STRUCTURES}
-    assert by_code["M1"].rise == b.HIGH_RAIL_HEIGHT
-    assert by_code["M2"].rise == b.LEDGE_RAIL_HEIGHT
-    rails = ops_of(b.rail_edits(), "object.place")
-    assert payload(rails[1])["position"]["y"] == by_code["M2"].rise
-    assert payload(rails[2])["position"]["y"] == by_code["M1"].rise
-
-
-def test_structure_placements_use_non_uniform_scale_of_width_rise_depth() -> None:
-    by_code = {s.code: s for s in b.STRUCTURES}
-    m1 = by_code["M1"]
-    place = next(p for p in structure_places() if p["scale"]["y"] == m1.rise and p["scale"]["x"] == m1.width)
-    assert place["scale"]["z"] == m1.depth
-    assert place["rotation"]["y"] == m1.yaw
 
 
 def collectible_places() -> list[dict]:
@@ -257,35 +195,6 @@ def test_collectibles_stay_inside_the_arena_and_clear_of_the_player_spawn() -> N
     for c in b.COLLECTIBLES:
         assert 0 <= c.x <= b.INNER_X * b.TILE and 0 <= c.z <= b.INNER_Z * b.TILE, c.code
         assert max(abs(c.x - sx), abs(c.z - sz)) >= b.SPAWN_CLEARANCE, c.code
-
-
-def test_collectibles_inside_a_structure_footprint_stand_on_its_surface() -> None:
-    by_code = {s.code: s for s in b.STRUCTURES}
-    for c in b.COLLECTIBLES:
-        inside = []
-        for s in b.STRUCTURES:
-            x0, x1, z0, z1 = b.footprint(s)
-            if x0 <= c.x <= x1 and z0 <= c.z <= z1:
-                inside.append(s.code)
-        if c.stands_on is None:
-            assert not inside, c.code
-            assert c.y == 0, c.code
-        else:
-            assert inside == [c.stands_on], c.code
-            assert c.y == b.surface_height(by_code[c.stands_on]), c.code
-
-
-def test_surface_height_is_a_block_top_or_a_corridor_floor() -> None:
-    by_code = {s.code: s for s in b.STRUCTURES}
-    assert b.surface_height(by_code["M2"]) == 5.5
-    assert b.surface_height(by_code["M5"]) == 13
-
-
-def test_collectibles_on_structures_are_reachable_by_a_jump_or_ramp_or_listed_as_trick_only() -> None:
-    by_code = {s.code: s for s in b.STRUCTURES}
-    for c in b.COLLECTIBLES:
-        if c.stands_on and by_code[c.stands_on].asset == "Block":
-            assert c.y <= b.PLAYER_JUMP_APEX, c.code
 
 
 def test_build_level_includes_collectibles_after_the_clutter_removals() -> None:
@@ -363,7 +272,7 @@ def test_build_level_places_the_warehouse_after_the_clutter_removals() -> None:
 
 
 def test_pack_version_is_the_warehouse_release() -> None:
-    assert b.PACK_VERSION == "2.0.18"
+    assert b.PACK_VERSION == "2.0.19"
 
 
 def test_player_starts_at_tonys_chosen_position() -> None:
