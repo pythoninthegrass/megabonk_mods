@@ -97,19 +97,51 @@ public class ObjectToolTests
     [Fact]
     public void DragY_ObjectOnTheSurface_FollowsTheNewSurface()
     {
-        Assert.Equal(60f, ObjectTools.DragY(newSurfaceY: 60f, lift: 0f, originY: 0f));
+        Assert.Equal(60f, ObjectTools.DragY(tileSurfaceY: 60f, lift: 0f, floatingY: 0f, nearbySurfaceYs: System.Array.Empty<float>()));
     }
 
     [Fact]
     public void DragY_ObjectSlightlyAboveTheSurface_KeepsItsLiftOverTheNewSurface()
     {
-        Assert.Equal(61f, ObjectTools.DragY(newSurfaceY: 60f, lift: 1f, originY: 1f));
+        Assert.Equal(61f, ObjectTools.DragY(tileSurfaceY: 60f, lift: 1f, floatingY: 1f, nearbySurfaceYs: System.Array.Empty<float>()));
     }
 
     [Fact]
-    public void DragY_FloatingObject_KeepsItsAbsoluteHeightOverATallerTile()
+    public void DragY_FloatingObject_KeepsItsHeightOverATallerTile()
     {
-        Assert.Equal(15.6f, ObjectTools.DragY(newSurfaceY: 40f, lift: 35.6f, originY: 15.6f));
+        Assert.Equal(15.6f, ObjectTools.DragY(tileSurfaceY: 40f, lift: 35.6f, floatingY: 15.6f, nearbySurfaceYs: System.Array.Empty<float>()));
+    }
+
+    [Fact]
+    public void DragY_FloatingObject_SettlesOntoASurfaceWithinTwoUnits()
+    {
+        Assert.Equal(17f, ObjectTools.DragY(tileSurfaceY: -20f, lift: 36f, floatingY: 15.6f, nearbySurfaceYs: new[] { 17f }));
+    }
+
+    [Fact]
+    public void DragY_FloatingObject_SettlesOntoTheTileSurfaceWithinTwoUnits()
+    {
+        Assert.Equal(16f, ObjectTools.DragY(tileSurfaceY: 16f, lift: 3f, floatingY: 15.6f, nearbySurfaceYs: System.Array.Empty<float>()));
+    }
+
+    [Fact]
+    public void SnapY_PicksTheNearestSurfaceWithinTwoUnits()
+    {
+        Assert.Equal(11f, ObjectTools.SnapY(10f, new[] { 12.5f, 11f, 8.5f }));
+    }
+
+    [Fact]
+    public void SnapY_NoSurfaceWithinTwoUnits_KeepsTheHeight()
+    {
+        Assert.Equal(10f, ObjectTools.SnapY(10f, new[] { 12.5f, 7f }));
+    }
+
+    [Fact]
+    public void RaiseBy_MovingTheMouseUpRaisesTheObject()
+    {
+        Assert.True(ObjectTools.RaiseBy(10f, 40f) > 10f);
+        Assert.True(ObjectTools.RaiseBy(10f, -40f) < 10f);
+        Assert.Equal(10f, ObjectTools.RaiseBy(10f, 0f));
     }
 
     [Fact]

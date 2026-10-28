@@ -21,6 +21,8 @@ public static class ObjectTools
     private const float GimbalLimit = 0.99999f;
     private const float PositionTolerance = 0.01f;
     private const float FloatingLift = 2f;
+    public const float SnapDistance = 2f;
+    private const float UnitsPerPixel = 0.05f;
     private const float DragHoldSeconds = 0.2f;
     private const float FootprintClearance = 1.1f;
     private const float MinRingRadius = 0.5f;
@@ -90,9 +92,37 @@ public static class ObjectTools
         return points;
     }
 
-    // A dragged object keeps its height over the surface, unless it floats well above it, where it keeps its absolute height.
-    public static float DragY(float newSurfaceY, float lift, float originY) =>
-        lift > FloatingLift ? originY : newSurfaceY + lift;
+    // An object resting on the surface keeps its lift over the surface it is dragged across; a floating one keeps its own height and only settles onto a surface within snap range.
+    public static float DragY(float tileSurfaceY, float lift, float floatingY, IReadOnlyList<float> nearbySurfaceYs)
+    {
+        if (lift <= FloatingLift)
+        {
+            return tileSurfaceY + lift;
+        }
+
+        var surfaces = new List<float>(nearbySurfaceYs) { tileSurfaceY };
+        return SnapY(floatingY, surfaces);
+    }
+
+    // The nearest surface within snap range, otherwise the height unchanged.
+    public static float SnapY(float y, IReadOnlyList<float> surfaceYs)
+    {
+        var best = y;
+        var bestDistance = SnapDistance;
+        for (var i = 0; i < surfaceYs.Count; i++)
+        {
+            var distance = MathF.Abs(surfaceYs[i] - y);
+            if (distance <= bestDistance)
+            {
+                best = surfaceYs[i];
+                bestDistance = distance;
+            }
+        }
+
+        return best;
+    }
+
+    public static float RaiseBy(float y, float mouseDeltaPixels) => y + mouseDeltaPixels * UnitsPerPixel;
 
     // The cursor point kept inside its cell, at the tile surface there.
     public static Vector3Data PositionAt(int x, int z, TileState state, int width, int depth, float spacing, float tileHeight, float pointX, float pointZ)

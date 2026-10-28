@@ -12,6 +12,7 @@ public static class EditorObjectTools
     private const float OutlineLift = 0.5f;
     private const float NearestPickTiles = 0.125f;
     private const float TerrainPickRadius = 2f;
+    private const float HorizontalNormalY = 0.7f;
     private const float TerrainProbeHeight = 1000f;
     private const int OnTopRenderQueue = 4000;
     private const float FlatDecalEpsilon = 0.01f;
@@ -36,6 +37,9 @@ public static class EditorObjectTools
     private static ObjectTarget? _dragging;
     private static TransformData _dragOrigin;
     private static float _dragLift;
+    private static float _dragY;
+    private static float _dragMouseY;
+    private static bool _dragFloating;
     private static bool _dragActive;
     private static float _dragPressedAt;
     private static (float X, float Z) _dragGrab;
@@ -222,18 +226,68 @@ public static class EditorObjectTools
         _dragPressedAt = Time.unscaledTime;
         _dragGrab = target != null || _onTerrain ? (_dragOrigin.Position.X - point.x, _dragOrigin.Position.Z - point.z) : (0f, 0f);
         _dragLift = SurfaceYAt(_dragOrigin.Position) is { } surface ? _dragOrigin.Position.Y - surface : 0f;
+        _dragY = _dragOrigin.Position.Y;
+        _dragMouseY = EditorInput.MousePosition.y;
+        _dragFloating = false;
         _logger.Msg($"EditorObjectTools: selected {hit.Target.Serialize()} '{hit.Object.name}' via {hit.Path}");
     }
 
-    // The object follows the cursor as a preview; the edit is only made on release.
+    // The object follows the cursor as a preview; holding Shift moves it vertically instead, and a floating object settles onto a surface within snap range.
     private static void UpdateDrag((int X, int Z, TileState State)? target, Vector3 point)
     {
-        if (_dragging is not { } dragged || LiveEditPatch.ObjectFor(dragged) is not { } go || CursorPosition(target, point, _dragGrab) is not { } position)
+        if (_dragging is not { } dragged || LiveEditPatch.ObjectFor(dragged) is not { } go)
         {
             return;
         }
 
-        go.transform.position = new Vector3(position.X, ObjectTools.DragY(position.Y, _dragLift, _dragOrigin.Position.Y), position.Z);
+        var mouseY = EditorInput.MousePosition.y;
+        var shift = EditorInput.GetKey(KeyCode.LeftShift) || EditorInput.GetKey(KeyCode.RightShift);
+        var current = go.transform.position;
+        if (shift)
+        {
+            _dragFloating = true;
+            _dragY = ObjectTools.RaiseBy(_dragY, mouseY - _dragMouseY);
+        }
+
+        _dragMouseY = mouseY;
+
+        Vector3Data cursor;
+        if (shift)
+        {
+            cursor = new Vector3Data(current.x, SurfaceYAt(ToData(current)) ?? float.NegativeInfinity, current.z);
+        }
+        else if (CursorPosition(target, point, _dragGrab) is { } position)
+        {
+            cursor = position;
+        }
+        else
+        {
+            return;
+        }
+
+        var lift = _dragFloating ? float.PositiveInfinity : _dragLift;
+        var y = ObjectTools.DragY(cursor.Y, lift, _dragY, SurfacesNear(new Vector3(cursor.X, _dragY, cursor.Z), go));
+        go.transform.position = new Vector3(cursor.X, y, cursor.Z);
+    }
+
+    // Heights of the mostly horizontal solid surfaces within snap range of the point, ignoring the object's own colliders.
+    private static IReadOnlyList<float> SurfacesNear(Vector3 at, GameObject go)
+    {
+        var self = go.GetComponentsInChildren<Collider>();
+        var hits = Physics.RaycastAll(new Vector3(at.x, at.y + ObjectTools.SnapDistance, at.z), Vector3.down, 2f * ObjectTools.SnapDistance);
+        var heights = new List<float>();
+        for (var i = 0; i < hits.Length; i++)
+        {
+            var hit = hits[i];
+            if (hit.collider.isTrigger || hit.normal.y < HorizontalNormalY || System.Array.IndexOf(self, hit.collider) >= 0)
+            {
+                continue;
+            }
+
+            heights.Add(hit.point.y);
+        }
+
+        return heights;
     }
 
     private static void EndDrag((int X, int Z, TileState State)? target, Vector3 point, bool pointerFree)
