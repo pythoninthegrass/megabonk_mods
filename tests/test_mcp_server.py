@@ -831,8 +831,9 @@ async def test_relaunch_tool_forwards_the_overrides(tmp_path, monkeypatch) -> No
     setup_harness(tmp_path, monkeypatch)
     seen = {}
 
-    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None):
+    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=False):
         seen["overrides"] = overrides
+        seen["spawns"] = spawns
         return True
 
     monkeypatch.setattr(mcp_server.run, "relaunch", fake_relaunch)
@@ -844,12 +845,33 @@ async def test_relaunch_tool_forwards_the_overrides(tmp_path, monkeypatch) -> No
     async with Client(mcp_server.mcp) as client:
         await client.call_tool("relaunch", {"map": 2, "seed": 3})
     assert seen["overrides"] == {"map": 2, "seed": 3}
+    assert seen["spawns"] is False
+
+
+async def test_relaunch_tool_leaves_spawns_on_when_the_setting_asks(tmp_path, monkeypatch) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    monkeypatch.setenv("MEGABONK_RELAUNCH_SPAWNS", "true")
+    seen = {}
+
+    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=False):
+        seen["spawns"] = spawns
+        return True
+
+    monkeypatch.setattr(mcp_server.run, "relaunch", fake_relaunch)
+
+    async def fake_command(harness, payload, timeout):
+        return mcp_server._encode({"ok": True})
+
+    monkeypatch.setattr(mcp_server, "_command", fake_command)
+    async with Client(mcp_server.mcp) as client:
+        await client.call_tool("relaunch", {})
+    assert seen["spawns"] is True
 
 
 async def test_relaunch_tool_error_carries_the_failing_log_line(tmp_path, monkeypatch) -> None:
     setup_harness(tmp_path, monkeypatch)
 
-    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None):
+    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=False):
         on_error("relaunch: the level failed to load: LevelLoader: load failed: no MapData found for map=32")
         return False
 

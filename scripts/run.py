@@ -126,6 +126,10 @@ def resolve_macos_runtime(lookup: Lookup) -> str:
     return runtime
 
 
+def resolve_relaunch_spawns(lookup: Lookup) -> bool:
+    return (lookup("MEGABONK_RELAUNCH_SPAWNS") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def launch_task(runtime: str, system: str | None = None) -> str:
     system = system or platform.system()
     return "crossover:run" if system == "Darwin" and runtime == "crossover" else "game:run"
@@ -671,8 +675,9 @@ def relaunch(
     on_step: Callable[[str], None],
     on_error: Callable[[str], None],
     overrides: Mapping[str, int] | None = None,
+    spawns: bool = False,
 ) -> bool:
-    """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable and enter editor."""
+    """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable, stop enemy spawns unless spawns is set, and enter editor."""
     started = time.time()
 
     def prepare_harness() -> str | None:
@@ -727,6 +732,8 @@ def relaunch(
         return False
 
     send(harness, build_command("invulnerable"), timeout)
+    if not spawns:
+        send(harness, build_spawns_command(False), timeout)
     send(harness, build_editor_command(True), timeout)
     return True
 
@@ -812,6 +819,7 @@ def main(argv: list[str] | None = None) -> int:
                 on_step=print,
                 on_error=lambda m: print(m, file=sys.stderr),
                 overrides=load_overrides(args),
+                spawns=resolve_relaunch_spawns(load_lookup()),
             )
     return 0 if ok else 1
 

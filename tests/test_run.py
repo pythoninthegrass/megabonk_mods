@@ -595,8 +595,41 @@ def test_relaunch_runs_every_step_in_order_and_returns_true(monkeypatch) -> None
         ("send", "load-level"),
         ("log", "KillFloor: armed"),
         ("send", "invulnerable"),
+        ("send", "spawns"),
         ("send", "editor"),
     ]
+
+
+def test_relaunch_with_spawns_enabled_leaves_the_game_default(monkeypatch) -> None:
+    calls = relaunch_stubs(monkeypatch)
+    ok = run.relaunch(
+        Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None, spawns=True
+    )
+    assert ok is True
+    assert ("send", "spawns") not in calls
+    assert ("send", "editor") in calls
+
+
+def test_relaunch_sends_spawns_off_before_entering_the_editor(monkeypatch) -> None:
+    sent = []
+    relaunch_stubs(monkeypatch)
+    monkeypatch.setattr(run, "send", lambda h, payload, t: sent.append(payload) or True)
+    run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None)
+    assert sent[-3:] == [
+        {"command": "invulnerable"},
+        {"command": "spawns", "enabled": False},
+        {"command": "editor", "enabled": True},
+    ]
+
+
+def test_resolve_relaunch_spawns_defaults_to_off() -> None:
+    assert run.resolve_relaunch_spawns({}.get) is False
+
+
+def test_resolve_relaunch_spawns_reads_the_setting() -> None:
+    assert run.resolve_relaunch_spawns({"MEGABONK_RELAUNCH_SPAWNS": "true"}.get) is True
+    assert run.resolve_relaunch_spawns({"MEGABONK_RELAUNCH_SPAWNS": "1"}.get) is True
+    assert run.resolve_relaunch_spawns({"MEGABONK_RELAUNCH_SPAWNS": "false"}.get) is False
 
 
 def test_relaunch_fails_with_the_exact_error_when_the_harness_never_becomes_ready(monkeypatch) -> None:
@@ -639,7 +672,9 @@ def test_relaunch_stops_at_once_when_the_editor_does_not_support_the_map(monkeyp
 def test_log_line_containing_returns_the_full_matching_line(tmp_path) -> None:
     log = tmp_path / "Latest.log"
     log.write_text("DevHarness: enabled\n[12:00:01] LevelLoader: load failed: no MapData found for map=32\n")
-    assert run.log_line_containing(log, run.LOAD_FAILED_LINE) == "[12:00:01] LevelLoader: load failed: no MapData found for map=32"
+    assert (
+        run.log_line_containing(log, run.LOAD_FAILED_LINE) == "[12:00:01] LevelLoader: load failed: no MapData found for map=32"
+    )
 
 
 def test_log_line_containing_uses_only_the_last_session_and_its_first_match(tmp_path) -> None:

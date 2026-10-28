@@ -135,7 +135,7 @@ async def relaunch(
     tier: int | None = None,
     seed: int | None = None,
 ) -> CallToolResult:
-    """Quit and relaunch the game, load a level, go invulnerable and enter editor; returns the final state. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only."""
+    """Quit and relaunch the game, load a level, go invulnerable, stop enemy spawns (unless MEGABONK_RELAUNCH_SPAWNS is set; call spawns(on=true) to start them) and enter editor; returns the final state. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only."""
     game_dir = _game_dir()
     harness = game_dir / "harness"
     level_path = Path(level) if level else run.TEST_FOREST_LEVEL
@@ -152,7 +152,16 @@ async def relaunch(
 
     overrides = {k: v for k, v in (("map", map), ("stage", stage), ("tier", tier), ("seed", seed)) if v is not None}
     ok = await anyio.to_thread.run_sync(
-        run.relaunch, harness, game_dir, level_path, TIMEOUT, task, on_step, errors.append, overrides
+        run.relaunch,
+        harness,
+        game_dir,
+        level_path,
+        TIMEOUT,
+        task,
+        on_step,
+        errors.append,
+        overrides,
+        run.resolve_relaunch_spawns(run.load_lookup()),
     )
     if not ok:
         raise ToolError("; ".join(errors) if errors else "relaunch failed")
