@@ -34,7 +34,7 @@ BOSS_SPAWN_Y = 15.6
 BOSS_SPAWN_SCALE = 0.4
 BOSS_SPAWN_YAW = 90.0
 BOSS_HIDDEN_CHILDREN = ["BottomPiece", "Collider"]
-PLAYER_START = [92, 30, -69]
+PLAYER_START = [109, 38, -120]
 
 PLAYER_SPAWN_LOCAL = (100, 137)
 SPAWN_CLEARANCE = 10
@@ -57,7 +57,7 @@ MESH_RAILS = (
 )
 
 PACK_ID = "thps"
-PACK_VERSION = "2.0.8"
+PACK_VERSION = "2.0.9"
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "packs" / PACK_ID / "manifest.json"
 STRUCTURE_ASSETS = ("QuarterPipe", "Kicker", "Block", "Taxi", "Corridor")
 WAREHOUSE_ASSET = "Warehouse"
