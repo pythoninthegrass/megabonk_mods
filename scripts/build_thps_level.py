@@ -29,8 +29,10 @@ SLOPE_NONE = 0
 
 # The player is placed at the generated spawn before edits apply, so that cell has to stay floor.
 GENERATED_SPAWN_CELL = (10, 7)
-BOSS_SPAWN_LOCAL = (145, 166)
-BOSS_SPAWN_Y = 12
+BOSS_SPAWN_LOCAL = (150, 167)
+BOSS_SPAWN_Y = 15.6
+BOSS_SPAWN_SCALE = 0.35
+BOSS_HIDDEN_CHILDREN = ["BottomPiece", "Collider"]
 PLAYER_START = [92, 30, -69]
 
 PLAYER_SPAWN_LOCAL = (100, 137)
@@ -239,17 +241,18 @@ def clutter_removals() -> list[dict]:
     return [edit("object.remove", {}, target) for target in ids]
 
 
-def transform(x: float, y: float, z: float) -> dict:
+def transform(x: float, y: float, z: float, scale: float = 1.0) -> dict:
     return {
         "position": {"x": x, "y": y, "z": z},
         "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
-        "scale": {"x": 1.0, "y": 1.0, "z": 1.0},
+        "scale": {"x": scale, "y": scale, "z": scale},
     }
 
 
 def spawn_moves() -> list[dict]:
     bx, bz = local_to_world(*BOSS_SPAWN_LOCAL)
-    return [edit("object.move", {"newTransform": transform(bx, BOSS_SPAWN_Y, bz)}, "gen:object:BossSpawner:0000")]
+    payload = {"newTransform": transform(bx, BOSS_SPAWN_Y, bz, BOSS_SPAWN_SCALE), "hiddenChildren": BOSS_HIDDEN_CHILDREN}
+    return [edit("object.move", payload, "gen:object:BossSpawner:0000")]
 
 
 def mesh_rail_edits() -> list[dict]:

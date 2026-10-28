@@ -929,7 +929,36 @@ public static class LiveEditPatch
             go.transform.position = ToVector(t.Position);
             go.transform.rotation = Quaternion.Euler(ToVector(t.Rotation));
             go.transform.localScale = ToVector(t.Scale);
+            HideChildren(go, action.HiddenChildren);
             _logger.Msg($"LiveEdit: moved {action.Target.Serialize()} '{go.name}' to {go.transform.position}");
+        }
+
+        private void HideChildren(GameObject go, IReadOnlyList<string> names)
+        {
+            if (names == null || names.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var child in go.GetComponentsInChildren<Transform>(true))
+            {
+                if (!names.Contains(child.name))
+                {
+                    continue;
+                }
+
+                foreach (var renderer in child.GetComponents<Renderer>())
+                {
+                    renderer.enabled = false;
+                }
+
+                foreach (var collider in child.GetComponents<Collider>())
+                {
+                    collider.enabled = false;
+                }
+
+                _logger.Msg($"LiveEdit: hid child '{child.name}' of '{go.name}'");
+            }
         }
 
         private void RemoveObject(LiveAction action)

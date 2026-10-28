@@ -145,6 +145,16 @@ public class LiveEditPlanTests
     }
 
     [Fact]
+    public void Build_MoveObjectWithHiddenChildren_CarriesTheChildNames()
+    {
+        var move = new MoveObject(ObjectTarget.FromGenId("chest:0003"), SomeTransform, new[] { "BottomPiece" });
+
+        var plan = Build(new[] { move.ToEditOp() });
+
+        Assert.Equal(new[] { "BottomPiece" }, plan[0].HiddenChildren);
+    }
+
+    [Fact]
     public void Build_MoveAndRemoveObject_CarryTargetAndTransform()
     {
         var target = ObjectTarget.FromGenId("chest:0003");

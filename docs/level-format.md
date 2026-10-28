@@ -54,7 +54,7 @@ The level records the manifest `version` of each pack it references, so a run ca
 | `AddTile` | `tile.add` | `X, Z, Height` | unused (`""`) |
 | `RemoveTile` | `tile.remove` | `X, Z` | unused (`""`) |
 | `PlaceObject` | `object.place` | `CatalogId, Position, Rotation, Scale` (`Vector3Data`), optional `Hidden` (`bool`, default `false`, left out of the payload when false) | unused (`""`) |
-| `MoveObject` | `object.move` | `Target` (`ObjectTarget`), `NewTransform` (`TransformData`) | `Target.Serialize()` |
+| `MoveObject` | `object.move` | `Target` (`ObjectTarget`), `NewTransform` (`TransformData`), optional `HiddenChildren` (names of descendants whose renderers and colliders are disabled when the move applies, left out of the payload when empty) | `Target.Serialize()` |
 | `RemoveObject` | `object.remove` | `Target` (`ObjectTarget`) | `Target.Serialize()` |
 
 Tile ops identify the tile by grid coordinates carried in the payload, so they have no need of `EditOp.Target`; object ops that mutate an *existing* object carry their target there instead, so an op can be filtered/routed by `EditOp.Target` alone without deserializing the payload.

@@ -83,7 +83,6 @@ def test_spawn_moves_only_relocate_the_boss_spawner_with_a_full_transform() -> N
     assert [m["target"] for m in moves] == ["gen:object:BossSpawner:0000"]
     p = payload(moves[0])["newTransform"]
     assert set(p) == {"position", "rotation", "scale"}
-    assert p["scale"] == {"x": 1.0, "y": 1.0, "z": 1.0}
 
 
 def test_generated_player_spawn_cell_is_an_inner_cell() -> None:
@@ -305,7 +304,7 @@ def warehouse_place() -> dict:
 
 
 def test_warehouse_scale_is_four_point_four_units_per_metre_at_eighteen_metres_per_unit() -> None:
-    assert b.WAREHOUSE_SCALE == pytest.approx(4.4 * 18)
+    assert pytest.approx(4.4 * 18) == b.WAREHOUSE_SCALE
 
 
 def test_warehouse_is_one_uniformly_scaled_thps_pack_placement() -> None:
@@ -340,8 +339,8 @@ def test_warehouse_footprint_fits_the_inner_arena() -> None:
 
 def test_inner_arena_is_no_larger_than_the_warehouse_needs_by_a_tile() -> None:
     width, depth = b.warehouse_footprint()
-    assert (b.INNER_X - 1) * b.TILE < width
-    assert (b.INNER_Z - 1) * b.TILE < depth
+    assert width > (b.INNER_X - 1) * b.TILE
+    assert depth > (b.INNER_Z - 1) * b.TILE
 
 
 def test_the_arena_and_its_ring_fit_the_grid() -> None:
@@ -365,10 +364,22 @@ def test_player_starts_at_tonys_chosen_position() -> None:
     assert b.build_level()["playerStart"] == [92, 30, -69]
 
 
-def test_boss_spawner_stands_in_the_secret_area_above_the_main_half_pipe() -> None:
-    move = next(e for e in b.spawn_moves() if e["target"] == "gen:object:BossSpawner:0000")
-    position = payload(move)["newTransform"]["position"]
-    assert (position["x"], position["y"], position["z"]) == (165, 12, 26)
+def boss_move() -> dict:
+    return next(e for e in b.spawn_moves() if e["target"] == "gen:object:BossSpawner:0000")
+
+
+def test_boss_spawner_sits_inside_the_hanging_box_above_the_main_half_pipe() -> None:
+    position = payload(boss_move())["newTransform"]["position"]
+    assert (position["x"], position["y"], position["z"]) == (170, 15.6, 27)
+
+
+def test_boss_spawner_is_scaled_down_to_fit_inside_the_hanging_box() -> None:
+    scale = payload(boss_move())["newTransform"]["scale"]
+    assert scale == {"x": 0.35, "y": 0.35, "z": 0.35}
+
+
+def test_boss_spawner_hides_the_pillar_mesh_and_its_collider() -> None:
+    assert payload(boss_move())["hiddenChildren"] == ["BottomPiece", "Collider"]
 
 
 def test_the_mesh_rail_gets_hidden_game_rails_along_its_run_and_its_bend() -> None:

@@ -173,6 +173,23 @@ public class PlaceObjectTests
 
 public class MoveObjectTests
 {
+    [Fact]
+    public void RoundTrip_HiddenChildren_Survive()
+    {
+        var op = new MoveObject(ObjectTarget.FromGenId("object:BossSpawner:0000"), SampleTransform(), new[] { "BottomPiece", "Collider" });
+
+        Assert.Equal(new[] { "BottomPiece", "Collider" }, MoveObject.FromEditOp(op.ToEditOp()).HiddenChildren);
+    }
+
+    [Fact]
+    public void FromEditOp_WithoutHiddenChildrenKey_HidesNothing()
+    {
+        var op = new MoveObject(ObjectTarget.FromGenId("object:BossSpawner:0000"), SampleTransform());
+
+        Assert.DoesNotContain("hiddenChildren", op.ToEditOp().Payload);
+        Assert.Empty(MoveObject.FromEditOp(op.ToEditOp()).HiddenChildren);
+    }
+
     private static TransformData SampleTransform() => new(
         Position: new Vector3Data(2, 0, 2),
         Rotation: new Vector3Data(0, 0, 0),

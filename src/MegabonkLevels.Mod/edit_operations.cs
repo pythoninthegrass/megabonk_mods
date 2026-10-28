@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -285,26 +286,29 @@ public readonly record struct MoveObject
 
     public ObjectTarget Target { get; }
     public TransformData NewTransform { get; }
+    // Names of descendants whose renderers and colliders are disabled, e.g. a pillar that must not block what is under it.
+    public IReadOnlyList<string> HiddenChildren { get; }
 
-    public MoveObject(ObjectTarget Target, TransformData NewTransform)
+    public MoveObject(ObjectTarget Target, TransformData NewTransform, IReadOnlyList<string> HiddenChildren = null)
     {
         EditOpValidation.RequirePositiveScale(NewTransform.Scale);
         this.Target = Target;
         this.NewTransform = NewTransform;
+        this.HiddenChildren = HiddenChildren ?? Array.Empty<string>();
     }
 
     public EditOp ToEditOp() =>
-        new(OpType, Target.Serialize(), JsonSerializer.Serialize(new Payload(NewTransform), EditOpJson.Options));
+        new(OpType, Target.Serialize(), JsonSerializer.Serialize(new Payload(NewTransform, HiddenChildren.Count > 0 ? HiddenChildren : null), EditOpJson.Options));
 
     public static MoveObject FromEditOp(EditOp op)
     {
         SetTileHeight.RequireOpType(op, OpType);
         var target = ObjectTarget.Parse(op.Target);
         var payload = JsonSerializer.Deserialize<Payload>(op.Payload, EditOpJson.Options);
-        return new MoveObject(target, payload.NewTransform);
+        return new MoveObject(target, payload.NewTransform, payload.HiddenChildren);
     }
 
-    private readonly record struct Payload(TransformData NewTransform);
+    private readonly record struct Payload(TransformData NewTransform, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string> HiddenChildren = null);
 }
 
 public readonly record struct RemoveObject(ObjectTarget Target)
