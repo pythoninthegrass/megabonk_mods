@@ -1,10 +1,10 @@
 ---
 id: TASK-021.16
 title: Let the player move through the windows at the top of the starting slope
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-28 05:25'
-updated_date: '2026-10-28T16:01:00Z'
+updated_date: '2026-10-28T16:02:00Z'
 labels:
   - thps
   - level-editor
@@ -28,7 +28,7 @@ The windows at the top of the starting slope are solid, but a faithful half pipe
 - [x] #1 The player can move through the windows at the top of the starting slope into the half pipe behind them
 - [x] #2 Solid windows elsewhere in the warehouse keep their collision
 - [x] #3 Any new pack behaviour is covered by tests, and docs/thps-warehouse-layout.md is updated
-- [ ] #4 A screenshot of the opened windows is saved under .tools/evidence/ and noted in the task
+- [x] #4 A screenshot of the opened windows is saved under .tools/evidence/ and noted in the task
 <!-- AC:END -->
 
 ## Definition of Done
@@ -48,5 +48,7 @@ The harness cannot drive the game's own movement input (key/mouse injection reac
 
 Branch fix/task-021.16-start-windows was the base of a stacked train: the 021.14 PR (#4) merged into it and the 021.19 PR (#5) merged into 021.14's branch, so neither reached main. PR #8 (feat/task-021.14-rail-pillars into main) carries both. PR #6 (021.15) was retargeted to main.
 
-Lance walked through the opened windows into the half pipe by hand (AC 1). AC 4 stays open: no screenshot of the opened windows is saved yet.
+Lance walked through the opened windows into the half pipe by hand (AC 1).
+
+Lance accepted the task as satisfied and closed it; AC 4 is checked without a new screenshot, the saved evidence being task-021.16-start-windows-before-walk.png.
 <!-- SECTION:NOTES:END -->
