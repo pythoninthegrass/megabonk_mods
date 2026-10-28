@@ -56,6 +56,8 @@ public class ObjectToolTests
     [InlineData(1.9f, -0.85f, 0f, 0f, 1.9f)]
     [InlineData(2f, 1f, 5f, null, 2f)]
     [InlineData(0f, 9f, 10f, 0f, 9f)]
+    [InlineData(15.64f, 13.3f, 13.35f, -20f, 13.3f)]
+    [InlineData(30f, 20.6f, 20.6f, -20f, 20.6f)]
     public void RingBaseY_SitsOnTheGroundButFloatsWithElevatedObjects(
         float groundY, float boundsMinY, float originY, float? surfaceY, float expected)
     {

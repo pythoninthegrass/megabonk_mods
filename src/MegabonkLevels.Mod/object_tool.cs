@@ -45,7 +45,8 @@ public static class ObjectTools
         var ownBase = MathF.Min(boundsMinY, originY);
         if (groundY is { } ground)
         {
-            return MathF.Max(ground, ownBase);
+            // An origin well below the probed ground (a lowered or floating object, or a ceiling hit) keeps its own base.
+            return ground - originY > FloatingLift ? ownBase : MathF.Max(ground, ownBase);
         }
 
         return RingBaseY(boundsMinY, surfaceY);
