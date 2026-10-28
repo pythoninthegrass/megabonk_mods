@@ -95,6 +95,35 @@ The level schema carries an optional top-level `packs` map (`{"<packId>": "<vers
 
 `GamePackVersionCheck.MismatchWarning` (in `game_pack_version_check.cs`, mirroring `GameBuildIdCheck`) compares the level's `packs[<packId>]` to the installed manifest version by exact string match and returns a warning string, or null when they match, or when either side is absent. A level with no `packs` entry for a pack, or a pack with no recorded version, produces no warning. The check runs in both load paths — `LevelLoaderPatch.Start` (disk load) and `EditorTileTools.LoadSelected` (editor load) — logs a warning, and the run still starts; it never blocks or crashes. A missing pack version just means there is nothing to compare, so no warning.
 
+## THPS Warehouse pack
+
+`Assets/Editor/ThpsPack.cs` builds the `thps` pack: the structures of the THPS Warehouse level that have no Megabonk prop. It generates every mesh in code, so there are no model files to import. The generated `Assets/Thps/` folder is gitignored; the committed inputs are `ThpsPack.cs` and `unity/pack-authoring/packs/thps/manifest.json`.
+
+```sh
+task pack:thps
+```
+
+The task builds the bundle (`task pack:build PACK_METHOD=ThpsPack.Build`) and runs `task pack:install`, which copies `.tools/bundles/<platform>/thps` and the manifest into `<game dir>/UserData/LevelPacks/thps/` (the `windows` bundle everywhere except Linux). `task pack:install PACK=<id>` installs any other pack the same way. Relaunch the game afterwards, because packs load once per session.
+
+| asset | shape | collider |
+| --- | --- | --- |
+| `QuarterPipe` | a curved transition that eases into a straight slope, closed solid, rising toward +z | non-convex `MeshCollider` on the mesh |
+| `Kicker` | a straight wedge rising toward +z | `MeshCollider` |
+| `Block` | a box for platforms, decks and ledges | `MeshCollider` |
+| `Taxi` | a hull box and a cabin box, with a dark window band | `BoxCollider` per box, none on the windows |
+| `Corridor` | floor, roof and two side walls, open at both ends | `BoxCollider` per box |
+
+Authoring rules:
+
+- Every prefab is unit size with its origin at the bottom centre of the footprint: x is the width, y the height and z the depth, and a ramp rises toward +z. The level generator (`STRUCTURES` in `scripts/build_thps_level.py`) scales each placement to its real width, rise and depth, so one prefab serves every size. Yaw 0 climbs north, 90 east, 180 south and 270 west.
+- Set every GameObject of the prefab, children included, to layer 8. The generated tile ground (`TileGround`, `TileSlope`, `TileWall` and the combined collision mesh) is layer 8 and the player is layer 7. A placed object keeps the layer its prefab was saved with, because the mod does not touch the layer of what it spawns.
+- Keep a ramp's steepest slope under about 41 degrees after scaling. `PlayerMovement.maxSlopeAngle` is 45, and a player cannot run up a ramp whose face passes it: on a test pipe whose face reached 56 degrees the player could not climb past a body height of about 8 to 10. `QuarterPipe` has a fixed profile (`TransitionFraction` 0.4 in `ThpsPack.cs`, mirrored as `QUARTER_PIPE_TRANSITION` in the generator), so its steepest slope is `atan(rise / depth / 0.8)`; a rise of 12 needs a depth of 18 or more. `end_slope_degrees` in the generator computes it and a test checks every placed ramp.
+- Colour with plain `Standard` materials and let the shader remap above turn them into the toon shader. The pack has no textures.
+- Build through the explicit `AssetBundleBuild[]` overload of `BuildAssetBundles`, so a build of the pack does not rebuild the test bundles in the same project.
+- List every asset in `manifest.json`; an asset the manifest omits resolves as `Missing:` even when the bundle holds it. The generator checks the manifest against the assets it places.
+
+Measured in the game with the pack: a player teleported 4 units above a flat top settles at the top plus 1.925 (the capsule centre height), so every `Block` top, the taxi cabin and the corridor floor hold the player. On a ramp the player lands on the surface and slides down it when the slope is steep, and rests on shallow slopes; nothing fell through. A teleport to only 1 unit above a surface leaves the player hovering at that height with no gravity, so test support with a drop of several units.
+
 ## Not yet established
 
 - The Linux bundle builds but has not been loaded. MelonLoader segfaults the native Linux build, so there is no mod-side harness there to run it.

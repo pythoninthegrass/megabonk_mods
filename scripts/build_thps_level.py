@@ -8,7 +8,9 @@ units from the south-west corner of the inner arena, x east and z north.
 
 import argparse
 import json
+import math
 from pathlib import Path
+from typing import NamedTuple
 
 GRID_SIZE = 15
 TILE = 40
@@ -35,14 +37,26 @@ SLOPE_NORTH = 1
 GENERATED_SPAWN_CELL = (10, 7)
 BOSS_SPAWN_LOCAL = (100, 120)
 
+PLAYER_SPAWN_LOCAL = (100, 137)
+SPAWN_CLEARANCE = 10
 BIG_RAIL_LOCAL = (66, 55)
 BIG_RAIL_YAW = 90.0
 BIG_RAIL_SCALE = 0.75
-LEDGE_RAIL_LOCAL = (20, 34)
+LEDGE_RAIL_LOCAL = (12, 33)
 LEDGE_RAIL_SCALE = 0.4
-HIGH_RAIL_LOCAL = (14, 14)
-HIGH_RAIL_HEIGHT = 12.0
+HIGH_RAIL_LOCAL = (3, 12)
 HIGH_RAIL_SCALE = 0.5
+
+PACK_ID = "thps"
+PACK_VERSION = "1.0.0"
+MANIFEST_PATH = Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "packs" / PACK_ID / "manifest.json"
+STRUCTURE_ASSETS = ("QuarterPipe", "Kicker", "Block", "Taxi", "Corridor")
+
+# Fraction of a quarter pipe's run that is the curved transition; the rest is a straight slope. Mirrors ThpsPack.cs.
+QUARTER_PIPE_TRANSITION = 0.4
+# The player's jump apex above the floor (the highest sample was 7.8), and PlayerMovement.maxSlopeAngle (45) less a margin.
+PLAYER_JUMP_APEX = 7.8
+MAX_RAMP_SLOPE_DEGREES = 41
 
 SEED = 20261007
 GAME_BUILD_ID = "21750826"
@@ -81,6 +95,41 @@ SEED_TILE_OBJECTS = 39
 KEPT_OBJECT_CATEGORIES = ("BossSpawner", "PlayerSpawnPortal", "ForestParticles")
 
 
+class Structure(NamedTuple):
+    code: str
+    asset: str
+    x: float
+    z: float
+    yaw: float
+    width: float
+    rise: float
+    depth: float
+    base_y: float = 0.0
+
+
+# Positions are block-local centres of the footprint at its base. width, rise and depth scale the unit prefab; a ramp rises toward its local +z, so yaw 0 climbs north, 90 east, 180 south and 270 west.
+STRUCTURES = (
+    Structure("M1", "QuarterPipe", 9, 12, 270, 24, 12, 18),
+    Structure("M2", "Block", 7, 33, 0, 14, 5.5, 14),
+    Structure("M3", "Taxi", 34, 25, 90, 8, 5, 20),
+    Structure("M4a", "QuarterPipe", 33, 35.5, 180, 30, 6, 9),
+    Structure("M4b", "QuarterPipe", 33, 54.5, 0, 30, 6, 9),
+    Structure("M5", "Corridor", 10, 66, 0, 18, 13, 28, 13),
+    Structure("M6", "QuarterPipe", 34, 71, 0, 20, 12, 18),
+    Structure("M7", "QuarterPipe", 58, 74, 0, 12, 8, 12),
+    Structure("M8", "QuarterPipe", 77, 72.5, 0, 18, 10, 15),
+    Structure("M9", "Block", 101, 103, 0, 38, 6, 24),
+    Structure("M9b", "QuarterPipe", 111, 103, 90, 24, 12, 18, 6),
+    Structure("M10", "QuarterPipe", 67, 4.5, 180, 20, 6, 9),
+    Structure("M10b", "Block", 60, 15, 0, 22, 4, 10),
+    Structure("M11", "Block", 99, 67, 0, 18, 4, 12),
+    Structure("M12a", "Kicker", 87, 46, 180, 12, 4.4, 6.3),
+    Structure("M12b", "Kicker", 87, 32, 0, 12, 2.6, 3.7),
+)
+HIGH_RAIL_HEIGHT = next(s.rise for s in STRUCTURES if s.code == "M1")
+LEDGE_RAIL_HEIGHT = next(s.rise for s in STRUCTURES if s.code == "M2")
+
+
 def local_to_world(x: float, z: float) -> tuple[float, float]:
     x0, z0 = INNER_ORIGIN
     return (
@@ -101,12 +150,7 @@ def inner_cells() -> list[tuple[int, int]]:
 def ring_cells() -> list[tuple[int, int]]:
     x0, z0 = INNER_ORIGIN
     inner = set(inner_cells())
-    return [
-        (x, z)
-        for z in range(z0 - 1, z0 + INNER_Z + 1)
-        for x in range(x0 - 1, x0 + INNER_X + 1)
-        if (x, z) not in inner
-    ]
+    return [(x, z) for z in range(z0 - 1, z0 + INNER_Z + 1) for x in range(x0 - 1, x0 + INNER_X + 1) if (x, z) not in inner]
 
 
 def edit(op_type: str, payload: dict, target: str = "") -> dict:
@@ -180,9 +224,41 @@ def place_rail(catalog_id: str, local: tuple[float, float], y: float, yaw: float
 def rail_edits() -> list[dict]:
     return [
         place_rail("interactable/rail/1", BIG_RAIL_LOCAL, 0.0, BIG_RAIL_YAW, BIG_RAIL_SCALE),
-        place_rail("interactable/rail/0", LEDGE_RAIL_LOCAL, 0.0, 0.0, LEDGE_RAIL_SCALE),
+        place_rail("interactable/rail/0", LEDGE_RAIL_LOCAL, LEDGE_RAIL_HEIGHT, 0.0, LEDGE_RAIL_SCALE),
         place_rail("interactable/rail/0", HIGH_RAIL_LOCAL, HIGH_RAIL_HEIGHT, 0.0, HIGH_RAIL_SCALE),
     ]
+
+
+def footprint(s: Structure) -> tuple[float, float, float, float]:
+    """Block-local (x0, x1, z0, z1) bounds of a structure whose yaw is a multiple of 90."""
+    half_x, half_z = (s.width / 2, s.depth / 2) if s.yaw % 180 == 0 else (s.depth / 2, s.width / 2)
+    return s.x - half_x, s.x + half_x, s.z - half_z, s.z + half_z
+
+
+def end_slope_degrees(s: Structure) -> float:
+    """Steepest slope of a QuarterPipe or Kicker after scaling."""
+    run_ratio = s.rise / s.depth
+    if s.asset == "QuarterPipe":
+        run_ratio /= 1 - QUARTER_PIPE_TRANSITION / 2
+    return math.degrees(math.atan(run_ratio))
+
+
+def structure_edits() -> list[dict]:
+    edits = []
+    for s in STRUCTURES:
+        wx, wz = local_to_world(s.x, s.z)
+        edits.append(
+            edit(
+                "object.place",
+                {
+                    "catalogId": f"bundle:{PACK_ID}/{s.asset}",
+                    "position": {"x": wx, "y": s.base_y, "z": wz},
+                    "rotation": {"x": 0.0, "y": s.yaw, "z": 0.0},
+                    "scale": {"x": s.width, "y": s.rise, "z": s.depth},
+                },
+            )
+        )
+    return edits
 
 
 def build_level() -> dict:
@@ -193,8 +269,8 @@ def build_level() -> dict:
         "stageIndex": 0,
         "tier": 0,
         "seed": SEED,
-        "packs": {},
-        "edits": tile_edits() + clutter_removals() + spawn_moves() + rail_edits(),
+        "packs": {PACK_ID: PACK_VERSION},
+        "edits": tile_edits() + clutter_removals() + spawn_moves() + rail_edits() + structure_edits(),
     }
 
 

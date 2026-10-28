@@ -107,7 +107,7 @@ def test_build_level_has_the_forest_stage_zero_header() -> None:
     assert level["tier"] == 0
     assert level["seed"] == 20261007
     assert level["schemaVersion"] == 2
-    assert level["packs"] == {}
+    assert level["packs"] == {b.PACK_ID: b.PACK_VERSION}
 
 
 def test_build_level_orders_tiles_before_object_edits() -> None:
@@ -149,3 +149,92 @@ def test_build_level_includes_the_rails_after_the_clutter_removals() -> None:
     first_place = min(i for i, k in enumerate(kinds) if k[0] == "object.place")
     last_remove = max(i for i, k in enumerate(kinds) if k[0] == "object.remove")
     assert last_remove < first_place
+
+
+def structure_places() -> list[dict]:
+    return [payload(e) for e in ops_of(b.structure_edits(), "object.place")]
+
+
+def test_every_structure_is_a_thps_pack_asset_listed_in_the_manifest() -> None:
+    manifest = json.loads(Path(b.MANIFEST_PATH).read_text())
+    assets = {p["catalogId"] for p in structure_places()}
+    assert assets == {f"bundle:{b.PACK_ID}/{a}" for a in b.STRUCTURE_ASSETS}
+    assert set(b.STRUCTURE_ASSETS) == set(manifest["assets"])
+    assert manifest["id"] == b.PACK_ID
+    assert manifest["version"] == b.PACK_VERSION
+
+
+def test_structures_cover_every_spec_feature_that_needs_a_new_asset() -> None:
+    codes = {s.code for s in b.STRUCTURES}
+    assert {"M1", "M2", "M3", "M4a", "M4b", "M5", "M6", "M7", "M8", "M9", "M9b", "M10", "M11", "M12a", "M12b"} <= codes
+    assert len(structure_places()) == len(b.STRUCTURES)
+
+
+def test_half_pipe_is_two_opposed_quarter_pipes_with_a_flat_between() -> None:
+    by_code = {s.code: s for s in b.STRUCTURES}
+    a, c = by_code["M4a"], by_code["M4b"]
+    assert a.asset == c.asset == "QuarterPipe"
+    assert (a.yaw - c.yaw) % 360 == 180
+    assert a.x == c.x
+    near, far = sorted((a, c), key=lambda s: s.z)
+    assert far.z - near.z > near.depth / 2 + far.depth / 2
+
+
+def test_structures_stay_inside_the_inner_arena() -> None:
+    for s in b.STRUCTURES:
+        x0, x1, z0, z1 = b.footprint(s)
+        assert x0 >= 0 and x1 <= b.INNER_X * b.TILE, s.code
+        assert z0 >= 0 and z1 <= b.INNER_Z * b.TILE, s.code
+
+
+def test_structures_leave_the_player_spawn_area_clear() -> None:
+    sx, sz = b.PLAYER_SPAWN_LOCAL
+    for s in b.STRUCTURES:
+        x0, x1, z0, z1 = b.footprint(s)
+        assert not (
+            x0 - b.SPAWN_CLEARANCE < sx < x1 + b.SPAWN_CLEARANCE and z0 - b.SPAWN_CLEARANCE < sz < z1 + b.SPAWN_CLEARANCE
+        ), s.code
+
+
+def test_ramp_end_slopes_stay_under_the_player_max_slope_angle() -> None:
+    ramps = [s for s in b.STRUCTURES if s.asset in ("QuarterPipe", "Kicker")]
+    assert ramps
+    for s in ramps:
+        assert b.end_slope_degrees(s) <= b.MAX_RAMP_SLOPE_DEGREES, s.code
+    assert b.MAX_RAMP_SLOPE_DEGREES < 45
+
+
+def test_structures_that_hold_items_or_rails_are_no_taller_than_the_jump_apex() -> None:
+    for s in b.STRUCTURES:
+        if s.asset == "Block":
+            assert s.rise <= b.PLAYER_JUMP_APEX, s.code
+
+
+def test_structures_are_placed_after_the_clutter_removals() -> None:
+    kinds = [(e["opType"], e["target"]) for e in b.build_level()["edits"]]
+    structures = {payload(e)["catalogId"] for e in b.structure_edits()}
+    ids = [
+        (i, json.loads(e["payload"]).get("catalogId"))
+        for i, e in enumerate(b.build_level()["edits"])
+        if e["opType"] == "object.place"
+    ]
+    first_structure = min(i for i, cid in ids if cid in structures)
+    last_remove = max(i for i, k in enumerate(kinds) if k[0] == "object.remove")
+    assert last_remove < first_structure
+
+
+def test_ledge_and_high_rails_sit_on_the_structures_they_belong_to() -> None:
+    by_code = {s.code: s for s in b.STRUCTURES}
+    assert by_code["M1"].rise == b.HIGH_RAIL_HEIGHT
+    assert by_code["M2"].rise == b.LEDGE_RAIL_HEIGHT
+    rails = ops_of(b.rail_edits(), "object.place")
+    assert payload(rails[1])["position"]["y"] == by_code["M2"].rise
+    assert payload(rails[2])["position"]["y"] == by_code["M1"].rise
+
+
+def test_structure_placements_use_non_uniform_scale_of_width_rise_depth() -> None:
+    by_code = {s.code: s for s in b.STRUCTURES}
+    m1 = by_code["M1"]
+    place = next(p for p in structure_places() if p["scale"]["y"] == m1.rise and p["scale"]["x"] == m1.width)
+    assert place["scale"]["z"] == m1.depth
+    assert place["rotation"]["y"] == m1.yaw

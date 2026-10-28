@@ -38,11 +38,12 @@ The skater is 1.8 m and the player is 3.85 units, so true scale is about 2.1 uni
 
 ### Player-reachable heights
 
-The player's jump force is computed from stats (`GetJumpForce`) and is not measured, so no reachable height is established. Working assumptions, to be confirmed by measurement before building:
+Measured in the running game (build 1.0.69, CrossOver):
 
-- A plain jump clears about one player height (3.85 units), which is about 0.9 m at the chosen scale. Decks, ledges and low ramps are kept at or under this.
-- Anything taller is reached by running up a slope, the same way the skater uses quarter pipes.
-- The game has a `JumpPad`, `Ladder`, wall climbing and rail grinding (`railSpeed`, `canJumpOffRailTime`), so higher spots (the corridor, the high rail) can be reached through those if a ramp is not enough.
+- A plain jump from the floor peaks at about 7.8 units above it (the capsule centre reaches about 9.7 with a resting centre height of 1.925). The jump is stat-driven (`GetJumpForce`), so a run with different items can differ. Decks, ledges and platforms are kept at 6 or lower so a jump clears them; `PLAYER_JUMP_APEX` in the generator is the limit its tests use.
+- `PlayerMovement.maxSlopeAngle` is 45. A ramp face steeper than that cannot be run up: on a test pipe reaching 56 degrees the player stalled between a body height of 8 and 10. Every ramp is therefore capped near 40 degrees, which makes a pipe at least 1.5 times as deep as it is high.
+- Anything taller than a jump is reached by running up a ramp or by launching off one, the same way the skater uses quarter pipes. The corridor floor at 13 units is a ramp rise plus a jump away from the half pipe.
+- The game has a `JumpPad`, `Ladder`, wall climbing and rail grinding (`railSpeed`, `canJumpOffRailTime`), so higher spots can also be reached through those.
 
 ## Structure to catalog mapping
 
@@ -64,7 +65,26 @@ Catalog IDs follow level-format.md. A thumbnail-only identification is marked "t
 | Hanging corridor M5 and the tape room | new | a box on a frame with a walkable floor; the breakable glass is not reproduced |
 | Roll-up doors, windows, pilasters, trusses, graffiti, cones and barricades | new, decorative | no equivalent props; only done if the layout needs the visual |
 
-The ramps, ledges and decks above are the new-asset work. They need a collider the player can run on, which the asset pack route supports as a prefab (see asset-bundles.md), and they are not touched by the shader remap beyond a toon material.
+The ramps, ledges and decks above are the new-asset work, built as the `thps` pack described in [asset-bundles.md](asset-bundles.md): five prefabs (`QuarterPipe`, `Kicker`, `Block`, `Taxi`, `Corridor`) scaled per placement.
+
+### Placed structures
+
+Block-local centre of the footprint in units (x east, z north), base height, and the scaled width, rise and depth. A ramp climbs toward yaw 0 north, 90 east, 180 south, 270 west. These are the `STRUCTURES` table in `scripts/build_thps_level.py`.
+
+| Code | Asset | Centre (x, z) | Base y | Yaw | Width x rise x depth | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| M1 | `QuarterPipe` | (9, 12) | 0 | 270 | 24 x 12 x 18 | west bank; the high rail sits on its lip |
+| M2 | `Block` | (7, 33) | 0 | 0 | 14 x 5.5 x 14 | west platform; the ledge rail sits on it |
+| M3 | `Taxi` | (34, 25) | 0 | 90 | 8 x 5 x 20 | long axis east to west |
+| M4a, M4b | `QuarterPipe` | (33, 35.5), (33, 54.5) | 0 | 180, 0 | 30 x 6 x 9 | the half pipe: two opposed pipes with a 10 unit flat between |
+| M5 | `Corridor` | (10, 66) | 13 | 0 | 18 x 13 x 28 | hangs 13 units up, open at both ends |
+| M6, M7, M8 | `QuarterPipe` | (34, 71), (58, 74), (77, 72.5) | 0 | 0 | 20 x 12 x 18, 12 x 8 x 12, 18 x 10 x 15 | the channel pipes, on flat ground south of the lanes |
+| M9 | `Block` | (101, 103) | 0 | 0 | 38 x 6 x 24 | east deck |
+| M9b | `QuarterPipe` | (111, 103) | 6 | 90 | 24 x 12 x 18 | back pipe standing on the deck |
+| M10 | `QuarterPipe` | (67, 4.5) | 0 | 180 | 20 x 6 x 9 | south notch pipe |
+| M10b | `Block` | (60, 15) | 0 | 0 | 22 x 4 x 10 | ledge in front of M10 |
+| M11 | `Block` | (99, 67) | 0 | 0 | 18 x 4 x 12 | south-east ledge |
+| M12a, M12b | `Kicker` | (87, 46), (87, 32) | 0 | 180, 0 | 12 x 4.4 x 6.3, 12 x 2.6 x 3.7 | the kicker pair, lips facing each other with 7.6 units between |
 
 ## Collectible mapping (confirmed)
 
@@ -94,11 +114,10 @@ Positions are the map's floating-icon positions mapped through the low-confidenc
 ## Open questions and risks
 
 - **Shrine effects on the letters.** The mapping is confirmed, but shrines change a run when used, so whether the effect suits a letter is worth a look once they are placed.
-- **Jump height is unmeasured.** Every height rule above is an assumption. It needs a measurement of the player's jump on this build.
 - **Block choice.** The 4x3 block has to be chosen from a height dump of seed `20261007` to keep terrain edits small.
 - **Generated clutter.** The seed spawns trees, rocks and shrines inside the block, which have to be removed with `RemoveObject` (`gen:` ids) or the block placed where there are few.
 - **Rail grinding is unconfirmed.** `rail/0` and `rail/1` place and render at a scaled size, but nobody has grinded them in a run.
-- **New assets are the bulk of the work.** Eleven structures need a custom prefab; the asset pack route is proven for a cube and a four-part model only, and scripts cannot ship in a bundle.
+- **Climbing the new ramps is only partly verified.** A teleported player lands on every ramp and does not fall through, and rests on shallow slopes, but a run up each pipe and kicker at speed was only tried by hand on one test pipe.
 - **The structure map itself is low confidence.** Box pile numbering, the start block's role and the exact positions are ambiguous in the source analysis; see its Unresolved list.
 
 ## Building the level
@@ -110,11 +129,15 @@ What the file contains:
 - A 3 tile by 4 tile arena at cells x 8-10, z 4-7, flat at height 0, wrapped by a one-cell ring at height 2 (cells x 7-11, z 3-8). Every other cell of the 15x15 grid is removed. Each kept cell gets an explicit `SetTileHeight` and `SetTileSlope`, so nothing depends on the generated heights.
 - The raised north-east block (two cells at height 1) and the two slope cells that climb to it.
 - Removal of every generator object except the spawn portal, the boss spawner and the particles, from the per-category counts the seed produces. The boss spawner is moved into the arena.
-- The three rails from the structure table.
+- The three rails from the structure table. The ledge rail sits on the M2 platform top and the high rail on the M1 lip (`LEDGE_RAIL_HEIGHT`, `HIGH_RAIL_HEIGHT`).
+- The sixteen placed structures in the table above, as `bundle:thps/<asset>` placements. The level records `packs: {"thps": "1.0.0"}`, so the version check in asset-bundles.md applies. The pack has to be installed (`task pack:thps`) and the game relaunched before the level loads with the structures; without it each placement shows a `Missing:` cube.
 
 Deviations from the spec above, and findings:
 
 - **Block position.** The player is placed at the generator's spawn (world (120, 2, -3), cell (10, 7)) before edits apply, and moving the spawn portal with `MoveObject` does not move the player. The arena therefore sits over cell (10, 7) at ground level, in the north-east corner next to the raised block, instead of anywhere in the grid.
+- **Layout compressed.** The structures are placed from the map's pixel positions mapped through the same conversion as the collectible table, then moved by hand so no two overlap, nothing sits within 10 units of the player spawn, and every footprint stays in the arena (all checked by tests). The half pipe is shorter and lower than the video (6 high with a 10 unit flat), the channel pipes M6 to M8 stand on the flat strip south of the lanes instead of on the sloped lane cells (a flat-based pipe on a slope would half-bury itself), and the back pipe M9b stands on the deck.
+- **Pipes stop at 40 degrees.** The real pipes go vertical; these end at about 40 degrees because the player cannot run up a face past 45. The curve is a fixed profile in `ThpsPack.cs`.
+- **Decoration and glass skipped.** Doors, windows, pilasters, trusses, graffiti, cones, barricades, the plywood kickers by the big rail and the corridor's breakable glass are not built. Structures are flat-coloured: plywood, light plywood, concrete grey and taxi yellow, with no textures.
 - **Dark pit omitted.** The removed cell would fall under the south 100 pickup and the S shrine at the 4.4 units per metre scale, and the structure is unidentified, so the pit is not built.
 - **Flat-tile prefabs are whole tiles.** `forest/stage0/stageTilePrefabs/flat/7` placed a flat slab with a ruined stone tower and blocks, not a crate. The palette thumbnail was misleading. Do not use the flat-tile entries as props.
 - **Rails.** `rail/0` and `rail/1` place with a `PlaceObject` and honour rotation and uniform scale. The big rail is `rail/1` at scale 0.75 and yaw 90, the ledge rail `rail/0` at scale 0.4 and the high rail `rail/0` at scale 0.5, 12 units up. The high rail floats until the west bank asset exists.
