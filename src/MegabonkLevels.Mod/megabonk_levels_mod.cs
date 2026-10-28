@@ -41,6 +41,7 @@ public class MegabonkLevelsMod : MelonMod
         DevHarness.Poll();
         LevelLoaderPatch.Pump();
         LiveEditPatch.TickPlayerStart(LoggerInstance);
+        LiveEditPatch.TickMaxSlopeAngle(LoggerInstance);
         KillFloorWatcher.Tick();
         PositionLabel.Tick();
         EditorMode.Tick(LoggerInstance);

@@ -29,7 +29,8 @@ public readonly record struct LevelFile(
     IReadOnlyDictionary<string, string> Packs,
     IReadOnlyList<EditOp> Edits,
     bool NoGrass = false,
-    IReadOnlyList<float> PlayerStart = null)
+    IReadOnlyList<float> PlayerStart = null,
+    float? MaxSlopeAngle = null)
 {
     public const int CurrentSchemaVersion = 2;
 
@@ -43,6 +44,7 @@ public readonly record struct LevelFile(
         && PacksDictionaryEquals(Packs, other.Packs)
         && NoGrass == other.NoGrass
         && PlayerStartEquals(PlayerStart, other.PlayerStart)
+        && MaxSlopeAngle == other.MaxSlopeAngle
         && Edits.SequenceEqual(other.Edits);
 
     public override int GetHashCode() =>
