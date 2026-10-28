@@ -24,8 +24,8 @@ public static class ThpsPack
     // The two windows at the top of the starting slope, with the half pipe behind them.
     static readonly float[] StartSlopeWindowBounds = { 80f, 140f, 27f, 38f, -75f, -72f };
     static readonly float[][] OpenedWindowBounds = { SecretRoomBounds, StartSlopeWindowBounds };
-    // Roof edge cell width, how far the roof sits above the tallest vertex and how close to the footprint edge a face counts as the wall there, in world units, plus how far the roof edges sit inside the footprint in mesh space so they do not overlap the original outer faces.
-    const float RoofCell = 12f, RoofMargin = 2f, RoofEdgeBand = 1.5f, RoofInset = 0.003f;
+    // Roof grid cell width, how far the seal over an open footprint edge sits above the tallest vertex, how low a boundary cell must be to count as open, and how close to the footprint edge a face counts as the wall there, in world units, plus how far the roof edges sit inside the footprint in mesh space so they do not overlap the original outer faces.
+    const float RoofCell = 1.5f, RoofMargin = 2f, RoofOpenBelow = 15f, RoofEdgeBand = 1.5f, RoofInset = 0.003f;
     const string RoofMaterial = "Roof";
     static readonly Color DarkRoof = new Color(0.07f, 0.07f, 0.08f);
     const string DefaultWarehouseSource = ".tools/thps1/warehouse";
@@ -298,26 +298,29 @@ public static class ThpsPack
         }
     }
 
-    // Closes the shell with one flat dark roof just above the tallest geometry, plus a skirt on every edge cell from that cell's wall top up to the roof, so there is no gap between the walls and the roof.
+    // Closes the shell with a dark roof that rides the tops of the walls: per grid cell, the lowest height over which a player could clear every wall around it (never below the surface there), with step faces between heights and a skirt on every edge from the wall-top line up to it, so nothing can float above a wall and no gap is left between the walls and the roof.
     static void AddRoof(List<Vector3> vertices, List<Vector2> vertexUvs, Dictionary<string, List<int>> trianglesByMaterial, float minX, float maxX, float minZ, float maxZ)
     {
         var standing = new List<System.Numerics.Vector3[]>();
         foreach (var triangles in trianglesByMaterial.Values)
             for (var i = 0; i < triangles.Count; i += 3)
                 standing.Add(Enumerable.Range(i, 3).Select(k => new System.Numerics.Vector3(vertices[triangles[k]].x, vertices[triangles[k]].y, vertices[triangles[k]].z)).ToArray());
-        var roofY = standing.SelectMany(t => t).Max(p => p.Y) + RoofMargin / WarehouseScale;
+        var sealY = standing.SelectMany(t => t).Max(p => p.Y) + RoofMargin / WarehouseScale;
         var cell = RoofCell / WarehouseScale;
+        int cellsX = Mathf.CeilToInt((maxX - minX) / cell), cellsZ = Mathf.CeilToInt((maxZ - minZ) / cell);
+        var tops = WarehouseRoof.ColumnTops(standing, minX, minZ, cell, cellsX, cellsZ);
+        var ceiling = WarehouseRoof.SpillLevels(tops, RoofOpenBelow / WarehouseScale, sealY);
         var band = RoofEdgeBand / WarehouseScale;
-        var wallTops = new[]
+        var profiles = new[]
         {
-            WarehouseRoof.EdgeWallTops(standing, WarehouseRoof.Side.West, minZ, maxZ, minX, cell, band, 0),
-            WarehouseRoof.EdgeWallTops(standing, WarehouseRoof.Side.East, minZ, maxZ, maxX, cell, band, 0),
-            WarehouseRoof.EdgeWallTops(standing, WarehouseRoof.Side.South, minX, maxX, minZ, cell, band, 0),
-            WarehouseRoof.EdgeWallTops(standing, WarehouseRoof.Side.North, minX, maxX, maxZ, cell, band, 0),
+            WarehouseRoof.EdgeWallProfile(standing, WarehouseRoof.Side.West, minZ, maxZ, minX, band, 0),
+            WarehouseRoof.EdgeWallProfile(standing, WarehouseRoof.Side.East, minZ, maxZ, maxX, band, 0),
+            WarehouseRoof.EdgeWallProfile(standing, WarehouseRoof.Side.South, minX, maxX, minZ, band, 0),
+            WarehouseRoof.EdgeWallProfile(standing, WarehouseRoof.Side.North, minX, maxX, maxZ, band, 0),
         };
         if (!trianglesByMaterial.TryGetValue(RoofMaterial, out var roofTriangles))
             trianglesByMaterial[RoofMaterial] = roofTriangles = new List<int>();
-        foreach (var quad in WarehouseRoof.Quads(roofY, minX, minZ, maxX, maxZ, cell, RoofInset, wallTops))
+        foreach (var quad in WarehouseRoof.Quads(ceiling, minX, minZ, maxX, maxZ, cell, RoofInset, profiles))
         {
             var first = vertices.Count;
             foreach (var corner in quad)
@@ -328,6 +331,9 @@ public static class ThpsPack
 
             roofTriangles.AddRange(new[] { first, first + 1, first + 2, first, first + 2, first + 3 });
         }
+
+        if (vertices.Count > 65000)
+            throw new Exception("the Warehouse mesh has " + vertices.Count + " vertices; a Unity mesh holds 65535 with 16-bit indices, so use a larger RoofCell");
     }
 
     static void RemoveRailLeftovers(List<Vector3> vertices, Dictionary<string, List<int>> trianglesByMaterial)

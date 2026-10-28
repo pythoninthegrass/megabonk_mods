@@ -65,7 +65,7 @@ MESH_RAILS = (
 MAX_SLOPE_ANGLE = 88
 
 PACK_ID = "thps"
-PACK_VERSION = "2.0.13"
+PACK_VERSION = "2.0.18"
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "packs" / PACK_ID / "manifest.json"
 STRUCTURE_ASSETS = ("QuarterPipe", "Kicker", "Block", "Taxi", "Corridor")
 WAREHOUSE_ASSET = "Warehouse"
