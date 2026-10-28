@@ -307,7 +307,7 @@ public static class EditorObjectTools
 
         var final = ToData(go.transform.position);
         go.transform.position = new Vector3(_dragOrigin.Position.X, _dragOrigin.Position.Y, _dragOrigin.Position.Z);
-        if (!pointerFree || (target == null && !_onTerrain) || !ObjectTools.HasMoved(_dragOrigin.Position, final))
+        if (!pointerFree || (!_dragFloating && target == null && !_onTerrain) || !ObjectTools.HasMoved(_dragOrigin.Position, final))
         {
             return;
         }

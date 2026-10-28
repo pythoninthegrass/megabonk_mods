@@ -21,7 +21,7 @@ public static class ObjectTools
     private const float GimbalLimit = 0.99999f;
     private const float PositionTolerance = 0.01f;
     private const float FloatingLift = 2f;
-    public const float SnapDistance = 2f;
+    public const float SnapDistance = 1.5f;
     private const float UnitsPerPixel = 0.05f;
     private const float DragHoldSeconds = 0.2f;
     private const float FootprintClearance = 1.1f;
@@ -104,22 +104,28 @@ public static class ObjectTools
         return SnapY(floatingY, surfaces);
     }
 
-    // The nearest surface within snap range, otherwise the height unchanged.
+    // The height pulled towards the nearest surface in snap range: the pull is zero at the edge of the range and total on the surface, so movement stays continuous and releases readily.
     public static float SnapY(float y, IReadOnlyList<float> surfaceYs)
     {
-        var best = y;
-        var bestDistance = SnapDistance;
+        var nearest = float.NaN;
+        var nearestDistance = SnapDistance;
         for (var i = 0; i < surfaceYs.Count; i++)
         {
             var distance = MathF.Abs(surfaceYs[i] - y);
-            if (distance <= bestDistance)
+            if (distance < nearestDistance)
             {
-                best = surfaceYs[i];
-                bestDistance = distance;
+                nearest = surfaceYs[i];
+                nearestDistance = distance;
             }
         }
 
-        return best;
+        if (float.IsNaN(nearest))
+        {
+            return y;
+        }
+
+        var remaining = 1f - nearestDistance / SnapDistance;
+        return y + (nearest - y) * remaining * remaining;
     }
 
     public static float RaiseBy(float y, float mouseDeltaPixels) => y + mouseDeltaPixels * UnitsPerPixel;

@@ -113,27 +113,69 @@ public class ObjectToolTests
     }
 
     [Fact]
-    public void DragY_FloatingObject_SettlesOntoASurfaceWithinTwoUnits()
+    public void DragY_FloatingObject_OnASurface_RestsOnIt()
     {
-        Assert.Equal(17f, ObjectTools.DragY(tileSurfaceY: -20f, lift: 36f, floatingY: 15.6f, nearbySurfaceYs: new[] { 17f }));
+        Assert.Equal(17f, ObjectTools.DragY(tileSurfaceY: -20f, lift: 36f, floatingY: 17f, nearbySurfaceYs: new[] { 17f }));
     }
 
     [Fact]
-    public void DragY_FloatingObject_SettlesOntoTheTileSurfaceWithinTwoUnits()
+    public void DragY_FloatingObject_NearATileSurface_IsPulledTowardsIt()
     {
-        Assert.Equal(16f, ObjectTools.DragY(tileSurfaceY: 16f, lift: 3f, floatingY: 15.6f, nearbySurfaceYs: System.Array.Empty<float>()));
+        var y = ObjectTools.DragY(tileSurfaceY: 16f, lift: 3f, floatingY: 15.2f, nearbySurfaceYs: System.Array.Empty<float>());
+
+        Assert.InRange(y, 15.2f, 16f);
+        Assert.NotEqual(15.2f, y);
     }
 
     [Fact]
-    public void SnapY_PicksTheNearestSurfaceWithinTwoUnits()
+    public void SnapY_NearASurface_IsPulledTowardsItWithoutReachingIt()
     {
-        Assert.Equal(11f, ObjectTools.SnapY(10f, new[] { 12.5f, 11f, 8.5f }));
+        var y = ObjectTools.SnapY(10f, new[] { 10.8f });
+
+        Assert.InRange(y, 10f, 10.8f);
+        Assert.NotEqual(10.8f, y);
     }
 
     [Fact]
-    public void SnapY_NoSurfaceWithinTwoUnits_KeepsTheHeight()
+    public void SnapY_AtTheSurface_StaysOnIt()
     {
-        Assert.Equal(10f, ObjectTools.SnapY(10f, new[] { 12.5f, 7f }));
+        Assert.Equal(11f, ObjectTools.SnapY(11f, new[] { 11f }));
+    }
+
+    [Fact]
+    public void SnapY_PullGrowsAsTheHeightApproachesTheSurface()
+    {
+        var far = ObjectTools.SnapY(10f, new[] { 11f }) - 10f;
+        var near = ObjectTools.SnapY(10.6f, new[] { 11f }) - 10.6f;
+
+        Assert.True(near / 0.4f > far / 1f);
+    }
+
+    [Fact]
+    public void SnapY_ReleasesOnceTheHeightLeavesSnapRange()
+    {
+        Assert.Equal(10f, ObjectTools.SnapY(10f, new[] { 10f + ObjectTools.SnapDistance }));
+        Assert.Equal(10f, ObjectTools.SnapY(10f, new[] { 14f }));
+    }
+
+    [Fact]
+    public void SnapY_UsesTheNearestSurface()
+    {
+        var y = ObjectTools.SnapY(10f, new[] { 12.5f, 10.5f, 8.5f });
+
+        Assert.InRange(y, 10f, 10.5f);
+    }
+
+    [Fact]
+    public void SnapY_MovesContinuouslyAsTheHeightChanges()
+    {
+        var previous = ObjectTools.SnapY(9f, new[] { 11f });
+        for (var y = 9.01f; y < 13f; y += 0.01f)
+        {
+            var snapped = ObjectTools.SnapY(y, new[] { 11f });
+            Assert.True(MathF.Abs(snapped - previous) < 0.05f);
+            previous = snapped;
+        }
     }
 
     [Fact]
