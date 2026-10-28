@@ -38,6 +38,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/live_edit_plan.cs" Link="live_edit_plan.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/tile_placement.cs" Link="tile_placement.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/kill_floor.cs" Link="kill_floor.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/rail_handoff.cs" Link="rail_handoff.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/terrain_edits.cs" Link="terrain_edits.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/kill_tracker.cs" Link="kill_tracker.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/env_flag.cs" Link="env_flag.cs" />
