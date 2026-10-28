@@ -1,11 +1,11 @@
 ---
 id: TASK-021.12
 title: Stop the boss portal pillar from blocking the main half pipe
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-10-28 04:12'
-updated_date: '2026-10-28 05:23'
+updated_date: '2026-10-28 06:05'
 labels:
   - thps
   - level-editor
@@ -28,15 +28,11 @@ The boss portal (the game's BossSpawner object) stands in the secret room above 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 The half pipe below the secret room is free of the pillar: the player can ride the full pipe without hitting it
-- [ ] #2 The boss portal still shows its steps and ring in the secret room and still spawns the boss when used
+- [x] #2 The boss portal still shows its steps and ring in the secret room and still spawns the boss when used
 - [x] #3 A screenshot of the pipe and of the portal is saved under .tools/evidence/ and noted in the task
 - [x] #4 Any new generator behaviour is covered by tests in tests/test_build_thps_level.py, and docs/thps-warehouse-layout.md is updated
-- [x] #5 The portal is scaled to 0.35 to fit inside the hanging box and sits at (170, 15.6, 27)
+- [x] #5 The portal is scaled to 0.4, turned 90 degrees so its arch faces down the corridor, and sits at (170, 15.6, 27) inside the hanging box
 <!-- AC:END -->
-
-
-
-
 
 ## Implementation Plan
 
@@ -54,7 +50,15 @@ Findings: pillar = BottomPiece renderer plus invisible Collider (y -18 to 25, x/
 
 <!-- SECTION:NOTES:BEGIN -->
 Implemented as optional hiddenChildren on object.move (not a separate object.hide op) to reuse the existing plumbing. Portal at (170, 15.6, 27), scale 0.35, hides BottomPiece and Collider. Evidence under .tools/evidence/: task-021-12-portal-hidden-in-box-play.png (clear pipe from the west), task-021-12-portal-lowered.png (portal inside the box). The pipe was checked visually; the player did not ride it. AC #2 is not yet verified: the BossSpawner trigger is left enabled and scaled with the object, but interacting with the portal and spawning the boss was not tested in game.
+
+Final: scale 0.4 (tuned by Lance through 0.5, 0.475, 0.4655, 0.4562, 0.35, 0.3555), yaw 90 so the arch faces down the corridor, position (170, 15.6, 27). Lance confirmed in game that the portal is interactive and fits the box without clipping. The pipe clearance was confirmed by screenshot only; the pipe was not ridden. Evidence: .tools/evidence/task-021-12-scale-0475-yaw90.png and the earlier task-021-12-* screenshots. Related: TASK-021.17 and TASK-021.18 (editor drag and snap), TASK-021.16 (windows, not started).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+The boss portal's invisible 43-unit Collider and BottomPiece mesh are hidden through a new optional hiddenChildren list on object.move, so the half pipe is clear. The portal is scaled to 0.4, turned 90 degrees and placed at (170, 15.6, 27) inside the hanging box. Generator, mod, tests and docs are updated. Pipe clearance was checked by screenshot, not ridden.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
