@@ -6,7 +6,7 @@
   "tier": 0,
   "seed": 20261007,
   "packs": {
-    "thps": "2.0.20"
+    "thps": "2.0.21"
   },
   "noGrass": true,
   "playerStart": [
@@ -15,7 +15,7 @@
     -120
   ],
   "maxSlopeAngle": 88,
-  "music": "bundle:thps/Superman",
+  "music": "bundle:thps/04_Superman",
   "edits": [
     {
       "opType": "tile.remove",
@@ -6271,6 +6271,11 @@
       "opType": "object.place",
       "target": "",
       "payload": "{\"catalogId\":\"bundle:thps/Warehouse\",\"position\":{\"x\":100.0,\"y\":0.5,\"z\":0.0},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":79.2,\"y\":79.2,\"z\":79.2}}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
+      "payload": "{\"catalogId\":\"interactable/boombox\",\"position\":{\"x\":90,\"y\":35.9,\"z\":-122},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",

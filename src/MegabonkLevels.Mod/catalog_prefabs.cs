@@ -15,6 +15,8 @@ public static class CatalogPrefabs
                 return interactables.chest;
             case CatalogRouteKind.ChestFree:
                 return interactables.chestFree;
+            case CatalogRouteKind.Boombox:
+                return EffectManager.Instance.boomboxQuest;
             case CatalogRouteKind.Rail:
                 return interactables.rails[route.Index];
         }
@@ -77,6 +79,7 @@ public static class CatalogPrefabs
             mapData.shrines?.Length ?? 0,
             interactables?.chest != null,
             interactables?.chestFree != null,
-            interactables?.rails?.Length ?? 0);
+            interactables?.rails?.Length ?? 0,
+            EffectManager.Instance?.boomboxQuest != null);
     }
 }

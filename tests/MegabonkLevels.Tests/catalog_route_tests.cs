@@ -50,6 +50,12 @@ public class CatalogRouteTests
     }
 
     [Fact]
+    public void Parse_Boombox()
+    {
+        Assert.Equal(CatalogRouteKind.Boombox, CatalogRoute.Parse(CatalogId.Parse("interactable/boombox")).Kind);
+    }
+
+    [Fact]
     public void Parse_Rail_ReadsIndex()
     {
         var route = CatalogRoute.Parse(CatalogId.Parse("interactable/rail/2"));

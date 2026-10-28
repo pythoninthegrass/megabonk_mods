@@ -79,13 +79,19 @@ Not covered: callers that pass a track straight to `PlayMusicTrack` (main menu, 
 
 An editor save writes the loaded `music` value back (`LiveEditPatch.SnapshotLevelFile`). Loading a level file from the editor's load list does not restart the music, the same as it does not re-apply `noGrass`, `playerStart` or `maxSlopeAngle`.
 
+## Radio
+
+The THPS Warehouse places the game's boombox (`interactable/boombox`, `EffectManager.boomboxQuest`) as a radio. While a custom run with a level `music` reference is active, a Harmony patch on `InteractableBoombox.Interact` plays the next clip of the same pack through `MusicController.PlayMusicTrack`, so it replaces the level music everywhere, not just near the boombox. `RadioPlaylist` orders the pack's clips by name (the file names carry the soundtrack order, `01_Police_Truck` through `13_Le_Hot_99`), starts at the first clip and wraps. The patch skips the stock interaction, which is single-use (it sets the private `done` flag) and throws a `NullReferenceException` when run a second time, so the boombox stays pressable and cycles through the soundtrack. A level without `music`, or a vanilla run, leaves the boombox alone.
+
+If the pack holds no clip to play, or playing it throws, the patch logs `Radio: ...; using the boombox's stock audio.` as a warning and the stock interaction runs unchanged.
+
 ## Fallback
 
 If `music` is not a two-segment `bundle:` id, the pack is not installed, the pack holds no clip of that name, or creating the track throws, `LevelMusic.Prepare` logs `Music: ...; using the stock music.` as a warning and no track is substituted. Nothing throws out of the patch.
 
 ## Audio formats and decoding
 
-The mod does not decode audio at runtime. Unity's runtime decode and clip-creation paths do not work in this build, so the audio is imported into the pack in the authoring project and ships as a normal `AudioClip` in the bundle (the clip is held compressed in memory as Vorbis, quality 0.7). Any format the Unity editor imports works as the source, including mp3, ogg and wav. `ThpsPack.SaveMusic` imports `tools/Goldfinger - Superman.mp3` (override with `-musicSource`); the build skips the clip with a log line when that file is absent, so the pack still builds without it. `scripts/transcode.py` can produce the mp3 from a lossless source.
+The mod does not decode audio at runtime. Unity's runtime decode and clip-creation paths do not work in this build, so the audio is imported into the pack in the authoring project and ships as a normal `AudioClip` in the bundle (the clip is held compressed in memory as Vorbis, quality 0.7). Any format the Unity editor imports works as the source, including mp3, ogg and wav. `ThpsPack.SaveSoundtrack` imports every mp3 in `tools/ost` (override the directory with `-musicSource`), naming each clip by its file name with runs of other characters made an underscore; the build skips them with a log line when the directory is absent, so the pack still builds without them. `scripts/transcode.py` can produce an mp3 from a lossless source.
 
 The runtime paths that fail, confirmed in the running game:
 
@@ -95,27 +101,30 @@ The runtime paths that fail, confirmed in the running game:
 
 ## THPS soundtrack sources
 
-The original PlayStation Tony Hawk's Pro Skater soundtrack has 14 tracks. Screamer and Nothing to Me are one file in the game. Ain't Got Time to Waste, Blue Thunder and Le Hot '99 are exclusive to the European release (titled Tony Hawk's Skateboarding); the first of those was dropped from the European Dreamcast and N64 ports. Albums come from Discogs listings; the rows marked "unchecked" come from memory and have not been looked up.
+The original PlayStation Tony Hawk's Pro Skater soundtrack has 14 tracks. Screamer and Nothing to Me are one file in the game. Ain't Got Time to Waste, Blue Thunder and Le Hot '99 are exclusive to the European release (titled Tony Hawk's Skateboarding); the first of those was dropped from the European Dreamcast and N64 ports. Albums and positions come from Discogs and MusicBrainz listings.
 
-| Track | Artist | Source release | Status |
-| --- | --- | --- | --- |
-| Police Truck | Dead Kennedys | *Give Me Convenience or Give Me Death* (1987 compilation); first issued in 1980 as the B-side of the "Holiday in Cambodia" single | confirmed |
-| Here & Now | The Ernies | *Meson Ray* (1999) | confirmed |
-| Vilified | Even Rude | *Superabsorbent* (1998), track 12 | confirmed |
-| Superman | Goldfinger | *Goldfinger* (1996) | in `tools/` |
-| Jerry Was a Race Car Driver | Primus | *Sailing the Seas of Cheese* (1991) | unchecked |
-| Screamer / Nothing to Me | Speedealer (credited REO Speedealer) | *REO Speedealer* (1998), tracks 2 and 11; reissued as *Speedealer* (2001) | confirmed |
-| Cyco Vision | Suicidal Tendencies | *Suicidal for Life* (1994) | unchecked |
-| New Girl | The Suicide Machines | *Destruction by Definition* (1996) | unchecked |
-| Committed | Unsane | *Scattered, Smothered & Covered* (1995) | unchecked |
-| Euro-Barge | The Vandals | *Hitler Bad, Vandals Good* (1998) | unchecked |
-| Ain't Got Time to Waste | Aim feat. YZ | *Cold Water Music* (1999) | confirmed |
-| Blue Thunder | Aquasky | *Bodyshock* (1999), track 3 | confirmed |
-| Le Hot '99 | Grand Unified | *Skinful Vol. 3* (1999, Second Skin compilation); a remix of the 1998 12" EP *Le Hot*, also on the *Skinful Vol. 3 Sampler* 12" | confirmed |
+| Track | Artist | Source release |
+| --- | --- | --- |
+| Police Truck | Dead Kennedys | *Give Me Convenience or Give Me Death* (1987 compilation); first issued in 1980 as the B-side of the "Holiday in Cambodia" single |
+| Here & Now | The Ernies | *Meson Ray* (1999) |
+| Vilified | Even Rude | *Superabsorbent* (1998), track 12 |
+| Superman | Goldfinger | *Hang-Ups* (1997), track 1 |
+| Jerry Was a Race Car Driver | Primus | *Sailing the Seas of Cheese* (1991), track 5 |
+| Screamer / Nothing to Me | Speedealer (credited REO Speedealer) | *REO Speedealer* (1998), tracks 2 and 11 of 15; reissued as *Speedealer* (2001) |
+| Cyco Vision | Suicidal Tendencies | *Freedumb* (1999), track 5 |
+| New Girl | The Suicide Machines | *Destruction by Definition* (1996), track 1 |
+| Committed | Unsane | *Occupational Hazard* (1998, Relapse Records), track 1 |
+| Euro-Barge | The Vandals | *Hitler Bad, Vandals Good* (1998), track 10 |
+| Ain't Got Time to Waste | Aim feat. YZ | *Cold Water Music* (1999, ATIC Records), track 6; ripper metadata often dates it 2007, the year of a later reissue |
+| Blue Thunder | Aquasky | *Bodyshock* (1999), disc 1 track 3 of 8 (a two-disc set) |
+| Le Hot '99 | Grand Unified | *Skinful Vol. 3* (1999, Second Skin compilation), track 12 of 12; a remix of the 1998 12" EP *Le Hot*, also on the *Skinful Vol. 3 Sampler* 12" |
 
-Discogs also lists unofficial vinyl pressings of the game soundtrack, including the three European tracks, as an alternative to buying each release. The mp3s live under `tools/`, which is gitignored.
+Two of these are widely misattributed. Cyco Vision is not on *Suicidal for Life* (1994), despite circulating under that album in soundtrack listings; the recording is from *Freedumb*. Committed is not on *Scattered, Smothered & Covered* (1995) either, which does not contain it.
+
+Discogs also lists unofficial vinyl pressings of the game soundtrack, including the three European tracks, as an alternative to buying each release. The mp3s live under `tools/ost/`, which is gitignored along with the rest of `tools/`. Filenames carry the in-game running order (`06.01` and `06.02` are the two halves of the one file the game ships for Screamer / Nothing to Me); the ID3 tags describe the source album instead, holding the artist, album, year and position on that album rather than a soundtrack numbering, so a rip can be checked against its release. Tags are ID3 v2.3 with latin1 text and no comments, lyrics or attached images.
 
 ## Open questions
 
 - What `Update` does with a null intro beyond `isPlayingIntro = false`; the track-switch path above does not set `introLength` for it, so it is expected to leave the loop alone.
 - Whether `MusicTrack.UnloadFromMemory` (`AudioClip.UnloadAudioData`) on a pack clip, when another track replaces it, leaves the clip playable on the next stage; confirm in game.
+- Which mix of Le Hot '99 the game uses: the rip runs 9:23 against the 6:47 *Skinful Vol. 3* cut, so it looks like an extended version of the 12" rather than the compilation track.

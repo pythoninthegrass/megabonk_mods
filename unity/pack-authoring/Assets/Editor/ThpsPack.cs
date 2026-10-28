@@ -28,9 +28,7 @@ public static class ThpsPack
     const string RoofMaterial = "Roof";
     static readonly Color DarkRoof = new Color(0.07f, 0.07f, 0.08f);
     const string DefaultWarehouseSource = ".tools/thps1/warehouse";
-    const string DefaultMusicSource = "tools/Goldfinger - Superman.mp3";
-    // The clip's name in the bundle, which a level's music id names as bundle:thps/Superman.
-    const string MusicAssetName = "Superman";
+    const string DefaultMusicSource = "tools/ost";
 
     // The PS1 transparency key in the extracted PNGs; the pack's shader is opaque, so it is baked to a dark glass colour.
     static readonly Color32 TransparencyKey = new Color32(255, 0, 255, 255);
@@ -49,9 +47,7 @@ public static class ThpsPack
         {
             SaveWarehouse(WarehouseSource()),
         };
-        var music = SaveMusic(MusicSource());
-        if (music != null)
-            prefabs.Add(music);
+        prefabs.AddRange(SaveSoundtrack(MusicSource()));
         AssetDatabase.SaveAssets();
         BuildBundle(prefabs, BuildTarget.StandaloneWindows64, Path.Combine(output, "windows"));
         BuildBundle(prefabs, BuildTarget.StandaloneLinux64, Path.Combine(output, "linux"));
@@ -65,7 +61,7 @@ public static class ThpsPack
         return i >= 0 && i + 1 < args.Length ? args[i + 1] : Path.GetFullPath(Path.Combine(Application.dataPath, "../../..", DefaultWarehouseSource));
     }
 
-    // The soundtrack file; -musicSource overrides the default.
+    // The directory of soundtrack mp3s; -musicSource overrides the default.
     static string MusicSource()
     {
         var args = Environment.GetCommandLineArgs();
@@ -73,16 +69,25 @@ public static class ThpsPack
         return i >= 0 && i + 1 < args.Length ? args[i + 1] : Path.GetFullPath(Path.Combine(Application.dataPath, "../../..", DefaultMusicSource));
     }
 
-    // Imports the soundtrack as a Vorbis clip held compressed in memory; returns null when the file is absent so the pack still builds without it.
-    static string SaveMusic(string source)
+    // Imports every mp3 in the directory as a Vorbis clip held compressed in memory, named by its file name with each run of other characters made an underscore (04 Superman.mp3 is bundle:thps/04_Superman); empty when the directory is absent so the pack still builds without music.
+    static List<string> SaveSoundtrack(string source)
     {
-        if (!File.Exists(source))
+        var saved = new List<string>();
+        if (!Directory.Exists(source))
         {
-            Debug.Log("ThpsPack: no music at " + source + "; building the pack without it.");
-            return null;
+            Debug.Log("ThpsPack: no music directory at " + source + "; building the pack without it.");
+            return saved;
         }
 
-        var path = PackDirectory + "/" + MusicAssetName + ".mp3";
+        foreach (var file in Directory.GetFiles(source, "*.mp3").OrderBy(f => f, StringComparer.Ordinal))
+            saved.Add(SaveClip(file));
+        return saved;
+    }
+
+    static string SaveClip(string source)
+    {
+        var name = System.Text.RegularExpressions.Regex.Replace(Path.GetFileNameWithoutExtension(source), "[^A-Za-z0-9]+", "_").Trim('_');
+        var path = PackDirectory + "/" + name + ".mp3";
         File.Copy(source, path, true);
         AssetDatabase.ImportAsset(path);
         var importer = (AudioImporter)AssetImporter.GetAtPath(path);

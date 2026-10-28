@@ -10,6 +10,7 @@ public enum CatalogRouteKind
     Shrine,
     Chest,
     ChestFree,
+    Boombox,
     Rail,
 }
 
@@ -32,6 +33,7 @@ public readonly record struct CatalogRoute(CatalogRouteKind Kind, EMap Map, int 
             {
                 "chest" => new CatalogRoute(CatalogRouteKind.Chest, EMap.None, 0, 0, 0),
                 "chestFree" => new CatalogRoute(CatalogRouteKind.ChestFree, EMap.None, 0, 0, 0),
+                "boombox" => new CatalogRoute(CatalogRouteKind.Boombox, EMap.None, 0, 0, 0),
                 _ => throw Unresolvable(id),
             };
         }

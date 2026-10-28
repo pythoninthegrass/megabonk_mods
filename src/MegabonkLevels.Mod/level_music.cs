@@ -13,6 +13,8 @@ public static class LevelMusic
 {
     private static MusicTrack _track;
     private static MelonLogger.Instance _logger;
+    private static string _pack;
+    private static RadioPlaylist _radio;
 
     // The level's music reference as loaded, kept so an editor save writes it back.
     public static string Reference { get; private set; }
@@ -23,6 +25,8 @@ public static class LevelMusic
         Reference = reference;
         _logger = logger;
         _track = null;
+        _pack = null;
+        _radio = null;
         if (reference == null)
         {
             return;
@@ -43,16 +47,58 @@ public static class LevelMusic
                 return;
             }
 
-            _track = ScriptableObject.CreateInstance(Il2CppType.Of<MusicTrack>()).Cast<MusicTrack>();
-            _track.hideFlags = HideFlags.HideAndDontSave;
-            _track.trackName = clip.name;
-            _track.loop = clip;
+            _pack = parsed.Pack;
+            _radio = new RadioPlaylist(PackPrefabs.ClipNames(parsed.Pack));
+            _track = BuildTrack(clip);
             logger.Msg($"Music: using clip '{clip.name}' from pack '{parsed.Pack}' ({clip.length:F0}s).");
         }
         catch (Exception ex)
         {
             _track = null;
             logger.Warning($"Music: could not prepare '{reference}': {ex.Message}; using the stock music.");
+        }
+    }
+
+    private static MusicTrack BuildTrack(AudioClip clip)
+    {
+        var track = ScriptableObject.CreateInstance(Il2CppType.Of<MusicTrack>()).Cast<MusicTrack>();
+        track.hideFlags = HideFlags.HideAndDontSave;
+        track.trackName = clip.name;
+        track.loop = clip;
+        return track;
+    }
+
+    // Replaces the stock boombox interaction, which is single-use and throws when repeated, with playing the next soundtrack clip as the level music; any failure runs the stock interaction.
+    [HarmonyPatch(typeof(InteractableBoombox), nameof(InteractableBoombox.Interact))]
+    private static class BoomboxInteractPrefix
+    {
+        private static bool Prefix(ref bool __result)
+        {
+            if (_radio == null || !CustomLevelState.IsActive)
+            {
+                return true;
+            }
+
+            try
+            {
+                var name = _radio.Next();
+                var clip = name == null ? null : PackPrefabs.ResolveClip(_pack, name);
+                if (clip == null)
+                {
+                    _logger?.Warning($"Radio: no playable clip '{name}' in pack '{_pack}'; using the boombox's stock audio.");
+                    return true;
+                }
+
+                MusicController.Instance.PlayMusicTrack(BuildTrack(clip));
+                _logger?.Msg($"Radio: playing '{clip.name}'.");
+                __result = true;
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger?.Warning($"Radio: could not play the next clip: {ex.Message}; using the stock audio.");
+                return true;
+            }
         }
     }
 

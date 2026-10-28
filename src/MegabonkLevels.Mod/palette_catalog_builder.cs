@@ -12,7 +12,8 @@ public readonly record struct PaletteMapCatalog(
     int ShrineCount,
     bool HasChest,
     bool HasChestFree,
-    int RailCount);
+    int RailCount,
+    bool HasBoombox = false);
 
 // Builds the catalogId shapes that CatalogRoute decodes, from counts read off the game's catalog.
 public static class PaletteCatalogBuilder
@@ -65,6 +66,11 @@ public static class PaletteCatalogBuilder
         if (catalog.HasChestFree)
         {
             Add("interactable/chestFree", PaletteCategory.Interactable, 0, "Chest (free)");
+        }
+
+        if (catalog.HasBoombox)
+        {
+            Add("interactable/boombox", PaletteCategory.Interactable, 0, "Boombox");
         }
 
         for (var i = 0; i < catalog.RailCount; i++)

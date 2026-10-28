@@ -50,6 +50,13 @@ public static class PackPrefabs
         return Clips.TryGetValue(pack, out var clips) && clips.TryGetValue(asset, out var clip) ? clip : null;
     }
 
+    // The names of every AudioClip in the pack, empty when the pack is not installed.
+    public static IReadOnlyCollection<string> ClipNames(string pack)
+    {
+        Catalog.AssetNames(pack);
+        return Clips.TryGetValue(pack, out var clips) ? clips.Keys.ToArray() : Array.Empty<string>();
+    }
+
     // The Packs palette entries for every pack directory; manifest-listed assets absent from the bundle are warned about once and not listed.
     public static IReadOnlyList<PaletteEntry> ListEntries()
     {
@@ -129,7 +136,7 @@ public static class PackPrefabs
     private static string PackDirectory(string pack) =>
         Path.Combine(MelonEnvironment.GameRootDirectory, "UserData", PacksDirectoryName, pack);
 
-    // Bundles stay loaded for the session because instantiated prefabs depend on their data. The async API is used because the synchronous loaders fail in the Il2Cpp interop.
+    // Bundles stay loaded for the session because instantiated prefabs depend on their data, and the assets are pinned so the game's unused-asset unload leaves them. The async API is used because the synchronous loaders fail in the Il2Cpp interop.
     private static void LoadBundleInto(string path, Dictionary<string, GameObject> assets, Dictionary<string, AudioClip> clips)
     {
         var bundle = AssetBundle.LoadFromFileAsync(path).assetBundle;
@@ -143,10 +150,12 @@ public static class PackPrefabs
             if (asset.TryCast<GameObject>() is { } prefab)
             {
                 PackShaderRemap.Apply(prefab, _logger);
+                prefab.hideFlags |= HideFlags.DontUnloadUnusedAsset;
                 assets[prefab.name] = prefab;
             }
             else if (asset.TryCast<AudioClip>() is { } clip)
             {
+                clip.hideFlags |= HideFlags.DontUnloadUnusedAsset;
                 clips[clip.name] = clip;
             }
         }

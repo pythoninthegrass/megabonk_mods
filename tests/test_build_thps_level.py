@@ -157,7 +157,15 @@ def test_build_level_raises_the_slope_limit_so_the_player_can_ride_the_half_pipe
 
 
 def test_build_level_names_the_pack_clip_as_its_music() -> None:
-    assert b.build_level()["music"] == "bundle:thps/Superman"
+    assert b.build_level()["music"] == "bundle:thps/04_Superman"
+
+
+def test_the_radio_is_one_boombox_placed_in_the_arena_beside_the_player_spawn() -> None:
+    places = [payload(e) for e in b.build_level()["edits"] if e["opType"] == "object.place" and payload(e)["catalogId"] == "interactable/boombox"]
+    assert len(places) == 1
+    pos = places[0]["position"]
+    assert "hidden" not in places[0]
+    assert max(abs(pos["x"] - b.PLAYER_START[0]), abs(pos["z"] - b.PLAYER_START[2])) <= b.RADIO_REACH
 
 
 def test_the_pack_manifest_lists_only_the_warehouse_at_the_pack_version() -> None:
@@ -377,7 +385,7 @@ def test_build_level_places_the_warehouse_after_the_clutter_removals() -> None:
 
 
 def test_pack_version_is_the_warehouse_release() -> None:
-    assert b.PACK_VERSION == "2.0.20"
+    assert b.PACK_VERSION == "2.0.21"
 
 
 def test_player_starts_at_tonys_chosen_position() -> None:

@@ -60,11 +60,15 @@ MESH_RAILS = (
 MAX_SLOPE_ANGLE = 88
 
 PACK_ID = "thps"
-PACK_VERSION = "2.0.20"
+PACK_VERSION = "2.0.21"
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "packs" / PACK_ID / "manifest.json"
 WAREHOUSE_ASSET = "Warehouse"
-# The soundtrack AudioClip in the thps bundle, built by ThpsPack.cs from tools/Goldfinger - Superman.mp3.
-MUSIC = f"bundle:{PACK_ID}/Superman"
+# The default track is the soundtrack AudioClip ThpsPack.cs builds from tools/ost/04 Superman.mp3, named by the file name with each run of other characters made an underscore.
+MUSIC = f"bundle:{PACK_ID}/04_Superman"
+# The game's boombox, placed as the radio on the top platform of the start half pipe (surface height 35.85), at its left end looking down the pipe, within this distance of the player spawn.
+RADIO_CATALOG_ID = "interactable/boombox"
+RADIO_POSITION = (90, 35.9, -122)
+RADIO_REACH = 20
 # The Warehouse floor sits this far above the level-0 tiles so it covers them.
 WAREHOUSE_LIFT = 0.5
 
@@ -407,6 +411,21 @@ def rail_edits() -> list[dict]:
     return mesh_rail_edits()
 
 
+def radio_edits() -> list[dict]:
+    x, y, z = RADIO_POSITION
+    return [
+        edit(
+            "object.place",
+            {
+                "catalogId": RADIO_CATALOG_ID,
+                "position": {"x": x, "y": y, "z": z},
+                "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+                "scale": {"x": 1.0, "y": 1.0, "z": 1.0},
+            },
+        )
+    ]
+
+
 def warehouse_edits() -> list[dict]:
     wx, wz = local_to_world(INNER_X * TILE / 2, INNER_Z * TILE / 2)
     return [
@@ -453,7 +472,7 @@ def build_level() -> dict:
         "playerStart": PLAYER_START,
         "maxSlopeAngle": MAX_SLOPE_ANGLE,
         "music": MUSIC,
-        "edits": tile_edits() + clutter_removals() + spawn_moves() + rail_edits() + warehouse_edits() + collectible_edits(),
+        "edits": tile_edits() + clutter_removals() + spawn_moves() + rail_edits() + warehouse_edits() + radio_edits() + collectible_edits(),
     }
 
 

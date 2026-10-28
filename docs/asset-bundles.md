@@ -97,7 +97,7 @@ The level schema carries an optional top-level `packs` map (`{"<packId>": "<vers
 
 ## THPS Warehouse pack
 
-`Assets/Editor/ThpsPack.cs` builds the `thps` pack: one `Warehouse` prefab and the `Superman` soundtrack clip. The prefab is made from the THPS1 Warehouse level extracted into `.tools/thps1/warehouse` (`warehouse.obj`, `warehouse.mtl` and the PNGs; `-warehouseSource` overrides the directory); the clip is imported from `tools/Goldfinger - Superman.mp3` (`-musicSource` overrides the file; the build skips it with a log line when the file is absent). The generated `Assets/Thps/` folder and the extraction are gitignored; the committed inputs are `ThpsPack.cs`, its helpers in `Assets/Editor/` and `unity/pack-authoring/packs/thps/manifest.json`.
+`Assets/Editor/ThpsPack.cs` builds the `thps` pack: one `Warehouse` prefab and one soundtrack clip per mp3 in `tools/ost`. The prefab is made from the THPS1 Warehouse level extracted into `.tools/thps1/warehouse` (`warehouse.obj`, `warehouse.mtl` and the PNGs; `-warehouseSource` overrides the directory); each clip is imported from `tools/ost/*.mp3` and named by its file name with runs of other characters made an underscore (`04 Superman.mp3` becomes `04_Superman`); `-musicSource` overrides the directory, and the build skips the clips with a log line when it is absent. The generated `Assets/Thps/` folder and the extraction are gitignored; the committed inputs are `ThpsPack.cs`, its helpers in `Assets/Editor/` and `unity/pack-authoring/packs/thps/manifest.json`.
 
 ```sh
 task pack:thps

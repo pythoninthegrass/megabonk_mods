@@ -21,6 +21,7 @@ public enum CatalogNamespace
 //   {map}/shrines/{index}
 //   interactable/chest
 //   interactable/chestFree
+//   interactable/boombox
 //   interactable/rail/{index}
 // The game exposes these prefabs only as GameObject[] with no name field, so the final segment is
 // typically a numeric index, not a human-readable name.

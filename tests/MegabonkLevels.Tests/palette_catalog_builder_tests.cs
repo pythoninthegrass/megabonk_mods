@@ -44,6 +44,17 @@ public class PaletteCatalogBuilderTests
     }
 
     [Fact]
+    public void Build_Boombox_IsAnInteractableEntry()
+    {
+        var catalog = Forest() with { HasBoombox = true };
+
+        var entry = Assert.Single(PaletteCatalogBuilder.Build(catalog, _ => null));
+
+        Assert.Equal("interactable/boombox", entry.Id.Serialize());
+        Assert.Equal(PaletteCategory.Interactable, entry.Category);
+    }
+
+    [Fact]
     public void Build_MissingChestsAndNoRails_OmitsThem()
     {
         var entries = PaletteCatalogBuilder.Build(Forest(), _ => null);
