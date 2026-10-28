@@ -123,6 +123,22 @@ public class RemoveTileTests
 
 public class PlaceObjectTests
 {
+    [Fact]
+    public void RoundTrip_Hidden_Survives()
+    {
+        var op = new PlaceObject("interactable/rail/0", new Vector3Data(1, 2, 3), new Vector3Data(0, 90, 0), new Vector3Data(1, 1, 1), Hidden: true);
+
+        Assert.True(PlaceObject.FromEditOp(op.ToEditOp()).Hidden);
+    }
+
+    [Fact]
+    public void FromEditOp_WithoutHiddenKey_DefaultsToVisible()
+    {
+        var op = new EditOp(PlaceObject.OpType, "", """{"catalogId":"interactable/chest","position":{"x":1,"y":2,"z":3},"rotation":{"x":0,"y":0,"z":0},"scale":{"x":1,"y":1,"z":1}}""");
+
+        Assert.False(PlaceObject.FromEditOp(op).Hidden);
+    }
+
     private static PlaceObject SampleOp() => new(
         CatalogId: "props/rock_small",
         Position: new Vector3Data(1, 0, 3),

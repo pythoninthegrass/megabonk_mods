@@ -27,7 +27,9 @@ public readonly record struct LevelFile(
     int Tier,
     int Seed,
     IReadOnlyDictionary<string, string> Packs,
-    IReadOnlyList<EditOp> Edits)
+    IReadOnlyList<EditOp> Edits,
+    bool NoGrass = false,
+    IReadOnlyList<float> PlayerStart = null)
 {
     public const int CurrentSchemaVersion = 2;
 
@@ -39,10 +41,15 @@ public readonly record struct LevelFile(
         && Tier == other.Tier
         && Seed == other.Seed
         && PacksDictionaryEquals(Packs, other.Packs)
+        && NoGrass == other.NoGrass
+        && PlayerStartEquals(PlayerStart, other.PlayerStart)
         && Edits.SequenceEqual(other.Edits);
 
     public override int GetHashCode() =>
         HashCode.Combine(SchemaVersion, GameBuildId, Map, StageIndex, Tier, Seed, Packs.Count, Edits.Count);
+
+    private static bool PlayerStartEquals(IReadOnlyList<float> a, IReadOnlyList<float> b) =>
+        a == null ? b == null : b != null && a.SequenceEqual(b);
 
     private static bool PacksDictionaryEquals(IReadOnlyDictionary<string, string> a, IReadOnlyDictionary<string, string> b) =>
         a.Count == b.Count && a.All(kvp => b.TryGetValue(kvp.Key, out var value) && value == kvp.Value);

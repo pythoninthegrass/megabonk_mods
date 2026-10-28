@@ -98,6 +98,56 @@ public class LevelFileTests
     }
 
     [Fact]
+    public void RoundTrip_NoGrass_Survives()
+    {
+        var level = SampleLevel() with { NoGrass = true };
+
+        var restored = LevelFileSerializer.DeserializeWithMigration(LevelFileSerializer.Serialize(level));
+
+        Assert.True(restored.NoGrass);
+        Assert.Equal(level, restored);
+    }
+
+    [Fact]
+    public void Deserialize_WithoutNoGrassKey_DefaultsToFalse()
+    {
+        var json = """{"schemaVersion":2,"gameBuildId":"1","map":1,"stageIndex":0,"tier":0,"seed":1,"packs":{},"edits":[]}""";
+
+        Assert.False(LevelFileSerializer.DeserializeWithMigration(json).NoGrass);
+    }
+
+    [Fact]
+    public void RoundTrip_PlayerStart_Survives()
+    {
+        var level = SampleLevel() with { PlayerStart = new[] { 92f, 30f, -69f } };
+
+        var restored = LevelFileSerializer.DeserializeWithMigration(LevelFileSerializer.Serialize(level));
+
+        Assert.Equal(new[] { 92f, 30f, -69f }, restored.PlayerStart);
+        Assert.Equal(level, restored);
+    }
+
+    [Fact]
+    public void Deserialize_WithoutPlayerStartKey_LeavesItNull()
+    {
+        var json = """{"schemaVersion":2,"gameBuildId":"1","map":1,"stageIndex":0,"tier":0,"seed":1,"packs":{},"edits":[]}""";
+
+        Assert.Null(LevelFileSerializer.DeserializeWithMigration(json).PlayerStart);
+    }
+
+    [Fact]
+    public void Equals_LevelsDifferingOnlyInPlayerStart_AreNotEqual()
+    {
+        Assert.NotEqual(SampleLevel(), SampleLevel() with { PlayerStart = new[] { 1f, 2f, 3f } });
+    }
+
+    [Fact]
+    public void Equals_LevelsDifferingOnlyInNoGrass_AreNotEqual()
+    {
+        Assert.NotEqual(SampleLevel(), SampleLevel() with { NoGrass = true });
+    }
+
+    [Fact]
     public void GetHashCode_LevelsWithEqualPacks_AreEqual()
     {
         var a = SampleLevel() with { Packs = new Dictionary<string, string> { ["testpack"] = "1.2.3" } };

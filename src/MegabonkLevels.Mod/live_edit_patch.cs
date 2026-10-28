@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using Il2Cpp;
+using Il2CppAssets.Scripts.Actors.Player;
 using Il2CppAssets.Scripts.Managers;
 using Il2CppAssets.Scripts.MapGeneration.ProceduralTiles;
 using MelonLoader;
@@ -22,6 +23,8 @@ public static class LiveEditPatch
     private const string TileObjectsParentName = "TileObjectsParent";
 
     private static IReadOnlyList<EditOp> _pendingEdits;
+    private static bool _noGrass;
+    private static IReadOnlyList<float> _playerStart;
     private static Session _session;
     private static int _runGeneration;
 
@@ -31,9 +34,11 @@ public static class LiveEditPatch
 
     // Set by LevelLoaderPatch right before it starts a run, consumed (and cleared) by the next
     // generation so a later vanilla run is never edited.
-    public static void SetPendingEdits(IReadOnlyList<EditOp> edits)
+    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null)
     {
         _pendingEdits = edits;
+        _noGrass = noGrass;
+        _playerStart = playerStart;
     }
 
     // Apply pending edits immediately to the current session if present. Returns the number of edits applied.
@@ -203,7 +208,9 @@ public static class LiveEditPatch
             Tier: MapController.runConfig?.mapTierIndex ?? 0,
             Seed: session.TileGen?.debugSeed ?? 0,
             Packs: BuildPacks(edits),
-            Edits: edits.ToList());
+            Edits: edits.ToList(),
+            NoGrass: _noGrass,
+            PlayerStart: _playerStart);
     }
 
     // The packs referenced by the level's edits, mapped to the version recorded in each installed
@@ -394,6 +401,8 @@ public static class LiveEditPatch
 
         var index = BuildIndex(controller);
         logger.Msg($"LiveEdit: indexed {index.Count} objects: {SummarizeCategories(index)}");
+        DisableGrassIfRequested(controller, logger);
+        SchedulePlayerStart();
 
         var tileGen = controller.proceduralTileGeneration;
         if (tileGen?.proceduralTiles == null)
@@ -418,6 +427,54 @@ public static class LiveEditPatch
         }
 
         KillFloorWatcher.Arm(tileGen, logger);
+    }
+
+    // The grass manager raycasts onto the ground layer, so it would grow through a level's placed floor meshes.
+    private static void DisableGrassIfRequested(MapGenerationController controller, MelonLogger.Instance logger)
+    {
+        if (!_noGrass || controller.grassRenderer == null)
+        {
+            return;
+        }
+
+        controller.grassRenderer.enabled = false;
+        logger.Msg("LiveEdit: grass disabled by the level");
+    }
+
+    private const float PlayerStartWatchSeconds = 5f;
+    private const float PlayerStartToleranceXz = 1f;
+    private static float _playerStartUntil;
+    private static bool _playerStartLogged;
+
+    // The game places the player at the generated spawn around generation, and moving the spawn portal does not move it, so the level start is re-applied for a few seconds.
+    private static void SchedulePlayerStart()
+    {
+        _playerStartUntil = _playerStart == null ? 0f : Time.realtimeSinceStartup + PlayerStartWatchSeconds;
+        _playerStartLogged = false;
+    }
+
+    public static void TickPlayerStart(MelonLogger.Instance logger)
+    {
+        var player = MyPlayer.Instance;
+        if (Time.realtimeSinceStartup > _playerStartUntil || player == null)
+        {
+            return;
+        }
+
+        var target = new Vector3(_playerStart[0], _playerStart[1] - TeleportTarget.PlayerBodyOffsetY, _playerStart[2]);
+        var body = player.playerMovement.rb.position;
+        if (Mathf.Abs(body.x - target.x) <= PlayerStartToleranceXz && Mathf.Abs(body.z - target.z) <= PlayerStartToleranceXz)
+        {
+            return;
+        }
+
+        var facing = player.transform.forward;
+        player.TeleportPlayerImmediate(target, facing, facing, 20f);
+        if (!_playerStartLogged)
+        {
+            logger.Msg($"LiveEdit: player moved to level start {target}");
+            _playerStartLogged = true;
+        }
     }
 
     // A ProceduralMesh map: the session holds only objects, over an empty tile baseline.
@@ -841,6 +898,14 @@ public static class LiveEditPatch
             var t = action.Transform.Value;
             var spawned = UnityEngine.Object.Instantiate(prefab, ToVector(t.Position), Quaternion.Euler(ToVector(t.Rotation)));
             spawned.transform.localScale = ToVector(t.Scale);
+            if (action.Hidden)
+            {
+                foreach (var renderer in spawned.GetComponentsInChildren<Renderer>(true))
+                {
+                    renderer.enabled = false;
+                }
+            }
+
             _placed[action.Target.PlacementId] = spawned;
             _placedCatalogIds[action.Target.PlacementId] = action.CatalogId;
             _targetsByInstanceId[spawned.GetInstanceID()] = action.Target;

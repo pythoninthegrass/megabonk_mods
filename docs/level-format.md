@@ -23,6 +23,8 @@ One consequence of staying in the same project: the Mod project compiles against
 | `tier` | `int` | Difficulty tier. |
 | `seed` | `int` | **The Tiles-map `debugSeed`** (see [map-generation-determinism.md](map-generation-determinism.md)) — the only field confirmed to control reproducible generation. **Never** `MapGenerationController.mapSeed`: that field varies freely per run and has no effect on layout. `ProceduralMesh` maps (Desert) don't yet have a confirmed-controllable seed field at all; storing a `seed` for those maps is "reproducible in practice so far" per that doc, not guaranteed. |
 | `packs` | `IReadOnlyDictionary<string, string>` | Optional map from a referenced pack id to the manifest `version` recorded at save time, used by the pack-version compatibility check (see "Pack versions" below). A level with no `bundle:` edits has an empty map. |
+| `noGrass` | `bool` | Optional, default `false`. When `true` the mod disables the game's `GrassChunkManager` (`MapGenerationController.grassRenderer`) for the run. The manager raycasts onto the ground layer, so grass otherwise grows through a placed floor mesh such as the THPS Warehouse. Additive, so `schemaVersion` stays `2`. |
+| `playerStart` | `float[3]` | Optional. World position `[x, y, z]` the player is moved to once generation has completed, with `y` the value the on-screen position readout shows (the body height, 1.925 above the feet). The game places the player at the generated spawn around generation and moving the spawn portal does not move it, so the mod re-applies the start for 5 seconds. Additive, so `schemaVersion` stays `2`. |
 | `edits` | `EditOp[]` | Ordered list of edit operations applied on top of the generated map. `EditOp(OpType, Target, Payload)` is a minimal shape (string opcode + string target id + a JSON-string payload) that round-trips and migrates correctly independent of any particular operation's payload shape — see "Edit operation types" below. |
 
 ## Migration mechanism
@@ -51,7 +53,7 @@ The level records the manifest `version` of each pack it references, so a run ca
 | `SetTileSlope` | `tile.setSlope` | `X, Z, Direction` (`SlopeDirection`: `None, North, South, East, West`) | unused (`""`) |
 | `AddTile` | `tile.add` | `X, Z, Height` | unused (`""`) |
 | `RemoveTile` | `tile.remove` | `X, Z` | unused (`""`) |
-| `PlaceObject` | `object.place` | `CatalogId, Position, Rotation, Scale` (`Vector3Data`) | unused (`""`) |
+| `PlaceObject` | `object.place` | `CatalogId, Position, Rotation, Scale` (`Vector3Data`), optional `Hidden` (`bool`, default `false`, left out of the payload when false) | unused (`""`) |
 | `MoveObject` | `object.move` | `Target` (`ObjectTarget`), `NewTransform` (`TransformData`) | `Target.Serialize()` |
 | `RemoveObject` | `object.remove` | `Target` (`ObjectTarget`) | `Target.Serialize()` |
 
@@ -235,3 +237,7 @@ The harness cannot press keys or move the player (see "Not covered" above), so t
 ### Verification status
 
 Verified on the CrossOver reference platform: automated checks (load, edit application, screenshots of each edit, idle-invulnerable survival with enemies approaching the edited cells) and a full human playthrough from spawn to the boss portal both passed. All six edit op types applied cleanly and were visually confirmed; enemies, including the stage boss, crossed and interacted with the edited terrain without getting stuck; the boss portal activated normally; and the run produced zero errors or exceptions and zero unsuppressed leaderboard/achievement/stats calls across the whole session (thousands of stats writes suppressed).
+
+## Hidden placements
+
+A `PlaceObject` with `hidden: true` spawns normally but the mod disables every `Renderer` under it, so its colliders and components stay live and it draws nothing. The THPS level uses this to lay the game's straight `interactable/rail/0` along the Warehouse mesh's own rail bar, so the bar keeps its original look while the game rail supplies the grind.

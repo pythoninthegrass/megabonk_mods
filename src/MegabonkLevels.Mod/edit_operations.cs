@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MegabonkLevels;
 
@@ -251,8 +252,10 @@ public readonly record struct PlaceObject
     public Vector3Data Position { get; }
     public Vector3Data Rotation { get; }
     public Vector3Data Scale { get; }
+    // A hidden placement keeps its colliders and components but draws nothing, e.g. a rail that only supplies the grind for a mesh rail.
+    public bool Hidden { get; }
 
-    public PlaceObject(string CatalogId, Vector3Data Position, Vector3Data Rotation, Vector3Data Scale)
+    public PlaceObject(string CatalogId, Vector3Data Position, Vector3Data Rotation, Vector3Data Scale, bool Hidden = false)
     {
         EditOpValidation.RequireNonBlankCatalogId(CatalogId);
         EditOpValidation.RequirePositiveScale(Scale);
@@ -260,19 +263,20 @@ public readonly record struct PlaceObject
         this.Position = Position;
         this.Rotation = Rotation;
         this.Scale = Scale;
+        this.Hidden = Hidden;
     }
 
     public EditOp ToEditOp() =>
-        new(OpType, "", JsonSerializer.Serialize(new Payload(CatalogId, Position, Rotation, Scale), EditOpJson.Options));
+        new(OpType, "", JsonSerializer.Serialize(new Payload(CatalogId, Position, Rotation, Scale, Hidden), EditOpJson.Options));
 
     public static PlaceObject FromEditOp(EditOp op)
     {
         SetTileHeight.RequireOpType(op, OpType);
         var payload = JsonSerializer.Deserialize<Payload>(op.Payload, EditOpJson.Options);
-        return new PlaceObject(payload.CatalogId, payload.Position, payload.Rotation, payload.Scale);
+        return new PlaceObject(payload.CatalogId, payload.Position, payload.Rotation, payload.Scale, payload.Hidden);
     }
 
-    private readonly record struct Payload(string CatalogId, Vector3Data Position, Vector3Data Rotation, Vector3Data Scale);
+    private readonly record struct Payload(string CatalogId, Vector3Data Position, Vector3Data Rotation, Vector3Data Scale, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Hidden = false);
 }
 
 public readonly record struct MoveObject

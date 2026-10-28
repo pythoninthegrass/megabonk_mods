@@ -133,6 +133,18 @@ public class LiveEditPlanTests
     }
 
     [Fact]
+    public void Build_HiddenPlaceObject_EmitsAHiddenSpawn()
+    {
+        var hidden = new PlaceObject("interactable/rail/0", SomeTransform.Position, SomeTransform.Rotation, SomeTransform.Scale, Hidden: true);
+        var visible = new PlaceObject("interactable/rail/0", SomeTransform.Position, SomeTransform.Rotation, SomeTransform.Scale);
+
+        var plan = Build(new[] { hidden.ToEditOp(), visible.ToEditOp() });
+
+        Assert.True(plan[0].Hidden);
+        Assert.False(plan[1].Hidden);
+    }
+
+    [Fact]
     public void Build_MoveAndRemoveObject_CarryTargetAndTransform()
     {
         var target = ObjectTarget.FromGenId("chest:0003");

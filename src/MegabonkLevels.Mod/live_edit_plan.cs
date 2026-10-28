@@ -21,7 +21,8 @@ public readonly record struct LiveAction(
     TileState? Tile,
     ObjectTarget Target,
     string CatalogId,
-    TransformData? Transform);
+    TransformData? Transform,
+    bool Hidden = false);
 
 // Replays EditOps through the same EditStack the in-memory model uses, so op semantics (resulting tile
 // state, monotonic placement ids) stay in one place, and flattens them into ordered live actions.
@@ -83,7 +84,7 @@ public static class LiveEditPlan
                 var typed = PlaceObject.FromEditOp(op);
                 var transform = new TransformData(typed.Position, typed.Rotation, typed.Scale);
                 var target = ObjectTarget.FromPlacementId(nextPlacementId++);
-                return new LiveAction(LiveActionKind.SpawnObject, 0, 0, null, target, typed.CatalogId, transform);
+                return new LiveAction(LiveActionKind.SpawnObject, 0, 0, null, target, typed.CatalogId, transform, typed.Hidden);
             }
             case MoveObject.OpType:
             {
