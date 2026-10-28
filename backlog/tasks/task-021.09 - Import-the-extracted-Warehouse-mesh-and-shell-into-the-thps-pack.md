@@ -1,11 +1,11 @@
 ---
 id: TASK-021.09
 title: Import the extracted Warehouse mesh and shell into the thps pack
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-10-28 02:41'
-updated_date: '2026-10-28T18:50:00Z'
+updated_date: '2026-10-28T21:19:00Z'
 labels:
   - thps
   - level-editor
@@ -115,3 +115,9 @@ AC 4 stays open by decision: the south-east pitch-45 overview is blocked by the 
 
 Update (2026-10-28), detritus cleanup: the three old hand-placed rails (big, ledge, high) are removed from the generator; rail_edits() now returns only the hidden mesh rails. The ruined towers, crates, cubes, pillars and dead trees the tile prefabs leave as uncloned scene roots (82 objects: Castle, Castle (1), CastleLying, Crate (1), Crate (2), Cube, Cube (1), Cube (3), Pillar, Pillar (1), Ruins (1), Tree) are now indexed as gen:scenery:<name>:<n> (SceneRootCategory in the mod, SEED_SCENERY_COUNTS in the generator) and removed by the level. FogOfWarSphere is the one uncloned root left out. Verified in game: 0 of these active after relaunch, 4 hidden mesh rails remain, the view from below shows only the Warehouse underside. Collectibles still float at old-layout positions until TASK-021.10. Not committed.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed as-is at Lance's request. The Warehouse mesh and shell are imported into the thps pack (ground-layer MeshCollider, point-filtered PS1 textures, floor patch, pass-through windows, rail posts), the old hand-built structures and detritus are removed, and docs are updated. AC #4 stays unchecked by decision: the south-east pitch-45 view is blocked by the flat roof, so the comparison was reduced to ground-level views with differences in docs/thps-warehouse-layout.md. Enemy spawn and movement inside the shell, the kill floor ending a fall, and the half pipe floor seam were not verified. Definition of Done boxes were not ticked.
+<!-- SECTION:FINAL_SUMMARY:END -->
