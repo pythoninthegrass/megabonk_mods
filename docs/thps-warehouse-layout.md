@@ -154,6 +154,17 @@ Deviations from the spec above, and findings:
 - **Validate.** The editor's Validate button produces no visible result in the toolbar or the log on this level, so reachability is checked by `ThpsLevelTests` instead.
 - **Save names.** The editor save writes to `UserData/Levels/<name>.mblevel.json`; use a new name so no existing custom level is overwritten.
 
+### Mesh rail near (75, 3, 28)
+
+The extracted Warehouse mesh carries its own rail: a thin flat bar at world x 75, height 3.17 to 3.44, running z 3 to 53 and then bending diagonally to about (81.5, 60.6). The extraction left it floating, with no posts and no `Rail` component, so it could not be ground.
+
+- **Bar kept.** The bar stays as extracted. A visible `rail/0` laid over it stacked on the bar, and `rail/1` is a sloped rail, so neither replaces it.
+- **Posts.** `ThpsPack.cs` (`AddRailPosts`, `RailPosts`) adds seven dark box posts under the bar, five along the straight run and two on the bend. The posts are part of the mesh and its collision.
+- **Grind.** `MESH_RAILS` in `scripts/build_thps_level.py` lays two hidden `interactable/rail/0` objects along the bar, one over the straight run (yaw 90, scale 1.786, centre z 28.13) and one over the bend (yaw 310.5, scale 0.352), at height -1.25 so the game rail's bar sits at the mesh bar's height. They are placed with the `hidden` flag, described in `level-format.md`, so the game rail's collider and `Rail` component stay live and nothing draws.
+- **Alignment.** Measured from top-down and side screenshots under `.tools/evidence/` (`rail_align_top2.png`, `rail0_top.png`, `rail0_side.png`, `rail_hidden_top.png`).
+- **Slide check.** Dropping the player onto the bar from above, at (75, 9, 30), carried it along the bar: samples at x 75.006 and 74.994 with z 47.8 then 57.9. The bend was not confirmed to carry the player round the corner.
+- **Open.** The rail does not activate on its own; like the game's other rails it needs the right approach and timing. Whether it needs a different approach angle, speed or jump timing to catch is not investigated.
+
 ### Check against the reference frames
 
 Built overview (a high three-quarter shot of the arena) against frame 12, the intro flyover:
