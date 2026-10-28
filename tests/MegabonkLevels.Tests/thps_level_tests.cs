@@ -36,6 +36,14 @@ public class ThpsLevelTests
     }
 
     [Fact]
+    public void Level_DisablesGrassBecauseItWouldGrowThroughTheWarehouseFloor()
+    {
+        var level = LevelFileSerializer.DeserializeWithMigration(File.ReadAllText(RepoFile("levels/thps.mblevel.json")));
+
+        Assert.True(level.NoGrass);
+    }
+
+    [Fact]
     public void Level_EveryArenaTileIsReachableFromTheGeneratedSpawnCell()
     {
         var state = Replay();
@@ -56,6 +64,6 @@ public class ThpsLevelTests
     {
         var state = Replay();
 
-        Assert.Equal(5 * 6, state.Tiles.Count);
+        Assert.Equal(6 * 9, state.Tiles.Count);
     }
 }
