@@ -176,6 +176,16 @@ The extracted Warehouse mesh carries its own rail: a thin flat bar at world x 75
 - **Slide check.** Dropping the player onto the bar from above, at (75, 9, 30), carried it along the bar: samples at x 75.006 and 74.994 with z 47.8 then 57.9. The bend was not confirmed to carry the player round the corner.
 - **Open.** The rail does not activate on its own; like the game's other rails it needs the right approach and timing. Whether it needs a different approach angle, speed or jump timing to catch is not investigated.
 
+### Mesh rails near (129, 27, 121) and (176, 8, 61)
+
+The Warehouse mesh has two more bars on the same material (`A53322CF`), handled the same way as the first:
+
+- **Wall rod, x 116.3 to 143.0 at z 120.8, height 27.3 to 27.55.** The rod the SKATEBOARDING banner hangs from, with a short bracket at each end running back to the wall (z 120.8 to 123.9). The brackets are real supports and are kept, so this rod gets a hidden game rail and no posts.
+- **Deck rail, z 47.9 to 74.7 at x 175.66, height 8.31 to 8.56.** Three posts (the two ends and the middle) in `RailPosts`, up from the floor to the bar. A hidden game rail lies along it.
+- **Hidden rails.** The third and fourth entries of `MESH_RAILS`: the wall rod at yaw 0, scale 0.954, centre (129.64, 22.88, 120.84), and the deck rail at yaw 90, scale 0.955, centre (175.66, 3.88, 61.295). Height is the bar's centre height minus 4.55, the offset the first rail uses.
+- **Floating leftovers.** Each post position on the first and deck rails carries a small plate (about 0.46 by 0.25) on the rail material, well below the bar (height 1.5 to 1.8 on the first rail, 5.7 to 6.1 on the deck rail). They are what is left of the original posts and float once the posts are missing. `RailLeftoverBounds` in `ThpsPack.cs` drops the rail-material faces inside two boxes around them; the bars are far above those boxes and are untouched. The wall rod has no such plates.
+- **Evidence.** `.tools/evidence/task-021.19-rail1-before.png` and `-after.png`, `-rail2-before.png`, `-rail3-after.png`. The thin diagonal line left beside the first rail's middle post in the after shot is not on the rail material and was not removed.
+
 ### Check against the reference frames
 
 Built overview (a high three-quarter shot of the arena) against frame 12, the intro flyover:

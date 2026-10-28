@@ -54,10 +54,13 @@ MESH_RAIL_HEIGHT = -1.25
 MESH_RAILS = (
     ((75, MESH_RAIL_HEIGHT, 28.13), 90.0, 1.786),
     ((78.3, MESH_RAIL_HEIGHT, 56.85), 310.5, 0.352),
+    # The rod the SKATEBOARDING banner hangs from, then the rail on the deck at the east wall.
+    ((129.64, 22.88, 120.84), 0.0, 0.954),
+    ((175.66, 3.88, 61.295), 90.0, 0.955),
 )
 
 PACK_ID = "thps"
-PACK_VERSION = "2.0.9"
+PACK_VERSION = "2.0.10"
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "packs" / PACK_ID / "manifest.json"
 STRUCTURE_ASSETS = ("QuarterPipe", "Kicker", "Block", "Taxi", "Corridor")
 WAREHOUSE_ASSET = "Warehouse"

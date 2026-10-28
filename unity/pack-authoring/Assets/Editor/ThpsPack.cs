@@ -186,9 +186,16 @@ public static class ThpsPack
     // The floor material's UVs per OBJ unit and offset, fitted to the extracted floor faces so a patch continues the same texture.
     const float FloorUvScaleU = 7.5f, FloorUvOffsetU = -10.91f, FloorUvScaleV = 7.95f, FloorUvOffsetV = -24.07f;
 
-    // Posts under the mesh's rail bar, which the extraction left floating: world (x, z) of each post along the straight run and the bend, with the bar's underside height and the post width.
-    const float RailBarHeight = 3.17f, RailPostWidth = 0.5f;
-    static readonly Vector2[] RailPosts = { new Vector2(75, 4), new Vector2(75, 16), new Vector2(75, 28), new Vector2(75, 40), new Vector2(75, 52), new Vector2(78.3f, 56.8f), new Vector2(81.4f, 60.5f) };
+    // Posts under the mesh's rail bars, which the extraction left floating: world (x, z) of each post and the height of the bar's underside, then the post width.
+    const float RailPostWidth = 0.5f;
+    static readonly Vector3[] RailPosts =
+    {
+        new Vector3(75, 3.17f, 4), new Vector3(75, 3.17f, 16), new Vector3(75, 3.17f, 28), new Vector3(75, 3.17f, 40), new Vector3(75, 3.17f, 52), new Vector3(78.3f, 3.17f, 56.8f), new Vector3(81.4f, 3.17f, 60.5f),
+        new Vector3(175.66f, 8.31f, 49.1f), new Vector3(175.66f, 8.31f, 61.3f), new Vector3(175.66f, 8.31f, 73.45f),
+    };
+    // Small plates the extraction left floating where the posts should be, as world bounds (x, y, z min and max) on the rail material.
+    const string RailMaterial = "A53322CF";
+    static readonly float[][] RailLeftoverBounds = { new[] { 74.9f, 82f, 1.4f, 1.95f, 3f, 61f }, new[] { 175.5f, 176.3f, 5.6f, 6.2f, 48f, 74.5f } };
     // The Warehouse is placed at this world centre, lift and scale, which turns a world position into mesh space.
     const float WarehouseWorldX = 100f, WarehouseWorldZ = 0f, WarehouseLift = 0.5f, WarehouseScale = 79.2f;
 
@@ -248,6 +255,7 @@ public static class ThpsPack
         for (var i = 0; i < vertices.Count; i++)
             vertices[i] -= origin;
 
+        RemoveRailLeftovers(vertices, trianglesByMaterial);
         AddRailPosts(vertices, vertexUvs, trianglesByMaterial);
         usedMaterials = trianglesByMaterial.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
         var mesh = new Mesh { name = "Warehouse", vertices = vertices.ToArray(), uv = vertexUvs.ToArray(), subMeshCount = usedMaterials.Count };
@@ -284,16 +292,38 @@ public static class ThpsPack
         }
     }
 
+    static void RemoveRailLeftovers(List<Vector3> vertices, Dictionary<string, List<int>> trianglesByMaterial)
+    {
+        if (!trianglesByMaterial.TryGetValue(RailMaterial, out var triangles))
+            return;
+        var kept = new List<int>();
+        for (var i = 0; i < triangles.Count; i += 3)
+        {
+            if (!Enumerable.Range(i, 3).All(k => InRailLeftovers(vertices[triangles[k]])))
+                kept.AddRange(new[] { triangles[i], triangles[i + 1], triangles[i + 2] });
+        }
+
+        trianglesByMaterial[RailMaterial] = kept;
+    }
+
+    static bool InRailLeftovers(Vector3 meshPoint)
+    {
+        var x = meshPoint.x * WarehouseScale + WarehouseWorldX;
+        var y = meshPoint.y * WarehouseScale + WarehouseLift;
+        var z = meshPoint.z * WarehouseScale + WarehouseWorldZ;
+        return RailLeftoverBounds.Any(b => x >= b[0] && x <= b[1] && y >= b[2] && y <= b[3] && z >= b[4] && z <= b[5]);
+    }
+
     static void AddRailPosts(List<Vector3> vertices, List<Vector2> vertexUvs, Dictionary<string, List<int>> trianglesByMaterial)
     {
         if (!trianglesByMaterial.TryGetValue(UntexturedMaterial, out var triangles))
             trianglesByMaterial[UntexturedMaterial] = triangles = new List<int>();
         var half = RailPostWidth / 2 / WarehouseScale;
-        var top = (RailBarHeight - WarehouseLift) / WarehouseScale;
         foreach (var post in RailPosts)
         {
+            var top = (post.y - WarehouseLift) / WarehouseScale;
             var x = (post.x - WarehouseWorldX) / WarehouseScale;
-            var z = (post.y - WarehouseWorldZ) / WarehouseScale;
+            var z = (post.z - WarehouseWorldZ) / WarehouseScale;
             var first = vertices.Count;
             foreach (var corner in new[]
             {

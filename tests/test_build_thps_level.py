@@ -115,7 +115,7 @@ def test_write_level_round_trips_through_json(tmp_path: Path) -> None:
 def test_rail_placements_use_the_rail_catalog_ids_with_the_big_rail_at_a_block_local_position() -> None:
     rails = ops_of(b.rail_edits(), "object.place")
     ids = [payload(r)["catalogId"] for r in rails]
-    assert ids == ["interactable/rail/1"] + ["interactable/rail/0"] * 4
+    assert ids == ["interactable/rail/1"] + ["interactable/rail/0"] * 6
     big = payload(rails[0])
     wx, wz = b.local_to_world(*b.BIG_RAIL_LOCAL)
     assert (big["position"]["x"], big["position"]["z"]) == (wx, wz)
@@ -357,7 +357,7 @@ def test_build_level_places_the_warehouse_after_the_clutter_removals() -> None:
 
 
 def test_pack_version_is_the_warehouse_release() -> None:
-    assert b.PACK_VERSION == "2.0.9"
+    assert b.PACK_VERSION == "2.0.10"
 
 
 def test_player_starts_at_tonys_chosen_position() -> None:
@@ -388,7 +388,7 @@ def test_boss_spawner_hides_the_pillar_mesh_and_its_collider() -> None:
 
 def test_the_mesh_rail_gets_hidden_game_rails_along_its_run_and_its_bend() -> None:
     hidden = [payload(e) for e in b.rail_edits() if payload(e).get("hidden")]
-    assert len(hidden) == len(b.MESH_RAILS) == 2
+    assert len(hidden) == len(b.MESH_RAILS) == 4
     for place, ((x, y, z), yaw, scale) in zip(hidden, b.MESH_RAILS, strict=True):
         assert place["catalogId"] == b.MESH_RAIL_CATALOG_ID
         assert (place["position"]["x"], place["position"]["y"], place["position"]["z"]) == (x, y, z)
@@ -397,7 +397,7 @@ def test_the_mesh_rail_gets_hidden_game_rails_along_its_run_and_its_bend() -> No
 
 
 def test_the_hidden_rails_cover_the_whole_bar_from_the_run_through_the_bend() -> None:
-    (run_pos, _, run_scale), (bend_pos, bend_yaw, bend_scale) = b.MESH_RAILS
+    (run_pos, _, run_scale), (bend_pos, bend_yaw, bend_scale), *_ = b.MESH_RAILS
     run_half = b.RAIL0_LENGTH * run_scale / 2
     assert run_pos[2] - run_half == pytest.approx(3.13, abs=0.1)
     assert run_pos[2] + run_half == pytest.approx(53.13, abs=0.1)
@@ -408,6 +408,31 @@ def test_the_hidden_rails_cover_the_whole_bar_from_the_run_through_the_bend() ->
     ends = sorted([start, end], key=lambda p: p[1])
     assert ends[0] == pytest.approx((75.1, 53.1), abs=0.3)
     assert ends[1] == pytest.approx((81.5, 60.6), abs=0.3)
+
+
+def rail_ends(rail: tuple) -> list[tuple[float, float]]:
+    (x, _, z), yaw, scale = rail
+    half = b.RAIL0_LENGTH * scale / 2
+    direction = (math.cos(math.radians(yaw)), -math.sin(math.radians(yaw)))
+    return sorted([(x - direction[0] * half, z - direction[1] * half), (x + direction[0] * half, z + direction[1] * half)])
+
+
+def test_the_hidden_rail_over_the_wall_rod_spans_the_rod_at_its_height() -> None:
+    rail = b.MESH_RAILS[2]
+    assert [c for end in rail_ends(rail) for c in end] == pytest.approx([116.28, 120.84, 143.0, 120.84], abs=0.3)
+    assert rail[0][1] == pytest.approx(27.43 + b.MESH_RAIL_HEIGHT - 3.3, abs=0.1)
+
+
+def test_the_hidden_rail_over_the_deck_rail_spans_the_bar_at_its_height() -> None:
+    rail = b.MESH_RAILS[3]
+    assert [c for end in rail_ends(rail) for c in end] == pytest.approx([175.66, 47.92, 175.66, 74.67], abs=0.3)
+    assert rail[0][1] == pytest.approx(8.43 + b.MESH_RAIL_HEIGHT - 3.3, abs=0.1)
+
+
+def test_the_pack_removes_the_floating_rail_leftovers_and_posts_the_deck_rail() -> None:
+    source = (Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "Assets" / "Editor" / "ThpsPack.cs").read_text()
+    assert "RailLeftoverBounds" in source
+    assert "A53322CF" in source
 
 
 def test_the_mesh_rail_bar_is_kept_and_stands_on_posts_in_the_pack() -> None:
