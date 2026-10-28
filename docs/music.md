@@ -93,6 +93,28 @@ The runtime paths that fail, confirmed in the running game:
 - `AudioClip.Create` throws `MissingMethodException` for `Il2CppSystem.ReadOnlySpan<T>.GetPinnableReference()`, which its name marshalling needs; `SetData` takes the same span path.
 - Calling `AudioClip.Construct_Internal_Injected` then `CreateUserSound_Injected` with a hand-built `ManagedSpanWrapper` crashes the game with no managed log.
 
+## THPS soundtrack sources
+
+The original PlayStation Tony Hawk's Pro Skater soundtrack has 14 tracks. Screamer and Nothing to Me are one file in the game. Ain't Got Time to Waste, Blue Thunder and Le Hot '99 are exclusive to the European release (titled Tony Hawk's Skateboarding); the first of those was dropped from the European Dreamcast and N64 ports. Albums come from Discogs listings; the rows marked "unchecked" come from memory and have not been looked up.
+
+| Track | Artist | Source release | Status |
+| --- | --- | --- | --- |
+| Police Truck | Dead Kennedys | *Give Me Convenience or Give Me Death* (1987 compilation); first issued in 1980 as the B-side of the "Holiday in Cambodia" single | confirmed |
+| Here & Now | The Ernies | *Meson Ray* (1999) | confirmed |
+| Vilified | Even Rude | *Superabsorbent* (1998), track 12 | confirmed |
+| Superman | Goldfinger | *Goldfinger* (1996) | in `tools/` |
+| Jerry Was a Race Car Driver | Primus | *Sailing the Seas of Cheese* (1991) | unchecked |
+| Screamer / Nothing to Me | Speedealer (credited REO Speedealer) | *REO Speedealer* (1998), tracks 2 and 11; reissued as *Speedealer* (2001) | confirmed |
+| Cyco Vision | Suicidal Tendencies | *Suicidal for Life* (1994) | unchecked |
+| New Girl | The Suicide Machines | *Destruction by Definition* (1996) | unchecked |
+| Committed | Unsane | *Scattered, Smothered & Covered* (1995) | unchecked |
+| Euro-Barge | The Vandals | *Hitler Bad, Vandals Good* (1998) | unchecked |
+| Ain't Got Time to Waste | Aim feat. YZ | *Cold Water Music* (1999) | confirmed |
+| Blue Thunder | Aquasky | *Bodyshock* (1999), track 3 | confirmed |
+| Le Hot '99 | Grand Unified | *Skinful Vol. 3* (1999, Second Skin compilation); a remix of the 1998 12" EP *Le Hot*, also on the *Skinful Vol. 3 Sampler* 12" | confirmed |
+
+Discogs also lists unofficial vinyl pressings of the game soundtrack, including the three European tracks, as an alternative to buying each release. The mp3s live under `tools/`, which is gitignored.
+
 ## Open questions
 
 - What `Update` does with a null intro beyond `isPlayingIntro = false`; the track-switch path above does not set `introLength` for it, so it is expected to leave the loop alone.

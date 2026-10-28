@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-28T20:32:00Z'
+updated_date: '2026-10-28T21:42:00Z'
 labels:
   - level-editor
   - thps
@@ -24,7 +25,7 @@ ordinal: 109000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-The THPS Warehouse recreation plays a single song, Superman, fixed by the level's `music` field. The original game has a soundtrack of many songs, and the level should let the player trigger them from a radio in the world. The radio is an existing Megabonk item, the game's boombox interactable, not a new object to build. Superman stays the level's default music. The soundtrack songs are mp3s kept under `tools/`, which is gitignored: only `tools/Goldfinger - Superman.mp3` (plus its flac source) is there at the time of filing, so the work pulls in whichever mp3s are present when it is picked up, and the rest of the soundtrack has to be supplied. Audio cannot be decoded at runtime in this build, so songs must ship inside the thps pack bundle; docs/music.md has the music mechanism and that constraint.
+The THPS Warehouse recreation plays a single song, Superman, fixed by the level's `music` field. The original game has a soundtrack of many songs, and the level should let the player trigger them from a radio in the world. The radio is an existing Megabonk item, the game's boombox interactable, not a new object to build. Superman stays the level's default music. The soundtrack songs are mp3s kept under `tools/`, which is gitignored: only `tools/Goldfinger - Superman.mp3` (plus its flac source) is there at the time of filing, so the work pulls in whichever mp3s are present when it is picked up, and the rest of the soundtrack has to be supplied. `docs/music.md` ("THPS soundtrack sources") lists the 14 tracks, their artists and the albums to source them from. Audio cannot be decoded at runtime in this build, so songs must ship inside the thps pack bundle; docs/music.md has the music mechanism and that constraint.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
