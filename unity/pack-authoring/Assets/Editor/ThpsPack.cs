@@ -24,8 +24,11 @@ public static class ThpsPack
     // The two windows at the top of the starting slope, with the half pipe behind them.
     static readonly float[] StartSlopeWindowBounds = { 80f, 140f, 27f, 38f, -75f, -72f };
     static readonly float[][] OpenedWindowBounds = { SecretRoomBounds, StartSlopeWindowBounds };
-    // Mesh-space height of the lowest wall top, where the roof skirts start, and how far they sit inside the footprint so they do not overlap the original outer faces.
-    const float LowestWallTop = 0.68f, RoofInset = 0.003f;
+    // Roof grid cell and clearance above the tallest top in world units, how many cells away a top still raises the roof, the mesh-space height of the lowest wall top where edge skirts start, and how far the outer edges sit inside the footprint so they do not overlap the original outer faces.
+    const float RoofCell = 12f, RoofClearance = 6f, LowestWallTop = 0.68f, RoofInset = 0.003f;
+    const int RoofReachCells = 4;
+    const string RoofMaterial = "Roof";
+    static readonly Color DarkRoof = new Color(0.07f, 0.07f, 0.08f);
     const string DefaultWarehouseSource = ".tools/thps1/warehouse";
 
     // The PS1 transparency key in the extracted PNGs; the pack's shader is opaque, so it is baked to a dark glass colour.
@@ -162,6 +165,7 @@ public static class ThpsPack
         }
 
         materials[UntexturedMaterial] = SaveMaterial("Warehouse_" + UntexturedMaterial, Concrete);
+        materials[RoofMaterial] = SaveMaterial("Warehouse_" + RoofMaterial, DarkRoof);
         return materials;
     }
 
@@ -295,13 +299,20 @@ public static class ThpsPack
         }
     }
 
-    // Closes the shell: wall skirts from the lowest wall top up to a flat roof, on the flat untextured material, so a two-feather player cannot jump out.
+    // Closes the shell with a dark roof that follows the tallest standable surfaces: per cell, the tallest top within reach plus clearance, so a jumping player meets it just above the scaffolding.
     static void AddRoof(List<Vector3> vertices, List<Vector2> vertexUvs, Dictionary<string, List<int>> trianglesByMaterial, float minX, float maxX, float minZ, float maxZ)
     {
-        if (!trianglesByMaterial.TryGetValue(UntexturedMaterial, out var triangles))
-            trianglesByMaterial[UntexturedMaterial] = triangles = new List<int>();
-        var roofY = (WarehouseRoof.RoofWorldHeight - WarehouseLift) / WarehouseScale;
-        foreach (var quad in WarehouseRoof.Quads(minX, maxX, minZ, maxZ, LowestWallTop, roofY, RoofInset))
+        var standable = new List<System.Numerics.Vector3[]>();
+        foreach (var triangles in trianglesByMaterial.Values)
+            for (var i = 0; i < triangles.Count; i += 3)
+                standable.Add(Enumerable.Range(i, 3).Select(k => new System.Numerics.Vector3(vertices[triangles[k]].x, vertices[triangles[k]].y, vertices[triangles[k]].z)).ToArray());
+        var cell = RoofCell / WarehouseScale;
+        int cellsX = Mathf.CeilToInt((maxX - minX) / cell), cellsZ = Mathf.CeilToInt((maxZ - minZ) / cell);
+        var tops = WarehouseRoof.CellTops(standable, minX, minZ, cell, cellsX, cellsZ);
+        var roof = WarehouseRoof.RoofHeights(tops, RoofReachCells, RoofClearance / WarehouseScale);
+        if (!trianglesByMaterial.TryGetValue(RoofMaterial, out var roofTriangles))
+            trianglesByMaterial[RoofMaterial] = roofTriangles = new List<int>();
+        foreach (var quad in WarehouseRoof.Quads(roof, minX, minZ, maxX, maxZ, cell, LowestWallTop, RoofInset))
         {
             var first = vertices.Count;
             foreach (var corner in quad)
@@ -310,7 +321,7 @@ public static class ThpsPack
                 vertexUvs.Add(Vector2.zero);
             }
 
-            triangles.AddRange(new[] { first, first + 1, first + 2, first, first + 2, first + 3 });
+            roofTriangles.AddRange(new[] { first, first + 1, first + 2, first, first + 2, first + 3 });
         }
     }
 
