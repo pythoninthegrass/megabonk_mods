@@ -5833,7 +5833,7 @@
     {
       "opType": "object.move",
       "target": "gen:object:BossSpawner:0000",
-      "payload": "{\"newTransform\":{\"position\":{\"x\":170,\"y\":15.6,\"z\":27},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":0.35,\"y\":0.35,\"z\":0.35}},\"hiddenChildren\":[\"BottomPiece\",\"Collider\"]}"
+      "payload": "{\"newTransform\":{\"position\":{\"x\":170,\"y\":15.6,\"z\":27},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":0.5,\"y\":0.5,\"z\":0.5}},\"hiddenChildren\":[\"BottomPiece\",\"Collider\"]}"
     },
     {
       "opType": "object.place",
