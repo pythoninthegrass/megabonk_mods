@@ -189,6 +189,10 @@ def source_nodes() -> list[dict]:
     return json.loads(b.NODES_PATH.read_text())["nodes"]
 
 
+def anchored() -> list[b.Collectible]:
+    return [c for c in b.collectibles() if not c.overridden]
+
+
 @needs_extract
 def test_collectibles_cover_the_spec_with_the_confirmed_item_mapping() -> None:
     ids = [c.catalog_id for c in b.collectibles()]
@@ -220,7 +224,7 @@ def test_collectibles_come_from_the_extracted_nodes_with_the_confirmed_mapping()
 @needs_extract
 def test_each_collectible_stays_within_the_stated_distance_of_its_source_node() -> None:
     nodes = {n["node"]: n for n in source_nodes()}
-    for c in b.collectibles():
+    for c in anchored():
         nx, _, nz = b.node_world(nodes[c.node]["position"])
         bx, _, bz = b.base_point(c)
         assert math.hypot(bx - nx, bz - nz) <= b.MAX_NODE_SHIFT, c.code
@@ -229,7 +233,7 @@ def test_each_collectible_stays_within_the_stated_distance_of_its_source_node() 
 @needs_extract
 def test_every_collectible_base_is_on_the_surface_below_it() -> None:
     triangles = b.warehouse_triangles()
-    for c in b.collectibles():
+    for c in anchored():
         bx, by, bz = b.base_point(c)
         hit = b.ws.drop(triangles, bx, by + 1.0, bz)
         assert hit is not None, c.code
@@ -239,7 +243,7 @@ def test_every_collectible_base_is_on_the_surface_below_it() -> None:
 @needs_extract
 def test_every_collectible_is_tilted_onto_the_surface_normal() -> None:
     triangles = b.warehouse_triangles()
-    for c in b.collectibles():
+    for c in anchored():
         bx, by, bz = b.base_point(c)
         assert c.normal == pytest.approx(b.ws.drop(triangles, bx, by + 1.0, bz).normal, abs=1e-6), c.code
         assert c.normal[1] >= math.cos(math.radians(b.MAX_SURFACE_TILT)), c.code
@@ -248,7 +252,7 @@ def test_every_collectible_is_tilted_onto_the_surface_normal() -> None:
 @needs_extract
 def test_no_collectible_overlaps_collider_triangles_other_than_the_one_it_stands_on() -> None:
     triangles = b.warehouse_triangles()
-    for c in b.collectibles():
+    for c in anchored():
         bx, by, bz = b.base_point(c)
         support = b.ws.drop(triangles, bx, by + 1.0, bz)
         assert set(b.item_overlaps(c, triangles)) <= {support.index}, c.code
@@ -260,8 +264,35 @@ def test_collectible_edits_place_each_item_at_its_pivot_with_the_surface_tilt() 
     assert [p["catalogId"] for p in places] == [c.catalog_id for c in b.collectibles()]
     for c, p in zip(b.collectibles(), places, strict=True):
         assert (p["position"]["x"], p["position"]["y"], p["position"]["z"]) == (c.x, c.y, c.z), c.code
-        pitch, yaw, roll = b.ws.unity_euler(b.ws.item_rotation(c.normal, c.yaw))
-        assert (p["rotation"]["x"], p["rotation"]["y"], p["rotation"]["z"]) == pytest.approx((pitch, yaw, roll)), c.code
+        assert (p["rotation"]["x"], p["rotation"]["y"], p["rotation"]["z"]) == pytest.approx(c.euler), c.code
+
+
+@needs_extract
+def test_overrides_replace_the_anchored_transform_of_the_items_they_name() -> None:
+    overrides = b.load_overrides()
+    assert overrides
+    by_code = {c.code: c for c in b.collectibles()}
+    assert set(overrides) <= set(by_code)
+    for code, override in overrides.items():
+        c = by_code[code]
+        assert c.overridden
+        assert [c.x, c.y, c.z] == override["position"]
+        assert list(c.euler) == override["rotation"]
+    assert {c.code for c in b.collectibles() if c.overridden} == set(overrides)
+
+
+@needs_extract
+def test_an_override_for_an_unknown_item_is_refused(tmp_path, monkeypatch) -> None:
+    path = tmp_path / "overrides.json"
+    path.write_text(json.dumps({"nope": {"position": [0, 0, 0], "rotation": [270, 0, 0]}}))
+    monkeypatch.setattr(b, "OVERRIDES_PATH", path)
+    b.collectibles.cache_clear()
+    try:
+        with pytest.raises(ValueError, match="nope"):
+            b.collectibles()
+    finally:
+        monkeypatch.undo()
+        b.collectibles.cache_clear()
 
 
 @needs_extract

@@ -126,6 +126,8 @@ SEED_SCENERY_COUNTS = {
 KEPT_OBJECT_CATEGORIES = ("BossSpawner", "PlayerSpawnPortal", "ForestParticles")
 
 
+# Items the level author moved by hand in the editor, as saved by scripts/extract_thps_item_overrides.py.
+OVERRIDES_PATH = Path(__file__).resolve().parent / "thps_item_overrides.json"
 EXTRACT_DIR = Path(__file__).resolve().parent.parent / ".tools" / "thps1" / "warehouse"
 NODES_PATH = EXTRACT_DIR / "warehouse_nodes.json"
 OBJ_PATH = EXTRACT_DIR / "warehouse.obj"
@@ -179,7 +181,9 @@ class Collectible(NamedTuple):
     y: float
     z: float
     normal: tuple[float, float, float]
+    euler: tuple[float, float, float]
     yaw: float = 0.0
+    overridden: bool = False
 
 
 def warehouse_footprint() -> tuple[float, float]:
@@ -253,7 +257,14 @@ def anchor(code: str, catalog_id: str, node: int, position: list[float]) -> Coll
         if not all(supported(triangles, hit, ax, az, rotation, ox, oz) for ox, oz in corners):
             continue
         item = Collectible(
-            code, catalog_id, node, ax + hit.normal[0] * off, hit.y + hit.normal[1] * off, az + hit.normal[2] * off, hit.normal
+            code,
+            catalog_id,
+            node,
+            ax + hit.normal[0] * off,
+            hit.y + hit.normal[1] * off,
+            az + hit.normal[2] * off,
+            hit.normal,
+            ws.unity_euler(ws.item_rotation(hit.normal, 0.0)),
         )
         if set(item_overlaps(item, triangles)) <= {hit.index}:
             return item
@@ -269,7 +280,7 @@ def supported(triangles: list[ws.Triangle], hit: ws.Hit, ax: float, az: float, r
 
 
 @cache
-def collectibles() -> tuple[Collectible, ...]:
+def anchored_collectibles() -> tuple[Collectible, ...]:
     nodes = {n["node"]: n for n in json.loads(NODES_PATH.read_text())["nodes"]}
 
     def by_type(kind: str) -> list[dict]:
@@ -283,6 +294,29 @@ def collectibles() -> tuple[Collectible, ...]:
     items += [anchor("Tape", "interactable/chestFree", n["node"], n["position"]) for n in by_type("tape")]
     items += [anchor(f"100/{i}", "interactable/chestFree", i, nodes[i]["position"]) for i in LANE_BONUS_NODES]
     return tuple(items)
+
+
+def load_overrides(path: Path | None = None) -> dict[str, dict]:
+    path = path or OVERRIDES_PATH
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+@cache
+def collectibles() -> tuple[Collectible, ...]:
+    """The anchored items, with the hand-arranged ones in the overrides file replaced by their saved transform."""
+    overrides = load_overrides()
+    items = anchored_collectibles()
+    unknown = set(overrides) - {c.code for c in items}
+    if unknown:
+        raise ValueError(f"overrides for unknown items: {sorted(unknown)}")
+    return tuple(overridden(c, overrides[c.code]) if c.code in overrides else c for c in items)
+
+
+def overridden(c: Collectible, override: dict) -> Collectible:
+    x, y, z = override["position"]
+    euler = tuple(override["rotation"])
+    rotation = ws.euler_matrix(*euler)
+    return c._replace(x=x, y=y, z=z, euler=euler, normal=(rotation[0][2], rotation[1][2], rotation[2][2]), overridden=True)
 
 
 def cell_of_local(x: float, z: float) -> tuple[int, int]:
@@ -389,7 +423,7 @@ def warehouse_edits() -> list[dict]:
 def collectible_edits() -> list[dict]:
     edits = []
     for c in collectibles():
-        pitch, yaw, roll = ws.unity_euler(ws.item_rotation(c.normal, c.yaw))
+        pitch, yaw, roll = c.euler
         edits.append(
             edit(
                 "object.place",

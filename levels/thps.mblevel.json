@@ -6304,37 +6304,37 @@
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"forest/shrines/1\",\"position\":{\"x\":107.985736,\"y\":0.55,\"z\":109.95049880000003},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"forest/shrines/1\",\"position\":{\"x\":26.9765,\"y\":0.6125,\"z\":61.3445},\"rotation\":{\"x\":270,\"y\":90,\"z\":0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"forest/shrines/2\",\"position\":{\"x\":125.05098375674312,\"y\":2.425607763566835,\"z\":82.87697385860208},\"rotation\":{\"x\":289.0224687787124,\"y\":340.4335575613486,\"z\":19.56644243865137},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"forest/shrines/2\",\"position\":{\"x\":166.9417,\"y\":0.4999,\"z\":78.2669},\"rotation\":{\"x\":289.0224,\"y\":250.4336,\"z\":19.5664},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"forest/shrines/3\",\"position\":{\"x\":129.6226216,\"y\":-4.9134368,\"z\":26.190529200000014},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"forest/shrines/3\",\"position\":{\"x\":170.3862,\"y\":-3.3634,\"z\":24.0671},\"rotation\":{\"x\":0,\"y\":251.2917,\"z\":0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"forest/shrines/4\",\"position\":{\"x\":60.59332720000001,\"y\":8.693114399999999,\"z\":-46.18385639999999},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"forest/shrines/4\",\"position\":{\"x\":59.312,\"y\":17.235,\"z\":-70.4775},\"rotation\":{\"x\":270,\"y\":0,\"z\":0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":156.925,\"y\":16.1400304,\"z\":26.190529200000014},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":153.1589,\"y\":26.7329,\"z\":26.8359},\"rotation\":{\"x\":270,\"y\":180,\"z\":0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":129.6420256,\"y\":4.912308540162662,\"z\":-26.17990437110546},\"rotation\":{\"x\":304.24001426296417,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":159.6157,\"y\":2.5223,\"z\":-21.5463},\"rotation\":{\"x\":302.1077,\"y\":358.8792,\"z\":306.0303},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":90.1773784,\"y\":4.912308540162662,\"z\":-26.17990437110546},\"rotation\":{\"x\":304.24001426296417,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":105.158,\"y\":8.6975,\"z\":-29.276},\"rotation\":{\"x\":304.8064,\"y\":250.0708,\"z\":58.5917},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
