@@ -28,6 +28,9 @@ public static class ThpsPack
     const string RoofMaterial = "Roof";
     static readonly Color DarkRoof = new Color(0.07f, 0.07f, 0.08f);
     const string DefaultWarehouseSource = ".tools/thps1/warehouse";
+    const string DefaultMusicSource = "tools/Goldfinger - Superman.mp3";
+    // The clip's name in the bundle, which a level's music id names as bundle:thps/Superman.
+    const string MusicAssetName = "Superman";
 
     // The PS1 transparency key in the extracted PNGs; the pack's shader is opaque, so it is baked to a dark glass colour.
     static readonly Color32 TransparencyKey = new Color32(255, 0, 255, 255);
@@ -44,6 +47,9 @@ public static class ThpsPack
         {
             SaveWarehouse(WarehouseSource()),
         };
+        var music = SaveMusic(MusicSource());
+        if (music != null)
+            prefabs.Add(music);
         AssetDatabase.SaveAssets();
         BuildBundle(prefabs, BuildTarget.StandaloneWindows64, Path.Combine(output, "windows"));
         BuildBundle(prefabs, BuildTarget.StandaloneLinux64, Path.Combine(output, "linux"));
@@ -55,6 +61,38 @@ public static class ThpsPack
         var args = Environment.GetCommandLineArgs();
         var i = Array.IndexOf(args, "-warehouseSource");
         return i >= 0 && i + 1 < args.Length ? args[i + 1] : Path.GetFullPath(Path.Combine(Application.dataPath, "../../..", DefaultWarehouseSource));
+    }
+
+    // The soundtrack file; -musicSource overrides the default.
+    static string MusicSource()
+    {
+        var args = Environment.GetCommandLineArgs();
+        var i = Array.IndexOf(args, "-musicSource");
+        return i >= 0 && i + 1 < args.Length ? args[i + 1] : Path.GetFullPath(Path.Combine(Application.dataPath, "../../..", DefaultMusicSource));
+    }
+
+    // Imports the soundtrack as a Vorbis clip held compressed in memory; returns null when the file is absent so the pack still builds without it.
+    static string SaveMusic(string source)
+    {
+        if (!File.Exists(source))
+        {
+            Debug.Log("ThpsPack: no music at " + source + "; building the pack without it.");
+            return null;
+        }
+
+        var path = PackDirectory + "/" + MusicAssetName + ".mp3";
+        File.Copy(source, path, true);
+        AssetDatabase.ImportAsset(path);
+        var importer = (AudioImporter)AssetImporter.GetAtPath(path);
+        importer.defaultSampleSettings = new AudioImporterSampleSettings
+        {
+            loadType = AudioClipLoadType.CompressedInMemory,
+            compressionFormat = AudioCompressionFormat.Vorbis,
+            quality = 0.7f,
+            sampleRateSetting = AudioSampleRateSetting.PreserveSampleRate,
+        };
+        importer.SaveAndReimport();
+        return path;
     }
 
     // The extracted level at OBJ scale, centred on its footprint with y = 0 at the floor and y up; the level placement applies the scale.

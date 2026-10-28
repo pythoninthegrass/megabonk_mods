@@ -104,7 +104,7 @@ def test_build_level_has_the_forest_stage_zero_header() -> None:
     assert level["stageIndex"] == 0
     assert level["tier"] == 0
     assert level["seed"] == 20261007
-    assert level["schemaVersion"] == 2
+    assert level["schemaVersion"] == 3
     assert level["packs"] == {b.PACK_ID: b.PACK_VERSION}
 
 
@@ -154,6 +154,10 @@ def test_build_level_raises_the_slope_limit_so_the_player_can_ride_the_half_pipe
     angle = b.build_level()["maxSlopeAngle"]
     assert angle == b.MAX_SLOPE_ANGLE
     assert angle > 45
+
+
+def test_build_level_names_the_pack_clip_as_its_music() -> None:
+    assert b.build_level()["music"] == "bundle:thps/Superman"
 
 
 def test_the_pack_manifest_lists_only_the_warehouse_at_the_pack_version() -> None:
@@ -373,7 +377,7 @@ def test_build_level_places_the_warehouse_after_the_clutter_removals() -> None:
 
 
 def test_pack_version_is_the_warehouse_release() -> None:
-    assert b.PACK_VERSION == "2.0.19"
+    assert b.PACK_VERSION == "2.0.20"
 
 
 def test_player_starts_at_tonys_chosen_position() -> None:

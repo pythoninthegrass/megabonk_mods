@@ -60,9 +60,11 @@ MESH_RAILS = (
 MAX_SLOPE_ANGLE = 88
 
 PACK_ID = "thps"
-PACK_VERSION = "2.0.19"
+PACK_VERSION = "2.0.20"
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "packs" / PACK_ID / "manifest.json"
 WAREHOUSE_ASSET = "Warehouse"
+# The soundtrack AudioClip in the thps bundle, built by ThpsPack.cs from tools/Goldfinger - Superman.mp3.
+MUSIC = f"bundle:{PACK_ID}/Superman"
 # The Warehouse floor sits this far above the level-0 tiles so it covers them.
 WAREHOUSE_LIFT = 0.5
 
@@ -76,7 +78,7 @@ WAREHOUSE_OBJ_DEPTH = 3.533447 - 0.398926
 
 SEED = 20261007
 GAME_BUILD_ID = "21750826"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Object categories and counts the generator spawns on Forest stage 0 at the seed above.
 SEED_OBJECT_COUNTS = {
@@ -450,6 +452,7 @@ def build_level() -> dict:
         "noGrass": True,
         "playerStart": PLAYER_START,
         "maxSlopeAngle": MAX_SLOPE_ANGLE,
+        "music": MUSIC,
         "edits": tile_edits() + clutter_removals() + spawn_moves() + rail_edits() + warehouse_edits() + collectible_edits(),
     }
 

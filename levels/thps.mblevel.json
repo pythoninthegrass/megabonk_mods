@@ -1,12 +1,12 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "gameBuildId": "21750826",
   "map": 1,
   "stageIndex": 0,
   "tier": 0,
   "seed": 20261007,
   "packs": {
-    "thps": "2.0.19"
+    "thps": "2.0.20"
   },
   "noGrass": true,
   "playerStart": [
@@ -15,6 +15,7 @@
     -120
   ],
   "maxSlopeAngle": 88,
+  "music": "bundle:thps/Superman",
   "edits": [
     {
       "opType": "tile.remove",
