@@ -366,7 +366,8 @@ Verified on the example forest level with the kill-floor heartbeat: with spawns 
 
 Limits:
 
-- Only the wave spawner is switched off. Whether bosses, shrine or summoner spawns, which call `EnemyManager.SpawnBoss` and `SpawnEnemy` directly, also respect `enabledWaves` is unconfirmed; the forest level run above had none of them.
+- `enabledWaves` also stops the stage timer, observed in a live run. Timeline events (mini bosses from `SummonerController.EventMiniboss`, swarms, anything timed) never fire while spawns are off, and neither does progress toward the boss portal that depends on the clock. Turn spawns on to test those.
+- Spawns that do not come from the stage timeline, such as shrine or coffin fights that call `EnemyManager.SpawnBoss` or `SpawnEnemy` directly, may ignore `enabledWaves`; unconfirmed.
 - The level-load reset was confirmed through `relaunch`, which starts a fresh process; a `load` into a running game was not tried, because the harness advises against it.
 
 ## Kill-floor heartbeat
