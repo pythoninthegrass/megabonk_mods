@@ -366,8 +366,8 @@ Verified on the example forest level with the kill-floor heartbeat: with spawns 
 
 Limits:
 
-- `enabledWaves` also stops the stage timer, observed in a live run. Timeline events (mini bosses from `SummonerController.EventMiniboss`, swarms, anything timed) never fire while spawns are off, and neither does progress toward the boss portal that depends on the clock. Turn spawns on to test those.
-- The HUD stage clock counts down from 10:00. The first miniboss (`MinibossPig`) spawned at 6:59 remaining, about 3:01 elapsed, in two separate runs, read off the HUD to the second; the exact `TimelineEvent.timeMinutes` is unread. To test pausing spawns before the first miniboss, turn spawns off before about 3:00 elapsed (7:00 remaining).
+- With spawns off the HUD stage clock stops and no timeline event fires (mini bosses from `SummonerController.EventMiniboss`, swarms). The clock does not lose that time: after 63 seconds off, the HUD went from 7:30 to 6:20 within about 14 seconds of `spawns on`, and a `MinibossGolem` due inside the skipped window spawned 0.1 seconds after the switch. Events that fell inside the pause fire together on re-enable, so spawns off defers timed events and does not cancel them. Inferred from one run; the timer code was not read.
+- The HUD stage clock counts down from 10:00. The first miniboss (`MinibossPig`) spawned at 6:59 remaining, about 3:01 elapsed, in two separate runs, read off the HUD to the second; the exact `TimelineEvent.timeMinutes` is unread. Turning spawns off before about 3:00 elapsed (7:00 remaining) delays the miniboss to the next `spawns on`, which does not skip it.
 - Spawns that do not come from the stage timeline, such as shrine or coffin fights that call `EnemyManager.SpawnBoss` or `SpawnEnemy` directly, may ignore `enabledWaves`; unconfirmed.
 - The level-load reset was confirmed through `relaunch`, which starts a fresh process; a `load` into a running game was not tried, because the harness advises against it.
 
