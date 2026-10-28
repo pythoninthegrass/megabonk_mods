@@ -95,6 +95,24 @@ public class ObjectToolTests
     }
 
     [Fact]
+    public void DragY_ObjectOnTheSurface_FollowsTheNewSurface()
+    {
+        Assert.Equal(60f, ObjectTools.DragY(newSurfaceY: 60f, lift: 0f, originY: 0f));
+    }
+
+    [Fact]
+    public void DragY_ObjectSlightlyAboveTheSurface_KeepsItsLiftOverTheNewSurface()
+    {
+        Assert.Equal(61f, ObjectTools.DragY(newSurfaceY: 60f, lift: 1f, originY: 1f));
+    }
+
+    [Fact]
+    public void DragY_FloatingObject_KeepsItsAbsoluteHeightOverATallerTile()
+    {
+        Assert.Equal(15.6f, ObjectTools.DragY(newSurfaceY: 40f, lift: 35.6f, originY: 15.6f));
+    }
+
+    [Fact]
     public void PositionAt_FlatTile_AtTheCellCentre_IsTheCentreAtTheTileSurface()
     {
         var position = ObjectTools.PositionAt(9, 7, new TileState(2, SlopeDirection.None), 15, 15, 40f, 20f, 80f, 0f);

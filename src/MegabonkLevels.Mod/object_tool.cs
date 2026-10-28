@@ -20,6 +20,7 @@ public static class ObjectTools
     private const int GridDivisions = 4;
     private const float GimbalLimit = 0.99999f;
     private const float PositionTolerance = 0.01f;
+    private const float FloatingLift = 2f;
     private const float DragHoldSeconds = 0.2f;
     private const float FootprintClearance = 1.1f;
     private const float MinRingRadius = 0.5f;
@@ -88,6 +89,10 @@ public static class ObjectTools
 
         return points;
     }
+
+    // A dragged object keeps its height over the surface, unless it floats well above it, where it keeps its absolute height.
+    public static float DragY(float newSurfaceY, float lift, float originY) =>
+        lift > FloatingLift ? originY : newSurfaceY + lift;
 
     // The cursor point kept inside its cell, at the tile surface there.
     public static Vector3Data PositionAt(int x, int z, TileState state, int width, int depth, float spacing, float tileHeight, float pointX, float pointZ)

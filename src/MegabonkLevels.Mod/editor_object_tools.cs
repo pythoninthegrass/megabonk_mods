@@ -233,7 +233,7 @@ public static class EditorObjectTools
             return;
         }
 
-        go.transform.position = new Vector3(position.X, position.Y + _dragLift, position.Z);
+        go.transform.position = new Vector3(position.X, ObjectTools.DragY(position.Y, _dragLift, _dragOrigin.Position.Y), position.Z);
     }
 
     private static void EndDrag((int X, int Z, TileState State)? target, Vector3 point, bool pointerFree)
