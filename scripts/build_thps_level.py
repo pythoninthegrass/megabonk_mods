@@ -126,6 +126,34 @@ STRUCTURES = (
     Structure("M12a", "Kicker", 87, 46, 180, 12, 4.4, 6.3),
     Structure("M12b", "Kicker", 87, 32, 0, 12, 2.6, 3.7),
 )
+
+
+class Collectible(NamedTuple):
+    code: str
+    catalog_id: str
+    x: float
+    z: float
+    y: float
+    stands_on: str | None = None
+
+
+# Block-local positions; y is the surface the item stands on. Items on a lane cell use the lane's slope height.
+COLLECTIBLES = (
+    Collectible("R1", "interactable/chest", 8, 34, 5.5, "M2"),
+    Collectible("R2", "interactable/chest", 61, 16, 4, "M10b"),
+    Collectible("R3", "interactable/chest", 98, 67, 4, "M11"),
+    Collectible("R4", "interactable/chest", 86, 100, 6, "M9"),
+    Collectible("R5", "interactable/chest", 20, 88, 4),
+    Collectible("S", "forest/shrines/0", 84, 40, 0),
+    Collectible("K", "forest/shrines/1", 33, 2, 0),
+    Collectible("A", "forest/shrines/2", 34, 26, 5, "M3"),
+    Collectible("T", "forest/shrines/3", 27, 60.5, 0),
+    Collectible("E", "forest/shrines/4", 86, 108, 6, "M9"),
+    Collectible("Tape", "interactable/chestFree", 11, 67, 13, "M5"),
+    Collectible("100N", "interactable/chestFree", 31, 99, 9.5),
+    Collectible("100E", "interactable/chestFree", 56, 99, 9.5),
+    Collectible("100S", "interactable/chestFree", 82, 13, 0),
+)
 HIGH_RAIL_HEIGHT = next(s.rise for s in STRUCTURES if s.code == "M1")
 LEDGE_RAIL_HEIGHT = next(s.rise for s in STRUCTURES if s.code == "M2")
 
@@ -261,6 +289,37 @@ def structure_edits() -> list[dict]:
     return edits
 
 
+def surface_height(s: Structure) -> float:
+    """Height of the surface an item stands on: a block or taxi top, or a corridor floor."""
+    return s.base_y if s.asset == "Corridor" else s.base_y + s.rise
+
+
+def ground_height(z: float, x: float) -> float:
+    """Ground height at a block-local point: the north lanes slope up one level, everything else is flat."""
+    lane_start = LANE_Z * TILE
+    if x < (LANE_X[-1] + 1) * TILE and lane_start <= z < lane_start + TILE:
+        return HEIGHT_STEP * (z - lane_start) / TILE
+    return 0.0
+
+
+def collectible_edits() -> list[dict]:
+    edits = []
+    for c in COLLECTIBLES:
+        wx, wz = local_to_world(c.x, c.z)
+        edits.append(
+            edit(
+                "object.place",
+                {
+                    "catalogId": c.catalog_id,
+                    "position": {"x": wx, "y": c.y, "z": wz},
+                    "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+                    "scale": {"x": 1.0, "y": 1.0, "z": 1.0},
+                },
+            )
+        )
+    return edits
+
+
 def build_level() -> dict:
     return {
         "schemaVersion": SCHEMA_VERSION,
@@ -270,7 +329,7 @@ def build_level() -> dict:
         "tier": 0,
         "seed": SEED,
         "packs": {PACK_ID: PACK_VERSION},
-        "edits": tile_edits() + clutter_removals() + spawn_moves() + rail_edits() + structure_edits(),
+        "edits": tile_edits() + clutter_removals() + spawn_moves() + rail_edits() + structure_edits() + collectible_edits(),
     }
 
 

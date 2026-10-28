@@ -92,27 +92,35 @@ Confirmed as written: box piles are chests, letters are shrines, the tape and th
 
 Collectibles stay as normal Megabonk items. The Forest palette has `interactable/chest`, `interactable/chestFree` and five shrines `forest/shrines/0` to `4`, which is exactly one shrine per letter.
 
-| THPS item | Megabonk item | Block-local position (x east, z north, units) | Source position (thps-warehouse.md) |
-| --- | --- | --- | --- |
-| Box pile R1 | `interactable/chest` | (8, 34) on the west platform | M2 |
-| Box pile R2 | `interactable/chest` | (61, 16) on the south notch ledge | M10 |
-| Box pile R3 | `interactable/chest` | (98, 67) on the south-east ledge | M11 |
-| Box pile R4 | `interactable/chest` | (83, 103) on the east deck | M9 |
-| Box pile R5 | `interactable/chest` | (18, 140) under the north-east block | uncertain, see below |
-| Letter S | `forest/shrines/0` | (84, 40) between the kickers | M12 |
-| Letter K | `forest/shrines/1` | (33, 2) south-west corner | K |
-| Letter A | `forest/shrines/2` | (34, 26) above the taxi | M3 |
-| Letter T | `forest/shrines/3` | (27, 64) above the half pipe | M4 |
-| Letter E | `forest/shrines/4` | (75, 103) east deck corner | M8, M9 |
-| Secret tape | `interactable/chestFree` | (11, 67) in the corridor | M5 |
-| 100 pickup, north | `interactable/chestFree` | (31, 99) | north lane |
-| 100 pickup, east | `interactable/chestFree` | (56, 99) | east lane |
-| 100 pickup, south | `interactable/chestFree` | (82, 13) | M10 |
+| THPS item | Megabonk item | Block-local (x east, z north) and y, units | Stands on | Source position (thps-warehouse.md) |
+| --- | --- | --- | --- | --- |
+| Box pile R1 | `interactable/chest` | (8, 34), 5.5 | M2 west platform | M2 |
+| Box pile R2 | `interactable/chest` | (61, 16), 4 | M10b south notch ledge | M10 |
+| Box pile R3 | `interactable/chest` | (98, 67), 4 | M11 south-east ledge | M11 |
+| Box pile R4 | `interactable/chest` | (86, 100), 6 | M9 east deck | M9 |
+| Box pile R5 | `interactable/chest` | (20, 88), 4 | the west lane, near its low end | uncertain, see below |
+| Letter S | `forest/shrines/0` | (84, 40), 0 | ground between the kickers | M12 |
+| Letter K | `forest/shrines/1` | (33, 2), 0 | ground, south-west corner | K |
+| Letter A | `forest/shrines/2` | (34, 26), 5 | M3 taxi | M3 |
+| Letter T | `forest/shrines/3` | (27, 60.5), 0 | ground between M4b and M6 | M4 |
+| Letter E | `forest/shrines/4` | (86, 108), 6 | M9 east deck, north corner | M8, M9 |
+| Secret tape | `interactable/chestFree` | (11, 67), 13 | M5 corridor floor | M5 |
+| 100 pickup, north | `interactable/chestFree` | (31, 99), 9.5 | the west lane | north lane |
+| 100 pickup, east | `interactable/chestFree` | (56, 99), 9.5 | the east lane | east lane |
+| 100 pickup, south | `interactable/chestFree` | (82, 13), 0 | ground | M10 |
 
-Positions are the map's floating-icon positions mapped through the low-confidence pixel-to-metre conversion, at ground level. Heights follow the guide: letters and the tape are meant to be reached in the air, so their Y is the structure height plus about one player height (about 4 units) once the structures exist.
+These are the `COLLECTIBLES` table in `scripts/build_thps_level.py`. Positions are the map's floating-icon positions mapped through the low-confidence pixel-to-metre conversion, nudged where the compressed structure layout (see "Building the level") moved the feature they belonged to:
+
+- Every item stands on its surface rather than floating about one player height above it. A shrine or chest hovering in the air has nothing to rest on, so the letters are reached by jumping onto the structure, not by an air trick.
+- R4 and the E shrine move onto the deck (the spec's E position at x 75 falls off the deck's west edge) and are split along it so they do not overlap.
+- Letter T moves from (27, 64), which is inside the M6 pipe, to the 3 unit gap between M4b and M6.
+- Box pile R5 stands on the west lane's low end at ground level instead of "under the north-east block"; the lane cell slopes one level over its 40 units, so an item on it uses `ground_height` (a slope of 20 units per 40, checked in game: the player settled at the predicted height).
+- `forest/shrines/3` is the `ShadyGuy` prefab, the merchant NPC, not a shrine, and `forest/shrines/0` to `2` and `4` are the Challenge, Magnet, Maoi and Cursed shrines. The mapping stays one catalog entry per letter.
 
 ## Open questions and risks
 
+- **Tape reach is unverified.** The corridor floor is at 13, above the 7.8 jump apex, and the harness can teleport the player but not move or jump it. The route is the lip of M6 (12 high, at x 24-44) with a running jump across the 5 unit gap to the corridor's east side (x 19), or the half pipe lip. Nobody has played it; if it fails the tape is the only collectible that needs a new ramp.
+- **Interaction is only partly verified.** The collectibles spawn through the same catalog path as generated chests, and a player standing at the R5 chest shows the chest's 30 gold price label. Opening one needs the `Interact` key and gold, which the harness cannot send.
 - **Shrine effects on the letters.** The mapping is confirmed, but shrines change a run when used, so whether the effect suits a letter is worth a look once they are placed.
 - **Block choice.** The 4x3 block has to be chosen from a height dump of seed `20261007` to keep terrain edits small.
 - **Generated clutter.** The seed spawns trees, rocks and shrines inside the block, which have to be removed with `RemoveObject` (`gen:` ids) or the block placed where there are few.

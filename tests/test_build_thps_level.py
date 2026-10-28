@@ -238,3 +238,75 @@ def test_structure_placements_use_non_uniform_scale_of_width_rise_depth() -> Non
     place = next(p for p in structure_places() if p["scale"]["y"] == m1.rise and p["scale"]["x"] == m1.width)
     assert place["scale"]["z"] == m1.depth
     assert place["rotation"]["y"] == m1.yaw
+
+
+def collectible_places() -> list[dict]:
+    return [payload(e) for e in ops_of(b.collectible_edits(), "object.place")]
+
+
+def test_collectibles_cover_the_spec_with_the_confirmed_item_mapping() -> None:
+    ids = [c.catalog_id for c in b.COLLECTIBLES]
+    assert len(ids) == 14
+    assert ids.count("interactable/chest") == 5
+    assert ids.count("interactable/chestFree") == 4
+    assert sorted(i for i in ids if i.startswith("forest/shrines/")) == [f"forest/shrines/{n}" for n in range(5)]
+    assert len({c.code for c in b.COLLECTIBLES}) == 14
+
+
+def test_collectible_edits_place_each_item_at_its_world_position() -> None:
+    places = collectible_places()
+    assert [p["catalogId"] for p in places] == [c.catalog_id for c in b.COLLECTIBLES]
+    for c, p in zip(b.COLLECTIBLES, places, strict=True):
+        wx, wz = b.local_to_world(c.x, c.z)
+        assert (p["position"]["x"], p["position"]["y"], p["position"]["z"]) == (wx, c.y, wz), c.code
+
+
+def test_collectibles_stay_inside_the_arena_and_clear_of_the_player_spawn() -> None:
+    sx, sz = b.PLAYER_SPAWN_LOCAL
+    for c in b.COLLECTIBLES:
+        assert 0 <= c.x <= b.INNER_X * b.TILE and 0 <= c.z <= b.INNER_Z * b.TILE, c.code
+        assert max(abs(c.x - sx), abs(c.z - sz)) >= b.SPAWN_CLEARANCE, c.code
+
+
+def test_collectibles_inside_a_structure_footprint_stand_on_its_surface() -> None:
+    by_code = {s.code: s for s in b.STRUCTURES}
+    for c in b.COLLECTIBLES:
+        inside = []
+        for s in b.STRUCTURES:
+            x0, x1, z0, z1 = b.footprint(s)
+            if x0 <= c.x <= x1 and z0 <= c.z <= z1:
+                inside.append(s.code)
+        if c.stands_on is None:
+            assert not inside, c.code
+            assert c.y == b.ground_height(c.z, c.x), c.code
+        else:
+            assert inside == [c.stands_on], c.code
+            assert c.y == b.surface_height(by_code[c.stands_on]), c.code
+
+
+def test_surface_height_is_a_block_top_or_a_corridor_floor() -> None:
+    by_code = {s.code: s for s in b.STRUCTURES}
+    assert b.surface_height(by_code["M2"]) == 5.5
+    assert b.surface_height(by_code["M5"]) == 13
+
+
+def test_ground_height_follows_the_north_lanes_and_is_zero_elsewhere() -> None:
+    assert b.ground_height(40, 20) == 0
+    assert b.ground_height(80, 20) == 0
+    assert b.ground_height(100, 20) == 10
+    assert b.ground_height(100, 100) == 0
+
+
+def test_collectibles_on_structures_are_reachable_by_a_jump_or_ramp_or_listed_as_trick_only() -> None:
+    by_code = {s.code: s for s in b.STRUCTURES}
+    for c in b.COLLECTIBLES:
+        if c.stands_on and by_code[c.stands_on].asset == "Block":
+            assert c.y <= b.PLAYER_JUMP_APEX, c.code
+
+
+def test_build_level_includes_collectibles_after_the_clutter_removals() -> None:
+    edits = b.build_level()["edits"]
+    ids = {c.catalog_id for c in b.COLLECTIBLES}
+    placed = [i for i, e in enumerate(edits) if e["opType"] == "object.place" and payload(e)["catalogId"] in ids]
+    assert len(placed) == len(b.COLLECTIBLES)
+    assert max(i for i, e in enumerate(edits) if e["opType"] == "object.remove") < min(placed)
