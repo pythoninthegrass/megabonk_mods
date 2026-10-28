@@ -357,7 +357,7 @@ def test_build_level_places_the_warehouse_after_the_clutter_removals() -> None:
 
 
 def test_pack_version_is_the_warehouse_release() -> None:
-    assert b.PACK_VERSION == "2.0.8"
+    assert b.PACK_VERSION == "2.0.9"
 
 
 def test_player_starts_at_tonys_chosen_position() -> None:
@@ -420,3 +420,8 @@ def test_the_pack_opens_the_intact_secret_room_windows_by_position_only() -> Non
     source = (Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "Assets" / "Editor" / "ThpsPack.cs").read_text()
     assert "PassThroughInRoomMaterials" in source
     assert "F2184063" in source
+
+
+def test_the_pack_opens_the_start_slope_windows_by_position_only() -> None:
+    source = (Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "Assets" / "Editor" / "ThpsPack.cs").read_text()
+    assert "StartSlopeWindowBounds" in source

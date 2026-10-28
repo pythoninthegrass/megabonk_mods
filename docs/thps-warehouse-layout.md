@@ -118,6 +118,17 @@ These are the `COLLECTIBLES` table in `scripts/build_thps_level.py`. Positions a
 - Box pile R5 stands on the west lane's low end at ground level instead of "under the north-east block"; the lane cell slopes one level over its 40 units, so an item on it uses `ground_height` (a slope of 20 units per 40, checked in game: the player settled at the predicted height).
 - `forest/shrines/3` is the `ShadyGuy` prefab, the merchant NPC, not a shrine, and `forest/shrines/0` to `2` and `4` are the Challenge, Magnet, Maoi and Cursed shrines. The mapping stays one catalog entry per letter.
 
+## Windows opened to the player
+
+The pack builds the Warehouse collision mesh without the faces of some windows (`ThpsPack.cs`, `SaveCollisionMesh`). The `FA88F30D` windows are dropped by material. The `F2184063` windows share their material with solid windows elsewhere, so only faces whose world position lies inside one of the `OpenedWindowBounds` boxes (x, y, z min and max) are dropped, and the rendered mesh is untouched:
+
+| Window | Bounds |
+| --- | --- |
+| Secret room, intact sections | x 149 to 179, y 15 to 26, z 20 to 32 |
+| Top of the starting slope, two panes at z -73.3 | x 80 to 140, y 27 to 38, z -75 to -72 |
+
+The half pipe behind the starting slope windows is reached through them. Other `F2184063` windows keep their collision.
+
 ## Open questions and risks
 
 - **Tape reach is unverified.** The corridor floor is at 13, above the 7.8 jump apex, and the harness can teleport the player but not move or jump it. The route is the lip of M6 (12 high, at x 24-44) with a running jump across the 5 unit gap to the corridor's east side (x 19), or the half pipe lip. Nobody has played it; if it fails the tape is the only collectible that needs a new ramp.
