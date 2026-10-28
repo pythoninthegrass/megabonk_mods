@@ -40,6 +40,7 @@ public static class EditorObjectTools
     private static float _dragY;
     private static float _dragMouseY;
     private static bool _dragFloating;
+    private static (float X, float Z) _dragPlaneGrab;
     private static bool _dragActive;
     private static float _dragPressedAt;
     private static (float X, float Z) _dragGrab;
@@ -228,7 +229,8 @@ public static class EditorObjectTools
         _dragLift = SurfaceYAt(_dragOrigin.Position) is { } surface ? _dragOrigin.Position.Y - surface : 0f;
         _dragY = _dragOrigin.Position.Y;
         _dragMouseY = EditorInput.MousePosition.y;
-        _dragFloating = false;
+        _dragFloating = ObjectTools.IsFloating(_dragLift);
+        _dragPlaneGrab = _dragFloating && CursorOnPlane(_dragY) is { } onPlane ? (_dragOrigin.Position.X - onPlane.X, _dragOrigin.Position.Z - onPlane.Z) : (0f, 0f);
         _logger.Msg($"EditorObjectTools: selected {hit.Target.Serialize()} '{hit.Object.name}' via {hit.Path}");
     }
 
@@ -256,6 +258,15 @@ public static class EditorObjectTools
         {
             cursor = new Vector3Data(current.x, SurfaceYAt(ToData(current)) ?? float.NegativeInfinity, current.z);
         }
+        else if (_dragFloating)
+        {
+            if (CursorOnPlane(_dragY) is not { } onPlane)
+            {
+                return;
+            }
+
+            cursor = new Vector3Data(onPlane.X + _dragPlaneGrab.X, SurfaceYAt(new Vector3Data(onPlane.X + _dragPlaneGrab.X, _dragY, onPlane.Z + _dragPlaneGrab.Z)) ?? float.NegativeInfinity, onPlane.Z + _dragPlaneGrab.Z);
+        }
         else if (CursorPosition(target, point, _dragGrab) is { } position)
         {
             cursor = position;
@@ -268,6 +279,19 @@ public static class EditorObjectTools
         var lift = _dragFloating ? float.PositiveInfinity : _dragLift;
         var y = ObjectTools.DragY(cursor.Y, lift, _dragY, SurfacesNear(new Vector3(cursor.X, _dragY, cursor.Z), go));
         go.transform.position = new Vector3(cursor.X, y, cursor.Z);
+    }
+
+    // The cursor ray crossing the horizontal plane at the given height.
+    private static (float X, float Z)? CursorOnPlane(float planeY)
+    {
+        var camera = PlayerCamera.Instance?.camera;
+        if (camera == null)
+        {
+            return null;
+        }
+
+        var ray = camera.ScreenPointToRay(EditorInput.MousePosition);
+        return ObjectTools.RayPlaneXZ(ToData(ray.origin), ToData(ray.direction), planeY);
     }
 
     // Heights of the mostly horizontal solid surfaces within snap range of the point, ignoring the object's own colliders.

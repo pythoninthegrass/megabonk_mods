@@ -181,6 +181,35 @@ public class ObjectToolTests
     }
 
     [Fact]
+    public void RayPlaneXZ_AngledRay_HitsTheHorizontalPlane()
+    {
+        var hit = ObjectTools.RayPlaneXZ(new Vector3Data(0, 20, 0), new Vector3Data(1, -1, 2), 10f);
+
+        Assert.NotNull(hit);
+        Assert.Equal(10f, hit.Value.X, 3);
+        Assert.Equal(20f, hit.Value.Z, 3);
+    }
+
+    [Fact]
+    public void RayPlaneXZ_RayPointingAwayFromThePlane_HasNoHit()
+    {
+        Assert.Null(ObjectTools.RayPlaneXZ(new Vector3Data(0, 20, 0), new Vector3Data(0, 1, 1), 10f));
+    }
+
+    [Fact]
+    public void RayPlaneXZ_RayParallelToThePlane_HasNoHit()
+    {
+        Assert.Null(ObjectTools.RayPlaneXZ(new Vector3Data(0, 20, 0), new Vector3Data(1, 0, 1), 10f));
+    }
+
+    [Fact]
+    public void IsFloating_OnlyBeyondTheFloatingLift()
+    {
+        Assert.False(ObjectTools.IsFloating(2f));
+        Assert.True(ObjectTools.IsFloating(2.1f));
+    }
+
+    [Fact]
     public void RaiseBy_MovingTheMouseUpRaisesTheObject()
     {
         Assert.True(ObjectTools.RaiseBy(10f, 40f) > 10f);

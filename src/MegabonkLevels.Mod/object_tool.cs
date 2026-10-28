@@ -96,7 +96,7 @@ public static class ObjectTools
     // An object resting on the surface keeps its lift over the surface it is dragged across; a floating one keeps its own height and only settles onto a surface within snap range.
     public static float DragY(float tileSurfaceY, float lift, float floatingY, IReadOnlyList<float> nearbySurfaceYs)
     {
-        if (lift <= FloatingLift)
+        if (!IsFloating(lift))
         {
             return tileSurfaceY + lift;
         }
@@ -127,6 +127,20 @@ public static class ObjectTools
 
         var remaining = 1f - nearestDistance / SnapDistance;
         return y + (nearest - y) * remaining * remaining;
+    }
+
+    public static bool IsFloating(float lift) => lift > FloatingLift;
+
+    // Where a ray crosses a horizontal plane, so a floating object follows the cursor at its own height instead of the ground far behind it.
+    public static (float X, float Z)? RayPlaneXZ(Vector3Data origin, Vector3Data direction, float planeY)
+    {
+        if (MathF.Abs(direction.Y) < 1e-6f)
+        {
+            return null;
+        }
+
+        var t = (planeY - origin.Y) / direction.Y;
+        return t < 0f ? null : (origin.X + t * direction.X, origin.Z + t * direction.Z);
     }
 
     public static float RaiseBy(float y, float mouseDeltaPixels) => y + mouseDeltaPixels * UnitsPerPixel;
