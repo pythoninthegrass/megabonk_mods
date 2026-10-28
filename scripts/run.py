@@ -46,6 +46,7 @@ Usage:
     run.py type <text>             Type text into the focused field (\\b is backspace, \\n is return), at most 200 characters
     run.py teleport X Y Z          Move the player's feet to a world position and print the position reached
     run.py teleport --cell CX CY   Move the player to a grid cell's centre, on the tile surface there
+    run.py item NAME [AMOUNT]      Print the player's amount of an item; with AMOUNT set it exactly (0 removes it), printing before and after
     run.py dismiss-levelup [--choice N]  Pick offer N (default 0) in the open level-up dialog; prints dialogWasOpen and chosen
     run.py quit                    Quit the game, wait for the process to exit, and stop leftover Wine processes (macOS)
     run.py cycle <level> <out.png> Load, wait --settle seconds, screenshot, quit
@@ -240,6 +241,13 @@ def build_teleport_command(position: tuple[float, ...] | None = None, cell: tupl
         payload["position"] = list(position)
     if cell is not None:
         payload["cell"] = list(cell)
+    return payload
+
+
+def build_item_command(name: str, amount: int | None = None) -> dict[str, object]:
+    payload: dict[str, object] = {"command": "item", "name": name}
+    if amount is not None:
+        payload["amount"] = amount
     return payload
 
 
@@ -552,6 +560,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     teleport = sub.add_parser("teleport")
     teleport.add_argument("position", type=float, nargs="*", metavar="X Y Z", help="world units, the player's feet point")
     teleport.add_argument("--cell", type=int, nargs=2, metavar=("CX", "CY"), help="grid cell to stand at the centre of")
+    item = sub.add_parser("item")
+    item.add_argument("name", help="EItem member, case-sensitive, e.g. Mirror")
+    item.add_argument("amount", type=int, nargs="?", help="set the amount to this exact number; omit to read it")
     dismiss = sub.add_parser("dismiss-levelup")
     dismiss.add_argument("--choice", type=int, default=0, help="zero-based index of the offered upgrade")
     type_ = sub.add_parser("type")
@@ -620,6 +631,10 @@ def save_level_payload(args: argparse.Namespace) -> dict[str, object]:
 
 def click_widget_payload(args: argparse.Namespace) -> dict[str, object]:
     return build_click_widget_command(args.name)
+
+
+def item_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_item_command(args.name, args.amount)
 
 
 def teleport_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -780,6 +795,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, click_widget_payload(args), args.timeout)
         case "teleport":
             ok = send_printing_result(harness, teleport_payload(args), args.timeout)
+        case "item":
+            ok = send_printing_result(harness, item_payload(args), args.timeout)
         case "dismiss-levelup":
             ok = send_printing_result(harness, dismiss_levelup_payload(args), args.timeout)
         case "spawns":

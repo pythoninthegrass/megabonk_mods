@@ -369,6 +369,25 @@ def test_build_teleport_command_carries_a_position_or_a_cell() -> None:
     assert run.build_teleport_command(cell=(3, 12)) == {"command": "teleport", "cell": [3, 12]}
 
 
+def test_build_item_command_reads_without_an_amount_and_sets_with_one() -> None:
+    assert run.build_item_command("Mirror") == {"command": "item", "name": "Mirror"}
+    assert run.build_item_command("Mirror", 0) == {"command": "item", "name": "Mirror", "amount": 0}
+    assert run.build_item_command("Feathers", 3) == {"command": "item", "name": "Feathers", "amount": 3}
+
+
+def test_item_payload_takes_a_name_and_an_optional_amount() -> None:
+    assert run.item_payload(run.parse_args(["item", "Mirror"])) == {"command": "item", "name": "Mirror"}
+    assert run.item_payload(run.parse_args(["item", "Mirror", "0"])) == {"command": "item", "name": "Mirror", "amount": 0}
+
+
+def test_item_prints_the_result_json(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"item","ok":true,"result":{"item":"Mirror","before":3,"after":0}}')
+        assert run_main(game, "item", "Mirror", "0") == 0
+    printed = capsys.readouterr().out.strip().splitlines()[-1]
+    assert json.loads(printed) == {"item": "Mirror", "before": 3, "after": 0}
+
+
 def test_build_dismiss_levelup_command_carries_the_choice() -> None:
     assert run.build_dismiss_levelup_command(0) == {"command": "dismiss-levelup", "choice": 0}
     assert run.build_dismiss_levelup_command(2) == {"command": "dismiss-levelup", "choice": 2}

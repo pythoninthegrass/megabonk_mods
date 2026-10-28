@@ -624,4 +624,48 @@ public class HarnessCommandTests
         Assert.False(ok);
         Assert.Contains("enabled", error);
     }
+
+    [Fact]
+    public void TryParse_ItemWithoutAmount_IsAReadOfTheNamedItem()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"item","name":"Mirror"}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.Item, command.Kind);
+        Assert.Equal("item", command.Name);
+        Assert.Equal("Mirror", command.Item.Name);
+        Assert.Null(command.Item.Amount);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    [InlineData(HarnessCommand.MaxItemAmount)]
+    public void TryParse_ItemWithAmount_ReturnsTheExactAmount(int amount)
+    {
+        var ok = HarnessCommand.TryParse($$"""{"command":"item","name":"Feathers","amount":{{amount}}}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal("Feathers", command.Item.Name);
+        Assert.Equal(amount, command.Item.Amount);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"item"}""", "name")]
+    [InlineData("""{"command":"item","name":""}""", "name")]
+    [InlineData("""{"command":"item","name":5}""", "name")]
+    [InlineData("""{"command":"item","name":"Mirror","amount":-1}""", "amount")]
+    [InlineData("""{"command":"item","name":"Mirror","amount":1000}""", "amount")]
+    [InlineData("""{"command":"item","name":"Mirror","amount":100000}""", "amount")]
+    [InlineData("""{"command":"item","name":"Mirror","amount":1.5}""", "amount")]
+    [InlineData("""{"command":"item","name":"Mirror","amount":"3"}""", "amount")]
+    public void TryParse_ItemWithBadFields_FailsNamingTheField(string json, string field)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains(field, error);
+    }
 }

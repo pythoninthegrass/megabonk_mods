@@ -36,6 +36,7 @@ public enum HarnessCommandKind
     SaveLevel,
     ListLevels,
     QueryObjects,
+    Item,
 }
 
 // World-space camera position and euler rotation in degrees.
@@ -67,6 +68,14 @@ public sealed class TeleportArgs
     public int[] Cell { get; init; }
 }
 
+// The item to read or set; a null Amount reads it.
+public sealed class ItemArgs
+{
+    public string Name { get; init; }
+
+    public int? Amount { get; init; }
+}
+
 // The type to enumerate and the public fields to read besides name.
 public sealed class QueryArgs
 {
@@ -76,9 +85,11 @@ public sealed class QueryArgs
 }
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null)
 {
     public const int MaxTypeLength = 200;
+
+    public const int MaxItemAmount = 999;
 
 
     // Returns false with a human-readable error instead of throwing, so a bad file can never crash the game.
@@ -181,6 +192,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseQueryObjects(root, out command, out error);
             case "ui-tree":
                 return TryParseUiTree(root, out command, out error);
+            case "item":
+                return TryParseItem(root, out command, out error);
             case "teleport":
                 return TryParseTeleport(root, out command, out error);
             case "dismiss-levelup":
@@ -232,6 +245,33 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.Camera, null, new CameraPose(p[0], p[1], p[2], r[0], r[1], r[2]));
+        return true;
+    }
+
+    private static bool TryParseItem(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        if (!TryGetString(root, "name", out var name) || name.Length == 0)
+        {
+            error = "missing non-empty string field 'name'";
+            return false;
+        }
+
+        int? amount = null;
+        if (root.TryGetPropertyValue("amount", out var node) && node != null)
+        {
+            if (node is not JsonValue value || !value.TryGetValue(out int parsed) || parsed < 0 || parsed > MaxItemAmount)
+            {
+                error = $"field 'amount' must be an integer from 0 to {MaxItemAmount}";
+                return false;
+            }
+
+            amount = parsed;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.Item, null, Item: new ItemArgs { Name = name, Amount = amount });
+        error = null;
         return true;
     }
 

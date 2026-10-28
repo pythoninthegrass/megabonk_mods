@@ -340,6 +340,8 @@ INPUT_TOOL_CASES = [
     ("type_text", {"text": "chest"}, {"command": "type", "text": "chest"}),
     ("teleport", {"position": [1.5, 0, -3]}, {"command": "teleport", "position": [1.5, 0, -3]}),
     ("teleport", {"cell": [4, 7]}, {"command": "teleport", "cell": [4, 7]}),
+    ("item", {"name": "Mirror"}, {"command": "item", "name": "Mirror"}),
+    ("item", {"name": "Mirror", "amount": 0}, {"command": "item", "name": "Mirror", "amount": 0}),
     ("dismiss_levelup", {}, {"command": "dismiss-levelup", "choice": 0}),
     ("dismiss_levelup", {"choice": 2}, {"command": "dismiss-levelup", "choice": 2}),
 ]
@@ -372,6 +374,7 @@ async def test_input_tool_writes_the_harness_payload_and_returns_the_result(tmp_
         ("mouse", {"action": "click"}),
         ("type_text", {"text": "x"}),
         ("teleport", {"cell": [1, 1]}),
+        ("item", {"name": "Mirror"}),
         ("dismiss_levelup", {}),
     ],
 )

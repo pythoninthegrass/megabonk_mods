@@ -224,6 +224,8 @@ public static class DevHarness
                 return QueryObjects(command.Query);
             case HarnessCommandKind.Teleport:
                 return Teleport(command.Teleport);
+            case HarnessCommandKind.Item:
+                return PlayerItems.Apply(command.Item);
             case HarnessCommandKind.DismissLevelUp:
                 return DismissLevelUp(command.Choice);
             case HarnessCommandKind.Quit:

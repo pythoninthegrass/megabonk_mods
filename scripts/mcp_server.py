@@ -378,6 +378,12 @@ async def teleport(position: list[float] | None = None, cell: list[int] | None =
     return await _command(_harness(), payload, TIMEOUT)
 
 
+@mcp.tool()
+async def item(name: str, amount: int | None = None) -> CallToolResult:
+    """Read or set the player's amount of a game item. name is a case-sensitive EItem member such as Mirror or Feathers. Without amount it only reads; with amount (0 to 999) it sets the amount exactly, 0 removing the item. Returns {item, before, after}. An unknown name or out-of-range amount is rejected and nothing changes."""
+    return await _command(_harness(), run.build_item_command(name, amount), TIMEOUT)
+
+
 def _compile_jq(expression: str) -> "jq._Program":
     try:
         return jq.compile(expression)
