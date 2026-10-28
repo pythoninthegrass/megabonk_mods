@@ -1,10 +1,10 @@
 ---
 id: TASK-021.14
-title: 'Add slideable pillars to the rail near (76, 2, 21)'
+title: 'Make the mesh rail near (75, 3, 28) grindable with posts'
 status: In Progress
 assignee: []
 created_date: '2026-10-28 04:12'
-updated_date: '2026-10-28 04:30'
+updated_date: '2026-10-28 06:24'
 labels:
   - thps
   - level-editor
@@ -20,7 +20,7 @@ ordinal: 102000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-The rail around world (76, 2, 21) in the THPS Warehouse has no pillars, and the player cannot grind or slide on it. Add pillars to the rail and make them slideable like the game's own rails. Rails are placed by scripts/build_thps_level.py (rail_edits, catalog ids interactable/rail/0 and interactable/rail/1). Check first how the game's rail objects decide what is slideable (the dump is .tools/il2cpp_dump/dump.cs, regenerate with task re:dump, and the bodies are native code in GameAssembly), and whether a pillar needs a collider of its own, a pack prefab, or an existing game object.
+The Warehouse mesh's rail at world x 75 (z 3 to 53, then a bend to about (81.5, 60.6)) floated with no posts and no Rail component, so the player could not grind it. The bar is kept as extracted, seven posts stand under it (ThpsPack.cs, RailPosts) and two hidden game rails lie along it (MESH_RAILS in scripts/build_thps_level.py). The original title and description said the rail was near (76, 2, 21) and had no pillars; the findings are in the implementation notes and docs/thps-warehouse-layout.md.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -30,7 +30,7 @@ The rail around world (76, 2, 21) in the THPS Warehouse has no pillars, and the 
 - [ ] #3 The pillars do not block the player or enemies elsewhere
 - [x] #4 The level generator places them and tests in tests/test_build_thps_level.py cover the placement
 - [ ] #5 A screenshot and a short note on how the slide was checked are saved with the task
-- [ ] #6 docs/thps-warehouse-layout.md is updated
+- [x] #6 docs/thps-warehouse-layout.md is updated
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -50,6 +50,8 @@ Open:
 - Check that the posts and hidden rails do not block the player or enemies elsewhere.
 - Update docs/thps-warehouse-layout.md for the kept bar, posts and hidden rails.
 - The task title and description still say the rail is near (76, 2, 21) and has no pillars.
+
+Branch feat/task-021.14-rail-pillars (commit 2de2217): docs/thps-warehouse-layout.md now documents the kept bar, posts and hidden rails (AC 6). Code was already on main. Still open and needs hands-on play: grind check and the bend (AC 2), posts and hidden rails not blocking the player or enemies elsewhere (AC 3), and the screenshot and slide note for AC 5.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

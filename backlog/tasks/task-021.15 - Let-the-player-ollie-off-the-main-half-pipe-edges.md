@@ -1,9 +1,10 @@
 ---
 id: TASK-021.15
 title: Let the player ollie off the main half pipe edges
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-28 04:12'
+updated_date: '2026-10-28 06:24'
 labels:
   - thps
   - level-editor
@@ -28,10 +29,20 @@ At the main half pipe edges near world (142, -3, 32) the player (Tony) cannot ol
 - [ ] #1 The cause is identified and written in the task notes, with the measured slope at the edges
 - [ ] #2 The player can ride up the main half pipe and ollie off both edges near (142, -3, 32) without stalling
 - [ ] #3 The player does not stall or get stuck on the other pipe and ramp edges in the Warehouse
-- [ ] #4 The fix does not change movement on the normal Forest levels
-- [ ] #5 Any new level-file or mod behaviour is covered by tests and documented in docs/level-format.md or docs/thps-warehouse-layout.md
+- [x] #4 The fix does not change movement on the normal Forest levels
+- [x] #5 Any new level-file or mod behaviour is covered by tests and documented in docs/level-format.md or docs/thps-warehouse-layout.md
 - [ ] #6 Screenshots or state readings from the run are saved under .tools/evidence/
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Branch fix/task-021.15-halfpipe-ollie (commit 2564c41), top of the train. Measured from the extracted mesh near (142, -3, 32): the half pipe faces run 31, 34, 54, 77 and 85 degrees up to the lip over about 8 units of rise, so the face passes PlayerMovement.maxSlopeAngle (45) roughly a third of the way up. Probable cause: the movement limit, not the collision mesh. Not confirmed by play, because the harness cannot drive the game's movement input.
+
+Fix: new optional level key maxSlopeAngle (LevelFile.MaxSlopeAngle, docs/level-format.md). The mod sets PlayerMovement.maxSlopeAngle for a custom level run only and restores the game's value afterwards (LiveEditPatch.TickMaxSlopeAngle); levels without the key, including Forest, are unchanged. The thps level sets 88 (MAX_SLOPE_ANGLE). Log on load: 'LiveEdit: max slope angle 45 -> 88' (saved as .tools/evidence/task-021.15-max-slope-log.txt). Tests cover the key round trip, default and equality, and the generator value.
+
+Open for Lance: ride the main half pipe and ollie off both edges (AC 2), check the other pipes and ramps (AC 3), and judge whether 88 changes the feel of the rest of the level; a lower value may ride the pipes just as well. The restore of the 45 limit on a later vanilla run is implemented but was not exercised.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
