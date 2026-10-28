@@ -122,6 +122,14 @@ Authoring rules:
 - Build through the explicit `AssetBundleBuild[]` overload of `BuildAssetBundles`, so a build of the pack does not rebuild the test bundles in the same project.
 - List every asset in `manifest.json`; an asset the manifest omits resolves as `Missing:` even when the bundle holds it. The generator checks the manifest against the assets it places.
 
+### Warehouse mesh import
+
+`ThpsPack.ParseWarehouseObj` reads `.tools/thps1/warehouse/warehouse.obj` and turns every face into its own corners, so no vertex is shared between faces. The extraction leaves faces that lie exactly in the same plane as another face and overlap it: posters over walls, and the stacked planks of the wood piles. With equal depth the depth buffer picks a winner per pixel and the result flickers as the camera moves.
+
+`CoplanarLayering.Separate` (`Assets/Editor/CoplanarLayering.cs`, plain C# with no Unity types so `tests/MegabonkLevels.Tests` compiles it directly) removes the tie. For every pair of faces that face the same way, lie within `0.00001` mesh units of one plane and overlap with positive area, the smaller face goes on top, and the later OBJ face goes on top when the areas are equal. A face is lifted along its front normal by `LiftStep` (`0.0005` mesh units, about 0.04 world units at the placed scale) for each face it has to sit above, so stacks of three or more separate too. Faces that only touch along an edge, back-to-back faces and faces in parallel planes beyond the tolerance are left alone. Positions move by under 0.2 world units at most, and UVs, textures and filtering are untouched.
+
+On the current mesh the pass lifts 195 of 1345 faces, at most 3 levels deep. The floor grime decals are not part of this pass: they sit 0.174 world units above the floor faces, and the floor patch sits under the floor plane on purpose.
+
 Measured in the game with the pack: a player teleported 4 units above a flat top settles at the top plus 1.925 (the capsule centre height), so every `Block` top, the taxi cabin and the corridor floor hold the player. On a ramp the player lands on the surface and slides down it when the slope is steep, and rests on shallow slopes; nothing fell through. A teleport to only 1 unit above a surface leaves the player hovering at that height with no gravity, so test support with a drop of several units.
 
 ## Not yet established

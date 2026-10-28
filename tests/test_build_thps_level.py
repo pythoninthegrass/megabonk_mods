@@ -358,7 +358,7 @@ def test_build_level_places_the_warehouse_after_the_clutter_removals() -> None:
 
 
 def test_pack_version_is_the_warehouse_release() -> None:
-    assert b.PACK_VERSION == "2.0.7"
+    assert b.PACK_VERSION == "2.0.8"
 
 
 def test_player_starts_at_tonys_chosen_position() -> None:

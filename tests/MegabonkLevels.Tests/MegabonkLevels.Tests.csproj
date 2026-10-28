@@ -90,6 +90,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/overview_target.cs" Link="overview_target.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/teleport_target.cs" Link="teleport_target.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/object_query.cs" Link="object_query.cs" />
+    <Compile Include="../../unity/pack-authoring/Assets/Editor/CoplanarLayering.cs" Link="CoplanarLayering.cs" />
   </ItemGroup>
 
   <ItemGroup>

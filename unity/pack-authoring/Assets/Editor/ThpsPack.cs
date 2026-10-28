@@ -197,6 +197,7 @@ public static class ThpsPack
         var vertices = new List<Vector3>();
         var vertexUvs = new List<Vector2>();
         var trianglesByMaterial = new Dictionary<string, List<int>>();
+        var faces = new List<int[]>();
         string material = null;
         foreach (var line in File.ReadLines(path))
         {
@@ -230,10 +231,12 @@ public static class ThpsPack
 
                     for (var i = 1; i < corners.Count - 1; i++)
                         triangles.AddRange(new[] { corners[0], corners[i + 1], corners[i] });
+                    faces.Add(corners.ToArray());
                     break;
             }
         }
 
+        SeparateCoplanarFaces(vertices, faces);
         AddFloorPatches(vertices, vertexUvs, trianglesByMaterial);
         var bounds = new Bounds(positions[0], Vector3.zero);
         foreach (var p in positions)
@@ -250,6 +253,15 @@ public static class ThpsPack
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         return mesh;
+    }
+
+    // Lifts the top face of each coplanar overlap (posters over walls, stacked planks) so the depth buffer no longer ties.
+    static void SeparateCoplanarFaces(List<Vector3> vertices, List<int[]> faces)
+    {
+        var points = vertices.Select(v => new System.Numerics.Vector3(v.x, v.y, v.z)).ToList();
+        CoplanarLayering.Separate(points, faces);
+        for (var i = 0; i < vertices.Count; i++)
+            vertices[i] = new Vector3(points[i].X, points[i].Y, points[i].Z);
     }
 
     static void AddFloorPatches(List<Vector3> vertices, List<Vector2> vertexUvs, Dictionary<string, List<int>> trianglesByMaterial)
