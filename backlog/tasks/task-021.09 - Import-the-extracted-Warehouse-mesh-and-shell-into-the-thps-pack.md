@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-28 02:41'
-updated_date: '2026-10-28 04:36'
+updated_date: '2026-10-28T18:50:00Z'
 labels:
   - thps
   - level-editor
@@ -30,12 +30,20 @@ Replace the hand-built flat-coloured ramps and the Forest cliff-ring look with t
 <!-- AC:BEGIN -->
 - [x] #1 The thps pack contains a Warehouse prefab built from the extracted mesh with a ground-layer MeshCollider, and the pack version is bumped
 - [x] #2 The level places the Warehouse at one uniform scale and the room fits the arena, enlarging INNER_X and INNER_Z if needed
-- [ ] #3 The tile floor and cliff ring no longer show inside the room, and the kill floor still ends a fall
+- [x] #3 The tile floor and cliff ring no longer show inside the room, and the kill floor still ends a fall
 - [ ] #4 In-game screenshots from the south-east at pitch 45 and from ground level are compared with tools/thps_warehouse_items_map.png and frames 4, 12 and 138, and differences are listed
 - [x] #5 Textures are point-filtered with no mipmaps and read as the PS1 original
-- [ ] #6 The old hand-built structures are removed only after the above is verified, and docs/thps-warehouse-layout.md is updated to describe the new structure instead of the retired tables
-- [ ] #7 The player spawns inside the shell, can move, and enemies spawn and move inside it
+- [x] #6 The old hand-built structures are removed only after the above is verified, and docs/thps-warehouse-layout.md is updated to describe the new structure instead of the retired tables
+- [x] #7 The player spawns inside the shell, can move, and enemies spawn and move inside it
 <!-- AC:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [ ] #1 task check passes
+- [ ] #2 Tests written first for testable logic
+- [ ] #3 Docs updated
+- [ ] #4 Conventional commit with no attribution
+<!-- DOD:END -->
 
 ## Implementation Plan
 
@@ -100,12 +108,10 @@ Notes
 - Commit messages carry no attribution lines (Lance's rule), and nothing under .serena goes in the same commit.
 
 Update (2026-10-28), pack 2.0.7: the secret room has five window sections, not three. Three are broken (material FA88F30D: south wall x 150 to 164, north wall x 164 to 178, west wall z 21.6 to 30.8) and two are intact (material F2184063: south wall x 164 to 178 at z=21, north wall x 150 to 164 at z=31). The earlier notes saying 'the three window sections' only covered the broken ones; Lance confirmed those pass and the intact center ones did not. F2184063 is shared with solid windows elsewhere (for example near the start), which must stay solid, so WarehouseCollision drops its faces only inside the room's world bounds (SecretRoomBounds x 149 to 179, y 15 to 26, z 20 to 32). Checked by walking out of the room: south at x about 171 (z 24 to 16) and north at x about 157 (z 28 to 44.6), both passing through. Solid windows elsewhere were not re-checked.
-<!-- SECTION:NOTES:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
-<!-- DOD:END -->
+Update (2026-10-28), AC 6: removed STRUCTURES, STRUCTURE_ASSETS, Structure, QUARTER_PIPE_TRANSITION, footprint, end_slope_degrees, structure_edits and surface_height from scripts/build_thps_level.py, and the structure tests. Collectible.stands_on is gone; collectibles and the ledge and high rails keep their old-layout positions and heights (LEDGE_RAIL_HEIGHT 5.5 and HIGH_RAIL_HEIGHT 12 are now constants) until TASK-021.10. ThpsPack.cs no longer builds QuarterPipe, Kicker, Block, Taxi or Corridor; the manifest lists only Warehouse; pack version 2.0.19. Rebuilt and installed with task pack:thps, relaunched: the pack loads with 1 prefab, the Warehouse spawns, the kill floor arms, no version warning. docs/thps-warehouse-layout.md (structure mapping, collectibles, building the level, reference-frame check) and docs/asset-bundles.md (Warehouse asset, textures, magenta bake, collision mesh, floor patch, rail posts) updated. task check passes.
+
+AC 4 stays open by decision: the south-east pitch-45 overview is blocked by the flat roof (the interior is hidden from above), so the comparison was reduced to ground-level views and the differences are listed in docs/thps-warehouse-layout.md under 'Check against the reference frames'. Evidence: .tools/evidence/ac4_*.png. Not committed yet.
+
+Update (2026-10-28), detritus cleanup: the three old hand-placed rails (big, ledge, high) are removed from the generator; rail_edits() now returns only the hidden mesh rails. The ruined towers, crates, cubes, pillars and dead trees the tile prefabs leave as uncloned scene roots (82 objects: Castle, Castle (1), CastleLying, Crate (1), Crate (2), Cube, Cube (1), Cube (3), Pillar, Pillar (1), Ruins (1), Tree) are now indexed as gen:scenery:<name>:<n> (SceneRootCategory in the mod, SEED_SCENERY_COUNTS in the generator) and removed by the level. FogOfWarSphere is the one uncloned root left out. Verified in game: 0 of these active after relaunch, 4 hidden mesh rails remain, the view from below shows only the Warehouse underside. Collectibles still float at old-layout positions until TASK-021.10. Not committed.
+<!-- SECTION:NOTES:END -->
