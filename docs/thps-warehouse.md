@@ -297,11 +297,69 @@ Rails named in the guide: the big rail (M15); the short rail on the ledge by the
 - **Props**: orange cones, orange-and-white A-frame barricades, wire or mesh cage panels, orange safety fence (55), pipes, a High Voltage sign above one ramp (122).
 - **Lighting**: bright shafts of sun from the window wall on a dim, dusty interior. Frame 188 and frame 24 show the contrast.
 
+## Extracted game data
+
+The mesh, textures and collectible positions come from the USA PS1 disc (SLUS-00860, raw MODE2/2352 `.bin`, sha256 `f1398cd1...`). Nothing ripped is committed: the disc image lives in `tools/thps1/` and every output in `.tools/thps1/`, both gitignored.
+
+### Rerunning the extraction
+
+1. Download JayFoxRox/thps2-tools (MIT) into its own directory. The scripts used were `common.py` (sha256 `4932af48...`), `convert-psx.py` (`059ba8c7...`) and `disassemble-trg.py` (`566db4a8...`); the download was not a git checkout, so these hashes are the pin.
+2. Run `uv run --with pillow scripts/thps1_extract.py --disc "tools/thps1/Tony Hawk's Pro Skater.bin" --converter-dir <thps2-tools dir>`. Pillow 13.0.0 and Python 3.13 were used.
+3. The script reads `CD.HED` and `CD.WAD` from the ISO, cuts out `skware.psx` (mesh), `skware_l.psx` (textures) and `skware_t.trg` (nodes), converts them with a patched copy of `convert-psx.py`, and writes `.tools/thps1/warehouse/`: `warehouse.obj`, `warehouse.mtl`, 99 texture PNGs and `warehouse_nodes.json`.
+
+`scripts/thps1_extract.py` is covered by `tests/test_thps1_extract.py`; run it through `task scripts:test`.
+
+### Format notes
+
+- `CD.HED` is a list of NUL-terminated names padded to 4 bytes, each followed by a u32 offset and a u32 size into `CD.WAD`, ended by a `0xFF` byte. 669 entries.
+- The level is a family of files: `skware.psx` is the mesh (252 objects, 288 models, no textures), `skware_l.psx` is the same container with no objects and only the texture section (99 textures, 72 4bpp and 25 8bpp palettes), `skware_t.trg` is the node and script data. `level.pre` is a bundle of interface bitmaps, not level textures.
+- Texture names are u32 hashes shared between `skware.psx` (face texture indices) and `skware_l.psx` (pixel data). Every one of the 80 materials the mesh uses has a texture.
+- THPS1 textures align only the width (4 pixels at 4bpp, 2 at 8bpp). `convert-psx.py` also rounds the height up to a multiple of 4 and loses sync at the first texture with an odd height (54x54 at 4bpp). The script patches `aligned_height` to the true height in a copy; with it every texture offset lands exactly.
+- Magenta in the PNGs is the PS1 transparency key.
+- Face UVs are u8 pixel coordinates. The script divides by the texture size and flips v, so the OBJ's UVs run past 0..1 (u up to 6.4, v down to -12) wherever a small texture tiles. Import with repeat wrapping.
+- Positions in the nodes are s19.12 fixed point divided by 4096, the same unit as the OBJ. y is negative upward. Object positions in the mesh are s7.24, and vertices are s3.12.
+- The `thps1_file` flag in `disassemble-trg.py` only changes a TrickOb branch this level never reaches; output is identical with it on.
+
+### Collectible nodes
+
+All positions are (x, y, z) in OBJ units. `warehouse_nodes.json` also holds the node index of each.
+
+| Item | Position |
+| --- | --- |
+| S | (0.829, -0.104, 2.662) |
+| K | (1.620, -0.255, 3.481) |
+| A | (1.873, -0.104, 2.962) |
+| T | (1.893, -0.232, 2.297) |
+| E | (1.021, -0.152, 1.383) |
+| Tape | (2.238, -0.251, 2.297) |
+| 100 north | (1.893, -0.255, 1.632) |
+| 100 east | (1.395, -0.255, 1.632) |
+| 100 south | (0.921, -0.255, 3.234) |
+| 100, 200, 500 cluster | (1.444, -0.386, 0.916), (1.520, -0.386, 0.916), (1.594, -0.386, 0.916) |
+| Box pile (node 43) | (2.023, -0.381, 0.924) |
+| Box pile (node 107) | (0.896, -0.138, 1.346) |
+| Box pile (node 109) | (0.616, -0.078, 2.140) |
+| Box pile (node 111) | (1.318, -0.138, 3.188) |
+| Box pile (node 113) | (2.460, -0.078, 2.844) |
+
+- The box piles are not pickups. They are the five Baddy nodes whose script ends in a goal counter; debris nodes sit within about 0.05 units of three of them. The 45 `Crate` nodes are breakable props (glass, panels, signs), not the wooden crates.
+- The 100, 200 and 500 cluster is real and is not marked on the items map.
+
+### Cross-check against the items map
+
+A least-squares affine fit of the five letters, the tape and the three 100s to their pixel positions on `tools/thps_warehouse_items_map.png` leaves 5 to 32 px of error (the map labels sit beside the items). It gives about 255 px per unit along x and 261 along z. The five pile nodes project to (708,167), (810,453), (678,611), (311,612) and (172,380), each 16 to 34 px from a different one of the five red circles at (698,155), (790,457), (695,600), (330,614) and (199,401). The match is one to one with nothing left over. Mismatches: the cluster of three bonus pickups has no marker on the map, and the largest single error is K at 32 px.
+
+### Unit calibration
+
+The skater (`hawk.psx`) is 0.844 units tall and the taxi (`c_taxi.psx`) 2.53 long, which both give about 2 m per unit, but at that scale the Warehouse (2.0 by 3.1 units) would be 4 by 7 m. The skater and vehicle models are therefore not in the level's unit and cannot be used as the ruler. The calibration anchor is the half pipe, measured on the mesh at its centre line (x = 2.018): the flat floor runs from z 2.218 to z 2.376 (0.158 units), the coping lines are at z 2.075 and z 2.519 (0.444 units apart), and each transition is 0.135 units tall.
+
+One unit is taken as 18 m, from the 0.444 unit coping-to-coping width equal to 8 m. That makes the transitions 2.4 m tall (the frames suggest 2.5-3 m) and the flat floor 2.8 m wide, and the room about 36 m by 56 m, larger than the 20-25 m by 14-17 m read from the map. Reading the 8 m as the flat floor alone would give about 51 m per unit and 6.8 m transitions, which contradicts the frames. This is a single anchor and low confidence; the skater, taxi and cardboard pieces cannot cross-check it because the skater and vehicle models are in a different unit from the level.
+
 ## Unresolved
 
 - **Walls and headings**: the map defines its own headings. The door wall, window wall and graffiti brick corner are not placed on it, since the south and east sides are cut away. The map's "SKATEBOARDING" wall is not confirmed to be the frames' sign wall.
 - **Room dimensions**: the 20-25 m by 14-17 m extent comes from one anchor (the half pipe flat at about 8 m) and is low confidence. The height of the raised north-east block and of every wall is not shown.
-- **Box pile numbering**: the guide's five piles cannot be matched one to one to the five circles. R1 fits guide piles 2 and 3, R2 and R3 both fit pile 4, and R5 sits in shadow under the north-east block.
+- **Box pile numbering**: the extracted pile nodes match the five map circles one to one, but the guide's pile numbers (1 to 5 in its text) are not matched to them. R1 fits guide piles 2 and 3, R2 and R3 both fit pile 4, and R5 sits in shadow under the north-east block.
 - **Floating icon heights**: all icons are drawn above their floor position by an unknown height, so ground positions and heights come from the guide text only.
 - **Start position and roll-ins**: the blue start arrow is on the raised north-east block, and the guide's "left" and "right" roll-ins are not matched to the two lanes with confidence. The function of the block (roof, ramp or platform) is not shown.
 - **Dark pit M13**: unidentified; it may be a hollow, a dark ramp or a drain.
