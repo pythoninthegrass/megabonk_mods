@@ -31,7 +31,8 @@ SLOPE_NONE = 0
 GENERATED_SPAWN_CELL = (10, 7)
 BOSS_SPAWN_LOCAL = (150, 167)
 BOSS_SPAWN_Y = 15.6
-BOSS_SPAWN_SCALE = 0.5
+BOSS_SPAWN_SCALE = 0.4
+BOSS_SPAWN_YAW = 90.0
 BOSS_HIDDEN_CHILDREN = ["BottomPiece", "Collider"]
 PLAYER_START = [92, 30, -69]
 
@@ -241,17 +242,17 @@ def clutter_removals() -> list[dict]:
     return [edit("object.remove", {}, target) for target in ids]
 
 
-def transform(x: float, y: float, z: float, scale: float = 1.0) -> dict:
+def transform(x: float, y: float, z: float, scale: float = 1.0, yaw: float = 0.0) -> dict:
     return {
         "position": {"x": x, "y": y, "z": z},
-        "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+        "rotation": {"x": 0.0, "y": yaw, "z": 0.0},
         "scale": {"x": scale, "y": scale, "z": scale},
     }
 
 
 def spawn_moves() -> list[dict]:
     bx, bz = local_to_world(*BOSS_SPAWN_LOCAL)
-    payload = {"newTransform": transform(bx, BOSS_SPAWN_Y, bz, BOSS_SPAWN_SCALE), "hiddenChildren": BOSS_HIDDEN_CHILDREN}
+    payload = {"newTransform": transform(bx, BOSS_SPAWN_Y, bz, BOSS_SPAWN_SCALE, BOSS_SPAWN_YAW), "hiddenChildren": BOSS_HIDDEN_CHILDREN}
     return [edit("object.move", payload, "gen:object:BossSpawner:0000")]
 
 

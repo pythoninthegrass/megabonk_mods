@@ -375,7 +375,11 @@ def test_boss_spawner_sits_inside_the_hanging_box_above_the_main_half_pipe() -> 
 
 def test_boss_spawner_is_scaled_down_to_fit_inside_the_hanging_box() -> None:
     scale = payload(boss_move())["newTransform"]["scale"]
-    assert scale == {"x": 0.5, "y": 0.5, "z": 0.5}
+    assert scale == {"x": 0.4, "y": 0.4, "z": 0.4}
+
+
+def test_boss_spawner_arch_faces_along_the_hanging_box() -> None:
+    assert payload(boss_move())["newTransform"]["rotation"] == {"x": 0.0, "y": 90.0, "z": 0.0}
 
 
 def test_boss_spawner_hides_the_pillar_mesh_and_its_collider() -> None:
