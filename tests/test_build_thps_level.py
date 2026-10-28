@@ -361,7 +361,7 @@ def test_pack_version_is_the_warehouse_release() -> None:
 
 
 def test_player_starts_at_tonys_chosen_position() -> None:
-    assert b.build_level()["playerStart"] == [92, 30, -69]
+    assert b.build_level()["playerStart"] == [109, 38, -120]
 
 
 def boss_move() -> dict:
