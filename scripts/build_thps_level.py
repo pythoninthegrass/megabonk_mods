@@ -51,12 +51,14 @@ MESH_RAIL_CATALOG_ID = "interactable/rail/0"
 # rail/0 is a straight bar this long at scale 1.
 RAIL0_LENGTH = 28
 MESH_RAIL_HEIGHT = -1.25
+# Height of rail/0's bar above its pivot per unit of scale, from the first mesh rail: bar centre 3.3 at pivot -1.25 and scale 1.786.
+RAIL0_BAR_HEIGHT = 2.55
 MESH_RAILS = (
     ((75, MESH_RAIL_HEIGHT, 28.13), 90.0, 1.786),
-    ((78.3, MESH_RAIL_HEIGHT, 56.85), 310.5, 0.352),
+    ((78.3, 3.3 - RAIL0_BAR_HEIGHT * 0.352, 56.85), 310.5, 0.352),
     # The rod the SKATEBOARDING banner hangs from, then the rail on the deck at the east wall.
-    ((129.64, 22.88, 120.84), 0.0, 0.954),
-    ((175.66, 3.88, 61.295), 90.0, 0.955),
+    ((129.64, 27.43 - RAIL0_BAR_HEIGHT * 0.954, 120.84), 0.0, 0.954),
+    ((175.66, 8.43 - RAIL0_BAR_HEIGHT * 0.955, 61.295), 90.0, 0.955),
 )
 
 # The half pipe lips reach 85 degrees, past the game's 45 degree slope limit.

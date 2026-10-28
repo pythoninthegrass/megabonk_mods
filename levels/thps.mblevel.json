@@ -5859,17 +5859,17 @@
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":78.3,\"y\":-1.25,\"z\":56.85},\"rotation\":{\"x\":0.0,\"y\":310.5,\"z\":0.0},\"scale\":{\"x\":0.352,\"y\":0.352,\"z\":0.352},\"hidden\":true}"
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":78.3,\"y\":2.4024,\"z\":56.85},\"rotation\":{\"x\":0.0,\"y\":310.5,\"z\":0.0},\"scale\":{\"x\":0.352,\"y\":0.352,\"z\":0.352},\"hidden\":true}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":129.64,\"y\":22.88,\"z\":120.84},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":0.954,\"y\":0.954,\"z\":0.954},\"hidden\":true}"
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":129.64,\"y\":24.9973,\"z\":120.84},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":0.954,\"y\":0.954,\"z\":0.954},\"hidden\":true}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":175.66,\"y\":3.88,\"z\":61.295},\"rotation\":{\"x\":0.0,\"y\":90.0,\"z\":0.0},\"scale\":{\"x\":0.955,\"y\":0.955,\"z\":0.955},\"hidden\":true}"
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":175.66,\"y\":5.99475,\"z\":61.295},\"rotation\":{\"x\":0.0,\"y\":90.0,\"z\":0.0},\"scale\":{\"x\":0.955,\"y\":0.955,\"z\":0.955},\"hidden\":true}"
     },
     {
       "opType": "object.place",
