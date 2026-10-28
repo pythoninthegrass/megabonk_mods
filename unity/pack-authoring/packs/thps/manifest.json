@@ -2,6 +2,6 @@
   "id": "thps",
   "name": "THPS Warehouse",
   "author": "pythoninthegrass",
-  "version": "2.0.10",
+  "version": "2.0.11",
   "assets": ["QuarterPipe", "Kicker", "Block", "Taxi", "Corridor", "Warehouse"]
 }

@@ -130,6 +130,14 @@ Authoring rules:
 
 On the current mesh the pass lifts 195 of 1345 faces, at most 3 levels deep. The floor grime decals are not part of this pass: they sit 0.174 world units above the floor faces, and the floor patch sits under the floor plane on purpose.
 
+### Warehouse roof
+
+The extracted PS1 level has no roof, truss ceiling or tall walls: the highest visible face is 0.81 OBJ units (about 64.7 world units), and the 297 faces the converter skips with base flag `0x80` are collision-only vertical quads, none of them horizontal. `ThpsPack.AddRoof` therefore adds a roof, so a player with two Feathers cannot jump out of the shell.
+
+`WarehouseRoof.Quads` (`Assets/Editor/WarehouseRoof.cs`, plain C# with no Unity types so `tests/MegabonkLevels.Tests` compiles it directly) returns four inward-facing wall skirts from the lowest wall top (`LowestWallTop`, 0.68 mesh units) up to the roof, and a downward-facing flat roof at `RoofWorldHeight` (120). The quads sit `RoofInset` (0.003 mesh units) inside the footprint so they do not overlap the original outer faces. They go on the flat untextured material, and the Warehouse collision mesh includes them, so the roof and skirts are solid on the ground layer. From outside they are culled, so the shell looks open from above.
+
+The height comes from measured reach. With two Feathers the dev harness's Feathers stacks, a three-jump chain from a standing surface rises about 56 units (floor centre y 18.6 to apex 72.8, sampled every 0.5 s, so the true figure may be a little higher). The highest surface a player can stand on is at world y 55 (an untextured slab spanning the room's width at the south end), plus the capsule top (about 2) gives about 113; the roof sits at 120 for margin. Measured with the pack installed: teleported to y 100 and jumping three more times, the player's centre peaks at 118.1 and falls, where a free chain would reach about 147. `RoofWorldHeight_ClearsHighestStandableSurfacePlusTwoFeatherReach` in the tests guards the numbers.
+
 Measured in the game with the pack: a player teleported 4 units above a flat top settles at the top plus 1.925 (the capsule centre height), so every `Block` top, the taxi cabin and the corridor floor hold the player. On a ramp the player lands on the surface and slides down it when the slope is steep, and rests on shallow slopes; nothing fell through. A teleport to only 1 unit above a surface leaves the player hovering at that height with no gravity, so test support with a drop of several units.
 
 ## Not yet established

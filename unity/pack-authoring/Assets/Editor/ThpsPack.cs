@@ -24,6 +24,8 @@ public static class ThpsPack
     // The two windows at the top of the starting slope, with the half pipe behind them.
     static readonly float[] StartSlopeWindowBounds = { 80f, 140f, 27f, 38f, -75f, -72f };
     static readonly float[][] OpenedWindowBounds = { SecretRoomBounds, StartSlopeWindowBounds };
+    // Mesh-space height of the lowest wall top, where the roof skirts start, and how far they sit inside the footprint so they do not overlap the original outer faces.
+    const float LowestWallTop = 0.68f, RoofInset = 0.003f;
     const string DefaultWarehouseSource = ".tools/thps1/warehouse";
 
     // The PS1 transparency key in the extracted PNGs; the pack's shader is opaque, so it is baked to a dark glass colour.
@@ -257,6 +259,7 @@ public static class ThpsPack
 
         RemoveRailLeftovers(vertices, trianglesByMaterial);
         AddRailPosts(vertices, vertexUvs, trianglesByMaterial);
+        AddRoof(vertices, vertexUvs, trianglesByMaterial, bounds.min.x - origin.x, bounds.max.x - origin.x, bounds.min.z - origin.z, bounds.max.z - origin.z);
         usedMaterials = trianglesByMaterial.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
         var mesh = new Mesh { name = "Warehouse", vertices = vertices.ToArray(), uv = vertexUvs.ToArray(), subMeshCount = usedMaterials.Count };
         for (var i = 0; i < usedMaterials.Count; i++)
@@ -286,6 +289,25 @@ public static class ThpsPack
             {
                 vertices.Add(new Vector3(corner.Item1, -FloorPatchDepth, corner.Item2));
                 vertexUvs.Add(new Vector2(corner.Item1 * FloorUvScaleU + FloorUvOffsetU, corner.Item2 * FloorUvScaleV + FloorUvOffsetV));
+            }
+
+            triangles.AddRange(new[] { first, first + 1, first + 2, first, first + 2, first + 3 });
+        }
+    }
+
+    // Closes the shell: wall skirts from the lowest wall top up to a flat roof, on the flat untextured material, so a two-feather player cannot jump out.
+    static void AddRoof(List<Vector3> vertices, List<Vector2> vertexUvs, Dictionary<string, List<int>> trianglesByMaterial, float minX, float maxX, float minZ, float maxZ)
+    {
+        if (!trianglesByMaterial.TryGetValue(UntexturedMaterial, out var triangles))
+            trianglesByMaterial[UntexturedMaterial] = triangles = new List<int>();
+        var roofY = (WarehouseRoof.RoofWorldHeight - WarehouseLift) / WarehouseScale;
+        foreach (var quad in WarehouseRoof.Quads(minX, maxX, minZ, maxZ, LowestWallTop, roofY, RoofInset))
+        {
+            var first = vertices.Count;
+            foreach (var corner in quad)
+            {
+                vertices.Add(new Vector3(corner.X, corner.Y, corner.Z));
+                vertexUvs.Add(Vector2.zero);
             }
 
             triangles.AddRange(new[] { first, first + 1, first + 2, first, first + 2, first + 3 });
