@@ -118,6 +118,17 @@ These are the `COLLECTIBLES` table in `scripts/build_thps_level.py`. Positions a
 - Box pile R5 stands on the west lane's low end at ground level instead of "under the north-east block"; the lane cell slopes one level over its 40 units, so an item on it uses `ground_height` (a slope of 20 units per 40, checked in game: the player settled at the predicted height).
 - `forest/shrines/3` is the `ShadyGuy` prefab, the merchant NPC, not a shrine, and `forest/shrines/0` to `2` and `4` are the Challenge, Magnet, Maoi and Cursed shrines. The mapping stays one catalog entry per letter.
 
+## Windows opened to the player
+
+The pack builds the Warehouse collision mesh without the faces of some windows (`ThpsPack.cs`, `SaveCollisionMesh`). The `FA88F30D` windows are dropped by material. The `F2184063` windows share their material with solid windows elsewhere, so only faces whose world position lies inside one of the `OpenedWindowBounds` boxes (x, y, z min and max) are dropped, and the rendered mesh is untouched:
+
+| Window | Bounds |
+| --- | --- |
+| Secret room, intact sections | x 149 to 179, y 15 to 26, z 20 to 32 |
+| Top of the starting slope, two panes at z -73.3 | x 80 to 140, y 27 to 38, z -75 to -72 |
+
+The half pipe behind the starting slope windows is reached through them. Other `F2184063` windows keep their collision.
+
 ## Open questions and risks
 
 - **Tape reach is unverified.** The corridor floor is at 13, above the 7.8 jump apex, and the harness can teleport the player but not move or jump it. The route is the lip of M6 (12 high, at x 24-44) with a running jump across the 5 unit gap to the corridor's east side (x 19), or the half pipe lip. Nobody has played it; if it fails the tape is the only collectible that needs a new ramp.
@@ -160,10 +171,20 @@ The extracted Warehouse mesh carries its own rail: a thin flat bar at world x 75
 
 - **Bar kept.** The bar stays as extracted. A visible `rail/0` laid over it stacked on the bar, and `rail/1` is a sloped rail, so neither replaces it.
 - **Posts.** `ThpsPack.cs` (`AddRailPosts`, `RailPosts`) adds seven dark box posts under the bar, five along the straight run and two on the bend. The posts are part of the mesh and its collision.
-- **Grind.** `MESH_RAILS` in `scripts/build_thps_level.py` lays two hidden `interactable/rail/0` objects along the bar, one over the straight run (yaw 90, scale 1.786, centre z 28.13) and one over the bend (yaw 310.5, scale 0.352), at height -1.25 so the game rail's bar sits at the mesh bar's height. They are placed with the `hidden` flag, described in `level-format.md`, so the game rail's collider and `Rail` component stay live and nothing draws.
+- **Grind.** `MESH_RAILS` in `scripts/build_thps_level.py` lays two hidden `interactable/rail/0` objects along the bar, one over the straight run (yaw 90, scale 1.786, centre z 28.13) and one over the bend (yaw 310.5, scale 0.352), at pivot heights -1.25 (run) and 2.41 (bend), the bar's centre height of 3.3 minus 2.55 times the scale, so the game rail's bar sits at the mesh bar's height. They are placed with the `hidden` flag, described in `level-format.md`, so the game rail's collider and `Rail` component stay live and nothing draws.
 - **Alignment.** Measured from top-down and side screenshots under `.tools/evidence/` (`rail_align_top2.png`, `rail0_top.png`, `rail0_side.png`, `rail_hidden_top.png`).
 - **Slide check.** Dropping the player onto the bar from above, at (75, 9, 30), carried it along the bar: samples at x 75.006 and 74.994 with z 47.8 then 57.9. The bend was not confirmed to carry the player round the corner.
 - **Open.** The rail does not activate on its own; like the game's other rails it needs the right approach and timing. Whether it needs a different approach angle, speed or jump timing to catch is not investigated.
+
+### Mesh rails near (129, 27, 121) and (176, 8, 61)
+
+The Warehouse mesh has two more bars on the same material (`A53322CF`), handled the same way as the first:
+
+- **Wall rod, x 116.3 to 143.0 at z 120.8, height 27.3 to 27.55.** The rod the SKATEBOARDING banner hangs from, with a short bracket at each end running back to the wall (z 120.8 to 123.9). The brackets are real supports and are kept, so this rod gets a hidden game rail and no posts.
+- **Deck rail, z 47.9 to 74.7 at x 175.66, height 8.31 to 8.56.** Three posts (the two ends and the middle) in `RailPosts`, up from the floor to the bar. A hidden game rail lies along it.
+- **Hidden rails.** The third and fourth entries of `MESH_RAILS`: the wall rod at yaw 0, scale 0.954, centre (129.64, 24.997, 120.84), and the deck rail at yaw 90, scale 0.955, centre (175.66, 5.995, 61.295). Height is the bar's centre height minus 2.55 times the scale (`RAIL0_BAR_HEIGHT`), since the game rail's bar sits higher above its pivot the larger the scale. The first rail's 4.55 offset only fits its 1.786 scale; applying it to these two put the grind about 2 units under the visible bar. Checked in the game: the grind sparks and the player sit on both visible bars.
+- **Floating leftovers.** Each post position on the first and deck rails carries a small plate (about 0.46 by 0.25) on the rail material, well below the bar (height 1.5 to 1.8 on the first rail, 5.7 to 6.1 on the deck rail). They are what is left of the original posts and float once the posts are missing. `RailLeftoverBounds` in `ThpsPack.cs` drops the rail-material faces inside two boxes around them; the bars are far above those boxes and are untouched. The wall rod has no such plates.
+- **Evidence.** `.tools/evidence/task-021.19-rail1-before.png` and `-after.png`, `-rail2-before.png`, `-rail3-after.png`. The thin diagonal line left beside the first rail's middle post in the after shot is not on the rail material and was not removed.
 
 ### Check against the reference frames
 
