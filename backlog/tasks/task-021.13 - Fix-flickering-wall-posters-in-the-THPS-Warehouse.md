@@ -1,7 +1,7 @@
 ---
 id: TASK-021.13
 title: Fix flickering wall posters in the THPS Warehouse
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-28 04:12'
 updated_date: '2026-10-28 05:09'
@@ -51,6 +51,8 @@ Cause (confirmed from warehouse.obj, not only the video): faces lie exactly in t
 Fix: CoplanarLayering.Separate (Assets/Editor/CoplanarLayering.cs) lifts the on-top face of each coplanar, same-facing, overlapping pair along its normal by 0.0005 mesh units per level; the smaller face goes on top, the later OBJ face on ties. Called from ThpsPack.ParseWarehouseObj. On the real mesh it lifts 195 of 1345 faces, at most 3 levels. Pack version 2.0.8 in manifest.json, build_thps_level.py and levels/thps.mblevel.json. Lance flew the rebuilt pack in game and confirmed every poster and the plank piles no longer flicker. Docs: 'Warehouse mesh import' in docs/asset-bundles.md.
 
 Evidence: before images from the recording (flicker diff map, crops, contact sheets) and one after screenshot are in .tools/evidence/task-021.13/. The after set is a single live view, not a matched pair at the flicker spots. Textures are untouched by the pass, so point filtering and no mipmaps are as before.
+
+Closed by Lance with AC #5 only partly met: the before images and one live after view are saved, but there is no matched before/after pair at the flicker spots.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
