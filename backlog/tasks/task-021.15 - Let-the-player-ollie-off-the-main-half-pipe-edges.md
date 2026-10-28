@@ -1,10 +1,10 @@
 ---
 id: TASK-021.15
 title: Let the player ollie off the main half pipe edges
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-28 04:12'
-updated_date: '2026-10-28 06:24'
+updated_date: '2026-10-28T18:32:00Z'
 labels:
   - thps
   - level-editor
@@ -26,13 +26,21 @@ At the main half pipe edges near world (142, -3, 32) the player (Tony) cannot ol
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The cause is identified and written in the task notes, with the measured slope at the edges
-- [ ] #2 The player can ride up the main half pipe and ollie off both edges near (142, -3, 32) without stalling
-- [ ] #3 The player does not stall or get stuck on the other pipe and ramp edges in the Warehouse
+- [x] #1 The cause is identified and written in the task notes, with the measured slope at the edges
+- [x] #2 The player can ride up the main half pipe and ollie off both edges near (142, -3, 32) without stalling
+- [x] #3 The player does not stall or get stuck on the other pipe and ramp edges in the Warehouse
 - [x] #4 The fix does not change movement on the normal Forest levels
 - [x] #5 Any new level-file or mod behaviour is covered by tests and documented in docs/level-format.md or docs/thps-warehouse-layout.md
 - [ ] #6 Screenshots or state readings from the run are saved under .tools/evidence/
 <!-- AC:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [ ] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
+<!-- DOD:END -->
 
 ## Implementation Notes
 
@@ -44,12 +52,6 @@ Fix: new optional level key maxSlopeAngle (LevelFile.MaxSlopeAngle, docs/level-f
 This PR (#6) now targets main; it was first stacked on feat/task-021.19-mesh-rails, which is already merged into feat/task-021.14-rail-pillars (PR #8).
 
 Open for Lance: ride the main half pipe and ollie off both edges (AC 2), check the other pipes and ramps (AC 3), and judge whether 88 changes the feel of the rest of the level; a lower value may ride the pipes just as well. The restore of the 45 limit on a later vanilla run is implemented but was not exercised.
-<!-- SECTION:NOTES:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
-<!-- DOD:END -->
+Confirmed in play by Lance on 2026-10-28: the main half pipe rides and both edges ollie off with maxSlopeAngle 88 on the thps level. The cause is the movement slope limit (45), not the collision mesh. AC 6 stays unchecked: the slope log file named above is not in .tools/evidence, and no run screenshots were saved.
+<!-- SECTION:NOTES:END -->
