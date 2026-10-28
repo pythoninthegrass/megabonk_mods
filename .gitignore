@@ -313,3 +313,5 @@ tools/thps1_100_playthrough.mkv
 tools/thps1/
 unity/*/Assets/Thps/
 unity/*/Assets/Thps.meta
+*.flac
+*.mp3
