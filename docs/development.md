@@ -229,6 +229,21 @@ task game:editor -- levels/other.mblevel.json     # a different level
 
 Process detection uses the standard library only: `ps -axo pid=,command=` on macOS and Linux, `tasklist` on Windows (not exercised on a Windows host). A process counts as the game only when its command line starts with the game executable, `...\Megabonk.exe` under Wine or `Megabonk.x86_64` natively. Helpers that mention the executable, such as `winewrapper.exe`, `UnityCrashHandler64.exe`, `winemenubuilder.exe` and a shell running the launch command, are ignored. If `quit` times out because the game is hung, end it by the pid it printed.
 
+### Loading the THPS level
+
+`levels/thps.mblevel.json` is generated, and its Warehouse mesh lives in the `thps` pack, so a launch needs both.
+
+```sh
+uv run scripts/build_thps_level.py                 # rewrites levels/thps.mblevel.json
+task mod:build                                     # only when the C# changed
+task pack:install PACK=thps                        # needs .tools/bundles/<platform>/thps
+task game:editor -- levels/thps.mblevel.json
+```
+
+The bundle is built by `task pack:thps` from `.tools/thps1/warehouse/`, which is extracted from the PS1 disc image and gitignored. A machine without the disc and the extraction can copy a built bundle from one that has them instead: `rsync -av <host>:git/megabonk_mods/.tools/bundles/windows/thps{,.manifest} .tools/bundles/windows/` (`linux` on a native Linux host), then `task pack:install PACK=thps`. Rebuild on the source machine first if `unity/pack-authoring/Assets/Editor/ThpsPack.cs` changed since that bundle was built.
+
+A missing pack does not fail the load. The level opens with a placeholder at the Warehouse position and the log shows `Packs: 'bundle:thps/Warehouse': pack 'thps' is not installed; using a placeholder.` Packs load once per session, so install the pack before the relaunch.
+
 ### Launching from an automated session
 
 To know when the mod is ready for commands, poll `MelonLoader/Latest.log` for the line `DevHarness: enabled` rather than for the process existing: MelonLoader takes several seconds to load after the process starts, and `Latest.log` is not truncated until that point, so an early read can see a stale line from the previous run. Run that poll as a background job (`run_in_background`, or `Monitor` as a self-ending loop) and wait for its own completion notice instead of a foreground `sleep`, which this harness blocks.
