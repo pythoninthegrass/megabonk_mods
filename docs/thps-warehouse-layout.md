@@ -111,6 +111,7 @@ Collectibles stay as normal Megabonk items. The Forest palette has `interactable
 
 These are the `COLLECTIBLES` table in `scripts/build_thps_level.py`. Positions are the map's floating-icon positions mapped through the low-confidence pixel-to-metre conversion, nudged where the compressed structure layout (see "Building the level") moved the feature they belonged to:
 
+- The chest, shrine and merchant prefabs are authored lying down (the prefab asset's euler X is 270), so a placement at rotation 0 renders them on their side. Items are placed at X 270, and the three lane items at 270 minus the 26.6 degree lane slope so they sit square to the ground.
 - Every item stands on its surface rather than floating about one player height above it. A shrine or chest hovering in the air has nothing to rest on, so the letters are reached by jumping onto the structure, not by an air trick.
 - R4 and the E shrine move onto the deck (the spec's E position at x 75 falls off the deck's west edge) and are split along it so they do not overlap.
 - Letter T moves from (27, 64), which is inside the M6 pipe, to the 3 unit gap between M4b and M6.

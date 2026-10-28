@@ -135,7 +135,11 @@ class Collectible(NamedTuple):
     z: float
     y: float
     stands_on: str | None = None
+    yaw: float = 0.0
 
+
+# Chest, shrine and merchant prefabs are authored lying down, so they stand up at pitch 270 (a lane tilts them back by its slope).
+UPRIGHT_PITCH = 270.0
 
 # Block-local positions; y is the surface the item stands on. Items on a lane cell use the lane's slope height.
 COLLECTIBLES = (
@@ -294,12 +298,18 @@ def surface_height(s: Structure) -> float:
     return s.base_y if s.asset == "Corridor" else s.base_y + s.rise
 
 
+def on_lane(z: float, x: float) -> bool:
+    lane_start = LANE_Z * TILE
+    return x < (LANE_X[-1] + 1) * TILE and lane_start <= z < lane_start + TILE
+
+
 def ground_height(z: float, x: float) -> float:
     """Ground height at a block-local point: the north lanes slope up one level, everything else is flat."""
-    lane_start = LANE_Z * TILE
-    if x < (LANE_X[-1] + 1) * TILE and lane_start <= z < lane_start + TILE:
-        return HEIGHT_STEP * (z - lane_start) / TILE
-    return 0.0
+    return HEIGHT_STEP * (z - LANE_Z * TILE) / TILE if on_lane(z, x) else 0.0
+
+
+def lane_slope_degrees(z: float, x: float) -> float:
+    return math.degrees(math.atan(HEIGHT_STEP / TILE)) if on_lane(z, x) else 0.0
 
 
 def collectible_edits() -> list[dict]:
@@ -312,7 +322,7 @@ def collectible_edits() -> list[dict]:
                 {
                     "catalogId": c.catalog_id,
                     "position": {"x": wx, "y": c.y, "z": wz},
-                    "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+                    "rotation": {"x": UPRIGHT_PITCH - lane_slope_degrees(c.z, c.x), "y": c.yaw, "z": 0.0},
                     "scale": {"x": 1.0, "y": 1.0, "z": 1.0},
                 },
             )

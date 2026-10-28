@@ -4,6 +4,8 @@ Self-test for scripts/build_thps_level.py.
 
 import build_thps_level as b
 import json
+import math
+import pytest
 from pathlib import Path
 
 
@@ -310,3 +312,19 @@ def test_build_level_includes_collectibles_after_the_clutter_removals() -> None:
     placed = [i for i, e in enumerate(edits) if e["opType"] == "object.place" and payload(e)["catalogId"] in ids]
     assert len(placed) == len(b.COLLECTIBLES)
     assert max(i for i, e in enumerate(edits) if e["opType"] == "object.remove") < min(placed)
+
+
+def test_collectibles_are_rotated_upright_because_the_prefabs_lie_on_their_side_at_zero() -> None:
+    for c, p in zip(b.COLLECTIBLES, collectible_places(), strict=True):
+        rot = p["rotation"]
+        on_lane = b.lane_slope_degrees(c.z, c.x) > 0
+        expected_pitch = b.UPRIGHT_PITCH - b.lane_slope_degrees(c.z, c.x)
+        assert rot["x"] == pytest.approx(expected_pitch), c.code
+        assert rot["z"] == 0, c.code
+        assert on_lane == (c.code in {"R5", "100N", "100E"}), c.code
+
+
+def test_lane_slope_is_the_lane_rise_over_the_tile_width() -> None:
+    assert b.lane_slope_degrees(100, 20) == pytest.approx(math.degrees(math.atan(b.HEIGHT_STEP / b.TILE)))
+    assert b.lane_slope_degrees(100, 100) == 0
+    assert b.lane_slope_degrees(40, 20) == 0

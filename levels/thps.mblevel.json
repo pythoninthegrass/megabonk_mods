@@ -5807,72 +5807,72 @@
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chest\",\"position\":{\"x\":28,\"y\":5.5,\"z\":-106},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chest\",\"position\":{\"x\":28,\"y\":5.5,\"z\":-106},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chest\",\"position\":{\"x\":81,\"y\":4,\"z\":-124},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chest\",\"position\":{\"x\":81,\"y\":4,\"z\":-124},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chest\",\"position\":{\"x\":118,\"y\":4,\"z\":-73},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chest\",\"position\":{\"x\":118,\"y\":4,\"z\":-73},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chest\",\"position\":{\"x\":106,\"y\":6,\"z\":-40},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chest\",\"position\":{\"x\":106,\"y\":6,\"z\":-40},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chest\",\"position\":{\"x\":40,\"y\":4,\"z\":-52},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chest\",\"position\":{\"x\":40,\"y\":4,\"z\":-52},\"rotation\":{\"x\":243.434948822922,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"forest/shrines/0\",\"position\":{\"x\":104,\"y\":0,\"z\":-100},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"forest/shrines/0\",\"position\":{\"x\":104,\"y\":0,\"z\":-100},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"forest/shrines/1\",\"position\":{\"x\":53,\"y\":0,\"z\":-138},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"forest/shrines/1\",\"position\":{\"x\":53,\"y\":0,\"z\":-138},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"forest/shrines/2\",\"position\":{\"x\":54,\"y\":5,\"z\":-114},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"forest/shrines/2\",\"position\":{\"x\":54,\"y\":5,\"z\":-114},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"forest/shrines/3\",\"position\":{\"x\":47,\"y\":0,\"z\":-79.5},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"forest/shrines/3\",\"position\":{\"x\":47,\"y\":0,\"z\":-79.5},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"forest/shrines/4\",\"position\":{\"x\":106,\"y\":6,\"z\":-32},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"forest/shrines/4\",\"position\":{\"x\":106,\"y\":6,\"z\":-32},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":31,\"y\":13,\"z\":-73},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":31,\"y\":13,\"z\":-73},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":51,\"y\":9.5,\"z\":-41},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":51,\"y\":9.5,\"z\":-41},\"rotation\":{\"x\":243.434948822922,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":76,\"y\":9.5,\"z\":-41},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":76,\"y\":9.5,\"z\":-41},\"rotation\":{\"x\":243.434948822922,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":102,\"y\":0,\"z\":-127},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":102,\"y\":0,\"z\":-127},\"rotation\":{\"x\":270.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     }
   ]
 }
