@@ -55,8 +55,9 @@ public class LevelFileTests
 
         var level = LevelFileSerializer.DeserializeWithMigration(json);
 
-        Assert.Equal(2, level.SchemaVersion);
+        Assert.Equal(LevelFile.CurrentSchemaVersion, level.SchemaVersion);
         Assert.Empty(level.Packs);
+        Assert.Null(level.Music);
     }
 
     [Fact]
@@ -75,8 +76,9 @@ public class LevelFileTests
 
         var level = LevelFileSerializer.DeserializeWithMigration(json);
 
-        Assert.Equal(2, level.SchemaVersion);
+        Assert.Equal(LevelFile.CurrentSchemaVersion, level.SchemaVersion);
         Assert.Equal(new Dictionary<string, string> { ["testpack"] = "1.2.3" }, level.Packs);
+        Assert.Null(level.Music);
     }
 
     [Fact]
@@ -164,6 +166,48 @@ public class LevelFileTests
     public void Equals_LevelsDifferingOnlyInMaxSlopeAngle_AreNotEqual()
     {
         Assert.NotEqual(SampleLevel(), SampleLevel() with { MaxSlopeAngle = 80f });
+    }
+
+    [Fact]
+    public void CurrentSchemaVersion_IsThree()
+    {
+        Assert.Equal(3, LevelFile.CurrentSchemaVersion);
+    }
+
+    [Fact]
+    public void RoundTrip_Music_Survives()
+    {
+        var level = SampleLevel() with { Music = "bundle:thps/Superman" };
+
+        var restored = LevelFileSerializer.DeserializeWithMigration(LevelFileSerializer.Serialize(level));
+
+        Assert.Equal("bundle:thps/Superman", restored.Music);
+        Assert.Equal(level, restored);
+    }
+
+    [Fact]
+    public void Deserialize_WithoutMusicKey_LeavesItNull()
+    {
+        var json = """{"schemaVersion":3,"gameBuildId":"1","map":1,"stageIndex":0,"tier":0,"seed":1,"packs":{},"edits":[]}""";
+
+        Assert.Null(LevelFileSerializer.DeserializeWithMigration(json).Music);
+    }
+
+    [Fact]
+    public void DeserializeWithMigration_V2WithoutMusic_MigratesToV3()
+    {
+        var json = """{"schemaVersion":2,"gameBuildId":"1","map":1,"stageIndex":0,"tier":0,"seed":1,"packs":{},"edits":[]}""";
+
+        var level = LevelFileSerializer.DeserializeWithMigration(json);
+
+        Assert.Equal(3, level.SchemaVersion);
+        Assert.Null(level.Music);
+    }
+
+    [Fact]
+    public void Equals_LevelsDifferingOnlyInMusic_AreNotEqual()
+    {
+        Assert.NotEqual(SampleLevel(), SampleLevel() with { Music = "bundle:thps/Superman" });
     }
 
     [Fact]

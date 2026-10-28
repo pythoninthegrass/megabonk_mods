@@ -16,6 +16,11 @@ public static class LevelFileSerializer
                 document["packs"] ??= new JsonObject();
                 return document;
             },
+            [2] = document =>
+            {
+                document["schemaVersion"] = 3;
+                return document;
+            },
         };
 
     private static readonly JsonSerializerOptions Options = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };

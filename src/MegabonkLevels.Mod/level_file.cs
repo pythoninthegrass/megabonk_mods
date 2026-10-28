@@ -30,9 +30,10 @@ public readonly record struct LevelFile(
     IReadOnlyList<EditOp> Edits,
     bool NoGrass = false,
     IReadOnlyList<float> PlayerStart = null,
-    float? MaxSlopeAngle = null)
+    float? MaxSlopeAngle = null,
+    string Music = null)
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     public bool Equals(LevelFile other) =>
         SchemaVersion == other.SchemaVersion
@@ -45,6 +46,7 @@ public readonly record struct LevelFile(
         && NoGrass == other.NoGrass
         && PlayerStartEquals(PlayerStart, other.PlayerStart)
         && MaxSlopeAngle == other.MaxSlopeAngle
+        && Music == other.Music
         && Edits.SequenceEqual(other.Edits);
 
     public override int GetHashCode() =>
