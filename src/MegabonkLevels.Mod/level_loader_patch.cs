@@ -97,7 +97,7 @@ public static class LevelLoaderPatch
         }
 
         SeedForcePatch.ForceLevelSeed(level.Seed);
-        LiveEditPatch.SetPendingEdits(level.Edits, level.NoGrass, level.PlayerStart);
+        LiveEditPatch.SetPendingEdits(level.Edits, level.NoGrass, level.PlayerStart, level.MaxSlopeAngle);
         CustomLevelState.MarkPendingStart();
 
         var runConfig = new RunConfig

@@ -142,6 +142,31 @@ public class LevelFileTests
     }
 
     [Fact]
+    public void RoundTrip_MaxSlopeAngle_Survives()
+    {
+        var level = SampleLevel() with { MaxSlopeAngle = 88f };
+
+        var restored = LevelFileSerializer.DeserializeWithMigration(LevelFileSerializer.Serialize(level));
+
+        Assert.Equal(88f, restored.MaxSlopeAngle);
+        Assert.Equal(level, restored);
+    }
+
+    [Fact]
+    public void Deserialize_WithoutMaxSlopeAngleKey_LeavesItNull()
+    {
+        var json = """{"schemaVersion":2,"gameBuildId":"1","map":1,"stageIndex":0,"tier":0,"seed":1,"packs":{},"edits":[]}""";
+
+        Assert.Null(LevelFileSerializer.DeserializeWithMigration(json).MaxSlopeAngle);
+    }
+
+    [Fact]
+    public void Equals_LevelsDifferingOnlyInMaxSlopeAngle_AreNotEqual()
+    {
+        Assert.NotEqual(SampleLevel(), SampleLevel() with { MaxSlopeAngle = 80f });
+    }
+
+    [Fact]
     public void Equals_LevelsDifferingOnlyInNoGrass_AreNotEqual()
     {
         Assert.NotEqual(SampleLevel(), SampleLevel() with { NoGrass = true });

@@ -14,6 +14,7 @@
     30,
     -69
   ],
+  "maxSlopeAngle": 88,
   "edits": [
     {
       "opType": "tile.remove",

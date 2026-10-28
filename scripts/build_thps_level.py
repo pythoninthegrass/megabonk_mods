@@ -59,6 +59,9 @@ MESH_RAILS = (
     ((175.66, 3.88, 61.295), 90.0, 0.955),
 )
 
+# The half pipe lips reach 85 degrees, past the game's 45 degree slope limit.
+MAX_SLOPE_ANGLE = 88
+
 PACK_ID = "thps"
 PACK_VERSION = "2.0.10"
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "packs" / PACK_ID / "manifest.json"
@@ -378,6 +381,7 @@ def build_level() -> dict:
         "packs": {PACK_ID: PACK_VERSION},
         "noGrass": True,
         "playerStart": PLAYER_START,
+        "maxSlopeAngle": MAX_SLOPE_ANGLE,
         "edits": tile_edits() + clutter_removals() + spawn_moves() + rail_edits() + warehouse_edits() + collectible_edits(),
     }
 

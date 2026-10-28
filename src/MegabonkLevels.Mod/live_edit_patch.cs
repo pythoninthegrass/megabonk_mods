@@ -25,6 +25,7 @@ public static class LiveEditPatch
     private static IReadOnlyList<EditOp> _pendingEdits;
     private static bool _noGrass;
     private static IReadOnlyList<float> _playerStart;
+    private static float? _maxSlopeAngle;
     private static Session _session;
     private static int _runGeneration;
 
@@ -34,11 +35,12 @@ public static class LiveEditPatch
 
     // Set by LevelLoaderPatch right before it starts a run, consumed (and cleared) by the next
     // generation so a later vanilla run is never edited.
-    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null)
+    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null)
     {
         _pendingEdits = edits;
         _noGrass = noGrass;
         _playerStart = playerStart;
+        _maxSlopeAngle = maxSlopeAngle;
     }
 
     // Apply pending edits immediately to the current session if present. Returns the number of edits applied.
@@ -210,7 +212,8 @@ public static class LiveEditPatch
             Packs: BuildPacks(edits),
             Edits: edits.ToList(),
             NoGrass: _noGrass,
-            PlayerStart: _playerStart);
+            PlayerStart: _playerStart,
+            MaxSlopeAngle: _maxSlopeAngle);
     }
 
     // The packs referenced by the level's edits, mapped to the version recorded in each installed
@@ -451,6 +454,39 @@ public static class LiveEditPatch
     {
         _playerStartUntil = _playerStart == null ? 0f : Time.realtimeSinceStartup + PlayerStartWatchSeconds;
         _playerStartLogged = false;
+    }
+
+    private static float? _defaultMaxSlopeAngle;
+
+    // Raises the player's slope limit for the length of a custom level run and puts the game's value back afterwards, so vanilla runs keep their movement.
+    public static void TickMaxSlopeAngle(MelonLogger.Instance logger)
+    {
+        var player = MyPlayer.Instance;
+        if (player == null || player.playerMovement == null)
+        {
+            return;
+        }
+
+        var movement = player.playerMovement;
+        var wanted = CustomLevelState.IsActive ? _maxSlopeAngle : null;
+        if (wanted == null)
+        {
+            if (_defaultMaxSlopeAngle != null)
+            {
+                movement.maxSlopeAngle = _defaultMaxSlopeAngle.Value;
+                _defaultMaxSlopeAngle = null;
+            }
+
+            return;
+        }
+
+        if (_defaultMaxSlopeAngle == null)
+        {
+            _defaultMaxSlopeAngle = movement.maxSlopeAngle;
+            logger.Msg($"LiveEdit: max slope angle {movement.maxSlopeAngle} -> {wanted.Value}");
+        }
+
+        movement.maxSlopeAngle = wanted.Value;
     }
 
     public static void TickPlayerStart(MelonLogger.Instance logger)

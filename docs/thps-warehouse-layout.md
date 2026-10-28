@@ -41,7 +41,7 @@ The skater is 1.8 m and the player is 3.85 units, so true scale is about 2.1 uni
 Measured in the running game (build 1.0.69, CrossOver):
 
 - A plain jump from the floor peaks at about 7.8 units above it (the capsule centre reaches about 9.7 with a resting centre height of 1.925). The jump is stat-driven (`GetJumpForce`), so a run with different items can differ. Decks, ledges and platforms are kept at 6 or lower so a jump clears them; `PLAYER_JUMP_APEX` in the generator is the limit its tests use.
-- `PlayerMovement.maxSlopeAngle` is 45. A ramp face steeper than that cannot be run up: on a test pipe reaching 56 degrees the player stalled between a body height of 8 and 10. Every ramp is therefore capped near 40 degrees, which makes a pipe at least 1.5 times as deep as it is high.
+- `PlayerMovement.maxSlopeAngle` is 45. A ramp face steeper than that cannot be run up: on a test pipe reaching 56 degrees the player stalled between a body height of 8 and 10. Every hand-built ramp is therefore capped near 40 degrees, which makes a pipe at least 1.5 times as deep as it is high. The extracted Warehouse half pipes are not capped: their faces run 31, 34, 54, 77 and 85 degrees up to the lip (measured from the mesh near (142, -3, 32)), so the level raises the limit instead, see "Slope limit on the half pipes".
 - Anything taller than a jump is reached by running up a ramp or by launching off one, the same way the skater uses quarter pipes. The corridor floor at 13 units is a ramp rise plus a jump away from the half pipe.
 - The game has a `JumpPad`, `Ladder`, wall climbing and rail grinding (`railSpeed`, `canJumpOffRailTime`), so higher spots can also be reached through those.
 
@@ -185,6 +185,10 @@ The Warehouse mesh has two more bars on the same material (`A53322CF`), handled 
 - **Hidden rails.** The third and fourth entries of `MESH_RAILS`: the wall rod at yaw 0, scale 0.954, centre (129.64, 22.88, 120.84), and the deck rail at yaw 90, scale 0.955, centre (175.66, 3.88, 61.295). Height is the bar's centre height minus 4.55, the offset the first rail uses.
 - **Floating leftovers.** Each post position on the first and deck rails carries a small plate (about 0.46 by 0.25) on the rail material, well below the bar (height 1.5 to 1.8 on the first rail, 5.7 to 6.1 on the deck rail). They are what is left of the original posts and float once the posts are missing. `RailLeftoverBounds` in `ThpsPack.cs` drops the rail-material faces inside two boxes around them; the bars are far above those boxes and are untouched. The wall rod has no such plates.
 - **Evidence.** `.tools/evidence/task-021.19-rail1-before.png` and `-after.png`, `-rail2-before.png`, `-rail3-after.png`. The thin diagonal line left beside the first rail's middle post in the after shot is not on the rail material and was not removed.
+
+### Slope limit on the half pipes
+
+The player could not ollie off the main half pipe edges near (142, -3, 32). The cause is the movement limit, not the collision mesh: the pipe face passes 45 degrees about 3 units up its 8 unit rise, so above that the player is not grounded and cannot ride to the lip. The level file therefore sets `maxSlopeAngle` (`MAX_SLOPE_ANGLE` in `scripts/build_thps_level.py`, 88), which the mod applies to `PlayerMovement.maxSlopeAngle` for the run only (see `level-format.md`); Forest and every level without the key keep the game's 45. Vertical faces (90 degrees) stay unclimbable, so walls still block. The mod logs `LiveEdit: max slope angle 45 -> 88` when it applies. Open: how the raised limit feels on the other ramps and whether a lower value rides the pipes as well.
 
 ### Check against the reference frames
 

@@ -203,6 +203,12 @@ def test_build_level_disables_grass_so_it_does_not_grow_through_the_warehouse_fl
     assert b.build_level()["noGrass"] is True
 
 
+def test_build_level_raises_the_slope_limit_so_the_player_can_ride_the_half_pipes() -> None:
+    angle = b.build_level()["maxSlopeAngle"]
+    assert angle == b.MAX_SLOPE_ANGLE
+    assert angle > 45
+
+
 def test_build_level_places_no_hand_built_structures_inside_the_warehouse() -> None:
     placed = {payload(e)["catalogId"] for e in b.build_level()["edits"] if e["opType"] == "object.place"}
     assert placed.isdisjoint(f"bundle:{b.PACK_ID}/{a}" for a in b.STRUCTURE_ASSETS)
