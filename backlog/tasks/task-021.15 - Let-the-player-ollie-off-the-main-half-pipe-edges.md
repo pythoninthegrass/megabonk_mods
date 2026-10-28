@@ -41,6 +41,8 @@ Branch fix/task-021.15-halfpipe-ollie (commit 2564c41), top of the train. Measur
 
 Fix: new optional level key maxSlopeAngle (LevelFile.MaxSlopeAngle, docs/level-format.md). The mod sets PlayerMovement.maxSlopeAngle for a custom level run only and restores the game's value afterwards (LiveEditPatch.TickMaxSlopeAngle); levels without the key, including Forest, are unchanged. The thps level sets 88 (MAX_SLOPE_ANGLE). Log on load: 'LiveEdit: max slope angle 45 -> 88' (saved as .tools/evidence/task-021.15-max-slope-log.txt). Tests cover the key round trip, default and equality, and the generator value.
 
+This PR (#6) now targets main; it was first stacked on feat/task-021.19-mesh-rails, which is already merged into feat/task-021.14-rail-pillars (PR #8).
+
 Open for Lance: ride the main half pipe and ollie off both edges (AC 2), check the other pipes and ramps (AC 3), and judge whether 88 changes the feel of the rest of the level; a lower value may ride the pipes just as well. The restore of the 45 limit on a later vanilla run is implemented but was not exercised.
 <!-- SECTION:NOTES:END -->
 

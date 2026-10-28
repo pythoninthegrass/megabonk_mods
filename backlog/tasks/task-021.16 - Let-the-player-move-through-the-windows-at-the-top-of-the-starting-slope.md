@@ -38,7 +38,7 @@ Branch fix/task-021.16-start-windows (commit 9e28cb1). The two start-slope windo
 
 NOT yet verified by hand (AC 1, 4): the harness cannot drive the game's own movement input (key/mouse injection reaches only editor code), so walking through the windows was not tested. Evidence so far: .tools/evidence/task-021.16-start-windows-before-walk.png shows the player at the start facing the windows. Lance: walk through both panes into the half pipe, and note a screenshot here.
 
-Branch fix/task-021.16-start-windows is the base of the train: 021.14 docs, 021.19 and 021.15 are stacked on it in that order.
+Branch fix/task-021.16-start-windows was the base of a stacked train: the 021.14 PR (#4) merged into it and the 021.19 PR (#5) merged into 021.14's branch, so neither reached main. PR #8 (feat/task-021.14-rail-pillars into main) carries both. PR #6 (021.15) was retargeted to main.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
