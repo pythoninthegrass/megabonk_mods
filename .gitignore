@@ -310,3 +310,5 @@ unity/*/Assets/TestModel.meta
 tools/thps_warehouse_*_map.png
 tools/thps_warehouse_frames/
 tools/thps1_100_playthrough.mkv
+unity/*/Assets/Thps/
+unity/*/Assets/Thps.meta

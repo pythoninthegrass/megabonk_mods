@@ -1,0 +1,7 @@
+{
+  "id": "thps",
+  "name": "THPS Warehouse",
+  "author": "pythoninthegrass",
+  "version": "1.0.0",
+  "assets": ["QuarterPipe", "Kicker", "Block", "Taxi", "Corridor"]
+}

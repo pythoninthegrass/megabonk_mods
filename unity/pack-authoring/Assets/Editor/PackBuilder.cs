@@ -111,7 +111,7 @@ public static class PackBuilder
         Debug.Log("PackBuilder: built " + target + " into " + directory);
     }
 
-    static string ArgValue(string name)
+    internal static string ArgValue(string name)
     {
         var args = Environment.GetCommandLineArgs();
         var i = Array.IndexOf(args, name);
