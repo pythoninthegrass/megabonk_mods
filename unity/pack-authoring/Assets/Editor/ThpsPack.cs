@@ -35,6 +35,8 @@ public static class ThpsPack
     // The PS1 transparency key in the extracted PNGs; the pack's shader is opaque, so it is baked to a dark glass colour.
     static readonly Color32 TransparencyKey = new Color32(255, 0, 255, 255);
     static readonly Color32 KeyReplacement = new Color32(24, 30, 40, 255);
+    // Textures whose keyed pixels stay transparent, drawn with the game's Sprites/Default shader because the toon shader has no usable alpha-clip variant: the ceiling chains and the two crane hook textures.
+    static readonly string[] SeeThroughTextures = { "E2BFD876-0.png", "0690EE87-0.png", "1D982D1F-0.png" };
 
     static readonly Color Concrete = new Color(0.6f, 0.6f, 0.58f);
 
@@ -170,7 +172,8 @@ public static class ThpsPack
         foreach (var pair in textureFiles)
         {
             var assetPath = textureDirectory + "/" + pair.Value;
-            File.WriteAllBytes(assetPath, BakeTransparencyKey(File.ReadAllBytes(Path.Combine(source, pair.Value))));
+            var seeThrough = SeeThroughTextures.Contains(pair.Value);
+            File.WriteAllBytes(assetPath, BakeTransparencyKey(File.ReadAllBytes(Path.Combine(source, pair.Value)), seeThrough));
             AssetDatabase.ImportAsset(assetPath);
             var importer = (TextureImporter)AssetImporter.GetAtPath(assetPath);
             importer.filterMode = FilterMode.Point;
@@ -178,11 +181,13 @@ public static class ThpsPack
             importer.wrapMode = TextureWrapMode.Repeat;
             importer.npotScale = TextureImporterNPOTScale.None;
             importer.textureCompression = TextureImporterCompression.Uncompressed;
-            importer.alphaSource = TextureImporterAlphaSource.None;
+            importer.alphaSource = seeThrough ? TextureImporterAlphaSource.FromInput : TextureImporterAlphaSource.None;
+            importer.alphaIsTransparency = seeThrough;
             importer.SaveAndReimport();
-            var material = new Material(Shader.Find("Standard")) { color = Color.white };
+            var material = new Material(Shader.Find(seeThrough ? "Sprites/Default" : "Standard")) { color = Color.white };
             material.mainTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
-            material.SetFloat("_Glossiness", 0);
+            if (!seeThrough)
+                material.SetFloat("_Glossiness", 0);
             AssetDatabase.CreateAsset(material, PackDirectory + "/Warehouse_" + pair.Key + ".mat");
             materials[pair.Key] = material;
         }
@@ -192,7 +197,7 @@ public static class ThpsPack
         return materials;
     }
 
-    static byte[] BakeTransparencyKey(byte[] png)
+    static byte[] BakeTransparencyKey(byte[] png, bool seeThrough)
     {
         var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
         texture.LoadImage(png);
@@ -200,7 +205,8 @@ public static class ThpsPack
         for (var i = 0; i < pixels.Length; i++)
         {
             var p = pixels[i];
-            pixels[i] = p.r == TransparencyKey.r && p.g == TransparencyKey.g && p.b == TransparencyKey.b ? KeyReplacement : new Color32(p.r, p.g, p.b, 255);
+            var isKey = p.r == TransparencyKey.r && p.g == TransparencyKey.g && p.b == TransparencyKey.b;
+            pixels[i] = isKey ? (seeThrough ? new Color32(0, 0, 0, 0) : KeyReplacement) : new Color32(p.r, p.g, p.b, 255);
         }
 
         texture.SetPixels32(pixels);
