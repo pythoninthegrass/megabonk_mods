@@ -276,6 +276,12 @@ async def invulnerable(on: bool) -> CallToolResult:
 
 
 @mcp.tool()
+async def spawns(on: bool) -> CallToolResult:
+    """Allow new enemy spawns (on) or stop them (off). Off leaves enemies already alive and resets on level load; state reports spawnsOff."""
+    return await _command(_harness(), run.build_spawns_command(on), TIMEOUT)
+
+
+@mcp.tool()
 async def camera(position: list[float] | None = None, rotation: list[float] | None = None, clear: bool = False) -> CallToolResult:
     """Hold the camera at a world pose (position and rotation euler degrees), or return it to the game with clear."""
     if clear:

@@ -28,6 +28,7 @@ Usage:
     run.py steam-ready             Check whether the in-game Steamworks client is ready
     run.py state                   Print the game's current state as JSON (level, editor, player, tool, selection)
     run.py shader-report           Print which candidate shaders Shader.Find resolves and the shaders and properties of the scene's materials
+    run.py spawns <on|off>         Allow or stop new enemy spawns (off leaves enemies already alive; resets on level load)
     run.py heartbeat <on|off>      Start or stop the kill-floor heartbeat (actor counts and lowest heights every 5 seconds)
     run.py cells <on|off>          Start or stop logging the player's and boss-tier actors' grid cell on change
     run.py editor <on|off>         Enter or leave editor mode (frozen run, free-fly camera), like pressing F8
@@ -169,6 +170,10 @@ def add_load_overrides(parser: argparse.ArgumentParser) -> None:
 
 def load_overrides(args: argparse.Namespace) -> dict[str, int]:
     return {k: v for k in ("map", "stage", "tier", "seed") if (v := getattr(args, k)) is not None}
+
+
+def build_spawns_command(enabled: bool) -> dict[str, object]:
+    return {"command": "spawns", "enabled": enabled}
 
 
 def build_heartbeat_command(enabled: bool) -> dict[str, object]:
@@ -511,6 +516,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("steam-ready")
     sub.add_parser("state")
     sub.add_parser("shader-report")
+    spawns = sub.add_parser("spawns")
+    spawns.add_argument("state", choices=["on", "off"])
     heartbeat = sub.add_parser("heartbeat")
     heartbeat.add_argument("state", choices=["on", "off"])
     cells = sub.add_parser("cells")
@@ -627,6 +634,10 @@ def dismiss_levelup_payload(args: argparse.Namespace) -> dict[str, object]:
 
 def type_payload(args: argparse.Namespace) -> dict[str, object]:
     return build_type_command(args.text)
+
+
+def spawns_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_spawns_command(args.state == "on")
 
 
 def heartbeat_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -764,6 +775,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, teleport_payload(args), args.timeout)
         case "dismiss-levelup":
             ok = send_printing_result(harness, dismiss_levelup_payload(args), args.timeout)
+        case "spawns":
+            ok = send(harness, spawns_payload(args), args.timeout)
         case "heartbeat":
             ok = send(harness, heartbeat_payload(args), args.timeout)
         case "cells":

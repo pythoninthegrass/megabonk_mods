@@ -20,6 +20,7 @@ public enum HarnessCommandKind
     CameraClear,
     Invulnerable,
     Vulnerable,
+    Spawns,
     Heartbeat,
     Cells,
     Editor,
@@ -154,6 +155,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 command = new HarnessCommand(HarnessCommandKind.CameraClear, null);
                 error = null;
                 return true;
+            case "spawns":
+                return TryParseEnabledFlag(root, HarnessCommandKind.Spawns, out command, out error);
             case "heartbeat":
                 return TryParseEnabledFlag(root, HarnessCommandKind.Heartbeat, out command, out error);
             case "cells":

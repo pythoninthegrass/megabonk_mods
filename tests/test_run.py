@@ -272,6 +272,22 @@ def test_build_heartbeat_command_carries_the_enabled_flag() -> None:
     assert run.build_heartbeat_command(False) == {"command": "heartbeat", "enabled": False}
 
 
+def test_build_spawns_command_carries_the_enabled_flag() -> None:
+    assert run.build_spawns_command(True) == {"command": "spawns", "enabled": True}
+    assert run.build_spawns_command(False) == {"command": "spawns", "enabled": False}
+
+
+def test_spawns_payload_maps_the_state_to_the_wire_command() -> None:
+    assert run.spawns_payload(run.parse_args(["spawns", "on"])) == {"command": "spawns", "enabled": True}
+    assert run.spawns_payload(run.parse_args(["spawns", "off"])) == {"command": "spawns", "enabled": False}
+
+
+def test_parse_args_spawns_rejects_other_states_and_a_missing_state() -> None:
+    for argv in (["spawns"], ["spawns", "maybe"]):
+        with pytest.raises(SystemExit):
+            run.parse_args(argv)
+
+
 def test_parse_args_heartbeat_takes_on_or_off() -> None:
     assert run.parse_args(["heartbeat", "on"]).state == "on"
     assert run.parse_args(["heartbeat", "off"]).state == "off"

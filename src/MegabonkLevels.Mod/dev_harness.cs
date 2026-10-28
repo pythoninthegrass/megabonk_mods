@@ -176,6 +176,9 @@ public static class DevHarness
             case HarnessCommandKind.Vulnerable:
                 PlayerInvulnerability.Set(false, _logger);
                 break;
+            case HarnessCommandKind.Spawns:
+                EnemySpawns.Set(command.Enabled, _logger);
+                break;
             case HarnessCommandKind.Heartbeat:
                 KillFloorWatcher.SetHeartbeat(command.Enabled, _logger);
                 break;
@@ -491,6 +494,7 @@ public static class DevHarness
             Editor: editor,
             Frozen: MyTime.paused,
             Invulnerable: PlayerInvulnerability.Active,
+            SpawnsOff: EnemySpawns.Off,
             Player: playerSnapshot,
             EditorTool: editor ? EditorTileTools.CurrentTool.ToString() : null,
             Selected: editor ? EditorObjectTools.Selected?.Serialize() : null,

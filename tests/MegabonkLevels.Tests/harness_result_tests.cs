@@ -76,6 +76,7 @@ public class HarnessResultTests
             Editor: true,
             Frozen: true,
             Invulnerable: false,
+            SpawnsOff: true,
             Player: new PlayerSnapshot(1.5f, 2f, -3f, new GridCell(4, 5, true)),
             EditorTool: "Select",
             Selected: "object:tree-1",
@@ -91,6 +92,7 @@ public class HarnessResultTests
         Assert.True((bool?)root["editor"]);
         Assert.True((bool?)root["frozen"]);
         Assert.False((bool?)root["invulnerable"]);
+        Assert.True((bool?)root["spawnsOff"]);
         Assert.Equal(new[] { 1.5f, 2f, -3f }, root["player"]!["position"]!.AsArray().Select(n => (float)n!).ToArray());
         Assert.Equal(new[] { 4, 5 }, root["player"]!["cell"]!.AsArray().Select(n => (int)n!).ToArray());
         Assert.Equal("Select", (string?)root["editorTool"]);
@@ -106,7 +108,7 @@ public class HarnessResultTests
     [Fact]
     public void GameStateSnapshot_WithUnsourcedFields_SerializesJsonNulls()
     {
-        var snapshot = new GameStateSnapshot(false, false, false, false, false, null, null, null, null, null, 800, 600);
+        var snapshot = new GameStateSnapshot(false, false, false, false, false, false, null, null, null, null, null, 800, 600);
 
         var root = snapshot.ToJson();
 
@@ -120,7 +122,7 @@ public class HarnessResultTests
     [Fact]
     public void GameStateSnapshot_PlayerOutsideTheGrid_SerializesNullCell()
     {
-        var snapshot = new GameStateSnapshot(true, false, false, false, false, new PlayerSnapshot(0f, 0f, 0f, null), null, null, null, null, 800, 600);
+        var snapshot = new GameStateSnapshot(true, false, false, false, false, false, new PlayerSnapshot(0f, 0f, 0f, null), null, null, null, null, 800, 600);
 
         var player = snapshot.ToJson()["player"]!.AsObject();
 

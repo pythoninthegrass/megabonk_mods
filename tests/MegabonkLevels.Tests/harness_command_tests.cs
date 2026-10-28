@@ -601,4 +601,27 @@ public class HarnessCommandTests
         Assert.False(HarnessCommand.TryParse(json, out _, out var error));
         Assert.Contains(expectedFragment, error);
     }
+
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public void TryParse_Spawns_ReadsTheEnabledFlag(string enabled, bool expected)
+    {
+        var ok = HarnessCommand.TryParse($$"""{"command":"spawns","enabled":{{enabled}}}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.Spawns, command.Kind);
+        Assert.Equal(expected, command.Enabled);
+        Assert.Null(command.Path);
+    }
+
+    [Fact]
+    public void TryParse_Spawns_WithoutEnabled_Fails()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"spawns"}""", out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains("enabled", error);
+    }
 }
