@@ -54,7 +54,7 @@ MESH_RAILS = (
 )
 
 PACK_ID = "thps"
-PACK_VERSION = "2.0.6"
+PACK_VERSION = "2.0.7"
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "packs" / PACK_ID / "manifest.json"
 STRUCTURE_ASSETS = ("QuarterPipe", "Kicker", "Block", "Taxi", "Corridor")
 WAREHOUSE_ASSET = "Warehouse"

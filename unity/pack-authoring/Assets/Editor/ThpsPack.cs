@@ -18,6 +18,9 @@ public static class ThpsPack
     const string FloorMaterial = "F051E515";
     // The secret room's three window sections: rendered, but left out of the collision mesh so the player flies through them.
     static readonly string[] PassThroughMaterials = { "FA88F30D" };
+    // The room's intact window sections share a material with solid windows elsewhere, so only the faces inside the room's world bounds (x, y, z min and max) are opened.
+    static readonly string[] PassThroughInRoomMaterials = { "F2184063" };
+    static readonly float[] SecretRoomBounds = { 149f, 179f, 15f, 26f, 20f, 32f };
     const string DefaultWarehouseSource = ".tools/thps1/warehouse";
 
     // The PS1 transparency key in the extracted PNGs; the pack's shader is opaque, so it is baked to a dark glass colour.
@@ -77,13 +80,41 @@ public static class ThpsPack
     static Mesh SaveCollisionMesh(Mesh mesh, List<string> usedMaterials)
     {
         var collision = new Mesh { name = "WarehouseCollision", vertices = mesh.vertices, uv = mesh.uv };
+        var vertices = mesh.vertices;
         var kept = Enumerable.Range(0, usedMaterials.Count).Where(i => !PassThroughMaterials.Contains(usedMaterials[i])).ToList();
         collision.subMeshCount = kept.Count;
         for (var i = 0; i < kept.Count; i++)
-            collision.SetTriangles(mesh.GetTriangles(kept[i]), i);
+        {
+            var triangles = mesh.GetTriangles(kept[i]);
+            if (PassThroughInRoomMaterials.Contains(usedMaterials[kept[i]]))
+                triangles = WithoutTrianglesInSecretRoom(triangles, vertices);
+            collision.SetTriangles(triangles, i);
+        }
+
         collision.RecalculateBounds();
         AssetDatabase.CreateAsset(collision, PackDirectory + "/WarehouseCollision.asset");
         return collision;
+    }
+
+    static int[] WithoutTrianglesInSecretRoom(int[] triangles, Vector3[] vertices)
+    {
+        var kept = new List<int>();
+        for (var i = 0; i < triangles.Length; i += 3)
+        {
+            var inRoom = Enumerable.Range(i, 3).All(k => InSecretRoom(vertices[triangles[k]]));
+            if (!inRoom)
+                kept.AddRange(new[] { triangles[i], triangles[i + 1], triangles[i + 2] });
+        }
+
+        return kept.ToArray();
+    }
+
+    static bool InSecretRoom(Vector3 meshPoint)
+    {
+        var x = meshPoint.x * WarehouseScale + WarehouseWorldX;
+        var y = meshPoint.y * WarehouseScale + WarehouseLift;
+        var z = meshPoint.z * WarehouseScale + WarehouseWorldZ;
+        return x >= SecretRoomBounds[0] && x <= SecretRoomBounds[1] && y >= SecretRoomBounds[2] && y <= SecretRoomBounds[3] && z >= SecretRoomBounds[4] && z <= SecretRoomBounds[5];
     }
 
     // One point-filtered, mipmap-free, repeating Standard material per mtl entry, plus a flat one for untextured faces, keyed by material name.
