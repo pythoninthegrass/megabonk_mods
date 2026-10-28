@@ -417,16 +417,21 @@ def rail_ends(rail: tuple) -> list[tuple[float, float]]:
     return sorted([(x - direction[0] * half, z - direction[1] * half), (x + direction[0] * half, z + direction[1] * half)])
 
 
+def test_the_hidden_rail_over_the_bend_sits_at_the_bar_height() -> None:
+    rail = b.MESH_RAILS[1]
+    assert rail[0][1] == pytest.approx(3.3 - b.RAIL0_BAR_HEIGHT * rail[2], abs=0.05)
+
+
 def test_the_hidden_rail_over_the_wall_rod_spans_the_rod_at_its_height() -> None:
     rail = b.MESH_RAILS[2]
     assert [c for end in rail_ends(rail) for c in end] == pytest.approx([116.28, 120.84, 143.0, 120.84], abs=0.3)
-    assert rail[0][1] == pytest.approx(27.43 + b.MESH_RAIL_HEIGHT - 3.3, abs=0.1)
+    assert rail[0][1] == pytest.approx(27.43 - b.RAIL0_BAR_HEIGHT * rail[2], abs=0.05)
 
 
 def test_the_hidden_rail_over_the_deck_rail_spans_the_bar_at_its_height() -> None:
     rail = b.MESH_RAILS[3]
     assert [c for end in rail_ends(rail) for c in end] == pytest.approx([175.66, 47.92, 175.66, 74.67], abs=0.3)
-    assert rail[0][1] == pytest.approx(8.43 + b.MESH_RAIL_HEIGHT - 3.3, abs=0.1)
+    assert rail[0][1] == pytest.approx(8.43 - b.RAIL0_BAR_HEIGHT * rail[2], abs=0.05)
 
 
 def test_the_pack_removes_the_floating_rail_leftovers_and_posts_the_deck_rail() -> None:
