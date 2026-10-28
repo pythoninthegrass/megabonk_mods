@@ -115,7 +115,7 @@ The half pipe behind the starting slope windows is reached through them. Other `
 
 ## See-through textures
 
-The PS1 transparency key (magenta) is baked to an opaque dark colour in textures drawn with the pack's toon shader, because that shader is opaque and its alpha-clip variant is not in the game build. 22 of the 99 textures carry the key. All but the two window textures (`F2184063`, `FA88F30D`) are listed in `SeeThroughTextures` in `ThpsPack.cs`: their keyed pixels get alpha 0 and their materials use `Sprites/Default`, so the scene shows through. These are the ceiling chains, the crane hooks, the posters and graffiti, the chain-link fence and the lamp. `Sprites/Default` is unlit, so these materials ignore the scene lighting. The windows keep the dark glass because their keyed pixels are broken panes and opening them changes how the secret room and starting-slope windows read.
+The PS1 transparency key (magenta) is baked to alpha 0 in every texture that carries it (22 of the 99), and those textures are listed in `SeeThroughTextures` in `ThpsPack.cs`. Their materials use `Sprites/Default` so the scene shows through, because the pack's toon shader is opaque and its alpha-clip variant is not in the game build (with `_MK_ALPHA_CLIPPING` on, the albedo map is ignored). They are the ceiling chains, the crane hooks, the posters and graffiti, the chain-link fence, the lamp and the two window textures (`F2184063`, `FA88F30D`), whose keyed pixels are the broken panes. `Sprites/Default` is unlit, so these materials ignore the scene lighting.
 
 ## Open questions and risks
 

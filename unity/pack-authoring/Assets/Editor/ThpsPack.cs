@@ -35,8 +35,8 @@ public static class ThpsPack
     // The PS1 transparency key in the extracted PNGs; the pack's shader is opaque, so it is baked to a dark glass colour.
     static readonly Color32 TransparencyKey = new Color32(255, 0, 255, 255);
     static readonly Color32 KeyReplacement = new Color32(24, 30, 40, 255);
-    // Textures whose keyed pixels stay transparent, drawn with the game's Sprites/Default shader because the toon shader has no usable alpha-clip variant: every keyed texture except the two window ones, which keep the dark glass.
-    static readonly string[] SeeThroughTextures = { "E2BFD876-0.png", "0690EE87-0.png", "1D982D1F-0.png", "053C2AA4-0.png", "0871F61A-0.png", "0DFA7C5E-0.png", "1723B29C-0.png", "1DEE7C12-0.png", "1EE84107-0.png", "221C0004-0.png", "2BB60043-0.png", "3738824A-0.png", "5324F69B-0.png", "5C18D016-0.png", "6909A8C5-0.png", "7A0957EC-0.png", "7F6B8FF9-0.png", "7F9ACEA9-0.png", "946164AD-0.png", "DF12C866-0.png" };
+    // Textures whose keyed pixels stay transparent, drawn with the game's Sprites/Default shader because the toon shader has no usable alpha-clip variant: every keyed texture.
+    static readonly string[] SeeThroughTextures = { "E2BFD876-0.png", "0690EE87-0.png", "1D982D1F-0.png", "053C2AA4-0.png", "0871F61A-0.png", "0DFA7C5E-0.png", "1723B29C-0.png", "1DEE7C12-0.png", "1EE84107-0.png", "221C0004-0.png", "2BB60043-0.png", "3738824A-0.png", "5324F69B-0.png", "5C18D016-0.png", "6909A8C5-0.png", "7A0957EC-0.png", "7F6B8FF9-0.png", "7F9ACEA9-0.png", "946164AD-0.png", "DF12C866-0.png", "F2184063-0.png", "FA88F30D-0.png" };
 
     static readonly Color Concrete = new Color(0.6f, 0.6f, 0.58f);
 
