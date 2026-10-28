@@ -212,7 +212,8 @@ public static class LiveEditPatch
             Edits: edits.ToList(),
             NoGrass: _noGrass,
             PlayerStart: _playerStart,
-            MaxSlopeAngle: _maxSlopeAngle);
+            MaxSlopeAngle: _maxSlopeAngle,
+            Music: LevelMusic.Reference);
     }
 
     // The packs referenced by the level's edits, mapped to the version recorded in each installed

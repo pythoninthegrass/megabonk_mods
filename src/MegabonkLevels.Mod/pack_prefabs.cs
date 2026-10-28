@@ -15,6 +15,7 @@ public static class PackPrefabs
     private const string PacksDirectoryName = "LevelPacks";
 
     private static readonly PackCatalog<GameObject> Catalog = new(LoadPack, ReadManifest);
+    private static readonly Dictionary<string, IReadOnlyDictionary<string, AudioClip>> Clips = new();
     private static readonly Dictionary<string, GameObject> Placeholders = new();
     private static readonly HashSet<string> Warned = new();
     private static GameObject _hiddenRoot;
@@ -40,6 +41,13 @@ public static class PackPrefabs
         }
 
         return PlaceholderFor(key);
+    }
+
+    // The pack's AudioClip with this name, or null when the pack is not installed or holds no such clip. Clips are not filtered by the manifest.
+    public static AudioClip ResolveClip(string pack, string asset)
+    {
+        Catalog.AssetNames(pack);
+        return Clips.TryGetValue(pack, out var clips) && clips.TryGetValue(asset, out var clip) ? clip : null;
     }
 
     // The Packs palette entries for every pack directory; manifest-listed assets absent from the bundle are warned about once and not listed.
@@ -73,11 +81,13 @@ public static class PackPrefabs
         }
 
         var assets = new Dictionary<string, GameObject>();
+        var clips = new Dictionary<string, AudioClip>();
+        Clips[pack] = clips;
         foreach (var file in Directory.GetFiles(directory).Where(f => PackFiles.IsBundleFile(Path.GetFileName(f))).OrderBy(f => f, StringComparer.Ordinal))
         {
             try
             {
-                LoadBundleInto(file, assets);
+                LoadBundleInto(file, assets, clips);
             }
             catch (Exception e)
             {
@@ -85,7 +95,7 @@ public static class PackPrefabs
             }
         }
 
-        _logger.Msg($"Packs: loaded pack '{pack}' with {assets.Count} prefab(s).");
+        _logger.Msg($"Packs: loaded pack '{pack}' with {assets.Count} prefab(s) and {clips.Count} clip(s).");
         return assets;
     }
 
@@ -120,7 +130,7 @@ public static class PackPrefabs
         Path.Combine(MelonEnvironment.GameRootDirectory, "UserData", PacksDirectoryName, pack);
 
     // Bundles stay loaded for the session because instantiated prefabs depend on their data. The async API is used because the synchronous loaders fail in the Il2Cpp interop.
-    private static void LoadBundleInto(string path, Dictionary<string, GameObject> assets)
+    private static void LoadBundleInto(string path, Dictionary<string, GameObject> assets, Dictionary<string, AudioClip> clips)
     {
         var bundle = AssetBundle.LoadFromFileAsync(path).assetBundle;
         if (bundle == null)
@@ -134,6 +144,10 @@ public static class PackPrefabs
             {
                 PackShaderRemap.Apply(prefab, _logger);
                 assets[prefab.name] = prefab;
+            }
+            else if (asset.TryCast<AudioClip>() is { } clip)
+            {
+                clips[clip.name] = clip;
             }
         }
     }

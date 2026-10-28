@@ -231,7 +231,7 @@ Process detection uses the standard library only: `ps -axo pid=,command=` on mac
 
 ### Loading the THPS level
 
-`levels/thps.mblevel.json` is generated, and its Warehouse mesh lives in the `thps` pack, so a launch needs both.
+`levels/thps.mblevel.json` is generated, and its Warehouse mesh and soundtrack clip live in the `thps` pack, so a launch needs both. The level's `music` field names the clip (`bundle:thps/Superman`); see [music.md](music.md).
 
 ```sh
 uv run scripts/build_thps_level.py                 # rewrites levels/thps.mblevel.json
@@ -240,7 +240,7 @@ task pack:install PACK=thps                        # needs .tools/bundles/<platf
 task game:editor -- levels/thps.mblevel.json
 ```
 
-The bundle is built by `task pack:thps` from `.tools/thps1/warehouse/`, which is extracted from the PS1 disc image and gitignored. A machine without the disc and the extraction can copy a built bundle from one that has them instead: `rsync -av <host>:git/megabonk_mods/.tools/bundles/windows/thps{,.manifest} .tools/bundles/windows/` (`linux` on a native Linux host), then `task pack:install PACK=thps`. Rebuild on the source machine first if `unity/pack-authoring/Assets/Editor/ThpsPack.cs` changed since that bundle was built.
+The bundle is built by `task pack:thps` from `.tools/thps1/warehouse/` and `tools/Goldfinger - Superman.mp3` (both gitignored; without the mp3 the pack builds with no music). The warehouse source is extracted from the PS1 disc image and gitignored. A machine without the disc and the extraction can copy a built bundle from one that has them instead: `rsync -av <host>:git/megabonk_mods/.tools/bundles/windows/thps{,.manifest} .tools/bundles/windows/` (`linux` on a native Linux host), then `task pack:install PACK=thps`. Rebuild on the source machine first if `unity/pack-authoring/Assets/Editor/ThpsPack.cs` changed since that bundle was built.
 
 A missing pack does not fail the load. The level opens with a placeholder at the Warehouse position and the log shows `Packs: 'bundle:thps/Warehouse': pack 'thps' is not installed; using a placeholder.` Packs load once per session, so install the pack before the relaunch.
 

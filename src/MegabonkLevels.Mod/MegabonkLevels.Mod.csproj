@@ -37,6 +37,10 @@
       <HintPath>$(Il2CppAssembliesFolder)/UnityEngine.AssetBundleModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>$(Il2CppAssembliesFolder)/UnityEngine.AudioModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="UnityEngine.PhysicsModule">
       <HintPath>$(Il2CppAssembliesFolder)/UnityEngine.PhysicsModule.dll</HintPath>
       <Private>False</Private>
