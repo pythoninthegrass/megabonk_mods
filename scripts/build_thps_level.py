@@ -56,6 +56,24 @@ MESH_RAILS = (
     ((175.66, 8.43 - RAIL0_BAR_HEIGHT * 0.955, 61.295), 90.0, 0.955),
 )
 
+# Coping edges of the main half pipe, each (start, end) on a ridge of the mesh; a rail/0 is laid along each so the lips grind.
+COPING_LIPS = (
+    ((119.78, 5.76, 8.59), (178.95, 5.76, 8.59)),
+    ((119.78, 5.76, 43.81), (178.95, 5.76, 43.81)),
+)
+
+
+def rail_along(start: tuple[float, float, float], end: tuple[float, float, float]) -> tuple[tuple[float, float, float], float, float]:
+    """The (position, yaw, scale) of a rail/0 whose bar runs from start to end at start's height."""
+    dx, dz = end[0] - start[0], end[2] - start[2]
+    scale = math.hypot(dx, dz) / RAIL0_LENGTH
+    yaw = math.degrees(math.atan2(-dz, dx)) % 360
+    centre = ((start[0] + end[0]) / 2, start[1] - RAIL0_BAR_HEIGHT * scale, (start[2] + end[2]) / 2)
+    return centre, yaw, scale
+
+
+COPING_RAILS = tuple(rail_along(start, end) for start, end in COPING_LIPS)
+
 # The half pipe lips reach 85 degrees, past the game's 45 degree slope limit.
 MAX_SLOPE_ANGLE = 88
 
@@ -403,7 +421,7 @@ def mesh_rail_edits() -> list[dict]:
                 "hidden": True,
             },
         )
-        for (x, y, z), yaw, scale in MESH_RAILS
+        for (x, y, z), yaw, scale in MESH_RAILS + COPING_RAILS
     ]
 
 

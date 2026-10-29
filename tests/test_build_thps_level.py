@@ -6,6 +6,7 @@ import build_thps_level as b
 import json
 import math
 import pytest
+import warehouse_surface as ws
 from pathlib import Path
 
 
@@ -123,7 +124,7 @@ def test_write_level_round_trips_through_json(tmp_path: Path) -> None:
 
 def test_the_only_rails_are_the_hidden_game_rails_along_the_mesh_bars() -> None:
     rails = ops_of(b.rail_edits(), "object.place")
-    assert len(rails) == len(b.MESH_RAILS)
+    assert len(rails) == len(b.MESH_RAILS) + len(b.COPING_RAILS)
     for rail in rails:
         assert payload(rail)["catalogId"] == b.MESH_RAIL_CATALOG_ID
         assert payload(rail)["hidden"] is True
@@ -415,7 +416,7 @@ def test_boss_spawner_hides_the_pillar_mesh_and_its_collider() -> None:
 
 
 def test_the_mesh_rail_gets_hidden_game_rails_along_its_run_and_its_bend() -> None:
-    hidden = [payload(e) for e in b.rail_edits() if payload(e).get("hidden")]
+    hidden = [payload(e) for e in b.rail_edits() if payload(e).get("hidden")][: len(b.MESH_RAILS)]
     assert len(hidden) == len(b.MESH_RAILS) == 4
     for place, ((x, y, z), yaw, scale) in zip(hidden, b.MESH_RAILS, strict=True):
         assert place["catalogId"] == b.MESH_RAIL_CATALOG_ID
@@ -491,3 +492,35 @@ def test_the_pack_opens_the_start_slope_windows_by_position_only() -> None:
         Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "Assets" / "Editor" / "ThpsPack.cs"
     ).read_text()
     assert "StartSlopeWindowBounds" in source
+
+
+def test_rail_along_spans_the_lip_with_its_bar_on_the_lip_height() -> None:
+    (x, y, z), yaw, scale = b.rail_along((119.78, 5.76, 8.59), (178.95, 5.76, 8.59))
+    assert yaw == pytest.approx(0.0)
+    assert (x, z) == pytest.approx((149.365, 8.59))
+    assert scale == pytest.approx(59.17 / b.RAIL0_LENGTH, abs=0.001)
+    assert y == pytest.approx(5.76 - b.RAIL0_BAR_HEIGHT * scale)
+    assert [c for end in rail_ends(((x, y, z), yaw, scale)) for c in end] == pytest.approx([119.78, 8.59, 178.95, 8.59], abs=0.01)
+
+
+def test_rail_along_turns_to_a_lip_running_along_z() -> None:
+    _, yaw, _ = b.rail_along((10, 3, 0), (10, 3, 28))
+    assert yaw == pytest.approx(270.0)
+
+
+def test_each_coping_rail_is_a_hidden_game_rail_after_the_mesh_rails() -> None:
+    placed = [payload(e) for e in b.rail_edits()]
+    assert [(p["position"]["x"], p["position"]["y"], p["position"]["z"]) for p in placed[len(b.MESH_RAILS) :]] == [r[0] for r in b.COPING_RAILS]
+
+
+@needs_extract
+def test_every_coping_lip_lies_on_a_ridge_of_the_mesh() -> None:
+    ridges = ws.ridge_runs(b.warehouse_triangles())
+    for start, end in b.COPING_LIPS:
+        assert any(
+            min(math.dist(start, a) + math.dist(end, c), math.dist(start, c) + math.dist(end, a)) < 0.1 for a, c in ridges
+        ), (start, end)
+
+
+def test_the_coping_lips_are_the_two_main_half_pipe_edges() -> None:
+    assert sorted((s[2], s[1]) for s, _ in b.COPING_LIPS) == [(8.59, 5.76), (43.81, 5.76)]

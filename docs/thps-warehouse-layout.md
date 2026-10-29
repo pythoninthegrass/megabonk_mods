@@ -170,6 +170,19 @@ The Warehouse mesh has two more bars on the same material (`A53322CF`), handled 
 - **Floating leftovers.** Each post position on the first and deck rails carries a small plate (about 0.46 by 0.25) on the rail material, well below the bar (height 1.5 to 1.8 on the first rail, 5.7 to 6.1 on the deck rail). They are what is left of the original posts and float once the posts are missing. `RailLeftoverBounds` in `ThpsPack.cs` drops the rail-material faces inside two boxes around them; the bars are far above those boxes and are untouched. The wall rod has no such plates.
 - **Evidence.** `.tools/evidence/task-021.19-rail1-before.png` and `-after.png`, `-rail2-before.png`, `-rail3-after.png`. The thin diagonal line left beside the first rail's middle post in the after shot is not on the rail material and was not removed.
 
+### Coping rails on the main half pipe
+
+The main half pipe near (142, -3, 32) has a hidden game rail along each lip, so the coping grinds like the mesh rails above. `COPING_LIPS` in `scripts/build_thps_level.py` lists the lips and `rail_along` turns each into a `rail/0` placement (the bar runs from start to end, its centre at the lip height minus `RAIL0_BAR_HEIGHT` times the scale). Both are placed through `COPING_RAILS` with the `hidden` flag.
+
+| Lip | From | To | Length | Rail scale |
+| --- | --- | --- | --- | --- |
+| North | (119.78, 5.76, 8.59) | (178.95, 5.76, 8.59) | 59.2 | 2.113 |
+| South | (119.78, 5.76, 43.81) | (178.95, 5.76, 43.81) | 59.2 | 2.113 |
+
+- **Measuring.** `ridge_runs` in `scripts/warehouse_surface.py` finds level edges where two faces fall away from each other, one at least 20 degrees steep, merged into straight runs. On the Warehouse mesh it returns the two lips above, and `tests/test_build_thps_level.py` checks every `COPING_LIPS` entry against it when the extraction is present.
+- **Not coped.** Other ridge runs are not pipe lips: the two wooden kickers near (45, 3.3, 47) and (45, 3.3, 62), the taxi funbox plywood near (120 to 137, 2 to 5, 75 to 83), the three mesh rails, and the ~20 unit tier edges at height 8.56 and 48 along the walls (the channel quarter pipes, left ungrindable by choice).
+- **Checked in game.** Dropped onto each lip, the player grinds it with the sparks on the yellow coping. The harness injects no gameplay input, so ollies off the lips and grinding from a run up the pipe were not exercised.
+
 ### Slope limit on the half pipes
 
 The player could not ollie off the main half pipe edges near (142, -3, 32). The cause is the movement limit, not the collision mesh: the pipe face passes 45 degrees about 3 units up its 8 unit rise, so above that the player is not grounded and cannot ride to the lip. The level file therefore sets `maxSlopeAngle` (`MAX_SLOPE_ANGLE` in `scripts/build_thps_level.py`, 88), which the mod applies to `PlayerMovement.maxSlopeAngle` for the run only (see `level-format.md`); Forest and every level without the key keep the game's 45. Vertical faces (90 degrees) stay unclimbable, so walls still block. The mod logs `LiveEdit: max slope angle 45 -> 88` when it applies. Open: how the raised limit feels on the other ramps and whether a lower value rides the pipes as well.

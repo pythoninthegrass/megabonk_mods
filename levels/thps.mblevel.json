@@ -6270,6 +6270,16 @@
     {
       "opType": "object.place",
       "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":149.365,\"y\":0.37130357142857306,\"z\":8.59},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":2.1132142857142853,\"y\":2.1132142857142853,\"z\":2.1132142857142853},\"hidden\":true}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":149.365,\"y\":0.37130357142857306,\"z\":43.81},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":2.1132142857142853,\"y\":2.1132142857142853,\"z\":2.1132142857142853},\"hidden\":true}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
       "payload": "{\"catalogId\":\"bundle:thps/Warehouse\",\"position\":{\"x\":100.0,\"y\":0.5,\"z\":0.0},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":79.2,\"y\":79.2,\"z\":79.2}}"
     },
     {

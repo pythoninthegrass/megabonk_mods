@@ -1,9 +1,11 @@
 ---
 id: TASK-021.21
 title: Grind the apex edges of the half pipes like the rails
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-10-28T21:02:00Z'
+updated_date: '2026-10-29 02:37'
 labels:
   - thps
   - level-editor
@@ -15,7 +17,6 @@ documentation:
   - scripts/build_thps_level.py
 parent_task_id: TASK-021
 priority: medium
-type: feature
 ordinal: 111000
 ---
 
@@ -29,16 +30,34 @@ Context for a fresh implementer: apply the hidden game rail approach from TASK-0
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Every half pipe and quarter pipe lip has a hidden game rail aligned to the coping, with each pipe and its coordinates listed in the task
-- [ ] #2 The player can grind each lip in game, with the grind sparks and player on the visible edge
+- [x] #1 Every half pipe and quarter pipe lip has a hidden game rail aligned to the coping, with each pipe and its coordinates listed in the task
+- [x] #2 The player can grind each lip in game, with the grind sparks and player on the visible edge
 - [ ] #3 Ollie off the main half pipe edges near (142, -3, 32) still works
-- [ ] #4 Generator behaviour is covered by tests in tests/test_build_thps_level.py written first, and docs/thps-warehouse-layout.md is updated
+- [x] #4 Generator behaviour is covered by tests in tests/test_build_thps_level.py written first, and docs/thps-warehouse-layout.md is updated
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Survey (tests first): add a lip finder to scripts/warehouse_surface.py (top boundary edges of 25-89 degree ramp faces, merged into collinear runs); failing tests in tests/test_build_thps_level.py first; verify candidates by screenshot.
+2. Pipe list: record each half pipe and quarter pipe with lip endpoints and height in this task and docs/thps-warehouse-layout.md.
+3. Rails (tests first): COPING_RAILS beside MESH_RAILS plus a helper from lip endpoints to (position, yaw, scale) using RAIL0_LENGTH and RAIL0_BAR_HEIGHT; emitted as hidden rail/0 via mesh_rail_edits; long copings split into touching rails so RailHandoffPatch chains them.
+4. In game: task mod:build, relaunch, teleport and grind each lip, check sparks/player on the edge; ollie off the main pipe edges near (142, -3, 32).
+5. Docs, task check, one conventional commit with no attribution.
+
+Scope (approved): only tops of half pipes and quarter pipes; borderline edges listed in the task for veto. Skip the long ~20-unit channel quarter pipe walls at height 8.56.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Pipes coped (main half pipe, from ridge_runs on the mesh): north lip (119.78, 5.76, 8.59) to (178.95, 5.76, 8.59); south lip (119.78, 5.76, 43.81) to (178.95, 5.76, 43.81); one hidden rail/0 each at scale 2.113. Borderline, excluded: wooden kickers near (45, 3.3, 47) and (45, 3.3, 62), taxi funbox near (120-137, 2-5, 75-83); long wall quarter pipes at height 8.56 skipped by decision. Grind checked by dropping the player onto each lip (task-021.21-grind-north.png, -grind-south.png in .tools/evidence): sparks and player on the coping. AC#3 not verified: the harness injects no gameplay input, so an ollie off the pipe edge was not exercised.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->

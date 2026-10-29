@@ -13,6 +13,9 @@ Triangle = tuple[Vec, Vec, Vec]
 Matrix = tuple[Vec, Vec, Vec]
 
 EPSILON = 1e-9
+# A ridge edge is at least this long and rises at most this much per unit of length.
+LEVEL_EDGE_MIN = 0.1
+LEVEL_EDGE_SLOPE = 0.1
 IDENTITY: Matrix = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
 # Chest, shrine and merchant prefabs are authored lying down with their up along +z, so they stand up at pitch 270.
 UPRIGHT_PITCH = 270.0
@@ -177,3 +180,63 @@ class Placement(NamedTuple):
 
     def triangles(self, triangles: list[Triangle]) -> list[Triangle]:
         return [tuple(self.point(v) for v in t) for t in triangles]
+
+
+def _upward_normal(t: Triangle) -> Vec:
+    n = triangle_normal(t)
+    return n if n[1] >= 0 else (-n[0], -n[1], -n[2])
+
+
+def _slope_degrees(normal: Vec) -> float:
+    return math.degrees(math.acos(min(1.0, normal[1])))
+
+
+def _round_point(p: Vec) -> Vec:
+    return (round(p[0], 2), round(p[1], 2), round(p[2], 2))
+
+
+def _extends(run: tuple[Vec, Vec], edge: tuple[Vec, Vec]) -> tuple[Vec, Vec] | None:
+    """The run grown by `edge` when they share an end and point the same way, else None."""
+    for i in (0, 1):
+        for j in (0, 1):
+            if math.dist(run[i], edge[j]) > 0.02:
+                continue
+            a, b = sub(run[1 - i], run[i]), sub(edge[1 - j], edge[j])
+            if math.dist(cross(a, b), (0, 0, 0)) > 0.02 * math.sqrt(dot(a, a) * dot(b, b)) or dot(a, b) > 0:
+                continue
+            return run[1 - i], edge[1 - j]
+    return None
+
+
+def ridge_runs(triangles: list[Triangle], min_length: float = 2.0, min_slope: float = 20.0) -> list[tuple[Vec, Vec]]:
+    """Level edges where two faces fall away from each other, one at least `min_slope` degrees steep, merged into straight runs of at least `min_length`."""
+    shared: dict[tuple[Vec, Vec], list[tuple[Vec, float]]] = {}
+    for t in triangles:
+        normal = _upward_normal(t)
+        for a, b, other in ((0, 1, 2), (1, 2, 0), (2, 0, 1)):
+            edge = tuple(sorted((_round_point(t[a]), _round_point(t[b]))))
+            shared.setdefault(edge, []).append((normal, t[other][1]))
+    runs: list[tuple[Vec, Vec]] = []
+    for (p, q), faces in shared.items():
+        length = math.dist(p, q)
+        if len(faces) != 2 or length < LEVEL_EDGE_MIN or abs(p[1] - q[1]) > LEVEL_EDGE_SLOPE * length:
+            continue
+        (n1, o1), (n2, o2) = faces
+        low = min(p[1], q[1]) - 0.05
+        falls_away = o1 < low and o2 < low and n1[0] * n2[0] + n1[2] * n2[2] < 0
+        if falls_away and max(_slope_degrees(n1), _slope_degrees(n2)) > min_slope:
+            runs.append((p, q))
+    merged = True
+    while merged:
+        merged = False
+        for i, run in enumerate(runs):
+            for j in range(i + 1, len(runs)):
+                grown = _extends(run, runs[j])
+                if grown:
+                    runs[i] = grown
+                    del runs[j]
+                    merged = True
+                    break
+            if merged:
+                break
+    return [r for r in runs if math.dist(*r) >= min_length]

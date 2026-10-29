@@ -81,3 +81,34 @@ def test_a_box_beside_a_triangle_without_touching_it_is_clear() -> None:
     upright = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
     wall = ((5, 0, 0), (5, 4, 0), (5, 0, 10))
     assert ws.box_hits([wall], (3, 2, 3), upright, (1, 1, 1)) == []
+
+
+def gable(x0: float, x1: float, z: float = 0.0, ridge: float = 4.0) -> list[ws.Triangle]:
+    """A roof ridge along x at height `ridge`, falling to height 0 a metre either side in z."""
+    return [
+        ((x0, ridge, z), (x1, ridge, z), (x0, 0, z - 1)),
+        ((x1, ridge, z), (x1, 0, z - 1), (x0, 0, z - 1)),
+        ((x0, ridge, z), (x0, 0, z + 1), (x1, ridge, z)),
+        ((x1, ridge, z), (x0, 0, z + 1), (x1, 0, z + 1)),
+    ]
+
+
+def test_ridge_runs_finds_the_edge_where_two_faces_fall_away_opposite_ways() -> None:
+    [(start, end)] = ws.ridge_runs(gable(0, 10))
+    assert sorted([start, end]) == [(0, 4, 0), (10, 4, 0)]
+
+
+def test_ridge_runs_merges_collinear_edges_into_one_run() -> None:
+    [(start, end)] = ws.ridge_runs(gable(0, 10) + gable(10, 25))
+    assert sorted([start, end]) == [(0, 4, 0), (25, 4, 0)]
+
+
+def test_ridge_runs_ignores_a_valley_a_flat_floor_and_a_gentle_ridge() -> None:
+    valley = [((0, 0, 0), (10, 0, 0), (0, 4, -1)), ((10, 0, 0), (10, 4, -1), (0, 4, -1)), ((0, 0, 0), (0, 4, 1), (10, 0, 0)), ((10, 0, 0), (0, 4, 1), (10, 4, 1))]
+    assert ws.ridge_runs(valley) == []
+    assert ws.ridge_runs([FLOOR, FLOOR_FAR]) == []
+    assert ws.ridge_runs(gable(0, 10, ridge=0.2)) == []
+
+
+def test_ridge_runs_ignores_runs_shorter_than_the_minimum() -> None:
+    assert ws.ridge_runs(gable(0, 1.5)) == []
