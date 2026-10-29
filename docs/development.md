@@ -236,13 +236,19 @@ Process detection uses the standard library only: `ps -axo pid=,command=` on mac
 `levels/thps.mblevel.json` is generated, and its Warehouse mesh and soundtrack clip live in the `thps` pack, so a launch needs both. The level's `music` field names the clip (`bundle:thps/04_Superman`); see [music.md](music.md).
 
 ```sh
-uv run scripts/build_thps_level.py                 # rewrites levels/thps.mblevel.json
+task thps                                          # extract, build and install the level and the pack
 task mod:build                                     # only when the C# changed
-task pack:install PACK=thps                        # needs .tools/bundles/<platform>/thps
 task game:editor -- levels/thps.mblevel.json
 ```
 
-The bundle is built by `task pack:thps` from `.tools/thps1/warehouse/` and `tools/ost/*.mp3` (both gitignored; without the mp3s the pack builds with no music). The warehouse source is extracted from the PS1 disc image and gitignored. A machine without the disc and the extraction can copy a built bundle from one that has them instead: `rsync -av <host>:git/megabonk_mods/.tools/bundles/windows/thps{,.manifest} .tools/bundles/windows/` (`linux` on a native Linux host), then `task pack:install PACK=thps`. Rebuild on the source machine first if `unity/pack-authoring/Assets/Editor/ThpsPack.cs` changed since that bundle was built.
+`task thps` (`taskfiles/thps.yml`) runs four steps, each of which skips itself when its inputs are unchanged, so a second run takes under a second:
+
+- `thps:extract` cuts the Warehouse mesh, textures and nodes out of the disc image into `.tools/thps1/warehouse/`. It is skipped once `warehouse.obj` exists; otherwise it needs the disc image in `tools/thps1/` and `THPS2_TOOLS_DIR` in `.env` pointing at a thps2-tools checkout (see [thps-warehouse.md](thps-warehouse.md)).
+- `thps:level` regenerates `levels/thps.mblevel.json` with `scripts/build_thps_level.py`. The output is byte-for-byte the same for the same inputs.
+- `thps:pack` builds the bundle for Windows and Linux with Unity from `.tools/thps1/warehouse/` and `tools/ost/*.mp3` (both gitignored; without the mp3s the pack builds with no music).
+- `thps:install` copies the bundle and manifest into `UserData/LevelPacks/thps` and the level into `UserData/Levels`, through `task pack:install PACK=thps`.
+
+A machine builds its own pack, so it needs the disc image, the mp3s and Unity 2023.2.22f1; nothing is copied between machines. The disc path, the extraction marker and the level path are variables that default to their usual values, so `task thps DISC=<path>` and `task thps LEVEL=<path>` override them. Rebuild runs whenever `ThpsPack.cs` or the pack inputs change, and a running game only sees the pack and level after a relaunch.
 
 A missing pack does not fail the load. The level opens with a placeholder at the Warehouse position and the log shows `Packs: 'bundle:thps/Warehouse': pack 'thps' is not installed; using a placeholder.` Packs load once per session, so install the pack before the relaunch.
 
@@ -503,7 +509,7 @@ A postfix on `MapSelectionUi.OnMapSelected` records whether the selected button 
 
 A custom level fixes its own tier, so its entry shows only the first tier button, like Graveyard. A prefix on `MapStatsWindow.OnMapSelected` records the selection before the stats window refreshes, and that method and `RefreshTiers` hide every tier button after the first while the entry is selected. The game sets the buttons itself for a native map, so nothing is restored. The right-hand panel still shows the base map's runs, highscore and speedrun, because the entry carries that map's `MapData`. The hover methods of the selection buttons share their native code with unrelated methods and cannot be patched, so nothing reacts to hover.
 
-To check it, copy `levels/thps.mblevel.json` into `UserData/Levels`, run `relaunch(no_level=true)` and click through Play, the character, Map Selection and Confirm by hand. The log shows `MapSelection: listed 'Warehouse'`, `MapSelection: selected thps.mblevel.json` and `LevelLoader: starting map=Forest`. A relaunch starts the game unfocused, so click its window before using the menu.
+To check it, run `task thps` to install the level and pack, then run `relaunch(no_level=true)` and click through Play, the character, Map Selection and Confirm by hand. The log shows `MapSelection: listed 'Warehouse'`, `MapSelection: selected thps.mblevel.json` and `LevelLoader: starting map=Forest`. A relaunch starts the game unfocused, so click its window before using the menu.
 
 ## Python tests
 

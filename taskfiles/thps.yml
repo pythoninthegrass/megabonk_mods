@@ -1,0 +1,73 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+vars:
+  DISC: '{{.DISC | default "tools/thps1/Tony Hawk''s Pro Skater.bin"}}'
+  WAREHOUSE_OBJ: '{{.WAREHOUSE_OBJ | default ".tools/thps1/warehouse/warehouse.obj"}}'
+  LEVEL: '{{.LEVEL | default "levels/thps.mblevel.json"}}'
+
+tasks:
+  default:
+    desc: "Extract, build and install the THPS Warehouse level and its pack into the game"
+    summary: |
+      Usage: task thps
+
+      Runs extract, level, pack and install. Every step skips itself when its inputs are
+      unchanged, so rerunning is cheap. Needs the disc image in tools/thps1/, the soundtrack
+      mp3s in tools/ost/ and Unity 2023.2.22f1; see docs/development.md. A running game only
+      sees the pack and level after a relaunch.
+    cmds:
+      - task: extract
+      - task: level
+      - task: pack
+      - task: install
+
+  extract:
+    desc: "Extract the Warehouse mesh, textures and nodes from the disc image into .tools/thps1/warehouse"
+    summary: |
+      Skipped once warehouse.obj exists. Otherwise needs THPS2_TOOLS_DIR (in .env) pointing at
+      a checkout of JayFoxRox/thps2-tools; see docs/thps-warehouse.md.
+    status:
+      - test -f {{.WAREHOUSE_OBJ}}
+    cmds:
+      - |
+        [ -f "{{.DISC}}" ] || { echo "missing disc image: {{.DISC}}" >&2; exit 1; }
+        [ -n "${THPS2_TOOLS_DIR:-}" ] || { echo "set THPS2_TOOLS_DIR in .env to a thps2-tools checkout" >&2; exit 1; }
+        uv run --with pillow scripts/thps1_extract.py --disc "{{.DISC}}" --converter-dir "$THPS2_TOOLS_DIR"
+
+  level:
+    desc: "Regenerate {{.LEVEL}} from scripts/build_thps_level.py"
+    sources:
+      - scripts/build_thps_level.py
+      - unity/pack-authoring/packs/thps/manifest.json
+      - .tools/thps1/warehouse/warehouse_nodes.json
+    generates:
+      - "{{.LEVEL}}"
+    cmds:
+      - uv run scripts/build_thps_level.py
+
+  pack:
+    desc: "Build the THPS pack bundles for Windows and Linux with Unity"
+    sources:
+      - unity/pack-authoring/Assets/Editor/ThpsPack.cs
+      - unity/pack-authoring/packs/thps/**/*
+      - .tools/thps1/warehouse/**/*
+      - tools/ost/*.mp3
+    generates:
+      - .tools/bundles/windows/thps
+      - .tools/bundles/linux/thps
+    cmds:
+      - task: :pack:build
+        vars: {PACK_METHOD: ThpsPack.Build}
+
+  install:
+    desc: "Copy the THPS pack and level into the game's UserData"
+    cmds:
+      - task: :pack:install
+        vars: {PACK: thps}
+      - |
+        dest="$(uv run scripts/game_paths.py | jq -r .game_dir)/UserData/Levels"
+        mkdir -p "$dest"
+        cp "{{.LEVEL}}" "$dest/"
+        echo "installed {{.LEVEL}} into $dest"

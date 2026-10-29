@@ -18,6 +18,7 @@ includes:
   game: taskfiles/game.yml
   steamstub: taskfiles/steamstub.yml
   pack: taskfiles/pack.yml
+  thps: taskfiles/thps.yml
   re: taskfiles/re.yml
   ghidra: taskfiles/ghidra.yml
   wine:
