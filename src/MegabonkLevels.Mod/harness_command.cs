@@ -20,6 +20,7 @@ public enum HarnessCommandKind
     CameraClear,
     Invulnerable,
     Vulnerable,
+    Kill,
     Spawns,
     Heartbeat,
     Cells,
@@ -152,6 +153,10 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return true;
             case "vulnerable":
                 command = new HarnessCommand(HarnessCommandKind.Vulnerable, null);
+                error = null;
+                return true;
+            case "kill":
+                command = new HarnessCommand(HarnessCommandKind.Kill, null);
                 error = null;
                 return true;
             case "steam-ready":

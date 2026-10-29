@@ -262,6 +262,14 @@ def test_build_command_invulnerable_and_vulnerable_have_no_payload() -> None:
     assert run.build_command("vulnerable") == {"command": "vulnerable"}
 
 
+def test_build_command_kill_has_no_payload() -> None:
+    assert run.build_command("kill") == {"command": "kill"}
+
+
+def test_parse_args_kill_subcommand() -> None:
+    assert run.parse_args(["kill"]).action == "kill"
+
+
 def test_parse_args_invulnerable_and_vulnerable_subcommands() -> None:
     assert run.parse_args(["invulnerable"]).action == "invulnerable"
     assert run.parse_args(["vulnerable"]).action == "vulnerable"

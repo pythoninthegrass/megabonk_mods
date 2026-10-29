@@ -151,6 +151,9 @@ public static class DevHarness
                 CameraOverride.Clear();
                 _logger.Msg("DevHarness: camera override cleared.");
                 break;
+            case HarnessCommandKind.Kill:
+                KillPlayer();
+                break;
             case HarnessCommandKind.Invulnerable:
                 PlayerInvulnerability.Set(true, _logger);
                 break;
@@ -423,6 +426,20 @@ public static class DevHarness
 
         _logger.Msg($"DevHarness: dismiss-levelup chose {choice} '{chosen}'.");
         return new JsonObject { ["dialogWasOpen"] = true, ["chosen"] = chosen };
+    }
+
+    // Ends the run through PlayerHealth.KillPlayer, the same call the kill floor uses, so it ignores invulnerability.
+    private static void KillPlayer()
+    {
+        var health = MyPlayer.Instance?.inventory?.playerHealth;
+        if (health == null)
+        {
+            _logger.Warning("DevHarness: kill ignored, no player in the scene.");
+            return;
+        }
+
+        health.KillPlayer();
+        _logger.Msg("DevHarness: player killed.");
     }
 
     private static void QueueKey(InputArgs input)

@@ -287,6 +287,12 @@ async def invulnerable(on: bool) -> CallToolResult:
 
 
 @mcp.tool()
+async def kill() -> CallToolResult:
+    """End the run at once by killing the player through PlayerHealth.KillPlayer, even when invulnerable; the game shows its death screen."""
+    return await _command(_harness(), run.build_command("kill"), TIMEOUT)
+
+
+@mcp.tool()
 async def spawns(on: bool) -> CallToolResult:
     """Allow new enemy spawns (on) or stop them (off). Off leaves enemies already alive and resets on level load; state reports spawnsOff."""
     return await _command(_harness(), run.build_spawns_command(on), TIMEOUT)

@@ -25,6 +25,7 @@ Usage:
     run.py resume                  Unpause gameplay through MyTime.Unpause
     run.py invulnerable            Make the player survive enemy damage
     run.py vulnerable              Restore normal player damage
+    run.py kill                    End the run at once by killing the player, even when invulnerable
     run.py steam-ready             Check whether the in-game Steamworks client is ready
     run.py state                   Print the game's current state as JSON (level, editor, player, tool, selection)
     run.py shader-report           Print which candidate shaders Shader.Find resolves and the shaders and properties of the scene's materials
@@ -553,6 +554,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("resume")
     sub.add_parser("invulnerable")
     sub.add_parser("vulnerable")
+    sub.add_parser("kill")
     sub.add_parser("steam-ready")
     sub.add_parser("state")
     sub.add_parser("shader-report")
@@ -812,7 +814,7 @@ def main(argv: list[str] | None = None) -> int:
             ok = quit_game(harness, args.timeout)
         case "steam-ready":
             ok = send_steam_ready(harness, args.timeout)
-        case "freeze" | "resume" | "invulnerable" | "vulnerable":
+        case "freeze" | "resume" | "invulnerable" | "vulnerable" | "kill":
             ok = send(harness, build_command(args.action), args.timeout)
         case "state":
             ok = send_printing_result(harness, build_command("state"), args.timeout)
