@@ -856,6 +856,25 @@ async def test_relaunch_tool_forwards_the_overrides(tmp_path, monkeypatch) -> No
     assert seen["feathers"] == 2
 
 
+async def test_relaunch_tool_no_level_passes_no_level_path(tmp_path, monkeypatch) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    seen = {}
+
+    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2):
+        seen["level"] = level
+        return True
+
+    monkeypatch.setattr(mcp_server.run, "relaunch", fake_relaunch)
+
+    async def fake_command(harness, payload, timeout):
+        return mcp_server._encode({"ok": True})
+
+    monkeypatch.setattr(mcp_server, "_command", fake_command)
+    async with Client(mcp_server.mcp) as client:
+        await client.call_tool("relaunch", {"no_level": True})
+    assert seen["level"] is None
+
+
 async def test_relaunch_tool_applies_the_spawn_and_invulnerable_settings(tmp_path, monkeypatch) -> None:
     setup_harness(tmp_path, monkeypatch)
     monkeypatch.setenv("MEGABONK_RELAUNCH_SPAWNS", "false")

@@ -280,6 +280,11 @@ def test_build_heartbeat_command_carries_the_enabled_flag() -> None:
     assert run.build_heartbeat_command(False) == {"command": "heartbeat", "enabled": False}
 
 
+def test_build_character_screen_command_carries_the_enabled_flag() -> None:
+    assert run.build_character_screen_command(True) == {"command": "character-screen", "enabled": True}
+    assert run.build_character_screen_command(False) == {"command": "character-screen", "enabled": False}
+
+
 def test_build_spawns_command_carries_the_enabled_flag() -> None:
     assert run.build_spawns_command(True) == {"command": "spawns", "enabled": True}
     assert run.build_spawns_command(False) == {"command": "spawns", "enabled": False}
@@ -450,6 +455,11 @@ def test_parse_args_relaunch_defaults_to_the_test_forest_level() -> None:
     args = run.parse_args(["relaunch"])
     assert args.action == "relaunch"
     assert args.level == run.TEST_FOREST_LEVEL
+
+
+def test_parse_args_relaunch_no_level_flag() -> None:
+    assert run.parse_args(["relaunch", "--no-level"]).no_level is True
+    assert run.parse_args(["relaunch"]).no_level is False
 
 
 def test_relaunch_timeout_allows_melonloader_to_initialize() -> None:
@@ -624,6 +634,21 @@ def test_relaunch_runs_every_step_in_order_and_returns_true(monkeypatch) -> None
         ("send", "item"),
         ("send", "editor"),
     ]
+
+
+def test_relaunch_without_a_level_stops_at_the_main_menu(monkeypatch) -> None:
+    calls = relaunch_stubs(monkeypatch)
+    ok = run.relaunch(Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=lambda m: None)
+    assert ok is True
+    assert calls == ["quit", ("launch", "game:run"), ("log", "DevHarness: enabled"), "steam"]
+
+
+def test_relaunch_without_a_level_still_fails_when_steamworks_never_readies(monkeypatch) -> None:
+    relaunch_stubs(monkeypatch, steam_ready=False)
+    errors = []
+    ok = run.relaunch(Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=errors.append)
+    assert ok is False
+    assert errors == ["relaunch: Steamworks did not become ready"]
 
 
 def test_relaunch_sets_two_feathers_before_entering_the_editor(monkeypatch) -> None:
@@ -980,6 +1005,10 @@ def test_relaunch_fails_fast_when_the_level_fails_to_load(monkeypatch) -> None:
     assert ok is False
     assert len([c for c in calls if c == ("send", "load-level")]) == 1
     assert errors == ["relaunch: the level failed to load; see the LevelLoader line in the game log"]
+
+
+def test_build_load_level_command_adds_the_character_when_named() -> None:
+    assert run.build_load_level_command("p", character="calcium") == {**run.build_command("load-level", "p"), "character": "calcium"}
 
 
 def test_build_load_level_command_without_overrides_matches_the_plain_command() -> None:

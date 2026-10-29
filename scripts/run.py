@@ -29,6 +29,7 @@ Usage:
     run.py steam-ready             Check whether the in-game Steamworks client is ready
     run.py state                   Print the game's current state as JSON (level, editor, player, tool, selection)
     run.py shader-report           Print which candidate shaders Shader.Find resolves and the shaders and properties of the scene's materials
+    run.py character-screen <on|off>  Restrict the game's character screen to Calcium and Tony McZoom (a custom run is being set up) or restore the stock grid
     run.py spawns <on|off>         Allow or stop new enemy spawns (off leaves enemies already alive; resets on level load)
     run.py heartbeat <on|off>      Start or stop the kill-floor heartbeat (actor counts and lowest heights every 5 seconds)
     run.py cells <on|off>          Start or stop logging the player's and boss-tier actors' grid cell on change
@@ -50,6 +51,8 @@ Usage:
     run.py item NAME [AMOUNT]      Print the player's amount of an item; with AMOUNT set it exactly (0 removes it), printing before and after
     run.py dismiss-levelup [--choice N]  Pick offer N (default 0) in the open level-up dialog; prints dialogWasOpen and chosen
     run.py quit                    Quit the game, wait for the process to exit, and stop leftover Wine processes (macOS)
+    run.py relaunch [level] [--no-level] [--map N] [--stage N] [--tier N] [--seed N] [--character NAME]
+                                   Quit and relaunch the game, load a level (default: the test forest) and enter editor; --no-level stops at the main menu
     run.py cycle <level> <out.png> Load, wait --settle seconds, screenshot, quit
                                    [--invulnerable] applies before the settle wait
                                    [--freeze] [--camera X Y Z RX RY RZ] apply before the screenshot
@@ -186,12 +189,15 @@ def build_load_level_command(
     stage: int | None = None,
     tier: int | None = None,
     seed: int | None = None,
+    character: str | None = None,
 ) -> dict[str, object]:
-    """A load-level command whose supplied overrides replace those fields of the level file for this load only."""
+    """A load-level command whose supplied overrides replace those fields of the level file for this load only; character names the dev-flag character (calcium or tonymczoom)."""
     payload: dict[str, object] = dict(build_command("load-level", path))
     for field, value in (("map", map), ("stageIndex", stage), ("tier", tier), ("seed", seed)):
         if value is not None:
             payload[field] = value
+    if character is not None:
+        payload["character"] = character
     return payload
 
 
@@ -200,10 +206,15 @@ def add_load_overrides(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--stage", type=int, help="replace the level's stage index")
     parser.add_argument("--tier", type=int, help="replace the level's tier")
     parser.add_argument("--seed", type=int, help="replace the level's debug seed")
+    parser.add_argument("--character", help="character for the run when MEGABONK_DEV is on: calcium or tonymczoom (default tonymczoom)")
 
 
-def load_overrides(args: argparse.Namespace) -> dict[str, int]:
-    return {k: v for k in ("map", "stage", "tier", "seed") if (v := getattr(args, k)) is not None}
+def load_overrides(args: argparse.Namespace) -> dict[str, int | str]:
+    return {k: v for k in ("map", "stage", "tier", "seed", "character") if (v := getattr(args, k)) is not None}
+
+
+def build_character_screen_command(enabled: bool) -> dict[str, object]:
+    return {"command": "character-screen", "enabled": enabled}
 
 
 def build_spawns_command(enabled: bool) -> dict[str, object]:
@@ -558,6 +569,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("steam-ready")
     sub.add_parser("state")
     sub.add_parser("shader-report")
+    character_screen = sub.add_parser("character-screen")
+    character_screen.add_argument("state", choices=["on", "off"])
     spawns = sub.add_parser("spawns")
     spawns.add_argument("state", choices=["on", "off"])
     heartbeat = sub.add_parser("heartbeat")
@@ -619,6 +632,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     cycle.add_argument("--settle", type=float, default=5.0, help="seconds between load and screenshot")
     relaunch = sub.add_parser("relaunch")
     relaunch.add_argument("level", type=Path, nargs="?", default=TEST_FOREST_LEVEL)
+    relaunch.add_argument("--no-level", action="store_true", help="stop at the main menu without loading a level")
     add_load_overrides(relaunch)
     return parser.parse_args(argv)
 
@@ -685,6 +699,10 @@ def type_payload(args: argparse.Namespace) -> dict[str, object]:
     return build_type_command(args.text)
 
 
+def character_screen_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_character_screen_command(args.state == "on")
+
+
 def spawns_payload(args: argparse.Namespace) -> dict[str, object]:
     return build_spawns_command(args.state == "on")
 
@@ -714,17 +732,17 @@ def prepare_frame(harness: Path, args: argparse.Namespace) -> bool:
 def relaunch(
     harness: Path,
     game_dir: Path,
-    level: Path,
+    level: Path | None,
     timeout: float,
     task: str,
     on_step: Callable[[str], None],
     on_error: Callable[[str], None],
-    overrides: Mapping[str, int] | None = None,
+    overrides: Mapping[str, int | str] | None = None,
     spawns: bool = True,
     invulnerable: bool = False,
     feathers: int = 2,
 ) -> bool:
-    """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable if asked, set the Feathers amount unless it is 0, stop enemy spawns unless spawns is set, and enter editor."""
+    """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable if asked, set the Feathers amount unless it is 0, stop enemy spawns unless spawns is set, and enter editor. A level of None stops at the main menu once Steamworks is ready."""
     started = time.time()
 
     def prepare_harness() -> str | None:
@@ -754,6 +772,9 @@ def relaunch(
             case str() as error:
                 on_error(error)
                 return False
+
+    if level is None:
+        return True
 
     loaded = False
     for attempt in range(1, 6):
@@ -834,6 +855,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, item_payload(args), args.timeout)
         case "dismiss-levelup":
             ok = send_printing_result(harness, dismiss_levelup_payload(args), args.timeout)
+        case "character-screen":
+            ok = send(harness, character_screen_payload(args), args.timeout)
         case "spawns":
             ok = send(harness, spawns_payload(args), args.timeout)
         case "heartbeat":
@@ -865,7 +888,7 @@ def main(argv: list[str] | None = None) -> int:
             ok = relaunch(
                 harness,
                 game_dir,
-                args.level,
+                None if args.no_level else args.level,
                 args.timeout,
                 launch_task(resolve_macos_runtime(load_lookup())),
                 on_step=print,

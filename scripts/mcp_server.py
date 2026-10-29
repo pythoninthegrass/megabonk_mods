@@ -134,11 +134,12 @@ async def relaunch(
     stage: int | None = None,
     tier: int | None = None,
     seed: int | None = None,
+    no_level: bool = False,
 ) -> CallToolResult:
-    """Quit and relaunch the game, load a level, enter editor with 2 Feathers, enemy spawns on and normal damage; MEGABONK_RELAUNCH_FEATHERS sets the Feathers amount (0 leaves it alone); MEGABONK_RELAUNCH_SPAWNS=false stops spawns and MEGABONK_RELAUNCH_INVULNERABLE=true makes the player invulnerable; returns the final state. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only."""
+    """Quit and relaunch the game, load a level, enter editor with 2 Feathers, enemy spawns on and normal damage; MEGABONK_RELAUNCH_FEATHERS sets the Feathers amount (0 leaves it alone); MEGABONK_RELAUNCH_SPAWNS=false stops spawns and MEGABONK_RELAUNCH_INVULNERABLE=true makes the player invulnerable; returns the final state. no_level stops at the main menu without loading a level or entering the editor, e.g. to check the stock character screen. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only."""
     game_dir = _game_dir()
     harness = game_dir / "harness"
-    level_path = Path(level) if level else run.TEST_FOREST_LEVEL
+    level_path = None if no_level else Path(level) if level else run.TEST_FOREST_LEVEL
     task = run.launch_task(run.resolve_macos_runtime(run.load_lookup()))
     errors: list[str] = []
     progress = {"step": 0}
@@ -177,9 +178,10 @@ async def load(
     stage: int | None = None,
     tier: int | None = None,
     seed: int | None = None,
+    character: str | None = None,
 ) -> CallToolResult:
-    """Load a level file and start it. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only; the file is not modified."""
-    payload = run.build_load_level_command(run.to_game_path(Path(level).resolve()), map, stage, tier, seed)
+    """Load a level file and start it. character (calcium or tonymczoom) names the run's character when MEGABONK_DEV is on; the default is Tony McZoom. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only; the file is not modified."""
+    payload = run.build_load_level_command(run.to_game_path(Path(level).resolve()), map, stage, tier, seed, character)
     return await _command(_harness(), payload, TIMEOUT)
 
 
@@ -290,6 +292,12 @@ async def invulnerable(on: bool) -> CallToolResult:
 async def kill() -> CallToolResult:
     """End the run at once by killing the player through PlayerHealth.KillPlayer, even when invulnerable; the game shows its death screen."""
     return await _command(_harness(), run.build_command("kill"), TIMEOUT)
+
+
+@mcp.tool()
+async def character_screen(on: bool) -> CallToolResult:
+    """Restrict the game's Character Selection screen to Calcium and Tony McZoom, pinned first with every other character greyed out (on), or restore the stock grid (off). Applies at once if the screen is built and whenever it opens."""
+    return await _command(_harness(), run.build_character_screen_command(on), TIMEOUT)
 
 
 @mcp.tool()
