@@ -22,6 +22,7 @@ public static class LiveEditPatch
     private const string TileObjectsParentName = "TileObjectsParent";
 
     private static IReadOnlyList<EditOp> _pendingEdits;
+    private static IReadOnlyList<EditOp> _levelEdits;
     private static bool _noGrass;
     private static IReadOnlyList<float> _playerStart;
     private static float? _maxSlopeAngle;
@@ -37,9 +38,16 @@ public static class LiveEditPatch
     public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null)
     {
         _pendingEdits = edits;
+        _levelEdits = edits;
         _noGrass = noGrass;
         _playerStart = playerStart;
         _maxSlopeAngle = maxSlopeAngle;
+    }
+
+    // Queues the loaded level's edits again for the next generation, which a native restart runs without going through LevelLoaderPatch.
+    public static void RearmLevelEdits()
+    {
+        _pendingEdits = _levelEdits;
     }
 
     // Apply pending edits immediately to the current session if present. Returns the number of edits applied.

@@ -381,6 +381,22 @@ Caveats:
 - A surviving, idle player can still reach the level-up dialog, which pauses play and puts a window in the frame. `freeze` after the settle wait does not close it, so keep the settle time short or take the screenshot before the first level-up.
 - The kill floor still wins. `KillFloorWatcher` ends a fall through `PlayerHealth.KillPlayer()`, which does not pass through the damage check. Verified with a level that removes every tile but one: the invulnerable player logged `KillFloor: player fell to y=-49.8, killing` and the run ended on the death screen.
 
+## Death screen restart
+
+The death screen's summary window (shown after Confirm on "you ded") has a retry button, `DeathScreen.restartBtn` (the object named `B_Retry`, in `StatsWindows/W_Stats/.../Buttons`). The game ships it inactive and nothing in `Awake`, `StartDeathScreen`, `DoTransition` or `Update` turns it on, so a normal run's death screen shows Confirm alone. A second object named `B_Restart` exists in the scene and is a different button; do not read it as the death screen's.
+
+`DeathRestartPatch` postfixes `DeathScreen.StartDeathScreen` and calls `restartBtn.SetActive(true)` when `CustomLevelState.IsActive`, so only mod-loaded runs get the button. Pressing it runs `DeathScreen.Restart`, which calls `MapController.RestartRun`. `RestartRun` keeps the stored `RunConfig` and does not call `MapController.StartNewMap`, so `LevelLoaderPatch.StartOnce` and the `CustomLevelState` start hook do not run again. Three things carry the custom level across the restart:
+
+- `CustomLevelState.IsActive` keeps its value, so `SteamWriteGuard` keeps suppressing scores, achievements and stats.
+- The forced seed (`SeedForcePatch` level-seed mode), the grass flag, the player start, the slope limit, the music and the title live in statics that nothing clears between generations.
+- `LiveEditPatch` clears its pending edits once a generation has applied them, so a `RestartRun` prefix in `DeathRestartPatch` calls `LiveEditPatch.RearmLevelEdits()`, which queues the loaded level's edits again. Without it the level regenerates without its edits and the kill floor stays disarmed.
+
+Edits made in the editor during the run are not kept; a restart reloads the edits the level file had when it was loaded.
+
+Reach the screen with the `kill` command (`run.py kill` or the MCP `kill` tool), which calls `PlayerHealth.KillPlayer` and so ignores `invulnerable`, then click Confirm in the game. The harness injects input for the editor only, so Confirm and the retry button need a real click. The log shows `DeathRestart: retry button shown for the custom run`, then after the click `DeathRestart: restarting the custom run, level edits queued again`.
+
+Not checked: `PauseUi.Restart` and the hold-to-reset `ResetRunUi` may also reach `RestartRun`, and with the prefix in place they would re-arm the edits the same way. What natively enables `B_Retry` on some maps (a report that Desert and Graveyard show it more often) was not found; it is not driven by any code reached from the death screen.
+
 ## Enemy spawns
 
 `spawns` with `enabled:false` (`run.py spawns off`, MCP `spawns(on=false)`) sets `EnemyManager.enabledWaves` to false, which stops the wave spawner; `enabled:true` sets it back. `state` reports `spawnsOff`, true only while the current `EnemyManager` is the one the harness switched off. The switch does not outlive a scene: a level load or new run builds a new `EnemyManager` with the default `enabledWaves`, so spawns are on again after a `load`; send `spawns off` again after each. `relaunch` sends `spawns off` itself before entering editor mode only when `MEGABONK_RELAUNCH_SPAWNS` is false.
