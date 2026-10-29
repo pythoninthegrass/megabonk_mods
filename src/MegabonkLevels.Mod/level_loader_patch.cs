@@ -121,6 +121,10 @@ public static class LevelLoaderPatch
         {
             logger.Warning(characterWarning);
         }
+        else
+        {
+            logger.Msg($"LevelLoader: character={(ECharacter)characterId}");
+        }
 
         var runConfig = PrepareRun(level, logger, mapData);
         try
