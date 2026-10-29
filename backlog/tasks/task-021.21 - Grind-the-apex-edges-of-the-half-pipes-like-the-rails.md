@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-28T21:02:00Z'
-updated_date: '2026-10-29 04:03'
+updated_date: '2026-10-29 04:19'
 labels:
   - thps
   - level-editor
@@ -58,6 +58,10 @@ Follow-up after review: the lips continue past x 119.78 as a 21 unit diagonal to
 Pocket tip fixed: two chords at the tip, coping rails at least the handoff search radius long, and RailHandoffPatch sets railDirectionMultiplier toward the far end after StartRail. Shorty's ledge on the west wall added as LEDGE_LIPS (4 segments, (40.89, 3.79, 3.51) to (21.17, 3.79, 58.73)) via ledge_runs; checked by dropping onto it: the grind chains to the kicker end and lands at (43, 2, 4). The east side's matching ledge edges are not coped.
 
 Start half pipe platform lip (80.34, 35.85, -120.84) to (139.5, 35.85, -120.84) added as START_PIPE_LIPS; the start area's mesh is double-sided, so the finders drop duplicate faces. Rail engages (grind pose and sparks on the coping); a grind along it was not exercised because a teleport gives no speed. Other lip runs near the start (z -58.02 at height 26.95, z -65.75 at height 48.01) are not coped.
+
+Wall-end pull-back (WALL_ENDS, WALL_MARGIN) removed: it left the last 12 units of each wall-to-wall lip ungrindable and did not stop the launch into the wall. Rails now run edge to edge (tested). Checked on the start lip: dropped 1.4 from the west wall, the grind ran to x 138.86, 0.6 short of the east wall. Observed: the spawn (109, 38, -120) is 0.84 from the start lip, so the player spawns caught on the rail and a teleport cannot move him; the spawn is a chosen position, left unchanged.
+
+The installed thps pack was stale (manifest 2.0.10 with six assets, built before the roof and see-through fixes), so the sky showed. Rebuilt and installed with task pack:thps (2.0.21, 44.9 MB, 14 clips); in game the roof is closed and the soundtrack loads. The build log shows a WarehouseRoof compile error on Unity's first pass that clears on the second; the build exits 0.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
