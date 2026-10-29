@@ -6385,6 +6385,26 @@
     {
       "opType": "object.place",
       "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":40.89,\"y\":3.3710714285714287,\"z\":5.81},\"rotation\":{\"x\":0.0,\"y\":270.0,\"z\":0.0},\"scale\":{\"x\":0.16428571428571428,\"y\":0.16428571428571428,\"z\":0.16428571428571428},\"hidden\":true}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":33.33,\"y\":1.6435316286076436,\"z\":17.15},\"rotation\":{\"x\":0.0,\"y\":230.09482747914154,\"z\":0.0},\"scale\":{\"x\":0.8417523025068065,\"y\":0.8417523025068065,\"z\":0.8417523025068065},\"hidden\":true}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":25.77,\"y\":1.7245000000000008,\"z\":37.53},\"rotation\":{\"x\":0.0,\"y\":270.0,\"z\":0.0},\"scale\":{\"x\":0.8099999999999998,\"y\":0.8099999999999998,\"z\":0.8099999999999998},\"hidden\":true}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":23.47,\"y\":2.7991210939890028,\"z\":53.8},\"rotation\":{\"x\":0.0,\"y\":244.98946918478475,\"z\":0.0},\"scale\":{\"x\":0.38857996314156756,\"y\":0.38857996314156756,\"z\":0.38857996314156756},\"hidden\":true}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
       "payload": "{\"catalogId\":\"bundle:thps/Warehouse\",\"position\":{\"x\":100.0,\"y\":0.5,\"z\":0.0},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":79.2,\"y\":79.2,\"z\":79.2}}"
     },
     {

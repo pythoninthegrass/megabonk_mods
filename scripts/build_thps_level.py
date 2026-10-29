@@ -85,7 +85,14 @@ WALL_PIPE_LIPS = (
     ((175.04, 8.56, 113.7), (175.66, 8.56, 108.04)),
     ((175.66, 8.56, 79.77), (175.66, 8.56, 108.04)),
 )
-COPING_LIPS = MAIN_PIPE_LIPS + WALL_PIPE_LIPS
+# The top edge of the Shorty's ledge along the west wall, from the kicker end near (44, 2, 5) round its diagonal to the wall near (22, 2, 60); it is a deck over a vertical face, not a ramp lip.
+LEDGE_LIPS = (
+    ((40.89, 3.79, 3.51), (40.89, 3.79, 8.11)),
+    ((40.89, 3.79, 8.11), (25.77, 3.79, 26.19)),
+    ((25.77, 3.79, 26.19), (25.77, 3.79, 48.87)),
+    ((25.77, 3.79, 48.87), (21.17, 3.79, 58.73)),
+)
+COPING_LIPS = MAIN_PIPE_LIPS + WALL_PIPE_LIPS + LEDGE_LIPS
 
 
 def rail_along(start: tuple[float, float, float], end: tuple[float, float, float]) -> tuple[tuple[float, float, float], float, float, float]:

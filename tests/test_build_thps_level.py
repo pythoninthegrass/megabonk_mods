@@ -540,7 +540,7 @@ def test_each_coping_rail_is_a_hidden_game_rail_after_the_mesh_rails() -> None:
 
 @needs_extract
 def test_every_coping_lip_runs_between_corners_of_the_mesh_lip() -> None:
-    runs = ws.lip_runs(b.warehouse_triangles())
+    runs = ws.lip_runs(b.warehouse_triangles()) + ws.ledge_runs(b.warehouse_triangles())
     corners = [p for run in runs for p in run]
     for start, end in b.COPING_LIPS:
         assert min(math.dist(start, c) for c in corners) < 0.1, start
@@ -549,7 +549,7 @@ def test_every_coping_lip_runs_between_corners_of_the_mesh_lip() -> None:
 
 @needs_extract
 def test_a_coping_lip_that_is_one_whole_run_matches_it() -> None:
-    runs = ws.lip_runs(b.warehouse_triangles())
+    runs = ws.lip_runs(b.warehouse_triangles()) + ws.ledge_runs(b.warehouse_triangles())
     whole = [lip for lip in b.COPING_LIPS if math.dist(*lip) > MIN_COPING_LIP]
     for start, end in whole:
         assert any(
@@ -593,3 +593,28 @@ def test_a_lip_away_from_the_walls_is_left_whole() -> None:
 def test_every_wall_end_is_the_end_of_a_coping_lip() -> None:
     ends = {point for lip in b.COPING_LIPS for point in lip}
     assert set(b.WALL_ENDS) <= ends
+
+
+def test_the_shortys_ledge_edge_runs_from_the_kicker_end_to_the_west_wall() -> None:
+    assert b.LEDGE_LIPS[0][0] == (40.89, 3.79, 3.51)
+    assert b.LEDGE_LIPS[-1][1] == (21.17, 3.79, 58.73)
+
+
+def test_the_ledge_lips_join_end_to_end_with_gentle_turns() -> None:
+    for (_, end), (start, nxt) in zip(b.LEDGE_LIPS, b.LEDGE_LIPS[1:], strict=False):
+        assert end == start
+    for (a, mid), (_, c) in zip(b.LEDGE_LIPS, b.LEDGE_LIPS[1:], strict=False):
+        before = math.atan2(mid[2] - a[2], mid[0] - a[0])
+        after = math.atan2(c[2] - mid[2], c[0] - mid[0])
+        turn = abs((math.degrees(after - before) + 180) % 360 - 180)
+        assert turn <= 50
+
+
+def test_the_ledge_lips_are_coping_lips() -> None:
+    assert set(b.LEDGE_LIPS) <= set(b.COPING_LIPS)
+
+
+def test_a_wall_end_pull_back_never_reaches_past_the_middle_of_its_lip() -> None:
+    for start, end in b.COPING_LIPS:
+        if start in b.WALL_ENDS or end in b.WALL_ENDS:
+            assert math.dist(start, end) > 2 * b.WALL_MARGIN, (start, end)

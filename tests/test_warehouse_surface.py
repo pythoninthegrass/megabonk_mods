@@ -161,3 +161,28 @@ def test_lip_runs_joins_a_ridge_to_the_deck_edge_it_continues_into() -> None:
     ridge = gable(10, 20, z=5, ridge=5)
     [(start, end)] = ws.lip_runs([*RAMP, DECK, *ridge])
     assert sorted([start, end]) == [(0, 5, 5), (20, 5, 5)]
+
+
+LEDGE_TOP = ((0, 5, 0), (10, 5, 0), (0, 5, 10))
+LEDGE_FACE = ((0, 5, 0), (10, 5, 0), (0, 0, 0))
+
+
+def test_ledge_runs_finds_the_top_edge_of_a_deck_over_a_vertical_face() -> None:
+    [(start, end)] = ws.ledge_runs([LEDGE_TOP, LEDGE_FACE])
+    assert sorted([start, end]) == [(0, 5, 0), (10, 5, 0)]
+
+
+def test_ledge_runs_ignores_the_foot_of_a_wall_where_it_meets_a_floor() -> None:
+    floor = ((0, 0, 0), (10, 0, 0), (0, 0, -10))
+    assert ws.ledge_runs([LEDGE_FACE, floor]) == []
+
+
+def test_ledge_runs_ignores_a_ramp_meeting_a_deck() -> None:
+    assert ws.ledge_runs([*RAMP, DECK]) == []
+
+
+def test_ledge_runs_merges_collinear_edges() -> None:
+    second = ((10, 5, 0), (20, 5, 0), (10, 5, 10))
+    second_face = ((10, 5, 0), (20, 5, 0), (10, 0, 0))
+    [(start, end)] = ws.ledge_runs([LEDGE_TOP, LEDGE_FACE, second, second_face])
+    assert sorted([start, end]) == [(0, 5, 0), (20, 5, 0)]

@@ -18,6 +18,8 @@ RIDGE_MAX_GRADE = 0.3
 # A face is flat below this many degrees and a wall from this many.
 FLAT_SLOPE = 15.0
 WALL_SLOPE = 89.0
+# A ledge's face is at least this steep.
+LEDGE_WALL_SLOPE = 80.0
 IDENTITY: Matrix = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
 # Chest, shrine and merchant prefabs are authored lying down with their up along +z, so they stand up at pitch 270.
 UPRIGHT_PITCH = 270.0
@@ -231,6 +233,11 @@ def _is_deck_lip(p: Vec, q: Vec, a: Face, b: Face, min_slope: float) -> bool:
     return _slope_degrees(ramp[0]) > min_slope and _slope_degrees(ramp[0]) < WALL_SLOPE and _slope_degrees(deck[0]) < FLAT_SLOPE and _below_edge(p, q, ramp[1]) and not _below_edge(p, q, deck[1])
 
 
+def _is_ledge_top(p: Vec, q: Vec, a: Face, b: Face, min_slope: float) -> bool:
+    wall, deck = (a, b) if _slope_degrees(a[0]) >= _slope_degrees(b[0]) else (b, a)
+    return _slope_degrees(wall[0]) >= LEDGE_WALL_SLOPE and _slope_degrees(deck[0]) < FLAT_SLOPE and _below_edge(p, q, wall[1]) and not _below_edge(p, q, deck[1])
+
+
 def _edges_where(triangles: list[Triangle], max_grade: float, min_slope: float, tests: tuple) -> list[tuple[Vec, Vec]]:
     shared: dict[tuple[Vec, Vec], list[Face]] = {}
     for t in triangles:
@@ -272,3 +279,8 @@ def ridge_runs(triangles: list[Triangle], min_length: float = 2.0, min_slope: fl
 def lip_runs(triangles: list[Triangle], min_length: float = 2.0, min_slope: float = 20.0, max_grade: float = RIDGE_MAX_GRADE) -> list[tuple[Vec, Vec]]:
     """Ridge edges plus the top of a ramp that meets a flat deck, merged into straight runs of at least `min_length`."""
     return _merged(_edges_where(triangles, max_grade, min_slope, (_is_ridge, _is_deck_lip)), min_length)
+
+
+def ledge_runs(triangles: list[Triangle], min_length: float = 2.0, max_grade: float = RIDGE_MAX_GRADE) -> list[tuple[Vec, Vec]]:
+    """The top edges of flat decks over a near-vertical face, merged into straight runs of at least `min_length`."""
+    return _merged(_edges_where(triangles, max_grade, 0.0, (_is_ledge_top,)), min_length)
