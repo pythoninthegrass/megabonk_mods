@@ -135,7 +135,7 @@ async def relaunch(
     tier: int | None = None,
     seed: int | None = None,
 ) -> CallToolResult:
-    """Quit and relaunch the game, load a level, go invulnerable, stop enemy spawns (unless MEGABONK_RELAUNCH_SPAWNS is set; call spawns(on=true) to start them) and enter editor; returns the final state. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only."""
+    """Quit and relaunch the game, load a level, enter editor with 2 Feathers, enemy spawns on and normal damage; MEGABONK_RELAUNCH_FEATHERS sets the Feathers amount (0 leaves it alone); MEGABONK_RELAUNCH_SPAWNS=false stops spawns and MEGABONK_RELAUNCH_INVULNERABLE=true makes the player invulnerable; returns the final state. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only."""
     game_dir = _game_dir()
     harness = game_dir / "harness"
     level_path = Path(level) if level else run.TEST_FOREST_LEVEL
@@ -162,6 +162,8 @@ async def relaunch(
         errors.append,
         overrides,
         run.resolve_relaunch_spawns(run.load_lookup()),
+        run.resolve_relaunch_invulnerable(run.load_lookup()),
+        run.resolve_relaunch_feathers(run.load_lookup()),
     )
     if not ok:
         raise ToolError("; ".join(errors) if errors else "relaunch failed")

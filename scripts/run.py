@@ -56,7 +56,9 @@ Usage:
 Game directory resolution: process environment, then the nearest .env walking up from the current
 directory or this script, then the per-runtime default (see game_paths.py). Keys: MEGABONK_GAME_DIR,
 MEGABONK_WINE_PREFIX, MEGABONK_BOTTLE, MEGABONK_MACOS_RUNTIME (wine or crossover; selects the task relaunch
-starts the game with).
+starts the game with), MEGABONK_RELAUNCH_SPAWNS (default true; false stops enemy spawns after relaunch),
+MEGABONK_RELAUNCH_INVULNERABLE (default false; true makes the player invulnerable after relaunch),
+MEGABONK_RELAUNCH_FEATHERS (default 2; the Feathers amount set after relaunch, 0 leaves it alone).
 """
 
 import argparse
@@ -127,8 +129,34 @@ def resolve_macos_runtime(lookup: Lookup) -> str:
     return runtime
 
 
+def resolve_flag(lookup: Lookup, key: str, default: bool) -> bool:
+    value = (lookup(key) or "").strip().lower()
+    if value in ("1", "true", "yes", "on"):
+        return True
+    if value in ("0", "false", "no", "off"):
+        return False
+    return default
+
+
 def resolve_relaunch_spawns(lookup: Lookup) -> bool:
-    return (lookup("MEGABONK_RELAUNCH_SPAWNS") or "").strip().lower() in ("1", "true", "yes", "on")
+    return resolve_flag(lookup, "MEGABONK_RELAUNCH_SPAWNS", True)
+
+
+def resolve_relaunch_feathers(lookup: Lookup) -> int:
+    raw = lookup("MEGABONK_RELAUNCH_FEATHERS")
+    if raw is None or not raw.strip():
+        return 2
+    try:
+        amount = int(raw)
+    except ValueError:
+        amount = -1
+    if not 0 <= amount <= 999:
+        raise SystemExit(f"MEGABONK_RELAUNCH_FEATHERS must be an integer from 0 to 999, got {raw!r}")
+    return amount
+
+
+def resolve_relaunch_invulnerable(lookup: Lookup) -> bool:
+    return resolve_flag(lookup, "MEGABONK_RELAUNCH_INVULNERABLE", False)
 
 
 def launch_task(runtime: str, system: str | None = None) -> str:
@@ -690,9 +718,11 @@ def relaunch(
     on_step: Callable[[str], None],
     on_error: Callable[[str], None],
     overrides: Mapping[str, int] | None = None,
-    spawns: bool = False,
+    spawns: bool = True,
+    invulnerable: bool = False,
+    feathers: int = 2,
 ) -> bool:
-    """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable, stop enemy spawns unless spawns is set, and enter editor."""
+    """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable if asked, set the Feathers amount unless it is 0, stop enemy spawns unless spawns is set, and enter editor."""
     started = time.time()
 
     def prepare_harness() -> str | None:
@@ -746,7 +776,10 @@ def relaunch(
     if not loaded:
         return False
 
-    send(harness, build_command("invulnerable"), timeout)
+    if invulnerable:
+        send(harness, build_command("invulnerable"), timeout)
+    if feathers:
+        send(harness, build_item_command("Feathers", feathers), timeout)
     if not spawns:
         send(harness, build_spawns_command(False), timeout)
     send(harness, build_editor_command(True), timeout)
@@ -837,6 +870,8 @@ def main(argv: list[str] | None = None) -> int:
                 on_error=lambda m: print(m, file=sys.stderr),
                 overrides=load_overrides(args),
                 spawns=resolve_relaunch_spawns(load_lookup()),
+                invulnerable=resolve_relaunch_invulnerable(load_lookup()),
+                feathers=resolve_relaunch_feathers(load_lookup()),
             )
     return 0 if ok else 1
 

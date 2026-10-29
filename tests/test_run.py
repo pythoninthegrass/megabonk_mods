@@ -613,42 +613,98 @@ def test_relaunch_runs_every_step_in_order_and_returns_true(monkeypatch) -> None
         "steam",
         ("send", "load-level"),
         ("log", "KillFloor: armed"),
-        ("send", "invulnerable"),
-        ("send", "spawns"),
+        ("send", "item"),
         ("send", "editor"),
     ]
 
 
-def test_relaunch_with_spawns_enabled_leaves_the_game_default(monkeypatch) -> None:
-    calls = relaunch_stubs(monkeypatch)
-    ok = run.relaunch(
-        Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None, spawns=True
-    )
-    assert ok is True
-    assert ("send", "spawns") not in calls
-    assert ("send", "editor") in calls
-
-
-def test_relaunch_sends_spawns_off_before_entering_the_editor(monkeypatch) -> None:
+def test_relaunch_sets_two_feathers_before_entering_the_editor(monkeypatch) -> None:
     sent = []
     relaunch_stubs(monkeypatch)
     monkeypatch.setattr(run, "send", lambda h, payload, t: sent.append(payload) or True)
     run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None)
+    assert sent[-2:] == [{"command": "item", "name": "Feathers", "amount": 2}, {"command": "editor", "enabled": True}]
+
+
+def test_relaunch_with_zero_feathers_sends_no_item_command(monkeypatch) -> None:
+    calls = relaunch_stubs(monkeypatch)
+    run.relaunch(
+        Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None, feathers=0
+    )
+    assert ("send", "item") not in calls
+
+
+def test_resolve_relaunch_feathers_defaults_to_two() -> None:
+    assert run.resolve_relaunch_feathers({}.get) == 2
+
+
+def test_resolve_relaunch_feathers_reads_the_setting() -> None:
+    assert run.resolve_relaunch_feathers({"MEGABONK_RELAUNCH_FEATHERS": "5"}.get) == 5
+    assert run.resolve_relaunch_feathers({"MEGABONK_RELAUNCH_FEATHERS": "0"}.get) == 0
+
+
+def test_resolve_relaunch_feathers_rejects_a_bad_value() -> None:
+    for value in ("many", "-1", "1000"):
+        with pytest.raises(SystemExit):
+            run.resolve_relaunch_feathers({"MEGABONK_RELAUNCH_FEATHERS": value}.get)
+
+
+def test_relaunch_with_invulnerable_sends_it_before_entering_the_editor(monkeypatch) -> None:
+    sent = []
+    relaunch_stubs(monkeypatch)
+    monkeypatch.setattr(run, "send", lambda h, payload, t: sent.append(payload) or True)
+    run.relaunch(
+        Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None, invulnerable=True
+    )
     assert sent[-3:] == [
         {"command": "invulnerable"},
-        {"command": "spawns", "enabled": False},
+        {"command": "item", "name": "Feathers", "amount": 2},
         {"command": "editor", "enabled": True},
     ]
 
 
-def test_resolve_relaunch_spawns_defaults_to_off() -> None:
-    assert run.resolve_relaunch_spawns({}.get) is False
+def test_relaunch_with_spawns_disabled_sends_spawns_off_before_entering_the_editor(monkeypatch) -> None:
+    sent = []
+    relaunch_stubs(monkeypatch)
+    monkeypatch.setattr(run, "send", lambda h, payload, t: sent.append(payload) or True)
+    run.relaunch(
+        Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None, spawns=False
+    )
+    assert sent[-3:] == [
+        {"command": "item", "name": "Feathers", "amount": 2},
+        {"command": "spawns", "enabled": False},
+        {"command": "editor", "enabled": True},
+    ]
+    assert {"command": "invulnerable"} not in sent
+
+
+def test_relaunch_leaves_spawns_and_damage_at_the_game_default(monkeypatch) -> None:
+    calls = relaunch_stubs(monkeypatch)
+    run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None)
+    assert ("send", "spawns") not in calls
+    assert ("send", "invulnerable") not in calls
+
+
+def test_resolve_relaunch_spawns_defaults_to_on() -> None:
+    assert run.resolve_relaunch_spawns({}.get) is True
 
 
 def test_resolve_relaunch_spawns_reads_the_setting() -> None:
-    assert run.resolve_relaunch_spawns({"MEGABONK_RELAUNCH_SPAWNS": "true"}.get) is True
-    assert run.resolve_relaunch_spawns({"MEGABONK_RELAUNCH_SPAWNS": "1"}.get) is True
-    assert run.resolve_relaunch_spawns({"MEGABONK_RELAUNCH_SPAWNS": "false"}.get) is False
+    for value in ("false", "0", "no", "off", "FALSE"):
+        assert run.resolve_relaunch_spawns({"MEGABONK_RELAUNCH_SPAWNS": value}.get) is False
+    for value in ("true", "1", "yes", "on"):
+        assert run.resolve_relaunch_spawns({"MEGABONK_RELAUNCH_SPAWNS": value}.get) is True
+
+
+def test_resolve_relaunch_invulnerable_defaults_to_off() -> None:
+    assert run.resolve_relaunch_invulnerable({}.get) is False
+
+
+def test_resolve_relaunch_invulnerable_reads_the_setting() -> None:
+    for value in ("true", "1", "yes", "on", "TRUE"):
+        assert run.resolve_relaunch_invulnerable({"MEGABONK_RELAUNCH_INVULNERABLE": value}.get) is True
+    for value in ("false", "0", "no", "off"):
+        assert run.resolve_relaunch_invulnerable({"MEGABONK_RELAUNCH_INVULNERABLE": value}.get) is False
 
 
 def test_relaunch_fails_with_the_exact_error_when_the_harness_never_becomes_ready(monkeypatch) -> None:

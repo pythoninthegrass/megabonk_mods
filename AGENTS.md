@@ -23,7 +23,7 @@ The fallback is the same harness through `scripts/run.py`. Enable it once with `
 
 ### Reloading a rebuilt mod
 
-MelonLoader loads the DLL once at startup, so a rebuild only takes effect on a fresh launch. Run `task mod:build` (it deploys the DLL into `Mods`), then run `uv run scripts/run.py relaunch` to quit the old game, launch a fresh instance, load `levels/example-forest.mblevel.json`, and enter editor mode. `relaunch` waits for a new harness log entry, retries the load until the kill floor arms, then enables invulnerability, stops enemy spawns and enables editor mode. Spawns stay off after a relaunch by default; start them for an end-to-end run with the MCP `spawns(on=true)` or `uv run scripts/run.py spawns on`, or set `MEGABONK_RELAUNCH_SPAWNS=true` to leave them on from the start (see "Enemy spawns" in `docs/development.md`). A level `load` into a running game turns them back on, so send `spawns off` again after it. Pass an optional level path to test a different file. The manual sequence remains useful when diagnosing a failed relaunch:
+MelonLoader loads the DLL once at startup, so a rebuild only takes effect on a fresh launch. Run `task mod:build` (it deploys the DLL into `Mods`), then run `uv run scripts/run.py relaunch` to quit the old game, launch a fresh instance, load `levels/example-forest.mblevel.json`, and enter editor mode. `relaunch` waits for a new harness log entry, retries the load until the kill floor arms, then enables editor mode. The player gets 2 Feathers (`MEGABONK_RELAUNCH_FEATHERS`, 0 leaves them alone), enemy spawns stay on and the player takes normal damage by default; set `MEGABONK_RELAUNCH_SPAWNS=false` to stop spawns and `MEGABONK_RELAUNCH_INVULNERABLE=true` to make the player invulnerable (in the environment or `.env`; `task` loads `.env` through its `dotenv` directive). The MCP `spawns` and `invulnerable` tools and `run.py spawns` and `run.py invulnerable` change either at runtime (see "Enemy spawns" in `docs/development.md`). A level `load` into a running game turns spawns back on, so send `spawns off` again after it. Pass an optional level path to test a different file. The manual sequence remains useful when diagnosing a failed relaunch:
 
 ```sh
 L="$(uv run scripts/game_paths.py | jq -r .latest_log_path)"
@@ -34,10 +34,10 @@ for i in 1 2 3 4 5; do
   for j in $(seq 1 10); do rg -q 'KillFloor: armed' "$L" && break; sleep 1; done
   rg -q 'KillFloor: armed' "$L" && break
 done
-uv run scripts/run.py invulnerable && uv run scripts/run.py spawns off && uv run scripts/run.py editor on
+uv run scripts/run.py editor on
 ```
 
-`task game:run` returns at once because it detaches the game. Send the load only until it succeeds; a second `load` restarts the run. `<level>` is a level file, such as `levels/example-forest.mblevel.json`, not a stage name. Once the kill floor arms, send `invulnerable`, `spawns off` and then `editor on` straight away, so the idle player is not killed by enemies while the run waits and the game opens in the map editor (frozen run, free-fly camera) ready to test; confirm `EditorMode: entered` in the log. Always relaunch rather than sending a second `load` into a running game: a reload over a run that was left unattended once left the player dead, and entering the editor late lets enemies reach an idle player. The whole chain has been run end to end on the CrossOver setup and on a copied plain-Wine prefix on a second Mac (see "Setting up a second machine" in `docs/development.md`).
+`task game:run` returns at once because it detaches the game. Send the load only until it succeeds; a second `load` restarts the run. `<level>` is a level file, such as `levels/example-forest.mblevel.json`, not a stage name. Once the kill floor arms, send `editor on` straight away, so the game opens in the map editor (frozen run, free-fly camera) ready to test; confirm `EditorMode: entered` in the log. Always relaunch rather than sending a second `load` into a running game: a reload over a run that was left unattended once left the player dead, and entering the editor late lets enemies reach an idle player. The whole chain has been run end to end on the CrossOver setup and on a copied plain-Wine prefix on a second Mac (see "Setting up a second machine" in `docs/development.md`).
 
 ### Loading the THPS level
 

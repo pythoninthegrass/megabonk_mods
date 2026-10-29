@@ -79,15 +79,17 @@ tasks:
       - tail -f "$(uv run scripts/game_paths.py | python3 -c 'import json, sys; print(json.load(sys.stdin)["latest_log_path"])')"
 
   editor:
-    desc: "(Re)launch Megabonk into editor mode on a custom level, invulnerable, as Tony McZoom"
+    desc: "(Re)launch Megabonk into editor mode on a custom level as Tony McZoom"
     summary: |
       Usage: task game:editor
              task game:editor -- levels/other.mblevel.json
 
       Wraps scripts/run.py relaunch: quits any running game, launches a fresh
       one (task game:run, or task crossover:run under the CrossOver runtime),
-      loads the level (default levels/example-forest.mblevel.json), makes the
-      player invulnerable and enters editor mode. The mod's level loader
+      loads the level (default levels/example-forest.mblevel.json) and enters
+      editor mode with 2 Feathers (MEGABONK_RELAUNCH_FEATHERS). Set MEGABONK_RELAUNCH_SPAWNS=false or
+      MEGABONK_RELAUNCH_INVULNERABLE=true in .env to stop enemy spawns or
+      make the player invulnerable. The mod's level loader
       spawns Tony McZoom, and editor mode starts from the overview camera
       pose, 60 units above the player. Build and deploy the mod first
       (task mod:build); a rebuilt DLL only loads on a fresh launch.

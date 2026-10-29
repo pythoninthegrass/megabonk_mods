@@ -834,9 +834,11 @@ async def test_relaunch_tool_forwards_the_overrides(tmp_path, monkeypatch) -> No
     setup_harness(tmp_path, monkeypatch)
     seen = {}
 
-    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=False):
+    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2):
         seen["overrides"] = overrides
         seen["spawns"] = spawns
+        seen["invulnerable"] = invulnerable
+        seen["feathers"] = feathers
         return True
 
     monkeypatch.setattr(mcp_server.run, "relaunch", fake_relaunch)
@@ -848,16 +850,22 @@ async def test_relaunch_tool_forwards_the_overrides(tmp_path, monkeypatch) -> No
     async with Client(mcp_server.mcp) as client:
         await client.call_tool("relaunch", {"map": 2, "seed": 3})
     assert seen["overrides"] == {"map": 2, "seed": 3}
-    assert seen["spawns"] is False
+    assert seen["spawns"] is True
+    assert seen["invulnerable"] is False
+    assert seen["feathers"] == 2
 
 
-async def test_relaunch_tool_leaves_spawns_on_when_the_setting_asks(tmp_path, monkeypatch) -> None:
+async def test_relaunch_tool_applies_the_spawn_and_invulnerable_settings(tmp_path, monkeypatch) -> None:
     setup_harness(tmp_path, monkeypatch)
-    monkeypatch.setenv("MEGABONK_RELAUNCH_SPAWNS", "true")
+    monkeypatch.setenv("MEGABONK_RELAUNCH_SPAWNS", "false")
+    monkeypatch.setenv("MEGABONK_RELAUNCH_INVULNERABLE", "true")
+    monkeypatch.setenv("MEGABONK_RELAUNCH_FEATHERS", "0")
     seen = {}
 
-    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=False):
+    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2):
         seen["spawns"] = spawns
+        seen["invulnerable"] = invulnerable
+        seen["feathers"] = feathers
         return True
 
     monkeypatch.setattr(mcp_server.run, "relaunch", fake_relaunch)
@@ -868,13 +876,15 @@ async def test_relaunch_tool_leaves_spawns_on_when_the_setting_asks(tmp_path, mo
     monkeypatch.setattr(mcp_server, "_command", fake_command)
     async with Client(mcp_server.mcp) as client:
         await client.call_tool("relaunch", {})
-    assert seen["spawns"] is True
+    assert seen["spawns"] is False
+    assert seen["invulnerable"] is True
+    assert seen["feathers"] == 0
 
 
 async def test_relaunch_tool_error_carries_the_failing_log_line(tmp_path, monkeypatch) -> None:
     setup_harness(tmp_path, monkeypatch)
 
-    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=False):
+    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2):
         on_error("relaunch: the level failed to load: LevelLoader: load failed: no MapData found for map=32")
         return False
 
