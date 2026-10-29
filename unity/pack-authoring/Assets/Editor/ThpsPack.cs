@@ -98,10 +98,11 @@ public static class ThpsPack
         File.WriteAllText(path, string.Join("\n", renumbered) + "\n");
     }
 
-    // CreateAsset ignores a pre-written .meta and picks its own GUID, so the object is serialized to the path directly and imported under the pinned one; the returned reference is the imported asset.
+    // CreateAsset ignores a pre-written .meta and picks its own GUID, so the object is serialized to the path directly and imported under the pinned one, named after the file as CreateAsset names it; the returned reference is the imported asset. A pinned .meta carries no importer settings, so an importer that defaults them badly (a PNG imports as a cubemap) has to set them explicitly.
     static T SaveAsset<T>(T asset, string path) where T : UnityEngine.Object
     {
         Pinned(path);
+        asset.name = Path.GetFileNameWithoutExtension(path);
         InternalEditorUtility.SaveToSerializedFileAndForget(new UnityEngine.Object[] { asset }, path, false);
         AssetDatabase.ImportAsset(path);
         return AssetDatabase.LoadAssetAtPath<T>(path);
@@ -218,6 +219,7 @@ public static class ThpsPack
             File.WriteAllBytes(assetPath, BakeTransparencyKey(File.ReadAllBytes(Path.Combine(source, pair.Value)), seeThrough));
             AssetDatabase.ImportAsset(assetPath);
             var importer = (TextureImporter)AssetImporter.GetAtPath(assetPath);
+            importer.textureShape = TextureImporterShape.Texture2D;
             importer.filterMode = FilterMode.Point;
             importer.mipmapEnabled = false;
             importer.wrapMode = TextureWrapMode.Repeat;
