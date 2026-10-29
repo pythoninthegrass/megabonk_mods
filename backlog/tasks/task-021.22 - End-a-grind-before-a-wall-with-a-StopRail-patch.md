@@ -1,11 +1,11 @@
 ---
 id: TASK-021.22
 title: End a grind before a wall with a StopRail patch
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-10-29 03:41'
-updated_date: '2026-10-29T19:09:00Z'
+updated_date: '2026-10-29T19:10:00Z'
 labels:
   - thps
   - mod
@@ -40,7 +40,7 @@ The outcome is that a grind detaches from the lip with room to spare before a wa
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -68,3 +68,17 @@ Implementation notes (final):
 - level-format.md needed no change: no level field is involved, and the sibling rail patches are documented in the layout doc only.
 - Evidence: task check green (1235 mod tests, 487 python tests, lint clean). In game, eastbound: RailWallEnd ended the grind 4.83 short of a wall at (174.1, 7.9, 43.8), progress 0.058, speed 19.5 kept 6.0, player alive 70/70, no DeathRestart. Westbound regression on levels/thps.mblevel.json: chains onto the west diagonal (RailHandoff moved onto rail at distance 0.00, direction 1.0) with no RailWallEnd line. Detaches also observed at the north wall pipe's west end (3.71 short at 44.6, 11.0, -27.1) and the south wall lip (4.92 short at 26.1, 10.6, 101.1); the Shorty's ledge chain handed off seven times with no detach.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+A grind on a Warehouse coping rail now lets go of the rail before the wall at its end instead of being launched into it.
+
+Added RailWallEndPatch (src/MegabonkLevels.Mod/rail_wall_end_patch.cs), a Harmony postfix on PlayerMovement.RailMovement registered from megabonk_levels_mod.cs, and RailWallEnd (rail_wall_end.cs) holding the Unity-free decision logic and tuning constants. On a custom level only, while grinding and moving at least 2 units/s, it raycasts along the horizontal velocity for a near-vertical face pointing back at the player; when one comes within 5 units and no other rail within RailHandoff.SearchRadius is off cooldown to take the grind, it calls StopRail, caps the horizontal speed at 6 and adds an upward 5, then cools the rail down. Deferring to the handoff is what keeps chained joints, the pocket tip and the west diagonal intact.
+
+Why the cap and the hop: releasing the rail alone left the player at the grind's own 19.5, coasting into the wall regardless. With both, Tony leaves the coping about 5 units out and comes to rest beside the wall at full health.
+
+Verification: task check green (1235 mod tests including the 22 new rail_wall_end tests written before the implementation, 487 python tests, lint clean). In game, eastbound into the east wall from a 57 unit run-up: "RailWallEnd: ended the grind 4.83 short of a wall at (174.1, 7.9, 43.8), progress 0.058, speed 19.5 kept 6.0", player alive 70/70 with no DeathRestart. Westbound on levels/thps.mblevel.json still chains onto the west diagonal with no detach; the north wall pipe and south wall lip also detach at their west wall ends, and the Shorty's ledge chain handed off seven times untouched. Evidence: .tools/evidence/task-021.22-east-wall-detach.png.
+
+Risks and follow-ups: the detach is tuned against the Warehouse lips, so a level with a much longer wall approach may still let the player touch the wall at low speed. The game re-catches the same rail once at low speed about half a second after the detach and its own StopRail ends that; PlayerMovement.canJumpOffRailAtTime looked like the gate for it but does not affect the catch at all (a 100 second window changed nothing), so it is left alone. The eastbound check used a scratch copy with the two main-pipe coping rails rotated 180 degrees, because a harness drop only ever grinds west; a player-driven entry into a grind (an ollie onto the coping) still needs real keyboard input.
+<!-- SECTION:FINAL_SUMMARY:END -->
