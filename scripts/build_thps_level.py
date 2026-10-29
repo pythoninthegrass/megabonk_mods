@@ -579,6 +579,9 @@ def build_level() -> dict:
         "playerStart": PLAYER_START,
         "maxSlopeAngle": MAX_SLOPE_ANGLE,
         "killFloorY": KILL_FLOOR_Y,
+        # The coping lips are rails, so without this the game catches one the moment a skater rides over it and
+        # hijacks the ollie off the lip. A grind starts on demand instead, with the slide button. See GrindGatePatch.
+        "grindRequiresSlide": True,
         "bossSpawnPosition": list(boss_spawn_position()),
         "music": MUSIC,
         "title": TITLE,

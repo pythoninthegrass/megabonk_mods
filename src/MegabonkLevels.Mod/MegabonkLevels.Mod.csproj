@@ -77,6 +77,10 @@
       <HintPath>$(Il2CppAssembliesFolder)/Il2Cppcom.rlabrecque.steamworks.net.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Il2CppRewired_Core">
+      <HintPath>$(Il2CppAssembliesFolder)/Il2CppRewired_Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
 
   <!-- Deploy the built DLL + PDB into the game's Mods folder on every build -->

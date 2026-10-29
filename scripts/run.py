@@ -50,6 +50,7 @@ Usage:
     run.py teleport X Y Z          Move the player's feet to a world position and print the position reached
     run.py teleport --cell CX CY   Move the player to a grid cell's centre, on the tile surface there
     run.py item NAME [AMOUNT]      Print the player's amount of an item; with AMOUNT set it exactly (0 removes it), printing before and after
+    run.py grind-slide <on|off|auto>  Hold the slide button down, release it, or read the real device again, for the grind gate on a grindRequiresSlide level
     run.py dismiss-levelup [--choice N]  Pick offer N (default 0) in the open level-up dialog; prints dialogWasOpen and chosen
     run.py quit                    Quit the game, wait for the process to exit, and stop leftover Wine processes (macOS)
     run.py relaunch [level] [--no-level] [--map N] [--stage N] [--tier N] [--seed N] [--character NAME]
@@ -296,6 +297,14 @@ def build_item_command(name: str, amount: int | None = None) -> dict[str, object
     payload: dict[str, object] = {"command": "item", "name": name}
     if amount is not None:
         payload["amount"] = amount
+    return payload
+
+
+def build_grind_slide_command(held: bool | None = None) -> dict[str, object]:
+    """Hold the slide button down (True), release it (False), or hand the read back to the real device (None)."""
+    payload: dict[str, object] = {"command": "grind-slide"}
+    if held is not None:
+        payload["held"] = held
     return payload
 
 
@@ -616,6 +625,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     item = sub.add_parser("item")
     item.add_argument("name", help="EItem member, case-sensitive, e.g. Mirror")
     item.add_argument("amount", type=int, nargs="?", help="set the amount to this exact number; omit to read it")
+    grind_slide = sub.add_parser("grind-slide")
+    grind_slide.add_argument("state", choices=["on", "off", "auto"], help="hold the slide button, release it, or read the real device again")
     dismiss = sub.add_parser("dismiss-levelup")
     dismiss.add_argument("--choice", type=int, default=0, help="zero-based index of the offered upgrade")
     type_ = sub.add_parser("type")
@@ -693,6 +704,10 @@ def click_widget_payload(args: argparse.Namespace) -> dict[str, object]:
 
 def item_payload(args: argparse.Namespace) -> dict[str, object]:
     return build_item_command(args.name, args.amount)
+
+
+def grind_slide_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_grind_slide_command({"on": True, "off": False, "auto": None}[args.state])
 
 
 def teleport_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -869,6 +884,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, teleport_payload(args), args.timeout)
         case "item":
             ok = send_printing_result(harness, item_payload(args), args.timeout)
+        case "grind-slide":
+            ok = send_printing_result(harness, grind_slide_payload(args), args.timeout)
         case "dismiss-levelup":
             ok = send_printing_result(harness, dismiss_levelup_payload(args), args.timeout)
         case "character-screen":

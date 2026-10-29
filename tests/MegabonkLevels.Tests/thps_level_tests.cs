@@ -75,6 +75,15 @@ public class ThpsLevelTests
     }
 
     [Fact]
+    public void Level_RequiresTheSlideButtonToStartAGrind()
+    {
+        var level = LevelFileSerializer.DeserializeWithMigration(File.ReadAllText(RepoFile("levels/thps.mblevel.json")));
+
+        // The coping is a rail along every lip, so a grind that starts on contact takes over each ride over a lip.
+        Assert.True(level.GrindRequiresSlide);
+    }
+
+    [Fact]
     public void Level_StandsTheBossPortalOnTheFloorInsideTheGlassBox()
     {
         var level = LevelFileSerializer.DeserializeWithMigration(File.ReadAllText(RepoFile("levels/thps.mblevel.json")));

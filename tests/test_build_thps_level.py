@@ -493,6 +493,11 @@ def test_the_level_authors_a_kill_floor_below_the_kept_tile() -> None:
     assert b.KILL_FLOOR_Y == b.INNER_LEVEL * b.HEIGHT_STEP - b.KILL_FLOOR_MARGIN_BELOW_KEPT_TILE
 
 
+def test_the_level_asks_for_the_slide_button_to_start_a_grind() -> None:
+    # The coping lips are rails, so a grind that starts on contact hijacks every ollie off a lip.
+    assert b.build_level()["grindRequiresSlide"] is True
+
+
 def test_the_kill_floor_is_below_the_only_kept_tile_and_above_the_meshs_lowest_point() -> None:
     # Below the kept tile so standing on it is safe, above the Warehouse's lowest geometry so anything that
     # ends up under the mesh dies instead of resting there out of reach of the game's own catch floor.

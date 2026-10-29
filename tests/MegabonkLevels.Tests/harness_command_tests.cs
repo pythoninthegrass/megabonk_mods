@@ -721,4 +721,40 @@ public class HarnessCommandTests
         Assert.False(ok);
         Assert.Contains(field, error);
     }
+
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public void TryParse_GrindSlide_ReadsTheHeldFlag(string held, bool expected)
+    {
+        var ok = HarnessCommand.TryParse($$"""{"command":"grind-slide","held":{{held}}}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.GrindSlide, command.Kind);
+        Assert.Equal("grind-slide", command.Name);
+        Assert.Equal(expected, command.Held);
+    }
+
+    [Fact]
+    public void TryParse_GrindSlide_WithoutHeld_ReturnsTheDevice()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"grind-slide"}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.GrindSlide, command.Kind);
+        Assert.Null(command.Held);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"grind-slide","held":"down"}""")]
+    [InlineData("""{"command":"grind-slide","held":1}""")]
+    public void TryParse_GrindSlide_WithANonBooleanHeld_Fails(string json)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains("held", error);
+    }
 }

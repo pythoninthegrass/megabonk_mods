@@ -177,7 +177,7 @@ public static class LevelLoaderPatch
     private static RunConfig PrepareRun(LevelFile level, MelonLogger.Instance logger, MapData mapData)
     {
         SeedForcePatch.ForceLevelSeed(level.Seed);
-        LiveEditPatch.SetPendingEdits(level.Edits, level.NoGrass, level.PlayerStart, level.MaxSlopeAngle, level.KillFloorY, level.BossSpawnPosition);
+        LiveEditPatch.SetPendingEdits(level.Edits, level.NoGrass, level.PlayerStart, level.MaxSlopeAngle, level.KillFloorY, level.BossSpawnPosition, level.GrindRequiresSlide);
         LevelMusic.Prepare(level.Music, logger);
         LevelTitle.Prepare(level.Title, level.Description, logger);
         AllowedCharacters = level.AllowedCharacters;

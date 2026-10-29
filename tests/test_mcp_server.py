@@ -345,6 +345,9 @@ INPUT_TOOL_CASES = [
     ("teleport", {"cell": [4, 7]}, {"command": "teleport", "cell": [4, 7]}),
     ("item", {"name": "Mirror"}, {"command": "item", "name": "Mirror"}),
     ("item", {"name": "Mirror", "amount": 0}, {"command": "item", "name": "Mirror", "amount": 0}),
+    ("grind_slide", {"held": True}, {"command": "grind-slide", "held": True}),
+    ("grind_slide", {"held": False}, {"command": "grind-slide", "held": False}),
+    ("grind_slide", {}, {"command": "grind-slide"}),
     ("dismiss_levelup", {}, {"command": "dismiss-levelup", "choice": 0}),
     ("dismiss_levelup", {"choice": 2}, {"command": "dismiss-levelup", "choice": 2}),
 ]

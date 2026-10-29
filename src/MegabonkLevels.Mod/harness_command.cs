@@ -40,6 +40,7 @@ public enum HarnessCommandKind
     ListLevels,
     QueryObjects,
     Item,
+    GrindSlide,
 }
 
 // World-space camera position and euler rotation in degrees.
@@ -88,7 +89,7 @@ public sealed class QueryArgs
 }
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null)
 {
     public const int MaxTypeLength = 200;
 
@@ -203,6 +204,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseUiTree(root, out command, out error);
             case "item":
                 return TryParseItem(root, out command, out error);
+            case "grind-slide":
+                return TryParseGrindSlide(root, out command, out error);
             case "teleport":
                 return TryParseTeleport(root, out command, out error);
             case "dismiss-levelup":
@@ -282,6 +285,28 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.Item, null, Item: new ItemArgs { Name = name, Amount = amount });
+        error = null;
+        return true;
+    }
+
+    // Forces the slide button the grind gate reads; with no held field the read goes back to the real device.
+    private static bool TryParseGrindSlide(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        bool? held = null;
+        if (root.TryGetPropertyValue("held", out var node) && node != null)
+        {
+            if (node is not JsonValue value || !value.TryGetValue(out bool parsed))
+            {
+                error = "field 'held' must be a boolean";
+                return false;
+            }
+
+            held = parsed;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.GrindSlide, null, Held: held);
         error = null;
         return true;
     }

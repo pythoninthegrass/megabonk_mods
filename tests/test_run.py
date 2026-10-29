@@ -401,6 +401,32 @@ def test_item_prints_the_result_json(capsys) -> None:
     assert json.loads(printed) == {"item": "Mirror", "before": 3, "after": 0}
 
 
+def test_build_grind_slide_command_omits_held_when_the_device_is_read() -> None:
+    assert run.build_grind_slide_command(True) == {"command": "grind-slide", "held": True}
+    assert run.build_grind_slide_command(False) == {"command": "grind-slide", "held": False}
+    assert run.build_grind_slide_command() == {"command": "grind-slide"}
+
+
+def test_grind_slide_payload_maps_the_state_to_the_wire_command() -> None:
+    assert run.grind_slide_payload(run.parse_args(["grind-slide", "on"])) == {"command": "grind-slide", "held": True}
+    assert run.grind_slide_payload(run.parse_args(["grind-slide", "off"])) == {"command": "grind-slide", "held": False}
+    assert run.grind_slide_payload(run.parse_args(["grind-slide", "auto"])) == {"command": "grind-slide"}
+
+
+def test_parse_args_grind_slide_rejects_other_states_and_a_missing_state() -> None:
+    for argv in (["grind-slide"], ["grind-slide", "maybe"]):
+        with pytest.raises(SystemExit):
+            run.parse_args(argv)
+
+
+def test_grind_slide_prints_the_result_json(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"grind-slide","ok":true,"result":{"held":true,"slideHeld":true}}')
+        assert run_main(game, "grind-slide", "on") == 0
+    printed = capsys.readouterr().out.strip().splitlines()[-1]
+    assert json.loads(printed) == {"held": True, "slideHeld": True}
+
+
 def test_build_dismiss_levelup_command_carries_the_choice() -> None:
     assert run.build_dismiss_levelup_command(0) == {"command": "dismiss-levelup", "choice": 0}
     assert run.build_dismiss_levelup_command(2) == {"command": "dismiss-levelup", "choice": 2}

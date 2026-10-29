@@ -219,6 +219,31 @@ public class LevelFileTests
     }
 
     [Fact]
+    public void RoundTrip_GrindRequiresSlide_Survives()
+    {
+        var level = SampleLevel() with { GrindRequiresSlide = true };
+
+        var restored = LevelFileSerializer.DeserializeWithMigration(LevelFileSerializer.Serialize(level));
+
+        Assert.True(restored.GrindRequiresSlide);
+        Assert.Equal(level, restored);
+    }
+
+    [Fact]
+    public void Deserialize_WithoutGrindRequiresSlideKey_LeavesItFalse()
+    {
+        var json = """{"schemaVersion":3,"gameBuildId":"1","map":1,"stageIndex":0,"tier":0,"seed":1,"packs":{},"edits":[]}""";
+
+        Assert.False(LevelFileSerializer.DeserializeWithMigration(json).GrindRequiresSlide);
+    }
+
+    [Fact]
+    public void Equals_LevelsDifferingOnlyInGrindRequiresSlide_AreNotEqual()
+    {
+        Assert.NotEqual(SampleLevel(), SampleLevel() with { GrindRequiresSlide = true });
+    }
+
+    [Fact]
     public void CurrentSchemaVersion_IsThree()
     {
         Assert.Equal(3, LevelFile.CurrentSchemaVersion);

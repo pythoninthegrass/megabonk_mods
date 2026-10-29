@@ -406,6 +406,12 @@ async def item(name: str, amount: int | None = None) -> CallToolResult:
     return await _command(_harness(), run.build_item_command(name, amount), TIMEOUT)
 
 
+@mcp.tool()
+async def grind_slide(held: bool | None = None) -> CallToolResult:
+    """Hold the slide button down (held=true), release it (held=false), or hand the read back to the real device (omit held) for the grind gate on a level with grindRequiresSlide. The gate reads the button through Rewired, which the harness cannot inject, so this stands in for the keyboard: with the button held a rail touch starts a grind, released it does not, and a released button also ends a handoff chain at the next rail. A grind already in progress is never interrupted. Returns {held, slideHeld}, slideHeld being what the gate sees afterwards."""
+    return await _command(_harness(), run.build_grind_slide_command(held), TIMEOUT)
+
+
 def _compile_jq(expression: str) -> "jq._Program":
     try:
         return jq.compile(expression)

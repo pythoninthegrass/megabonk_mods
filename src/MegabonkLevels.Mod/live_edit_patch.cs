@@ -28,6 +28,7 @@ public static class LiveEditPatch
     private static float? _maxSlopeAngle;
     private static float? _killFloorY;
     private static IReadOnlyList<float> _bossSpawnPosition;
+    private static bool _grindRequiresSlide;
     private static Session _session;
     private static int _runGeneration;
 
@@ -39,9 +40,12 @@ public static class LiveEditPatch
     // boss at the portal itself. See BossSpawnRedirectPatch.
     public static IReadOnlyList<float> BossSpawnPosition => _bossSpawnPosition;
 
+    // Whether a rail touch on this level needs the slide button held. See GrindGatePatch.
+    public static bool GrindRequiresSlide => _grindRequiresSlide;
+
     // Set by LevelLoaderPatch right before it starts a run, consumed (and cleared) by the next
     // generation so a later vanilla run is never edited.
-    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null, float? killFloorY = null, IReadOnlyList<float> bossSpawnPosition = null)
+    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null, float? killFloorY = null, IReadOnlyList<float> bossSpawnPosition = null, bool grindRequiresSlide = false)
     {
         _pendingEdits = edits;
         _levelEdits = edits;
@@ -50,6 +54,7 @@ public static class LiveEditPatch
         _maxSlopeAngle = maxSlopeAngle;
         _killFloorY = killFloorY;
         _bossSpawnPosition = bossSpawnPosition;
+        _grindRequiresSlide = grindRequiresSlide;
     }
 
     // Queues the loaded level's edits again for the next generation, which a native restart runs without going through LevelLoaderPatch.
@@ -231,6 +236,7 @@ public static class LiveEditPatch
             MaxSlopeAngle: _maxSlopeAngle,
             KillFloorY: _killFloorY,
             BossSpawnPosition: _bossSpawnPosition,
+            GrindRequiresSlide: _grindRequiresSlide,
             Music: LevelMusic.Reference,
             Title: LevelTitle.Title,
             Description: LevelTitle.Description,
@@ -449,6 +455,7 @@ public static class LiveEditPatch
         if (edits == null)
         {
             KillFloorWatcher.Disarm();
+            _grindRequiresSlide = false;
             return;
         }
 

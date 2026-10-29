@@ -238,6 +238,8 @@ public static class DevHarness
                 return Teleport(command.Teleport);
             case HarnessCommandKind.Item:
                 return PlayerItems.Apply(command.Item);
+            case HarnessCommandKind.GrindSlide:
+                return GrindSlide(command.Held);
             case HarnessCommandKind.DismissLevelUp:
                 return DismissLevelUp(command.Choice);
             case HarnessCommandKind.Quit:
@@ -391,6 +393,18 @@ public static class DevHarness
         {
             ["position"] = new JsonArray(reached.x, reached.y, reached.z),
             ["cell"] = PositionLabel.CellOf(reached.x, reached.z) is { } c ? new JsonArray(c.X, c.Z) : null,
+        };
+    }
+
+    // Holds the slide button the grind gate reads so a scripted check needs no keyboard; with no value the read
+    // goes back to the real device. slideHeld is what the gate sees afterwards, forced or not.
+    private static JsonObject GrindSlide(bool? held)
+    {
+        GrindInput.Force(held, _logger);
+        return new JsonObject
+        {
+            ["held"] = held is bool value ? JsonValue.Create(value) : null,
+            ["slideHeld"] = JsonValue.Create(GrindInput.IsSlideHeld()),
         };
     }
 

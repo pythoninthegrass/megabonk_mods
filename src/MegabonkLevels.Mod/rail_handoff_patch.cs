@@ -37,6 +37,12 @@ public static class RailHandoffPatch
                 return;
             }
 
+            if (!GrindGate.AllowsStart(CustomLevelState.IsActive, LiveEditPatch.GrindRequiresSlide, GrindInput.IsSlideHeld()))
+            {
+                _logger?.Msg($"RailHandoff: slide released at progress {__instance.progress:F3}, the grind is not carried onto the next rail.");
+                return;
+            }
+
             var body = __instance.rb.position;
             var origin = new Vector3(body.x, __instance.playerCollider.bounds.min.y, body.z);
             var colliders = Physics.OverlapSphere(origin, RailHandoff.SearchRadius, ~0, QueryTriggerInteraction.Collide);
