@@ -400,7 +400,7 @@ def test_pack_version_is_the_warehouse_release() -> None:
 
 
 def test_player_starts_at_tonys_chosen_position() -> None:
-    assert b.build_level()["playerStart"] == [109, 38, -120]
+    assert b.build_level()["playerStart"] == [109, 38, -116]
 
 
 def boss_move() -> dict:
@@ -621,6 +621,15 @@ def test_the_hand_placed_merchant_stands_on_the_floor_rather_than_hovering() -> 
     hit = ws.drop(b.warehouse_triangles(), merchant.x, merchant.y + 1, merchant.z)
     base_offset = b.ITEM_METRICS[merchant.catalog_id].base_offset
     assert merchant.y - base_offset - hit.y == pytest.approx(0, abs=0.1)
+
+
+@needs_extract
+def test_the_player_lands_on_the_start_pipe_slope_clear_of_the_lip_rail() -> None:
+    x, y, z = b.PLAYER_START
+    assert z - b.START_PIPE_LIPS[0][0][2] >= 3
+    hit = ws.drop(b.warehouse_triangles(), x, y, z)
+    assert hit is not None
+    assert math.degrees(math.acos(hit.normal[1])) < 45
 
 
 GROUNDED_OVERRIDES = ("E", "Tape", "100/15")
