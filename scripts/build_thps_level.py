@@ -150,7 +150,7 @@ WAREHOUSE_ASSET = "Warehouse"
 MUSIC = f"bundle:{PACK_ID}/04_Superman"
 # The game's boombox, placed as the radio on the top platform of the start half pipe (surface height 35.85), at its left end looking down the pipe, within this distance of the player spawn.
 RADIO_CATALOG_ID = "interactable/boombox"
-RADIO_POSITION = (90, 35.9, -122)
+RADIO_POSITION = (90, 35.9, -123.5)
 RADIO_REACH = 20
 # The Warehouse floor sits this far above the level-0 tiles so it covers them.
 WAREHOUSE_LIFT = 0.5
