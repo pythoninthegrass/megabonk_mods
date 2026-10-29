@@ -37,7 +37,9 @@ public static class RailHandoffPatch
                 return;
             }
 
-            if (!GrindGate.AllowsStart(CustomLevelState.IsActive, LiveEditPatch.GrindRequiresSlide, GrindInput.IsSlideHeld()))
+            // Same question as the catch: a joint only carries the grind on while the button is held. In practice the
+            // player is already off the rail by now if they let go, thanks to RailMovementRelease.
+            if (!GrindGate.AllowsGrind(CustomLevelState.IsActive, LiveEditPatch.GrindRequiresSlide, GrindInput.IsSlideHeld()))
             {
                 _logger?.Msg($"RailHandoff: slide released at progress {__instance.progress:F3}, the grind is not carried onto the next rail.");
                 return;

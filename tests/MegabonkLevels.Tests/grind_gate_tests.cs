@@ -9,21 +9,24 @@ public class GrindGateTests
     // A run the mod did not load keeps the game's behaviour whatever the level file says.
     [InlineData(false, true, false)]
     [InlineData(false, false, false)]
-    public void AllowsStart_IsTrueWhereverTheGateIsNotInForce(bool customLevel, bool optIn, bool slideHeld)
+    public void AllowsGrind_IsTrueWhereverTheGateIsNotInForce(bool customLevel, bool optIn, bool slideHeld)
     {
-        Assert.True(GrindGate.AllowsStart(customLevel, optIn, slideHeld));
+        Assert.True(GrindGate.AllowsGrind(customLevel, optIn, slideHeld));
     }
 
     [Fact]
-    public void AllowsStart_IsFalseOnAnOptedInCustomLevelWithSlideReleased()
+    // The same answer covers the touch that starts a grind, the joint that would carry it on, and staying on the rail at
+    // all, so a released button comes the player off the rail instead of leaving them riding to the next junction.
+    public void AllowsGrind_IsFalseOnAnOptedInCustomLevelWithSlideReleased()
     {
-        Assert.False(GrindGate.AllowsStart(true, true, false));
+        Assert.False(GrindGate.AllowsGrind(true, true, false));
     }
 
     [Fact]
-    public void AllowsStart_IsTrueOnAnOptedInCustomLevelWithSlideHeld()
+    // Held, the grind runs and chains through junctions for as long as the button is down.
+    public void AllowsGrind_IsTrueOnAnOptedInCustomLevelWithSlideHeld()
     {
-        Assert.True(GrindGate.AllowsStart(true, true, true));
+        Assert.True(GrindGate.AllowsGrind(true, true, true));
     }
 
     [Theory]
@@ -39,9 +42,10 @@ public class GrindGateTests
     [Fact]
     public void FailedSlideRead_LeavesTheGameToItself()
     {
-        // An unreachable Rewired must not make grinding impossible, so a failed read reports the button held.
+        // An unreachable Rewired must not make grinding impossible, and must not throw the player off a running grind,
+        // so a failed read reports the button held.
         Assert.True(GrindGate.SlideHeldWhenReadFails);
-        Assert.True(GrindGate.AllowsStart(true, true, GrindGate.SlideHeldWhenReadFails));
+        Assert.True(GrindGate.AllowsGrind(true, true, GrindGate.SlideHeldWhenReadFails));
     }
 
     [Fact]
