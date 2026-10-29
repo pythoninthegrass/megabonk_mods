@@ -45,6 +45,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/rail_handoff.cs" Link="rail_handoff.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/rail_wall_end.cs" Link="rail_wall_end.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/grind_gate.cs" Link="grind_gate.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/grind_assist.cs" Link="grind_assist.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/terrain_edits.cs" Link="terrain_edits.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/kill_tracker.cs" Link="kill_tracker.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/env_flag.cs" Link="env_flag.cs" />

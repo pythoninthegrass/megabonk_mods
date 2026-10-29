@@ -27,6 +27,7 @@ public class MegabonkLevelsMod : MelonMod
         RailWallEndPatch.Install(LoggerInstance);
         GrindInput.Install(LoggerInstance);
         GrindGatePatch.Install(LoggerInstance);
+        GrindAssistWatcher.Install(LoggerInstance);
         BossSpawnRedirectPatch.Install(LoggerInstance);
         PackPrefabs.Initialize(LoggerInstance);
         SceneTransitionProbe.Install(LoggerInstance);
@@ -51,6 +52,7 @@ public class MegabonkLevelsMod : MelonMod
         LiveEditPatch.TickPlayerStart(LoggerInstance);
         LiveEditPatch.TickMaxSlopeAngle(LoggerInstance);
         KillFloorWatcher.Tick();
+        GrindAssistWatcher.Tick();
         LevelMusic.Tick();
         MenuNotice.Tick();
         PositionLabel.Tick();
