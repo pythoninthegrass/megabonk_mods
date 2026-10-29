@@ -289,6 +289,24 @@ def base_point(c: Collectible) -> ws.Vec:
     return (c.x - c.normal[0] * off, c.y - c.normal[1] * off, c.z - c.normal[2] * off)
 
 
+def lowest_clearance(c: Collectible, triangles: list[ws.Triangle]) -> float:
+    """Height of the item's lowest footprint corner above the surface under it: positive hovers, negative sinks."""
+    hx, _, hz = ITEM_METRICS[c.catalog_id].half
+    rotation = ws.tilt_rotation(c.normal, c.yaw)
+    bx, by, bz = base_point(c)
+    clearances = []
+    for sx in (-1, 1):
+        for sz in (-1, 1):
+            ox, oz = sx * hx * SUPPORT_FOOTPRINT, sz * hz * SUPPORT_FOOTPRINT
+            cx = bx + rotation[0][0] * ox + rotation[0][2] * oz
+            cy = by + rotation[1][0] * ox + rotation[1][2] * oz
+            cz = bz + rotation[2][0] * ox + rotation[2][2] * oz
+            hit = ws.drop(triangles, cx, cy + 3.0, cz)
+            if hit is not None:
+                clearances.append(cy - hit.y)
+    return min(clearances)
+
+
 def item_overlaps(c: Collectible, triangles: list[ws.Triangle]) -> list[int]:
     """Triangles that cut into the item's box, which starts BASE_CLEARANCE above its base."""
     metrics = ITEM_METRICS[c.catalog_id]

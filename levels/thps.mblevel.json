@@ -6465,17 +6465,17 @@
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"forest/shrines/4\",\"position\":{\"x\":59.312,\"y\":17.235,\"z\":-70.4775},\"rotation\":{\"x\":270,\"y\":0,\"z\":0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"forest/shrines/4\",\"position\":{\"x\":59.312,\"y\":16.7561,\"z\":-70.4775},\"rotation\":{\"x\":270,\"y\":0,\"z\":0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":153.1589,\"y\":26.7329,\"z\":26.8359},\"rotation\":{\"x\":270,\"y\":180,\"z\":0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":153.1589,\"y\":26.2528,\"z\":26.8359},\"rotation\":{\"x\":270,\"y\":180,\"z\":0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":159.6157,\"y\":2.5223,\"z\":-21.5463},\"rotation\":{\"x\":302.1077,\"y\":358.8792,\"z\":306.0303},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"interactable/chestFree\",\"position\":{\"x\":159.6157,\"y\":2.1575,\"z\":-21.5463},\"rotation\":{\"x\":302.1077,\"y\":358.8792,\"z\":306.0303},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",

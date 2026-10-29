@@ -621,3 +621,23 @@ def test_the_hand_placed_merchant_stands_on_the_floor_rather_than_hovering() -> 
     hit = ws.drop(b.warehouse_triangles(), merchant.x, merchant.y + 1, merchant.z)
     base_offset = b.ITEM_METRICS[merchant.catalog_id].base_offset
     assert merchant.y - base_offset - hit.y == pytest.approx(0, abs=0.1)
+
+
+GROUNDED_OVERRIDES = ("E", "Tape", "100/15")
+LEANING_OVERRIDES = ("100/30", "A")
+
+
+@needs_extract
+def test_hand_placed_items_rest_on_the_surface_without_hovering() -> None:
+    triangles = b.warehouse_triangles()
+    items = {c.code: c for c in b.collectibles()}
+    for code in GROUNDED_OVERRIDES:
+        assert b.lowest_clearance(items[code], triangles) == pytest.approx(0, abs=0.1), code
+    for code in LEANING_OVERRIDES:
+        assert b.lowest_clearance(items[code], triangles) <= 0.1, code
+
+
+def test_lowest_clearance_of_a_level_item_is_its_height_above_the_floor() -> None:
+    floor = [((-50, 0, -50), (50, 0, -50), (-50, 0, 50)), ((50, 0, -50), (50, 0, 50), (-50, 0, 50))]
+    item = b.Collectible("X", "interactable/chest", 0, 0.0, 1.5, 0.0, (0.0, 1.0, 0.0), (270, 0, 0), 0.0, True)
+    assert b.lowest_clearance(item, floor) == pytest.approx(1.5 - b.ITEM_METRICS["interactable/chest"].base_offset)
