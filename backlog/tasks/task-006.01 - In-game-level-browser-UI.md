@@ -51,5 +51,5 @@ AC #5 done and confirmed in the running game: the Map Selection screen lists eve
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
