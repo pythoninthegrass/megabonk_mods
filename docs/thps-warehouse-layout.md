@@ -170,18 +170,27 @@ The Warehouse mesh has two more bars on the same material (`A53322CF`), handled 
 - **Floating leftovers.** Each post position on the first and deck rails carries a small plate (about 0.46 by 0.25) on the rail material, well below the bar (height 1.5 to 1.8 on the first rail, 5.7 to 6.1 on the deck rail). They are what is left of the original posts and float once the posts are missing. `RailLeftoverBounds` in `ThpsPack.cs` drops the rail-material faces inside two boxes around them; the bars are far above those boxes and are untouched. The wall rod has no such plates.
 - **Evidence.** `.tools/evidence/task-021.19-rail1-before.png` and `-after.png`, `-rail2-before.png`, `-rail3-after.png`. The thin diagonal line left beside the first rail's middle post in the after shot is not on the rail material and was not removed.
 
-### Coping rails on the main half pipe
+### Coping rails on the half pipes and wall quarter pipes
 
-The main half pipe near (142, -3, 32) has a hidden game rail along each lip, so the coping grinds like the mesh rails above. `COPING_LIPS` in `scripts/build_thps_level.py` lists the lips and `rail_along` turns each into a `rail/0` placement (the bar runs from start to end, its centre at the lip height minus `RAIL0_BAR_HEIGHT` times the scale). Both are placed through `COPING_RAILS` with the `hidden` flag.
+The yellow-and-black coping of the main half pipe near (142, -3, 32), and the yellow and grey-brown lips on the wall quarter pipes, each have a hidden game rail so they grind like the mesh rails above. `COPING_LIPS` in `scripts/build_thps_level.py` (`MAIN_PIPE_LIPS` plus `WALL_PIPE_LIPS`) lists the lips and `rail_along` turns each into a `rail/0` placement: the bar runs from start to end, pitched along a falling lip, with its centre on the lip. They are placed through `COPING_RAILS` with the `hidden` flag, the same way as the mesh rails.
 
-| Lip | From | To | Length | Rail scale |
-| --- | --- | --- | --- | --- |
-| North | (119.78, 5.76, 8.59) | (178.95, 5.76, 8.59) | 59.2 | 2.113 |
-| South | (119.78, 5.76, 43.81) | (178.95, 5.76, 43.81) | 59.2 | 2.113 |
+| Lip | From | To | Length |
+| --- | --- | --- | --- |
+| Main pipe, north | (119.78, 5.76, 8.59) | (178.95, 5.76, 8.59) | 59.2 |
+| Main pipe, south | (119.78, 5.76, 43.81) | (178.95, 5.76, 43.81) | 59.2 |
+| Main pipe, north west diagonal | (119.78, 5.76, 8.59) | (100.06, 0.5, 3.51) | 21.0 |
+| Main pipe, south west diagonal | (119.78, 5.76, 43.81) | (100.06, 0.5, 48.87) | 21.0 |
+| North wall tiers, height 8.56 | x 40.89 to 80.34, 100.06 to 119.78 and 139.5 to 178.95 | at z -27.1 | 39.5, 19.7, 39.4 |
+| North wall upper tier, height 16.63 | (40.89, 16.63, -70.03) | (80.34, 16.63, -70.03) | 39.5 |
+| South wall, height 8.56 | (21.17, 8.56, 101.06) | (64.48, 8.56, 101.06) | 43.3 |
+| South wall pocket and run | 64.48, 101.06 round the U-shaped pocket near (80, 8.56, 86), down to (96.19, 8.56, 120.63) | 14 segments | 2.5 to 19.6 each |
+| South wall to east wall | (96.19, 8.56, 120.63) | (162.92, 8.56, 120.63), then round to (175.66, 8.56, 108.04) and up to (175.66, 8.56, 79.77) | 66.7, then 3 curve segments and 28.3 |
 
-- **Measuring.** `ridge_runs` in `scripts/warehouse_surface.py` finds level edges where two faces fall away from each other, one at least 20 degrees steep, merged into straight runs. On the Warehouse mesh it returns the two lips above, and `tests/test_build_thps_level.py` checks every `COPING_LIPS` entry against it when the extraction is present.
-- **Not coped.** Other ridge runs are not pipe lips: the two wooden kickers near (45, 3.3, 47) and (45, 3.3, 62), the taxi funbox plywood near (120 to 137, 2 to 5, 75 to 83), the three mesh rails, and the ~20 unit tier edges at height 8.56 and 48 along the walls (the channel quarter pipes, left ungrindable by choice).
-- **Checked in game.** Dropped onto each lip, the player grinds it with the sparks on the yellow coping. The harness injects no gameplay input, so ollies off the lips and grinding from a run up the pipe were not exercised.
+- **Measuring.** `lip_runs` in `scripts/warehouse_surface.py` finds the edges where two faces fall away from each other (a ridge) and where a ramp meets a flat deck, with a grade of at most 0.3, merged into straight runs. It returns every lip above, and `tests/test_build_thps_level.py` checks each `COPING_LIPS` entry against it when the extraction is present.
+- **Diagonals.** The west end of the main pipe is a hip: each lip bends down along a 21 unit diagonal to the floor corner, so `rail_along` pitches those rails and the grind chains onto them through `RailHandoffPatch`, the same long run and short bend as the mesh rail near (77, 2, 28).
+- **Wall ends.** A grind off the end of a rail launches the player along the rail, so a rail that ends on a wall launches the player into it. The ends in `WALL_ENDS`, found by probing the mesh from each lip end, stop `WALL_MARGIN` (12) units short of the wall. Dropped on the north tier, the player still coasts along the flat lip into the wall, so the margin does not stop that; it only moves where the launch starts.
+- **Not coped.** The two wooden kickers near (45, 3.3, 47) and (45, 3.3, 62), the taxi funbox plywood near (120 to 137, 2 to 5, 75 to 83), the three earlier mesh rails, and the vertical-faced tops at heights 45 to 51, which have no ramp face.
+- **Checked in game.** Dropped onto the main pipe lips, the north tier, the south wall and the pocket, the player grinds with sparks on the coping, and from the north lip the grind carries onto the west diagonal. The harness injects no gameplay input, so a drop only ever grinds west: an eastbound grind into the east wall, ollies off the lips, and grinding from a run up a pipe were not exercised.
 
 ### Slope limit on the half pipes
 

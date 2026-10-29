@@ -13,9 +13,11 @@ Triangle = tuple[Vec, Vec, Vec]
 Matrix = tuple[Vec, Vec, Vec]
 
 EPSILON = 1e-9
-# A ridge edge is at least this long and rises at most this much per unit of length.
-LEVEL_EDGE_MIN = 0.1
-LEVEL_EDGE_SLOPE = 0.1
+# A ridge edge rises or falls at most this much per unit of horizontal length.
+RIDGE_MAX_GRADE = 0.3
+# A face is flat below this many degrees and a wall from this many.
+FLAT_SLOPE = 15.0
+WALL_SLOPE = 89.0
 IDENTITY: Matrix = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
 # Chest, shrine and merchant prefabs are authored lying down with their up along +z, so they stand up at pitch 270.
 UPRIGHT_PITCH = 270.0
@@ -208,24 +210,44 @@ def _extends(run: tuple[Vec, Vec], edge: tuple[Vec, Vec]) -> tuple[Vec, Vec] | N
     return None
 
 
-def ridge_runs(triangles: list[Triangle], min_length: float = 2.0, min_slope: float = 20.0) -> list[tuple[Vec, Vec]]:
-    """Level edges where two faces fall away from each other, one at least `min_slope` degrees steep, merged into straight runs of at least `min_length`."""
-    shared: dict[tuple[Vec, Vec], list[tuple[Vec, float]]] = {}
+def _below_edge(p: Vec, q: Vec, v: Vec) -> bool:
+    """Whether v lies lower than the edge p-q at the edge's point nearest v in plan."""
+    dx, dz = q[0] - p[0], q[2] - p[2]
+    t = max(0.0, min(1.0, ((v[0] - p[0]) * dx + (v[2] - p[2]) * dz) / (dx * dx + dz * dz)))
+    return v[1] < p[1] + t * (q[1] - p[1]) - 0.05
+
+
+Face = tuple[Vec, Vec]
+
+
+def _is_ridge(p: Vec, q: Vec, a: Face, b: Face, min_slope: float) -> bool:
+    (n1, o1), (n2, o2) = a, b
+    falls_away = _below_edge(p, q, o1) and _below_edge(p, q, o2) and n1[0] * n2[0] + n1[2] * n2[2] < 0
+    return falls_away and max(_slope_degrees(n1), _slope_degrees(n2)) > min_slope
+
+
+def _is_deck_lip(p: Vec, q: Vec, a: Face, b: Face, min_slope: float) -> bool:
+    ramp, deck = (a, b) if _slope_degrees(a[0]) >= _slope_degrees(b[0]) else (b, a)
+    return _slope_degrees(ramp[0]) > min_slope and _slope_degrees(ramp[0]) < WALL_SLOPE and _slope_degrees(deck[0]) < FLAT_SLOPE and _below_edge(p, q, ramp[1]) and not _below_edge(p, q, deck[1])
+
+
+def _edges_where(triangles: list[Triangle], max_grade: float, min_slope: float, tests: tuple) -> list[tuple[Vec, Vec]]:
+    shared: dict[tuple[Vec, Vec], list[Face]] = {}
     for t in triangles:
         normal = _upward_normal(t)
         for a, b, other in ((0, 1, 2), (1, 2, 0), (2, 0, 1)):
             edge = tuple(sorted((_round_point(t[a]), _round_point(t[b]))))
-            shared.setdefault(edge, []).append((normal, t[other][1]))
-    runs: list[tuple[Vec, Vec]] = []
+            shared.setdefault(edge, []).append((normal, t[other]))
+    edges = []
     for (p, q), faces in shared.items():
-        length = math.dist(p, q)
-        if len(faces) != 2 or length < LEVEL_EDGE_MIN or abs(p[1] - q[1]) > LEVEL_EDGE_SLOPE * length:
-            continue
-        (n1, o1), (n2, o2) = faces
-        low = min(p[1], q[1]) - 0.05
-        falls_away = o1 < low and o2 < low and n1[0] * n2[0] + n1[2] * n2[2] < 0
-        if falls_away and max(_slope_degrees(n1), _slope_degrees(n2)) > min_slope:
-            runs.append((p, q))
+        run = math.hypot(q[0] - p[0], q[2] - p[2])
+        if len(faces) == 2 and run >= 0.1 and abs(p[1] - q[1]) <= max_grade * run and any(test(p, q, *faces, min_slope) for test in tests):
+            edges.append((p, q))
+    return edges
+
+
+def _merged(edges: list[tuple[Vec, Vec]], min_length: float) -> list[tuple[Vec, Vec]]:
+    runs = list(edges)
     merged = True
     while merged:
         merged = False
@@ -240,3 +262,13 @@ def ridge_runs(triangles: list[Triangle], min_length: float = 2.0, min_slope: fl
             if merged:
                 break
     return [r for r in runs if math.dist(*r) >= min_length]
+
+
+def ridge_runs(triangles: list[Triangle], min_length: float = 2.0, min_slope: float = 20.0, max_grade: float = RIDGE_MAX_GRADE) -> list[tuple[Vec, Vec]]:
+    """Edges rising or falling at most `max_grade` where two faces fall away from each other, one at least `min_slope` degrees steep, merged into straight runs of at least `min_length`."""
+    return _merged(_edges_where(triangles, max_grade, min_slope, (_is_ridge,)), min_length)
+
+
+def lip_runs(triangles: list[Triangle], min_length: float = 2.0, min_slope: float = 20.0, max_grade: float = RIDGE_MAX_GRADE) -> list[tuple[Vec, Vec]]:
+    """Ridge edges plus the top of a ramp that meets a flat deck, merged into straight runs of at least `min_length`."""
+    return _merged(_edges_where(triangles, max_grade, min_slope, (_is_ridge, _is_deck_lip)), min_length)

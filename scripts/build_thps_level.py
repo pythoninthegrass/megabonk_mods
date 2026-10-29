@@ -56,23 +56,79 @@ MESH_RAILS = (
     ((175.66, 8.43 - RAIL0_BAR_HEIGHT * 0.955, 61.295), 90.0, 0.955),
 )
 
-# Coping edges of the main half pipe, each (start, end) on a ridge of the mesh; a rail/0 is laid along each so the lips grind.
-COPING_LIPS = (
+# Coping edges, each (start, end) on a run from warehouse_surface.lip_runs: the main half pipe's two lips and the diagonal each turns into at its west end, then the tops of the wall quarter pipes. A rail/0 is laid along each so the lips grind.
+MAIN_PIPE_LIPS = (
     ((119.78, 5.76, 8.59), (178.95, 5.76, 8.59)),
     ((119.78, 5.76, 43.81), (178.95, 5.76, 43.81)),
+    ((119.78, 5.76, 8.59), (100.06, 0.5, 3.51)),
+    ((119.78, 5.76, 43.81), (100.06, 0.5, 48.87)),
 )
+# The tiered quarter pipes along the north wall, then the curved ones along the south and east walls, which wind round a U-shaped pocket near (80, 8.56, 86).
+WALL_PIPE_LIPS = (
+    ((40.89, 8.56, -27.1), (80.34, 8.56, -27.1)),
+    ((100.06, 8.56, -27.1), (119.78, 8.56, -27.1)),
+    ((139.5, 8.56, -27.1), (178.95, 8.56, -27.1)),
+    ((40.89, 16.63, -70.03), (80.34, 16.63, -70.03)),
+    ((21.17, 8.56, 101.06), (64.48, 8.56, 101.06)),
+    ((64.48, 8.56, 101.06), (70.13, 8.56, 100.29)),
+    ((70.13, 8.56, 100.29), (76.43, 8.56, 93.98)),
+    ((76.43, 8.56, 93.98), (77.05, 8.56, 88.32)),
+    ((77.05, 8.56, 88.32), (78.02, 8.56, 86.0)),
+    ((78.02, 8.56, 86.0), (80.34, 8.56, 85.03)),
+    ((80.34, 8.56, 85.03), (82.66, 8.56, 86.0)),
+    ((82.66, 8.56, 86.0), (83.62, 8.56, 88.32)),
+    ((83.62, 8.56, 88.32), (83.62, 8.56, 107.88)),
+    ((83.62, 8.56, 107.88), (84.24, 8.56, 113.7)),
+    ((84.24, 8.56, 113.7), (90.54, 8.56, 120.01)),
+    ((90.54, 8.56, 120.01), (96.19, 8.56, 120.63)),
+    ((96.19, 8.56, 120.63), (162.92, 8.56, 120.63)),
+    ((162.92, 8.56, 120.63), (168.74, 8.56, 120.01)),
+    ((168.74, 8.56, 120.01), (175.04, 8.56, 113.7)),
+    ((175.04, 8.56, 113.7), (175.66, 8.56, 108.04)),
+    ((175.66, 8.56, 79.77), (175.66, 8.56, 108.04)),
+)
+COPING_LIPS = MAIN_PIPE_LIPS + WALL_PIPE_LIPS
 
 
-def rail_along(start: tuple[float, float, float], end: tuple[float, float, float]) -> tuple[tuple[float, float, float], float, float]:
-    """The (position, yaw, scale) of a rail/0 whose bar runs from start to end at start's height."""
-    dx, dz = end[0] - start[0], end[2] - start[2]
-    scale = math.hypot(dx, dz) / RAIL0_LENGTH
+def rail_along(start: tuple[float, float, float], end: tuple[float, float, float]) -> tuple[tuple[float, float, float], float, float, float]:
+    """The (position, yaw, scale, pitch) of a rail/0 whose bar runs from start to end."""
+    dx, dy, dz = end[0] - start[0], end[1] - start[1], end[2] - start[2]
+    run = math.hypot(dx, dz)
     yaw = math.degrees(math.atan2(-dz, dx)) % 360
-    centre = ((start[0] + end[0]) / 2, start[1] - RAIL0_BAR_HEIGHT * scale, (start[2] + end[2]) / 2)
-    return centre, yaw, scale
+    pitch = math.degrees(math.atan2(dy, run))
+    scale = math.sqrt(run * run + dy * dy) / RAIL0_LENGTH
+    yaw_r, pitch_r = math.radians(yaw), math.radians(pitch)
+    up = (-math.sin(pitch_r) * math.cos(yaw_r), math.cos(pitch_r), math.sin(pitch_r) * math.sin(yaw_r))
+    bar = RAIL0_BAR_HEIGHT * scale
+    middle = tuple((a + c) / 2 for a, c in zip(start, end, strict=True))
+    return tuple(m - u * bar for m, u in zip(middle, up, strict=True)), yaw, scale, pitch
 
 
-COPING_RAILS = tuple(rail_along(start, end) for start, end in COPING_LIPS)
+# Lip ends that run into a wall, found by probing the mesh from each end along the lip. A rail stops this far short of them, so the grind's launch has room before the wall.
+WALL_ENDS = (
+    (178.95, 5.76, 8.59),
+    (178.95, 5.76, 43.81),
+    (40.89, 8.56, -27.1),
+    (178.95, 8.56, -27.1),
+    (40.89, 16.63, -70.03),
+    (80.34, 16.63, -70.03),
+    (21.17, 8.56, 101.06),
+)
+WALL_MARGIN = 12.0
+
+
+def stopped_short_of_walls(start: tuple[float, float, float], end: tuple[float, float, float]) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """The lip with any end in WALL_ENDS pulled back along the lip by WALL_MARGIN."""
+    length = math.dist(start, end)
+    pull = tuple((e - s_) * WALL_MARGIN / length for s_, e in zip(start, end, strict=True))
+    if start in WALL_ENDS:
+        start = tuple(s_ + d for s_, d in zip(start, pull, strict=True))
+    if end in WALL_ENDS:
+        end = tuple(e - d for e, d in zip(end, pull, strict=True))
+    return start, end
+
+
+COPING_RAILS = tuple(rail_along(*stopped_short_of_walls(start, end)) for start, end in COPING_LIPS)
 
 # The half pipe lips reach 85 degrees, past the game's 45 degree slope limit.
 MAX_SLOPE_ANGLE = 88
@@ -409,20 +465,22 @@ def spawn_moves() -> list[dict]:
     return [edit("object.move", payload, "gen:object:BossSpawner:0000")]
 
 
+def hidden_rail_edit(position: tuple[float, float, float], yaw: float, scale: float, pitch: float = 0.0) -> dict:
+    x, y, z = position
+    return edit(
+        "object.place",
+        {
+            "catalogId": MESH_RAIL_CATALOG_ID,
+            "position": {"x": x, "y": y, "z": z},
+            "rotation": {"x": 0.0, "y": yaw, "z": pitch},
+            "scale": {"x": scale, "y": scale, "z": scale},
+            "hidden": True,
+        },
+    )
+
+
 def mesh_rail_edits() -> list[dict]:
-    return [
-        edit(
-            "object.place",
-            {
-                "catalogId": MESH_RAIL_CATALOG_ID,
-                "position": {"x": x, "y": y, "z": z},
-                "rotation": {"x": 0.0, "y": yaw, "z": 0.0},
-                "scale": {"x": scale, "y": scale, "z": scale},
-                "hidden": True,
-            },
-        )
-        for (x, y, z), yaw, scale in MESH_RAILS + COPING_RAILS
-    ]
+    return [hidden_rail_edit(*rail) for rail in MESH_RAILS + COPING_RAILS]
 
 
 def rail_edits() -> list[dict]:

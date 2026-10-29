@@ -112,3 +112,52 @@ def test_ridge_runs_ignores_a_valley_a_flat_floor_and_a_gentle_ridge() -> None:
 
 def test_ridge_runs_ignores_runs_shorter_than_the_minimum() -> None:
     assert ws.ridge_runs(gable(0, 1.5)) == []
+
+
+def hip(x1: float, drop: float) -> list[ws.Triangle]:
+    """A ridge from (0, 4, 0) falling `drop` over x1, with faces falling away a metre either side in z."""
+    return [
+        ((0, 4, 0), (x1, 4 - drop, 0), (0, 0, -1)),
+        ((x1, 4 - drop, 0), (x1, 0, -1), (0, 0, -1)),
+        ((0, 4, 0), (0, 0, 1), (x1, 4 - drop, 0)),
+        ((x1, 4 - drop, 0), (0, 0, 1), (x1, 0, 1)),
+    ]
+
+
+def test_ridge_runs_follows_a_ridge_that_falls_along_its_length() -> None:
+    [(start, end)] = ws.ridge_runs(hip(10, 2.5))
+    assert sorted([start, end]) == [(0, 4, 0), (10, 1.5, 0)]
+
+
+def test_ridge_runs_ignores_a_ridge_steeper_than_the_grade_limit() -> None:
+    assert ws.ridge_runs(hip(10, 8)) == []
+
+
+DECK = ((0, 5, 5), (10, 5, 5), (0, 5, 15))
+RAMP = [((0, 0, 0), (10, 0, 0), (0, 5, 5)), ((10, 0, 0), (10, 5, 5), (0, 5, 5))]
+
+
+def test_lip_runs_finds_the_top_of_a_ramp_that_meets_a_flat_deck() -> None:
+    [(start, end)] = ws.lip_runs([*RAMP, DECK])
+    assert sorted([start, end]) == [(0, 5, 5), (10, 5, 5)]
+
+
+def test_lip_runs_ignores_the_foot_of_a_ramp_where_it_meets_the_floor() -> None:
+    floor = ((0, 0, 0), (10, 0, 0), (0, 0, -10))
+    assert [r for r in ws.lip_runs([*RAMP, floor]) if r[0][1] == 0] == []
+
+
+def test_lip_runs_ignores_a_ramp_that_meets_a_wall() -> None:
+    wall = ((0, 5, 5), (10, 5, 5), (0, 15, 5))
+    assert ws.lip_runs([*RAMP, wall]) == []
+
+
+def test_lip_runs_still_finds_a_ridge() -> None:
+    [(start, end)] = ws.lip_runs(gable(0, 10))
+    assert sorted([start, end]) == [(0, 4, 0), (10, 4, 0)]
+
+
+def test_lip_runs_joins_a_ridge_to_the_deck_edge_it_continues_into() -> None:
+    ridge = gable(10, 20, z=5, ridge=5)
+    [(start, end)] = ws.lip_runs([*RAMP, DECK, *ridge])
+    assert sorted([start, end]) == [(0, 5, 5), (20, 5, 5)]

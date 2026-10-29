@@ -494,33 +494,84 @@ def test_the_pack_opens_the_start_slope_windows_by_position_only() -> None:
     assert "StartSlopeWindowBounds" in source
 
 
-def test_rail_along_spans_the_lip_with_its_bar_on_the_lip_height() -> None:
-    (x, y, z), yaw, scale = b.rail_along((119.78, 5.76, 8.59), (178.95, 5.76, 8.59))
-    assert yaw == pytest.approx(0.0)
+def rail_axis_ends(rail: tuple) -> list[tuple[float, float, float]]:
+    (x, y, z), yaw, scale, pitch = rail
+    half = b.RAIL0_LENGTH * scale / 2
+    yaw_r, pitch_r = math.radians(yaw), math.radians(pitch)
+    along = (math.cos(pitch_r) * math.cos(yaw_r), math.sin(pitch_r), -math.cos(pitch_r) * math.sin(yaw_r))
+    up = (-math.sin(pitch_r) * math.cos(yaw_r), math.cos(pitch_r), math.sin(pitch_r) * math.sin(yaw_r))
+    bar = b.RAIL0_BAR_HEIGHT * scale
+    centre = tuple(c + u * bar for c, u in zip((x, y, z), up, strict=True))
+    return [tuple(c + sign * a * half for c, a in zip(centre, along, strict=True)) for sign in (-1, 1)]
+
+
+def test_rail_along_spans_a_level_lip_with_its_bar_on_the_lip_height() -> None:
+    rail = b.rail_along((119.78, 5.76, 8.59), (178.95, 5.76, 8.59))
+    (x, y, z), yaw, scale, pitch = rail
+    assert (yaw, pitch) == pytest.approx((0.0, 0.0))
     assert (x, z) == pytest.approx((149.365, 8.59))
     assert scale == pytest.approx(59.17 / b.RAIL0_LENGTH, abs=0.001)
     assert y == pytest.approx(5.76 - b.RAIL0_BAR_HEIGHT * scale)
-    assert [c for end in rail_ends(((x, y, z), yaw, scale)) for c in end] == pytest.approx([119.78, 8.59, 178.95, 8.59], abs=0.01)
+    assert [c for end in rail_axis_ends(rail) for c in end] == pytest.approx([119.78, 5.76, 8.59, 178.95, 5.76, 8.59], abs=0.01)
 
 
 def test_rail_along_turns_to_a_lip_running_along_z() -> None:
-    _, yaw, _ = b.rail_along((10, 3, 0), (10, 3, 28))
+    _, yaw, _, _ = b.rail_along((10, 3, 0), (10, 3, 28))
     assert yaw == pytest.approx(270.0)
+
+
+def test_rail_along_pitches_a_falling_lip_and_keeps_its_bar_on_the_lip() -> None:
+    start, end = (119.78, 5.76, 8.59), (100.06, 0.5, 3.51)
+    rail = b.rail_along(start, end)
+    _, yaw, scale, pitch = rail
+    assert scale == pytest.approx(math.dist(start, end) / b.RAIL0_LENGTH, abs=0.001)
+    assert pitch == pytest.approx(-14.48, abs=0.05)
+    assert [c for e in rail_axis_ends(rail) for c in e] == pytest.approx([*start, *end], abs=0.01)
 
 
 def test_each_coping_rail_is_a_hidden_game_rail_after_the_mesh_rails() -> None:
     placed = [payload(e) for e in b.rail_edits()]
     assert [(p["position"]["x"], p["position"]["y"], p["position"]["z"]) for p in placed[len(b.MESH_RAILS) :]] == [r[0] for r in b.COPING_RAILS]
+    assert [p["rotation"]["z"] for p in placed[len(b.MESH_RAILS) :]] == [r[3] for r in b.COPING_RAILS]
 
 
 @needs_extract
-def test_every_coping_lip_lies_on_a_ridge_of_the_mesh() -> None:
-    ridges = ws.ridge_runs(b.warehouse_triangles())
+def test_every_coping_lip_lies_on_a_lip_run_of_the_mesh() -> None:
+    ridges = ws.lip_runs(b.warehouse_triangles())
     for start, end in b.COPING_LIPS:
         assert any(
             min(math.dist(start, a) + math.dist(end, c), math.dist(start, c) + math.dist(end, a)) < 0.1 for a, c in ridges
         ), (start, end)
 
 
-def test_the_coping_lips_are_the_two_main_half_pipe_edges() -> None:
-    assert sorted((s[2], s[1]) for s, _ in b.COPING_LIPS) == [(8.59, 5.76), (43.81, 5.76)]
+def test_the_coping_lips_are_the_main_half_pipe_edges_and_the_diagonals_at_their_west_ends() -> None:
+    level = [(s, e) for s, e in b.MAIN_PIPE_LIPS if s[1] == e[1]]
+    assert sorted((s[2], s[1]) for s, _ in level) == [(8.59, 5.76), (43.81, 5.76)]
+    diagonals = [(s, e) for s, e in b.MAIN_PIPE_LIPS if s[1] != e[1]]
+    assert sorted(e for _, e in diagonals) == [(100.06, 0.5, 3.51), (100.06, 0.5, 48.87)]
+
+
+def test_each_diagonal_lip_starts_where_a_level_lip_ends() -> None:
+    level_ends = {end for start, end in b.MAIN_PIPE_LIPS if start[1] == end[1] for end in (start, end)}
+    for start, end in b.MAIN_PIPE_LIPS:
+        if start[1] != end[1]:
+            assert start in level_ends
+
+
+def test_a_lip_ending_at_a_wall_is_pulled_back_so_the_launch_has_room() -> None:
+    start, end = b.stopped_short_of_walls((119.78, 5.76, 8.59), (178.95, 5.76, 8.59))
+    assert start == (119.78, 5.76, 8.59)
+    assert end == pytest.approx((178.95 - b.WALL_MARGIN, 5.76, 8.59))
+    start, end = b.stopped_short_of_walls((21.17, 8.56, 101.06), (64.48, 8.56, 101.06))
+    assert start == pytest.approx((21.17 + b.WALL_MARGIN, 8.56, 101.06))
+    assert end == (64.48, 8.56, 101.06)
+
+
+def test_a_lip_away_from_the_walls_is_left_whole() -> None:
+    lip = ((119.78, 5.76, 8.59), (100.06, 0.5, 3.51))
+    assert b.stopped_short_of_walls(*lip) == lip
+
+
+def test_every_wall_end_is_the_end_of_a_coping_lip() -> None:
+    ends = {point for lip in b.COPING_LIPS for point in lip}
+    assert set(b.WALL_ENDS) <= ends
