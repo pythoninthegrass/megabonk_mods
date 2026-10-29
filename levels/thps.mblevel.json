@@ -6460,7 +6460,7 @@
     {
       "opType": "object.place",
       "target": "",
-      "payload": "{\"catalogId\":\"forest/shrines/3\",\"position\":{\"x\":170.3862,\"y\":-3.3634,\"z\":24.0671},\"rotation\":{\"x\":0,\"y\":251.2917,\"z\":0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
+      "payload": "{\"catalogId\":\"forest/shrines/3\",\"position\":{\"x\":170.3862,\"y\":-4.9134,\"z\":24.0671},\"rotation\":{\"x\":0,\"y\":251.2917,\"z\":0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}"
     },
     {
       "opType": "object.place",

@@ -613,3 +613,11 @@ def test_every_coping_rail_runs_edge_to_edge_along_its_lip() -> None:
     for lip, rail in zip(b.COPING_LIPS, b.COPING_RAILS, strict=True):
         ends = rail_axis_ends(rail)
         assert [c for end in ends for c in end] == pytest.approx([*lip[0], *lip[1]], abs=0.01), lip
+
+
+@needs_extract
+def test_the_hand_placed_merchant_stands_on_the_floor_rather_than_hovering() -> None:
+    merchant = next(c for c in b.collectibles() if c.code == "T")
+    hit = ws.drop(b.warehouse_triangles(), merchant.x, merchant.y + 1, merchant.z)
+    base_offset = b.ITEM_METRICS[merchant.catalog_id].base_offset
+    assert merchant.y - base_offset - hit.y == pytest.approx(0, abs=0.1)
