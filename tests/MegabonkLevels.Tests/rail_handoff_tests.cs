@@ -48,4 +48,14 @@ public class RailHandoffTests
     {
         Assert.Equal(-1, RailHandoff.PickNearest(Array.Empty<float>(), Array.Empty<bool>()));
     }
+
+    [Theory]
+    [InlineData(0f, 1f)]
+    [InlineData(0.04f, 1f)]
+    [InlineData(0.96f, -1f)]
+    [InlineData(1f, -1f)]
+    public void DirectionAwayFromNearestEnd_RunsTowardTheFarEnd(float progress, float expected)
+    {
+        Assert.Equal(expected, RailHandoff.DirectionAwayFromNearestEnd(progress));
+    }
 }

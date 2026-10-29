@@ -63,7 +63,7 @@ MAIN_PIPE_LIPS = (
     ((119.78, 5.76, 8.59), (100.06, 0.5, 3.51)),
     ((119.78, 5.76, 43.81), (100.06, 0.5, 48.87)),
 )
-# The tiered quarter pipes along the north wall, then the curved ones along the south and east walls, which wind round a U-shaped pocket near (80, 8.56, 86).
+# The tiered quarter pipes along the north wall, then the curved ones along the south and east walls, which wind round a U-shaped pocket near (80, 8.56, 86); the pocket's rounded tip is two chords, since the mesh's four 2.5 unit edges there are shorter than the handoff's search radius.
 WALL_PIPE_LIPS = (
     ((40.89, 8.56, -27.1), (80.34, 8.56, -27.1)),
     ((100.06, 8.56, -27.1), (119.78, 8.56, -27.1)),
@@ -73,10 +73,8 @@ WALL_PIPE_LIPS = (
     ((64.48, 8.56, 101.06), (70.13, 8.56, 100.29)),
     ((70.13, 8.56, 100.29), (76.43, 8.56, 93.98)),
     ((76.43, 8.56, 93.98), (77.05, 8.56, 88.32)),
-    ((77.05, 8.56, 88.32), (78.02, 8.56, 86.0)),
-    ((78.02, 8.56, 86.0), (80.34, 8.56, 85.03)),
-    ((80.34, 8.56, 85.03), (82.66, 8.56, 86.0)),
-    ((82.66, 8.56, 86.0), (83.62, 8.56, 88.32)),
+    ((77.05, 8.56, 88.32), (80.34, 8.56, 85.03)),
+    ((80.34, 8.56, 85.03), (83.62, 8.56, 88.32)),
     ((83.62, 8.56, 88.32), (83.62, 8.56, 107.88)),
     ((83.62, 8.56, 107.88), (84.24, 8.56, 113.7)),
     ((84.24, 8.56, 113.7), (90.54, 8.56, 120.01)),

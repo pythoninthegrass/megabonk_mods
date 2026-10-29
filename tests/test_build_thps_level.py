@@ -9,6 +9,9 @@ import pytest
 import warehouse_surface as ws
 from pathlib import Path
 
+# The handoff searches this far from a rail end (RailHandoff.SearchRadius), so a rail shorter than it has several neighbours in reach.
+MIN_COPING_LIP = 3.5
+
 
 def ops_of(edits: list[dict], op_type: str) -> list[dict]:
     return [e for e in edits if e["opType"] == op_type]
@@ -536,12 +539,27 @@ def test_each_coping_rail_is_a_hidden_game_rail_after_the_mesh_rails() -> None:
 
 
 @needs_extract
-def test_every_coping_lip_lies_on_a_lip_run_of_the_mesh() -> None:
-    ridges = ws.lip_runs(b.warehouse_triangles())
+def test_every_coping_lip_runs_between_corners_of_the_mesh_lip() -> None:
+    runs = ws.lip_runs(b.warehouse_triangles())
+    corners = [p for run in runs for p in run]
     for start, end in b.COPING_LIPS:
+        assert min(math.dist(start, c) for c in corners) < 0.1, start
+        assert min(math.dist(end, c) for c in corners) < 0.1, end
+
+
+@needs_extract
+def test_a_coping_lip_that_is_one_whole_run_matches_it() -> None:
+    runs = ws.lip_runs(b.warehouse_triangles())
+    whole = [lip for lip in b.COPING_LIPS if math.dist(*lip) > MIN_COPING_LIP]
+    for start, end in whole:
         assert any(
-            min(math.dist(start, a) + math.dist(end, c), math.dist(start, c) + math.dist(end, a)) < 0.1 for a, c in ridges
-        ), (start, end)
+            min(math.dist(start, a) + math.dist(end, c), math.dist(start, c) + math.dist(end, a)) < 0.1 for a, c in runs
+        ) or any(math.dist(start, a) < 0.1 for a, _ in runs), (start, end)
+
+
+def test_no_coping_rail_is_short_enough_for_the_handoff_to_bounce_between_neighbours() -> None:
+    for lip in b.COPING_LIPS:
+        assert math.dist(*lip) >= MIN_COPING_LIP, lip
 
 
 def test_the_coping_lips_are_the_main_half_pipe_edges_and_the_diagonals_at_their_west_ends() -> None:

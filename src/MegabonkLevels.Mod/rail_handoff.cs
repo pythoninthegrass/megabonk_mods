@@ -11,6 +11,9 @@ public static class RailHandoff
     // The game clamps a rail's progress to 0..1 and stops the grind at either end, so an interior value means the player jumped off.
     public static bool ReachedEnd(float progress) => progress >= 1f || progress <= 0f;
 
+    // The game's direction multiplier for a rail started where the player stands: toward the far end, so a sharp turn at the joint does not start the grind running off the end it is at.
+    public static float DirectionAwayFromNearestEnd(float progress) => progress >= 0.5f ? -1f : 1f;
+
     // Index of the closest rail within SearchRadius that is not on cooldown, or -1.
     public static int PickNearest(IReadOnlyList<float> distances, IReadOnlyList<bool> onCooldown)
     {

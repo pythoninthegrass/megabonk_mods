@@ -64,7 +64,8 @@ public static class RailHandoffPatch
             }
 
             __instance.StartRail(rails[pick]);
-            _logger?.Msg($"RailHandoff: moved onto rail at distance {distances[pick]:F2}.");
+            __instance.railDirectionMultiplier = RailHandoff.DirectionAwayFromNearestEnd(__instance.progress);
+            _logger?.Msg($"RailHandoff: moved onto rail at distance {distances[pick]:F2}, progress {__instance.progress:F3}, direction {__instance.railDirectionMultiplier:F1}.");
         }
     }
 }
