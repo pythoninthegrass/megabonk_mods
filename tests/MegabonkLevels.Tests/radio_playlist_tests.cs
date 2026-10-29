@@ -26,4 +26,34 @@ public class RadioPlaylistTests
 
         Assert.Equal(["01_A", "02_B"], new[] { playlist.Next(), playlist.Next() });
     }
+
+    [Fact]
+    public void StartAfter_ContinuesFromTheClipThatIsAlreadyPlaying()
+    {
+        var playlist = new RadioPlaylist(["03_C", "01_A", "02_B", "04_D"]);
+
+        playlist.StartAfter("02_B");
+
+        Assert.Equal(["03_C", "04_D", "01_A"], new[] { playlist.Next(), playlist.Next(), playlist.Next() });
+    }
+
+    [Fact]
+    public void StartAfter_AnUnknownClipLeavesTheStartAtTheFirstClip()
+    {
+        var playlist = new RadioPlaylist(["01_A", "02_B"]);
+
+        playlist.StartAfter("99_missing");
+
+        Assert.Equal("01_A", playlist.Next());
+    }
+
+    [Theory]
+    [InlineData(150f, 0.4f, true)]
+    [InlineData(30.2f, 30.3f, false)]
+    [InlineData(0f, 0.1f, false)]
+    [InlineData(185f, 184.9f, false)]
+    public void LoopWrap_IsTrueWhenPlaybackJumpsBackToTheStart(float previous, float current, bool wrapped)
+    {
+        Assert.Equal(wrapped, RadioPlaylist.LoopWrapped(previous, current));
+    }
 }

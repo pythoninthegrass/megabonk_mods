@@ -15,6 +15,9 @@ public static class LevelMusic
     private static MelonLogger.Instance _logger;
     private static string _pack;
     private static RadioPlaylist _radio;
+    private static IntPtr _radioTrack;
+    private static bool _playingOurs;
+    private static float _lastTime;
 
     // The level's music reference as loaded, kept so an editor save writes it back.
     public static string Reference { get; private set; }
@@ -49,6 +52,7 @@ public static class LevelMusic
 
             _pack = parsed.Pack;
             _radio = new RadioPlaylist(PackPrefabs.ClipNames(parsed.Pack));
+            _radio.StartAfter(clip.name);
             _track = BuildTrack(clip);
             logger.Msg($"Music: using clip '{clip.name}' from pack '{parsed.Pack}' ({clip.length:F0}s).");
         }
@@ -68,6 +72,57 @@ public static class LevelMusic
         return track;
     }
 
+    // Plays the next soundtrack clip as the level music; false when there is nothing to play.
+    private static bool PlayNext()
+    {
+        var name = _radio.Next();
+        var clip = name == null ? null : PackPrefabs.ResolveClip(_pack, name);
+        if (clip == null)
+        {
+            _logger?.Warning($"Radio: no playable clip '{name}' in pack '{_pack}'.");
+            return false;
+        }
+
+        var track = BuildTrack(clip);
+        _radioTrack = track.Pointer;
+        MusicController.Instance.PlayMusicTrack(track);
+        _lastTime = 0f;
+        _logger?.Msg($"Radio: playing '{clip.name}'.");
+        return true;
+    }
+
+    // Moves on to the next clip when the looping level or radio clip wraps round to its start.
+    public static void Tick()
+    {
+        if (_radio == null || !_playingOurs || !CustomLevelState.IsActive)
+        {
+            return;
+        }
+
+        try
+        {
+            var source = MusicController.Instance?.musicSource;
+            if (source == null || !source.isPlaying)
+            {
+                return;
+            }
+
+            var time = source.time;
+            var wrapped = RadioPlaylist.LoopWrapped(_lastTime, time);
+            _lastTime = time;
+            if (wrapped)
+            {
+                _logger?.Msg("Radio: clip ended, moving to the next.");
+                PlayNext();
+            }
+        }
+        catch (Exception ex)
+        {
+            _playingOurs = false;
+            _logger?.Warning($"Radio: could not follow the clip's end: {ex.Message}.");
+        }
+    }
+
     // Replaces the stock boombox interaction, which is single-use and throws when repeated, with playing the next soundtrack clip as the level music; any failure runs the stock interaction.
     [HarmonyPatch(typeof(InteractableBoombox), nameof(InteractableBoombox.Interact))]
     private static class BoomboxInteractPrefix
@@ -81,16 +136,11 @@ public static class LevelMusic
 
             try
             {
-                var name = _radio.Next();
-                var clip = name == null ? null : PackPrefabs.ResolveClip(_pack, name);
-                if (clip == null)
+                if (!PlayNext())
                 {
-                    _logger?.Warning($"Radio: no playable clip '{name}' in pack '{_pack}'; using the boombox's stock audio.");
                     return true;
                 }
 
-                MusicController.Instance.PlayMusicTrack(BuildTrack(clip));
-                _logger?.Msg($"Radio: playing '{clip.name}'.");
                 __result = true;
                 return false;
             }
@@ -122,7 +172,9 @@ public static class LevelMusic
     {
         private static void Postfix(MusicController __instance, MusicTrack musicTrack)
         {
-            if (_track == null || musicTrack == null || musicTrack.Pointer != _track.Pointer)
+            _playingOurs = _track != null && musicTrack != null && (musicTrack.Pointer == _track.Pointer || musicTrack.Pointer == _radioTrack);
+            _lastTime = 0f;
+            if (!_playingOurs || musicTrack.Pointer != _track.Pointer)
             {
                 return;
             }

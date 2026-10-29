@@ -15,6 +15,19 @@ public sealed class RadioPlaylist
         _clips = clipNames.Distinct().OrderBy(name => name, StringComparer.Ordinal).ToList();
     }
 
+    // Makes the next clip the one after `clip`, so the radio continues the playlist from the clip already playing; an unknown clip leaves the start unchanged.
+    public void StartAfter(string clip)
+    {
+        var at = _clips.ToList().IndexOf(clip);
+        if (at >= 0)
+        {
+            _index = (at + 1) % _clips.Count;
+        }
+    }
+
+    // A looping clip's playback position jumps back to the start when the clip ends; ordinary playback moves forward.
+    public static bool LoopWrapped(float previousTime, float currentTime) => previousTime - currentTime > 1f;
+
     public string Next()
     {
         if (_clips.Count == 0)
