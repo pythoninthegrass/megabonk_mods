@@ -213,7 +213,9 @@ public static class LiveEditPatch
             NoGrass: _noGrass,
             PlayerStart: _playerStart,
             MaxSlopeAngle: _maxSlopeAngle,
-            Music: LevelMusic.Reference);
+            Music: LevelMusic.Reference,
+            Title: LevelTitle.Title,
+            Description: LevelTitle.Description);
     }
 
     // The packs referenced by the level's edits, mapped to the version recorded in each installed

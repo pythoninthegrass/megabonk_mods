@@ -211,6 +211,41 @@ public class LevelFileTests
     }
 
     [Fact]
+    public void RoundTrip_TitleAndDescription_Survive()
+    {
+        var level = SampleLevel() with { Title = "Warehouse", Description = "I'm trying to sleep" };
+
+        var restored = LevelFileSerializer.DeserializeWithMigration(LevelFileSerializer.Serialize(level));
+
+        Assert.Equal("Warehouse", restored.Title);
+        Assert.Equal("I'm trying to sleep", restored.Description);
+        Assert.Equal(level, restored);
+    }
+
+    [Fact]
+    public void Deserialize_WithoutTitleKeys_LeavesThemNull()
+    {
+        var json = """{"schemaVersion":3,"gameBuildId":"1","map":1,"stageIndex":0,"tier":0,"seed":1,"packs":{},"edits":[]}""";
+
+        var level = LevelFileSerializer.DeserializeWithMigration(json);
+
+        Assert.Null(level.Title);
+        Assert.Null(level.Description);
+    }
+
+    [Fact]
+    public void Equals_LevelsDifferingOnlyInTitle_AreNotEqual()
+    {
+        Assert.NotEqual(SampleLevel(), SampleLevel() with { Title = "Warehouse" });
+    }
+
+    [Fact]
+    public void Equals_LevelsDifferingOnlyInDescription_AreNotEqual()
+    {
+        Assert.NotEqual(SampleLevel(), SampleLevel() with { Description = "I'm trying to sleep" });
+    }
+
+    [Fact]
     public void Equals_LevelsDifferingOnlyInNoGrass_AreNotEqual()
     {
         Assert.NotEqual(SampleLevel(), SampleLevel() with { NoGrass = true });

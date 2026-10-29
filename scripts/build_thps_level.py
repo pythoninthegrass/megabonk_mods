@@ -122,6 +122,8 @@ MANIFEST_PATH = Path(__file__).resolve().parent.parent / "unity" / "pack-authori
 WAREHOUSE_ASSET = "Warehouse"
 # The default track is the soundtrack AudioClip ThpsPack.cs builds from tools/ost/04 Superman.mp3, named by the file name with each run of other characters made an underscore.
 MUSIC = f"bundle:{PACK_ID}/04_Superman"
+TITLE = "Warehouse"
+DESCRIPTION = "I'm trying to sleep"
 # The game's boombox, placed as the radio on the top platform of the start half pipe (surface height 35.85), at its left end looking down the pipe, within this distance of the player spawn.
 RADIO_CATALOG_ID = "interactable/boombox"
 RADIO_POSITION = (90, 35.9, -123.5)
@@ -549,6 +551,8 @@ def build_level() -> dict:
         "playerStart": PLAYER_START,
         "maxSlopeAngle": MAX_SLOPE_ANGLE,
         "music": MUSIC,
+        "title": TITLE,
+        "description": DESCRIPTION,
         "edits": tile_edits() + clutter_removals() + spawn_moves() + rail_edits() + warehouse_edits() + radio_edits() + collectible_edits(),
     }
 

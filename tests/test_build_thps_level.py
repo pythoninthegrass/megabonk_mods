@@ -164,6 +164,13 @@ def test_build_level_names_the_pack_clip_as_its_music() -> None:
     assert b.build_level()["music"] == "bundle:thps/04_Superman"
 
 
+def test_build_level_is_titled_warehouse_on_tier_one() -> None:
+    level = b.build_level()
+    assert level["title"] == "Warehouse"
+    assert level["description"] == "I'm trying to sleep"
+    assert level["tier"] == 0
+
+
 def test_the_radio_is_one_boombox_placed_in_the_arena_beside_the_player_spawn() -> None:
     places = [payload(e) for e in b.build_level()["edits"] if e["opType"] == "object.place" and payload(e)["catalogId"] == "interactable/boombox"]
     assert len(places) == 1

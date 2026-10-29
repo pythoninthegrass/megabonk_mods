@@ -16,6 +16,8 @@
   ],
   "maxSlopeAngle": 88,
   "music": "bundle:thps/04_Superman",
+  "title": "Warehouse",
+  "description": "I'm trying to sleep",
   "edits": [
     {
       "opType": "tile.remove",
