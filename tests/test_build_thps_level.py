@@ -171,6 +171,16 @@ def test_build_level_is_titled_warehouse_on_tier_one() -> None:
     assert level["tier"] == 0
 
 
+def test_build_level_has_a_map_selection_description_apart_from_the_banner() -> None:
+    level = b.build_level()
+    assert level["mapDescription"] == "A warehouse built for grinding"
+    assert level["mapDescription"] != level["description"]
+
+
+def test_build_level_allows_only_calcium_and_tony_mczoom() -> None:
+    assert b.build_level()["allowedCharacters"] == ["calcium", "tonymczoom"]
+
+
 def test_the_radio_is_one_boombox_placed_in_the_arena_beside_the_player_spawn() -> None:
     places = [payload(e) for e in b.build_level()["edits"] if e["opType"] == "object.place" and payload(e)["catalogId"] == "interactable/boombox"]
     assert len(places) == 1

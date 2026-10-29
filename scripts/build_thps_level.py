@@ -124,6 +124,8 @@ WAREHOUSE_ASSET = "Warehouse"
 MUSIC = f"bundle:{PACK_ID}/04_Superman"
 TITLE = "Warehouse"
 DESCRIPTION = "I'm trying to sleep"
+MAP_DESCRIPTION = "A warehouse built for grinding"
+ALLOWED_CHARACTERS = ["calcium", "tonymczoom"]
 # The game's boombox, placed as the radio on the top platform of the start half pipe (surface height 35.85), at its left end looking down the pipe, within this distance of the player spawn.
 RADIO_CATALOG_ID = "interactable/boombox"
 RADIO_POSITION = (90, 35.9, -123.5)
@@ -553,6 +555,8 @@ def build_level() -> dict:
         "music": MUSIC,
         "title": TITLE,
         "description": DESCRIPTION,
+        "mapDescription": MAP_DESCRIPTION,
+        "allowedCharacters": ALLOWED_CHARACTERS,
         "edits": tile_edits() + clutter_removals() + spawn_moves() + rail_edits() + warehouse_edits() + radio_edits() + collectible_edits(),
     }
 

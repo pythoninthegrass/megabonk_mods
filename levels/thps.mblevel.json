@@ -18,6 +18,11 @@
   "music": "bundle:thps/04_Superman",
   "title": "Warehouse",
   "description": "I'm trying to sleep",
+  "mapDescription": "A warehouse built for grinding",
+  "allowedCharacters": [
+    "calcium",
+    "tonymczoom"
+  ],
   "edits": [
     {
       "opType": "tile.remove",
