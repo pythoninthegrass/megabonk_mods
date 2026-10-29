@@ -26,6 +26,7 @@ public static class LiveEditPatch
     private static bool _noGrass;
     private static IReadOnlyList<float> _playerStart;
     private static float? _maxSlopeAngle;
+    private static float? _killFloorY;
     private static Session _session;
     private static int _runGeneration;
 
@@ -35,13 +36,14 @@ public static class LiveEditPatch
 
     // Set by LevelLoaderPatch right before it starts a run, consumed (and cleared) by the next
     // generation so a later vanilla run is never edited.
-    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null)
+    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null, float? killFloorY = null)
     {
         _pendingEdits = edits;
         _levelEdits = edits;
         _noGrass = noGrass;
         _playerStart = playerStart;
         _maxSlopeAngle = maxSlopeAngle;
+        _killFloorY = killFloorY;
     }
 
     // Queues the loaded level's edits again for the next generation, which a native restart runs without going through LevelLoaderPatch.
@@ -221,6 +223,7 @@ public static class LiveEditPatch
             NoGrass: _noGrass,
             PlayerStart: _playerStart,
             MaxSlopeAngle: _maxSlopeAngle,
+            KillFloorY: _killFloorY,
             Music: LevelMusic.Reference,
             Title: LevelTitle.Title,
             Description: LevelTitle.Description,
@@ -441,7 +444,7 @@ public static class LiveEditPatch
             return;
         }
 
-        KillFloorWatcher.Arm(tileGen, logger);
+        KillFloorWatcher.Arm(tileGen, logger, _killFloorY);
     }
 
     // The grass manager raycasts onto the ground layer, so it would grow through a level's placed floor meshes.

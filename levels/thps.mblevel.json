@@ -15,6 +15,7 @@
     -116
   ],
   "maxSlopeAngle": 88,
+  "killFloorY": -35.0,
   "music": "bundle:thps/04_Superman",
   "title": "Warehouse",
   "description": "I'm trying to sleep",
@@ -285,64 +286,34 @@
       "payload": "{\"x\":6,\"z\":3}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":3,\"height\":2}"
+      "payload": "{\"x\":7,\"z\":3}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":3,\"direction\":0}"
+      "payload": "{\"x\":8,\"z\":3}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":3,\"height\":2}"
+      "payload": "{\"x\":9,\"z\":3}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":3,\"direction\":0}"
+      "payload": "{\"x\":10,\"z\":3}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":3,\"height\":2}"
+      "payload": "{\"x\":11,\"z\":3}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":3,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":3,\"height\":2}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":3,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":3,\"height\":2}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":3,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":3,\"height\":2}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":3,\"direction\":0}"
+      "payload": "{\"x\":12,\"z\":3}"
     },
     {
       "opType": "tile.remove",
@@ -390,64 +361,34 @@
       "payload": "{\"x\":6,\"z\":4}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":4,\"height\":2}"
+      "payload": "{\"x\":7,\"z\":4}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":4,\"direction\":0}"
+      "payload": "{\"x\":8,\"z\":4}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":4,\"height\":-1}"
+      "payload": "{\"x\":9,\"z\":4}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":4,\"direction\":0}"
+      "payload": "{\"x\":10,\"z\":4}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":4,\"height\":-1}"
+      "payload": "{\"x\":11,\"z\":4}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":4,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":4,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":4,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":4,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":4,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":4,\"height\":2}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":4,\"direction\":0}"
+      "payload": "{\"x\":12,\"z\":4}"
     },
     {
       "opType": "tile.remove",
@@ -495,64 +436,34 @@
       "payload": "{\"x\":6,\"z\":5}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":5,\"height\":2}"
+      "payload": "{\"x\":7,\"z\":5}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":5,\"direction\":0}"
+      "payload": "{\"x\":8,\"z\":5}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":5,\"height\":-1}"
+      "payload": "{\"x\":9,\"z\":5}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":5,\"direction\":0}"
+      "payload": "{\"x\":10,\"z\":5}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":5,\"height\":-1}"
+      "payload": "{\"x\":11,\"z\":5}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":5,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":5,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":5,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":5,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":5,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":5,\"height\":2}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":5,\"direction\":0}"
+      "payload": "{\"x\":12,\"z\":5}"
     },
     {
       "opType": "tile.remove",
@@ -600,64 +511,34 @@
       "payload": "{\"x\":6,\"z\":6}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":6,\"height\":2}"
+      "payload": "{\"x\":7,\"z\":6}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":6,\"direction\":0}"
+      "payload": "{\"x\":8,\"z\":6}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":6,\"height\":-1}"
+      "payload": "{\"x\":9,\"z\":6}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":6,\"direction\":0}"
+      "payload": "{\"x\":10,\"z\":6}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":6,\"height\":-1}"
+      "payload": "{\"x\":11,\"z\":6}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":6,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":6,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":6,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":6,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":6,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":6,\"height\":2}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":6,\"direction\":0}"
+      "payload": "{\"x\":12,\"z\":6}"
     },
     {
       "opType": "tile.remove",
@@ -705,34 +586,19 @@
       "payload": "{\"x\":6,\"z\":7}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":7,\"height\":2}"
+      "payload": "{\"x\":7,\"z\":7}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":7,\"direction\":0}"
+      "payload": "{\"x\":8,\"z\":7}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":7,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":8,\"z\":7,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":9,\"z\":7,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":9,\"z\":7,\"direction\":0}"
+      "payload": "{\"x\":9,\"z\":7}"
     },
     {
       "opType": "tile.setHeight",
@@ -745,24 +611,14 @@
       "payload": "{\"x\":10,\"z\":7,\"direction\":0}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":11,\"z\":7,\"height\":-1}"
+      "payload": "{\"x\":11,\"z\":7}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":11,\"z\":7,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":7,\"height\":2}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":7,\"direction\":0}"
+      "payload": "{\"x\":12,\"z\":7}"
     },
     {
       "opType": "tile.remove",
@@ -810,64 +666,34 @@
       "payload": "{\"x\":6,\"z\":8}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":8,\"height\":2}"
+      "payload": "{\"x\":7,\"z\":8}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":8,\"direction\":0}"
+      "payload": "{\"x\":8,\"z\":8}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":8,\"height\":-1}"
+      "payload": "{\"x\":9,\"z\":8}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":8,\"direction\":0}"
+      "payload": "{\"x\":10,\"z\":8}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":8,\"height\":-1}"
+      "payload": "{\"x\":11,\"z\":8}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":8,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":8,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":8,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":8,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":8,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":8,\"height\":2}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":8,\"direction\":0}"
+      "payload": "{\"x\":12,\"z\":8}"
     },
     {
       "opType": "tile.remove",
@@ -915,64 +741,34 @@
       "payload": "{\"x\":6,\"z\":9}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":9,\"height\":2}"
+      "payload": "{\"x\":7,\"z\":9}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":9,\"direction\":0}"
+      "payload": "{\"x\":8,\"z\":9}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":9,\"height\":-1}"
+      "payload": "{\"x\":9,\"z\":9}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":9,\"direction\":0}"
+      "payload": "{\"x\":10,\"z\":9}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":9,\"height\":-1}"
+      "payload": "{\"x\":11,\"z\":9}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":9,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":9,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":9,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":9,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":9,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":9,\"height\":2}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":9,\"direction\":0}"
+      "payload": "{\"x\":12,\"z\":9}"
     },
     {
       "opType": "tile.remove",
@@ -1020,64 +816,34 @@
       "payload": "{\"x\":6,\"z\":10}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":10,\"height\":2}"
+      "payload": "{\"x\":7,\"z\":10}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":10,\"direction\":0}"
+      "payload": "{\"x\":8,\"z\":10}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":10,\"height\":-1}"
+      "payload": "{\"x\":9,\"z\":10}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":10,\"direction\":0}"
+      "payload": "{\"x\":10,\"z\":10}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":10,\"height\":-1}"
+      "payload": "{\"x\":11,\"z\":10}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":10,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":10,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":10,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":10,\"height\":-1}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":10,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":10,\"height\":2}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":10,\"direction\":0}"
+      "payload": "{\"x\":12,\"z\":10}"
     },
     {
       "opType": "tile.remove",
@@ -1125,64 +891,34 @@
       "payload": "{\"x\":6,\"z\":11}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":11,\"height\":2}"
+      "payload": "{\"x\":7,\"z\":11}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":7,\"z\":11,\"direction\":0}"
+      "payload": "{\"x\":8,\"z\":11}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":11,\"height\":2}"
+      "payload": "{\"x\":9,\"z\":11}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":8,\"z\":11,\"direction\":0}"
+      "payload": "{\"x\":10,\"z\":11}"
     },
     {
-      "opType": "tile.setHeight",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":11,\"height\":2}"
+      "payload": "{\"x\":11,\"z\":11}"
     },
     {
-      "opType": "tile.setSlope",
+      "opType": "tile.remove",
       "target": "",
-      "payload": "{\"x\":9,\"z\":11,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":11,\"height\":2}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":10,\"z\":11,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":11,\"height\":2}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":11,\"z\":11,\"direction\":0}"
-    },
-    {
-      "opType": "tile.setHeight",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":11,\"height\":2}"
-    },
-    {
-      "opType": "tile.setSlope",
-      "target": "",
-      "payload": "{\"x\":12,\"z\":11,\"direction\":0}"
+      "payload": "{\"x\":12,\"z\":11}"
     },
     {
       "opType": "tile.remove",
@@ -6252,7 +5988,7 @@
     {
       "opType": "object.move",
       "target": "gen:object:BossSpawner:0000",
-      "payload": "{\"newTransform\":{\"position\":{\"x\":170,\"y\":15.6,\"z\":27},\"rotation\":{\"x\":0.0,\"y\":90.0,\"z\":0.0},\"scale\":{\"x\":0.4,\"y\":0.4,\"z\":0.4}},\"hiddenChildren\":[\"BottomPiece\",\"Collider\"]}"
+      "payload": "{\"newTransform\":{\"position\":{\"x\":150,\"y\":0.5,\"z\":65},\"rotation\":{\"x\":0.0,\"y\":90.0,\"z\":0.0},\"scale\":{\"x\":0.4,\"y\":0.4,\"z\":0.4}},\"hiddenChildren\":[\"BottomPiece\",\"Collider\"]}"
     },
     {
       "opType": "object.place",

@@ -27,6 +27,14 @@ public static class KillFloor
             ? Math.Max(lowestTerrainY - margin, catchFloorY + CatchFloorClearance)
             : float.NegativeInfinity;
 
+    // A level can author its own floor instead of deriving one from tile levels, which a level whose terrain is
+    // removed entirely has no meaningful lowest tile to derive from. The catch-floor clamp still applies, or an
+    // authored height under the game's own catch floor would leave bodies resting there unkillable.
+    public static float FloorYExplicit(float? killFloorY, float catchFloorY) =>
+        killFloorY.HasValue
+            ? Math.Max(killFloorY.Value, catchFloorY + CatchFloorClearance)
+            : float.NegativeInfinity;
+
     public static bool ShouldKill(float y, float floorY) => y < floorY;
 
     // An actor's pivot can sit well above its feet, so a tall one standing on the catch floor never has a pivot below

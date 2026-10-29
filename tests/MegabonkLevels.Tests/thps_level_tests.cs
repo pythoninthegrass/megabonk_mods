@@ -44,26 +44,47 @@ public class ThpsLevelTests
     }
 
     [Fact]
-    public void Level_EveryArenaTileIsReachableFromTheGeneratedSpawnCell()
+    public void Level_KeepsOnlyTheGeneratedSpawnCellTile()
+    {
+        var state = Replay();
+
+        Assert.Single(state.Tiles);
+        var kept = state.GetTile(10, 7);
+        Assert.NotNull(kept);
+        Assert.Equal(-1, kept!.Value.Height);
+    }
+
+    [Fact]
+    public void Level_TheKeptTileIsReachableFromTheGeneratedSpawnCell()
     {
         var state = Replay();
 
         var result = ReachabilityValidator.Validate(state, (10, 7));
 
-        for (var x = 8; x <= 10; x++)
-        {
-            for (var z = 4; z <= 7; z++)
-            {
-                Assert.True(result.IsReachable((x, z)), $"arena tile ({x},{z}) is unreachable");
-            }
-        }
+        Assert.True(result.IsReachable((10, 7)));
     }
 
     [Fact]
-    public void Level_OnlyTheArenaAndItsWallRingRemain()
+    public void Level_ArmsTheKillFloorBelowItsOnlyTile()
     {
-        var state = Replay();
+        var level = LevelFileSerializer.DeserializeWithMigration(File.ReadAllText(RepoFile("levels/thps.mblevel.json")));
+        var keptLevel = Replay().GetTile(10, 7)!.Value.Height;
 
-        Assert.Equal(6 * 9, state.Tiles.Count);
+        Assert.NotNull(level.KillFloorY);
+        Assert.True(level.KillFloorY < keptLevel * 20f, $"kill floor {level.KillFloorY} must sit below the kept tile at {keptLevel * 20f}");
+    }
+
+    [Fact]
+    public void Level_StandsTheBossSpawnerOnTheWarehouseFloorNotInTheHangingBox()
+    {
+        var level = LevelFileSerializer.DeserializeWithMigration(File.ReadAllText(RepoFile("levels/thps.mblevel.json")));
+        var move = level.Edits.Single(e => e.OpType == MoveObject.OpType && e.Target == "gen:object:BossSpawner:0000");
+
+        var placed = MoveObject.FromEditOp(move);
+        Assert.True(
+            placed.NewTransform.Position.Y is > -10f and < 10f,
+            $"the boss spawner must stand on the arena floor, not in the box above the pipe (y={placed.NewTransform.Position.Y})");
+        Assert.Contains("BottomPiece", placed.HiddenChildren);
+        Assert.Contains("Collider", placed.HiddenChildren);
     }
 }

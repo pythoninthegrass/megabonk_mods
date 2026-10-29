@@ -31,38 +31,33 @@ def test_cell_of_local_returns_block_cell_index() -> None:
     assert b.cell_of_local(98, 67) == (2, 1)
 
 
-def test_tile_edits_remove_every_cell_outside_ring_and_inner() -> None:
+def test_tile_edits_remove_every_cell_but_the_kept_one() -> None:
     edits = b.tile_edits()
     removed = {(payload(e)["x"], payload(e)["z"]) for e in ops_of(edits, "tile.remove")}
-    keep = set(b.ring_cells()) | set(b.inner_cells())
+    keep = set(b.kept_cells())
     assert len(removed) == b.GRID_SIZE**2 - len(keep)
     assert removed.isdisjoint(keep)
 
 
-def test_ring_is_one_cell_wide_around_the_inner_block() -> None:
-    ring = set(b.ring_cells())
-    inner = set(b.inner_cells())
-    assert len(inner) == b.INNER_X * b.INNER_Z
-    assert ring.isdisjoint(inner)
-    assert len(ring) == (b.INNER_X + 2) * (b.INNER_Z + 2) - len(inner)
+def test_only_the_generated_spawn_cell_tile_survives() -> None:
+    assert set(b.kept_cells()) == {b.GENERATED_SPAWN_CELL}
+    assert b.GENERATED_SPAWN_CELL in set(b.inner_cells())
 
 
-def test_ring_cells_are_raised_flat_and_inner_cells_are_flat_below_the_warehouse_floor() -> None:
+def test_the_kept_cell_is_flat_below_the_warehouse_floor() -> None:
     edits = b.tile_edits()
     heights = {(payload(e)["x"], payload(e)["z"]): payload(e)["height"] for e in ops_of(edits, "tile.setHeight")}
     slopes = {(payload(e)["x"], payload(e)["z"]): payload(e)["direction"] for e in ops_of(edits, "tile.setSlope")}
-    for cell in b.ring_cells():
-        assert heights[cell] == b.WALL_LEVELS
-    for cell in b.inner_cells():
+    assert set(heights) == set(b.kept_cells())
+    for cell in b.kept_cells():
         assert heights[cell] == b.INNER_LEVEL
-    for cell in set(b.ring_cells()) | set(b.inner_cells()):
         assert slopes[cell] == b.SLOPE_NONE
 
 
 def test_every_kept_cell_is_made_flat_before_slopes_are_applied() -> None:
     edits = b.tile_edits()
     slopes = {(payload(e)["x"], payload(e)["z"]): payload(e)["direction"] for e in ops_of(edits, "tile.setSlope")}
-    for cell in set(b.ring_cells()) | set(b.inner_cells()):
+    for cell in b.kept_cells():
         assert cell in slopes
 
 
@@ -399,10 +394,11 @@ def test_inner_arena_is_no_larger_than_the_warehouse_needs_by_a_tile() -> None:
     assert depth > (b.INNER_Z - 1) * b.TILE
 
 
-def test_the_arena_and_its_ring_fit_the_grid() -> None:
+def test_the_arena_fits_the_grid_with_the_kept_cell_inside_it() -> None:
     x0, z0 = b.INNER_ORIGIN
-    assert x0 - 1 >= 0 and x0 + b.INNER_X + 1 <= b.GRID_SIZE
-    assert z0 - 1 >= 0 and z0 + b.INNER_Z + 1 <= b.GRID_SIZE
+    assert x0 >= 0 and x0 + b.INNER_X <= b.GRID_SIZE
+    assert z0 >= 0 and z0 + b.INNER_Z <= b.GRID_SIZE
+    assert b.GENERATED_SPAWN_CELL in set(b.inner_cells())
 
 
 def test_build_level_places_the_warehouse_after_the_clutter_removals() -> None:
@@ -424,22 +420,45 @@ def boss_move() -> dict:
     return next(e for e in b.spawn_moves() if e["target"] == "gen:object:BossSpawner:0000")
 
 
-def test_boss_spawner_sits_inside_the_hanging_box_above_the_main_half_pipe() -> None:
+def test_boss_spawner_stands_on_the_warehouse_floor_below_the_hanging_box() -> None:
     position = payload(boss_move())["newTransform"]["position"]
-    assert (position["x"], position["y"], position["z"]) == (170, 15.6, 27)
+    assert (position["x"], position["z"]) == (150, 65)
+    assert -10 < position["y"] < 12, "the portal must sit on the room's floor, not in the box above the pipe"
 
 
-def test_boss_spawner_is_scaled_down_to_fit_inside_the_hanging_box() -> None:
+def test_boss_spawner_sits_on_the_mesh_surface_it_drops_to() -> None:
+    position = payload(boss_move())["newTransform"]["position"]
+    hit = ws.drop(b.warehouse_triangles(), position["x"], b.BOSS_SPAWN_DROP_FROM, position["z"])
+    assert hit is not None
+    assert position["y"] == hit.y
+
+
+def test_boss_spawner_is_scaled_down_to_fit_the_room() -> None:
     scale = payload(boss_move())["newTransform"]["scale"]
     assert scale == {"x": 0.4, "y": 0.4, "z": 0.4}
 
 
-def test_boss_spawner_arch_faces_along_the_hanging_box() -> None:
+def test_boss_spawner_arch_faces_across_the_floor() -> None:
     assert payload(boss_move())["newTransform"]["rotation"] == {"x": 0.0, "y": 90.0, "z": 0.0}
 
 
 def test_boss_spawner_hides_the_pillar_mesh_and_its_collider() -> None:
     assert payload(boss_move())["hiddenChildren"] == ["BottomPiece", "Collider"]
+
+
+def test_the_level_authors_a_kill_floor_below_the_kept_tile() -> None:
+    level = b.build_level()
+    assert level["killFloorY"] == b.KILL_FLOOR_Y
+    assert b.KILL_FLOOR_Y == b.INNER_LEVEL * b.HEIGHT_STEP - b.KILL_FLOOR_MARGIN_BELOW_KEPT_TILE
+
+
+def test_the_kill_floor_is_below_the_only_kept_tile_and_above_the_meshs_lowest_point() -> None:
+    # Below the kept tile so standing on it is safe, above the Warehouse's lowest geometry so anything that
+    # ends up under the mesh dies instead of resting there out of reach of the game's own catch floor.
+    triangles = b.warehouse_triangles()
+    lowest = min(min(p[1] for p in t) for t in triangles)
+    assert b.KILL_FLOOR_Y < b.INNER_LEVEL * b.HEIGHT_STEP
+    assert lowest < b.KILL_FLOOR_Y
 
 
 def test_the_mesh_rail_gets_hidden_game_rails_along_its_run_and_its_bend() -> None:

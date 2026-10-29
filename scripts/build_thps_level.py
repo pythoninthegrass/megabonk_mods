@@ -19,20 +19,28 @@ TILE = 40
 HEIGHT_STEP = 20
 GRID_ORIGIN = -280
 
-# Inner arena of 4 tiles east by 7 tiles north, wrapped by a one-cell raised ring.
+# The Warehouse footprint: 4 tiles east by 7 tiles north. The tile grid keeps only the generated
+# spawn cell (the player is placed there before the edits apply); everything else is removed, so the
+# Warehouse mesh floats like a native island and its own walls enclose the arena.
 INNER_ORIGIN = (8, 4)
 INNER_X = 4
 INNER_Z = 7
-WALL_LEVELS = 2
-# Inner tiles sit below the Warehouse's sunken floor areas so they do not show through.
+# The kept tile sits below the Warehouse's sunken floor areas so it cannot show through.
 INNER_LEVEL = -1
 
 SLOPE_NONE = 0
 
 # The player is placed at the generated spawn before edits apply, so that cell has to stay floor.
 GENERATED_SPAWN_CELL = (10, 7)
-BOSS_SPAWN_LOCAL = (150, 167)
-BOSS_SPAWN_Y = 15.6
+# Authored rather than derived: with one hidden tile left, the mod's tile-derived floor would sit 40 under
+# it, deep enough for a body to rest on the mesh's outer skirt above it and stay unkillable.
+KILL_FLOOR_MARGIN_BELOW_KEPT_TILE = 15.0
+KILL_FLOOR_Y = INNER_LEVEL * HEIGHT_STEP - KILL_FLOOR_MARGIN_BELOW_KEPT_TILE
+# The boss portal stands on the flat Warehouse floor at the south deck of the main half pipe, so the boss
+# spawns where the player can reach it. Its drop starts under the hanging box above the pipe, so the box
+# that used to hold the portal can never catch it.
+BOSS_SPAWN_LOCAL = (130, 205)
+BOSS_SPAWN_DROP_FROM = 12.0
 BOSS_SPAWN_SCALE = 0.4
 BOSS_SPAWN_YAW = 90.0
 BOSS_HIDDEN_CHILDREN = ["BottomPiece", "Collider"]
@@ -413,10 +421,8 @@ def inner_cells() -> list[tuple[int, int]]:
     return [(x0 + dx, z0 + dz) for dz in range(INNER_Z) for dx in range(INNER_X)]
 
 
-def ring_cells() -> list[tuple[int, int]]:
-    x0, z0 = INNER_ORIGIN
-    inner = set(inner_cells())
-    return [(x, z) for z in range(z0 - 1, z0 + INNER_Z + 1) for x in range(x0 - 1, x0 + INNER_X + 1) if (x, z) not in inner]
+def kept_cells() -> list[tuple[int, int]]:
+    return [GENERATED_SPAWN_CELL]
 
 
 def edit(op_type: str, payload: dict, target: str = "") -> dict:
@@ -424,20 +430,14 @@ def edit(op_type: str, payload: dict, target: str = "") -> dict:
 
 
 def tile_edits() -> list[dict]:
-    ring = set(ring_cells())
-    inner = set(inner_cells())
+    kept = set(kept_cells())
     edits = []
     for z in range(GRID_SIZE):
         for x in range(GRID_SIZE):
-            cell = (x, z)
-            if cell in ring:
-                height = WALL_LEVELS
-            elif cell in inner:
-                height = INNER_LEVEL
-            else:
+            if (x, z) not in kept:
                 edits.append(edit("tile.remove", {"x": x, "z": z}))
                 continue
-            edits.append(edit("tile.setHeight", {"x": x, "z": z, "height": height}))
+            edits.append(edit("tile.setHeight", {"x": x, "z": z, "height": INNER_LEVEL}))
             edits.append(edit("tile.setSlope", {"x": x, "z": z, "direction": SLOPE_NONE}))
     return edits
 
@@ -461,10 +461,23 @@ def transform(x: float, y: float, z: float, scale: float = 1.0, yaw: float = 0.0
     }
 
 
-def spawn_moves() -> list[dict]:
+def boss_spawn_position() -> tuple[float, float, float]:
+    """The boss portal's world position, standing on the Warehouse surface under it.
+
+    The drop starts below the hanging box (BOSS_SPAWN_DROP_FROM) so it finds the room's floor rather
+    than the box the portal used to hang in. A portal in the air spawns its boss in the air, and the
+    physics-chase boss cannot climb out of a closed box, which left the boss unreachable."""
     bx, bz = local_to_world(*BOSS_SPAWN_LOCAL)
+    hit = ws.drop(warehouse_triangles(), bx, BOSS_SPAWN_DROP_FROM, bz)
+    if hit is None:
+        raise ValueError(f"no Warehouse surface under the boss spawner at ({bx}, {bz})")
+    return (bx, hit.y, bz)
+
+
+def spawn_moves() -> list[dict]:
+    bx, by, bz = boss_spawn_position()
     payload = {
-        "newTransform": transform(bx, BOSS_SPAWN_Y, bz, BOSS_SPAWN_SCALE, BOSS_SPAWN_YAW),
+        "newTransform": transform(bx, by, bz, BOSS_SPAWN_SCALE, BOSS_SPAWN_YAW),
         "hiddenChildren": BOSS_HIDDEN_CHILDREN,
     }
     return [edit("object.move", payload, "gen:object:BossSpawner:0000")]
@@ -552,6 +565,7 @@ def build_level() -> dict:
         "noGrass": True,
         "playerStart": PLAYER_START,
         "maxSlopeAngle": MAX_SLOPE_ANGLE,
+        "killFloorY": KILL_FLOOR_Y,
         "music": MUSIC,
         "title": TITLE,
         "description": DESCRIPTION,

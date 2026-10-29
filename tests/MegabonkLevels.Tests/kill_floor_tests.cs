@@ -91,4 +91,28 @@ public class KillFloorTests
     {
         Assert.Equal(float.NegativeInfinity, KillFloor.FloorYForTerrain(lowest, 40f, -100f));
     }
+
+    [Fact]
+    public void FloorYExplicit_UsesTheAuthoredHeight()
+    {
+        Assert.Equal(-35f, KillFloor.FloorYExplicit(-35f, float.NegativeInfinity));
+    }
+
+    [Fact]
+    public void FloorYExplicit_IsRaisedAboveTheCatchFloorSoABodyRestingOnItStillTriggers()
+    {
+        var floor = KillFloor.FloorYExplicit(-90f, -80f);
+
+        Assert.Equal(-72f, floor);
+        Assert.True(KillFloor.ShouldKill(-80f, floor));
+    }
+
+    [Fact]
+    public void FloorYExplicit_NoAuthoredHeight_NeverKills()
+    {
+        var floor = KillFloor.FloorYExplicit(null, -80f);
+
+        Assert.Equal(float.NegativeInfinity, floor);
+        Assert.False(KillFloor.ShouldKill(-1_000_000f, floor));
+    }
 }

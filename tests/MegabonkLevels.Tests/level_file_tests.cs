@@ -169,6 +169,31 @@ public class LevelFileTests
     }
 
     [Fact]
+    public void RoundTrip_KillFloorY_Survives()
+    {
+        var level = SampleLevel() with { KillFloorY = -35f };
+
+        var restored = LevelFileSerializer.DeserializeWithMigration(LevelFileSerializer.Serialize(level));
+
+        Assert.Equal(-35f, restored.KillFloorY);
+        Assert.Equal(level, restored);
+    }
+
+    [Fact]
+    public void Deserialize_WithoutKillFloorYKey_LeavesItNull()
+    {
+        var json = """{"schemaVersion":3,"gameBuildId":"1","map":1,"stageIndex":0,"tier":0,"seed":1,"packs":{},"edits":[]}""";
+
+        Assert.Null(LevelFileSerializer.DeserializeWithMigration(json).KillFloorY);
+    }
+
+    [Fact]
+    public void Equals_LevelsDifferingOnlyInKillFloorY_AreNotEqual()
+    {
+        Assert.NotEqual(SampleLevel(), SampleLevel() with { KillFloorY = -35f });
+    }
+
+    [Fact]
     public void CurrentSchemaVersion_IsThree()
     {
         Assert.Equal(3, LevelFile.CurrentSchemaVersion);

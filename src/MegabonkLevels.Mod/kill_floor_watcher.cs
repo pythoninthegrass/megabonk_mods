@@ -35,12 +35,14 @@ public static class KillFloorWatcher
 
     public static float FloorY => _armed ? _floorY : float.NegativeInfinity;
 
-    public static void Arm(ProceduralTileGeneration tileGen, MelonLogger.Instance logger)
+    public static void Arm(ProceduralTileGeneration tileGen, MelonLogger.Instance logger, float? killFloorY = null)
     {
         var mapParameters = tileGen.currentMapParameters ?? tileGen.currentStage?.mapParameters;
-        var levels = LiveLevels(tileGen);
         var catchFloorY = CatchFloorY();
-        _floorY = KillFloor.FloorY(levels, mapParameters.scaledTileHeight, MarginBelowLowestTile, catchFloorY);
+        var authored = killFloorY.HasValue;
+        _floorY = authored
+            ? KillFloor.FloorYExplicit(killFloorY, catchFloorY)
+            : KillFloor.FloorY(LiveLevels(tileGen), mapParameters.scaledTileHeight, MarginBelowLowestTile, catchFloorY);
         _logger = logger;
         _playerKilled = false;
         _armed = !float.IsNegativeInfinity(_floorY);
@@ -54,7 +56,10 @@ public static class KillFloorWatcher
             PositionLabel.Disarm();
         }
 
-        logger.Msg(_armed ? $"KillFloor: armed at y={_floorY} (catch floor y={catchFloorY})" : "KillFloor: no tiles, not armed");
+        logger.Msg(
+            _armed
+                ? $"KillFloor: armed at y={_floorY} ({(authored ? "authored" : "derived from tiles")}, catch floor y={catchFloorY})"
+                : "KillFloor: no tiles, not armed");
         if (_armed && _heartbeatEnabled)
         {
             logger.Msg("KillFloor: heartbeat on");

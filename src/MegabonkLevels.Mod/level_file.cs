@@ -35,7 +35,8 @@ public readonly record struct LevelFile(
     string Title = null,
     string Description = null,
     IReadOnlyList<string> AllowedCharacters = null,
-    string MapDescription = null)
+    string MapDescription = null,
+    float? KillFloorY = null)
 {
     public const int CurrentSchemaVersion = 3;
 
@@ -50,6 +51,7 @@ public readonly record struct LevelFile(
         && NoGrass == other.NoGrass
         && ListEquals(PlayerStart, other.PlayerStart)
         && MaxSlopeAngle == other.MaxSlopeAngle
+        && KillFloorY == other.KillFloorY
         && Music == other.Music
         && Title == other.Title
         && Description == other.Description

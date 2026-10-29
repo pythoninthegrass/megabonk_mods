@@ -21,7 +21,7 @@ Forest, stage 0, `ParamForest1`, debug seed `20261007` (the seed the repo's regr
 | Grid | 15x15 tiles, cell (0,0) at world (-280,-280), world = (-280 + 40x, -280 + 40z) | runtime-map-structure.md |
 | Skater | 1.8 m | thps-warehouse.md |
 
-The skater is 1.8 m and the player is 3.85 units, so true scale is about 2.1 units per THPS metre. At that scale a tile is about 19 m wide and one height level is about 9 m, which is far coarser than the warehouse: its 2-3 m ramps are 4-6 units, a quarter of one level. Tiles can therefore only supply the floor and the enclosure. Every ramp, deck, ledge and kicker comes from the placed Warehouse mesh.
+The skater is 1.8 m and the player is 3.85 units, so true scale is about 2.1 units per THPS metre. At that scale a tile is about 19 m wide and one height level is about 9 m, which is far coarser than the warehouse: its 2-3 m ramps are 4-6 units, a quarter of one level. Tiles are therefore too coarse to build anything in the level, and the level keeps just one of them out of sight; every floor, ramp, deck, ledge, wall and kicker comes from the placed Warehouse mesh.
 
 ### Chosen scale
 
@@ -34,7 +34,7 @@ The skater is 1.8 m and the player is 3.85 units, so true scale is about 2.1 uni
 ### Grid orientation
 
 - Map north is grid +Z and map east is grid +X, the same as `SlopeDirection` (`North` is +Z, `East` is +X). Block-local coordinates below are units from the block's south-west corner, `x` east and `z` north.
-- The inner block sits at cells x 8-11, z 4-10 so it contains the generated spawn cell (10, 7). It is surrounded by a ring of cells raised two levels so the generated cliff pieces act as walls; the rest of the grid is removed (`RemoveTile`) and the kill floor ends a fall.
+- The Warehouse block covers cells x 8-11, z 4-10, which contains the generated spawn cell (10, 7). Only that one cell is kept as a tile, flat at level -1 and hidden under the Warehouse floor; every other cell of the grid is removed (`RemoveTile`) and the authored kill floor ends a fall. The mesh floats like a native island and its own walls enclose the arena, so no tile terrain is needed to hold the playfield in.
 
 ### Player-reachable heights
 
@@ -51,7 +51,7 @@ The Warehouse is one `bundle:thps/Warehouse` placement built from the extracted 
 
 | Feature | How it is built |
 | --- | --- |
-| Arena floor and enclosure | tile ops: the inner cells are flat at level -1 so they sit below the Warehouse's sunken floor areas, a one-cell ring is raised to level 2, and every other cell is removed with the kill floor under them |
+| Arena floor and enclosure | the placed Warehouse mesh: its floor, banks and walls are all in it, and the game's ground-layer spawn raycasts land enemies on its floor. The tile grid keeps only the generated spawn cell, flat at level -1 under the mesh, so the player has somewhere to stand while the edits apply; every other cell is removed and the authored kill floor (`killFloorY` -35) ends a fall |
 | Grind rails on the mesh bars | hidden `interactable/rail/0` objects laid along each mesh bar (see "Mesh rail near (75, 3, 28)") |
 | Box piles and the tape | `interactable/chest` and `interactable/chestFree` |
 | Letters | `forest/shrines/0` to `4` |
@@ -127,15 +127,16 @@ The PS1 transparency key (magenta) is baked to alpha 0 in every texture that car
 
 ## Building the level
 
-`levels/thps.mblevel.json` is generated, not hand-edited: `scripts/build_thps_level.py` writes it (`uv run scripts/build_thps_level.py`) and `tests/test_build_thps_level.py` covers the generator. `ThpsLevelTests` in `tests/MegabonkLevels.Tests` replays the saved file through `EditStack` and `ReachabilityValidator` and checks that every arena tile is reachable from the generated spawn cell. Regenerate and reload with `uv run scripts/build_thps_level.py` then `relaunch(level="levels/thps.mblevel.json")`.
+`levels/thps.mblevel.json` is generated, not hand-edited: `scripts/build_thps_level.py` writes it (`uv run scripts/build_thps_level.py`) and `tests/test_build_thps_level.py` covers the generator. `ThpsLevelTests` in `tests/MegabonkLevels.Tests` replays the saved file through `EditStack` and `ReachabilityValidator` and checks that the kept tile is reachable from the generated spawn cell, that the authored kill floor sits below it, and that the boss portal stands on the Warehouse floor. Regenerate and reload with `uv run scripts/build_thps_level.py` then `relaunch(level="levels/thps.mblevel.json")`.
 
 What the file contains:
 
-- A 4 tile by 7 tile inner arena at cells x 8-11, z 4-10 (`INNER_X`, `INNER_Z`), flat at level -1 (`INNER_LEVEL`), wrapped by a one-cell ring at level 2. Every other cell of the 15x15 grid is removed. Each kept cell gets an explicit `SetTileHeight` and `SetTileSlope`, so nothing depends on the generated heights. Removing every tile does not work, because the kill floor needs a tile to arm; it sits at y=-60.
+- One kept tile at the generated spawn cell (10, 7) (`GENERATED_SPAWN_CELL`), flat at level -1 (`INNER_LEVEL`), with an explicit `SetTileHeight` and `SetTileSlope` so nothing depends on the generated heights. It is there because the game places the player at the generated spawn before the edits apply, so that cell has to be floor while they run; the mesh hides it. Every other cell of the 15x15 grid is removed. The Warehouse block the mesh spans is 4 tiles east by 7 tiles north at cells x 8-11, z 4-10 (`INNER_X`, `INNER_Z`).
+- `killFloorY` (`KILL_FLOOR_Y`, -35): authored rather than derived, because with a single hidden tile the derived floor would sit 40 units below it, deep enough for an actor to come to rest on the mesh's sub-floor skirt above it and stay unkillable. It is 15 units under the kept tile, so standing on that tile is safe, and above the mesh's lowest geometry (-48.6), so anything that ends up under the Warehouse dies. All 43 mesh faces below -20 are vertical (x 21-80, z 3.5-104: the west wall's skirt), so nothing is restable in that band.
 - One `bundle:thps/Warehouse` placement at uniform scale 79.2 (4.4 units per metre times 18 metres per OBJ unit), centred on the arena and lifted 0.5 above y=0 (`WAREHOUSE_LIFT`). The footprint fits the arena (a test checks it). The level records `packs: {"thps": "<version>"}`, so the version check in asset-bundles.md applies; the pack has to be installed (`task pack:thps`) and the game relaunched before the level loads, or the placement shows a `Missing:` cube.
 - `noGrass`: the game's grass manager raycasts onto the ground layer and otherwise grows through the Warehouse floor.
 - `playerStart` (`PLAYER_START`): the game places the player at the generated spawn and moving the spawn portal does not move it, so the mod re-applies the start position for 5 seconds after generation. `y` is the on-screen readout value, 1.925 above the feet. The spawn is (109, 38, -116), on the 26 degree slope of the start half pipe 4 units past the platform lip, so the player drops onto the pipe and slides forward; spawned nearer the lip, over its 72 degree face, the player caught the lip rail and stuck.
-- Removal of every generator object except the spawn portal, the boss spawner and the particles, from the per-category counts the seed produces. The boss spawner is moved into the hanging glass box above the main half pipe, scaled to 0.4 and turned 90 degrees so its arch faces down the corridor, and its `BottomPiece` pillar mesh and the 43-unit-tall invisible `Collider` are hidden (`hiddenChildren` on the `object.move`); that collider otherwise reaches down into the pipe and blocks it. The box's size is estimated from screenshots, so the position and scale are tuned by eye.
+- Removal of every generator object except the spawn portal, the boss spawner and the particles, from the per-category counts the seed produces. The boss spawner is moved onto the Warehouse floor at the south deck of the main half pipe, world (150, 0.5, 65) (`BOSS_SPAWN_LOCAL`), scaled to 0.4 and turned 90 degrees so its arch faces across the floor, and its `BottomPiece` pillar mesh and the 43-unit-tall invisible `Collider` are hidden (`hiddenChildren` on the `object.move`); that collider otherwise reaches down into the pipe and blocks it. Its height comes from a raycast down onto the extracted mesh (`ws.drop`) starting at `BOSS_SPAWN_DROP_FROM`, below the hanging box, so the box the portal used to sit in can never catch it. A portal in the air spawns its boss in the air: the portal stood at y=15.6 inside the hanging glass box above the pipe, the boss materialised there, and `EnemyMovementRb` chases with rigidbody physics on a Tiles map that has no navmesh, so it could not get out and the "Defeat the Boss" objective could not complete. The box is still in the mesh; nothing is placed in it.
 - The hidden mesh rails below, the only rails the level places.
 - The collectibles in the table above.
 
