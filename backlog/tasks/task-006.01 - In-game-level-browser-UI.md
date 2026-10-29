@@ -1,10 +1,10 @@
 ---
 id: TASK-006.01
 title: In-game level browser UI
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06 21:44'
-updated_date: '2026-10-29 06:22'
+updated_date: '2026-10-29 08:10'
 labels:
   - level-editor
 dependencies: []
@@ -35,19 +35,21 @@ Findings from reading .tools/il2cpp_dump/dump.cs (regenerate with task re:dump),
 - [ ] #2 The browser is reachable from a standalone entry point (e.g. main menu or map selection) without requiring editor mode to be entered first
 - [ ] #3 Selecting a level loads and starts it via TASK-004.01's existing loader
 - [ ] #4 The browser UI is visually consistent with TASK-005's editor UI styling
-- [ ] #5 The game's Map Selection screen lists the Warehouse custom level beside the native maps, and confirming it starts that level through the mod's loader
+- [x] #5 The game's Map Selection screen lists the Warehouse custom level beside the native maps, and confirming it starts that level through the mod's loader
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 TASK-004.12 is done. Hook for the Map Selection entry: LevelLoaderPatch.LoadAndStart holds a level when MEGABONK_DEV is unset, restricts the Character Selection screen through CharacterScreenPatch.SetRestricted(true), and a StartNewMap prefix swaps in the held level's RunConfig once a character is confirmed (the saved character preference is restored). Confirming the custom Map Selection entry should queue the level the same way instead of calling MapController.StartNewMap itself; cancelling back to the menu should call LevelLoaderPatch.CancelAwaitingCharacter() and CharacterScreenPatch.SetRestricted(false). See 'Character selection' in docs/development.md. run.py relaunch --no-level (MCP relaunch(no_level=true)) reaches the main menu without a level for testing the screens; the harness cannot press menu buttons, so the menu flow is clicked by hand.
+
+AC #5 done and confirmed in the running game: the Map Selection screen lists every titled level in UserData/Levels after the native maps (MapSelectionPatch, CustomMapEntries), with a placeholder thumbnail, the level's mapDescription (else description), Tier 1 only and a controller-reachable entry. Confirm holds the level for the StartNewMap call that StartMap makes at once; the character is picked before the map on the stock screens, so the check is made at Confirm against the level's allowedCharacters and a refusal shows through MenuNotice. Restrictions are per level: LevelFile.allowedCharacters (absent means anyone) applied by CharacterPolicy. Remaining for this task: ACs 1-4, the full level browser with the gameBuildId warning, and an entry point from inside the editor. Open: backing out of Map Selection after a held load is only cleared by the next native Confirm; the detail panel still shows the base map's runs and highscore.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
