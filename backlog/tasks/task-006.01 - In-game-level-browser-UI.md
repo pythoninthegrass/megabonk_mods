@@ -4,7 +4,7 @@ title: In-game level browser UI
 status: To Do
 assignee: []
 created_date: '2026-10-06 21:44'
-updated_date: '2026-10-29 05:24'
+updated_date: '2026-10-29 06:22'
 labels:
   - level-editor
 dependencies: []
@@ -38,7 +38,11 @@ Findings from reading .tools/il2cpp_dump/dump.cs (regenerate with task re:dump),
 - [ ] #5 The game's Map Selection screen lists the Warehouse custom level beside the native maps, and confirming it starts that level through the mod's loader
 <!-- AC:END -->
 
+## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
+TASK-004.12 is done. Hook for the Map Selection entry: LevelLoaderPatch.LoadAndStart holds a level when MEGABONK_DEV is unset, restricts the Character Selection screen through CharacterScreenPatch.SetRestricted(true), and a StartNewMap prefix swaps in the held level's RunConfig once a character is confirmed (the saved character preference is restored). Confirming the custom Map Selection entry should queue the level the same way instead of calling MapController.StartNewMap itself; cancelling back to the menu should call LevelLoaderPatch.CancelAwaitingCharacter() and CharacterScreenPatch.SetRestricted(false). See 'Character selection' in docs/development.md. run.py relaunch --no-level (MCP relaunch(no_level=true)) reaches the main menu without a level for testing the screens; the harness cannot press menu buttons, so the menu flow is clicked by hand.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

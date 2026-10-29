@@ -5,7 +5,7 @@ status: Done
 assignee:
   - Claude
 created_date: '2026-10-08 02:39'
-updated_date: '2026-10-08 03:02'
+updated_date: '2026-10-29 06:22'
 labels:
   - level-editor
 dependencies:
@@ -55,6 +55,8 @@ Context for a fresh implementer: the game's ECharacter enum has TonyMcZoom = 13 
 Verified on CrossOver: harness load-level of levels/example-forest.mblevel.json spawned a human character on a hoverboard while the saved selectedCharacter is Fox. Saved config.json unchanged after the run. No control run without the override was done; the saved-vs-spawned difference is the evidence. AC #3 (warning path) is covered by the unit test for a throwing setter, not exercised live.
 
 Lance tested manually after the change and confirmed Tony McZoom spawns as expected, which supersedes the missing control run noted above.
+
+Superseded by TASK-004.12: the forced Tony McZoom now applies only with MEGABONK_DEV=true; otherwise the player picks Calcium or Tony McZoom on the game's Character Selection screen. See 'Character selection' in docs/development.md.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
