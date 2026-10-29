@@ -24,7 +24,7 @@ Write a player-facing (non-technical, not a dev-oriented doc like `docs/modding-
 - How to find the `UserData/Levels/` folder and share a `.mblevel.json` file with someone else (Discord attachment, forum upload, etc.), and how to install a level someone shared with you.
 - A plain-language explanation that this is unofficial, third-party, fan-made content with no first-party Steam Workshop integration, so players understand why there's no in-Steam subscribe button.
 
-Link this guide from `docs/modding-setup.md` (TASK-001.04) and from the in-game browser if there's a natural place to surface a link/hint (optional, coordinate with TASK-006.01).
+Link this guide from `docs/modding-setup.md` (TASK-001.04) and from the Map Selection entry's description if there's a natural place to surface a link/hint (optional, see TASK-006.01).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
