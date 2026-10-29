@@ -182,6 +182,13 @@ public static class DevHarness
             case HarnessCommandKind.Spawns:
                 EnemySpawns.Set(command.Enabled, _logger);
                 break;
+            case HarnessCommandKind.CharacterScreen:
+                CharacterScreenPatch.SetRestricted(command.Enabled);
+                if (!command.Enabled)
+                {
+                    LevelLoaderPatch.CancelAwaitingCharacter();
+                }
+                break;
             case HarnessCommandKind.Heartbeat:
                 KillFloorWatcher.SetHeartbeat(command.Enabled, _logger);
                 break;

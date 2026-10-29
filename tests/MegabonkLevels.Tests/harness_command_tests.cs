@@ -617,6 +617,37 @@ public class HarnessCommandTests
         Assert.Null(command.Path);
     }
 
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public void TryParse_CharacterScreen_ReadsTheEnabledFlag(string enabled, bool expected)
+    {
+        var ok = HarnessCommand.TryParse($$"""{"command":"character-screen","enabled":{{enabled}}}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.CharacterScreen, command.Kind);
+        Assert.Equal(expected, command.Enabled);
+    }
+
+    [Fact]
+    public void TryParse_LoadLevel_ReadsTheCharacterOverride()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"load-level","path":"p","character":"calcium"}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal("calcium", command.Overrides.Character);
+    }
+
+    [Fact]
+    public void TryParse_LoadLevel_WithoutCharacter_LeavesItNull()
+    {
+        HarnessCommand.TryParse("""{"command":"load-level","path":"p"}""", out var command, out _);
+
+        Assert.Null(command.Overrides.Character);
+    }
+
     [Fact]
     public void TryParse_Spawns_WithoutEnabled_Fails()
     {

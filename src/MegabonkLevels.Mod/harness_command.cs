@@ -22,6 +22,7 @@ public enum HarnessCommandKind
     Vulnerable,
     Kill,
     Spawns,
+    CharacterScreen,
     Heartbeat,
     Cells,
     Editor,
@@ -173,6 +174,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return true;
             case "spawns":
                 return TryParseEnabledFlag(root, HarnessCommandKind.Spawns, out command, out error);
+            case "character-screen":
+                return TryParseEnabledFlag(root, HarnessCommandKind.CharacterScreen, out command, out error);
             case "heartbeat":
                 return TryParseEnabledFlag(root, HarnessCommandKind.Heartbeat, out command, out error);
             case "cells":
@@ -684,7 +687,7 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
             return false;
         }
 
-        command = command with { Overrides = new LoadOverrides(map, stageIndex, tier, seed) };
+        command = command with { Overrides = new LoadOverrides(map, stageIndex, tier, seed, TryGetString(root, "character", out var character) ? character : null) };
         return true;
     }
 
