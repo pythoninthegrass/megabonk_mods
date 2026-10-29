@@ -65,6 +65,10 @@ No section-banner or multi-paragraph comments, in `.cs`, `.py`, `.sh`, or anywhe
 
 Document the content itself — the schema, the rule, the API, the gotcha — not which task or AC introduced it. Don't cite `TASK-###` IDs, acceptance-criteria numbers, or phrasing like "per the final TASK-002.03 runtime finding"; that provenance is already tracked in Backlog and `git log`/`git blame`, and it rots as tasks close and get archived. Exception: a genuinely open, unresolved question (e.g. "this assumption is unconfirmed, revisit once real data is available") belongs in the doc as a TODO, but phrase it about the open question itself, not the task number that will close it.
 
+## Gotchas
+
+- BSD sed (macOS) does not expand `\n` in a replacement, so `sed -i 's/a/a\nb/'` fails with "unterminated substitute pattern". Use a Python one-liner, or the Edit tool, for multi-line replacements.
+
 ## Context7 Libraries
 
 - astral-sh/docs
