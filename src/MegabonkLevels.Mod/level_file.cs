@@ -33,7 +33,9 @@ public readonly record struct LevelFile(
     float? MaxSlopeAngle = null,
     string Music = null,
     string Title = null,
-    string Description = null)
+    string Description = null,
+    IReadOnlyList<string> AllowedCharacters = null,
+    string MapDescription = null)
 {
     public const int CurrentSchemaVersion = 3;
 
@@ -46,17 +48,19 @@ public readonly record struct LevelFile(
         && Seed == other.Seed
         && PacksDictionaryEquals(Packs, other.Packs)
         && NoGrass == other.NoGrass
-        && PlayerStartEquals(PlayerStart, other.PlayerStart)
+        && ListEquals(PlayerStart, other.PlayerStart)
         && MaxSlopeAngle == other.MaxSlopeAngle
         && Music == other.Music
         && Title == other.Title
         && Description == other.Description
+        && MapDescription == other.MapDescription
+        && ListEquals(AllowedCharacters, other.AllowedCharacters)
         && Edits.SequenceEqual(other.Edits);
 
     public override int GetHashCode() =>
         HashCode.Combine(SchemaVersion, GameBuildId, Map, StageIndex, Tier, Seed, Packs.Count, Edits.Count);
 
-    private static bool PlayerStartEquals(IReadOnlyList<float> a, IReadOnlyList<float> b) =>
+    private static bool ListEquals<T>(IReadOnlyList<T> a, IReadOnlyList<T> b) =>
         a == null ? b == null : b != null && a.SequenceEqual(b);
 
     private static bool PacksDictionaryEquals(IReadOnlyDictionary<string, string> a, IReadOnlyDictionary<string, string> b) =>

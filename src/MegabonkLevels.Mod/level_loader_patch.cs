@@ -26,12 +26,15 @@ public static class LevelLoaderPatch
     // "no MapData found". Each entry is removed once the run starts or the load is fatally rejected.
     private static readonly List<(LevelFile Level, MelonLogger.Instance Logger, string Path, float QueuedAt, string Character)> _pending = new();
 
-    // Reads a .mblevel.json from disk and registers the matching run. MapData may not exist yet when
-    // this is called (e.g. a load-level issued right after launch), so the load is queued and Pump()
-    // attempts it each frame until the map is available. Read/parse failures return false at once.
-    public static bool LoadAndStart(string path, MelonLogger.Instance logger, LoadOverrides overrides = default)
+    // The level's allowedCharacters as loaded, kept so an editor save writes them back.
+    public static IReadOnlyList<string> AllowedCharacters { get; private set; }
+
+    // The level's mapDescription as loaded, kept so an editor save writes it back.
+    public static string MapDescription { get; private set; }
+
+    private static bool TryRead(string path, MelonLogger.Instance logger, LoadOverrides overrides, out LevelFile level)
     {
-        LevelFile level;
+        level = default;
         try
         {
             level = overrides.Apply(LevelFileSerializer.DeserializeWithMigration(File.ReadAllText(path)));
@@ -55,6 +58,31 @@ public static class LevelLoaderPatch
         if (buildWarning != null)
         {
             logger.Warning(buildWarning);
+        }
+
+        return true;
+    }
+
+    // Holds the level for the very next MapController.StartNewMap, which the Map Selection Confirm calls at once; the caller has already checked the character.
+    public static bool HoldForNextStart(string path, MelonLogger.Instance logger)
+    {
+        if (!TryRead(path, logger, default, out var level))
+        {
+            return false;
+        }
+
+        _awaitingCharacter = (level, logger, false);
+        return true;
+    }
+
+    // Reads a .mblevel.json from disk and registers the matching run. MapData may not exist yet when
+    // this is called (e.g. a load-level issued right after launch), so the load is queued and Pump()
+    // attempts it each frame until the map is available. Read/parse failures return false at once.
+    public static bool LoadAndStart(string path, MelonLogger.Instance logger, LoadOverrides overrides = default)
+    {
+        if (!TryRead(path, logger, overrides, out var level))
+        {
+            return false;
         }
 
         _pending.Add((level, logger, path, Time.realtimeSinceStartup, overrides.Character));
@@ -110,20 +138,26 @@ public static class LevelLoaderPatch
 
         if (character is not int characterId)
         {
-            _awaitingCharacter = (level, logger);
-            CharacterScreenPatch.SetRestricted(true);
-            logger.Msg($"LevelLoader: waiting for a character to be confirmed on the character screen for map={level.Map}");
-            return true;
-        }
-
-        var characterWarning = CharacterOverride.TryApply(id => CharacterMenu.selectedCharacter = (ECharacter)id, characterId);
-        if (characterWarning != null)
-        {
-            logger.Warning(characterWarning);
+            var allowedIds = CharacterPolicy.AllowedIds(level.AllowedCharacters);
+            if (allowedIds != null)
+            {
+                _awaitingCharacter = (level, logger, true);
+                CharacterScreenPatch.SetRestricted(true, allowedIds);
+                logger.Msg($"LevelLoader: waiting for a character to be confirmed on the character screen for map={level.Map}");
+                return true;
+            }
         }
         else
         {
-            logger.Msg($"LevelLoader: character={(ECharacter)characterId}");
+            var characterWarning = CharacterOverride.TryApply(id => CharacterMenu.selectedCharacter = (ECharacter)id, characterId);
+            if (characterWarning != null)
+            {
+                logger.Warning(characterWarning);
+            }
+            else
+            {
+                logger.Msg($"LevelLoader: character={(ECharacter)characterId}");
+            }
         }
 
         var runConfig = PrepareRun(level, logger, mapData);
@@ -146,6 +180,8 @@ public static class LevelLoaderPatch
         LiveEditPatch.SetPendingEdits(level.Edits, level.NoGrass, level.PlayerStart, level.MaxSlopeAngle);
         LevelMusic.Prepare(level.Music, logger);
         LevelTitle.Prepare(level.Title, level.Description, logger);
+        AllowedCharacters = level.AllowedCharacters;
+        MapDescription = level.MapDescription;
         CustomLevelState.MarkPendingStart();
         logger.Msg($"LevelLoader: starting map={level.Map} stage={level.StageIndex} tier={level.Tier} seed={level.Seed}");
 
@@ -161,7 +197,7 @@ public static class LevelLoaderPatch
     private const string DevVariable = "MEGABONK_DEV";
 
     // A load held back until the player confirms a character on the restricted character screen.
-    private static (LevelFile Level, MelonLogger.Instance Logger)? _awaitingCharacter;
+    private static (LevelFile Level, MelonLogger.Instance Logger, bool RestrictsScreen)? _awaitingCharacter;
 
     public static void CancelAwaitingCharacter()
     {
@@ -175,7 +211,7 @@ public static class LevelLoaderPatch
         [HarmonyPriority(Priority.First)]
         private static void Prefix(ref RunConfig newRunConfig)
         {
-            if (_awaitingCharacter is not var (level, logger) || !CharacterScreenPatch.Restricted)
+            if (_awaitingCharacter is not var (level, logger, restrictsScreen) || (restrictsScreen && !CharacterScreenPatch.Restricted))
             {
                 return;
             }
@@ -190,7 +226,10 @@ public static class LevelLoaderPatch
 
             newRunConfig = PrepareRun(level, logger, mapData);
             _awaitingCharacter = null;
-            CharacterScreenPatch.SetRestricted(false);
+            if (restrictsScreen)
+            {
+                CharacterScreenPatch.SetRestricted(false);
+            }
         }
     }
 
@@ -208,5 +247,5 @@ public static class LevelLoaderPatch
         logger.Error($"LevelLoader: load failed: no MapData found for map={map} ({(int)map}); available: {string.Join(", ", available)}");
     }
 
-    private static MapData FindMapData(EMap map) => CatalogPrefabs.TryFindMap(map);
+    public static MapData FindMapData(EMap map) => CatalogPrefabs.TryFindMap(map);
 }

@@ -10,6 +10,13 @@ public static class CharacterOverride
     public const int TonyMcZoomId = 13;
     public const int CalciumId = 1;
 
+    public static string DisplayName(int id) => id switch
+    {
+        CalciumId => "Calcium",
+        TonyMcZoomId => "Tony McZoom",
+        _ => $"character {id}",
+    };
+
     public static bool IsAllowed(int id) => id == CalciumId || id == TonyMcZoomId;
 
     // Maps a harness or settings name to a character id; null when the name is not an allowed character.

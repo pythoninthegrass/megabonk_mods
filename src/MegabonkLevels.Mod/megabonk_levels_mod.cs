@@ -29,6 +29,7 @@ public class MegabonkLevelsMod : MelonMod
         CustomLevelStatePatch.Install(LoggerInstance);
         DeathRestartPatch.Install(LoggerInstance);
         CharacterScreenPatch.Install(LoggerInstance);
+        MapSelectionPatch.Install(LoggerInstance);
         SteamWriteGuard.Install(LoggerInstance);
         DevHarness.Install(LoggerInstance);
     }
@@ -47,6 +48,7 @@ public class MegabonkLevelsMod : MelonMod
         LiveEditPatch.TickMaxSlopeAngle(LoggerInstance);
         KillFloorWatcher.Tick();
         LevelMusic.Tick();
+        MenuNotice.Tick();
         PositionLabel.Tick();
         EditorMode.Tick(LoggerInstance);
 

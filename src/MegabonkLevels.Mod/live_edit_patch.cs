@@ -223,7 +223,9 @@ public static class LiveEditPatch
             MaxSlopeAngle: _maxSlopeAngle,
             Music: LevelMusic.Reference,
             Title: LevelTitle.Title,
-            Description: LevelTitle.Description);
+            Description: LevelTitle.Description,
+            AllowedCharacters: LevelLoaderPatch.AllowedCharacters,
+            MapDescription: LevelLoaderPatch.MapDescription);
     }
 
     // The packs referenced by the level's edits, mapped to the version recorded in each installed

@@ -234,6 +234,56 @@ public class LevelFileTests
     }
 
     [Fact]
+    public void RoundTrip_AllowedCharacters_Survive()
+    {
+        var level = SampleLevel() with { AllowedCharacters = new[] { "calcium", "tonymczoom" } };
+
+        var restored = LevelFileSerializer.DeserializeWithMigration(LevelFileSerializer.Serialize(level));
+
+        Assert.Equal(new[] { "calcium", "tonymczoom" }, restored.AllowedCharacters);
+        Assert.Equal(level, restored);
+    }
+
+    [Fact]
+    public void Deserialize_WithoutAllowedCharactersKey_LeavesItNull()
+    {
+        var json = """{"schemaVersion":3,"gameBuildId":"1","map":1,"stageIndex":0,"tier":0,"seed":1,"packs":{},"edits":[]}""";
+
+        Assert.Null(LevelFileSerializer.DeserializeWithMigration(json).AllowedCharacters);
+    }
+
+    [Fact]
+    public void Equals_LevelsDifferingOnlyInAllowedCharacters_AreNotEqual()
+    {
+        Assert.NotEqual(SampleLevel(), SampleLevel() with { AllowedCharacters = new[] { "calcium" } });
+    }
+
+    [Fact]
+    public void RoundTrip_MapDescription_Survives()
+    {
+        var level = SampleLevel() with { MapDescription = "A warehouse built for grinding" };
+
+        var restored = LevelFileSerializer.DeserializeWithMigration(LevelFileSerializer.Serialize(level));
+
+        Assert.Equal("A warehouse built for grinding", restored.MapDescription);
+        Assert.Equal(level, restored);
+    }
+
+    [Fact]
+    public void Deserialize_WithoutMapDescriptionKey_LeavesItNull()
+    {
+        var json = """{"schemaVersion":3,"gameBuildId":"1","map":1,"stageIndex":0,"tier":0,"seed":1,"packs":{},"edits":[]}""";
+
+        Assert.Null(LevelFileSerializer.DeserializeWithMigration(json).MapDescription);
+    }
+
+    [Fact]
+    public void Equals_LevelsDifferingOnlyInMapDescription_AreNotEqual()
+    {
+        Assert.NotEqual(SampleLevel(), SampleLevel() with { MapDescription = "x" });
+    }
+
+    [Fact]
     public void Equals_LevelsDifferingOnlyInTitle_AreNotEqual()
     {
         Assert.NotEqual(SampleLevel(), SampleLevel() with { Title = "Warehouse" });

@@ -25,8 +25,9 @@ public static class CharacterScreenPatch
     }
 
     // Re-styles the grid when it is already built, so the change shows without reopening the screen.
-    public static void SetRestricted(bool restricted)
+    public static void SetRestricted(bool restricted, IReadOnlyList<int> allowedIds = null)
     {
+        _allowedIds = allowedIds ?? DefaultAllowedIds;
         if (restricted && !Restricted)
         {
             _savedCharacter = SavedPreferences()?.selectedCharacter;
@@ -42,6 +43,11 @@ public static class CharacterScreenPatch
             Apply(menu);
         }
     }
+
+    private static readonly int[] DefaultAllowedIds = { CharacterOverride.CalciumId, CharacterOverride.TonyMcZoomId };
+    private static IReadOnlyList<int> _allowedIds = DefaultAllowedIds;
+
+    private static bool IsAllowed(int id) => CharacterPolicy.Permits(_allowedIds, id);
 
     // The game saves the confirmed character as the player's preference; a custom run puts the previous one back.
     private static ECharacter? _savedCharacter;
@@ -61,7 +67,7 @@ public static class CharacterScreenPatch
         _savedCharacter = null;
     }
 
-    private readonly record struct ButtonSnapshot(int SiblingIndex, bool CanUse, Color IconColor, bool OverlayActive);
+    private readonly record struct ButtonSnapshot(int SiblingIndex, bool CanUse, Color IconColor, bool OverlayActive, string Reason);
 
     private static void Apply(CharacterMenu menu)
     {
@@ -106,7 +112,7 @@ public static class CharacterScreenPatch
         MyButtonCharacter first = null;
         foreach (var button in buttons)
         {
-            if (CharacterOverride.IsAllowed(IdOf(button)) && (first == null || button.transform.GetSiblingIndex() < first.transform.GetSiblingIndex()))
+            if (IsAllowed(IdOf(button)) && (first == null || button.transform.GetSiblingIndex() < first.transform.GetSiblingIndex()))
             {
                 first = button;
             }
@@ -152,7 +158,8 @@ public static class CharacterScreenPatch
         button.transform.GetSiblingIndex(),
         button.canUseCharacter,
         button.i_icon != null ? button.i_icon.color : Color.white,
-        button.unavailableOverlay != null && button.unavailableOverlay.activeSelf);
+        button.unavailableOverlay != null && button.unavailableOverlay.activeSelf,
+        button.cantUseCharacterReason);
 
     private static int IdOf(MyButtonCharacter button) => button.characterData != null ? (int)button.characterData.eCharacter : PlaceholderId;
 
@@ -181,12 +188,13 @@ public static class CharacterScreenPatch
 
         foreach (var button in buttons)
         {
-            if (button.characterData == null || CharacterOverride.IsAllowed(IdOf(button)))
+            if (button.characterData == null || IsAllowed(IdOf(button)))
             {
                 continue;
             }
 
             button.canUseCharacter = false;
+            button.cantUseCharacterReason = CharacterPolicy.Refusal(_allowedIds, null);
             if (button.i_icon != null)
             {
                 button.i_icon.color = Color.black;
@@ -198,7 +206,7 @@ public static class CharacterScreenPatch
             }
         }
 
-        _logger?.Msg($"CharacterScreen: restricted to Calcium and Tony McZoom, {buttons.Length} buttons");
+        _logger?.Msg($"CharacterScreen: restricted to {string.Join(", ", _allowedIds)}, {buttons.Length} buttons");
     }
 
     private static void RestoreStock(MyButtonCharacter[] buttons)
@@ -208,6 +216,7 @@ public static class CharacterScreenPatch
             var stock = _stock[button.GetInstanceID()];
             button.transform.SetSiblingIndex(stock.SiblingIndex);
             button.canUseCharacter = stock.CanUse;
+            button.cantUseCharacterReason = stock.Reason;
             if (button.i_icon != null)
             {
                 button.i_icon.color = stock.IconColor;
