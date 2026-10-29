@@ -4,12 +4,14 @@ title: In-game level browser UI
 status: To Do
 assignee: []
 created_date: '2026-10-06 21:44'
+updated_date: '2026-10-29 05:24'
 labels:
   - level-editor
 dependencies: []
+documentation:
+  - docs/development.md
 parent_task_id: TASK-006
 priority: medium
-type: feature
 ordinal: 31000
 ---
 
@@ -21,6 +23,10 @@ Read parent TASK-006 first for full context.
 Build a standalone level browser UI (UGUI+TMP, consistent with TASK-005's editor styling) listing every `.mblevel.json` file in `UserData/Levels/`, showing at minimum: title/filename, map, and a `gameBuildId` mismatch warning (reusing TASK-004.01's build-ID comparison logic) when a level was saved against a different game build than the one currently running. Make it accessible both from within the editor (extending TASK-005.05's basic save/load dialog) and from a standalone entry point usable without first entering editor mode (e.g. a button on the main menu or map-selection screen), so a player who only wants to play other people's levels never has to touch the editor.
 
 Selecting a level loads and starts it via TASK-004.01's loader.
+
+Preferred entry point: the game's own Map Selection screen. It lists maps as entries (Forest, Desert, Graveyard) with a thumbnail, name and description, and a detail panel on the right with Confirm. Add a custom level to that list, starting with the THPS level named Warehouse (see the title and description overrides on LevelFile), so choosing it and pressing Confirm starts the custom run instead of a native map. After that the Character Selection screen follows (TASK-004.12).
+
+Findings from reading .tools/il2cpp_dump/dump.cs (regenerate with task re:dump), not yet confirmed in the running game: MapSelectionWindow.InitButtons (RVA 0x570E30) builds the list from mapEntryPrefab; MapSelectionUi.StartMap (0x570D40) starts the run from its RunConfig; and the right-hand panel (MapStatsWindow, MapStatsInfoUi) shows runs, highscore, speedrun and tiers, which have no data for a custom level. Decide what the detail panel shows for a custom entry and how Confirm hands off to LevelLoaderPatch rather than MapController.StartNewMap with a native MapData.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -29,7 +35,10 @@ Selecting a level loads and starts it via TASK-004.01's loader.
 - [ ] #2 The browser is reachable from a standalone entry point (e.g. main menu or map selection) without requiring editor mode to be entered first
 - [ ] #3 Selecting a level loads and starts it via TASK-004.01's existing loader
 - [ ] #4 The browser UI is visually consistent with TASK-005's editor UI styling
+- [ ] #5 The game's Map Selection screen lists the Warehouse custom level beside the native maps, and confirming it starts that level through the mod's loader
 <!-- AC:END -->
+
+
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
