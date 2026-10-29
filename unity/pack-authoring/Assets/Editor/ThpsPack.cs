@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 
 // The THPS Warehouse pack: one prefab built from the extracted level mesh and textures.
@@ -42,6 +45,7 @@ public static class ThpsPack
     public static void Build()
     {
         var output = PackBuilder.ArgValue("-packOutput");
+        AssetDatabase.DeleteAsset(PackDirectory);
         Directory.CreateDirectory(PackDirectory);
         var prefabs = new List<string>
         {
@@ -69,6 +73,40 @@ public static class ThpsPack
         return i >= 0 && i + 1 < args.Length ? args[i + 1] : Path.GetFullPath(Path.Combine(Application.dataPath, "../../..", DefaultMusicSource));
     }
 
+    // Writes the asset's .meta with a GUID derived from its path before Unity first sees the file, so every machine builds the same bundle; Unity otherwise picks a random GUID per machine.
+    static string Pinned(string assetPath)
+    {
+        using var md5 = MD5.Create();
+        var guid = string.Concat(md5.ComputeHash(Encoding.UTF8.GetBytes(assetPath)).Select(b => b.ToString("x2")));
+        File.WriteAllText(assetPath + ".meta", "fileFormatVersion: 2\nguid: " + guid + "\n");
+        return assetPath;
+    }
+
+    // Unity gives a new prefab's objects random file IDs on every save, and the bundle derives its object identities from them; each is renumbered to its class id times 100000 plus its position in the file.
+    static void PinFileIds(string path)
+    {
+        var lines = File.ReadAllLines(path);
+        var ids = new Dictionary<string, string>();
+        foreach (var line in lines)
+        {
+            var header = System.Text.RegularExpressions.Regex.Match(line, @"^--- !u!(\d+) &(\d+)");
+            if (header.Success)
+                ids[header.Groups[2].Value] = (long.Parse(header.Groups[1].Value) * 100000 + ids.Count).ToString();
+        }
+
+        var renumbered = lines.Select(line => System.Text.RegularExpressions.Regex.Replace(line, @"(?<=&|fileID: )\d+", match => ids.TryGetValue(match.Value, out var id) ? id : match.Value));
+        File.WriteAllText(path, string.Join("\n", renumbered) + "\n");
+    }
+
+    // CreateAsset ignores a pre-written .meta and picks its own GUID, so the object is serialized to the path directly and imported under the pinned one; the returned reference is the imported asset.
+    static T SaveAsset<T>(T asset, string path) where T : UnityEngine.Object
+    {
+        Pinned(path);
+        InternalEditorUtility.SaveToSerializedFileAndForget(new UnityEngine.Object[] { asset }, path, false);
+        AssetDatabase.ImportAsset(path);
+        return AssetDatabase.LoadAssetAtPath<T>(path);
+    }
+
     // Imports every mp3 in the directory as a Vorbis clip held compressed in memory, named by its file name with each run of other characters made an underscore (04 Superman.mp3 is bundle:thps/04_Superman); empty when the directory is absent so the pack still builds without music.
     static List<string> SaveSoundtrack(string source)
     {
@@ -87,7 +125,7 @@ public static class ThpsPack
     static string SaveClip(string source)
     {
         var name = System.Text.RegularExpressions.Regex.Replace(Path.GetFileNameWithoutExtension(source), "[^A-Za-z0-9]+", "_").Trim('_');
-        var path = PackDirectory + "/" + name + ".mp3";
+        var path = Pinned(PackDirectory + "/" + name + ".mp3");
         File.Copy(source, path, true);
         AssetDatabase.ImportAsset(path);
         var importer = (AudioImporter)AssetImporter.GetAtPath(path);
@@ -107,7 +145,7 @@ public static class ThpsPack
     {
         var materials = LoadWarehouseMaterials(source);
         var mesh = ParseWarehouseObj(Path.Combine(source, "warehouse.obj"), materials.Keys.ToList(), out var usedMaterials);
-        AssetDatabase.CreateAsset(mesh, PackDirectory + "/Warehouse.asset");
+        mesh = SaveAsset(mesh, PackDirectory + "/Warehouse.asset");
         var root = new GameObject("Warehouse");
         root.AddComponent<MeshFilter>().sharedMesh = mesh;
         root.AddComponent<MeshRenderer>().sharedMaterials = usedMaterials.Select(m => materials[m]).ToArray();
@@ -130,8 +168,7 @@ public static class ThpsPack
         }
 
         collision.RecalculateBounds();
-        AssetDatabase.CreateAsset(collision, PackDirectory + "/WarehouseCollision.asset");
-        return collision;
+        return SaveAsset(collision, PackDirectory + "/WarehouseCollision.asset");
     }
 
     static int[] WithoutTrianglesInOpenedWindows(int[] triangles, Vector3[] vertices)
@@ -176,7 +213,7 @@ public static class ThpsPack
         var materials = new Dictionary<string, Material>();
         foreach (var pair in textureFiles)
         {
-            var assetPath = textureDirectory + "/" + pair.Value;
+            var assetPath = Pinned(textureDirectory + "/" + pair.Value);
             var seeThrough = SeeThroughTextures.Contains(pair.Value);
             File.WriteAllBytes(assetPath, BakeTransparencyKey(File.ReadAllBytes(Path.Combine(source, pair.Value)), seeThrough));
             AssetDatabase.ImportAsset(assetPath);
@@ -193,8 +230,7 @@ public static class ThpsPack
             material.mainTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
             if (!seeThrough)
                 material.SetFloat("_Glossiness", 0);
-            AssetDatabase.CreateAsset(material, PackDirectory + "/Warehouse_" + pair.Key + ".mat");
-            materials[pair.Key] = material;
+            materials[pair.Key] = SaveAsset(material, PackDirectory + "/Warehouse_" + pair.Key + ".mat");
         }
 
         materials[UntexturedMaterial] = SaveMaterial("Warehouse_" + UntexturedMaterial, Concrete);
@@ -425,8 +461,7 @@ public static class ThpsPack
     static Material SaveMaterial(string name, Color color)
     {
         var material = new Material(Shader.Find("Standard")) { color = color };
-        AssetDatabase.CreateAsset(material, PackDirectory + "/" + name + ".mat");
-        return material;
+        return SaveAsset(material, PackDirectory + "/" + name + ".mat");
     }
 
     // Puts the prefab on the layer the player grounds against, the same as the tile ground.
@@ -435,8 +470,10 @@ public static class ThpsPack
         foreach (var t in root.GetComponentsInChildren<Transform>(true))
             t.gameObject.layer = GroundLayer;
 
-        var path = PackDirectory + "/" + root.name + ".prefab";
+        var path = Pinned(PackDirectory + "/" + root.name + ".prefab");
         PrefabUtility.SaveAsPrefabAsset(root, path);
+        PinFileIds(path);
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
         UnityEngine.Object.DestroyImmediate(root);
         return path;
     }
