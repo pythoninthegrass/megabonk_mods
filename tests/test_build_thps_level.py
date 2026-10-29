@@ -583,25 +583,6 @@ def test_each_diagonal_lip_starts_where_a_level_lip_ends() -> None:
             assert start in level_ends
 
 
-def test_a_lip_ending_at_a_wall_is_pulled_back_so_the_launch_has_room() -> None:
-    start, end = b.stopped_short_of_walls((119.78, 5.76, 8.59), (178.95, 5.76, 8.59))
-    assert start == (119.78, 5.76, 8.59)
-    assert end == pytest.approx((178.95 - b.WALL_MARGIN, 5.76, 8.59))
-    start, end = b.stopped_short_of_walls((21.17, 8.56, 101.06), (64.48, 8.56, 101.06))
-    assert start == pytest.approx((21.17 + b.WALL_MARGIN, 8.56, 101.06))
-    assert end == (64.48, 8.56, 101.06)
-
-
-def test_a_lip_away_from_the_walls_is_left_whole() -> None:
-    lip = ((119.78, 5.76, 8.59), (100.06, 0.5, 3.51))
-    assert b.stopped_short_of_walls(*lip) == lip
-
-
-def test_every_wall_end_is_the_end_of_a_coping_lip() -> None:
-    ends = {point for lip in b.COPING_LIPS for point in lip}
-    assert set(b.WALL_ENDS) <= ends
-
-
 def test_the_shortys_ledge_edge_runs_from_the_kicker_end_to_the_west_wall() -> None:
     assert b.LEDGE_LIPS[0][0] == (40.89, 3.79, 3.51)
     assert b.LEDGE_LIPS[-1][1] == (21.17, 3.79, 58.73)
@@ -621,14 +602,14 @@ def test_the_ledge_lips_are_coping_lips() -> None:
     assert set(b.LEDGE_LIPS) <= set(b.COPING_LIPS)
 
 
-def test_a_wall_end_pull_back_never_reaches_past_the_middle_of_its_lip() -> None:
-    for start, end in b.COPING_LIPS:
-        if start in b.WALL_ENDS or end in b.WALL_ENDS:
-            assert math.dist(start, end) > 2 * b.WALL_MARGIN, (start, end)
-
-
 def test_the_start_pipe_lip_runs_along_the_platform_edge_above_the_spawn() -> None:
     [(start, end)] = b.START_PIPE_LIPS
     assert (start, end) == ((80.34, 35.85, -120.84), (139.5, 35.85, -120.84))
     assert b.PLAYER_START[0] in range(int(start[0]), int(end[0]))
     assert set(b.START_PIPE_LIPS) <= set(b.COPING_LIPS)
+
+
+def test_every_coping_rail_runs_edge_to_edge_along_its_lip() -> None:
+    for lip, rail in zip(b.COPING_LIPS, b.COPING_RAILS, strict=True):
+        ends = rail_axis_ends(rail)
+        assert [c for end in ends for c in end] == pytest.approx([*lip[0], *lip[1]], abs=0.01), lip

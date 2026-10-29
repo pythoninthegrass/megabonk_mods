@@ -111,33 +111,7 @@ def rail_along(start: tuple[float, float, float], end: tuple[float, float, float
     return tuple(m - u * bar for m, u in zip(middle, up, strict=True)), yaw, scale, pitch
 
 
-# Lip ends that run into a wall, found by probing the mesh from each end along the lip. A rail stops this far short of them, so the grind's launch has room before the wall.
-WALL_ENDS = (
-    (178.95, 5.76, 8.59),
-    (178.95, 5.76, 43.81),
-    (40.89, 8.56, -27.1),
-    (178.95, 8.56, -27.1),
-    (40.89, 16.63, -70.03),
-    (80.34, 16.63, -70.03),
-    (21.17, 8.56, 101.06),
-    (80.34, 35.85, -120.84),
-    (139.5, 35.85, -120.84),
-)
-WALL_MARGIN = 12.0
-
-
-def stopped_short_of_walls(start: tuple[float, float, float], end: tuple[float, float, float]) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
-    """The lip with any end in WALL_ENDS pulled back along the lip by WALL_MARGIN."""
-    length = math.dist(start, end)
-    pull = tuple((e - s_) * WALL_MARGIN / length for s_, e in zip(start, end, strict=True))
-    if start in WALL_ENDS:
-        start = tuple(s_ + d for s_, d in zip(start, pull, strict=True))
-    if end in WALL_ENDS:
-        end = tuple(e - d for e, d in zip(end, pull, strict=True))
-    return start, end
-
-
-COPING_RAILS = tuple(rail_along(*stopped_short_of_walls(start, end)) for start, end in COPING_LIPS)
+COPING_RAILS = tuple(rail_along(start, end) for start, end in COPING_LIPS)
 
 # The half pipe lips reach 85 degrees, past the game's 45 degree slope limit.
 MAX_SLOPE_ANGLE = 88
