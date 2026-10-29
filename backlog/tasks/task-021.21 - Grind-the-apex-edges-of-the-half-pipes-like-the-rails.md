@@ -1,11 +1,11 @@
 ---
 id: TASK-021.21
 title: Grind the apex edges of the half pipes like the rails
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-10-28T21:02:00Z'
-updated_date: '2026-10-29 04:19'
+updated_date: '2026-10-29 05:02'
 labels:
   - thps
   - level-editor
@@ -32,7 +32,7 @@ Context for a fresh implementer: apply the hidden game rail approach from TASK-0
 <!-- AC:BEGIN -->
 - [x] #1 Every half pipe and quarter pipe lip has a hidden game rail aligned to the coping, with each pipe and its coordinates listed in the task
 - [x] #2 The player can grind each lip in game, with the grind sparks and player on the visible edge
-- [ ] #3 Ollie off the main half pipe edges near (142, -3, 32) still works
+- [x] #3 Ollie off the main half pipe edges near (142, -3, 32) still works
 - [x] #4 Generator behaviour is covered by tests in tests/test_build_thps_level.py written first, and docs/thps-warehouse-layout.md is updated
 <!-- AC:END -->
 
@@ -62,6 +62,8 @@ Start half pipe platform lip (80.34, 35.85, -120.84) to (139.5, 35.85, -120.84) 
 Wall-end pull-back (WALL_ENDS, WALL_MARGIN) removed: it left the last 12 units of each wall-to-wall lip ungrindable and did not stop the launch into the wall. Rails now run edge to edge (tested). Checked on the start lip: dropped 1.4 from the west wall, the grind ran to x 138.86, 0.6 short of the east wall. Observed: the spawn (109, 38, -120) is 0.84 from the start lip, so the player spawns caught on the rail and a teleport cannot move him; the spawn is a chosen position, left unchanged.
 
 The installed thps pack was stale (manifest 2.0.10 with six assets, built before the roof and see-through fixes), so the sky showed. Rebuilt and installed with task pack:thps (2.0.21, 44.9 MB, 14 clips); in game the roof is closed and the soundtrack loads. The build log shows a WarehouseRoof compile error on Unity's first pass that clears on the second; the build exits 0.
+
+AC#3 verified manually by Lance: ollie off the main half pipe edges works.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
@@ -69,5 +71,5 @@ The installed thps pack was stale (manifest 2.0.10 with six assets, built before
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
