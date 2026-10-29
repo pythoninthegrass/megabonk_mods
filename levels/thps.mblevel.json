@@ -6405,6 +6405,11 @@
     {
       "opType": "object.place",
       "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":109.92,\"y\":32.64792857142857,\"z\":-120.84},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":1.2557142857142856,\"y\":1.2557142857142856,\"z\":1.2557142857142856},\"hidden\":true}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
       "payload": "{\"catalogId\":\"bundle:thps/Warehouse\",\"position\":{\"x\":100.0,\"y\":0.5,\"z\":0.0},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":79.2,\"y\":79.2,\"z\":79.2}}"
     },
     {

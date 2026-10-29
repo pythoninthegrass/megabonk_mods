@@ -186,3 +186,15 @@ def test_ledge_runs_merges_collinear_edges() -> None:
     second_face = ((10, 5, 0), (20, 5, 0), (10, 0, 0))
     [(start, end)] = ws.ledge_runs([LEDGE_TOP, LEDGE_FACE, second, second_face])
     assert sorted([start, end]) == [(0, 5, 0), (20, 5, 0)]
+
+
+def test_lip_runs_treats_a_double_sided_mesh_like_a_single_sided_one() -> None:
+    doubled = [*RAMP, DECK, *[(t[0], t[2], t[1]) for t in [*RAMP, DECK]]]
+    [(start, end)] = ws.lip_runs(doubled)
+    assert sorted([start, end]) == [(0, 5, 5), (10, 5, 5)]
+
+
+def test_ridge_runs_and_ledge_runs_treat_a_double_sided_mesh_like_a_single_sided_one() -> None:
+    both = lambda tris: [*tris, *[(t[0], t[2], t[1]) for t in tris]]  # noqa: E731
+    assert len(ws.ridge_runs(both(gable(0, 10)))) == 1
+    assert len(ws.ledge_runs(both([LEDGE_TOP, LEDGE_FACE]))) == 1

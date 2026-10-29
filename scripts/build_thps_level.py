@@ -92,7 +92,9 @@ LEDGE_LIPS = (
     ((25.77, 3.79, 26.19), (25.77, 3.79, 48.87)),
     ((25.77, 3.79, 48.87), (21.17, 3.79, 58.73)),
 )
-COPING_LIPS = MAIN_PIPE_LIPS + WALL_PIPE_LIPS + LEDGE_LIPS
+# The edge of the platform the player starts on, where it drops into the start half pipe.
+START_PIPE_LIPS = (((80.34, 35.85, -120.84), (139.5, 35.85, -120.84)),)
+COPING_LIPS = MAIN_PIPE_LIPS + WALL_PIPE_LIPS + LEDGE_LIPS + START_PIPE_LIPS
 
 
 def rail_along(start: tuple[float, float, float], end: tuple[float, float, float]) -> tuple[tuple[float, float, float], float, float, float]:
@@ -118,6 +120,8 @@ WALL_ENDS = (
     (40.89, 16.63, -70.03),
     (80.34, 16.63, -70.03),
     (21.17, 8.56, 101.06),
+    (80.34, 35.85, -120.84),
+    (139.5, 35.85, -120.84),
 )
 WALL_MARGIN = 12.0
 

@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-28T21:02:00Z'
-updated_date: '2026-10-29 03:57'
+updated_date: '2026-10-29 04:03'
 labels:
   - thps
   - level-editor
@@ -56,6 +56,8 @@ Pipes coped (main half pipe, from ridge_runs on the mesh): north lip (119.78, 5.
 Follow-up after review: the lips continue past x 119.78 as a 21 unit diagonal to the floor corner (hip), so rail_along now pitches, and a rail/0 is laid along each diagonal; the grind chains onto it (checked: north lip dropped at x 126 ends at (94.6, 2.4, 2.1)). Lip ends at walls stop WALL_MARGIN (12) short, listed in WALL_ENDS. Wall quarter pipes (north tiers, south wall, U pocket, east curve) added from lip_runs. Not verified: an eastbound grind into the east wall at (178, 7, 46) (a harness drop only grinds west) and ollies; in the north tier test the player still coasts into the wall after the rail ends.
 
 Pocket tip fixed: two chords at the tip, coping rails at least the handoff search radius long, and RailHandoffPatch sets railDirectionMultiplier toward the far end after StartRail. Shorty's ledge on the west wall added as LEDGE_LIPS (4 segments, (40.89, 3.79, 3.51) to (21.17, 3.79, 58.73)) via ledge_runs; checked by dropping onto it: the grind chains to the kicker end and lands at (43, 2, 4). The east side's matching ledge edges are not coped.
+
+Start half pipe platform lip (80.34, 35.85, -120.84) to (139.5, 35.85, -120.84) added as START_PIPE_LIPS; the start area's mesh is double-sided, so the finders drop duplicate faces. Rail engages (grind pose and sparks on the coping); a grind along it was not exercised because a teleport gives no speed. Other lip runs near the start (z -58.02 at height 26.95, z -65.75 at height 48.01) are not coped.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

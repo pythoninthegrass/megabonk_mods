@@ -238,6 +238,14 @@ def _is_ledge_top(p: Vec, q: Vec, a: Face, b: Face, min_slope: float) -> bool:
     return _slope_degrees(wall[0]) >= LEDGE_WALL_SLOPE and _slope_degrees(deck[0]) < FLAT_SLOPE and _below_edge(p, q, wall[1]) and not _below_edge(p, q, deck[1])
 
 
+def _distinct_faces(faces: list[Face]) -> list[Face]:
+    """The faces with a double-sided mesh's duplicates dropped: a face whose opposite vertex and normal up to sign match another's."""
+    seen: dict[tuple[Vec, Vec], Face] = {}
+    for normal, other in faces:
+        seen.setdefault((_round_point(other), _round_point(tuple(abs(c) for c in normal))), (normal, other))
+    return list(seen.values())
+
+
 def _edges_where(triangles: list[Triangle], max_grade: float, min_slope: float, tests: tuple) -> list[tuple[Vec, Vec]]:
     shared: dict[tuple[Vec, Vec], list[Face]] = {}
     for t in triangles:
@@ -247,6 +255,7 @@ def _edges_where(triangles: list[Triangle], max_grade: float, min_slope: float, 
             shared.setdefault(edge, []).append((normal, t[other]))
     edges = []
     for (p, q), faces in shared.items():
+        faces = _distinct_faces(faces)
         run = math.hypot(q[0] - p[0], q[2] - p[2])
         if len(faces) == 2 and run >= 0.1 and abs(p[1] - q[1]) <= max_grade * run and any(test(p, q, *faces, min_slope) for test in tests):
             edges.append((p, q))

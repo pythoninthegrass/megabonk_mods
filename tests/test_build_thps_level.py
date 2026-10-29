@@ -618,3 +618,10 @@ def test_a_wall_end_pull_back_never_reaches_past_the_middle_of_its_lip() -> None
     for start, end in b.COPING_LIPS:
         if start in b.WALL_ENDS or end in b.WALL_ENDS:
             assert math.dist(start, end) > 2 * b.WALL_MARGIN, (start, end)
+
+
+def test_the_start_pipe_lip_runs_along_the_platform_edge_above_the_spawn() -> None:
+    [(start, end)] = b.START_PIPE_LIPS
+    assert (start, end) == ((80.34, 35.85, -120.84), (139.5, 35.85, -120.84))
+    assert b.PLAYER_START[0] in range(int(start[0]), int(end[0]))
+    assert set(b.START_PIPE_LIPS) <= set(b.COPING_LIPS)
