@@ -420,17 +420,58 @@ def boss_move() -> dict:
     return next(e for e in b.spawn_moves() if e["target"] == "gen:object:BossSpawner:0000")
 
 
-def test_boss_spawner_stands_on_the_warehouse_floor_below_the_hanging_box() -> None:
-    position = payload(boss_move())["newTransform"]["position"]
-    assert (position["x"], position["z"]) == (150, 65)
-    assert -10 < position["y"] < 12, "the portal must sit on the room's floor, not in the box above the pipe"
+# Between the box's interior floor (15.64) and the underside of its roof (25.42), so a drop from here finds the floor
+# the portal stands on rather than the top of the box.
+PORTAL_ROOF_PROBE_Y = 24.0
 
 
-def test_boss_spawner_sits_on_the_mesh_surface_it_drops_to() -> None:
+def test_boss_portal_stands_on_the_floor_inside_the_glass_box() -> None:
     position = payload(boss_move())["newTransform"]["position"]
-    hit = ws.drop(b.warehouse_triangles(), position["x"], b.BOSS_SPAWN_DROP_FROM, position["z"])
+    x0, x1, z0, z1 = b.BOSS_PORTAL_FOOTPRINT
+    assert (position["x"], position["z"]) == b.local_to_world(*b.BOSS_SPAWN_LOCAL)
+    assert b.BOSS_PORTAL_INTERIOR_FLOOR_Y - 0.1 <= position["y"] < b.BOSS_PORTAL_UNDERSIDE_Y, (
+        "the portal must stand inside the box, on its floor, not on the roof"
+    )
+    assert x0 + 1.0 <= position["x"] <= x1 - 1.0, "clear of the box's end walls"
+    assert z0 + 1.0 <= position["z"] <= z1 - 1.0, "clear of the box's long walls"
+
+
+def test_boss_portal_rests_on_the_box_floor_under_the_roof() -> None:
+    position = payload(boss_move())["newTransform"]["position"]
+    # Dropped from between the interior floor and the roof underside: 25.75 would be the top of the box, which is where
+    # the portal must not sit.
+    hit = ws.drop(b.warehouse_triangles(), position["x"], PORTAL_ROOF_PROBE_Y, position["z"])
     assert hit is not None
-    assert position["y"] == hit.y
+    assert position["y"] == pytest.approx(hit.y, abs=0.1)
+    assert hit.y == pytest.approx(b.BOSS_PORTAL_INTERIOR_FLOOR_Y, abs=0.1)
+
+
+def test_boss_drops_on_the_pipe_floor_outside_the_box() -> None:
+    x, y, z = b.build_level()["bossSpawnPosition"]
+    assert (x, z) == b.local_to_world(*b.BOSS_GROUND_LOCAL)
+    assert y < b.BOSS_PORTAL_FLOOR_UNDERSIDE_Y, "the boss must not spawn inside the hanging box"
+    assert y > b.KILL_FLOOR_Y
+    # Below the box's floor slab there is nothing left to catch the drop but the room's floor.
+    under_box = ws.drop(b.warehouse_triangles(), x, b.BOSS_PORTAL_FLOOR_UNDERSIDE_Y - 0.5, z)
+    assert under_box is not None and y == under_box.y
+
+
+def test_boss_spawn_sits_on_the_mesh_surface_it_drops_to() -> None:
+    x, y, z = b.boss_spawn_position()
+    hit = ws.drop(b.warehouse_triangles(), x, b.BOSS_GROUND_DROP_FROM, z)
+    assert hit is not None
+    assert y == hit.y
+
+
+def test_the_boss_spawn_drop_starts_under_the_box_so_the_box_cannot_catch_it() -> None:
+    assert b.BOSS_GROUND_DROP_FROM < b.BOSS_PORTAL_FLOOR_UNDERSIDE_Y
+
+
+def test_the_boss_shares_the_portals_column_so_it_comes_out_at_its_foot() -> None:
+    portal = payload(boss_move())["newTransform"]["position"]
+    boss_x, _, boss_z = b.boss_spawn_position()
+    assert boss_x == portal["x"]
+    assert boss_z < portal["z"], "the boss comes out on the near side of the box, by the quarter pipe"
 
 
 def test_boss_spawner_is_scaled_down_to_fit_the_room() -> None:

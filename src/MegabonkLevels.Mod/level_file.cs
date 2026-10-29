@@ -36,7 +36,8 @@ public readonly record struct LevelFile(
     string Description = null,
     IReadOnlyList<string> AllowedCharacters = null,
     string MapDescription = null,
-    float? KillFloorY = null)
+    float? KillFloorY = null,
+    IReadOnlyList<float> BossSpawnPosition = null)
 {
     public const int CurrentSchemaVersion = 3;
 
@@ -52,6 +53,7 @@ public readonly record struct LevelFile(
         && ListEquals(PlayerStart, other.PlayerStart)
         && MaxSlopeAngle == other.MaxSlopeAngle
         && KillFloorY == other.KillFloorY
+        && ListEquals(BossSpawnPosition, other.BossSpawnPosition)
         && Music == other.Music
         && Title == other.Title
         && Description == other.Description

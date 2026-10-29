@@ -27,6 +27,7 @@ public static class LiveEditPatch
     private static IReadOnlyList<float> _playerStart;
     private static float? _maxSlopeAngle;
     private static float? _killFloorY;
+    private static IReadOnlyList<float> _bossSpawnPosition;
     private static Session _session;
     private static int _runGeneration;
 
@@ -34,9 +35,13 @@ public static class LiveEditPatch
     // when the level has changed and the undo/redo session should be reset.
     public static int RunGeneration => _runGeneration;
 
+    // Where the level authors the boss appearing when its boss portal is activated, or null to let the game spawn the
+    // boss at the portal itself. See BossSpawnRedirectPatch.
+    public static IReadOnlyList<float> BossSpawnPosition => _bossSpawnPosition;
+
     // Set by LevelLoaderPatch right before it starts a run, consumed (and cleared) by the next
     // generation so a later vanilla run is never edited.
-    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null, float? killFloorY = null)
+    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null, float? killFloorY = null, IReadOnlyList<float> bossSpawnPosition = null)
     {
         _pendingEdits = edits;
         _levelEdits = edits;
@@ -44,6 +49,7 @@ public static class LiveEditPatch
         _playerStart = playerStart;
         _maxSlopeAngle = maxSlopeAngle;
         _killFloorY = killFloorY;
+        _bossSpawnPosition = bossSpawnPosition;
     }
 
     // Queues the loaded level's edits again for the next generation, which a native restart runs without going through LevelLoaderPatch.
@@ -224,6 +230,7 @@ public static class LiveEditPatch
             PlayerStart: _playerStart,
             MaxSlopeAngle: _maxSlopeAngle,
             KillFloorY: _killFloorY,
+            BossSpawnPosition: _bossSpawnPosition,
             Music: LevelMusic.Reference,
             Title: LevelTitle.Title,
             Description: LevelTitle.Description,
@@ -410,6 +417,7 @@ public static class LiveEditPatch
         _pendingEdits = null;
         _runGeneration++;
         _session = null;
+        BossSpawnRedirectPatch.Disarm();
 
         var controller = UnityEngine.Object.FindObjectOfType<MapGenerationController>();
         if (controller == null)

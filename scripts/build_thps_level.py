@@ -36,11 +36,24 @@ GENERATED_SPAWN_CELL = (10, 7)
 # it, deep enough for a body to rest on the mesh's outer skirt above it and stay unkillable.
 KILL_FLOOR_MARGIN_BELOW_KEPT_TILE = 15.0
 KILL_FLOOR_Y = INNER_LEVEL * HEIGHT_STEP - KILL_FLOOR_MARGIN_BELOW_KEPT_TILE
-# The boss portal stands on the flat Warehouse floor at the south deck of the main half pipe, so the boss
-# spawns where the player can reach it. Its drop starts under the hanging box above the pipe, so the box
-# that used to hold the portal can never catch it.
-BOSS_SPAWN_LOCAL = (130, 205)
-BOSS_SPAWN_DROP_FROM = 12.0
+# The glass box that hangs above the main half pipe is a closed room: an interior floor at 15.64 (its slab's underside
+# at 15.31), a roof whose underside sits at 25.42, and walls on all four sides between them, over this footprint
+# (x0, x1, z0, z1). The boss portal stands on that interior floor at the authored spot, hidden in plain sight the way
+# the reference map has its secret room (docs/thps-warehouse.md, "Glass corridor and secret room": the skater reaches it
+# by launching off the quarter pipe in front). Its own collider and BaseInteractable are hidden, so it cannot block a
+# grind or be triggered from the floor below. A spawner summons its boss at its own position and a boss inside a closed
+# box could never get out, so the level also authors where the boss appears: BossSpawnRedirectPatch moves it to
+# BOSS_GROUND_LOCAL.
+BOSS_PORTAL_FOOTPRINT = (149.4, 178.9, 20.9, 31.4)
+BOSS_PORTAL_INTERIOR_FLOOR_Y = 15.64
+BOSS_PORTAL_FLOOR_UNDERSIDE_Y = 15.31
+BOSS_PORTAL_UNDERSIDE_Y = 25.42
+BOSS_SPAWN_LOCAL = (150, 167)
+BOSS_SPAWN_Y = 15.6
+# The main half pipe's floor, outside the box's south wall, in the same x column as the portal.
+BOSS_GROUND_LOCAL = (150, 160)
+# Below the box's floor slab (15.31), so the box itself can never catch the drop.
+BOSS_GROUND_DROP_FROM = 12.0
 BOSS_SPAWN_SCALE = 0.4
 BOSS_SPAWN_YAW = 90.0
 BOSS_HIDDEN_CHILDREN = ["BottomPiece", "Collider"]
@@ -462,22 +475,22 @@ def transform(x: float, y: float, z: float, scale: float = 1.0, yaw: float = 0.0
 
 
 def boss_spawn_position() -> tuple[float, float, float]:
-    """The boss portal's world position, standing on the Warehouse surface under it.
+    """Where the boss appears when the portal is activated: the main half pipe's floor, by the box.
 
-    The drop starts below the hanging box (BOSS_SPAWN_DROP_FROM) so it finds the room's floor rather
-    than the box the portal used to hang in. A portal in the air spawns its boss in the air, and the
-    physics-chase boss cannot climb out of a closed box, which left the boss unreachable."""
-    bx, bz = local_to_world(*BOSS_SPAWN_LOCAL)
-    hit = ws.drop(warehouse_triangles(), bx, BOSS_SPAWN_DROP_FROM, bz)
+    A spawner summons at its own position and the physics-chase boss cannot climb out of a closed box, so the
+    level authors this instead and BossSpawnRedirectPatch moves the boss here. The drop starts below the box's
+    floor slab, or the box catches the ray — the mistake that left the boss unreachable the first time."""
+    bx, bz = local_to_world(*BOSS_GROUND_LOCAL)
+    hit = ws.drop(warehouse_triangles(), bx, BOSS_GROUND_DROP_FROM, bz)
     if hit is None:
-        raise ValueError(f"no Warehouse surface under the boss spawner at ({bx}, {bz})")
+        raise ValueError(f"no Warehouse surface under the boss spawn at ({bx}, {bz})")
     return (bx, hit.y, bz)
 
 
 def spawn_moves() -> list[dict]:
-    bx, by, bz = boss_spawn_position()
+    bx, bz = local_to_world(*BOSS_SPAWN_LOCAL)
     payload = {
-        "newTransform": transform(bx, by, bz, BOSS_SPAWN_SCALE, BOSS_SPAWN_YAW),
+        "newTransform": transform(bx, BOSS_SPAWN_Y, bz, BOSS_SPAWN_SCALE, BOSS_SPAWN_YAW),
         "hiddenChildren": BOSS_HIDDEN_CHILDREN,
     }
     return [edit("object.move", payload, "gen:object:BossSpawner:0000")]
@@ -566,6 +579,7 @@ def build_level() -> dict:
         "playerStart": PLAYER_START,
         "maxSlopeAngle": MAX_SLOPE_ANGLE,
         "killFloorY": KILL_FLOOR_Y,
+        "bossSpawnPosition": list(boss_spawn_position()),
         "music": MUSIC,
         "title": TITLE,
         "description": DESCRIPTION,

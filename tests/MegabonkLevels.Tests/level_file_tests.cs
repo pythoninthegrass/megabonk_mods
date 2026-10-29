@@ -194,6 +194,31 @@ public class LevelFileTests
     }
 
     [Fact]
+    public void RoundTrip_BossSpawnPosition_Survives()
+    {
+        var level = SampleLevel() with { BossSpawnPosition = new[] { 130f, -4.933f, 65f } };
+
+        var restored = LevelFileSerializer.DeserializeWithMigration(LevelFileSerializer.Serialize(level));
+
+        Assert.Equal(new[] { 130f, -4.933f, 65f }, restored.BossSpawnPosition);
+        Assert.Equal(level, restored);
+    }
+
+    [Fact]
+    public void Deserialize_WithoutBossSpawnPositionKey_LeavesItNull()
+    {
+        var json = """{"schemaVersion":3,"gameBuildId":"1","map":1,"stageIndex":0,"tier":0,"seed":1,"packs":{},"edits":[]}""";
+
+        Assert.Null(LevelFileSerializer.DeserializeWithMigration(json).BossSpawnPosition);
+    }
+
+    [Fact]
+    public void Equals_LevelsDifferingOnlyInBossSpawnPosition_AreNotEqual()
+    {
+        Assert.NotEqual(SampleLevel(), SampleLevel() with { BossSpawnPosition = new[] { 130f, -4.933f, 65f } });
+    }
+
+    [Fact]
     public void CurrentSchemaVersion_IsThree()
     {
         Assert.Equal(3, LevelFile.CurrentSchemaVersion);

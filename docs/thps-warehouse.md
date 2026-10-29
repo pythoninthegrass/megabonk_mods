@@ -165,6 +165,7 @@ The room has several distinct quarter pipes along its walls. The frames do not g
 - Size (low): about 4 m wide and 3 m high, from window height and sill scale (28). The length cannot be measured.
 - The glass is breakable (43). The tape icon floats inside (4).
 - The skater reaches it by launching off the quarter pipe in front, not by a door (frames 39, 42, 43).
+- In the extracted `Warehouse` mesh the box is a closed room: walls on all four sides between an interior floor top at 15.64 and a roof underside at 25.42 (world units, scale 79.2; the slab's underside is at 15.31 and the roof's top at 25.75), over a footprint of x 149.4-178.9, z 20.9-31.4. The frames do not settle whether a skater can actually get in through a window, so the game's boss portal standing on that floor is decoration for a launch-in entry, not a proven one. See [thps-warehouse-layout.md](thps-warehouse-layout.md) for what the level places there.
 
 ### Box piles
 

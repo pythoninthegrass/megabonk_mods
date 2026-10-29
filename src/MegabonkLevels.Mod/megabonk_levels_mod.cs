@@ -25,6 +25,7 @@ public class MegabonkLevelsMod : MelonMod
         LiveEditPatch.Install(LoggerInstance);
         RailHandoffPatch.Install(LoggerInstance);
         RailWallEndPatch.Install(LoggerInstance);
+        BossSpawnRedirectPatch.Install(LoggerInstance);
         PackPrefabs.Initialize(LoggerInstance);
         SceneTransitionProbe.Install(LoggerInstance);
         CustomLevelStatePatch.Install(LoggerInstance);
