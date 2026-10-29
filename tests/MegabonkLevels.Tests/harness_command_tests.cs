@@ -532,6 +532,27 @@ public class HarnessCommandTests
     }
 
     [Fact]
+    public void TryParse_MaterialDump_ObjectIsOptional()
+    {
+        Assert.True(HarnessCommand.TryParse("""{"command":"material-dump"}""", out var bare, out _));
+        Assert.Equal(HarnessCommandKind.MaterialDump, bare.Kind);
+        Assert.Null(bare.Path);
+
+        Assert.True(HarnessCommand.TryParse("""{"command":"material-dump","object":"Warehouse"}""", out var named, out var error));
+        Assert.Null(error);
+        Assert.Equal("Warehouse", named.Path);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"material-dump","object":""}""")]
+    [InlineData("""{"command":"material-dump","object":5}""")]
+    public void TryParse_MaterialDump_RejectsABadObject(string json)
+    {
+        Assert.False(HarnessCommand.TryParse(json, out _, out var error));
+        Assert.Contains("'object'", error);
+    }
+
+    [Fact]
     public void TryParse_ListLevels_NeedsNoArguments()
     {
         Assert.True(HarnessCommand.TryParse("""{"command":"list-levels"}""", out var command, out _));

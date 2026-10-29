@@ -29,6 +29,7 @@ Usage:
     run.py steam-ready             Check whether the in-game Steamworks client is ready
     run.py state                   Print the game's current state as JSON (level, editor, player, tool, selection)
     run.py shader-report           Print which candidate shaders Shader.Find resolves and the shaders and properties of the scene's materials
+    run.py material-dump [object]  Print the shader, keywords and textures of every material under the objects whose name contains [object] (default Warehouse)
     run.py character-screen <on|off>  Restrict the game's character screen to Calcium and Tony McZoom (a custom run is being set up) or restore the stock grid
     run.py spawns <on|off>         Allow or stop new enemy spawns (off leaves enemies already alive; resets on level load)
     run.py heartbeat <on|off>      Start or stop the kill-floor heartbeat (actor counts and lowest heights every 5 seconds)
@@ -255,6 +256,13 @@ def build_mouse_command(action: str, position: tuple[float, float] | None = None
 
 def build_click_widget_command(name: str) -> dict[str, object]:
     return {"command": "click-widget", "name": name}
+
+
+def build_material_dump_command(object_name: str | None = None) -> dict[str, object]:
+    payload: dict[str, object] = {"command": "material-dump"}
+    if object_name is not None:
+        payload["object"] = object_name
+    return payload
 
 
 def build_save_level_command(level: str | None = None) -> dict[str, object]:
@@ -595,6 +603,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     mouse.add_argument("--button", type=int, choices=[0, 1, 2], help="0 left (default), 1 right, 2 middle")
     ui_tree = sub.add_parser("ui-tree")
     ui_tree.add_argument("position", type=float, nargs="*", metavar="X Y", help="screenshot pixels, origin top left")
+    material_dump = sub.add_parser("material-dump")
+    material_dump.add_argument("object", nargs="?", help="substring of an object or ancestor name; defaults to Warehouse")
     save_level = sub.add_parser("save-level")
     save_level.add_argument("level", nargs="?", help="level name to save as; defaults to the editor's save field")
     sub.add_parser("list-levels")
@@ -667,6 +677,10 @@ def ui_tree_payload(args: argparse.Namespace) -> dict[str, object]:
     if len(args.position) not in (0, 2):
         raise SystemExit("ui-tree: give both X and Y, or neither")
     return build_ui_tree_command((args.position[0], args.position[1]) if args.position else None)
+
+
+def material_dump_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_material_dump_command(args.object)
 
 
 def save_level_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -843,6 +857,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, build_command("shader-report"), args.timeout)
         case "ui-tree":
             ok = send_printing_result(harness, ui_tree_payload(args), args.timeout)
+        case "material-dump":
+            ok = send_printing_result(harness, material_dump_payload(args), args.timeout)
         case "save-level":
             ok = send_printing_result(harness, save_level_payload(args), args.timeout)
         case "list-levels":

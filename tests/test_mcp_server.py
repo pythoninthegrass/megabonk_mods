@@ -331,6 +331,8 @@ INPUT_TOOL_CASES = [
         {"command": "mouse", "action": "click", "x": 960, "y": 540, "button": 1},
     ),
     ("mouse", {"action": "clear"}, {"command": "mouse", "action": "clear"}),
+    ("material_dump", {}, {"command": "material-dump"}),
+    ("material_dump", {"object": "Warehouse"}, {"command": "material-dump", "object": "Warehouse"}),
     ("save_level", {}, {"command": "save-level"}),
     ("save_level", {"level": "my"}, {"command": "save-level", "level": "my"}),
     ("list_levels", {}, {"command": "list-levels"}),

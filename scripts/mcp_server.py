@@ -356,6 +356,12 @@ async def ui_tree(x: float | None = None, y: float | None = None) -> CallToolRes
 
 
 @mcp.tool()
+async def material_dump(object: str | None = None) -> CallToolResult:  # noqa: A002
+    """Dump the shader, keywords, textures and colours of every material under the scene objects whose own or ancestor name contains `object` (case-insensitive, default Warehouse), with counts of shaders, keyword sets and materials with no texture. Use it to find out why a pack mesh renders flat white; compare the keywords with a textured game material (shader_report lists those)."""
+    return await _command(_harness(), run.build_material_dump_command(object), TIMEOUT)
+
+
+@mcp.tool()
 async def save_level(level: str | None = None) -> CallToolResult:
     """Save the editor's level like the Save button, optionally as `level` (normalized to a safe *.mblevel.json file name; omitted, the save field's text is used). Returns {name, path, edits}. Needs editor mode with a live run; a failed write is an error."""
     return await _command(_harness(), run.build_save_level_command(level), TIMEOUT)

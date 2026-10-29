@@ -131,6 +131,8 @@ public static class DevHarness
                 return LoadBundle(command.Path);
             case HarnessCommandKind.ShaderReport:
                 return ShaderReport.Build();
+            case HarnessCommandKind.MaterialDump:
+                return MaterialDump.Build(command.Path);
             case HarnessCommandKind.Screenshot:
                 _logger.Msg($"DevHarness: screenshot '{command.Path}'.");
                 MelonCoroutines.Start(CaptureAtEndOfFrame(command.Path));

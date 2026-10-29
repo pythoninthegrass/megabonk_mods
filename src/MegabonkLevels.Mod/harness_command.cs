@@ -11,6 +11,7 @@ public enum HarnessCommandKind
     LoadLevel,
     LoadBundle,
     ShaderReport,
+    MaterialDump,
     Screenshot,
     ApplyPendingEdits,
     Quit,
@@ -212,6 +213,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseLoadLevel(root, out command, out error);
             case "load-bundle":
                 return TryParseWithPath(root, HarnessCommandKind.LoadBundle, out command, out error);
+            case "material-dump":
+                return TryParseMaterialDump(root, out command, out error);
             case "shader-report":
                 command = new HarnessCommand(HarnessCommandKind.ShaderReport, null);
                 error = null;
@@ -536,6 +539,23 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.ClickWidget, null, Input: new InputArgs { Action = "click-widget", Text = name });
+        error = null;
+        return true;
+    }
+
+    private static bool TryParseMaterialDump(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+        string target = null;
+
+        if (root.TryGetPropertyValue("object", out var node) && node != null
+            && (node is not JsonValue value || !value.TryGetValue(out target) || target.Trim().Length == 0))
+        {
+            error = "field 'object' must be a non-empty string";
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.MaterialDump, target);
         error = null;
         return true;
     }

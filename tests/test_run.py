@@ -890,6 +890,13 @@ def test_build_click_widget_command_carries_the_name() -> None:
     assert run.build_click_widget_command("Save") == {"command": "click-widget", "name": "Save"}
 
 
+def test_material_dump_command_carries_the_optional_object() -> None:
+    assert run.build_material_dump_command() == {"command": "material-dump"}
+    assert run.build_material_dump_command("Warehouse") == {"command": "material-dump", "object": "Warehouse"}
+    assert run.material_dump_payload(run.parse_args(["material-dump"])) == {"command": "material-dump"}
+    assert run.material_dump_payload(run.parse_args(["material-dump", "Warehouse"])) == {"command": "material-dump", "object": "Warehouse"}
+
+
 def test_level_commands_carry_the_optional_level() -> None:
     assert run.build_save_level_command() == {"command": "save-level"}
     assert run.build_save_level_command("my level") == {"command": "save-level", "level": "my level"}
