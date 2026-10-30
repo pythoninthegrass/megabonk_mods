@@ -49,14 +49,7 @@ tasks:
     desc: "Run the Python tests under tests/ with pytest"
     cmds:
       - |-
-        uv run --python 3.13 --exclude-newer 2026-10-31T00:00:00Z \
-          --with "pytest>=8" \
-          --with "python-decouple>=3.8" \
-          --with "mcp>=2.3,<3" \
-          --with "toon-format==1.2.0" \
-          --with "jq>=1.8" \
-          --with "pillow>=11" \
-          pytest
+        uv run pytest
 
   lint:
     desc: "markdownlint + ruff over the repo"

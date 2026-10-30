@@ -60,9 +60,9 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 
 `run.py cycle <level> <out.png>` runs load, waits `--settle` seconds (default 5), takes the screenshot, then quits. `--invulnerable` makes the player invulnerable right after the load, before the settle wait. `--freeze` freezes gameplay and `--camera X Y Z RX RY RZ` poses the camera after the settle wait and before the screenshot. `--timeout` (before the subcommand, default 15 seconds) sets how long to wait for each command and for the PNG to appear. The exit code is 0 only if every step succeeded, 1 if a step failed or timed out, and 2 if the harness is not enabled (`run.py` prints `harness not enabled at <dir>; run 'run.py enable' and relaunch the game`).
 
-On macOS, every quit (`run.py quit`, and the quit inside `relaunch` and `cycle`) also stops the Wine system processes a game leaves behind (`services.exe`, `conhost.exe`, `explorer.exe /desktop` and the like), which otherwise pile up as extra MelonLoader console windows. It skips that cleanup while any other Windows process is running, such as the Steam client under Wine, so a relaunch never takes Steam down.
+On macOS, every quit (`run.py quit`, and the quit inside `relaunch` and `cycle`) also stops the Wine system processes a game leaves behind (`services.exe`, `conhost.exe`, `explorer.exe /desktop` and the like, which otherwise pile up as extra MelonLoader console windows) together with orphaned game helpers such as `UnityCrashHandler64.exe`, which the game leaves running after its own process exits. It skips that cleanup while any other Windows process is running, such as the Steam client under Wine, so a relaunch never takes Steam down. A leftover `wineserver` is not killed by the quit; `relaunch` waits for it to exit (killing it after a short grace) before launching, so a fresh session never races the previous one's teardown — a relaunch into a prefix that was not fully torn down used to die several seconds into boot, right after MelonLoader's `0 Plugins loaded` line.
 
-`run.py relaunch` quits the running game, starts a fresh process through `task game:run` (`task crossover:run` when `MEGABONK_MACOS_RUNTIME=crossover`), waits for the new session's `DevHarness: enabled` log entry — the log must have been written after the launch, so the previous session's line cannot satisfy the wait — then polls the in-game Steamworks client before loading `levels/example-forest.mblevel.json`. Both waits also watch the game process: once the startup grace passes, a missing Megabonk process ends the relaunch at once with `relaunch: game exited during startup (see <Latest.log>)` instead of waiting out the timeout. A Steamworks client that answers `ready:false` and keeps answering — the offline case on the Steam stub, where the game's `SteamManager` has already failed init and will not retry — is accepted after a 15-second grace with the step `relaunch: Steamworks not ready (offline run); continuing`; only a client that never answers at all fails with `relaunch: Steamworks did not become ready`. It retries the load until `KillFloor: armed` appears, then enables editor mode. The player gets 2 Feathers (extra jumps) through the `item` command; `MEGABONK_RELAUNCH_FEATHERS` sets another amount from 0 to 999, and 0 leaves them alone. Enemy spawns stay on and the player takes normal damage by default. Set `MEGABONK_RELAUNCH_SPAWNS=false` in the environment or `.env` to stop spawns after the load (see "Enemy spawns") and `MEGABONK_RELAUNCH_INVULNERABLE=true` to make the player invulnerable (see "Player invulnerability"); `task` loads `.env` through the `dotenv` directive in `taskfile.yml`, so `task game:editor` sees both. The MCP `spawns` and `invulnerable` tools and `run.py spawns` and `run.py invulnerable` change either at runtime. It allows at least 60 seconds for readiness checks, even when `--timeout` is lower. Pass an optional level path to use a different level file. `--no-level` (MCP `relaunch(no_level=true)`) stops at the main menu once Steamworks is ready, with no level loaded and no editor, for checking the stock menu screens. Use this command between interactive editor sessions; do not send another `load` to an existing run. A second `load` while in editor mode is survivable: `LiveEditPatch` hides its session while the old tile generator is destroyed, so the editor tools find no grid until the reloaded level finishes generating, and the editor re-enters on the new run.
+`run.py relaunch` quits the running game, waits for the previous session's `wineserver` to exit (killing it after a 15-second grace if it lingers), starts a fresh process through `task game:run` (`task crossover:run` when `MEGABONK_MACOS_RUNTIME=crossover`), waits for the new session's `DevHarness: enabled` log entry — the log must have been written after the launch, so the previous session's line cannot satisfy the wait — then polls the in-game Steamworks client before loading `levels/example-forest.mblevel.json`. Both waits also watch the game process: once the startup grace passes, a missing Megabonk process ends the relaunch at once with `relaunch: game exited during startup (see <Latest.log>)` instead of waiting out the timeout. A Steamworks client that answers `ready:false` and keeps answering — the offline case on the Steam stub, where the game's `SteamManager` has already failed init and will not retry — is accepted after a 15-second grace with the step `relaunch: Steamworks not ready (offline run); continuing`; only a client that never answers at all fails with `relaunch: Steamworks did not become ready`. It retries the load until `KillFloor: armed` appears, then enables editor mode. The player gets 2 Feathers (extra jumps) through the `item` command; `MEGABONK_RELAUNCH_FEATHERS` sets another amount from 0 to 999, and 0 leaves them alone. Enemy spawns stay on and the player takes normal damage by default. Set `MEGABONK_RELAUNCH_SPAWNS=false` in the environment or `.env` to stop spawns after the load (see "Enemy spawns") and `MEGABONK_RELAUNCH_INVULNERABLE=true` to make the player invulnerable (see "Player invulnerability"); `task` loads `.env` through the `dotenv` directive in `taskfile.yml`, so `task game:editor` sees both. The MCP `spawns` and `invulnerable` tools and `run.py spawns` and `run.py invulnerable` change either at runtime. It allows at least 60 seconds for readiness checks, even when `--timeout` is lower. Pass an optional level path to use a different level file. `--no-level` (MCP `relaunch(no_level=true)`) stops at the main menu once Steamworks is ready, with no level loaded and no editor, for checking the stock menu screens. Use this command between interactive editor sessions; do not send another `load` to an existing run. A second `load` while in editor mode is survivable: `LiveEditPatch` hides its session while the old tile generator is destroyed, so the editor tools find no grid until the reloaded level finishes generating, and the editor re-enters on the new run.
 
 An unknown command, malformed JSON, a missing or empty `path`, or a command that fails while running logs an error and moves the file to `rejected/` without replaying it.
 
@@ -607,33 +607,39 @@ To check it, run `task thps` to install the level and pack, then run `relaunch(n
 
 ## Python tests
 
-The tooling scripts under `scripts/` are covered by pytest tests in `tests/` (the C# tests live in `tests/MegabonkLevels.Tests`). `task scripts:test` runs them, and `task test` runs them after the C# tests. `pytest.ini` at the repo root sets `testpaths = tests` and puts `scripts/` on the import path, so a test does `import game_paths` directly. It takes precedence over `[tool.pytest.ini_options]` in `pyproject.toml`; pytest does not merge the two configurations.
+The tooling scripts under `scripts/` are covered by pytest tests in `tests/` (the C# tests live in `tests/MegabonkLevels.Tests`). `task scripts:test` runs them, and `task test` runs them after the C# tests. `[tool.pytest.ini_options]` in `pyproject.toml` is the only pytest configuration: it sets `testpaths = tests`, puts `scripts/` on the import path with `pythonpath` so a test does `import game_paths` directly, and runs the suite in parallel across CPU cores through pytest-xdist (`addopts = -n auto`, ~24s serial becomes ~7s). Pass `-n 0` for a serial run, which keeps `--durations` and failures in file order; `-p no:xdist` does not work because `addopts` still passes `-n`. Async tests are marked `pytest.mark.anyio` and select the asyncio backend in `tests/conftest.py`.
 
-`pyproject.toml` declares runtime dependencies and optional `test` and `dev`
-extras; `uv.lock` records their resolved versions. Run tests from the repo root:
+`pyproject.toml` declares runtime dependencies under `[project.dependencies]`
+and test and lint tooling under `[dependency-groups] dev`; `uv.lock` records
+their resolved versions. uv installs the `dev` group by default, so a test run
+needs no flags:
 
 ```sh
-uv run --extra test pytest
-uv run --extra test pytest tests/test_build_thps_level.py -q
+uv run pytest
+uv run pytest tests/test_build_thps_level.py -q
 ```
 
-Extras are not selected by default. Use `--extra test` even if a previous
-`uv sync --extra test` installed them, so the command declares what it needs.
-Once that extra is selected, `--with pytest` is redundant; runtime packages
-such as `python-decouple`, `mcp` and `pillow` also come from the project without
-`--with`. Reserve `--with` for a genuinely ad-hoc dependency not declared by
-the project. `uv run` automatically checks the lockfile and syncs the project
+`--with` is not needed: the `dev` group brings pytest and its plugins, and the
+project dependencies bring runtime packages such as `python-decouple`, `mcp` and
+`pillow`. Reserve `--with` for a genuinely ad-hoc dependency the project does not
+declare. `uv run` automatically checks the lockfile and syncs the project
 environment; add `--locked` when the command must fail instead of updating an
-out-of-date lockfile. Optional extras use `--extra`, not `--group`.
+out-of-date lockfile. Name the group explicitly with `--group dev`, or leave it
+out with `--no-dev`.
 
 `tests/conftest.py` has an autouse fixture that removes every `MEGABONK_*` environment variable and points `game_paths.ENV_FILE` at a nonexistent file for each test, so a developer's shell or `.env` (for example `MEGABONK_WINE_PREFIX`) cannot change a result. A test that needs a setting sets it with `monkeypatch.setenv` or passes `env_file_values` to the function under test. Async tests use `@pytest.mark.anyio`; the conftest pins `anyio_backend` to `asyncio`, so no trio dependency is needed.
 
-The current `task scripts:test` wrapper still lists explicit `--with`
-requirements and an `--exclude-newer` date in `Taskfile.yml`; that legacy
-invocation is not the template for new project commands. Project dependency
-updates belong in `pyproject.toml` and `uv.lock`. PEP 723 scripts run with
-`uv run --script` use their own inline dependencies rather than project extras;
-keep their headers/pins current separately.
+`task scripts:test` is just `uv run pytest`. Resolution policy lives in
+`[tool.uv]`: `exclude-newer = "2026-10-31T00:00:00Z"` caps candidate packages and
+`prerelease = "allow"` matches what `uv.lock` records under `[options]`. Both
+belong in `pyproject.toml` rather than a Taskfile flag or a shell export:
+`uv.lock` records the same values but is a generated file, so a lock regenerated
+without them silently drops them and resolves differently. The interpreter comes from
+`requires-python`, which already pins `>=3.13,<3.14`, so no `--python` flag is
+needed either. Project dependency updates belong in `pyproject.toml` and
+`uv.lock`. PEP 723 scripts run with `uv run --script` use their own inline
+dependencies rather than the `dev` group; keep their headers/pins current
+separately.
 
 ## Reading the game's code
 

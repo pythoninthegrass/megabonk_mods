@@ -55,7 +55,7 @@ Megabonk is an Il2Cpp build with no managed IL anywhere in the install. `MelonLo
 
 ## Python tests
 
-The Python tests are in `tests/` and run with `task scripts:test` or `uv run --extra test pytest` (append a test path for a focused run). Dependencies come from `pyproject.toml` and `uv.lock`; select the optional `test` extra explicitly rather than adding redundant `--with pytest` or runtime packages. `tests/conftest.py` isolates every test from `MEGABONK_*` settings and the repo `.env`. See [Python tests](docs/development.md#python-tests) for extras, lockfile, pytest configuration precedence and the separate PEP 723 script environment.
+The Python tests are in `tests/` and run with `task scripts:test` or `uv run pytest` (append a test path for a focused run). Dependencies come from `pyproject.toml` and `uv.lock`: runtime packages under `[project.dependencies]`, test tooling under `[dependency-groups] dev`, which uv installs by default, so no `--extra` or `--with` flags are needed. `tests/conftest.py` isolates every test from `MEGABONK_*` settings and the repo `.env`. See [Python tests](docs/development.md#python-tests) for the pytest configuration, the `[tool.uv]` resolution pins and the separate PEP 723 script environment.
 
 ## Comments in code (all languages)
 
