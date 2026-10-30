@@ -67,9 +67,9 @@ Other callers of `PlayMusicTrack`: `OnMainMenu`, `PlayMenuTrack` (menu track), `
 
 ## Level music
 
-A level file's optional `music` field (see [level-format.md](level-format.md)) names an `AudioClip` as `bundle:<pack>/<clip>`. The mod replaces the stock stage music with it:
+A level file's optional `music` field (see [level-format.md](level-format.md)) selects either `bundle:<pack>/<clip>` or `track:<filename without extension>`. For example, `"music": "track:14 Strobe"` selects `UserData/CustomMusic/14 Strobe.mp3` without rebuilding a pack. Runtime lookup is case-insensitive; the `track:` prefix is lowercase. The mod replaces the stock stage music with it:
 
-1. `LevelLoaderPatch.StartOnce` calls `LevelMusic.Prepare` before the run starts. It parses the reference (`LevelMusicReference`), asks `PackPrefabs.ResolveClip` for the clip, and builds a `MusicTrack` with `ScriptableObject.CreateInstance` whose `loop` is the clip and whose `intro` stays null.
+1. `LevelLoaderPatch` calls `LevelMusic.Prepare` before the run starts. It parses the reference (`LevelMusicReference`). Bundle references use `PackPrefabs.ResolveClip`; runtime references resolve only the startup catalog and decode through `RuntimeMusicSession`, `Mp3Decoder` and `RuntimeMusicTrack`. Both produce a `MusicTrack` whose `loop` is the clip and whose `intro` stays null.
 2. A Harmony prefix on `MusicUtility.GetMusicTrackToPlay` returns that track and skips the original while a custom run is active (`CustomLevelState.IsActive`). A vanilla run, or a level without `music`, passes through to the stock logic.
 3. `OnStageStarted` and `PlayStageMusic` then hand the track to `PlayMusicTrack`, which loops the clip.
 
@@ -85,13 +85,15 @@ The THPS Warehouse places the game's boombox (`interactable/boombox`, `EffectMan
 
 If the pack holds no clip to play, or playing it throws, the patch logs `Radio: ...; using the boombox's stock audio.` as a warning and the stock interaction runs unchanged.
 
+For a `track:` level, the playlist instead contains only startup-discovered runtime files in numeric order (below). It starts after the selected file, wraps, and uses the same boombox and natural-loop-end hooks. Each successful selection prefetches the successor's managed PCM; Unity object creation and switching stay on the game thread. Rapid presses consume successive entries, not parallel playback requests. A failed runtime successor disables custom playback, cancels prefetch, releases owned objects and starts stock stage music rather than invoking the single-use stock boombox. Runtime and pack playlists never mix.
+
 ## Fallback
 
-If `music` is not a two-segment `bundle:` id, the pack is not installed, the pack holds no clip of that name, or creating the track throws, `LevelMusic.Prepare` logs `Music: ...; using the stock music.` as a warning and no track is substituted. Nothing throws out of the patch.
+Invalid references, missing pack clips or runtime filenames, unreadable/deleted files, decode limits/errors, unsupported native bindings and clip-creation failures log `Music: ...; using the stock music.` and leave the level load intact. A failed initial selection returns to normal stock selection; a failed runtime successor explicitly starts stock stage music. The original reference remains available for editor saves after a failure. No `music` means stock selection without a warning.
 
 ## Audio formats and decoding
 
-Level and radio playback currently use imported clips, not runtime decoding. Audio is imported into the pack in the authoring project and ships as a normal `AudioClip` in the bundle (the clip is held compressed in memory as Vorbis, quality 0.7). Any format the Unity editor imports works as the source, including mp3, ogg and wav. `ThpsPack.SaveSoundtrack` imports every mp3 in `tools/ost` (override the directory with `-musicSource`), naming each clip by its file name with runs of other characters made an underscore; the build skips them with a log line when the directory is absent, so the pack still builds without them. `scripts/transcode.py` can produce an mp3 from a lossless source. Runtime clip creation is proven through the native probe below, despite failures in the ordinary managed wrappers.
+Bundle playback uses imported clips. Audio is imported into the pack in the authoring project and ships as a normal `AudioClip` in the bundle (compressed in memory as Vorbis, quality 0.7). Any format the Unity editor imports works as the source, including mp3, ogg and wav. `ThpsPack.SaveSoundtrack` imports every mp3 in `tools/ost` (override the directory with `-musicSource`), naming each clip by its file name with runs of other characters made an underscore; the build skips them with a log line when the directory is absent, so the pack still builds without them. `scripts/transcode.py` can produce an mp3 from a lossless source. Runtime `track:` playback decodes mp3s using the native clip path below, despite failures in the ordinary managed wrappers.
 
 The runtime paths that fail, confirmed in the running game:
 
@@ -101,7 +103,7 @@ The runtime paths that fail, confirmed in the running game:
 
 ## Runtime music catalog
 
-The runtime catalog scans only the top level of `<game>/UserData/CustomMusic/` for `.mp3` files (extension matching is case-insensitive). `tools/ost/` is a host-side source folder, not a discovery folder. The catalog is implemented separately from playback: startup discovery, `track:` stage references and radio integration are not wired in yet.
+At mod startup, the runtime catalog scans only the top level of `<game>/UserData/CustomMusic/` for `.mp3` files (extension matching is case-insensitive). Create that folder and copy files there before launching; restart after adding or renaming files. `tools/ost/` is a host-side source folder, not a discovery folder. The catalog does not decode files at startup.
 
 Track names are filenames without the extension, preserving spaces and dots. Lookup is case-insensitive and resolves only discovered entries, never arbitrary paths. Case-colliding names are all excluded with a warning; rename them to distinct names. Linked files and names containing path separators, colons or control characters are excluded. An absent folder yields an empty catalog; an unreadable folder warns without throwing. Discovery does not decode or verify audio contents: playback must handle files that disappear, become unreadable or fail decoding afterward.
 
@@ -109,7 +111,7 @@ Order follows leading ASCII integer components matching `[0-9]+(\.[0-9]+)*`, not
 
 ## Runtime PCM probe
 
-The development harness can decode mp3 files and audition either native `AudioClip` playback or buffer injection. Native playback now uses the shared production clip factory, decoder and resource owner described below, but it is still a diagnostic entry point: level and radio integration is not wired in and `bundle:` playback remains unchanged. See [development.md](development.md#runtime-music-probe) for commands.
+The development harness can decode mp3 files and audition either native `AudioClip` playback or buffer injection. Native probing and production `track:` playback share the clip factory, decoder and resource owner below; `bundle:` playback remains separate. See [development.md](development.md#runtime-music-probe) for commands.
 
 ### Decoder and output decision
 
@@ -154,7 +156,7 @@ The injection probe copies one source frame per output frame without resampling.
 
 ### Implications for runtime playback
 
-Build runtime playback around native clip creation and the existing `MusicTrack` pipeline. There is no need to reproduce the game's pitch, ducking or low-pass in a custom callback on the verified player. Remaining work includes bounded decoding/memory, track discovery and ordering, clip ownership across switches, graceful fallback, and native Linux verification. The platform guard is deliberate: inspect and validate Linux bindings before enabling them.
+Runtime playback uses native clip creation and the existing `MusicTrack` pipeline. There is no need to reproduce the game's pitch, ducking or low-pass in a custom callback on the verified player. Native Linux verification remains outstanding. The platform guard is deliberate: inspect and validate Linux bindings before enabling them.
 
 The native probe decodes a whole track synchronously into bounded PCM blocks and loops it. It does not implement streaming, `track:` references or playlists. Switching native probe clips releases the previous probe track and clip after playback switches; relaunch returns to a clean stock baseline. The shared owner supports prefetch, but the probe does not schedule a successor.
 
@@ -166,9 +168,13 @@ The native probe decodes a whole track synchronously into bounded PCM blocks and
 
 The current track keeps no managed PCM once native creation completes. A switch temporarily overlaps the old clip, decoded successor PCM and new clip (up to roughly 768 MiB at the per-track limit, plus decoder/Unity overhead); normally it retains the current native clip plus at most 256 MiB of prefetched PCM. Unity destruction is deferred, and managed buffers become eligible for collection rather than being synchronously freed. This is bounded whole-track decoding, not streaming or a guarantee about process RSS. The nine-minute `13 Le Hot '99` alone needs about 206 MiB of stereo 48 kHz PCM, so a blanket 50 MiB-per-track estimate is not valid.
 
-`RuntimeMusicTrack` owns only its generated `MusicTrack` and `AudioClip`, never a pack asset. Disposal on the game thread detaches its clip if still active, clears the controller's reference if it still points to that track, and destroys both objects; disposing an inactive resource does not stop a replacement or menu track. Owner disposal cancels/joins pending decoding and releases current ownership exactly once. Production level lifecycle hooks must dispose the owner when leaving/replacing a run; those hooks belong to level/radio integration. The native probe already uses this owner for switches and releases its resources once another game track takes over.
+`RuntimeMusicTrack` owns only its generated `MusicTrack` and `AudioClip`, never a pack asset. Disposal on the game thread detaches its clip if still active, clears the controller's reference if it still points to that track, and destroys both objects; disposing an inactive resource does not stop a replacement or menu track. Owner disposal cancels/joins pending decoding and releases current ownership exactly once. `LevelMusic` releases its session on preparing a replacement level, entering the main menu, starting a vanilla run, loss of custom-run state, fallback or mod shutdown. Bundle cleanup destroys generated track wrappers only, never the pack's clips. The native probe separately releases its resources once another game track takes over.
+
+When another game track takes over, `PlayMusicTrack` unloads the previous clip. Imported bundle clips can reload their asset data, but a generated runtime clip cannot: trying to reuse it leaves the source stopped. The next stage selection therefore re-decodes/rebuilds the current runtime track and restarts successor prefetch. A radio press still advances normally to a newly constructed successor. Failure to rebuild falls back to stock selection.
 
 The shared block upload path was checked on the default Wine setup with the two-second tone, `01 Police Truck` (44.1 kHz stereo, 145.005 seconds), `13 Le Hot '99` (48 kHz stereo, 562.344 seconds) and `14 Strobe` (44.1 kHz stereo, 635.872 seconds). Every block read back with zero error; switching long-track → tone → Police Truck and Le Hot → Strobe reported active sources without a crash. Strobe was read directly through Wine's `Z:` host mapping, not copied into or discovered from the runtime folder. Invalid MPEG input warned and left Police Truck playing. These are transfer/source-state checks, not a new human listening confirmation; the earlier audible evidence above still applies to the native path. Native Linux remains guarded and unverified.
+
+Production integration was also checked on default Wine: startup discovery selected `track:14 strobe` from the runtime folder as the 635.872-second Strobe clip. Four-second fixtures naturally progressed through dotted numeric names and wrapped; repeated boombox calls advanced through the soundtrack. Missing, permission-denied and invalid-MPEG initial selections left a fully loaded level with playing stock music; an invalid successor released custom playback and resumed stock music. Menu playback released the session and prefetch. Bundle Superman → Jerry → Screamer progression, end detection, last-to-first wrap and replaying a previously unloaded bundle clip all reported playing sources. Runtime pause/unpause, held pitch/filter and duck controls were verified by source state, with overrides released afterward. These integration checks do **not** constitute human listening confirmation of audibility, transitions, volume-slider response or natural ducking; the earlier listening results apply to the shared native path only.
 
 If both stock and injected music are silent while callbacks advance, first verify host audio with a native player and relaunch the game. In the test, an old Wine process was silent even with the probe detached; a fresh launch on the current Bluetooth output restored stock and injected audio. This is consistent with a stale output-device handle, not evidence that PCM injection failed.
 

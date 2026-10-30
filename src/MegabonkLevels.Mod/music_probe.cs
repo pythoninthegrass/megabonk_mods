@@ -75,6 +75,26 @@ public static class MusicProbe
                 return SetSourcePitch(value, logger);
             case "lowpass":
                 return SetLowpass(value, logger);
+            case "radio-next":
+                var boombox = UnityEngine.Object.FindObjectOfType<InteractableBoombox>();
+                if (boombox == null) return Fail("no boombox in the scene");
+                boombox.Interact();
+                return Status();
+            case "seek":
+                var source = MusicController.Instance?.musicSource;
+                if (source?.clip == null || !value.HasValue || !float.IsFinite(value.Value) || value < 0 || value >= source.clip.length)
+                {
+                    return Fail("seek needs a value in seconds within the current clip");
+                }
+
+                source.time = value.Value;
+                return Status();
+            case "menu-music":
+                MusicController.Instance.OnMainMenu();
+                return Status();
+            case "stage-music":
+                MusicController.Instance.PlayStageMusic();
+                return Status();
             case "mute":
                 return SetStockMuted(true, logger);
             case "unmute":
@@ -531,6 +551,8 @@ public static class MusicProbe
             { "peak", Math.Round(_peak, 4) },
             { "decodeMs", _decodeMs },
             { "error", _error },
+            { "levelMusicReference", LevelMusic.Reference },
+            { "runtimeSession", LevelMusic.RuntimeActive },
         };
 
         try

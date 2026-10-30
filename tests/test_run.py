@@ -13,7 +13,11 @@ from pathlib import Path
 
 
 @pytest.mark.parametrize(
-    "action", ["status", "play", "decode", "pitch", "lowpass", "detach", "native-info", "native-tone", "native-play"]
+    "action",
+    [
+        "status", "play", "decode", "pitch", "lowpass", "detach", "native-info", "native-tone", "native-play",
+        "radio-next", "seek", "menu-music", "stage-music",
+    ],
 )
 def test_music_probe_action_does_not_replace_subcommand(action: str) -> None:
     args = run.parse_args(["music-probe", action])

@@ -30,6 +30,7 @@ public class MegabonkLevelsMod : MelonMod
         GrindAssistWatcher.Install(LoggerInstance);
         BossSpawnRedirectPatch.Install(LoggerInstance);
         PackPrefabs.Initialize(LoggerInstance);
+        LevelMusic.Initialize(LoggerInstance);
         SceneTransitionProbe.Install(LoggerInstance);
         CustomLevelStatePatch.Install(LoggerInstance);
         DeathRestartPatch.Install(LoggerInstance);
@@ -43,6 +44,8 @@ public class MegabonkLevelsMod : MelonMod
     {
         CameraOverride.Apply();
     }
+
+    public override void OnDeinitializeMelon() => LevelMusic.Clear();
 
     public override void OnUpdate()
     {

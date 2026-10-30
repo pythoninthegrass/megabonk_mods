@@ -650,6 +650,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "native-info",
             "native-tone",
             "native-play",
+            "radio-next",
+            "seek",
+            "menu-music",
+            "stage-music",
             "detach",
         ],
     )

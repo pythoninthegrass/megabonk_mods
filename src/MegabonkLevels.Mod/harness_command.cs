@@ -333,6 +333,7 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         {
             "decode", "play", "stop", "status", "restart", "duck", "unduck", "pause", "unpause",
             "mute", "unmute", "clip-null", "pitch", "lowpass", "detach", "native-info", "native-tone", "native-play",
+            "radio-next", "seek", "menu-music", "stage-music",
         };
         if (Array.IndexOf(allowed, action) < 0)
         {

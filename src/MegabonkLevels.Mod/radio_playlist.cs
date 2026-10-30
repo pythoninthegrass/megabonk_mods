@@ -35,6 +35,8 @@ public sealed class RadioPlaylist
     // A looping clip's playback position jumps back to the start when the clip ends; ordinary playback moves forward.
     public static bool LoopWrapped(float previousTime, float currentTime) => previousTime - currentTime > 1f;
 
+    public string Peek() => _clips.Count == 0 ? null : _clips[_index % _clips.Count];
+
     public string Next()
     {
         if (_clips.Count == 0)
