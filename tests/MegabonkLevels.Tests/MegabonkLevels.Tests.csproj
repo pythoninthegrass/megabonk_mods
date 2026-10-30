@@ -110,6 +110,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/character_policy.cs" Link="character_policy.cs" />
     <Compile Include="../../unity/pack-authoring/Assets/Editor/CoplanarLayering.cs" Link="CoplanarLayering.cs" />
     <Compile Include="../../unity/pack-authoring/Assets/Editor/WarehouseRoof.cs" Link="WarehouseRoof.cs" />
+    <Compile Include="../../unity/pack-authoring/Assets/Editor/WarehousePieces.cs" Link="WarehousePieces.cs" />
   </ItemGroup>
 
   <ItemGroup>

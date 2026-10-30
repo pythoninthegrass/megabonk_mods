@@ -9,7 +9,7 @@ using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
 
-// The THPS Warehouse pack: one prefab built from the extracted level mesh and textures.
+// The THPS Warehouse pack: the one-piece Warehouse prefab, one prefab per construction piece, and the soundtrack, all built from the extracted level mesh and textures.
 public static class ThpsPack
 {
     const string BundleName = "thps";
@@ -32,6 +32,8 @@ public static class ThpsPack
     static readonly Color DarkRoof = new Color(0.07f, 0.07f, 0.08f);
     const string DefaultWarehouseSource = ".tools/thps1/warehouse";
     const string DefaultMusicSource = "tools/ost";
+    const string DefaultPiecesDoc = "docs/thps-warehouse-pieces.md";
+    const string PacksSourceDirectory = "unity/pack-authoring/packs/thps";
 
     // The PS1 transparency key in the extracted PNGs; the pack's shader is opaque, so it is baked to a dark glass colour.
     static readonly Color32 TransparencyKey = new Color32(255, 0, 255, 255);
@@ -47,14 +49,83 @@ public static class ThpsPack
         var output = PackBuilder.ArgValue("-packOutput");
         AssetDatabase.DeleteAsset(PackDirectory);
         Directory.CreateDirectory(PackDirectory);
-        var prefabs = new List<string>
-        {
-            SaveWarehouse(WarehouseSource()),
-        };
+        var (prefabs, assetNames, records) = BuildWarehouseAndPieces();
+        WriteManifest(assetNames);
+        WritePiecesJson(records);
         prefabs.AddRange(SaveSoundtrack(MusicSource()));
         AssetDatabase.SaveAssets();
         BuildBundle(prefabs, BuildTarget.StandaloneWindows64, Path.Combine(output, "windows"));
         BuildBundle(prefabs, BuildTarget.StandaloneLinux64, Path.Combine(output, "linux"));
+    }
+
+    // The merged Warehouse prefab first (byte-identical to the shipped one), then one prefab per inventory piece and per pack-added piece; assetNames is the manifest and bundle order.
+    static (List<string> Prefabs, List<string> AssetNames, List<PieceRecord> Records) BuildWarehouseAndPieces()
+    {
+        var source = WarehouseSource();
+        var materials = LoadWarehouseMaterials(source);
+        var mesh = ParseWarehouseObj(Path.Combine(source, "warehouse.obj"), materials.Keys.ToList(), out var usedMaterials, out var vertices, out var vertexUvs, out var faces, out var floorPatches, out var posts, out var roofQuads);
+        mesh = SaveAsset(mesh, PackDirectory + "/Warehouse.asset");
+        var root = new GameObject("Warehouse");
+        root.AddComponent<MeshFilter>().sharedMesh = mesh;
+        root.AddComponent<MeshRenderer>().sharedMaterials = usedMaterials.Select(m => materials[m]).ToArray();
+        root.AddComponent<MeshCollider>().sharedMesh = SaveCollisionMesh(mesh, usedMaterials);
+        var prefabs = new List<string> { SavePrefab(root) };
+        var assetNames = new List<string> { "Warehouse" };
+        var records = new List<PieceRecord>();
+
+        var inventory = WarehousePieces.ParseInventory(File.ReadAllText(PiecesDoc()));
+        var coverage = WarehousePieces.CoverageErrors(inventory, faces.Count);
+        if (coverage.Count > 0)
+            throw new Exception("the piece inventory does not partition the source: " + string.Join("; ", coverage.Take(10)));
+        var faceByOrdinal = faces.ToDictionary(face => face.Ordinal);
+        foreach (var piece in inventory)
+        {
+            var build = new PieceBuild(piece.Id, piece.Module);
+            foreach (var ordinal in piece.Faces)
+                build.AddFace(faceByOrdinal[ordinal], vertices, vertexUvs);
+            prefabs.Add(SavePiece(build, materials));
+            assetNames.Add(piece.Id);
+            records.Add(new PieceRecord
+            {
+                Asset = piece.Id,
+                Kind = "source",
+                Module = piece.Module,
+                Groups = piece.Groups,
+                Faces = piece.Faces,
+                Placement = LastPlacement,
+                Collider = LastHadCollider,
+            });
+        }
+
+        for (var i = 0; i < floorPatches.Count; i++)
+            prefabs.Add(SaveAdded(floorPatches[i], vertices, "added-floor-patch-" + i, "floor", "FloorPatches[" + i + "]", materials, assetNames, records));
+        for (var i = 0; i < posts.Count; i++)
+            prefabs.Add(SaveAdded(posts[i], vertices, "added-post-" + i, "prop", "RailPosts[" + i + "]", materials, assetNames, records));
+        var pad = roofQuads.Count < 100 ? 2 : 3;
+        for (var i = 0; i < roofQuads.Count; i++)
+            prefabs.Add(SaveAdded(roofQuads[i], vertices, "added-roof-quad-" + i.ToString("D" + pad), "roof", "WarehouseRoof.Quads", materials, assetNames, records));
+        Debug.Log("ThpsPack: " + inventory.Count + " inventory pieces, " + (floorPatches.Count + posts.Count + roofQuads.Count) + " added pieces (" + roofQuads.Count + " roof quads)");
+        return (prefabs, assetNames, records);
+    }
+
+    static string SaveAdded(AddedGeometry geometry, List<Vector3> vertices, string asset, string module, string origin, Dictionary<string, Material> materials, List<string> assetNames, List<PieceRecord> records)
+    {
+        var build = new PieceBuild(asset, module);
+        build.AddGeometry(geometry.Material, geometry.Indices.Select(index => vertices[index]).ToArray(), geometry.Uvs, geometry.Tris);
+        var path = SavePiece(build, materials);
+        assetNames.Add(asset);
+        records.Add(new PieceRecord { Asset = asset, Kind = "added", Module = module, Source = origin, Placement = LastPlacement, Collider = LastHadCollider });
+        return path;
+    }
+
+    // Repo root paths are resolved from Assets/ so the batch-mode working directory does not matter; -piecesDoc overrides the inventory document.
+    static string RepoPath(string relative) => Path.GetFullPath(Path.Combine(Application.dataPath, "../../..", relative));
+
+    static string PiecesDoc()
+    {
+        var args = Environment.GetCommandLineArgs();
+        var i = Array.IndexOf(args, "-piecesDoc");
+        return i >= 0 && i + 1 < args.Length ? args[i + 1] : RepoPath(DefaultPiecesDoc);
     }
 
     // The directory holding warehouse.obj, warehouse.mtl and the PNGs; -warehouseSource overrides the default.
@@ -141,19 +212,7 @@ public static class ThpsPack
         return path;
     }
 
-    // The extracted level at OBJ scale, centred on its footprint with y = 0 at the floor and y up; the level placement applies the scale.
-    static string SaveWarehouse(string source)
-    {
-        var materials = LoadWarehouseMaterials(source);
-        var mesh = ParseWarehouseObj(Path.Combine(source, "warehouse.obj"), materials.Keys.ToList(), out var usedMaterials);
-        mesh = SaveAsset(mesh, PackDirectory + "/Warehouse.asset");
-        var root = new GameObject("Warehouse");
-        root.AddComponent<MeshFilter>().sharedMesh = mesh;
-        root.AddComponent<MeshRenderer>().sharedMaterials = usedMaterials.Select(m => materials[m]).ToArray();
-        root.AddComponent<MeshCollider>().sharedMesh = SaveCollisionMesh(mesh, usedMaterials);
-        return SavePrefab(root);
-    }
-
+    // The merged collision mesh: every rendered triangle except the pass-through window faces.
     static Mesh SaveCollisionMesh(Mesh mesh, List<string> usedMaterials)
     {
         var collision = new Mesh { name = "WarehouseCollision", vertices = mesh.vertices, uv = mesh.uv };
@@ -277,15 +336,18 @@ public static class ThpsPack
     // The Warehouse is placed at this world centre, lift and scale, which turns a world position into mesh space.
     const float WarehouseWorldX = 100f, WarehouseWorldZ = 0f, WarehouseLift = 0.5f, WarehouseScale = 79.2f;
 
-    // Reads v, vt and f lines. The extracted y runs down, so y is negated and every triangle is rewound to keep its front face; quads are split into two triangles.
-    static Mesh ParseWarehouseObj(string path, List<string> knownMaterials, out List<string> usedMaterials)
+    // Reads v, vt and f lines. The extracted y runs down, so y is negated and every triangle is rewound to keep its front face; quads are split into two triangles. Faces keep their f-line ordinal so the inventory's face selectors can partition them; the floor patches, posts and roof quads are also returned per piece.
+    static Mesh ParseWarehouseObj(string path, List<string> knownMaterials, out List<string> usedMaterials, out List<Vector3> outVertices, out List<Vector2> outUvs, out List<WarehouseFace> outFaces, out List<AddedGeometry> floorPatches, out List<AddedGeometry> posts, out List<AddedGeometry> roofQuads)
     {
         var positions = new List<Vector3>();
         var uvs = new List<Vector2>();
         var vertices = new List<Vector3>();
         var vertexUvs = new List<Vector2>();
         var trianglesByMaterial = new Dictionary<string, List<int>>();
-        var faces = new List<int[]>();
+        var faces = new List<WarehouseFace>();
+        floorPatches = new List<AddedGeometry>();
+        posts = new List<AddedGeometry>();
+        roofQuads = new List<AddedGeometry>();
         string material = null;
         foreach (var line in File.ReadLines(path))
         {
@@ -319,13 +381,13 @@ public static class ThpsPack
 
                     for (var i = 1; i < corners.Count - 1; i++)
                         triangles.AddRange(new[] { corners[0], corners[i + 1], corners[i] });
-                    faces.Add(corners.ToArray());
+                    faces.Add(new WarehouseFace(faces.Count + 1, material, corners.ToArray()));
                     break;
             }
         }
 
-        SeparateCoplanarFaces(vertices, faces);
-        AddFloorPatches(vertices, vertexUvs, trianglesByMaterial);
+        SeparateCoplanarFaces(vertices, faces.Select(face => face.Corners).ToList());
+        AddFloorPatches(vertices, vertexUvs, trianglesByMaterial, floorPatches);
         var bounds = new Bounds(positions[0], Vector3.zero);
         foreach (var p in positions)
             bounds.Encapsulate(p);
@@ -334,14 +396,17 @@ public static class ThpsPack
             vertices[i] -= origin;
 
         RemoveRailLeftovers(vertices, trianglesByMaterial);
-        AddRailPosts(vertices, vertexUvs, trianglesByMaterial);
-        AddRoof(vertices, vertexUvs, trianglesByMaterial, bounds.min.x - origin.x, bounds.max.x - origin.x, bounds.min.z - origin.z, bounds.max.z - origin.z);
+        AddRailPosts(vertices, vertexUvs, trianglesByMaterial, posts);
+        AddRoof(vertices, vertexUvs, trianglesByMaterial, bounds.min.x - origin.x, bounds.max.x - origin.x, bounds.min.z - origin.z, bounds.max.z - origin.z, roofQuads);
         usedMaterials = trianglesByMaterial.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
         var mesh = new Mesh { name = "Warehouse", vertices = vertices.ToArray(), uv = vertexUvs.ToArray(), subMeshCount = usedMaterials.Count };
         for (var i = 0; i < usedMaterials.Count; i++)
             mesh.SetTriangles(trianglesByMaterial[usedMaterials[i]], i);
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
+        outVertices = vertices;
+        outUvs = vertexUvs;
+        outFaces = faces;
         return mesh;
     }
 
@@ -354,25 +419,30 @@ public static class ThpsPack
             vertices[i] = new Vector3(points[i].X, points[i].Y, points[i].Z);
     }
 
-    static void AddFloorPatches(List<Vector3> vertices, List<Vector2> vertexUvs, Dictionary<string, List<int>> trianglesByMaterial)
+    static void AddFloorPatches(List<Vector3> vertices, List<Vector2> vertexUvs, Dictionary<string, List<int>> trianglesByMaterial, List<AddedGeometry> added)
     {
         if (!trianglesByMaterial.TryGetValue(FloorMaterial, out var triangles))
             trianglesByMaterial[FloorMaterial] = triangles = new List<int>();
         foreach (var patch in FloorPatches)
         {
             var first = vertices.Count;
+            var uvs = new List<Vector2>();
             foreach (var corner in new[] { (patch[0], patch[2]), (patch[0], patch[3]), (patch[1], patch[3]), (patch[1], patch[2]) })
             {
                 vertices.Add(new Vector3(corner.Item1, -FloorPatchDepth, corner.Item2));
-                vertexUvs.Add(new Vector2(corner.Item1 * FloorUvScaleU + FloorUvOffsetU, corner.Item2 * FloorUvScaleV + FloorUvOffsetV));
+                var uv = new Vector2(corner.Item1 * FloorUvScaleU + FloorUvOffsetU, corner.Item2 * FloorUvScaleV + FloorUvOffsetV);
+                vertexUvs.Add(uv);
+                uvs.Add(uv);
             }
 
-            triangles.AddRange(new[] { first, first + 1, first + 2, first, first + 2, first + 3 });
+            var patchTriangles = new[] { 0, 1, 2, 0, 2, 3 };
+            triangles.AddRange(patchTriangles.Select(index => first + index));
+            added.Add(new AddedGeometry { Material = FloorMaterial, Indices = Enumerable.Range(first, 4).ToArray(), Uvs = uvs.ToArray(), Tris = patchTriangles });
         }
     }
 
     // Closes the shell with a dark roof that rides the tops of the walls: per grid cell, the lowest height over which a player could clear every wall around it (never below the surface there), with step faces between heights and a skirt on every edge from the wall-top line up to it, so nothing can float above a wall and no gap is left between the walls and the roof.
-    static void AddRoof(List<Vector3> vertices, List<Vector2> vertexUvs, Dictionary<string, List<int>> trianglesByMaterial, float minX, float maxX, float minZ, float maxZ)
+    static void AddRoof(List<Vector3> vertices, List<Vector2> vertexUvs, Dictionary<string, List<int>> trianglesByMaterial, float minX, float maxX, float minZ, float maxZ, List<AddedGeometry> added)
     {
         var standing = new List<System.Numerics.Vector3[]>();
         foreach (var triangles in trianglesByMaterial.Values)
@@ -403,6 +473,7 @@ public static class ThpsPack
             }
 
             roofTriangles.AddRange(new[] { first, first + 1, first + 2, first, first + 2, first + 3 });
+            added.Add(new AddedGeometry { Material = RoofMaterial, Indices = Enumerable.Range(first, 4).ToArray(), Uvs = Enumerable.Repeat(Vector2.zero, 4).ToArray(), Tris = new[] { 0, 1, 2, 0, 2, 3 } });
         }
 
         if (vertices.Count > 65000)
@@ -431,7 +502,7 @@ public static class ThpsPack
         return RailLeftoverBounds.Any(b => x >= b[0] && x <= b[1] && y >= b[2] && y <= b[3] && z >= b[4] && z <= b[5]);
     }
 
-    static void AddRailPosts(List<Vector3> vertices, List<Vector2> vertexUvs, Dictionary<string, List<int>> trianglesByMaterial)
+    static void AddRailPosts(List<Vector3> vertices, List<Vector2> vertexUvs, Dictionary<string, List<int>> trianglesByMaterial, List<AddedGeometry> added)
     {
         if (!trianglesByMaterial.TryGetValue(UntexturedMaterial, out var triangles))
             trianglesByMaterial[UntexturedMaterial] = triangles = new List<int>();
@@ -453,10 +524,186 @@ public static class ThpsPack
             }
 
             // Corner indices of each side face, clockwise seen from outside, then the top.
+            var postTriangles = new List<int>();
             foreach (var face in new[] { new[] { 0, 3, 2, 1 }, new[] { 5, 6, 7, 4 }, new[] { 4, 7, 3, 0 }, new[] { 1, 2, 6, 5 }, new[] { 3, 7, 6, 2 } })
+            {
                 triangles.AddRange(new[] { first + face[0], first + face[1], first + face[2], first + face[0], first + face[2], first + face[3] });
+                postTriangles.AddRange(new[] { face[0], face[1], face[2], face[0], face[2], face[3] });
+            }
+
+            added.Add(new AddedGeometry { Material = UntexturedMaterial, Indices = Enumerable.Range(first, 8).ToArray(), Uvs = Enumerable.Repeat(Vector2.zero, 8).ToArray(), Tris = postTriangles.ToArray() });
         }
     }
+
+    // One parsed f line: its ordinal across the file, the mtl name in effect, and its corner vertex indices.
+    sealed class WarehouseFace
+    {
+        public WarehouseFace(int ordinal, string material, int[] corners)
+        {
+            Ordinal = ordinal;
+            Material = material;
+            Corners = corners;
+        }
+
+        public int Ordinal { get; }
+        public string Material { get; }
+        public int[] Corners { get; }
+    }
+
+    // Geometry a code path added to the merged mesh, recorded as indices into the shared vertex list so the origin shift still applies.
+    sealed class AddedGeometry
+    {
+        public string Material;
+        public int[] Indices;
+        public Vector2[] Uvs;
+        public int[] Tris;
+    }
+
+    // One pieces.json row: where the asset came from and how it is placed, so the level generator can reassemble without re-deriving geometry.
+    sealed class PieceRecord
+    {
+        public string Asset;
+        public string Kind;
+        public string Module;
+        public string Source;
+        public string[] Groups;
+        public int[] Faces;
+        public WarehousePieces.Placement Placement;
+        public bool Collider;
+    }
+
+    // One piece's geometry before mesh creation: mesh-space vertices with UVs and triangle indices grouped by material.
+    sealed class PieceBuild
+    {
+        public PieceBuild(string asset, string module)
+        {
+            Asset = asset;
+            Module = module;
+        }
+
+        public string Asset { get; }
+        public string Module { get; }
+        public List<Vector3> Verts { get; } = new List<Vector3>();
+        public List<Vector2> Uvs { get; } = new List<Vector2>();
+        public Dictionary<string, List<int>> Triangles { get; } = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+
+        public void AddFace(WarehouseFace face, List<Vector3> vertices, List<Vector2> vertexUvs)
+        {
+            var triangles = new List<int>();
+            for (var i = 1; i < face.Corners.Length - 1; i++)
+                triangles.AddRange(new[] { 0, i + 1, i });
+            AddGeometry(face.Material, face.Corners.Select(corner => vertices[corner]).ToArray(), face.Corners.Select(corner => vertexUvs[corner]).ToArray(), triangles.ToArray());
+        }
+
+        public void AddGeometry(string material, Vector3[] verts, Vector2[] uvs, int[] triangles)
+        {
+            var first = Verts.Count;
+            Verts.AddRange(verts);
+            Uvs.AddRange(uvs);
+            if (!Triangles.TryGetValue(material, out var list))
+                Triangles[material] = list = new List<int>();
+            foreach (var index in triangles)
+                list.Add(first + index);
+        }
+    }
+
+    // Placement and collider presence of the last SavePiece call, picked up by the caller for its pieces.json record.
+    static WarehousePieces.Placement LastPlacement;
+    static bool LastHadCollider;
+
+    // Builds one construction piece: vertices folded into its convention pivot frame, submeshes per material in ordinal order sharing the Warehouse materials, and a collision mesh without the pass-through faces (no MeshCollider at all when nothing solid is left).
+    static string SavePiece(PieceBuild build, Dictionary<string, Material> materials)
+    {
+        var meshVerts = build.Verts.Select(v => new System.Numerics.Vector3(v.x, v.y, v.z)).ToList();
+        var placement = WarehousePieces.ComputePlacement(WarehousePieces.RuleFor(build.Module), meshVerts);
+        var vertices = WarehousePieces.ToLocal(meshVerts, placement).Select(v => new Vector3(v.X, v.Y, v.Z)).ToArray();
+        var ordered = build.Triangles.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
+        var mesh = new Mesh { name = build.Asset, vertices = vertices, uv = build.Uvs.ToArray(), subMeshCount = ordered.Count };
+        for (var i = 0; i < ordered.Count; i++)
+            mesh.SetTriangles(build.Triangles[ordered[i]], i);
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        var root = new GameObject(build.Asset);
+        root.transform.localScale = Vector3.one * WarehouseScale;
+        root.AddComponent<MeshFilter>().sharedMesh = SaveAsset(mesh, PackDirectory + "/" + build.Asset + ".asset");
+        root.AddComponent<MeshRenderer>().sharedMaterials = ordered.Select(material => materials[material]).ToArray();
+        var collision = SavePieceCollisionMesh(build, ordered, vertices);
+        LastHadCollider = collision != null;
+        if (collision != null)
+            root.AddComponent<MeshCollider>().sharedMesh = collision;
+        LastPlacement = placement;
+        return SavePrefab(root);
+    }
+
+    static Mesh SavePieceCollisionMesh(PieceBuild build, List<string> ordered, Vector3[] vertices)
+    {
+        var kept = new List<List<int>>();
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            var material = ordered[i];
+            if (PassThroughMaterials.Contains(material))
+                continue;
+            var triangles = build.Triangles[material];
+            if (PassThroughInRoomMaterials.Contains(material))
+                triangles = WithoutTrianglesInOpenedWindows(triangles.ToArray(), build.Verts.ToArray()).ToList();
+            if (triangles.Count > 0)
+                kept.Add(triangles);
+        }
+
+        if (kept.Count == 0)
+            return null;
+        var collision = new Mesh { name = build.Asset + "Collision", vertices = vertices, uv = build.Uvs.ToArray(), subMeshCount = kept.Count };
+        for (var i = 0; i < kept.Count; i++)
+            collision.SetTriangles(kept[i], i);
+        collision.RecalculateBounds();
+        return SaveAsset(collision, PackDirectory + "/" + build.Asset + "Collision.asset");
+    }
+
+    // Rewrites the committed manifest with the built asset list; id, name, author and version are kept from the existing file, whose version the shipped level pins, so adding pieces never bumps it.
+    static void WriteManifest(List<string> assetNames)
+    {
+        var path = Path.Combine(RepoPath(PacksSourceDirectory), "manifest.json");
+        if (!File.Exists(path))
+            throw new Exception("missing pack manifest " + path);
+        var text = File.ReadAllText(path);
+        string Field(string name) => System.Text.RegularExpressions.Regex.Match(text, "\"" + name + "\": \"([^\"]*)\"").Groups[1].Value;
+        var json = "{\n  \"id\": \"" + Field("id") + "\",\n  \"name\": \"" + Field("name") + "\",\n  \"author\": \"" + Field("author") + "\",\n  \"version\": \"" + Field("version") + "\",\n  \"assets\": [\n"
+            + string.Join(",\n", assetNames.Select(name => "    \"" + name + "\"")) + "\n  ]\n}\n";
+        if (File.ReadAllText(path) != json)
+            File.WriteAllText(path, json);
+    }
+
+    // Writes the committed pieces.json sidecar: every piece asset's convention pivot, placement yaw, world position and collider presence, in manifest order.
+    static void WritePiecesJson(List<PieceRecord> records)
+    {
+        var json = new StringBuilder();
+        json.Append("{\n  \"schema\": \"thps-pieces/1\",\n  \"meshToWorld\": { \"scale\": ").Append(Number(WarehouseScale))
+            .Append(", \"position\": [").Append(Number(WarehouseWorldX)).Append(", ").Append(Number(WarehouseLift)).Append(", ").Append(Number(WarehouseWorldZ)).Append("] },\n  \"pieces\": [\n");
+        for (var i = 0; i < records.Count; i++)
+        {
+            var record = records[i];
+            json.Append("    { \"asset\": \"").Append(record.Asset).Append("\", \"kind\": \"").Append(record.Kind)
+                .Append("\", \"module\": \"").Append(record.Module).Append("\"");
+            if (record.Kind == "source")
+                json.Append(", \"groups\": [").Append(string.Join(", ", record.Groups.Select(group => "\"" + group + "\"")))
+                    .Append("], \"faces\": [").Append(string.Join(", ", record.Faces)).Append("]");
+            else
+                json.Append(", \"source\": \"").Append(record.Source).Append("\"");
+            var pivot = record.Placement.Pivot;
+            json.Append(", \"pivot\": [").Append(Number(pivot.X)).Append(", ").Append(Number(pivot.Y)).Append(", ").Append(Number(pivot.Z)).Append("]");
+            json.Append(", \"yaw\": ").Append(Number(record.Placement.YawDegrees));
+            json.Append(", \"position\": [").Append(Number(pivot.X * WarehouseScale + WarehouseWorldX)).Append(", ")
+                .Append(Number(pivot.Y * WarehouseScale + WarehouseLift)).Append(", ").Append(Number(pivot.Z * WarehouseScale + WarehouseWorldZ)).Append("]");
+            json.Append(", \"collider\": ").Append(record.Collider ? "true" : "false").Append(" }").Append(i + 1 < records.Count ? ",\n" : "\n");
+        }
+
+        json.Append("  ]\n}\n");
+        var path = Path.Combine(RepoPath(PacksSourceDirectory), "pieces.json");
+        File.WriteAllText(path, json.ToString());
+    }
+
+    static string Number(float value) => value.ToString("R", CultureInfo.InvariantCulture);
 
     static float Parse(string value) => float.Parse(value, CultureInfo.InvariantCulture);
 

@@ -1,8 +1,11 @@
 # Warehouse construction piece inventory
 
-This is the additive construction kit's source partition, not a claim that the
-pieces are already in the palette. The shipped `bundle:thps/Warehouse`, its
-assets and `levels/thps.mblevel.json` remain unchanged. See the
+This is the additive construction kit's source partition, and the pieces it
+names are live assets: the pack builder ships each row below as a placeable
+`bundle:thps/<id>` prefab in the editor's Packs palette. The shipped
+`bundle:thps/Warehouse`, its assets and `levels/thps.mblevel.json` remain
+unchanged. See [asset-bundles.md](asset-bundles.md) for the piece prefabs,
+their pivots and the `pieces.json` sidecar, and the
 [reference](thps-warehouse.md), [shipped layout](thps-warehouse-layout.md) and
 [preservation check](development.md#preserving-the-shipped-warehouse).
 
@@ -459,8 +462,10 @@ adding geometry to the preserved PS1 assembly.
 | Ceiling / trusses / lamp / crane | Source upper roof/ceiling panels, ten ceiling/room diagonal braces, chains, crane hook, lamp, pillar sections and added spill roof panels. |
 | Remake cones, barricades, truck, door splinters, sunlight shafts | No separate source objects or generator placements identified. Do not invent instances from video-only details; the source partition still covers every face. |
 
-This is a source/measurement audit, not a live-game verification of the future
-kit. Palette selection, transforms, joint collision, grind handoff, save/reload
-and visual equivalence must be checked once the additive assets and assembled
-level exist. The original preservation check remains the guard against changes
-to the shipped Warehouse throughout that work.
+This is a source/measurement audit. The kit's palette listing, search,
+thumbnails, placement at world scale, selection, rotation, drag-move, removal
+and undo/redo were checked in the running editor through the dev harness for a
+prop, a window and an added piece. Joint collision behaviour, the hidden grind
+paths, save/reload round-trips and visual equivalence in an assembled level
+remain open; the original preservation check stays the guard against changes to
+the shipped Warehouse throughout that work.

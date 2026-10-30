@@ -97,7 +97,7 @@ The level schema carries an optional top-level `packs` map (`{"<packId>": "<vers
 
 ## THPS Warehouse pack
 
-`Assets/Editor/ThpsPack.cs` builds the `thps` pack: one `Warehouse` prefab and one soundtrack clip per mp3 in `tools/ost`. The prefab is made from the THPS1 Warehouse level extracted into `.tools/thps1/warehouse` (`warehouse.obj`, `warehouse.mtl` and the PNGs; `-warehouseSource` overrides the directory); each clip is imported from `tools/ost/*.mp3` and named by its file name with runs of other characters made an underscore (`04 Superman.mp3` becomes `04_Superman`); `-musicSource` overrides the directory, and the build skips the clips with a log line when it is absent. The generated `Assets/Thps/` folder and the extraction are gitignored; the committed inputs are `ThpsPack.cs`, its helpers in `Assets/Editor/` and `unity/pack-authoring/packs/thps/manifest.json`.
+`Assets/Editor/ThpsPack.cs` builds the `thps` pack: one merged `Warehouse` prefab, one prefab per [construction piece](#warehouse-pieces) (the inventoried faces plus the pack-added geometry), and one soundtrack clip per mp3 in `tools/ost`. The prefab is made from the THPS1 Warehouse level extracted into `.tools/thps1/warehouse` (`warehouse.obj`, `warehouse.mtl` and the PNGs; `-warehouseSource` overrides the directory); each clip is imported from `tools/ost/*.mp3` and named by its file name with runs of other characters made an underscore (`04 Superman.mp3` becomes `04_Superman`); `-musicSource` overrides the directory, and the build skips the clips with a log line when it is absent. The generated `Assets/Thps/` folder and the extraction are gitignored; the committed inputs are `ThpsPack.cs`, its helpers in `Assets/Editor/` (including `WarehousePieces.cs`), and `unity/pack-authoring/packs/thps/manifest.json` and `pieces.json` (both rewritten by the build).
 
 ```sh
 task pack:thps
@@ -109,6 +109,12 @@ The task builds the bundle (`task pack:build PACK_METHOD=ThpsPack.Build`) and ru
 | --- | --- | --- |
 | `Warehouse` | the extracted level at OBJ scale, centred on its footprint with y = 0 at the floor and y up, one submesh per material; the level placement applies the scale (79.2 puts the 1.8 m skater at about 4.4 units per metre) | non-convex `MeshCollider` on a separate collision mesh |
 
+### Warehouse pieces
+
+Alongside the merged `Warehouse`, the builder emits every face of the [piece inventory](thps-warehouse-pieces.md) and the pack-added geometry as its own placeable prefab, so the Packs palette lists each piece individually (`bundle:thps/piece-taxi`, `bundle:thps/added-post-0`, `bundle:thps/added-roof-quad-000`, …). Asset names are the inventory IDs verbatim; roof quads added by the builder are `added-roof-quad-NNN` with a three-digit ordinal. Piece vertices are stored pivot-relative in raw OBJ units, rotated by the piece's convention yaw, and the prefab root carries `localScale` 79.2 so the editor's place (which copies the prefab's scale) spawns the piece at world size; a piece placed at the sidecar's `position` reproduces its shipped pose inside the Warehouse. Each piece shares the Warehouse materials one submesh per material in ordinal order. Window pieces render only: they get no collider at all, mirroring the pass-through faces of the shipped collision mesh.
+
+The build also rewrites the committed sidecar `unity/pack-authoring/packs/thps/pieces.json` (schema `thps-pieces/1`): per piece asset the module, convention, pivot, yaw (`0` except for the riding conventions), world position (`pivot × 79.2 + (100, 0.5, 0)`, the shipped pose) and whether it has a collider, in manifest order, plus the `meshToWorld` scale. `manifest.json` is rewritten from the built asset list the same way, keeping the `id`, `name`, `author` and `version` fields of the existing file. `tests/test_thps_pack_pieces.py` cross-checks both files against the inventory tables and the built prefabs, and `WarehousePieces.cs` (the sidecar's pivot maths) is covered in `tests/MegabonkLevels.Tests/`.
+
 Authoring rules:
 
 - Set every GameObject of the prefab, children included, to layer 8. The generated tile ground (`TileGround`, `TileSlope`, `TileWall` and the combined collision mesh) is layer 8 and the player is layer 7. A placed object keeps the layer its prefab was saved with, because the mod does not touch the layer of what it spawns.
@@ -118,7 +124,7 @@ Authoring rules:
 - Build through the explicit `AssetBundleBuild[]` overload of `BuildAssetBundles`, so a build of the pack does not rebuild the test bundles in the same project.
 - The authoring project enables the `com.unity.modules.audio` package module. Without it the build logs `'AudioClip' is not supported because the module Audio is disabled in the build` and leaves the clip out of the bundle.
 - Unity's bundle build is incremental and keeps an output whose inputs it considers unchanged, so delete `.tools/bundles/<platform>/thps` and its `.manifest` to force a rebuild after changing project settings.
-- List every prefab in `manifest.json`; a prefab the manifest omits resolves as `Missing:` even when the bundle holds it. Audio clips are not listed and are not filtered by the manifest. The generator checks the manifest against the placement. Bump the manifest `version` and `PACK_VERSION` in `scripts/build_thps_level.py` together whenever the bundle changes.
+- List every prefab in `manifest.json`; a prefab the manifest omits resolves as `Missing:` even when the bundle holds it. Audio clips are not listed and are not filtered by the manifest. The generator checks the manifest against the placement. Bump the manifest `version` and `PACK_VERSION` in `scripts/build_thps_level.py` together whenever the bundle changes, except for purely additive piece assets: shipped levels pin the manifest version, so a build that only adds prefabs keeps the version and the pinned level still loads them.
 
 ### Warehouse collision
 

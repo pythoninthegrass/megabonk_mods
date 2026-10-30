@@ -191,9 +191,9 @@ def test_the_radio_stands_against_the_back_wall_clear_of_the_start_lip() -> None
     assert b.RADIO_POSITION[2] >= platform_back_z
 
 
-def test_the_pack_manifest_lists_only_the_warehouse_at_the_pack_version() -> None:
+def test_the_pack_manifest_leads_with_the_warehouse_at_the_pack_version() -> None:
     manifest = json.loads(Path(b.MANIFEST_PATH).read_text())
-    assert manifest["assets"] == [b.WAREHOUSE_ASSET]
+    assert manifest["assets"][0] == b.WAREHOUSE_ASSET
     assert manifest["id"] == b.PACK_ID
     assert manifest["version"] == b.PACK_VERSION
 
