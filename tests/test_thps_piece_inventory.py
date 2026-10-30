@@ -3,6 +3,8 @@ import hashlib
 import pytest
 from pathlib import Path
 
+needs_extract = pytest.mark.skipif(not inventory.OBJ_PATH.exists(), reason="needs the extraction under .tools/thps1/warehouse")
+
 OBJ = "o WALL\nv 0 0 0\nv 1 0 0\nv 1 0 1\nusemtl brick\nf 1 2 3\no EMPTY\no WINDOW\nf 1 3 2\n"
 
 
@@ -51,6 +53,7 @@ def test_all_declared_groups_must_contribute_faces() -> None:
     assert any("unused group WINDOW" in error for error in errors)
 
 
+@needs_extract
 def test_committed_inventory_covers_the_extraction() -> None:
     assert inventory.check() == []
     pieces = inventory.read_pieces(inventory.DOC_PATH.read_text())
@@ -64,6 +67,7 @@ def test_missing_source_is_not_silently_skipped(tmp_path: Path) -> None:
         inventory.check(tmp_path / "absent.obj")
 
 
+@needs_extract
 def test_flat_modules_do_not_include_sloping_rollin_or_hip_faces() -> None:
     vertices = []
     faces = []

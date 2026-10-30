@@ -12,6 +12,11 @@ from pathlib import Path
 # The handoff searches this far from a rail end (RailHandoff.SearchRadius), so a rail shorter than it has several neighbours in reach.
 MIN_COPING_LIP = 3.5
 
+needs_extract = pytest.mark.skipif(
+    not (b.NODES_PATH.exists() and b.OBJ_PATH.exists()), reason="needs the extraction under .tools/thps1/warehouse"
+)
+
+
 
 def ops_of(edits: list[dict], op_type: str) -> list[dict]:
     return [e for e in edits if e["opType"] == op_type]
@@ -97,6 +102,7 @@ def test_generated_player_spawn_cell_is_an_inner_cell() -> None:
     assert b.GENERATED_SPAWN_CELL in b.inner_cells()
 
 
+@needs_extract
 def test_build_level_has_the_forest_stage_zero_header() -> None:
     level = b.build_level()
     assert level["map"] == 1
@@ -107,6 +113,7 @@ def test_build_level_has_the_forest_stage_zero_header() -> None:
     assert level["packs"] == {b.PACK_ID: b.PACK_VERSION}
 
 
+@needs_extract
 def test_build_level_orders_tiles_before_object_edits() -> None:
     kinds = [e["opType"] for e in b.build_level()["edits"]]
     last_tile = max(i for i, k in enumerate(kinds) if k.startswith("tile."))
@@ -114,6 +121,7 @@ def test_build_level_orders_tiles_before_object_edits() -> None:
     assert last_tile < first_object
 
 
+@needs_extract
 def test_write_level_round_trips_through_json(tmp_path: Path) -> None:
     out = tmp_path / "thps.mblevel.json"
     b.write_level(out)
@@ -138,6 +146,7 @@ def test_rails_sit_inside_the_inner_arena() -> None:
         assert 0 <= cz < b.INNER_Z
 
 
+@needs_extract
 def test_build_level_includes_the_rails_after_the_clutter_removals() -> None:
     kinds = [(e["opType"], e["target"]) for e in b.build_level()["edits"]]
     first_place = min(i for i, k in enumerate(kinds) if k[0] == "object.place")
@@ -145,20 +154,24 @@ def test_build_level_includes_the_rails_after_the_clutter_removals() -> None:
     assert last_remove < first_place
 
 
+@needs_extract
 def test_build_level_disables_grass_so_it_does_not_grow_through_the_warehouse_floor() -> None:
     assert b.build_level()["noGrass"] is True
 
 
+@needs_extract
 def test_build_level_raises_the_slope_limit_so_the_player_can_ride_the_half_pipes() -> None:
     angle = b.build_level()["maxSlopeAngle"]
     assert angle == b.MAX_SLOPE_ANGLE
     assert angle > 45
 
 
+@needs_extract
 def test_build_level_names_the_pack_clip_as_its_music() -> None:
     assert b.build_level()["music"] == "bundle:thps/04_Superman"
 
 
+@needs_extract
 def test_build_level_is_titled_warehouse_on_tier_one() -> None:
     level = b.build_level()
     assert level["title"] == "Warehouse"
@@ -166,16 +179,19 @@ def test_build_level_is_titled_warehouse_on_tier_one() -> None:
     assert level["tier"] == 0
 
 
+@needs_extract
 def test_build_level_has_a_map_selection_description_apart_from_the_banner() -> None:
     level = b.build_level()
     assert level["mapDescription"] == "A warehouse built for grinding"
     assert level["mapDescription"] != level["description"]
 
 
+@needs_extract
 def test_build_level_allows_only_calcium_and_tony_mczoom() -> None:
     assert b.build_level()["allowedCharacters"] == ["calcium", "tonymczoom"]
 
 
+@needs_extract
 def test_the_radio_is_one_boombox_placed_in_the_arena_beside_the_player_spawn() -> None:
     places = [payload(e) for e in b.build_level()["edits"] if e["opType"] == "object.place" and payload(e)["catalogId"] == "interactable/boombox"]
     assert len(places) == 1
@@ -198,14 +214,11 @@ def test_the_pack_manifest_leads_with_the_warehouse_at_the_pack_version() -> Non
     assert manifest["version"] == b.PACK_VERSION
 
 
+@needs_extract
 def test_the_warehouse_is_the_only_pack_asset_the_level_places() -> None:
     placed = {payload(e)["catalogId"] for e in b.build_level()["edits"] if e["opType"] == "object.place"}
     assert {c for c in placed if c.startswith("bundle:")} == {f"bundle:{b.PACK_ID}/{b.WAREHOUSE_ASSET}"}
 
-
-needs_extract = pytest.mark.skipif(
-    not (b.NODES_PATH.exists() and b.OBJ_PATH.exists()), reason="needs the extraction under .tools/thps1/warehouse"
-)
 
 LETTER_SHRINES = {
     "S": "forest/shrines/0",
@@ -401,6 +414,7 @@ def test_the_arena_fits_the_grid_with_the_kept_cell_inside_it() -> None:
     assert b.GENERATED_SPAWN_CELL in set(b.inner_cells())
 
 
+@needs_extract
 def test_build_level_places_the_warehouse_after_the_clutter_removals() -> None:
     kinds = [(e["opType"], json.loads(e["payload"]).get("catalogId", "")) for e in b.build_level()["edits"]]
     warehouse = next(i for i, k in enumerate(kinds) if k[1] == f"bundle:{b.PACK_ID}/{b.WAREHOUSE_ASSET}")
@@ -412,6 +426,7 @@ def test_pack_version_is_the_warehouse_release() -> None:
     assert b.PACK_VERSION == "2.0.21"
 
 
+@needs_extract
 def test_player_starts_at_tonys_chosen_position() -> None:
     assert b.build_level()["playerStart"] == [109, 38, -116]
 
@@ -436,6 +451,7 @@ def test_boss_portal_stands_on_the_floor_inside_the_glass_box() -> None:
     assert z0 + 1.0 <= position["z"] <= z1 - 1.0, "clear of the box's long walls"
 
 
+@needs_extract
 def test_boss_portal_rests_on_the_box_floor_under_the_roof() -> None:
     position = payload(boss_move())["newTransform"]["position"]
     # Dropped from between the interior floor and the roof underside: 25.75 would be the top of the box, which is where
@@ -446,6 +462,7 @@ def test_boss_portal_rests_on_the_box_floor_under_the_roof() -> None:
     assert hit.y == pytest.approx(b.BOSS_PORTAL_INTERIOR_FLOOR_Y, abs=0.1)
 
 
+@needs_extract
 def test_boss_drops_on_the_pipe_floor_outside_the_box() -> None:
     x, y, z = b.build_level()["bossSpawnPosition"]
     assert (x, z) == b.local_to_world(*b.BOSS_GROUND_LOCAL)
@@ -456,6 +473,7 @@ def test_boss_drops_on_the_pipe_floor_outside_the_box() -> None:
     assert under_box is not None and y == under_box.y
 
 
+@needs_extract
 def test_boss_spawn_sits_on_the_mesh_surface_it_drops_to() -> None:
     x, y, z = b.boss_spawn_position()
     hit = ws.drop(b.warehouse_triangles(), x, b.BOSS_GROUND_DROP_FROM, z)
@@ -467,6 +485,7 @@ def test_the_boss_spawn_drop_starts_under_the_box_so_the_box_cannot_catch_it() -
     assert b.BOSS_GROUND_DROP_FROM < b.BOSS_PORTAL_FLOOR_UNDERSIDE_Y
 
 
+@needs_extract
 def test_the_boss_shares_the_portals_column_so_it_comes_out_at_its_foot() -> None:
     portal = payload(boss_move())["newTransform"]["position"]
     boss_x, _, boss_z = b.boss_spawn_position()
@@ -487,17 +506,20 @@ def test_boss_spawner_hides_the_pillar_mesh_and_its_collider() -> None:
     assert payload(boss_move())["hiddenChildren"] == ["BottomPiece", "Collider"]
 
 
+@needs_extract
 def test_the_level_authors_a_kill_floor_below_the_kept_tile() -> None:
     level = b.build_level()
     assert level["killFloorY"] == b.KILL_FLOOR_Y
     assert b.KILL_FLOOR_Y == b.INNER_LEVEL * b.HEIGHT_STEP - b.KILL_FLOOR_MARGIN_BELOW_KEPT_TILE
 
 
+@needs_extract
 def test_the_level_asks_for_the_slide_button_to_start_a_grind() -> None:
     # The coping lips are rails, so a grind that starts on contact hijacks every ollie off a lip.
     assert b.build_level()["grindRequiresSlide"] is True
 
 
+@needs_extract
 def test_the_kill_floor_is_below_the_only_kept_tile_and_above_the_meshs_lowest_point() -> None:
     # Below the kept tile so standing on it is safe, above the Warehouse's lowest geometry so anything that
     # ends up under the mesh dies instead of resting there out of reach of the game's own catch floor.

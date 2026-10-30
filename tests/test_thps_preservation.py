@@ -1,3 +1,4 @@
+import build_thps_level as b
 import check_thps_preservation as p
 import copy
 import json
@@ -6,7 +7,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+needs_extract = pytest.mark.skipif(
+    not (b.NODES_PATH.exists() and b.OBJ_PATH.exists()), reason="needs the extraction under .tools/thps1/warehouse"
+)
 
+@needs_extract
 def test_shipped_warehouse_matches_preservation_baseline() -> None:
     assert p.check() == []
 
@@ -55,6 +60,7 @@ def test_check_compares_shipped_and_generated_levels_independently(monkeypatch) 
     assert any("generated.level" in d for d in differences)
 
 
+@needs_extract
 def test_cli_check_does_not_modify_the_shipped_level() -> None:
     before = p.LEVEL_PATH.read_bytes()
     result = subprocess.run([sys.executable, str(p.__file__)], capture_output=True, text=True)
