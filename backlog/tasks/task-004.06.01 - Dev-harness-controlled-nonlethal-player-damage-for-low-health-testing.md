@@ -1,7 +1,7 @@
 ---
 id: TASK-004.06.01
 title: 'Dev harness: controlled nonlethal player damage for low-health testing'
-status: In Progress
+status: Done
 assignee:
   - Assistant
 created_date: '2026-10-30T03:00:00Z'
@@ -45,7 +45,7 @@ The harness exposes kill and invulnerability but cannot apply controlled, nonlet
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -72,4 +72,12 @@ Final verification on default plain Wine, final deployed DLL: real MCP damage(am
 Danger check on final build: after 70→1 hit and leaving editor, music-probe status reported sourcePitch=0.858, heldPitch=null, heldCutoff=null, lowpassCutoff=22000. MusicController.currentDangerPitch subsequently read 0.7612614. This verifies natural source-state modulation, not audible perception; no new human listening confirmation is claimed (prior golem listening is in the task description). Overheal/fractional floor behavior covered by native inspection and pure tests; no live overheal setup was manufactured.
 
 task check passed: clean mod build, 1,392 C# tests, 555 Python tests, markdownlint and ruff. Ruff sorted the new test imports. Strict MCP tests first reproduced coercion of 1.0/true/string amounts, then passed with strict schema. git diff --check passed. Commit remains before closure.
+
+Conventional implementation commit: adbe95c (feat(harness): add controlled 1–99 HP damage with nonlethal safety). All acceptance criteria and Definition of Done verified; closed.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added CLI/MCP damage for any integer 1–99 with an independent default-on nonlethal flag. Uses normal external enemy damage, preserves shield/item/cooldown reactions, caps damage after item checks and reports before/after health, actual loss, events and explicit blocked/clamped outcomes. Strict validation rejects invalid inputs before sending. Documented Mirror limitations and fractional overheal safety. Tests written first; task check passes (1,392 C# and 555 Python tests). Verified on default Wine through real CLI/MCP: HP 70→1, shield-only hits, cooldown blocking, lethal opt-out and dead/missing-player rejection. Natural low-health pitch changed with no override; no new human audible confirmation claimed. Implementation committed as adbe95c. Game left in a fresh default example-forest editor run.
+<!-- SECTION:FINAL_SUMMARY:END -->
