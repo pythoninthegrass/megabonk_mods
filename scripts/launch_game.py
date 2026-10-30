@@ -16,9 +16,15 @@ Usage:
 """
 
 import argparse
+import ctypes
+import hashlib
 import os
+import platform
+import plistlib
+import re
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,7 +38,7 @@ STEAM_DIR_WINDOWS = r"C:\Program Files (x86)\Steam"
 GAME_EXE_WINDOWS = STEAM_DIR_WINDOWS + r"\steamapps\common\Megabonk\Megabonk.exe"
 STEAM_ARGS = ["-silent", "-no-cef-sandbox", "-cef-disable-gpu", "-cef-disable-gpu-compositing"]
 GAME_DLL_OVERRIDES = "version=n,b;d3d11,d3d10core=n,b"
-# MelonLoader 0.7.3 crashes (silent exit 1) when the RemoteAPI update-check returns a non-semver dumper version; the check only matters for games registered on api.melonloader.com.
+# Keep assembly-generator version checks offline; unrelated to GUI-session access under SSH.
 GAME_ARGS = ["--melonloader.agfoffline"]
 GAME_WINEDEBUG = "-all,err+seh,warn+seh,err+module,trace+loaddll"
 
@@ -117,9 +123,91 @@ def watch_launch(log: Path, argv: list[str]) -> int:
     return status
 
 
+def has_graphical_session() -> bool:
+    security = ctypes.CDLL("/System/Library/Frameworks/Security.framework/Security")
+    query = security.SessionGetInfo
+    query.argtypes = [ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
+    query.restype = ctypes.c_int32
+    session, attributes = ctypes.c_uint32(), ctypes.c_uint32()
+    status = query(0xFFFFFFFF, ctypes.byref(session), ctypes.byref(attributes))
+    if status:
+        raise RuntimeError(f"SessionGetInfo failed ({status}); cannot determine macOS graphical access")
+    return bool(attributes.value & 0x10)
+
+
+def gui_job_label(launch: Launch) -> str:
+    identity = "\0".join([launch.env.get("WINEPREFIX", ""), *launch.argv[:2]])
+    return "local.megabonk.launch-" + hashlib.sha256(identity.encode()).hexdigest()[:16]
+
+
+GUI_ENV_NAMES = {
+    "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "USER", "LOGNAME",
+    "MEGABONK_DEV", "MEGABONK_KILL_FLOOR_HEARTBEAT", "MEGABONK_CELL_LOG", "MEGABONK_RING_DIAG",
+}
+GUI_ENV_PREFIXES = ("WINE", "DOTNET_", "DYLD_", "MVK_", "DXVK_", "Steam")
+
+
+def launchctl(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["launchctl", *args], capture_output=True, text=True, check=False, timeout=10)
+
+
+def spawn_in_gui(launch: Launch, env: dict[str, str]) -> None:
+    """Bootstrap a one-shot GUI LaunchAgent; changing only the bootstrap namespace does not grant SSH graphical access."""
+    import fcntl
+
+    domain = f"gui/{os.getuid()}"
+    if launchctl("print", domain).returncode:
+        raise RuntimeError("No macOS GUI session is available. Log in to this user's desktop first, then retry from SSH.")
+    label = gui_job_label(launch)
+    service = f"{domain}/{label}"
+    directory = Path.home() / "Library" / "Application Support" / "Megabonk" / "launchd"
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with (directory / f"{label}.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        previous = launchctl("print", service)
+        if previous.returncode == 0:
+            if re.search(r"^\s*pid = \d+\s*$", previous.stdout, re.MULTILINE) or "state = not running" not in previous.stdout:
+                raise RuntimeError(f"GUI launch is already running or pending ({service}); quit it before relaunching")
+            stopped = launchctl("bootout", service)
+            if stopped.returncode:
+                raise RuntimeError(f"launchctl bootout failed: {stopped.stderr.strip()}")
+        if launch.log is not None:
+            rotate_launch_log(launch.log)
+        output = launch.log or directory / f"{label}.log"
+        output.touch(mode=0o600, exist_ok=True)
+        config = {
+            "Label": label,
+            "ProgramArguments": watcher_argv(launch) if launch.log else launch.argv,
+            "EnvironmentVariables": {key: value for key, value in env.items() if key in GUI_ENV_NAMES or key.startswith(GUI_ENV_PREFIXES)},
+            "RunAtLoad": True,
+            "LimitLoadToSessionType": "Aqua",
+            "StandardInPath": "/dev/null",
+            "StandardOutPath": str(output),
+            "StandardErrorPath": str(output),
+        }
+        if launch.cwd is not None:
+            config["WorkingDirectory"] = str(launch.cwd)
+        destination = directory / f"{label}.plist"
+        with tempfile.NamedTemporaryFile(dir=directory, suffix=".plist", delete=False) as stream:
+            temporary = Path(stream.name)
+            try:
+                plistlib.dump(config, stream)
+                stream.flush()
+                temporary.replace(destination)
+            finally:
+                temporary.unlink(missing_ok=True)
+        result = launchctl("bootstrap", domain, str(destination))
+        if result.returncode:
+            raise RuntimeError(f"launchctl bootstrap failed: {result.stderr.strip()}; check {output}")
+    print(f"launch: handed off to macOS GUI session ({service}); log: {output}")
+
+
 def spawn(launch: Launch) -> None:
     """Start the target detached; a logged game launch runs through a watcher process that can reap it and record its exit status."""
     env = {**os.environ, **launch.env}
+    if platform.system() == "Darwin" and not has_graphical_session():
+        spawn_in_gui(launch, env)
+        return
     if launch.log is not None:
         rotate_launch_log(launch.log)
         subprocess.Popen(
@@ -162,7 +250,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wine binary not found at {wine}; run 'task wine:install' or set MEGABONK_WINE", file=sys.stderr)
         return 1
     prefix = prefix_for(game)
-    spawn(build_steam_launch(wine, prefix) if args.target == "steam" else build_game_launch(wine, prefix, game))
+    try:
+        spawn(build_steam_launch(wine, prefix) if args.target == "steam" else build_game_launch(wine, prefix, game))
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
+        print(f"launch: {error}", file=sys.stderr)
+        return 1
     return 0
 
 

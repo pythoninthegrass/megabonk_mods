@@ -1042,7 +1042,7 @@ CRASH_HANDLER_EXE = "UnityCrashHandler64.exe"
 
 
 def unity_crash_handler_diag(game_dir: Path, diag: bool) -> None:
-    """Prepare the game directory for a boot: in diag mode hide Unity's crash handler (it swallows native faults and exits the game with status 1 reporting to MelonLoader's RemoteAPI) and ask Wine to trace exceptions itself; outside diag mode undo that so normal launches keep their handler."""
+    """Hide Unity's crash handler for exception tracing, or restore it for a normal launch."""
     handler = game_dir / CRASH_HANDLER_EXE
     disabled = handler.with_name(f"{CRASH_HANDLER_EXE}.disabled")
     if diag:

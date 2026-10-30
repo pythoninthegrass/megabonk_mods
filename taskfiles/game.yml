@@ -37,7 +37,8 @@ tasks:
       Usage: task game:run
 
       Platform-guarded. macOS: starts Megabonk.exe under plain Wine through
-      scripts/launch_game.py, detached, with SteamAppId and SteamGameId set so
+      scripts/launch_game.py, detached (via the logged-in GUI session under SSH),
+      with SteamAppId and SteamGameId set so
       Steamworks initializes; the Steam client must already be running (task
       game:steam). Use task crossover:run for the CrossOver runtime. Linux:
       uses the native `steam` binary when present, otherwise the Flatpak

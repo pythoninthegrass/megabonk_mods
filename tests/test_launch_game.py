@@ -3,11 +3,17 @@ Self-test for scripts/launch_game.py.
 """
 
 import launch_game as lg
+import pytest
 from pathlib import Path
 
 WINE = Path("/w/Wine Devel.app/Contents/Resources/wine/bin/wine")
 PREFIX = Path("/b/Steam")
 GAME = PREFIX / "drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk"
+
+
+@pytest.fixture(autouse=True)
+def graphical_session(monkeypatch):
+    monkeypatch.setattr(lg, "has_graphical_session", lambda: True)
 
 
 def test_game_launch_argv_and_cwd() -> None:
