@@ -1,137 +1,73 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
+using System.Threading;
 using Il2CppInterop.Runtime;
 using Il2Cpp;
-using Il2CppAssets.Scripts.Audio.Music;
 using MelonLoader;
-using UnityEngine;
 
 namespace MegabonkLevels;
 
 internal static class MusicNativeProbe
 {
-    private static AudioClip _clip;
-    private static MusicTrack _track;
+    private const string Tone = "<native-probe-tone>";
+    private static RuntimeMusicOwner<RuntimeMusicTrack> _owner;
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct NativeSpan
-    {
-        public IntPtr Begin;
-        public int Length;
-    }
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate void CreateSound(IntPtr clip, ref NativeSpan name, int frames, int channels, int rate, byte stream);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate byte TransferData(IntPtr clip, ref NativeSpan data, int offset);
+    private static RuntimeMusicOwner<RuntimeMusicTrack> CreateOwner() => new(
+        (path, token) => path == Tone ? CreateTone(token) : Mp3Decoder.Decode(path, token),
+        (path, audio) => new RuntimeMusicTrack(path == Tone ? "runtime-native-tone" : Path.GetFileNameWithoutExtension(path), audio),
+        track => track.Dispose());
 
     internal static JsonObject PlayTone(MelonLogger.Instance logger)
+        => Play(Tone, logger);
+
+    internal static JsonObject PlayFile(string path, MelonLogger.Instance logger)
+        => Play(path, logger);
+
+    private static PcmAudio CreateTone(CancellationToken cancellation)
     {
         const int rate = 44100;
-        var pcm = new float[rate * 2];
-        for (var i = 0; i < pcm.Length; i++)
+        var position = 0;
+        return PcmAudio.Read(1, rate, (buffer, count) =>
         {
-            var envelope = Math.Min(1d, Math.Min(i, pcm.Length - 1 - i) / 441d);
-            pcm[i] = (float)(0.12d * envelope * Math.Sin(2d * Math.PI * 440d * i / rate));
-        }
+            var read = Math.Min(count, rate * 2 - position);
+            for (var j = 0; j < read; j++)
+            {
+                var i = position + j;
+                var envelope = Math.Min(1d, Math.Min(i, rate * 2 - 1 - i) / 441d);
+                buffer[j] = (float)(0.12d * envelope * Math.Sin(2d * Math.PI * 440d * i / rate));
+            }
 
-        return Play(pcm, 1, rate, logger);
+            position += read;
+            return read;
+        }, cancellation);
     }
 
-    internal static JsonObject Play(float[] pcm, int channels, int rate, MelonLogger.Instance logger)
+    private static JsonObject Play(string path, MelonLogger.Instance logger)
     {
-        AudioClip clip = null;
         try
         {
-            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || IntPtr.Size != 8)
-            {
-                throw new PlatformNotSupportedException("native clip probe ABI is verified only on the Win64 player; inspect the native platform first");
-            }
-
-            if (pcm.Length == 0 || channels <= 0 || pcm.Length % channels != 0 || rate <= 0)
-            {
-                throw new ArgumentException("invalid PCM dimensions");
-            }
-
+            RuntimeAudioClip.EnsureSupported();
             var controller = MusicController.Instance;
             if (controller?.musicSource == null)
             {
                 throw new InvalidOperationException("start a run before the native clip probe");
             }
 
-            var create = Resolve<CreateSound>("CreateUserSound_Injected");
-            var write = Resolve<TransferData>("SetData_Injected");
-            var read = Resolve<TransferData>("GetData_Injected");
-            logger.Msg("MusicNativeProbe: constructing clip through Unity's GC-handle unmarshaller.");
-            clip = AudioClip.Construct_Internal();
-            var native = clip?.m_CachedPtr ?? IntPtr.Zero;
-            if (native == IntPtr.Zero)
-            {
-                throw new InvalidOperationException("clip construction returned no native object");
-            }
-
-            logger.Msg($"MusicNativeProbe: native clip 0x{native.ToInt64():X}; creating {pcm.Length / channels} frames.");
-            var name = "runtime-mp3-native-probe".ToCharArray();
-            WithPinned(name, name.Length, (ref NativeSpan span) => create(native, ref span, pcm.Length / channels, channels, rate, 0));
-            logger.Msg("MusicNativeProbe: writing PCM.");
-            WithPinned(pcm, pcm.Length, (ref NativeSpan span) =>
-            {
-                if (write(native, ref span, 0) == 0)
-                {
-                    throw new InvalidOperationException("native SetData returned false");
-                }
-            });
-
-            var check = new float[Math.Min(pcm.Length, 4096 * channels)];
-            WithPinned(check, check.Length, (ref NativeSpan span) =>
-            {
-                if (read(native, ref span, 0) == 0)
-                {
-                    throw new InvalidOperationException("native GetData returned false");
-                }
-            });
-            var maxError = 0f;
-            for (var i = 0; i < check.Length; i++)
-            {
-                maxError = Math.Max(maxError, Math.Abs(check[i] - pcm[i]));
-            }
-
-            if (maxError > 0.0001f)
-            {
-                throw new InvalidOperationException($"PCM roundtrip mismatch: {maxError}");
-            }
-
-            var track = ScriptableObject.CreateInstance(Il2CppType.Of<MusicTrack>()).Cast<MusicTrack>();
-            track.hideFlags = HideFlags.HideAndDontSave;
-            track.trackName = "Runtime native clip probe";
-            track.loop = clip;
-            var oldClip = _clip;
-            var oldTrack = _track;
-            controller.PlayMusicTrack(track);
-            _clip = clip;
-            _track = track;
-            if (oldTrack != null)
-            {
-                UnityEngine.Object.Destroy(oldTrack);
-            }
-
-            if (oldClip != null)
-            {
-                UnityEngine.Object.Destroy(oldClip);
-            }
-
-            logger.Msg($"MusicNativeProbe: playing normal MusicTrack, {clip.length:F3}s; PCM roundtrip error {maxError}.");
+            _owner ??= CreateOwner();
+            _owner.Switch(path, track => track.Play());
+            var current = _owner.Current;
+            logger.Msg($"MusicNativeProbe: playing normal MusicTrack, {current.Clip.length:F3}s; PCM roundtrip error {current.RoundtripMaxError}.");
             return new JsonObject
             {
                 ["action"] = "native-play",
-                ["length"] = clip.length,
-                ["sampleRate"] = rate,
-                ["channels"] = channels,
-                ["frames"] = pcm.Length / channels,
-                ["roundtripMaxError"] = maxError,
+                ["length"] = current.Clip.length,
+                ["sampleRate"] = current.SampleRate,
+                ["channels"] = current.Channels,
+                ["frames"] = current.Frames,
+                ["roundtripMaxError"] = current.RoundtripMaxError,
                 ["sourceIsPlaying"] = controller.musicSource.isPlaying,
                 ["sourceClip"] = controller.musicSource.clip?.name,
             };
@@ -139,37 +75,21 @@ internal static class MusicNativeProbe
         catch (Exception ex)
         {
             logger.Warning($"MusicNativeProbe: {ex.GetType().Name}: {ex.Message}");
-            if (clip != null && clip != _clip)
-            {
-                UnityEngine.Object.Destroy(clip);
-            }
-
             return new JsonObject { ["action"] = "native-play", ["error"] = ex.Message };
         }
     }
 
-    private delegate void PinnedAction(ref NativeSpan span);
-
-    private static void WithPinned(Array data, int length, PinnedAction action)
+    internal static void ReleaseIfInactive()
     {
-        var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
-        try
+        var current = _owner?.Current;
+        var controller = MusicController.Instance;
+        if (current == null || (controller != null && controller.currentTrack == current.Track))
         {
-            var span = new NativeSpan { Begin = handle.AddrOfPinnedObject(), Length = length };
-            action(ref span);
+            return;
         }
-        finally
-        {
-            handle.Free();
-        }
-    }
 
-    private static T Resolve<T>(string name) where T : Delegate
-    {
-        var address = IL2CPP.il2cpp_resolve_icall($"UnityEngine.AudioClip::{name}");
-        return address == IntPtr.Zero
-            ? throw new MissingMethodException(name)
-            : Marshal.GetDelegateForFunctionPointer<T>(address);
+        _owner.Dispose();
+        _owner = null;
     }
 
     internal static JsonObject Inspect()

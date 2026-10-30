@@ -152,6 +152,24 @@ public static class MusicProbe
             return Fail($"no readable mp3 at '{path}'");
         }
 
+        if (native)
+        {
+            var decodeWatch = Stopwatch.StartNew();
+            var result = MusicNativeProbe.PlayFile(file, logger);
+            _error = result["error"]?.GetValue<string>();
+            if (_error == null)
+            {
+                _loaded = file;
+                _pcm = null;
+                _sourceChannels = result["channels"].GetValue<int>();
+                _sourceRate = result["sampleRate"].GetValue<int>();
+                _frames = result["frames"].GetValue<int>();
+                _decodeMs = (int)decodeWatch.ElapsedMilliseconds;
+            }
+
+            return result;
+        }
+
         float[] pcm;
         int channels;
         int rate;
@@ -198,11 +216,6 @@ public static class MusicProbe
         _decodeMs = (int)watch.ElapsedMilliseconds;
         _loaded = file;
         _error = null;
-
-        if (native)
-        {
-            return MusicNativeProbe.Play(pcm, channels, rate, logger);
-        }
 
         if (!Attach(logger))
         {
@@ -488,6 +501,7 @@ public static class MusicProbe
     {
         private static void Postfix(MusicController __instance)
         {
+            MusicNativeProbe.ReleaseIfInactive();
             if (_heldPitch.HasValue && __instance.musicSource != null)
             {
                 __instance.musicSource.pitch = _heldPitch.Value;
