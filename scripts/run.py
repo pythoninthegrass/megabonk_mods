@@ -601,15 +601,51 @@ def reap_wine_leftovers_on_host(system: str | None = None) -> None:
     reap_wine_leftovers(listing, kill)
 
 
-def quit_game(harness: Path, timeout: float) -> bool:
-    """Ask the game to quit and block until its process is gone; a game that is not running counts as quit."""
+def find_harness_pids(ps_listing: str) -> list[int]:
+    """Pids of any process running out of the game directory, from `ps -axo pid=,command=` output; the game plus helpers such as its crash handler."""
+    pids = []
+    for line in ps_listing.splitlines():
+        pid, _, command = line.strip().partition(" ")
+        if pid.isdigit() and WINDOWS_COMMAND.match(command.strip()) and MEGABONK_ORPHAN_COMMAND.search(command):
+            pids.append(int(pid))
+    return pids
+
+
+def force_kill_games() -> int:
+    """SIGKILL every process running out of the game directory; the escalation for a game whose main thread stopped polling the harness."""
+    listing = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True, check=True).stdout
+    pids = find_harness_pids(listing)
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    if pids:
+        print(f"quit: force-killed {len(pids)} game processes")
+    return len(pids)
+
+
+def clear_harness_queue(harness: Path) -> None:
+    """Drop leftover command, outcome and result files so a fresh session never replays a previous one's queue."""
+    for folder in ("commands", "processing", "done", "rejected", "results"):
+        for entry in (harness / folder).glob("*"):
+            entry.unlink(missing_ok=True)
+
+
+def quit_game(harness: Path, timeout: float, force_kill: Callable[[], int] = force_kill_games) -> bool:
+    """Ask the game to quit and block until its process is gone; a game that is not running counts as quit. A game whose main thread stopped polling (an editor left idle can have its window suspended) never answers, so it is force-killed."""
     if not running_game_pids():
         print("quit: game not running")
     elif not send(harness, build_command("quit"), timeout):
-        return False
-    elif not wait_for_exit(timeout=timeout):
-        print(f"quit: game still running after {timeout}s (pids {running_game_pids()})", file=sys.stderr)
-        return False
+        if wait_for_exit(timeout=timeout):
+            print("quit: game exited")
+            reap_wine_leftovers_on_host()
+            return True
+        force_kill()
+        if not wait_for_exit(timeout=timeout):
+            print(f"quit: game still running after force kill (pids {running_game_pids()})", file=sys.stderr)
+            return False
+        print("quit: game exited")
     else:
         print("quit: game exited")
     reap_wine_leftovers_on_host()
@@ -936,11 +972,12 @@ def relaunch(
     started = time.time()
 
     def prepare_harness() -> str | None:
-        """Quit, relaunch, and wait for the new session's harness to enable; the previous session's log must not satisfy the wait."""
+        """Quit, clear the stale harness queue, relaunch, and wait for the new session's harness to enable; the previous session's log must not satisfy the wait."""
         if not quit_game(harness, timeout):
             return "relaunch: harness did not become ready"
         if not wait_for_wineserver_to_exit():
             return "relaunch: wineserver did not exit before launch"
+        clear_harness_queue(harness)
         on_step("relaunch: starting game")
         launched = time.time()
         if not launch_game(task):

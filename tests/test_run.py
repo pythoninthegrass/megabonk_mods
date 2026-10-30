@@ -699,7 +699,9 @@ def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_verdict="ready", ki
     calls = []
     monkeypatch.setattr(run, "quit_game", lambda h, t: calls.append("quit") or True)
     monkeypatch.setattr(run, "launch_game", lambda task: calls.append(("launch", task)) or True)
+    monkeypatch.setattr(run, "force_kill_games", lambda: calls.append("force_kill") or 0)
     monkeypatch.setattr(run, "wait_for_wineserver_to_exit", lambda timeout=15.0: calls.append("wineserver") or True)
+    monkeypatch.setattr(run, "clear_harness_queue", lambda h: calls.append("clear") or None)
     monkeypatch.setattr(run, "wait_for_steamworks_ready", lambda probe, timeout, alive=None: calls.append("steam") or steam_verdict)
     monkeypatch.setattr(run, "send", lambda h, payload, t: calls.append(("send", payload["command"])) or True)
 
@@ -727,6 +729,7 @@ def test_relaunch_runs_every_step_in_order_and_returns_true(monkeypatch) -> None
     assert calls == [
         "quit",
         "wineserver",
+        "clear",
         ("launch", "game:run"),
         ("log", "DevHarness: enabled"),
         "steam",
@@ -741,7 +744,7 @@ def test_relaunch_without_a_level_stops_at_the_main_menu(monkeypatch) -> None:
     calls = relaunch_stubs(monkeypatch)
     ok = run.relaunch(Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=lambda m: None)
     assert ok is True
-    assert calls == ["quit", "wineserver", ("launch", "game:run"), ("log", "DevHarness: enabled"), "steam"]
+    assert calls == ["quit", "wineserver", "clear", ("launch", "game:run"), ("log", "DevHarness: enabled"), "steam"]
 
 
 def test_relaunch_without_a_level_still_fails_when_steamworks_never_answers(monkeypatch) -> None:
@@ -759,7 +762,7 @@ def test_relaunch_continues_past_a_not_ready_steamworks_on_an_offline_run(monkey
     assert ok is True
     assert errors == []
     assert "relaunch: Steamworks not ready (offline run); continuing" in steps
-    assert calls == ["quit", "wineserver", ("launch", "game:run"), ("log", "DevHarness: enabled"), "steam", ("send", "load-level"), ("log", "KillFloor: armed"), ("send", "item"), ("send", "editor")]
+    assert calls == ["quit", "wineserver", "clear", ("launch", "game:run"), ("log", "DevHarness: enabled"), "steam", ("send", "load-level"), ("log", "KillFloor: armed"), ("send", "item"), ("send", "editor")]
 
 
 def test_relaunch_fails_when_the_wineserver_never_exits(monkeypatch) -> None:
@@ -1195,6 +1198,81 @@ def test_reap_wine_leftovers_leaves_orphans_when_steam_runs(capsys) -> None:
     assert run.reap_wine_leftovers(listing, killed.append) == 0
     assert killed == []
     assert "skipping" in capsys.readouterr().out
+
+
+GAME_DIR_PS_LINE = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\Megabonk.exe"
+CRASH_HANDLER_PS_LINE = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\UnityCrashHandler64.exe 32 28839936"
+
+
+def test_find_harness_pids_matches_game_dir_processes() -> None:
+    listing = (
+        f"  5 {GAME_DIR_PS_LINE} \n"
+        f"  6 {CRASH_HANDLER_PS_LINE} \n"
+        "  7 C:\\windows\\system32\\services.exe \n"
+        "  8 C:\\Program Files (x86)\\Steam\\steam.exe -silent\n"
+        "  9 /sbin/launchd\n"
+    )
+    assert run.find_harness_pids(listing) == [5, 6]
+
+
+def test_force_kill_games_kills_only_game_dir_processes(monkeypatch) -> None:
+    listing = f"  5 {GAME_DIR_PS_LINE} \n  6 {CRASH_HANDLER_PS_LINE} \n  8 C:\\Program Files (x86)\\Steam\\steam.exe -silent\n"
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, stdout=listing))
+    killed: list[tuple[int, int]] = []
+    monkeypatch.setattr(os, "kill", lambda pid, sig: killed.append((pid, sig)))
+    assert run.force_kill_games() == 2
+    assert killed == [(5, 9), (6, 9)]
+
+
+def test_quit_game_force_kills_a_wedged_game(monkeypatch, capsys) -> None:
+    state = {"alive": True}
+    monkeypatch.setattr(run, "running_game_pids", lambda: [5] if state["alive"] else [])
+    monkeypatch.setattr(run, "send", lambda h, payload, t: False)
+    monkeypatch.setattr(run, "wait_for_exit", lambda timeout: not state["alive"])
+    monkeypatch.setattr(run, "reap_wine_leftovers_on_host", lambda: None)
+    killed: list[int] = []
+
+    def force_kill() -> int:
+        state["alive"] = False
+        killed.append(1)
+        return 1
+
+    ok = run.quit_game(Path("/h"), 5, force_kill=force_kill)
+    assert ok is True
+    assert killed == [1]
+    assert "game exited" in capsys.readouterr().out
+
+
+def test_quit_game_reports_a_game_that_survives_the_force_kill(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(run, "running_game_pids", lambda: [5])
+    monkeypatch.setattr(run, "send", lambda h, payload, t: False)
+    monkeypatch.setattr(run, "wait_for_exit", lambda timeout: False)
+    monkeypatch.setattr(run, "reap_wine_leftovers_on_host", lambda: None)
+    ok = run.quit_game(Path("/h"), 5, force_kill=lambda: 1)
+    assert ok is False
+    assert "force kill" in capsys.readouterr().err
+
+
+def test_quit_game_clears_nothing_and_force_kills_nothing_when_the_harness_answers(monkeypatch) -> None:
+    monkeypatch.setattr(run, "running_game_pids", lambda: [5])
+    monkeypatch.setattr(run, "send", lambda h, payload, t: True)
+    monkeypatch.setattr(run, "wait_for_exit", lambda timeout: True)
+    reaped: list[int] = []
+    monkeypatch.setattr(run, "reap_wine_leftovers_on_host", lambda: reaped.append(1))
+    killed: list[int] = []
+    assert run.quit_game(Path("/h"), 5, force_kill=lambda: killed.append(1) or 1) is True
+    assert killed == []
+    assert reaped == [1]
+
+
+def test_clear_harness_queue_empties_the_queue_folders(tmp_path) -> None:
+    harness = tmp_path / "harness"
+    for folder in ("commands", "processing", "done", "rejected", "results"):
+        (harness / folder).mkdir(parents=True)
+        (harness / folder / "179-quit.json").write_text("{}", encoding="utf-8")
+    run.clear_harness_queue(harness)
+    for folder in ("commands", "processing", "done", "rejected", "results"):
+        assert list((harness / folder).iterdir()) == []
 
 
 def test_wait_for_wineserver_to_exit_returns_immediately_when_none_runs(monkeypatch) -> None:
