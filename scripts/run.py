@@ -56,6 +56,7 @@ Usage:
     run.py quit                    Quit the game, wait for the process to exit, and stop leftover Wine processes (macOS)
     run.py relaunch [level] [--no-level] [--map N] [--stage N] [--tier N] [--seed N] [--character NAME]
                                    Quit and relaunch the game, load a level (default: the test forest) and enter editor; --no-level stops at the main menu
+                                   An offline run (Steam stub, no Steam session) continues once the game reports Steamworks not ready; a game that exits during startup fails fast
     run.py cycle <level> <out.png> Load, wait --settle seconds, screenshot, quit
                                    [--invulnerable] applies before the settle wait
                                    [--freeze] [--camera X Y Z RX RY RZ] apply before the screenshot
@@ -96,6 +97,8 @@ RELAUNCH_STOP_ERRORS = {
     LOAD_FAILED_LINE: ("the level failed to load", "see the LevelLoader line in the game log"),
 }
 STEAM_READY_POLL_SECONDS = 1.0
+STEAM_OFFLINE_GRACE_SECONDS = 15.0
+GAME_STARTUP_GRACE_SECONDS = 5.0
 GAME_COMMAND = re.compile(r"^(?:[A-Za-z]:\\(?:.*\\)?Megabonk\.exe|(?:\S*/)?Megabonk\.x86_64)(?:\s|$)")
 GAME_IMAGE_WINDOWS = "Megabonk.exe"
 WINDOWS_COMMAND = re.compile(r"^[A-Za-z]:\\")
@@ -388,10 +391,18 @@ def wait_for_png(path: Path, timeout: float) -> bool:
     return True
 
 
-def wait_for_any_log_line(log: Path, lines: list[str], newer_than: float, timeout: float) -> str | None:
-    """The first of `lines` found in the log once it is newer than `newer_than`, or None on timeout."""
+def wait_for_any_log_line(
+    log: Path,
+    lines: list[str],
+    newer_than: float,
+    timeout: float,
+    alive: Callable[[], bool] | None = None,
+) -> str | None:
+    """The first of `lines` found in the log once it is newer than `newer_than`, or None on timeout; returns None early when `alive` reports the game has exited."""
     deadline = time.monotonic() + timeout
     while True:
+        if alive is not None and not alive():
+            return None
         try:
             if log.stat().st_mtime > newer_than:
                 text = log.read_text(errors="ignore")
@@ -417,8 +428,8 @@ def log_line_containing(log: Path, marker: str) -> str | None:
     return next((line for line in lines if marker in line), None)
 
 
-def wait_for_log_line(log: Path, line: str, newer_than: float, timeout: float) -> bool:
-    return wait_for_any_log_line(log, [line], newer_than, timeout) is not None
+def wait_for_log_line(log: Path, line: str, newer_than: float, timeout: float, alive: Callable[[], bool] | None = None) -> bool:
+    return wait_for_any_log_line(log, [line], newer_than, timeout, alive) is not None
 
 
 def launch_game(task: str = "game:run") -> bool:
@@ -430,17 +441,30 @@ def relaunch_timeout(timeout: float) -> float:
 
 
 def wait_for_steamworks_ready(
-    probe: Callable[[], bool],
+    probe: Callable[[], str | None],
     timeout: float,
+    alive: Callable[[], bool] = lambda: True,
     sleep: Callable[[float], None] = time.sleep,
     now: Callable[[], float] = time.monotonic,
-) -> bool:
+) -> str:
+    """Poll the steam-ready verdict: 'ready', 'offline' once a definite not-ready has stood for the grace period, 'timeout' without a definite answer, or 'dead' when the game exited."""
     deadline = now() + timeout
+    offline_deadline: float | None = None
     while True:
-        if probe():
-            return True
+        if not alive():
+            return "dead"
+        match probe():
+            case "ready":
+                return "ready"
+            case "not-ready":
+                if offline_deadline is None:
+                    offline_deadline = now() + STEAM_OFFLINE_GRACE_SECONDS
+            case _:
+                pass
+        if offline_deadline is not None and now() >= offline_deadline:
+            return "offline"
         if now() >= deadline:
-            return False
+            return "timeout"
         sleep(STEAM_READY_POLL_SECONDS)
 
 
@@ -470,6 +494,10 @@ def running_game_pids(system: str | None = None) -> list[int]:
         return find_game_pids_tasklist(subprocess.run(cmd, capture_output=True, text=True, check=True).stdout)
     cmd = ["ps", "-axo", "pid=,command="]
     return find_game_pids(subprocess.run(cmd, capture_output=True, text=True, check=True).stdout)
+
+
+def game_is_running() -> bool:
+    return bool(running_game_pids())
 
 
 def wait_for_exit(
@@ -561,11 +589,20 @@ def send(harness: Path, payload: dict[str, object], timeout: float) -> bool:
     return send_for_result(harness, payload, timeout)[0]
 
 
-def send_steam_ready(harness: Path, timeout: float) -> bool:
-    """True when the game's Steamworks client is up; a mod that returns no result counts as ready."""
+def steam_ready_verdict(harness: Path, timeout: float) -> str | None:
+    """'ready', 'not-ready', or None when the game gave no definite answer; a mod that returns no result counts as ready."""
     ok, result = send_for_result(harness, build_command("steam-ready"), timeout)
     payload = (result or {}).get("result")
-    return ok and not (isinstance(payload, dict) and payload.get("ready") is False)
+    if not ok:
+        return None
+    if isinstance(payload, dict) and payload.get("ready") is False:
+        return "not-ready"
+    return "ready"
+
+
+def send_steam_ready(harness: Path, timeout: float) -> bool:
+    """True when the game's Steamworks client is up; a mod that returns no result counts as ready."""
+    return steam_ready_verdict(harness, timeout) == "ready"
 
 
 def send_printing_result(harness: Path, payload: dict[str, object], timeout: float) -> bool:
@@ -829,6 +866,10 @@ def prepare_frame(harness: Path, args: argparse.Namespace) -> bool:
     return True
 
 
+def game_exited_error(game_dir: Path) -> str:
+    return f"relaunch: game exited during startup (see {latest_log_path(game_dir)})"
+
+
 def relaunch(
     harness: Path,
     game_dir: Path,
@@ -841,31 +882,42 @@ def relaunch(
     spawns: bool = True,
     invulnerable: bool = False,
     feathers: int = 2,
+    is_alive: Callable[[], bool] = game_is_running,
 ) -> bool:
-    """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable if asked, set the Feathers amount unless it is 0, stop enemy spawns unless spawns is set, and enter editor. A level of None stops at the main menu once Steamworks is ready."""
+    """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable if asked, set the Feathers amount unless it is 0, stop enemy spawns unless spawns is set, and enter editor. A level of None stops at the main menu once Steamworks is ready. A game that stays not-ready but keeps answering (an offline run with the Steam stub) continues after a grace period; one that stops answering or exits fails."""
     started = time.time()
 
     def prepare_harness() -> str | None:
-        """Quit, relaunch, and wait for the harness to enable; any step failing reports the same error."""
+        """Quit, relaunch, and wait for the new session's harness to enable; the previous session's log must not satisfy the wait."""
         if not quit_game(harness, timeout):
             return "relaunch: harness did not become ready"
         on_step("relaunch: starting game")
+        launched = time.time()
         if not launch_game(task):
             return "relaunch: harness did not become ready"
         on_step("relaunch: waiting for harness")
-        return (
-            None
-            if wait_for_log_line(latest_log_path(game_dir), HARNESS_ENABLED_LINE, started, relaunch_timeout(timeout))
-            else "relaunch: harness did not become ready"
-        )
+        grace_until = time.monotonic() + GAME_STARTUP_GRACE_SECONDS
+        starting_up = lambda: is_alive() or time.monotonic() < grace_until
+        if wait_for_log_line(latest_log_path(game_dir), HARNESS_ENABLED_LINE, launched, relaunch_timeout(timeout), alive=starting_up):
+            return None
+        return game_exited_error(game_dir) if not is_alive() else "relaunch: harness did not become ready"
 
     def wait_for_steamworks() -> str | None:
         on_step("relaunch: waiting for Steamworks")
-        return (
-            None
-            if wait_for_steamworks_ready(lambda: send_steam_ready(harness, min(timeout, 2.0)), relaunch_timeout(timeout))
-            else "relaunch: Steamworks did not become ready"
-        )
+        match wait_for_steamworks_ready(
+            lambda: steam_ready_verdict(harness, min(timeout, 2.0)),
+            relaunch_timeout(timeout),
+            alive=is_alive,
+        ):
+            case "ready":
+                return None
+            case "offline":
+                on_step("relaunch: Steamworks not ready (offline run); continuing")
+                return None
+            case "dead":
+                return game_exited_error(game_dir)
+            case _:
+                return "relaunch: Steamworks did not become ready"
 
     for step in (prepare_harness, wait_for_steamworks):
         match step():
@@ -1009,5 +1061,13 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if ok else 1
 
 
+def run_main(argv: list[str] | None = None) -> int:
+    try:
+        return main(argv)
+    except KeyboardInterrupt:
+        print("run.py: interrupted", file=sys.stderr)
+        return 130
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_main())

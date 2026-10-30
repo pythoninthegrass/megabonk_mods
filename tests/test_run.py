@@ -570,13 +570,27 @@ def test_steam_ready_exits_0_for_a_mod_that_returns_no_result() -> None:
 
 
 def test_wait_for_steamworks_ready_retries_until_the_game_reports_ready() -> None:
-    results = iter([False, False, True])
-    assert run.wait_for_steamworks_ready(lambda: next(results), timeout=5, sleep=lambda _: None)
+    results = iter(["not-ready", "not-ready", "ready"])
+    assert run.wait_for_steamworks_ready(lambda: next(results), timeout=5, sleep=lambda _: None) == "ready"
 
 
-def test_wait_for_steamworks_ready_times_out_when_the_game_never_reports_ready() -> None:
+def test_wait_for_steamworks_ready_times_out_without_an_answer() -> None:
     clock = iter(range(100))
-    assert not run.wait_for_steamworks_ready(lambda: False, timeout=3, sleep=lambda _: None, now=lambda: next(clock))
+    assert run.wait_for_steamworks_ready(lambda: None, timeout=3, sleep=lambda _: None, now=lambda: next(clock)) == "timeout"
+
+
+def test_wait_for_steamworks_ready_reports_offline_after_the_grace_period() -> None:
+    clock = iter(range(100))
+    assert run.wait_for_steamworks_ready(lambda: "not-ready", timeout=60, sleep=lambda _: None, now=lambda: next(clock)) == "offline"
+
+
+def test_wait_for_steamworks_ready_still_becomes_ready_within_the_grace() -> None:
+    results = iter(["not-ready", "ready"])
+    assert run.wait_for_steamworks_ready(lambda: next(results), timeout=60, sleep=lambda _: None) == "ready"
+
+
+def test_wait_for_steamworks_ready_reports_dead_when_the_game_exits() -> None:
+    assert run.wait_for_steamworks_ready(lambda: "not-ready", timeout=60, alive=lambda: False, sleep=lambda _: None) == "dead"
 
 
 def test_build_camera_command_carries_position_and_rotation() -> None:
@@ -680,14 +694,14 @@ def test_request_result_prints_nothing(capsys) -> None:
         assert out.out == "" and out.err == ""
 
 
-def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_ready=True, kill_floor=True, unsupported=False, load_failed=False):
+def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_verdict="ready", kill_floor=True, unsupported=False, load_failed=False):
     calls = []
     monkeypatch.setattr(run, "quit_game", lambda h, t: calls.append("quit") or True)
     monkeypatch.setattr(run, "launch_game", lambda task: calls.append(("launch", task)) or True)
-    monkeypatch.setattr(run, "wait_for_steamworks_ready", lambda probe, timeout: calls.append("steam") or steam_ready)
+    monkeypatch.setattr(run, "wait_for_steamworks_ready", lambda probe, timeout, alive=None: calls.append("steam") or steam_verdict)
     monkeypatch.setattr(run, "send", lambda h, payload, t: calls.append(("send", payload["command"])) or True)
 
-    def wait_log(log, line, newer, timeout):
+    def wait_log(log, line, newer, timeout, alive=None):
         calls.append(("log", line))
         return harness_ready
 
@@ -727,12 +741,66 @@ def test_relaunch_without_a_level_stops_at_the_main_menu(monkeypatch) -> None:
     assert calls == ["quit", ("launch", "game:run"), ("log", "DevHarness: enabled"), "steam"]
 
 
-def test_relaunch_without_a_level_still_fails_when_steamworks_never_readies(monkeypatch) -> None:
-    relaunch_stubs(monkeypatch, steam_ready=False)
+def test_relaunch_without_a_level_still_fails_when_steamworks_never_answers(monkeypatch) -> None:
+    relaunch_stubs(monkeypatch, steam_verdict="timeout")
     errors = []
     ok = run.relaunch(Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=errors.append)
     assert ok is False
     assert errors == ["relaunch: Steamworks did not become ready"]
+
+
+def test_relaunch_continues_past_a_not_ready_steamworks_on_an_offline_run(monkeypatch) -> None:
+    calls = relaunch_stubs(monkeypatch, steam_verdict="offline")
+    steps, errors = [], []
+    ok = run.relaunch(Path("/h"), Path("/g"), Path("/lvl.json"), 5, "game:run", on_step=steps.append, on_error=errors.append)
+    assert ok is True
+    assert errors == []
+    assert "relaunch: Steamworks not ready (offline run); continuing" in steps
+    assert calls == ["quit", ("launch", "game:run"), ("log", "DevHarness: enabled"), "steam", ("send", "load-level"), ("log", "KillFloor: armed"), ("send", "item"), ("send", "editor")]
+
+
+def test_relaunch_reports_the_game_exiting_during_startup(monkeypatch) -> None:
+    relaunch_stubs(monkeypatch, harness_ready=False)
+    errors = []
+    ok = run.relaunch(Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=errors.append, is_alive=lambda: False)
+    assert ok is False
+    assert errors == ["relaunch: game exited during startup (see /g/MelonLoader/Latest.log)"]
+
+
+def test_relaunch_reports_a_game_dying_while_steamworks_is_awaited(monkeypatch) -> None:
+    relaunch_stubs(monkeypatch, steam_verdict="dead")
+    errors = []
+    ok = run.relaunch(Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=errors.append)
+    assert ok is False
+    assert errors == ["relaunch: game exited during startup (see /g/MelonLoader/Latest.log)"]
+
+
+def test_wait_for_any_log_line_gives_up_when_the_game_exits(tmp_path) -> None:
+    log = tmp_path / "Latest.log"
+    log.write_text("nothing useful yet\n", encoding="utf-8")
+    started = time.time()
+    assert run.wait_for_any_log_line(log, ["DevHarness: enabled"], started, 30, alive=lambda: False) is None
+
+
+def test_steam_ready_verdict_classifies_the_result(monkeypatch) -> None:
+    cases = [
+        ((True, {"result": {"ready": False}}), "not-ready"),
+        ((True, {"result": {"ready": True, "buildId": "21750826"}}), "ready"),
+        ((True, {"result": None}), "ready"),
+        ((True, None), "ready"),
+        ((False, None), None),
+    ]
+    for (ok, result), expected in cases:
+        monkeypatch.setattr(run, "send_for_result", lambda harness, payload, timeout, ok=ok, result=result: (ok, result))
+        assert run.steam_ready_verdict(Path("/h"), 5) == expected
+
+
+def test_run_main_exits_130_on_keyboard_interrupt(monkeypatch) -> None:
+    def interrupted(argv=None):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(run, "main", interrupted)
+    assert run.run_main([]) == 130
 
 
 def test_relaunch_sets_two_feathers_before_entering_the_editor(monkeypatch) -> None:
@@ -827,13 +895,15 @@ def test_resolve_relaunch_invulnerable_reads_the_setting() -> None:
 def test_relaunch_fails_with_the_exact_error_when_the_harness_never_becomes_ready(monkeypatch) -> None:
     relaunch_stubs(monkeypatch, harness_ready=False)
     errors = []
-    ok = run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=errors.append)
+    ok = run.relaunch(
+        Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=errors.append, is_alive=lambda: True
+    )
     assert ok is False
     assert "relaunch: harness did not become ready" in errors
 
 
 def test_relaunch_fails_when_steamworks_never_becomes_ready(monkeypatch) -> None:
-    relaunch_stubs(monkeypatch, steam_ready=False)
+    relaunch_stubs(monkeypatch, steam_verdict="timeout")
     errors = []
     ok = run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=errors.append)
     assert ok is False
