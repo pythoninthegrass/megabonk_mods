@@ -1,7 +1,7 @@
 ---
 id: TASK-025.04
 title: 'Keep collision, grind and window behaviour attached to their pieces'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-30T16:24:00Z'
 updated_date: '2026-10-30T23:54:00Z'
@@ -67,7 +67,7 @@ Depends on TASK-025.03, which provides the placeable pieces. Grind behaviour in 
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -101,4 +101,21 @@ Fresh palette check in the shipped level: searching piece-rail-big-straight, sel
 Validation: 1463 C# tests and 659 Python tests pass in full task check, including build and lint; final modifier refinement is being rechecked before commit. Preservation CLI matches the shipped baseline. Full assembled-level visual/joint verification stays in the existing follow-up tasks. Final handoff must leave the shipped level in editor mode, normal spawns/damage, and no forced slide override.
 
 Final verification passed on the finished code: task check (1463 C# tests, 659 Python tests, build, markdownlint and ruff), git diff --check, and standalone shipped-Warehouse preservation check. Ctrl-click was verified in a fresh instance: selected placement:101 (hidden path), R rotated only that path from yaw90 to180 while its copy stayed yaw90. Last relaunch restored levels/thps.mblevel.json in editor mode with 1241 edits, dirty=false, normal damage/spawns and no forced slide override.
+
+Implementation committed as 96b1642 (feat(thps): attach grind paths and supports to construction pieces). All acceptance criteria and Definition of Done items verified.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented piece-owned grind and support attachments without changing the shipped Warehouse or its pack version.
+
+- Added explicit serialized attachment descriptors and stable placement IDs, atomic owner/child ID reservation, independent editing, transform propagation, deletion/restore, undo/redo and save/replay. Removing a piece stops an active grind on its rails.
+- Added deterministic attachments.json defaults: 41 grind subpaths and 17 supports on 36 owners. Coping splits follow source module boundaries with no duplicate catch regions or segments shorter than the handoff radius. Palette placements snapshot installed defaults; pack installation copies the sidecar.
+- Normal clicks select the visible owner of a hidden catch collider; Ctrl-click selects the hidden path. Window panes retain baked pass-through collision without carving unrelated walls.
+- Updated the asset-bundle, level-format, inventory and development docs.
+
+Verification: task check passed (1463 C# tests, 659 Python tests, build and lint); git diff --check and the standalone preservation check passed. Running-game checks covered fresh palette placement, independent copies/supports/paths, transformed native catches, active-grind deletion, bidirectional ramp seam handoffs and editor save/relaunch. The shipped level was restored in editor mode with its original 1241 edits, dirty=false and normal gameplay settings.
+
+Implementation commit: 96b1642. Full assembled-level generation and whole-layout verification remain in the existing subsequent tasks.
+<!-- SECTION:FINAL_SUMMARY:END -->
