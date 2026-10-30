@@ -4,16 +4,23 @@ using System.Linq;
 
 namespace MegabonkLevels;
 
-// The radio's songs in clip-name order; Next advances through them and wraps.
+// The radio's songs; Next advances through them and wraps.
 public sealed class RadioPlaylist
 {
     private readonly IReadOnlyList<string> _clips;
     private int _index;
 
-    public RadioPlaylist(IEnumerable<string> clipNames)
+    public RadioPlaylist(IEnumerable<string> clipNames) : this(clipNames, preserveOrder: false)
     {
-        _clips = clipNames.Distinct().OrderBy(name => name, StringComparer.Ordinal).ToList();
     }
+
+    private RadioPlaylist(IEnumerable<string> clipNames, bool preserveOrder)
+    {
+        var distinct = clipNames.Distinct();
+        _clips = (preserveOrder ? distinct : distinct.OrderBy(name => name, StringComparer.Ordinal)).ToList();
+    }
+
+    public static RadioPlaylist PreserveOrder(IEnumerable<string> clipNames) => new(clipNames, preserveOrder: true);
 
     // Makes the next clip the one after `clip`, so the radio continues the playlist from the clip already playing; an unknown clip leaves the start unchanged.
     public void StartAfter(string clip)

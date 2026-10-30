@@ -3,6 +3,22 @@ namespace MegabonkLevels.Tests;
 public class RadioPlaylistTests
 {
     [Fact]
+    public void PreserveOrder_DeduplicatesContinuesAndWrapsWithoutSorting()
+    {
+        var playlist = RadioPlaylist.PreserveOrder(["6 Base", "06.01 One", "06.02 Two", "6 Base"]);
+
+        playlist.StartAfter("06.01 One");
+
+        Assert.Equal(new[] { "06.02 Two", "6 Base", "06.01 One" }, new[] { playlist.Next(), playlist.Next(), playlist.Next() });
+    }
+
+    [Fact]
+    public void PreserveOrder_EmptyPlaylistReturnsNull()
+    {
+        Assert.Null(RadioPlaylist.PreserveOrder([]).Next());
+    }
+
+    [Fact]
     public void Next_FollowsClipNameOrderAndWraps()
     {
         var playlist = new RadioPlaylist(["02_Here_and_Now", "01_Police_Truck", "03_Vilified"]);

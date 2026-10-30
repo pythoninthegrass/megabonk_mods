@@ -3,10 +3,11 @@ id: TASK-024
 title: >-
   Load custom music from mp3 files at runtime for stage music and the boombox
   radio
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - Assistant
 created_date: '2026-10-29 08:43'
-updated_date: '2026-10-30T02:18:00Z'
+updated_date: '2026-10-30T02:25:00Z'
 labels:
   - music
   - level-editor
@@ -79,6 +80,8 @@ TASK-024.01 is complete. Pushed commit 36257ac provides a diagnostic NLayer -> r
 ## Current user example
 
 Lance added tools/ost/14 Strobe.mp3 after the spike. It is not automatically discovered or copied by the current runtime code and has not been tested. Once placed in the runtime folder and the feature is implemented, its numeric prefix should place it after 13 Le Hot '99 and before unprefixed files. The current boombox still reads installed pack clips; rebuilding/installing the pack is the existing alternative, not the requested runtime solution.
+
+Approved breakdown: TASK-024.02 discovery/order/lookup tests → TASK-024.03 shared native clip factory and bounded decoding → TASK-024.04 stage/radio integration and default Wine verification on this Mac → TASK-024.05 native Linux ABI/playback when available. Assistant owns execution. Do not assume CrossOver; use the machine's default Wine setup. Startup scan is required; a Prepare-time rescan may refresh the catalog without a watcher.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes

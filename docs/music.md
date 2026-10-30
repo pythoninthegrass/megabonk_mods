@@ -99,6 +99,14 @@ The runtime paths that fail, confirmed in the running game:
 - `AudioClip.Create` throws `MissingMethodException` for `Il2CppSystem.ReadOnlySpan<T>.GetPinnableReference()`, which its name marshalling needs; `SetData` takes the same span path.
 - An initial direct `Construct_Internal_Injected` / `CreateUserSound_Injected` attempt with a hand-built span crashed with no managed log. This does not establish that native clip creation is unavailable: the corrected handle/pointer path below succeeds.
 
+## Runtime music catalog
+
+The runtime catalog scans only the top level of `<game>/UserData/CustomMusic/` for `.mp3` files (extension matching is case-insensitive). `tools/ost/` is a host-side source folder, not a discovery folder. The catalog is implemented separately from playback: startup discovery, `track:` stage references and radio integration are not wired in yet.
+
+Track names are filenames without the extension, preserving spaces and dots. Lookup is case-insensitive and resolves only discovered entries, never arbitrary paths. Case-colliding names are all excluded with a warning; rename them to distinct names. Linked files and names containing path separators, colons or control characters are excluded. An absent folder yields an empty catalog; an unreadable folder warns without throwing. Discovery does not decode or verify audio contents: playback must handle files that disappear, become unreadable or fail decoding afterward.
+
+Order follows leading ASCII integer components matching `[0-9]+(\.[0-9]+)*`, not decimal numbers: `6 Base`, `06.01 Screamer`, `06.02 Nothing to Me`, `06.10 Ten`, `14 Strobe`. Components compare numerically regardless of leading zeros or size; a shorter equal prefix sorts first (`6` before `6.0`). Equal numeric prefixes use the complete extensionless name in ordinal (case-sensitive, culture-independent) order. Files without a numeric prefix sort last, also by ordinal name. Runtime playlists can preserve this supplied order; pack playlists retain their existing ordinal clip-name sorting.
+
 ## Runtime PCM probe
 
 The development harness can decode mp3 files and audition either native `AudioClip` playback or buffer injection. This is a diagnostic probe, not a level or radio playback implementation; `bundle:` playback remains unchanged. See [development.md](development.md#runtime-music-probe) for commands.

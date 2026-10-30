@@ -23,6 +23,8 @@
     <Compile Include="../../src/MegabonkLevels.Mod/level_file_serialization.cs" Link="level_file_serialization.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_music_reference.cs" Link="level_music_reference.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/radio_playlist.cs" Link="radio_playlist.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/track_file_name.cs" Link="track_file_name.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/custom_music_library.cs" Link="custom_music_library.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/catalog_id.cs" Link="catalog_id.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/edit_operations.cs" Link="edit_operations.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_state.cs" Link="level_state.cs" />
