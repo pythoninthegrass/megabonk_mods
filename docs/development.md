@@ -289,6 +289,47 @@ A machine builds its own pack, so it needs the disc image, the mp3s and Unity 20
 
 A missing pack does not fail the load. The level opens with a placeholder at the Warehouse position and the log shows `Packs: 'bundle:thps/Warehouse': pack 'thps' is not installed; using a placeholder.` Packs load once per session, so install the pack before the relaunch.
 
+### Preserving the shipped Warehouse
+
+Run `uv run scripts/check_thps_preservation.py` to compare the shipped Warehouse with
+`tests/fixtures/thps-preservation.json`. The same check runs in `task scripts:test`
+and therefore `task check`. It regenerates into a temporary directory in a fresh
+Python process, never overwriting `levels/thps.mblevel.json`. Both copies must match
+the baseline byte-for-byte, including whitespace and the final newline. Differences
+include field paths, changed file hashes, missing files, and level text diffs.
+
+The baseline contains the complete level text, derived footprint, placement, boss
+spawn, kept cells, coping rails and collectible transforms, required pack entries,
+and SHA-256/size fingerprints. The file inventory covers extraction OBJ/MTL/nodes
+and PNGs, item overrides, the generated Warehouse prefab, render/collision meshes,
+`Warehouse_*.mat` materials, `WarehouseTextures/*.png` textures, their importer
+metadata, and the default Superman clip and its source MP3. Unrelated pack assets
+and manifest entries may be added; the existing pack id/version and dependencies
+must remain unchanged. Whole bundle hashes are deliberately not pinned, since an
+additive asset changes the bundle without changing the legacy assets.
+
+This is a strict check, not a skip when proprietary inputs are absent. Prepare the
+extraction, soundtrack and generated Unity assets with the THPS setup above before
+running it. After pack-authoring changes, rebuild the pack before checking: the
+check fingerprints the generated assets on disk, not the C# builder's future
+output. It does not inspect an installed bundle or certify in-game rendering.
+
+To deliberately accept a shipped Warehouse change, first review the level and
+asset changes, regenerate the level to a separate path and compare it, and rebuild
+the pack. Then run:
+
+```sh
+uv run scripts/check_thps_preservation.py --refresh
+uv run scripts/check_thps_preservation.py
+task check
+```
+
+Refresh refuses missing inventoried files or a level the generator cannot reproduce.
+Review and commit the baseline diff with the intentional change. **Refreshing means
+the shipped level or its dependencies changed**; it is not a way to make an
+unexplained failure green. Construction-kit additions must preserve this baseline
+and use a separate level instead of refreshing it.
+
 The level also places the game's boombox beside the player spawn as a radio. To check it, `relaunch` the level, leave the editor, walk to the boombox and press the interact key; the log shows `Radio: playing '<clip>'.` and each further press plays the next clip in soundtrack order. `Music: using clip '04_Superman'` at load confirms the default track.
 
 ### Launching from an automated session
