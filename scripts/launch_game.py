@@ -12,6 +12,7 @@ Steam must be running and logged on before the game starts; see docs/development
 Usage:
     uv run scripts/launch_game.py steam   Start the Steam client with -silent
     uv run scripts/launch_game.py game    Start Megabonk.exe
+    uv run scripts/launch_game.py watch --log FILE -- argv...   internal: run the game and append its exit status to FILE
 """
 
 import argparse
@@ -31,6 +32,7 @@ STEAM_DIR_WINDOWS = r"C:\Program Files (x86)\Steam"
 GAME_EXE_WINDOWS = STEAM_DIR_WINDOWS + r"\steamapps\common\Megabonk\Megabonk.exe"
 STEAM_ARGS = ["-silent", "-no-cef-sandbox", "-cef-disable-gpu", "-cef-disable-gpu-compositing"]
 GAME_DLL_OVERRIDES = "version=n,b;d3d11,d3d10core=n,b"
+GAME_WINEDEBUG = "-all,err+seh,warn+seh,err+module,trace+loaddll"
 
 
 @dataclass(frozen=True)
@@ -38,6 +40,7 @@ class Launch:
     argv: list[str]
     env: dict[str, str]
     cwd: Path | None
+    log: Path | None = None
 
 
 def _wine_env(prefix: Path) -> dict[str, str]:
@@ -50,9 +53,11 @@ def build_game_launch(wine: Path, prefix: Path, game: Path) -> Launch:
         "SteamAppId": APP_ID,
         "SteamGameId": APP_ID,
         "WINEDLLOVERRIDES": GAME_DLL_OVERRIDES,
-        "WINEDEBUG": "-all",
+        "WINEDEBUG": GAME_WINEDEBUG,
+        "MVK_CONFIG_LOG_LEVEL": "1",
+        "DXVK_LOG_LEVEL": "error",
     }
-    return Launch([str(wine), GAME_EXE_WINDOWS], env, game)
+    return Launch([str(wine), GAME_EXE_WINDOWS], env, game, game / "MelonLoader" / "wine-latest.log")
 
 
 def build_steam_launch(wine: Path, prefix: Path) -> Launch:
@@ -66,10 +71,43 @@ def prefix_for(game: Path) -> Path:
     return prefix
 
 
+def rotate_launch_log(log: Path) -> None:
+    """Move the previous launch's log aside so each launch gets a fresh file, the way Unity rotates Player.log."""
+    log.parent.mkdir(parents=True, exist_ok=True)
+    if log.exists():
+        log.replace(log.with_name(f"{log.stem}.prev{log.suffix}"))
+
+
+def watcher_argv(launch: Launch) -> list[str]:
+    return [sys.executable, str(Path(__file__).resolve()), "watch", "--log", str(launch.log), "--", *launch.argv]
+
+
+def watch_launch(log: Path, argv: list[str]) -> int:
+    """Run the game to completion from the detached watcher and append its exit status to the log; only the game's parent can wait on it, which is why spawn() detaches this process instead of the game."""
+    with log.open("ab") as stream:
+        proc = subprocess.Popen(argv, stdout=stream, stderr=stream)
+        status = proc.wait()
+        stream.write(f"\nwine: game process exited with status {status}\n".encode())
+    return status
+
+
 def spawn(launch: Launch) -> None:
+    """Start the target detached; a logged game launch runs through a watcher process that can reap it and record its exit status."""
+    env = {**os.environ, **launch.env}
+    if launch.log is not None:
+        rotate_launch_log(launch.log)
+        subprocess.Popen(
+            watcher_argv(launch),
+            env=env,
+            cwd=launch.cwd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        return
     subprocess.Popen(
         launch.argv,
-        env={**os.environ, **launch.env},
+        env=env,
         cwd=launch.cwd,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -78,6 +116,16 @@ def spawn(launch: Launch) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["watch"]:
+        if argv[1:2] != ["--log"] or len(argv) < 4:
+            print("usage: launch_game.py watch --log FILE -- argv...", file=sys.stderr)
+            return 2
+        game_argv = argv[3:]
+        if game_argv[:1] == ["--"]:
+            game_argv = game_argv[1:]
+        return watch_launch(Path(argv[2]), game_argv)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("target", choices=["steam", "game"])
     args = parser.parse_args(argv)

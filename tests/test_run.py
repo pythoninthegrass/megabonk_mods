@@ -699,9 +699,10 @@ def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_verdict="ready", ki
     calls = []
     monkeypatch.setattr(run, "quit_game", lambda h, t: calls.append("quit") or True)
     monkeypatch.setattr(run, "launch_game", lambda task: calls.append(("launch", task)) or True)
-    monkeypatch.setattr(run, "force_kill_games", lambda: calls.append("force_kill") or 0)
+    monkeypatch.setattr(run, "force_kill_games", lambda context="quit": calls.append("force_kill") or 0)
     monkeypatch.setattr(run, "wait_for_wineserver_to_exit", lambda timeout=15.0: calls.append("wineserver") or True)
     monkeypatch.setattr(run, "clear_harness_queue", lambda h: calls.append("clear") or None)
+    monkeypatch.setattr(run, "reap_wine_leftovers_on_host", lambda **kwargs: calls.append("reap") or None)
     monkeypatch.setattr(run, "wait_for_steamworks_ready", lambda probe, timeout, alive=None: calls.append("steam") or steam_verdict)
     monkeypatch.setattr(run, "send", lambda h, payload, t: calls.append(("send", payload["command"])) or True)
 
@@ -780,6 +781,32 @@ def test_relaunch_reports_the_game_exiting_during_startup(monkeypatch) -> None:
     ok = run.relaunch(Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=errors.append, is_alive=lambda: False)
     assert ok is False
     assert errors == ["relaunch: game exited during startup (see /g/MelonLoader/Latest.log)"]
+
+
+def test_game_exited_error_appends_the_wine_log_tail(tmp_path) -> None:
+    log = tmp_path / "MelonLoader" / "wine-latest.log"
+    log.parent.mkdir(parents=True)
+    log.write_text(
+        "0024:err:module:import_dll Library foo.dll not found\n"
+        "\n"
+        "wine: game process exited with status -11\n",
+        encoding="utf-8",
+    )
+    message = run.game_exited_error(tmp_path)
+    assert message.startswith("relaunch: game exited during startup (see")
+    assert "  wine: game process exited with status -11" in message
+    assert "  0024:err:module:import_dll Library foo.dll not found" in message
+
+
+def test_game_exited_error_without_a_wine_log_is_unchanged(tmp_path) -> None:
+    assert run.game_exited_error(tmp_path) == f"relaunch: game exited during startup (see {tmp_path}/MelonLoader/Latest.log)"
+
+
+def test_relaunch_leaves_no_game_or_wine_processes_after_a_failure(monkeypatch) -> None:
+    calls = relaunch_stubs(monkeypatch, harness_ready=False)
+    ok = run.relaunch(Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=lambda m: None, is_alive=lambda: False)
+    assert ok is False
+    assert calls[-2:] == ["force_kill", "reap"]
 
 
 def test_relaunch_reports_a_game_dying_while_steamworks_is_awaited(monkeypatch) -> None:
@@ -1200,6 +1227,46 @@ def test_reap_wine_leftovers_leaves_orphans_when_steam_runs(capsys) -> None:
     assert "skipping" in capsys.readouterr().out
 
 
+def test_force_kill_wine_leftovers_sigkills_stubs_and_orphans(monkeypatch, capsys) -> None:
+    listing = WINE_IDLE_LISTING + "  21 " + CRASH_HANDLER_PS_LINE + "\n"
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, stdout=listing))
+    killed: list[tuple[int, int]] = []
+    monkeypatch.setattr(os, "kill", lambda pid, sig: killed.append((pid, sig)))
+    assert run.force_kill_wine_leftovers() == 6
+    assert killed == [(10, 9), (11, 9), (12, 9), (13, 9), (14, 9), (21, 9)]
+    assert "force-killed 6 stubborn Wine processes" in capsys.readouterr().out
+
+
+def test_force_kill_wine_leftovers_skips_while_steam_runs(monkeypatch) -> None:
+    listing = WINE_IDLE_LISTING + "  20 C:\\Program Files (x86)\\Steam\\steam.exe -silent\n"
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, stdout=listing))
+    killed: list[tuple[int, int]] = []
+    monkeypatch.setattr(os, "kill", lambda pid, sig: killed.append((pid, sig)))
+    assert run.force_kill_wine_leftovers() == 0
+    assert killed == []
+
+
+def test_reap_wine_leftovers_on_host_escalates_survivors_after_the_grace(monkeypatch) -> None:
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, stdout=WINE_IDLE_LISTING))
+    signaled: list[tuple[int, int]] = []
+    monkeypatch.setattr(os, "kill", lambda pid, sig: signaled.append((pid, sig)))
+    forced: list[str] = []
+    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit": forced.append(context) or 0)
+    run.reap_wine_leftovers_on_host("Darwin", sleep=lambda _: None)
+    assert [sig for _, sig in signaled] == [15] * 5
+    assert forced == ["quit"]
+
+
+def test_reap_wine_leftovers_on_host_skips_the_grace_when_nothing_runs(monkeypatch) -> None:
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, stdout="  99 /sbin/launchd\n"))
+    slept: list[float] = []
+    forced: list[str] = []
+    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit": forced.append(context) or 0)
+    run.reap_wine_leftovers_on_host("Darwin", sleep=slept.append)
+    assert slept == []
+    assert forced == []
+
+
 GAME_DIR_PS_LINE = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\Megabonk.exe"
 CRASH_HANDLER_PS_LINE = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\UnityCrashHandler64.exe 32 28839936"
 
@@ -1302,6 +1369,7 @@ def test_wait_for_wineserver_to_exit_fails_when_the_server_survives(monkeypatch)
     monkeypatch.setattr(run, "wineserver_binary", lambda: run.Path("/wine/bin/wineserver"))
     monkeypatch.setattr(run, "resolve_wine_prefix", lambda: run.Path("/prefix"))
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit": 0)
     assert run.wait_for_wineserver_to_exit() is False
 
 
@@ -1314,11 +1382,12 @@ def test_wait_for_wineserver_to_exit_fails_when_the_timeout_expires(monkeypatch)
         raise subprocess.TimeoutExpired(cmd, 1)
 
     monkeypatch.setattr(subprocess, "run", expire)
+    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit": 0)
     monkeypatch.setattr(run.time, "sleep", lambda _: None)
     assert run.wait_for_wineserver_to_exit() is False
 
 
-def test_wait_for_wineserver_to_exit_kills_a_server_that_outlives_the_wait(monkeypatch) -> None:
+def test_wait_for_wineserver_to_exit_kills_a_server_that_outlives_the_wait(monkeypatch, capsys) -> None:
     servers = iter([[7], [7], [7], []])
     monkeypatch.setattr(run, "running_wineserver_pids", lambda: next(servers))
     monkeypatch.setattr(run, "running_game_pids", lambda: [])
@@ -1327,9 +1396,13 @@ def test_wait_for_wineserver_to_exit_kills_a_server_that_outlives_the_wait(monke
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0))
     killed: list[int] = []
     monkeypatch.setattr(os, "kill", lambda pid, sig: killed.append(pid))
+    forced: list[str] = []
+    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit": forced.append(context) or 0)
     monkeypatch.setattr(run.time, "sleep", lambda _: None)
     assert run.wait_for_wineserver_to_exit() is True
     assert killed == [7]
+    assert forced == ["relaunch"]
+    assert "force-killed 1 lingering wineserver(s)" in capsys.readouterr().out
 
 
 def test_wait_for_wineserver_to_exit_fails_when_a_killed_server_survives(monkeypatch) -> None:
@@ -1339,6 +1412,7 @@ def test_wait_for_wineserver_to_exit_fails_when_a_killed_server_survives(monkeyp
     monkeypatch.setattr(run, "resolve_wine_prefix", lambda: run.Path("/prefix"))
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0))
     monkeypatch.setattr(os, "kill", lambda pid, sig: None)
+    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit": 0)
     monkeypatch.setattr(run.time, "sleep", lambda _: None)
     assert run.wait_for_wineserver_to_exit() is False
 

@@ -100,6 +100,7 @@ STEAM_READY_POLL_SECONDS = 1.0
 STEAM_OFFLINE_GRACE_SECONDS = 15.0
 GAME_STARTUP_GRACE_SECONDS = 5.0
 WINESERVER_EXIT_TIMEOUT_SECONDS = 15.0
+WINE_STUB_KILL_GRACE_SECONDS = 1.5
 GAME_COMMAND = re.compile(r"^(?:[A-Za-z]:\\(?:.*\\)?Megabonk\.exe|(?:\S*/)?Megabonk\.x86_64)(?:\s|$)")
 GAME_IMAGE_WINDOWS = "Megabonk.exe"
 WINDOWS_COMMAND = re.compile(r"^[A-Za-z]:\\")
@@ -534,12 +535,16 @@ def wait_for_wineserver_to_exit(timeout: float = WINESERVER_EXIT_TIMEOUT_SECONDS
         pass
     if not running_wineserver_pids():
         return not running_game_pids()
-    for pid in running_wineserver_pids():
+    leftover_servers = running_wineserver_pids()
+    for pid in leftover_servers:
         try:
             os.kill(pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
+    if leftover_servers:
+        print(f"relaunch: force-killed {len(leftover_servers)} lingering wineserver(s)")
     time.sleep(1.0)
+    force_kill_wine_leftovers("relaunch")
     return not running_wineserver_pids() and not running_game_pids()
 
 
@@ -587,7 +592,24 @@ def reap_wine_leftovers(ps_listing: str, kill: Callable[[int], None]) -> int:
     return len(stubs) + len(orphans)
 
 
-def reap_wine_leftovers_on_host(system: str | None = None) -> None:
+def force_kill_wine_leftovers(context: str = "quit") -> int:
+    """SIGKILL the Wine stubs and game helpers that survived SIGTERM, which is what a stub does once its wineserver is gone; skipped while a real Windows process such as Steam runs."""
+    listing = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True, check=True).stdout
+    stubs, others, orphans = find_wine_leftovers(listing)
+    if others:
+        return 0
+    pids = stubs + orphans
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    if pids:
+        print(f"{context}: force-killed {len(pids)} stubborn Wine processes")
+    return len(pids)
+
+
+def reap_wine_leftovers_on_host(system: str | None = None, sleep: Callable[[float], None] = time.sleep) -> None:
     if (system or platform.system()) != "Darwin":
         return
 
@@ -598,7 +620,10 @@ def reap_wine_leftovers_on_host(system: str | None = None) -> None:
             pass
 
     listing = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True, check=True).stdout
-    reap_wine_leftovers(listing, kill)
+    if not reap_wine_leftovers(listing, kill):
+        return
+    sleep(WINE_STUB_KILL_GRACE_SECONDS)
+    force_kill_wine_leftovers("quit")
 
 
 def find_harness_pids(ps_listing: str) -> list[int]:
@@ -611,7 +636,7 @@ def find_harness_pids(ps_listing: str) -> list[int]:
     return pids
 
 
-def force_kill_games() -> int:
+def force_kill_games(context: str = "quit") -> int:
     """SIGKILL every process running out of the game directory; the escalation for a game whose main thread stopped polling the harness."""
     listing = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True, check=True).stdout
     pids = find_harness_pids(listing)
@@ -621,7 +646,7 @@ def force_kill_games() -> int:
         except ProcessLookupError:
             pass
     if pids:
-        print(f"quit: force-killed {len(pids)} game processes")
+        print(f"{context}: force-killed {len(pids)} game processes")
     return len(pids)
 
 
@@ -950,8 +975,23 @@ def prepare_frame(harness: Path, args: argparse.Namespace) -> bool:
     return True
 
 
+def wine_log_tail(game_dir: Path) -> str:
+    """The exit-status line and last lines of the Wine launch log, appended to a startup failure so the reason reaches the terminal, not just the file."""
+    wine_log = game_dir / "MelonLoader" / "wine-latest.log"
+    try:
+        lines = [line for line in wine_log.read_text(errors="replace").splitlines() if line.strip()]
+    except OSError:
+        return ""
+    if not lines:
+        return ""
+    exits = [line for line in lines if "game process exited with status" in line]
+    rest = [line for line in lines if line not in exits]
+    tail = (exits[-1:] + rest[-2:]) if exits else lines[-3:]
+    return "\n" + "\n".join(f"  {line}" for line in tail)
+
+
 def game_exited_error(game_dir: Path) -> str:
-    return f"relaunch: game exited during startup (see {latest_log_path(game_dir)})"
+    return f"relaunch: game exited during startup (see {latest_log_path(game_dir)}){wine_log_tail(game_dir)}"
 
 
 def relaunch(
@@ -1010,6 +1050,8 @@ def relaunch(
         match step():
             case str() as error:
                 on_error(error)
+                force_kill_games("relaunch")
+                reap_wine_leftovers_on_host()
                 return False
 
     if level is None:
