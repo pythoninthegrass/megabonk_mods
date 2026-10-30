@@ -21,7 +21,7 @@ tasks:
           cxstart = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/cxstart"
           game = sys.argv[1]
           env = {**os.environ, "SteamAppId": "3405340", "SteamGameId": "3405340"}
-          args = [cxstart, "--bottle", "Steam", "--workdir", game, ntpath.join(game, "Megabonk.exe")]
+          args = [cxstart, "--bottle", "Steam", "--workdir", game, ntpath.join(game, "Megabonk.exe"), "--melonloader.agfoffline"]
           subprocess.Popen(args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
           PY
 

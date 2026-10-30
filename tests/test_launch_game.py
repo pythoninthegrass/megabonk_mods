@@ -12,7 +12,11 @@ GAME = PREFIX / "drive_c/Program Files (x86)/Steam/steamapps/common/Megabonk"
 
 def test_game_launch_argv_and_cwd() -> None:
     launch = lg.build_game_launch(WINE, PREFIX, GAME)
-    assert launch.argv == [str(WINE), r"C:\Program Files (x86)\Steam\steamapps\common\Megabonk\Megabonk.exe"]
+    assert launch.argv == [
+        str(WINE),
+        r"C:\Program Files (x86)\Steam\steamapps\common\Megabonk\Megabonk.exe",
+        "--melonloader.agfoffline",
+    ]
     assert launch.cwd == GAME
 
 
