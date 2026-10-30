@@ -1,7 +1,7 @@
 ---
 id: TASK-024.02
 title: Discover and order runtime music files with safe track lookup
-status: In Progress
+status: Done
 assignee:
   - Assistant
 created_date: '2026-10-30T02:24:00Z'
@@ -35,7 +35,7 @@ Runtime music needs a deterministic cross-platform catalog without Unity or a pa
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -52,3 +52,9 @@ Runtime music needs a deterministic cross-platform catalog without Unity or a pa
 <!-- SECTION:NOTES:BEGIN -->
 Test-first red: task mod:test failed for absent TrackFileName, CustomMusicLibrary and PreserveOrder APIs before implementation. Green: task check passes (mod builds/deploys, 1,324 xUnit tests, 513 Python tests, markdownlint and ruff). Catalog tests exercise permission-denied folder, missing folder, file-as-folder, nested/non-mp3 exclusion, symlinks, case-insensitive lookup, path traversal, overflow-sized numeric components and dotted ordering. Case collisions are tested on candidate snapshots in both enumeration orders so coverage does not depend on filesystem case sensitivity. Startup/Prepare integration and actual audio remain deliberately deferred to 024.04; no parent playback criteria checked.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented a pure runtime music catalog with numeric dotted-prefix ordering, case-insensitive safe lookup, deterministic ambiguous-name rejection, top-level mp3 filtering and guarded filesystem discovery. Added an explicit preserve-order playlist factory without changing pack ordering, plus documentation and test-first coverage. task check passes: 1,324 xUnit and 513 Python tests, build/deploy and lint. Commit 8486699. Playback/startup integration remains for 024.04; no in-game audio behavior changed.
+<!-- SECTION:FINAL_SUMMARY:END -->
