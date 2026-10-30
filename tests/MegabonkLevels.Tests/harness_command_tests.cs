@@ -2,6 +2,39 @@ namespace MegabonkLevels.Tests;
 
 public class HarnessCommandTests
 {
+    [Theory]
+    [InlineData("decode")]
+    [InlineData("native-info")]
+    [InlineData("native-tone")]
+    [InlineData("native-play")]
+    [InlineData("play")]
+    [InlineData("status")]
+    [InlineData("pitch")]
+    [InlineData("lowpass")]
+    [InlineData("detach")]
+    public void TryParse_MusicProbe_PreservesArguments(string action)
+    {
+        var json = $$"""{"command":"music-probe","action":"{{action}}","path":"06.01 Screamer.mp3","variant":"il2cpp","value":0.55}""";
+        Assert.True(HarnessCommand.TryParse(json, out var command, out var error));
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.MusicProbe, command.Kind);
+        Assert.Equal("music-probe", command.Name);
+        Assert.Equal("06.01 Screamer.mp3", command.Path);
+        Assert.Equal(action, command.Input.Action);
+        Assert.Equal("il2cpp", command.Input.Variant);
+        Assert.Equal(0.55f, command.Input.Value);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"music-probe"}""")]
+    [InlineData("""{"command":"music-probe","action":"unknown"}""")]
+    [InlineData("""{"command":"music-probe","action":"pitch","value":"half"}""")]
+    public void TryParse_MusicProbe_RejectsInvalidArguments(string json)
+    {
+        Assert.False(HarnessCommand.TryParse(json, out _, out var error));
+        Assert.NotNull(error);
+    }
+
     [Fact]
     public void TryParse_LoadLevel_ReturnsKindAndPath()
     {

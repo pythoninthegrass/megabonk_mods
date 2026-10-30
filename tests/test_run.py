@@ -12,6 +12,31 @@ import time
 from pathlib import Path
 
 
+@pytest.mark.parametrize(
+    "action", ["status", "play", "decode", "pitch", "lowpass", "detach", "native-info", "native-tone", "native-play"]
+)
+def test_music_probe_action_does_not_replace_subcommand(action: str) -> None:
+    args = run.parse_args(["music-probe", action])
+    assert args.action == "music-probe"
+    assert run.music_probe_payload(args) == {"command": "music-probe", "action": action}
+
+
+def test_music_probe_payload_preserves_path_variant_and_zero_value() -> None:
+    args = run.parse_args(["music-probe", "play", "06.01 Screamer.mp3", "--variant", "managed", "--value", "0"])
+    assert run.music_probe_payload(args) == {
+        "command": "music-probe",
+        "action": "play",
+        "path": "06.01 Screamer.mp3",
+        "variant": "managed",
+        "value": 0.0,
+    }
+
+
+def test_music_probe_rejects_unknown_action() -> None:
+    with pytest.raises(SystemExit):
+        run.parse_args(["music-probe", "unknown"])
+
+
 def test_find_env_file_walks_up_from_start() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)

@@ -6,7 +6,13 @@
     <Nullable>disable</Nullable>
     <RootNamespace>MegabonkLevels</RootNamespace>
     <AssemblyName>MegabonkLevels.Mod</AssemblyName>
+    <!-- Library builds keep package assemblies out of the output; MelonLoader loads the mod from the game's Mods folder, so NLayer has to land beside it. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NLayer" Version="1.16.0" />
+  </ItemGroup>
 
   <ItemGroup>
     <Reference Include="MelonLoader">
@@ -88,8 +94,12 @@
     <ItemGroup>
       <BuiltArtifacts Include="$(TargetPath)" />
       <BuiltArtifacts Include="$(TargetDir)$(TargetName).pdb" />
+      <!-- MelonLoader resolves third-party managed dependencies from UserLibs, and Mods as a fallback probe path. -->
+      <ModDependencyArtifacts Include="$(TargetDir)NLayer.dll" />
     </ItemGroup>
     <Copy SourceFiles="@(BuiltArtifacts)" DestinationFolder="$(ModInstanceFolder)" />
+    <Copy SourceFiles="@(ModDependencyArtifacts)" DestinationFolder="$(GameFolder)/UserLibs" />
+    <Copy SourceFiles="@(ModDependencyArtifacts)" DestinationFolder="$(ModInstanceFolder)" />
   </Target>
 
 </Project>

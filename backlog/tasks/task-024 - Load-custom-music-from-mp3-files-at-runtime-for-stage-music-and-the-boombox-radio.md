@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-29 08:43'
+updated_date: '2026-10-30T01:16:00Z'
 labels:
   - music
   - level-editor
@@ -51,3 +52,9 @@ Open questions for the implementer to settle and record in docs/music.md: which 
 - [ ] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Output decision from TASK-024.01: prefer NLayer decode -> real runtime AudioClip -> existing MusicTrack/PlayMusicTrack path. Correct native creation is proven on the Win64 player under Wine: Construct_Internal() GC-handle unmarshal, m_CachedPtr as injected-call self, pinned UTF-16/PCM blittable spans. Lance confirmed clear relative-mp3 playback in THPS, natural menu/item ducking, held source pitch/tempo and low-pass modulation. Do not build a software pitch/duck/filter engine based on the earlier callback conclusion; those one-shot pitch/filter tests were inconclusive because game updates reset controls. Native Linux still requires ABI inspection and audible verification; the diagnostic currently guards it out. See docs/music.md for exact evidence and remaining production requirements.
+<!-- SECTION:PLAN:END -->

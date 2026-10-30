@@ -629,6 +629,41 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     grind_slide.add_argument("state", choices=["on", "off", "auto"], help="hold the slide button, release it, or read the real device again")
     dismiss = sub.add_parser("dismiss-levelup")
     dismiss.add_argument("--choice", type=int, default=0, help="zero-based index of the offered upgrade")
+    music_probe = sub.add_parser("music-probe")
+    music_probe.add_argument(
+        "probe_action",
+        choices=[
+            "decode",
+            "play",
+            "stop",
+            "status",
+            "restart",
+            "duck",
+            "unduck",
+            "pause",
+            "unpause",
+            "mute",
+            "unmute",
+            "clip-null",
+            "pitch",
+            "lowpass",
+            "native-info",
+            "native-tone",
+            "native-play",
+            "detach",
+        ],
+    )
+    music_probe.add_argument("path", nargs="?", help="mp3 file name or path, for decode and play")
+    music_probe.add_argument(
+        "--variant",
+        choices=["il2cpp", "managed"],
+        help="filter signature to attach; il2cpp (default) is the only one Unity dispatches",
+    )
+    music_probe.add_argument(
+        "--value",
+        type=float,
+        help="number for duck, pitch, or lowpass cutoff frequency in Hz",
+    )
     type_ = sub.add_parser("type")
     type_.add_argument("text")
     load = sub.add_parser("load")
@@ -722,6 +757,17 @@ def teleport_payload(args: argparse.Namespace) -> dict[str, object]:
 
 def dismiss_levelup_payload(args: argparse.Namespace) -> dict[str, object]:
     return build_dismiss_levelup_command(args.choice)
+
+
+def music_probe_payload(args: argparse.Namespace) -> dict[str, object]:
+    payload: dict[str, object] = {"command": "music-probe", "action": args.probe_action}
+    if args.path:
+        payload["path"] = args.path
+    if args.variant:
+        payload["variant"] = args.variant
+    if args.value is not None:
+        payload["value"] = args.value
+    return payload
 
 
 def type_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -888,6 +934,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, grind_slide_payload(args), args.timeout)
         case "dismiss-levelup":
             ok = send_printing_result(harness, dismiss_levelup_payload(args), args.timeout)
+        case "music-probe":
+            ok = send_printing_result(harness, music_probe_payload(args), args.timeout)
         case "character-screen":
             ok = send(harness, character_screen_payload(args), args.timeout)
         case "spawns":

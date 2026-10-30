@@ -51,6 +51,7 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Hold or release the slide button the grind gate reads (see "Grind gate") | `{"command":"grind-slide","held":true}` or `{"command":"grind-slide"}` | `run.py grind-slide <on\|off\|auto>` |
 | Move the player | `{"command":"teleport","position":[x,y,z]}` or `{"command":"teleport","cell":[cx,cz]}` | `run.py teleport X Y Z`, `run.py teleport --cell CX CY` |
 | Pick an upgrade in the open level-up dialog | `{"command":"dismiss-levelup","choice":0}` | `run.py dismiss-levelup [--choice N]` |
+| Decode or audition runtime mp3 PCM (see "Runtime music probe") | `{"command":"music-probe","action":"play","path":"01 Police Truck.mp3"}` | `run.py music-probe <action> [path] [--variant il2cpp\|managed] [--value N]` |
 | Quit the game | `{"command":"quit"}` | `run.py quit` |
 | Relaunch the test level in editor mode | Multiple commands | `run.py relaunch [level] [--map N] [--stage N] [--tier N] [--seed N]` |
 
@@ -66,9 +67,40 @@ An unknown command, malformed JSON, a missing or empty `path`, or a command that
 
 The paths in `load-level` and `screenshot` are interpreted by the game process, so `run.py` converts them (see below).
 
+### Runtime music probe
+
+With the harness enabled and a run loaded, copy an mp3 into the game's `UserData/CustomMusic/`, then use:
+
+```sh
+uv run scripts/run.py music-probe decode "01 Police Truck.mp3"
+uv run scripts/run.py music-probe native-info
+uv run scripts/run.py music-probe native-tone
+uv run scripts/run.py music-probe native-play "01 Police Truck.mp3"
+uv run scripts/run.py music-probe pitch --value 0.55
+uv run scripts/run.py music-probe pitch
+uv run scripts/run.py music-probe lowpass --value 400
+uv run scripts/run.py music-probe lowpass
+```
+
+`native-info` resolves internal calls and reports their module/RVA and a short code prefix without creating a clip. `native-tone` creates a two-second, 440 Hz test clip; `native-play` decodes the mp3 into a real clip. Both use the game's normal `MusicTrack` playback with no injected filter, and report clip length and checked PCM roundtrip error. The native ABI is verified only on Win64 (including Wine); other platforms are rejected pending inspection. Native calls can crash the process if the ABI changes, so use a disposable test run. Relaunch to restore stock music after a native probe; `stop` and `detach` affect buffer injection only.
+
+For comparison, the older buffer-injection path is:
+
+```sh
+uv run scripts/run.py music-probe play "01 Police Truck.mp3"
+uv run scripts/run.py music-probe status
+uv run scripts/run.py music-probe detach
+```
+
+Paths are interpreted by the game; a file name resolves under `UserData/CustomMusic/`. Both playback paths decode the entire file synchronously. `play` loops PCM through a filter without resampling; `native-play` declares the clip's source rate so Unity handles sampling. This is a diagnostic, not a level music format. `decode` reports sample rate, channels, decoded samples, duration and peak; `status` reports callback counts, consumed frames, average copy time, source controls and probe errors. Its `playing` and `attached` fields describe buffer injection only, not native clip playback; inspect `sourceIsPlaying`, `sourceClip` and `stockTrack` for that. A failure can be reported as `error` inside the returned probe object; inspect it as well as the harness envelope.
+
+Actions are `decode`, `native-info`, `native-tone`, `native-play`, `play`, `stop`, `status`, `restart`, `duck`, `unduck`, `pause`, `unpause`, `mute`, `unmute`, `clip-null`, `pitch`, `lowpass` and `detach`. `duck` defaults to 0.2; `--value` overrides it, sets source pitch, or sets source low-pass cutoff in Hz. Pitch and cutoff with an explicit value are held by a postfix after `MusicController.Update`, because the game otherwise resets them before a listener can compare. `pitch` without a value releases the hold and sets 1; `lowpass` without a value releases the hold and sets 22,000 Hz, then leaves subsequent changes to the game. Confirm `heldPitch`/`heldCutoff` and a later property reading when testing. `unduck` sets both duck multipliers to 1. `stop` stops overwriting samples; `detach` also removes the injected component and releases held controls. Neither restores a clip removed with `clip-null` nor resets mute; relaunch for a clean stock baseline after destructive comparisons. `restart` restarts the source, but is not required when attaching to a playing source.
+
+The default `--variant il2cpp` uses the working `Il2CppStructArray<float>` signature. `managed` reproduces the unsupported `float[]` callback, which Unity never dispatches. Detach before comparing variants. Frozen editor gameplay is not an audio pause and does not prevent the game resetting audio properties; use the held controls for comparisons. Duck multiplier propagation through `MusicController.Update` was observed with resumed gameplay. See [music.md](music.md#runtime-pcm-probe) for the audible results and limitations.
+
 ### Results
 
-Before moving a command file to `done/` or `rejected/`, the mod writes `harness/results/<command file name>`: UTF-8 JSON, one object, written to `<name>.tmp` and renamed so a reader never sees a partial file. A command that succeeds writes `{"command":"<wire name>","ok":true,"result":<object or null>}`. A command that fails while running writes `{"command":"<wire name>","ok":false,"error":"<message>"}`. A file that does not parse writes the same failure shape with `"command":null`. Every command other than `state`, `ui-tree`, `click-widget`, `save-level`, `list-levels`, `query-objects`, `teleport`, `grind-slide`, `dismiss-levelup` and `steam-ready` has `"result":null`. The result file is written before the command file moves, so a caller that sees the file in `done/` or `rejected/` can read the result at once. Result files are never deleted by the mod.
+Before moving a command file to `done/` or `rejected/`, the mod writes `harness/results/<command file name>`: UTF-8 JSON, one object, written to `<name>.tmp` and renamed so a reader never sees a partial file. A command that succeeds writes `{"command":"<wire name>","ok":true,"result":<object or null>}`. A command that fails while running writes `{"command":"<wire name>","ok":false,"error":"<message>"}`. A file that does not parse writes the same failure shape with `"command":null`. Every command other than `state`, `ui-tree`, `click-widget`, `save-level`, `list-levels`, `query-objects`, `teleport`, `grind-slide`, `dismiss-levelup`, `music-probe` and `steam-ready` has `"result":null`. The result file is written before the command file moves, so a caller that sees the file in `done/` or `rejected/` can read the result at once. Result files are never deleted by the mod.
 
 `run.py` reads them with `read_result(harness, name)`, which returns `None` when the file is absent or not valid JSON. Every subcommand that sends a command exits 1 and prints the `error` text on stderr when the result has `ok:false`, even if the command file landed in `done/`. A missing result file does not fail a command, so `run.py` still works against a mod built before results existed.
 

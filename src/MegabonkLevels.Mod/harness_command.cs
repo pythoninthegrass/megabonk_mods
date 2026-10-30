@@ -41,6 +41,7 @@ public enum HarnessCommandKind
     QueryObjects,
     Item,
     GrindSlide,
+    MusicProbe,
 }
 
 // World-space camera position and euler rotation in degrees.
@@ -62,6 +63,10 @@ public sealed class InputArgs
     public int Button { get; init; }
 
     public string Text { get; init; }
+
+    public string Variant { get; init; }
+
+    public float? Value { get; init; }
 }
 
 // Exactly one of Position (world x, y, z) or Cell (grid x, z) is set.
@@ -206,6 +211,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseItem(root, out command, out error);
             case "grind-slide":
                 return TryParseGrindSlide(root, out command, out error);
+            case "music-probe":
+                return TryParseMusicProbe(root, out command, out error);
             case "teleport":
                 return TryParseTeleport(root, out command, out error);
             case "dismiss-levelup":
@@ -307,6 +314,43 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.GrindSlide, null, Held: held);
+        error = null;
+        return true;
+    }
+
+    // The TASK-024.01 runtime-music probe; action selects the phase and path names the mp3 for decode and play.
+    private static bool TryParseMusicProbe(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        if (!TryGetString(root, "action", out var action) || action.Length == 0)
+        {
+            error = "missing string field 'action' (decode, play, stop, status, detach)";
+            return false;
+        }
+
+        var allowed = new[]
+        {
+            "decode", "play", "stop", "status", "restart", "duck", "unduck", "pause", "unpause",
+            "mute", "unmute", "clip-null", "pitch", "lowpass", "detach", "native-info", "native-tone", "native-play",
+        };
+        if (Array.IndexOf(allowed, action) < 0)
+        {
+            error = $"unknown action '{action}'; expected {string.Join(", ", allowed)}";
+            return false;
+        }
+
+        if (!TryGetOptionalFloat(root, "value", out var value, out error))
+        {
+            return false;
+        }
+
+        TryGetString(root, "path", out var path);
+        TryGetString(root, "variant", out var variant);
+        command = new HarnessCommand(
+            HarnessCommandKind.MusicProbe,
+            path,
+            Input: new InputArgs { Action = action, Variant = variant, Value = value });
         error = null;
         return true;
     }
@@ -753,6 +797,26 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         error = $"field '{field}' must be an integer";
+        return false;
+    }
+
+    private static bool TryGetOptionalFloat(JsonObject root, string field, out float? value, out string error)
+    {
+        value = null;
+        error = null;
+
+        if (!root.TryGetPropertyValue(field, out var node) || node == null)
+        {
+            return true;
+        }
+
+        if (node is JsonValue jsonValue && jsonValue.TryGetValue(out float parsed))
+        {
+            value = parsed;
+            return true;
+        }
+
+        error = $"field '{field}' must be a number";
         return false;
     }
 

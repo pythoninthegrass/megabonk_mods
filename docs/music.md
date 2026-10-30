@@ -91,13 +91,66 @@ If `music` is not a two-segment `bundle:` id, the pack is not installed, the pac
 
 ## Audio formats and decoding
 
-The mod does not decode audio at runtime. Unity's runtime decode and clip-creation paths do not work in this build, so the audio is imported into the pack in the authoring project and ships as a normal `AudioClip` in the bundle (the clip is held compressed in memory as Vorbis, quality 0.7). Any format the Unity editor imports works as the source, including mp3, ogg and wav. `ThpsPack.SaveSoundtrack` imports every mp3 in `tools/ost` (override the directory with `-musicSource`), naming each clip by its file name with runs of other characters made an underscore; the build skips them with a log line when the directory is absent, so the pack still builds without them. `scripts/transcode.py` can produce an mp3 from a lossless source.
+Level and radio playback currently use imported clips, not runtime decoding. Audio is imported into the pack in the authoring project and ships as a normal `AudioClip` in the bundle (the clip is held compressed in memory as Vorbis, quality 0.7). Any format the Unity editor imports works as the source, including mp3, ogg and wav. `ThpsPack.SaveSoundtrack` imports every mp3 in `tools/ost` (override the directory with `-musicSource`), naming each clip by its file name with runs of other characters made an underscore; the build skips them with a log line when the directory is absent, so the pack still builds without them. `scripts/transcode.py` can produce an mp3 from a lossless source. Runtime clip creation is proven through the native probe below, despite failures in the ordinary managed wrappers.
 
 The runtime paths that fail, confirmed in the running game:
 
 - `UnityWebRequestMultimedia.GetAudioClip` throws `MissingMethodException` for `DownloadHandlerAudioClip..ctor(String, AudioType)`.
 - `AudioClip.Create` throws `MissingMethodException` for `Il2CppSystem.ReadOnlySpan<T>.GetPinnableReference()`, which its name marshalling needs; `SetData` takes the same span path.
-- Calling `AudioClip.Construct_Internal_Injected` then `CreateUserSound_Injected` with a hand-built `ManagedSpanWrapper` crashes the game with no managed log.
+- An initial direct `Construct_Internal_Injected` / `CreateUserSound_Injected` attempt with a hand-built span crashed with no managed log. This does not establish that native clip creation is unavailable: the corrected handle/pointer path below succeeds.
+
+## Runtime PCM probe
+
+The development harness can decode mp3 files and audition either native `AudioClip` playback or buffer injection. This is a diagnostic probe, not a level or radio playback implementation; `bundle:` playback remains unchanged. See [development.md](development.md#runtime-music-probe) for commands.
+
+### Decoder and output decision
+
+NLayer 1.16.0 decodes mp3 files as managed float PCM under MelonLoader's .NET 6. The mod build copies `NLayer.dll` into both `Mods` and `UserLibs`; `CopyLocalLockFileAssemblies` is needed to get the dependency into the build output. A complete in-game decode of `01 Police Truck.mp3` produced 44,100 Hz stereo, 12,789,504 samples (6,394,752 frames), and peak 1.0414, matching the host decode. The 14 source files include both 44.1 and 48 kHz material and decoded successfully on the host; decoder peaks can exceed 1.0.
+
+**Prefer a real native `AudioClip`**, populated with NLayer PCM and passed to the existing `MusicTrack` path. The native probe created a two-second 44.1 kHz tone and then a 145.005-second stereo clip from the relative file `01 Police Truck.mp3`. Native `GetData_Injected` returned an exact match for the checked PCM prefix (up to 4,096 frames). Lance heard the tone and the song, and verified the modulation behavior below in THPS. No crash occurred in the corrected native attempts. The OS-audio fallback was not needed.
+
+### Native binding details
+
+The verified player is Win64 Unity 2023.2.22f1, running under Wine on macOS. `UnityPlayer.dll` still registers the relevant internal calls even though their managed methods were stripped. Resolve them by name with `IL2CPP.il2cpp_resolve_icall`, not hardcoded addresses. The inspected RVAs were `Construct_Internal_Injected` 0x1217A0, `CreateUserSound_Injected` 0x1218A0, `SetData_Injected` 0x1216F0 and `GetData_Injected` 0x121660; these are evidence for this binary, not portable constants.
+
+The important boundary is **GC handle → Il2Cpp object → native Unity object**:
+
+1. Use `AudioClip.Construct_Internal()`, whose generated wrapper calls `Unmarshal.UnmarshalUnityObject<AudioClip>` on the handle returned by `Construct_Internal_Injected`. Do not wrap that handle with `new AudioClip(handle)` or treat it as a native pointer.
+2. Read the resulting clip's `m_CachedPtr`. This native pointer, not the Il2Cpp object's `Pointer`, is the `self` argument for the injected creation/data calls.
+3. Call `CreateUserSound_Injected` with a pinned UTF-16 name described by a blittable `{ IntPtr begin; int length; }` span, frame count, channels, source rate and a zero streaming byte. This avoids the stripped Il2Cpp span marshalling helper.
+4. Pin the managed float PCM and pass a span of **sample count**, not frame count, to `SetData_Injected`. The call is synchronous; unpin after it returns. The native boolean return is one byte. Verify a prefix through `GetData_Injected` before playback.
+5. Keep the clip and `MusicTrack` alive, set `track.loop = clip`, and use `MusicController.PlayMusicTrack`. No audio-thread injection or software resampling is needed for this path; Unity samples a clip at its declared source rate.
+
+Native Linux playback remains unverified: the second machine was not reachable, and Lance chose to record that blocker. The native probe currently rejects non-Win64 execution until its ABI has been inspected there. Do not assume the Windows ABI or addresses apply to Linux.
+
+### Observed signal behavior
+
+| Control | Observed result with the native mp3 clip |
+| --- | --- |
+| Normal playback | Police Truck clearly audible in THPS with no injected filter attached |
+| Menus and item choices | Lance confirmed the game's natural ducking works |
+| Source pitch held at 0.55 | Later status confirmed the value persisted; Lance heard slower tempo and lower pitch |
+| Source low-pass held at 400 Hz | Later status confirmed the cutoff persisted; Lance heard clear muffling |
+
+Release test overrides afterward: `music-probe pitch` and `music-probe lowpass` without `--value` return control to the game. The native clip enters the same playback path as a pack clip; these tests establish the key observed behaviors, not exhaustive parity across every game state or platform. The separate mixer `MusicLowpass` parameter was not independently forced.
+
+### Buffer-injection alternative
+
+An injected `MonoBehaviour.OnAudioFilterRead(Il2CppStructArray<float>, int)` also produces audible audio on the music source's GameObject. `AsSpan()` views Unity's buffer without copying it. The managed `float[]` signature failed: Il2CppInterop logged `has unsupported parameter Single[] data of type System.Single[]`, skipped the method, and its callback count stayed zero.
+
+Lance confirmed injected music follows the Options Music slider, but heard no duck when the source volume read 0.2 during resumed gameplay. Source `Pause()` stops callback/frame counters; frozen editor gameplay does not. Setting `clip = null` leaves `isPlaying` false but callbacks and audible injected music continue. Attaching to a playing source does not require a restart.
+
+Earlier one-shot pitch and low-pass tests reported no audible change, but later readings exposed the game resetting those properties. Those tests are **inconclusive**, not proof the processing is bypassed; held-control tests were subsequently performed on native clips only. Component/filter ordering would also need checking before using injection for parity.
+
+The injection probe copies one source frame per output frame without resampling. A 24.21-second measurement consumed about 48,047 frames/second, so 44.1 kHz material advances about 8.95% too fast on that output path, although Lance did not notice the speed difference by ear. Callback copy cost was in the tens of microseconds, versus about 21 ms for 1,024 frames at 48 kHz; this is diagnostic timing, not a production benchmark.
+
+### Implications for runtime playback
+
+Build runtime playback around native clip creation and the existing `MusicTrack` pipeline. There is no need to reproduce the game's pitch, ducking or low-pass in a custom callback on the verified player. Remaining work includes bounded decoding/memory, track discovery and ordering, clip ownership across switches, graceful fallback, and native Linux verification. The platform guard is deliberate: inspect and validate Linux bindings before enabling them.
+
+The probe decodes a whole track synchronously into memory and loops it. It does not implement streaming, prefetched tracks, `track:` references or playlists. Switching native probe clips releases the previous probe track and clip after playback switches; relaunch returns to a clean stock baseline.
+
+If both stock and injected music are silent while callbacks advance, first verify host audio with a native player and relaunch the game. In the test, an old Wine process was silent even with the probe detached; a fresh launch on the current Bluetooth output restored stock and injected audio. This is consistent with a stale output-device handle, not evidence that PCM injection failed.
 
 ## THPS soundtrack sources
 
