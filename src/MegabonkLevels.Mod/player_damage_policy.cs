@@ -4,9 +4,11 @@ namespace MegabonkLevels;
 
 public static class PlayerDamagePolicy
 {
-    public static float Clamp(float damage, int hp, float shield, float overheal, bool nonlethal)
+    public const bool IgnoreShield = true;
+
+    public static float Clamp(float damage, int hp, float overheal, bool nonlethal)
     {
-        if (!nonlethal || shield > 0f)
+        if (!nonlethal)
         {
             return damage;
         }

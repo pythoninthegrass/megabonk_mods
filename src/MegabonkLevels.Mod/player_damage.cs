@@ -58,7 +58,7 @@ public static class PlayerDamage
         PlayerHealth.A_TakeDamage += observer;
         try
         {
-            health.DamagePlayerExternal(args.Amount, 0f, Vector3.zero, false, Source, 0, 0, null);
+            health.DamagePlayerExternal(args.Amount, 0f, Vector3.zero, PlayerDamagePolicy.IgnoreShield, Source, 0, 0, null);
         }
         finally
         {
@@ -85,6 +85,7 @@ public static class PlayerDamage
             ["shieldDamage"] = shieldDamage,
             ["overhealDamage"] = overhealDamage,
             ["nonlethal"] = args.Nonlethal,
+            ["ignoreShield"] = PlayerDamagePolicy.IgnoreShield,
             ["clamped"] = _clamped,
             ["blocked"] = blocked,
             ["reason"] = reason,
@@ -112,7 +113,7 @@ public static class PlayerDamage
     [HarmonyPatch(typeof(PlayerHealth), nameof(PlayerHealth.CheckStopDamage))]
     private static class NonlethalGuard
     {
-        private static void Postfix(PlayerHealth __instance, DamageContainer dc, bool ignoreShield, ref bool __result)
+        private static void Postfix(PlayerHealth __instance, DamageContainer dc, ref bool __result)
         {
             if (!IsOurs(__instance, dc))
             {
@@ -122,7 +123,7 @@ public static class PlayerDamage
             _stopped = __result;
             if (!__result)
             {
-                var safe = PlayerDamagePolicy.Clamp(dc.damage, __instance.hp, ignoreShield ? 0f : __instance.shield, __instance.overheal, _nonlethal);
+                var safe = PlayerDamagePolicy.Clamp(dc.damage, __instance.hp, __instance.overheal, _nonlethal);
                 _clamped = safe < dc.damage;
                 dc.damage = safe;
                 __result = safe <= 0f;

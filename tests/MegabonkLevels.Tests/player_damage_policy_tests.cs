@@ -2,6 +2,12 @@ namespace MegabonkLevels.Tests;
 
 public class PlayerDamagePolicyTests
 {
+    [Fact]
+    public void HarnessHits_BypassShieldInEveryMode()
+    {
+        Assert.True(PlayerDamagePolicy.IgnoreShield);
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(5)]
@@ -44,16 +50,15 @@ public class PlayerDamagePolicyTests
     }
 
     [Theory]
-    [InlineData(90, 77, 0, 0, true, 76)]
-    [InlineData(5, 77, 0, 0, true, 5)]
-    [InlineData(99, 1, 0, 0, true, 0)]
-    [InlineData(99, 1, 2, 0, true, 99)]
-    [InlineData(99, 5, 0, 10.5, true, 14)]
-    [InlineData(99, 1, 0, 0.5, true, 0)]
-    [InlineData(99, 1, 0, 0, false, 99)]
-    [InlineData(250, 20, 0, 0, true, 19)]
-    public void Clamp_PreservesFloorAfterModifiers(float damage, int hp, float shield, float overheal, bool nonlethal, float expected)
+    [InlineData(90, 77, 0, true, 76)]
+    [InlineData(5, 77, 0, true, 5)]
+    [InlineData(99, 1, 0, true, 0)]
+    [InlineData(99, 5, 10.5, true, 14)]
+    [InlineData(99, 1, 0.5, true, 0)]
+    [InlineData(99, 1, 0, false, 99)]
+    [InlineData(250, 20, 0, true, 19)]
+    public void Clamp_PreservesFloorAfterModifiers(float damage, int hp, float overheal, bool nonlethal, float expected)
     {
-        Assert.Equal(expected, PlayerDamagePolicy.Clamp(damage, hp, shield, overheal, nonlethal));
+        Assert.Equal(expected, PlayerDamagePolicy.Clamp(damage, hp, overheal, nonlethal));
     }
 }

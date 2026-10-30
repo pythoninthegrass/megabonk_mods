@@ -26,7 +26,7 @@ Usage:
     run.py invulnerable            Make the player survive enemy damage
     run.py vulnerable              Restore normal player damage
     run.py kill                    End the run at once by killing the player, even when invulnerable
-    run.py damage <1-99>           Apply integer damage; preserves 1 HP unless --no-nonlethal
+    run.py damage <1-99>           Apply integer damage bypassing shield; preserves 1 HP unless --no-nonlethal
     run.py steam-ready             Check whether the in-game Steamworks client is ready
     run.py state                   Print the game's current state as JSON (level, editor, player, tool, selection)
     run.py shader-report           Print which candidate shaders Shader.Find resolves and the shaders and properties of the scene's materials
@@ -601,7 +601,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("invulnerable")
     sub.add_parser("vulnerable")
     sub.add_parser("kill")
-    damage = sub.add_parser("damage", help="apply 1–99 damage through the game; nonlethal by default")
+    damage = sub.add_parser("damage", help="apply 1–99 damage through the game, bypassing shield; nonlethal by default")
     damage.add_argument("amount", type=damage_amount)
     damage.add_argument("--nonlethal", action=argparse.BooleanOptionalAction, default=True, help="preserve at least 1 HP; --no-nonlethal can end the run")
     sub.add_parser("steam-ready")

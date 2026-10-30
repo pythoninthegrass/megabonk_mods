@@ -1,11 +1,11 @@
 ---
 id: TASK-004.06.01
 title: 'Dev harness: controlled nonlethal player damage for low-health testing'
-status: Done
+status: In Progress
 assignee:
   - Assistant
 created_date: '2026-10-30T03:00:00Z'
-updated_date: '2026-10-30T16:09:00Z'
+updated_date: '2026-10-30T16:20:00Z'
 labels:
   - dev-harness
   - testing
@@ -38,6 +38,7 @@ The harness exposes kill and invulnerability but cannot apply controlled, nonlet
 - [x] #6 Pure validation and command parsing tests are written first; CLI/MCP coverage and docs/development.md describe usage and safety limits.
 - [x] #7 In-game verification demonstrates controlled nonlethal damage and a low-health danger reaction on the default Wine setup; human audible confirmation is distinguished from source-state checks.
 - [x] #8 Damage accepts any integer HP amount from 1 through 99, independently of an explicit nonlethal toggle; nonlethal defaults on and preserves at least 1 HP.
+- [x] #9 Every harness damage hit bypasses shield in both nonlethal and lethal modes, leaves shield unchanged, and applies the nonlethal HP floor even while shield is present.
 <!-- AC:END -->
 
 ## Definition of Done
@@ -45,7 +46,7 @@ The harness exposes kill and invulnerability but cannot apply controlled, nonlet
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [x] #4 Conventional commit with no attribution
+- [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -58,6 +59,8 @@ The harness exposes kill and invulnerability but cannot apply controlled, nonlet
 5. Document command and native safety semantics; run task check and record evidence/remaining limitations before finalization.
 
 Final runtime refinement: use the stock Enemy source so native cooldowns and danger history are retained. Mirror still does not stop this attacker-less external hit; verified and documented rather than bypassing or modifying invulnerability. The nonlethal guard fails closed when its Harmony postfix is missing. MCP uses strict integer/boolean validation to reject coercion before command files are sent.
+
+User-requested revision: all harness damage must bypass shield. Write a failing regression for the HP floor with positive shield, set native ignoreShield=true for every harness hit, retain the post-check floor clamp, update CLI/MCP descriptions and docs, then build/relaunch and verify positive-shield HP damage and nonlethal floor without changing shield. Run task check and commit.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -74,10 +77,10 @@ Danger check on final build: after 70→1 hit and leaving editor, music-probe st
 task check passed: clean mod build, 1,392 C# tests, 555 Python tests, markdownlint and ruff. Ruff sorted the new test imports. Strict MCP tests first reproduced coercion of 1.0/true/string amounts, then passed with strict schema. git diff --check passed. Commit remains before closure.
 
 Conventional implementation commit: adbe95c (feat(harness): add controlled 1–99 HP damage with nonlethal safety). All acceptance criteria and Definition of Done verified; closed.
+
+Reopened on user request: shield absorption is no longer desired. Scope is harness damage only, not enemy damage elsewhere in the game.
+
+Shield-bypass revision verified: failing test first demonstrated missing IgnoreShield policy. Native DamagePlayerExternal now always receives IgnoreShield=true; the nonlethal clamp no longer considers shield. Results expose ignoreShield=true; CLI/MCP help and development docs updated. task check passed again (1,392 C# tests, 555 Python tests, markdownlint and ruff).
+
+Default Wine, rebuilt DLL relaunched, real MCP integration with full shield: damage 10 (nonlethal=true) reduced HP 70→60 while shield stayed 10; damage 3 (nonlethal=false) reduced HP 60→57 while shield stayed 10; damage 99 (nonlethal=true) clamped to 56, HP 57→1 while shield stayed 10. Every hit emitted one normal damage event and honored cooldown. Game left frozen in editor at 1/70 HP and 10 shield, with spawns off for safe testing.
 <!-- SECTION:NOTES:END -->
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Added CLI/MCP damage for any integer 1–99 with an independent default-on nonlethal flag. Uses normal external enemy damage, preserves shield/item/cooldown reactions, caps damage after item checks and reports before/after health, actual loss, events and explicit blocked/clamped outcomes. Strict validation rejects invalid inputs before sending. Documented Mirror limitations and fractional overheal safety. Tests written first; task check passes (1,392 C# and 555 Python tests). Verified on default Wine through real CLI/MCP: HP 70→1, shield-only hits, cooldown blocking, lethal opt-out and dead/missing-player rejection. Natural low-health pitch changed with no override; no new human audible confirmation claimed. Implementation committed as adbe95c. Game left in a fresh default example-forest editor run.
-<!-- SECTION:FINAL_SUMMARY:END -->

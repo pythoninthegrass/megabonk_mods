@@ -297,7 +297,7 @@ async def kill() -> CallToolResult:
 
 @mcp.tool()
 async def damage(amount: Annotated[int, Field(strict=True, ge=1, le=99)], nonlethal: StrictBool = True) -> CallToolResult:
-    """Apply any integer 1–99 HP damage through normal game reactions, shields and cooldowns. Nonlethal preserves at least 1 HP by default; false may end the run. Returns requested/actual damage, before/after health and blocked/clamped status."""
+    """Apply any integer 1–99 HP damage, bypassing shield, through normal game reactions and cooldowns. Nonlethal preserves at least 1 HP by default; false may end the run. Returns requested/actual damage, before/after health and blocked/clamped status."""
     try:
         payload = run.build_damage_command(amount, nonlethal)
     except ValueError as error:
