@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-29 08:43'
-updated_date: '2026-10-30T01:16:00Z'
+updated_date: '2026-10-30T02:18:00Z'
 labels:
   - music
   - level-editor
@@ -26,11 +26,11 @@ ordinal: 116000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Let a player add their own music to a custom level by dropping mp3 files into a folder, with no Unity install and no pack build. Today the only way to get a clip into a level is to import the mp3 into a Unity pack (`ThpsPack` imports `tools/ost/*.mp3` as Vorbis AudioClips into the `thps` bundle) and reference it from the level's `music` field as `bundle:<pack>/<clip>`. The boombox radio (`RadioPlaylist`, TASK-021.07.01) plays the pack's clips in clip-name order. Lance decided on runtime injection, not a generalised build-time pack: the mod itself reads and decodes the mp3 files in the running game.
+Let a player add their own music to a custom level by dropping mp3 files into a folder, with no Unity install and no pack build. Production level music and the boombox currently use AudioClips imported into an installed pack and bundle:<pack>/<clip> references. TASK-024.01 has now proven runtime NLayer decoding into a real native AudioClip on the Win64 player under Wine; that diagnostic is not yet integrated into level loading or the boombox.
 
-Scope: discover mp3 files in a folder under UserData, order them by their leading track number (for example `01 Police Truck.mp3`, `06.01 Screamer.mp3`, `06.02 Nothing To Me.mp3`), let a level name one of them as its stage music, and let the boombox radio cycle through them in that order. Existing `bundle:` music references and pack clips must keep working unchanged.
+Scope: discover mp3 files in a global folder under UserData, order them by their leading track number (including dotted components such as 06.01 and 06.02), allow a level to select one as stage music, and let the boombox cycle through the runtime tracks in that order. Existing bundle: music references and pack playlists must remain unchanged.
 
-Open questions for the implementer to settle and record in docs/music.md: which mp3 decoder works inside the Il2Cpp game on both CrossOver and native Linux (this is the main risk, so spike it first); whether tracks are decoded up front or streamed, given a playlist can be 14 tracks of about 3 minutes each; whether the folder is global or per level; how a level refers to a runtime track in its `music` field; and how files without a track prefix are ordered.
+Remaining platform risk: inspect the native Linux binding ABI and confirm audible playback there. The spike recorded Linux as blocked, which does not satisfy this feature's requirement to play on both platforms.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -56,5 +56,33 @@ Open questions for the implementer to settle and record in docs/music.md: which 
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-Output decision from TASK-024.01: prefer NLayer decode -> real runtime AudioClip -> existing MusicTrack/PlayMusicTrack path. Correct native creation is proven on the Win64 player under Wine: Construct_Internal() GC-handle unmarshal, m_CachedPtr as injected-call self, pinned UTF-16/PCM blittable spans. Lance confirmed clear relative-mp3 playback in THPS, natural menu/item ducking, held source pitch/tempo and low-pass modulation. Do not build a software pitch/duck/filter engine based on the earlier callback conclusion; those one-shot pitch/filter tests were inconclusive because game updates reset controls. Native Linux still requires ABI inspection and audible verification; the diagnostic currently guards it out. See docs/music.md for exact evidence and remaining production requirements.
+## Proven prerequisite
+
+TASK-024.01 is complete. Pushed commit 36257ac provides a diagnostic NLayer -> real native AudioClip -> MusicTrack/PlayMusicTrack path. On the Win64 player under Wine, Lance confirmed clear relative-mp3 playback in THPS, natural menu/item ducking, held pitch/tempo and source low-pass modulation. Use this native clip path, not a software pitch/duck/filter engine. See docs/music.md for the GC-handle/native-pointer boundary, span ABI, failed candidates and evidence.
+
+## Agreed feature design (not implemented)
+
+- Global runtime folder: <game>/UserData/CustomMusic/. tools/ost/ is the host-side soundtrack source, not an automatic runtime watch/discovery folder.
+- Level reference: track:<file name without extension>, for example track:06.01 Screamer. Preserve spaces/dots; lookup is case-insensitive.
+- Order by leading integer components matching \d+(\.\d+)*; files without a prefix sort last with a deterministic documented tie-break. Do not interpret dotted track numbers as floating-point decimals. Preserve this numeric order in RadioPlaylist rather than re-sorting it lexically.
+- Decode on demand for the current track and a prefetched next track, with bounded ownership/memory rather than decoding the entire playlist up front. Native clip lifetime and unload/replay behavior must be validated across track switches.
+- Route runtime tracks through the existing MusicTrack path while preventing competing stock stage selection. Keep bundle: resolution and pack playlist behavior unchanged.
+
+## Remaining implementation and verification
+
+1. Write tests first for filename/prefix parsing, ordering, case-insensitive reference lookup and playlist preserve-order behavior.
+2. Implement runtime-folder discovery, safe reference resolution and missing/unreadable/undecodable fallback.
+3. Extract production-safe clip creation from the probe, including platform validation, bounded decoding/prefetch and cleanup. Inspect Linux ABI before enabling it; the diagnostic currently guards non-Win64 out.
+4. Integrate track: stage music and boombox next/wrap behavior without changing bundle: playback.
+5. Verify actual Windows/Wine and native Linux playback, track transitions, fallback, music controls and pack regression behavior. Update docs/music.md and level-format documentation with the folder/reference/ordering rules.
+
+## Current user example
+
+Lance added tools/ost/14 Strobe.mp3 after the spike. It is not automatically discovered or copied by the current runtime code and has not been tested. Once placed in the runtime folder and the feature is implemented, its numeric prefix should place it after 13 Le Hot '99 and before unprefixed files. The current boombox still reads installed pack clips; rebuilding/installing the pack is the existing alternative, not the requested runtime solution.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Backlog reconciliation after spike delivery: TASK-024.01 marked Done with native-clip evidence and pushed commit 36257ac; Linux remains unverified, and original exploratory code's test-first process deviation is explicitly recorded. This parent stays To Do with all feature acceptance criteria unchecked: discovery, numeric ordering, track: level references and runtime boombox integration are still absent. Newly added tools/ost/14 Strobe.mp3 is a source asset only, not automatically part of the installed runtime playlist.
+<!-- SECTION:NOTES:END -->
