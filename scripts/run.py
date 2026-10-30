@@ -81,7 +81,7 @@ import sys
 import time
 from collections.abc import Callable, Mapping
 from decouple import Config, RepositoryEmpty, RepositoryEnv
-from game_paths import latest_log_path, resolve_game_dir as _resolve_game_dir
+from game_paths import latest_log_path, resolve_game_dir as _resolve_game_dir, wine_bin, wine_prefix
 from pathlib import Path
 
 MACOS_RUNTIMES = ("wine", "crossover")
@@ -99,6 +99,7 @@ RELAUNCH_STOP_ERRORS = {
 STEAM_READY_POLL_SECONDS = 1.0
 STEAM_OFFLINE_GRACE_SECONDS = 15.0
 GAME_STARTUP_GRACE_SECONDS = 5.0
+WINESERVER_EXIT_TIMEOUT_SECONDS = 15.0
 GAME_COMMAND = re.compile(r"^(?:[A-Za-z]:\\(?:.*\\)?Megabonk\.exe|(?:\S*/)?Megabonk\.x86_64)(?:\s|$)")
 GAME_IMAGE_WINDOWS = "Megabonk.exe"
 WINDOWS_COMMAND = re.compile(r"^[A-Za-z]:\\")
@@ -106,6 +107,8 @@ WINE_SYSTEM_COMMAND = re.compile(
     r"^[A-Za-z]:\\windows\\system32\\(?:services|plugplay|conhost|explorer|rpcss|svchost|lsass|winedevice)\.exe(?:\s|$)",
     re.IGNORECASE,
 )
+MEGABONK_ORPHAN_COMMAND = re.compile(r"megabonk[/\\]", re.IGNORECASE)
+WINESERVER_COMMAND = re.compile(r"(?:^|/)wineserver(?:\s|$)")
 TEST_FOREST_LEVEL = Path(__file__).resolve().parents[1] / "levels" / "example-forest.mblevel.json"
 
 Lookup = Callable[[str], str | None]
@@ -500,6 +503,46 @@ def game_is_running() -> bool:
     return bool(running_game_pids())
 
 
+def resolve_wine_prefix() -> Path:
+    game = resolve_game_dir(load_lookup())
+    prefix = wine_prefix(game)
+    if prefix is None:
+        raise SystemExit(f"{game} is not inside a Wine prefix (no drive_c ancestor); set MEGABONK_WINE_PREFIX")
+    return prefix
+
+
+def wineserver_binary() -> Path:
+    wine = wine_bin()
+    candidate = wine.parent / "wineserver"
+    return candidate if candidate.parent.is_dir() else Path("wineserver")
+
+
+def running_wineserver_pids() -> list[int]:
+    cmd = ["pgrep", "-f", "/wineserver"]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    return [int(line) for line in proc.stdout.split() if line.isdigit()]
+
+
+def wait_for_wineserver_to_exit(timeout: float = WINESERVER_EXIT_TIMEOUT_SECONDS) -> bool:
+    """Block until no wineserver serves the prefix, so a relaunch never races the previous session's teardown; a game process appearing counts as failure."""
+    if not running_wineserver_pids():
+        return True
+    cmd = [str(wineserver_binary()), "-w"]
+    try:
+        subprocess.run(cmd, env={**os.environ, "WINEPREFIX": str(resolve_wine_prefix())}, timeout=timeout, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    if not running_wineserver_pids():
+        return not running_game_pids()
+    for pid in running_wineserver_pids():
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    time.sleep(1.0)
+    return not running_wineserver_pids() and not running_game_pids()
+
+
 def wait_for_exit(
     probe: Callable[[], list[int]] = running_game_pids,
     timeout: float = 15.0,
@@ -514,29 +557,34 @@ def wait_for_exit(
     return True
 
 
-def find_wine_leftovers(ps_listing: str) -> tuple[list[int], list[int]]:
-    """Pids of Wine's idle system processes and of any other Windows process, from `ps -axo pid=,command=` output."""
-    stubs, others = [], []
+def find_wine_leftovers(ps_listing: str) -> tuple[list[int], list[int], list[int]]:
+    """Pids of Wine's idle system processes, of any other live Windows process (such as Steam), and of orphaned game helpers, from `ps -axo pid=,command=` output."""
+    stubs, others, orphans = [], [], []
     for line in ps_listing.splitlines():
         pid, _, command = line.strip().partition(" ")
         command = command.strip()
         if not pid.isdigit() or not WINDOWS_COMMAND.match(command):
             continue
-        (stubs if WINE_SYSTEM_COMMAND.match(command) else others).append(int(pid))
-    return stubs, others
+        if WINE_SYSTEM_COMMAND.match(command):
+            stubs.append(int(pid))
+        elif MEGABONK_ORPHAN_COMMAND.search(command):
+            orphans.append(int(pid))
+        else:
+            others.append(int(pid))
+    return stubs, others, orphans
 
 
 def reap_wine_leftovers(ps_listing: str, kill: Callable[[int], None]) -> int:
-    """Kill the Wine system processes (and their console windows) that outlive a game, unless a real Windows process such as Steam is running."""
-    stubs, others = find_wine_leftovers(ps_listing)
+    """Kill the Wine system processes (and their console windows) and orphaned game helpers such as the crash handler that outlive a game, unless a real Windows process such as Steam is running."""
+    stubs, others, orphans = find_wine_leftovers(ps_listing)
     if others:
         print(f"quit: Windows processes still running (pids {others}), skipping Wine cleanup")
         return 0
-    for pid in stubs:
+    for pid in stubs + orphans:
         kill(pid)
-    if stubs:
-        print(f"quit: stopped {len(stubs)} leftover Wine processes")
-    return len(stubs)
+    if stubs or orphans:
+        print(f"quit: stopped {len(stubs) + len(orphans)} leftover Wine processes")
+    return len(stubs) + len(orphans)
 
 
 def reap_wine_leftovers_on_host(system: str | None = None) -> None:
@@ -891,6 +939,8 @@ def relaunch(
         """Quit, relaunch, and wait for the new session's harness to enable; the previous session's log must not satisfy the wait."""
         if not quit_game(harness, timeout):
             return "relaunch: harness did not become ready"
+        if not wait_for_wineserver_to_exit():
+            return "relaunch: wineserver did not exit before launch"
         on_step("relaunch: starting game")
         launched = time.time()
         if not launch_game(task):
