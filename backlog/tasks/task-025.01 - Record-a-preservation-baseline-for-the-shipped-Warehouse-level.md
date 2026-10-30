@@ -1,7 +1,7 @@
 ---
 id: TASK-025.01
 title: Record a preservation baseline for the shipped Warehouse level
-status: In Progress
+status: Done
 assignee:
   - '@opencode'
 created_date: '2026-10-30T16:24:00Z'
@@ -35,19 +35,19 @@ The construction kit work will add pack assets, change the generator and touch t
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A committed baseline records the current levels/thps.mblevel.json contents, the generator's derived values, and the pack assets the level depends on
-- [ ] #2 A check compares the level file, a fresh generator run's output and the pack asset inventory against the baseline and fails naming every difference
-- [ ] #3 Regenerating with scripts/build_thps_level.py reproduces the baselined level file exactly
-- [ ] #4 The check runs in the existing test suite and passes before any decomposition work lands
-- [ ] #5 Docs state how to refresh the baseline deliberately and that a refresh means the shipped level changed
+- [x] #1 A committed baseline records the current levels/thps.mblevel.json contents, the generator's derived values, and the pack assets the level depends on
+- [x] #2 A check compares the level file, a fresh generator run's output and the pack asset inventory against the baseline and fails naming every difference
+- [x] #3 Regenerating with scripts/build_thps_level.py reproduces the baselined level file exactly
+- [x] #4 The check runs in the existing test suite and passes before any decomposition work lands
+- [x] #5 Docs state how to refresh the baseline deliberately and that a refresh means the shipped level changed
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -67,4 +67,12 @@ Working tree was clean before the task status update. Local extraction, generate
 Implemented baseline with full level text, derived placements/rails/collectibles, required prefab/music references, and 432 source/generated asset fingerprints. Added 10 tests covering baseline matching, all-difference diagnostics, byte-only drift, changed/missing files, additive manifest assets, independent generator comparison, missing extraction/generator failures, CLI non-mutation, and refresh refusal. Initial tests failed at import before implementation; focused tests now pass (10/10). First task check passed: 1392 C# + 562 Python tests, build and lint. Added three final failure-path tests afterward; final task check is running.
 
 Confirmed levels/thps.mblevel.json is identical to HEAD (SHA-256 c74ffeb46811ea78c37c9577600e814510ff0719d91adc57e4702f4716ee5be9). Generator and legacy pack assets were not edited. Check requires prepared gitignored extraction, soundtrack and Unity assets, and compares generated files rather than installed bundle contents; docs explicitly require rebuilding after pack-authoring changes.
+
+Final task check passed: clean mod build (0 warnings/errors), 1392 C# tests and 565 Python tests, markdownlint and ruff. Standalone preservation CLI also passes. Committed implementation and baseline as 41659a6 (test(thps): baseline shipped Warehouse preservation). All five acceptance criteria verified: baseline contents/inventory, difference/failure-path tests, fresh-process byte-identical generation, existing-suite integration, and documented refresh procedure. No decomposition work started.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added a committed Warehouse preservation baseline containing exact level text, generator-derived values and 432 legacy source/generated asset fingerprints. Added a standalone strict check and 10 pytest tests; fresh generation runs into a temporary path and compares bytes without modifying the shipped level. Documented preparation, coverage limits and deliberate refresh semantics. Existing Warehouse level and assets remain unchanged; additive pack assets remain possible. Verified task check: build, 1392 C# tests, 565 Python tests and lint all pass. Implementation commit: 41659a6.
+<!-- SECTION:FINAL_SUMMARY:END -->
