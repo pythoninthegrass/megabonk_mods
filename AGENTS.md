@@ -61,6 +61,15 @@ The Python tests are in `tests/` and run with `task scripts:test` or `uv run --e
 
 No section-banner or multi-paragraph comments, in `.cs`, `.py`, `.sh`, or anywhere else. Code should be self-explanatory; put design rationale in `docs/*.md` instead. A comment above a function, method, or field is at most 1-2 lines, and only when naming alone doesn't make intent clear.
 
+## Attribution
+
+Leave no agent, harness, model or tool watermark on anything written to the
+repository. Commit messages are the conventional subject and body only: never
+`Co-Authored-By`, `Generated with`, or a tool/model name. Backlog tasks keep an
+empty assignee and Backlog comments carry no `author:` label — do not pass
+`assignee` agent names or `commentAuthor` (the Backlog MCP stamps nothing when
+they are omitted).
+
 ## Writing docs/*.md
 
 Document the content itself — the schema, the rule, the API, the gotcha — not which task or AC introduced it. Don't cite `TASK-###` IDs, acceptance-criteria numbers, or phrasing like "per the final TASK-002.03 runtime finding"; that provenance is already tracked in Backlog and `git log`/`git blame`, and it rots as tasks close and get archived. Exception: a genuinely open, unresolved question (e.g. "this assumption is unconfirmed, revisit once real data is available") belongs in the doc as a TODO, but phrase it about the open question itself, not the task number that will close it.
