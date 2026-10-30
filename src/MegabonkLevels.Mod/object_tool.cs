@@ -210,8 +210,9 @@ public static class ObjectTools
     // Faces the camera: the opposite of its yaw, rounded to a quarter turn.
     public static float FacingYaw(float cameraYaw) => NormalizeAngle(MathF.Round((cameraYaw + 180f) / QuarterTurn) * QuarterTurn);
 
-    public static EditOp Place(CatalogId catalogId, Vector3Data position, Vector3Data prefabRotation, Vector3Data scale, float cameraYaw) =>
-        new PlaceObject(catalogId.Serialize(), position, prefabRotation with { Y = FacingYaw(cameraYaw) }, scale).ToEditOp();
+    public static EditOp Place(CatalogId catalogId, Vector3Data position, Vector3Data prefabRotation, Vector3Data scale, float cameraYaw,
+        IReadOnlyList<ObjectAttachmentSpec> attachments = null) =>
+        new PlaceObject(catalogId.Serialize(), position, prefabRotation with { Y = FacingYaw(cameraYaw) }, scale, Attachments: attachments).ToEditOp();
 
     public static EditOp Move(ObjectTarget target, TransformData current, Vector3Data position) =>
         new MoveObject(target, current with { Position = position }).ToEditOp();

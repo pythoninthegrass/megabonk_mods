@@ -192,8 +192,8 @@ public static class EditCommandPlanner
             }
             case PlaceObject.OpType:
             {
-                var placed = ObjectTarget.FromPlacementId(nextPlacementId);
                 var place = PlaceObject.FromEditOp(op);
+                var placed = ObjectTarget.FromPlacementId(place.PlacementId ?? nextPlacementId);
                 var transform = new TransformData(place.Position, place.Rotation, place.Scale);
                     return new EditCommandPlan(
                         OriginalOp: op,

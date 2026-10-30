@@ -23,7 +23,9 @@ public readonly record struct LiveAction(
     string CatalogId,
     TransformData? Transform,
     bool Hidden = false,
-    IReadOnlyList<string> HiddenChildren = null);
+    IReadOnlyList<string> HiddenChildren = null,
+    IReadOnlyList<ObjectAttachmentSpec> Attachments = null,
+    ObjectTarget? Owner = null);
 
 // Replays EditOps through the same EditStack the in-memory model uses, so op semantics (resulting tile
 // state, monotonic placement ids) stay in one place, and flattens them into ordered live actions.
@@ -84,13 +86,17 @@ public static class LiveEditPlan
             {
                 var typed = PlaceObject.FromEditOp(op);
                 var transform = new TransformData(typed.Position, typed.Rotation, typed.Scale);
-                var target = ObjectTarget.FromPlacementId(nextPlacementId++);
-                return new LiveAction(LiveActionKind.SpawnObject, 0, 0, null, target, typed.CatalogId, transform, typed.Hidden);
+                var target = ObjectTarget.FromPlacementId(typed.PlacementId ?? nextPlacementId);
+                nextPlacementId = target.PlacementId + 1 + typed.Attachments.Count;
+                return new LiveAction(LiveActionKind.SpawnObject, 0, 0, null, target, typed.CatalogId, transform, typed.Hidden,
+                    Attachments: typed.Attachments.Count > 0 ? typed.Attachments : null);
             }
             case MoveObject.OpType:
             {
                 var typed = MoveObject.FromEditOp(op);
-                return new LiveAction(LiveActionKind.MoveObject, 0, 0, null, typed.Target, "", typed.NewTransform, HiddenChildren: typed.HiddenChildren);
+                var current = state.GetObject(typed.Target);
+                return new LiveAction(LiveActionKind.MoveObject, 0, 0, null, typed.Target, "", current?.LocalTransform ?? typed.NewTransform,
+                    HiddenChildren: typed.HiddenChildren, Owner: current?.Owner);
             }
             case RemoveObject.OpType:
             {

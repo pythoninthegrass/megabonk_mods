@@ -62,7 +62,7 @@ The level records the manifest `version` of each pack it references, so a run ca
 | `SetTileSlope` | `tile.setSlope` | `X, Z, Direction` (`SlopeDirection`: `None, North, South, East, West`) | unused (`""`) |
 | `AddTile` | `tile.add` | `X, Z, Height` | unused (`""`) |
 | `RemoveTile` | `tile.remove` | `X, Z` | unused (`""`) |
-| `PlaceObject` | `object.place` | `CatalogId, Position, Rotation, Scale` (`Vector3Data`), optional `Hidden` (`bool`, default `false`, left out of the payload when false) | unused (`""`) |
+| `PlaceObject` | `object.place` | `CatalogId, Position, Rotation, Scale` (`Vector3Data`), optional `Hidden`, `Attachments`, `PlacementId` (see below) | unused (`""`) |
 | `MoveObject` | `object.move` | `Target` (`ObjectTarget`), `NewTransform` (`TransformData`), optional `HiddenChildren` (names of descendants whose renderers and colliders are disabled when the move applies, left out of the payload when empty) | `Target.Serialize()` |
 | `RemoveObject` | `object.remove` | `Target` (`ObjectTarget`) | `Target.Serialize()` |
 
@@ -75,7 +75,7 @@ Tile ops apply on top of the generated grid, not an empty one. At generation the
 `MoveObject`/`RemoveObject` reference an existing object through `ObjectTarget`, which distinguishes two kinds:
 
 - **`GenId`** — an opaque string identifying a generator-spawned object, using a `{category}:{sequentialIndex}` scheme; treated here as an opaque non-blank string.
-- **`PlacementId`** — a non-negative `int` identifying an object the editor itself placed via a `PlaceObject` op, scoped to the edit list (assigned incrementally by `EditStack` as `PlaceObject` ops are appended). `PlaceObject` itself carries no target — its identity is assigned by whatever appends it to the edits list, not by this op.
+- **`PlacementId`** — a non-negative `int` identifying an editor placement, scoped to the edit list. Without an explicit `placementId`, replay assigns the next incremental ID. An explicit ID must be unused and at least the next ID. The editor saves it so undo followed by new placement cannot renumber later edit targets on reload. Attachments consume the immediately following IDs in list order.
 
 `ObjectTarget.Serialize()`/`Parse()` encode these onto `EditOp.Target` as `gen:<genId>` or `placement:<id>`.
 
@@ -136,7 +136,7 @@ Rules, checked in this order by `CatalogId.TryParse`/`Parse`:
 
 - If no record existed at that key, undo deletes the key entirely (back to "no edit has ever touched this", not a synthesized default) — this is what makes undoing a `MoveObject`/`RemoveObject` applied to a generator (`GenId`) object well-defined even though `LevelState` never knew that object's generator-assigned transform.
 - If a record existed, undo restores it verbatim, including fields the forward op didn't touch (e.g. undoing `SetTileHeight` restores the prior height *and* keeps whatever slope was already there; undoing `MoveObject` on a placed object restores its prior transform without losing its `CatalogId`).
-- `PlaceObject` carries no target of its own (see above) — `EditStack` allocates one `LevelState.AllocatePlacementId()` per `Apply`, once, and reuses that same id across its own undo/redo; the id is never reused by a later `PlaceObject` even if this one is undone, since `LevelState`'s counter only increments.
+- `PlaceObject` reserves its owner and attachment IDs once per `Apply`, using the explicit `placementId` when present, and reuses those IDs across undo/redo. IDs are never reused by later placements, including after undo.
 
 `tests/MegabonkLevels.Tests/edit_stack_tests.cs` covers: single-apply state for every op type, undo/redo restoring exact prior records (including the "no prior record" deletion case for both tiles and objects), undo on an empty stack being a no-op, apply-after-undo clearing the redo stack, and a multi-step apply/undo/undo/redo/redo sequence.
 
@@ -251,3 +251,37 @@ Verified on the CrossOver reference platform: automated checks (load, edit appli
 ## Hidden placements
 
 A `PlaceObject` with `hidden: true` spawns normally but the mod disables every `Renderer` under it, so its colliders and components stay live and it draws nothing. The THPS level uses this to lay the game's straight `interactable/rail/0` along the Warehouse mesh's own rail bar, so the bar keeps its original look while the game rail supplies the grind.
+
+### Attached placements
+
+An optional `attachments` array in `object.place` contains named child placements:
+
+```json
+{
+  "name": "coping",
+  "catalogId": "interactable/rail/0",
+  "localTransform": {
+    "position": {"x": 0, "y": 0.1, "z": 0.2},
+    "rotation": {"x": 0, "y": 90, "z": 0},
+    "scale": {"x": 0.01, "y": 0.01, "z": 0.01}
+  },
+  "hidden": true
+}
+```
+
+Names must be nonblank and unique within the owner; catalog IDs and positive
+scales use normal placement validation. Attachments are one level deep, not
+recursive assemblies. Their local transforms include the owner's scale; the
+child's prefab root scale is replaced, not multiplied again. The owner gets the
+placement's first ID, and each ordered child gets its own following ID. They
+remain normal move/remove targets. Removing an owner hides its descendants;
+restoring it preserves each child's independent removed state. Replaying a saved
+placement uses its serialized attachment list, never the pack's current defaults.
+
+`MoveObject` retains the existing editor convention: world position and rotation,
+**local** scale. For a child, replay converts position/rotation back to the owner's
+frame and preserves the local scale, so moving a post does not detach it. Owner
+transforms propagate through Unity parenting, including nonuniform scale. Empty
+attachments and absent explicit IDs are omitted, preserving old payload bytes.
+These optional fields keep schema version 3, but files using them require a mod
+that understands attached placements.

@@ -399,9 +399,10 @@ face boundaries (or an explicitly recorded new cut with interpolated UVs).
 No source-face selector is possible for these: their source is the named
 code/config value below. Every enumerated instance needs an editable transform
 or setting, not a hidden consequence of the monolithic Warehouse placement.
-These are implementation requirements for the additive kit, not APIs that
-already exist. Behaviour ownership can be grouped for convenience, but must
-not prevent selecting an individual support or marker.
+Geometry assets and local grind/support attachment defaults are implemented;
+the remaining game placements and level settings below describe the assembly
+contract. Ownership does not prevent selecting an individual support or path;
+see [piece attachments](asset-bundles.md#piece-attachments).
 
 | Inventory ID / instances | Authoritative source | Editable form and ownership |
 | --- | --- | --- |
@@ -465,7 +466,9 @@ adding geometry to the preserved PS1 assembly.
 This is a source/measurement audit. The kit's palette listing, search,
 thumbnails, placement at world scale, selection, rotation, drag-move, removal
 and undo/redo were checked in the running editor through the dev harness for a
-prop, a window and an added piece. Joint collision behaviour, the hidden grind
-paths, save/reload round-trips and visual equivalence in an assembled level
-remain open; the original preservation check stays the guard against changes to
-the shipped Warehouse throughout that work.
+prop, a window and an added piece. Attachment checks cover owner transforms,
+independent support edits, deletion/undo, isolated copies and saved replay. The
+three main north transition modules hand off grinds across their split coping
+paths; the relocated window remains collision-open while its frame stays solid.
+Visual equivalence and joint collision throughout a complete assembled level
+remain open. The preservation check guards the shipped Warehouse throughout.

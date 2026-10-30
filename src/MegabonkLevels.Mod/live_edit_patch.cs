@@ -121,6 +121,9 @@ public static class LiveEditPatch
     // The live object for a target, null when it is gone.
     public static GameObject ObjectFor(ObjectTarget target) => LiveSession?.Applier.FindActive(target);
 
+    public static ObjectTarget SelectionTarget(ObjectTarget target, bool selectHidden) =>
+        LiveSession?.Planner.State.SelectionTarget(target, selectHidden) ?? target;
+
     public static IEnumerable<Renderer> ModelRenderers(GameObject go) => Applier.ModelRenderers(go);
 
     public static IReadOnlyList<(ObjectTarget Target, GameObject Object)> PickableObjects() =>
@@ -155,6 +158,12 @@ public static class LiveEditPatch
 
         try
         {
+            if (op.OpType == PlaceObject.OpType)
+            {
+                var place = PlaceObject.FromEditOp(op);
+                op = new PlaceObject(place.CatalogId, place.Position, place.Rotation, place.Scale, place.Hidden,
+                    place.Attachments, place.PlacementId ?? session.Planner.NextPlacementId).ToEditOp();
+            }
             plan = EditCommandPlanner.Plan(op, session.Planner.State, session.Planner.NextPlacementId, fallback);
             return true;
         }
@@ -258,15 +267,18 @@ public static class LiveEditPatch
             }
 
             var place = PlaceObject.FromEditOp(op);
-            if (CatalogId.TryParse(place.CatalogId, out var id, out _) && id.Namespace == CatalogNamespace.Bundle)
+            foreach (var catalogId in new[] { place.CatalogId }.Concat(place.Attachments.Select(child => child.CatalogId)))
             {
-                var pack = id.Segments[0];
-                if (!referenced.ContainsKey(pack))
+                if (CatalogId.TryParse(catalogId, out var id, out _) && id.Namespace == CatalogNamespace.Bundle)
                 {
-                    var version = PackPrefabs.ManifestVersion(pack);
-                    if (version != null)
+                    var pack = id.Segments[0];
+                    if (!referenced.ContainsKey(pack))
                     {
-                        referenced[pack] = version;
+                        var version = PackPrefabs.ManifestVersion(pack);
+                        if (version != null)
+                        {
+                            referenced[pack] = version;
+                        }
                     }
                 }
             }
@@ -975,6 +987,30 @@ public static class LiveEditPatch
             _placed[action.Target.PlacementId] = spawned;
             _placedCatalogIds[action.Target.PlacementId] = action.CatalogId;
             _targetsByInstanceId[spawned.GetInstanceID()] = action.Target;
+            for (var i = 0; i < (action.Attachments?.Count ?? 0); i++)
+            {
+                var attachment = action.Attachments[i];
+                var target = ObjectTarget.FromPlacementId(action.Target.PlacementId + i + 1);
+                var childPrefab = ResolvePrefab(CatalogId.Parse(attachment.CatalogId));
+                var child = UnityEngine.Object.Instantiate(childPrefab);
+                child.name = attachment.Name;
+                child.transform.SetParent(spawned.transform, false);
+                var local = attachment.LocalTransform;
+                child.transform.localPosition = ToVector(local.Position);
+                child.transform.localRotation = Quaternion.Euler(ToVector(local.Rotation));
+                child.transform.localScale = ToVector(local.Scale);
+                if (attachment.Hidden || action.Hidden)
+                {
+                    foreach (var renderer in child.GetComponentsInChildren<Renderer>(true))
+                    {
+                        renderer.enabled = false;
+                    }
+                }
+                _placed[target.PlacementId] = child;
+                _placedCatalogIds[target.PlacementId] = attachment.CatalogId;
+                _targetsByInstanceId[child.GetInstanceID()] = target;
+                _logger.Msg($"LiveEdit: attached '{attachment.Name}' as {target.Serialize()} to {action.Target.Serialize()}");
+            }
             _logger.Msg($"LiveEdit: spawned '{action.CatalogId}' (prefab '{prefab.name}') as placement:{action.Target.PlacementId} at {spawned.transform.position}");
         }
 
@@ -992,8 +1028,16 @@ public static class LiveEditPatch
                 go.SetActive(true);
             }
 
-            go.transform.position = ToVector(t.Position);
-            go.transform.rotation = Quaternion.Euler(ToVector(t.Rotation));
+            if (action.Owner != null)
+            {
+                go.transform.localPosition = ToVector(t.Position);
+                go.transform.localRotation = Quaternion.Euler(ToVector(t.Rotation));
+            }
+            else
+            {
+                go.transform.position = ToVector(t.Position);
+                go.transform.rotation = Quaternion.Euler(ToVector(t.Rotation));
+            }
             go.transform.localScale = ToVector(t.Scale);
             HideChildren(go, action.HiddenChildren);
             _logger.Msg($"LiveEdit: moved {action.Target.Serialize()} '{go.name}' to {go.transform.position}");
@@ -1037,6 +1081,11 @@ public static class LiveEditPatch
 
             var name = go.name;
             go.SetActive(false);
+            var player = MyPlayer.Instance?.playerMovement;
+            if (player != null && player.IsGrinding() && player.rail != null && player.rail.transform.IsChildOf(go.transform))
+            {
+                player.StopRail();
+            }
             _logger.Msg($"LiveEdit: removed {action.Target.Serialize()} '{name}'");
         }
 

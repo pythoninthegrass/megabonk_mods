@@ -42,6 +42,9 @@ tasks:
         mkdir -p "$dest"
         cp ".tools/bundles/$platform/{{.PACK}}" "$dest/{{.PACK}}"
         cp "{{.PACK_PROJECT}}/packs/{{.PACK}}/manifest.json" "$dest/manifest.json"
+        if [ -f "{{.PACK_PROJECT}}/packs/{{.PACK}}/attachments.json" ]; then
+          cp "{{.PACK_PROJECT}}/packs/{{.PACK}}/attachments.json" "$dest/attachments.json"
+        fi
         echo "installed {{.PACK}} into $dest"
 
   thps:
@@ -49,5 +52,6 @@ tasks:
     cmds:
       - task: build
         vars: {PACK_METHOD: ThpsPack.Build}
+      - uv run scripts/build_thps_attachments.py
       - task: install
         vars: {PACK: thps}

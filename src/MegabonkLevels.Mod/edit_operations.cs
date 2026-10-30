@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -255,8 +256,10 @@ public readonly record struct PlaceObject
     public Vector3Data Scale { get; }
     // A hidden placement keeps its colliders and components but draws nothing, e.g. a rail that only supplies the grind for a mesh rail.
     public bool Hidden { get; }
+    public IReadOnlyList<ObjectAttachmentSpec> Attachments { get; }
+    public int? PlacementId { get; }
 
-    public PlaceObject(string CatalogId, Vector3Data Position, Vector3Data Rotation, Vector3Data Scale, bool Hidden = false)
+    public PlaceObject(string CatalogId, Vector3Data Position, Vector3Data Rotation, Vector3Data Scale, bool Hidden = false, IReadOnlyList<ObjectAttachmentSpec> Attachments = null, int? PlacementId = null)
     {
         EditOpValidation.RequireNonBlankCatalogId(CatalogId);
         EditOpValidation.RequirePositiveScale(Scale);
@@ -265,19 +268,58 @@ public readonly record struct PlaceObject
         this.Rotation = Rotation;
         this.Scale = Scale;
         this.Hidden = Hidden;
+        var attachments = new List<ObjectAttachmentSpec>(Attachments ?? Array.Empty<ObjectAttachmentSpec>());
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var attachment in attachments)
+        {
+            _ = new ObjectAttachmentSpec(attachment.Name, attachment.CatalogId, attachment.LocalTransform, attachment.Hidden);
+            if (!names.Add(attachment.Name))
+            {
+                throw new ArgumentException("Attachment names must be unique.", nameof(Attachments));
+            }
+        }
+        this.Attachments = attachments.AsReadOnly();
+        if (PlacementId is { } id)
+        {
+            EditOpValidation.RequireNonNegative(id, nameof(PlacementId));
+        }
+        this.PlacementId = PlacementId;
     }
 
     public EditOp ToEditOp() =>
-        new(OpType, "", JsonSerializer.Serialize(new Payload(CatalogId, Position, Rotation, Scale, Hidden), EditOpJson.Options));
+        new(OpType, "", JsonSerializer.Serialize(new Payload(CatalogId, Position, Rotation, Scale, Hidden, Attachments.Count > 0 ? Attachments : null, PlacementId), EditOpJson.Options));
+
+    public bool Equals(PlaceObject other) => CatalogId == other.CatalogId && Position == other.Position
+        && Rotation == other.Rotation && Scale == other.Scale && Hidden == other.Hidden
+        && PlacementId == other.PlacementId
+        && (Attachments ?? Array.Empty<ObjectAttachmentSpec>()).SequenceEqual(other.Attachments ?? Array.Empty<ObjectAttachmentSpec>());
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(CatalogId);
+        hash.Add(Position);
+        hash.Add(Rotation);
+        hash.Add(Scale);
+        hash.Add(Hidden);
+        hash.Add(PlacementId);
+        foreach (var attachment in Attachments ?? Array.Empty<ObjectAttachmentSpec>())
+        {
+            hash.Add(attachment);
+        }
+        return hash.ToHashCode();
+    }
 
     public static PlaceObject FromEditOp(EditOp op)
     {
         SetTileHeight.RequireOpType(op, OpType);
         var payload = JsonSerializer.Deserialize<Payload>(op.Payload, EditOpJson.Options);
-        return new PlaceObject(payload.CatalogId, payload.Position, payload.Rotation, payload.Scale, payload.Hidden);
+        return new PlaceObject(payload.CatalogId, payload.Position, payload.Rotation, payload.Scale, payload.Hidden, payload.Attachments, payload.PlacementId);
     }
 
-    private readonly record struct Payload(string CatalogId, Vector3Data Position, Vector3Data Rotation, Vector3Data Scale, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Hidden = false);
+    private readonly record struct Payload(string CatalogId, Vector3Data Position, Vector3Data Rotation, Vector3Data Scale, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Hidden = false,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ObjectAttachmentSpec> Attachments = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? PlacementId = null);
 }
 
 public readonly record struct MoveObject

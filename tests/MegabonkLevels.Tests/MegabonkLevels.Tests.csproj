@@ -32,6 +32,8 @@
     <Compile Include="../../src/MegabonkLevels.Mod/runtime_music_session.cs" Link="runtime_music_session.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/catalog_id.cs" Link="catalog_id.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/edit_operations.cs" Link="edit_operations.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/object_attachments.cs" Link="object_attachments.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/pack_attachments.cs" Link="pack_attachments.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_state.cs" Link="level_state.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/edit_stack.cs" Link="edit_stack.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/reachability_validator.cs" Link="reachability_validator.cs" />

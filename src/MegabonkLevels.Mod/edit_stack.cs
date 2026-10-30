@@ -120,31 +120,57 @@ public sealed class EditStack
 
     private UndoEntry BuildPlaceObject(PlaceObject typed)
     {
-        var target = _state.AllocatePlacementId();
+        var target = _state.AllocatePlacementId(typed.PlacementId, typed.Attachments.Count + 1);
         var transform = new TransformData(typed.Position, typed.Rotation, typed.Scale);
+        var children = new List<(ObjectTarget Target, ObjectState State)>();
+        foreach (var child in typed.Attachments)
+        {
+            children.Add((ObjectTarget.FromPlacementId(target.PlacementId + children.Count + 1), new ObjectState(false, child.CatalogId,
+                AttachmentTransform.ToWorld(transform, child.LocalTransform), target, child.LocalTransform, child.Hidden)));
+        }
         return new UndoEntry(
-            Undo: () => _state.RemoveObject(target),
-            Redo: () => _state.SetObject(target, new ObjectState(Removed: false, typed.CatalogId, transform)));
+            Undo: () =>
+            {
+                foreach (var child in children)
+                {
+                    _state.RemoveObject(child.Target);
+                }
+                _state.RemoveObject(target);
+            },
+            Redo: () =>
+            {
+                _state.SetObject(target, new ObjectState(false, typed.CatalogId, transform, Hidden: typed.Hidden));
+                foreach (var child in children)
+                {
+                    _state.SetObject(child.Target, child.State);
+                }
+            });
     }
 
     private UndoEntry BuildMoveObject(MoveObject typed)
     {
         var previous = _state.GetObject(typed.Target);
-        var removed = previous?.Removed ?? false;
         var catalogId = previous?.CatalogId ?? "";
+        var next = (previous ?? new ObjectState(false, catalogId, null)) with { Removed = false, Transform = typed.NewTransform };
+        if (next.Owner is { } owner && _state.GetObject(owner)?.Transform is { } ownerTransform)
+        {
+            next = next with { LocalTransform = AttachmentTransform.ToLocal(ownerTransform, typed.NewTransform) };
+        }
         return new UndoEntry(
             Undo: () => RestoreObject(typed.Target, previous),
-            Redo: () => _state.SetObject(typed.Target, new ObjectState(removed, catalogId, typed.NewTransform)));
+            Redo: () =>
+            {
+                _state.SetObject(typed.Target, next);
+                _state.RefreshAttachments(typed.Target);
+            });
     }
 
     private UndoEntry BuildRemoveObject(RemoveObject typed)
     {
         var previous = _state.GetObject(typed.Target);
-        var catalogId = previous?.CatalogId ?? "";
-        var transform = previous?.Transform;
         return new UndoEntry(
             Undo: () => RestoreObject(typed.Target, previous),
-            Redo: () => _state.SetObject(typed.Target, new ObjectState(Removed: true, catalogId, transform)));
+            Redo: () => _state.SetObject(typed.Target, (previous ?? new ObjectState(false, "", null)) with { Removed = true }));
     }
 
     private void RestoreObject(ObjectTarget target, ObjectState? previous)
@@ -152,6 +178,7 @@ public sealed class EditStack
         if (previous is { } value)
         {
             _state.SetObject(target, value);
+            _state.RefreshAttachments(target);
         }
         else
         {

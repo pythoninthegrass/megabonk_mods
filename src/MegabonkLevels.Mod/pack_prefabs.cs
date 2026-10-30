@@ -17,11 +17,23 @@ public static class PackPrefabs
     private static readonly PackCatalog<GameObject> Catalog = new(LoadPack, ReadManifest);
     private static readonly Dictionary<string, IReadOnlyDictionary<string, AudioClip>> Clips = new();
     private static readonly Dictionary<string, GameObject> Placeholders = new();
+    private static readonly Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<ObjectAttachmentSpec>>> Attachments = new();
     private static readonly HashSet<string> Warned = new();
     private static GameObject _hiddenRoot;
     private static MelonLogger.Instance _logger;
 
     public static void Initialize(MelonLogger.Instance logger) => _logger = logger;
+
+    public static IReadOnlyList<ObjectAttachmentSpec> AttachmentsFor(CatalogId id)
+    {
+        if (id.Namespace != CatalogNamespace.Bundle || id.Segments.Count != 2)
+        {
+            return Array.Empty<ObjectAttachmentSpec>();
+        }
+        Catalog.AssetNames(id.Segments[0]);
+        return Attachments.TryGetValue(id.Segments[0], out var assets) && assets.TryGetValue(id.Segments[1], out var children)
+            ? children : Array.Empty<ObjectAttachmentSpec>();
+    }
 
     // Returns the pack prefab, or a placeholder cube with a warning when the pack or asset is absent.
     public static GameObject Resolve(CatalogId id)
@@ -88,6 +100,18 @@ public static class PackPrefabs
         }
 
         var assets = new Dictionary<string, GameObject>();
+        var metadata = Path.Combine(directory, PackAttachments.FileName);
+        if (File.Exists(metadata))
+        {
+            try
+            {
+                Attachments[pack] = PackAttachments.Parse(File.ReadAllText(metadata));
+            }
+            catch (ArgumentException e)
+            {
+                _logger.Warning($"Packs: invalid attachments for '{pack}': {e.Message}");
+            }
+        }
         var clips = new Dictionary<string, AudioClip>();
         Clips[pack] = clips;
         foreach (var file in Directory.GetFiles(directory).Where(f => PackFiles.IsBundleFile(Path.GetFileName(f))).OrderBy(f => f, StringComparer.Ordinal))

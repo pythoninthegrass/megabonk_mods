@@ -115,7 +115,43 @@ Alongside the merged `Warehouse`, the builder emits every face of the [piece inv
 
 The build also rewrites the committed sidecar `unity/pack-authoring/packs/thps/pieces.json` (schema `thps-pieces/1`): per piece asset the module, convention, pivot, yaw (`0` except for the riding conventions), world position (`pivot × 79.2 + (100, 0.5, 0)`, the shipped pose) and whether it has a collider, in manifest order, plus the `meshToWorld` scale. `manifest.json` is rewritten from the built asset list the same way, keeping the `id`, `name`, `author` and `version` fields of the existing file. `tests/test_thps_pack_pieces.py` cross-checks both files against the inventory tables and the built prefabs, and `WarehousePieces.cs` (the sidecar's pivot maths) is covered in `tests/MegabonkLevels.Tests/`.
 
-Authoring rules:
+#### Piece attachments
+
+`task pack:thps` also runs `scripts/build_thps_attachments.py`, which writes
+`packs/thps/attachments.json`; `task pack:install` copies it beside the bundle.
+Its `pack-attachments/1` schema maps each owner asset name under `assets` to an
+ordered list of `{name, catalogId, localTransform, hidden}` attachments. Positions,
+rotations and scales use the owner's prefab-local frame, including its 79.2 root
+scale. Extra `start`/`end` fields record the original world-space grind endpoints
+for auditing, not runtime world-position tests. The merged `Warehouse` has no
+entry and gains no extra rails or supports.
+
+The palette copies this list into the placed object's serialized edit. Each
+attachment receives its own placement ID and is parented to the owner at runtime:
+move/rotate/scale and removal follow the owner; independent edits change only the
+attachment's local transform or active state. Undoing an owner removal does not
+revive an independently removed support. Removing a rail or its owner also stops
+an active grind on that rail. Clicking a hidden grind collider selects
+its visible owner by default; **Ctrl-click** selects the hidden path itself. Visible
+supports are selected normally. Replacing a pack's defaults does not rewrite
+attachments already saved in a level.
+
+The four mesh rails retain their tuned game `interactable/rail/0` transforms with
+renderers disabled. Coping paths spanning ramp strips are split at source module
+boundaries, never duplicated onto adjoining decks. Every segment exceeds the
+3.5-unit handoff radius, including the original two-chord pocket tip. Rail posts
+belong to their straight/bent/deck bars; kicker frames belong to their boards;
+the room's underside box follows its floor, and suspension chains/braces follow
+its roof. The support assets remain separately available in the palette. A level
+assembled from the kit must omit separate copies of these attached supports and
+must not also place the legacy hidden rails.
+
+Window pass-through is baked into each pane's own collision result, not a live
+cutout in neighbouring walls. Moving a pane never removes triangles from a wall
+it is moved against; use a window frame with an authored opening rather than
+expecting a solid wall to be carved automatically.
+
+#### Authoring rules
 
 - Set every GameObject of the prefab, children included, to layer 8. The generated tile ground (`TileGround`, `TileSlope`, `TileWall` and the combined collision mesh) is layer 8 and the player is layer 7. A placed object keeps the layer its prefab was saved with, because the mod does not touch the layer of what it spawns.
 - Textures are the extracted PS1 PNGs, point-filtered with no mipmaps and repeat wrap, on materials the pack's shader remap turns into the toon shader. The PS1 transparency key (magenta) is baked to a dark glass colour (`TransparencyKey`, `KeyReplacement`) because the shader is opaque, except for the textures in `SeeThroughTextures` (every keyed texture: chains, crane hooks, posters, graffiti, the fence, the lamp and the windows): their keyed pixels get alpha 0 and their materials use `Sprites/Default`, because the game build has no usable alpha-clip variant of the toon shader (with `_MK_ALPHA_CLIPPING` on, the albedo map is ignored and the chains render white or black). The 41 faces with no texture share a flat concrete material.

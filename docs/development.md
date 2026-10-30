@@ -318,6 +318,16 @@ A missing pack does not fail the load. The level opens with a placeholder at the
 
 ### Preserving the shipped Warehouse
 
+Construction-piece grind and support defaults live in
+`unity/pack-authoring/packs/thps/attachments.json`. Regenerate them with
+`uv run scripts/build_thps_attachments.py` after rebuilding `pieces.json` or
+changing path ownership; `task pack:thps` does both steps and installs the
+metadata beside the bundle. Existing saved placements retain their explicit
+attachments, so place a fresh piece to test changed defaults. Ctrl-click selects
+a hidden grind path instead of its visible owner; posts are normally selectable.
+The [attachment contract](asset-bundles.md#piece-attachments) explains ownership,
+local transforms and avoiding duplicate supports in a kit assembly.
+
 Run `uv run scripts/check_thps_preservation.py` to compare the shipped Warehouse with
 `tests/fixtures/thps-preservation.json`. The same check runs in `task scripts:test`
 and therefore `task check`. It regenerates into a temporary directory in a fresh

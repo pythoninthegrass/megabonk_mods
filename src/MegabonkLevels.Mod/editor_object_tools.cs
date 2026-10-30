@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Il2Cpp;
 using MelonLoader;
 using UnityEngine;
@@ -206,7 +207,8 @@ public static class EditorObjectTools
             return;
         }
 
-        var op = ObjectTools.Place(id, position, ToData(prefab.transform.eulerAngles), ToData(prefab.transform.localScale), camera.transform.eulerAngles.y);
+        var op = ObjectTools.Place(id, position, ToData(prefab.transform.eulerAngles), ToData(prefab.transform.localScale), camera.transform.eulerAngles.y,
+            PackPrefabs.AttachmentsFor(id));
         Apply(op, $"place '{id.Serialize()}' at ({position.X:0.##}, {position.Z:0.##}) {(target is { } cell ? $" in cell ({cell.X},{cell.Z})" : "")}");
     }
 
@@ -468,6 +470,10 @@ public static class EditorObjectTools
         {
             var hit = raw[i];
             var target = LiveEditPatch.TargetOf(hit.transform);
+            if (target is { } attachment)
+            {
+                target = LiveEditPatch.SelectionTarget(attachment, SelectHiddenAttachment());
+            }
             var go = target is { } t ? LiveEditPatch.ObjectFor(t) : null;
             objects.Add(target is { } found && go != null ? (found, go) : null);
             hits.Add(new RayHit(hit.distance, hit.collider.isTrigger, go != null, go != null && CrossesModel(ray, go)));
@@ -511,7 +517,8 @@ public static class EditorObjectTools
             return null;
         }
 
-        var candidates = LiveEditPatch.PickableObjects();
+        var candidates = LiveEditPatch.PickableObjects()
+            .Where(candidate => LiveEditPatch.SelectionTarget(candidate.Target, SelectHiddenAttachment()) == candidate.Target).ToList();
         var positions = new List<(float X, float Z)>(candidates.Count);
         foreach (var candidate in candidates)
         {
@@ -525,6 +532,8 @@ public static class EditorObjectTools
 
     private static TransformData CurrentTransform(GameObject go) =>
         new(ToData(go.transform.position), ToData(go.transform.eulerAngles), ToData(go.transform.localScale));
+
+    private static bool SelectHiddenAttachment() => EditorInput.GetKey(KeyCode.LeftControl) || EditorInput.GetKey(KeyCode.RightControl);
 
     private static Vector3Data ToData(Vector3 v) => new(v.x, v.y, v.z);
 
