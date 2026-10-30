@@ -1,0 +1,49 @@
+[project]
+name = "megabonk-mods"
+version = "0.1.0"
+authors = [
+    { name = "pythoninthegrass", email = "4097471+pythoninthegrass@users.noreply.github.com" }
+]
+requires-python = ">=3.13,<3.14"
+
+dependencies = [
+    "anyio>=4.9",
+    "jq>=1.8",
+    "mcp>=2.3,<3",
+    "mcp-types>=2.3,<3",
+    "pillow>=11",
+    "pydantic>=2.12",
+    "python-decouple>=3.8",
+    "toon-format==1.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "argcomplete>=3.7.2,<4",
+    "ipython>=9.18.0,<10",
+    "pyclean>=3.7.0,<4",
+    "rich>=15.0.0,<16",
+    "ruff>=0.17.3,<0.18",
+]
+test = [
+    "coverage>=7.17.0,<8",
+    "hypothesis[cli]>=6.170.14,<7",
+    "pytest>=9.2.0,<10",
+    "pytest-asyncio>=1.4.1,<2",
+    "pytest-cov>=7.1.0,<8",
+    "pytest-datafiles>=3.0.1,<4",
+    "pytest-xdist>=3.8.0,<4",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+python_classes = "Test*"
+asyncio_mode = "auto"
+markers = [
+    "unit: marks tests as unit tests",
+    "integration: marks tests as integration tests",
+    "e2e: marks tests as end-to-end tests",
+    "benchmark: marks performance benchmark tests"
+]
