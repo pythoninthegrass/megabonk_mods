@@ -2,8 +2,7 @@
 id: TASK-025.02
 title: Inventory every Warehouse element as an editable piece
 status: Done
-assignee:
-  - OpenCode
+assignee: []
 created_date: '2026-10-30T16:24:00Z'
 updated_date: '2026-10-30T16:51:00Z'
 labels:

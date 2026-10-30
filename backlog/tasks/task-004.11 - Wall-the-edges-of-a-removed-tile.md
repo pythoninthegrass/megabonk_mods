@@ -2,8 +2,7 @@
 id: TASK-004.11
 title: Wall the edges of a removed tile
 status: Done
-assignee:
-  - OpenCode
+assignee: []
 created_date: '2026-10-10 06:41'
 updated_date: '2026-10-25T18:08:00Z'
 labels:

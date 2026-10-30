@@ -2,8 +2,7 @@
 id: TASK-005.07
 title: 'Palette search, category tabs and tooltips'
 status: Done
-assignee:
-  - OpenCode
+assignee: []
 created_date: '2026-10-10 06:23'
 updated_date: '2026-10-26T19:58:00Z'
 labels:
@@ -94,7 +93,7 @@ Thumbnails and an icon grid are a separate task.
 
 Verification: wrote filtering/focus tests before implementation; initial task mod:test failed on missing PaletteFilter/PaletteSearchInput types. Added 13 test cases and verified task check passes: mod build, 703 C# tests, 185 Python tests, markdownlint and ruff. git diff --check passes.
 
-Runtime verification on fresh Forest relaunch: rOcK showed only rock names; FOREST/SHRINES matched the five shrine ids despite case; selecting filtered rock_medium_01 showed name + forest/stage0/randomMapObjects/3/0 tooltip, and remained selected while hidden by shrine/group filters. While focused, held W/Space and tapped Alpha1/C left camera framing and Select unchanged. Escape ended focus; clicking group controls outside search ended focus and subsequent Alpha2 selected Lower. Stage 0 flat tiles showed only its nine entries; incompatible query/group showed No matching entries; previous-group from All wrapped to Interactables; All reset restored the full catalog and selection highlight. No ERROR/Exception lines in the current launch log. Screenshots are under the approved OpenCode temporary directory: palette-name-filter-focus.png, palette-selected-tooltip.png, palette-id-filter-hidden-selection.png, palette-group-no-results.png, palette-flat-group.png, palette-interactables-wrap.png and palette-all-restored.png.
+Runtime verification on fresh Forest relaunch: rOcK showed only rock names; FOREST/SHRINES matched the five shrine ids despite case; selecting filtered rock_medium_01 showed name + forest/stage0/randomMapObjects/3/0 tooltip, and remained selected while hidden by shrine/group filters. While focused, held W/Space and tapped Alpha1/C left camera framing and Select unchanged. Escape ended focus; clicking group controls outside search ended focus and subsequent Alpha2 selected Lower. Stage 0 flat tiles showed only its nine entries; incompatible query/group showed No matching entries; previous-group from All wrapped to Interactables; All reset restored the full catalog and selection highlight. No ERROR/Exception lines in the current launch log. Screenshots are under the approved temporary directory: palette-name-filter-focus.png, palette-selected-tooltip.png, palette-id-filter-hidden-selection.png, palette-group-no-results.png, palette-flat-group.png, palette-interactables-wrap.png and palette-all-restored.png.
 
 Implementation committed as fb2f89e (feat(editor): add palette search, group filters and tooltips), with no attribution. All six acceptance criteria and four Definition of Done items verified.
 
