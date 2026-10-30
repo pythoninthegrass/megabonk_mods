@@ -34,7 +34,7 @@ import tempfile
 import time
 import toon_format
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -44,6 +44,7 @@ from mcp.server.mcpserver import Context, Image
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import CallToolResult, TextContent
 from PIL import Image as PilImage
+from pydantic import Field, StrictBool
 
 TIMEOUT = 15.0
 LAUNCH_MARKER = "DevHarness: enabled"
@@ -292,6 +293,16 @@ async def invulnerable(on: bool) -> CallToolResult:
 async def kill() -> CallToolResult:
     """End the run at once by killing the player through PlayerHealth.KillPlayer, even when invulnerable; the game shows its death screen."""
     return await _command(_harness(), run.build_command("kill"), TIMEOUT)
+
+
+@mcp.tool()
+async def damage(amount: Annotated[int, Field(strict=True, ge=1, le=99)], nonlethal: StrictBool = True) -> CallToolResult:
+    """Apply any integer 1–99 HP damage through normal game reactions, shields and cooldowns. Nonlethal preserves at least 1 HP by default; false may end the run. Returns requested/actual damage, before/after health and blocked/clamped status."""
+    try:
+        payload = run.build_damage_command(amount, nonlethal)
+    except ValueError as error:
+        raise ToolError(str(error)) from error
+    return await _command(_harness(), payload, TIMEOUT)
 
 
 @mcp.tool()

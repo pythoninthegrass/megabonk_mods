@@ -22,6 +22,7 @@ public enum HarnessCommandKind
     Invulnerable,
     Vulnerable,
     Kill,
+    Damage,
     Spawns,
     CharacterScreen,
     Heartbeat,
@@ -85,6 +86,13 @@ public sealed class ItemArgs
     public int? Amount { get; init; }
 }
 
+public sealed class DamageArgs
+{
+    public int Amount { get; init; }
+
+    public bool Nonlethal { get; init; } = true;
+}
+
 // The type to enumerate and the public fields to read besides name.
 public sealed class QueryArgs
 {
@@ -94,7 +102,7 @@ public sealed class QueryArgs
 }
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null)
 {
     public const int MaxTypeLength = 200;
 
@@ -143,6 +151,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
 
         switch (name)
         {
+            case "damage":
+                return TryParseDamage(root, out command, out error);
             case "quit":
                 command = new HarnessCommand(HarnessCommandKind.Quit, null);
                 error = null;
@@ -239,6 +249,28 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 error = $"unknown command '{name}'";
                 return false;
         }
+    }
+
+    private static bool TryParseDamage(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+        if (root["amount"] is not JsonValue amountValue || !amountValue.TryGetValue(out int amount) || amount is < 1 or > 99)
+        {
+            error = "field 'amount' must be an integer from 1 to 99";
+            return false;
+        }
+
+        var nonlethal = true;
+        if (root.TryGetPropertyValue("nonlethal", out var node)
+            && (node is not JsonValue value || !value.TryGetValue(out nonlethal)))
+        {
+            error = "field 'nonlethal' must be a boolean";
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.Damage, null, Damage: new DamageArgs { Amount = amount, Nonlethal = nonlethal });
+        error = null;
+        return true;
     }
 
     private static bool TryParseEnabledFlag(JsonObject root, HarnessCommandKind kind, out HarnessCommand command, out string error)

@@ -26,6 +26,7 @@ Usage:
     run.py invulnerable            Make the player survive enemy damage
     run.py vulnerable              Restore normal player damage
     run.py kill                    End the run at once by killing the player, even when invulnerable
+    run.py damage <1-99>           Apply integer damage; preserves 1 HP unless --no-nonlethal
     run.py steam-ready             Check whether the in-game Steamworks client is ready
     run.py state                   Print the game's current state as JSON (level, editor, player, tool, selection)
     run.py shader-report           Print which candidate shaders Shader.Find resolves and the shaders and properties of the scene's materials
@@ -221,6 +222,23 @@ def build_character_screen_command(enabled: bool) -> dict[str, object]:
 
 def build_spawns_command(enabled: bool) -> dict[str, object]:
     return {"command": "spawns", "enabled": enabled}
+
+
+def build_damage_command(amount: int, nonlethal: bool = True) -> dict[str, object]:
+    if type(amount) is not int or not 1 <= amount <= 99:
+        raise ValueError("damage amount must be an integer from 1 to 99")
+    if type(nonlethal) is not bool:
+        raise ValueError("nonlethal must be a boolean")
+    return {"command": "damage", "amount": amount, "nonlethal": nonlethal}
+
+
+def damage_amount(value: str) -> int:
+    try:
+        amount = int(value)
+        build_damage_command(amount)
+        return amount
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("damage amount must be an integer from 1 to 99") from error
 
 
 def build_heartbeat_command(enabled: bool) -> dict[str, object]:
@@ -583,6 +601,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("invulnerable")
     sub.add_parser("vulnerable")
     sub.add_parser("kill")
+    damage = sub.add_parser("damage", help="apply 1–99 damage through the game; nonlethal by default")
+    damage.add_argument("amount", type=damage_amount)
+    damage.add_argument("--nonlethal", action=argparse.BooleanOptionalAction, default=True, help="preserve at least 1 HP; --no-nonlethal can end the run")
     sub.add_parser("steam-ready")
     sub.add_parser("state")
     sub.add_parser("shader-report")
@@ -918,6 +939,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send(harness, build_command(args.action), args.timeout)
         case "state":
             ok = send_printing_result(harness, build_command("state"), args.timeout)
+        case "damage":
+            ok = send_printing_result(harness, build_damage_command(args.amount, args.nonlethal), args.timeout)
         case "shader-report":
             ok = send_printing_result(harness, build_command("shader-report"), args.timeout)
         case "ui-tree":

@@ -30,6 +30,7 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Resume gameplay | `{"command":"resume"}` | `run.py resume` |
 | Make the player survive enemy damage | `{"command":"invulnerable"}` | `run.py invulnerable` |
 | Restore normal player damage | `{"command":"vulnerable"}` | `run.py vulnerable` |
+| Apply 1–99 integer damage, preserving 1 HP by default | `{"command":"damage","amount":37,"nonlethal":true}` | `run.py damage 37` |
 | End the run at once by killing the player (ignores invulnerability) | `{"command":"kill"}` | `run.py kill` |
 | Allow or stop new enemy spawns | `{"command":"spawns","enabled":false}` | `run.py spawns <on\|off>` |
 | Check in-game Steamworks readiness | `{"command":"steam-ready"}` | `run.py steam-ready` |
@@ -409,6 +410,20 @@ Caveats:
 The `item` command reads or sets the player's stack count of one game item. `name` is a case-sensitive `EItem` member (`Mirror`, `Feathers`, and the rest of the enum in `.tools/il2cpp_dump/dump.cs`). Without `amount` it only reads; with `amount`, an integer from 0 to 999, it sets the count exactly and 0 removes the item. The result is `{"item":name,"before":n,"after":n}`. An unknown or wrongly cased name, a missing `name`, or an `amount` that is negative, above 999, or not an integer is rejected with an error and changes nothing. With no player in the scene the command fails with `no player: start a run first`.
 
 `ItemInventory.RemoveItem` drops one stack per call, so lowering an amount repeats it; raising one is a single `AddItem(item, count)`. `invulnerable` and `vulnerable` use the same routine. Items sent through `item` while invulnerable are not tracked: `vulnerable` still restores the Mirror and Feathers amounts held when `invulnerable` was sent.
+
+## Controlled player damage
+
+`run.py damage <amount>` and MCP `damage(amount=<amount>, nonlethal=true)` accept **any integer from 1 through 99**, not just presets. Each call requests one hit. The independent nonlethal flag defaults to true and caps that hit to preserve at least 1 HP. To permit death explicitly, use `run.py damage 99 --no-nonlethal` or MCP `damage(amount=99, nonlethal=false)`. The flag applies only to that command; it is not persistent invulnerability against enemies or the kill floor. Invalid amounts, nonboolean flags, absent players and dead players are rejected before damage is attempted.
+
+The hit calls `PlayerHealth.DamagePlayerExternal` with zero knockback, no attacker and the stock `Enemy` source. It exercises the normal damage checks, `A_TakeDamage` reactions and music danger history; it does not overwrite HP, clear cooldowns, remove items or force pitch. Armor and other game modifiers can change the requested damage. Harness Mirror invulnerability does **not** reliably block this attacker-less external hit: it applied in Wine with the toggle on. Use the default nonlethal flag for safety, not Mirror.
+
+Results include `requestedDamage`, `submittedDamage`, `effectiveDamage` (after game checks and the safety cap, or null if gated earlier), `actualDamage` (sum of positive HP/shield/overheal losses), individual signed losses, `before`/`after` snapshots with HP, max HP, shield, max shield, overheal and max overheal, plus `blocked`, `clamped`, `reason` and cooldown state. `damageEvents` counts actual `A_TakeDamage` callbacks for the hit. A blocked command succeeds as a diagnostic operation but applies no hit; inspect its result rather than assuming the requested damage landed.
+
+- **Cooldown:** the normal enemy-damage cooldown is respected. While the editor freezes gameplay it does not expire, so repeated commands can return `reason: damage-cooldown` with identical snapshots. Leave the editor briefly to advance gameplay before another hit. Disable spawns first in a disposable test run; existing enemies remain.
+- **Shield:** when shield is positive, the game subtracts from shield only; even a hit larger than the remaining shield does not spill into HP. A 99-point hit against 5 shield therefore reports 5 actual damage, no HP loss and no nonlethal clamp.
+- **Overheal:** without shield, damage consumes overheal before HP. Native HP subtraction truncates floats, so the nonlethal cap conservatively uses `hp - 1 + floor(overheal)`. Fractional overheal may remain. The cap runs after `CheckStopDamage` item modifiers and only during the harness call; at the floor, a fully capped hit emits no damage callback. Nonlethal calls fail closed if the guard patch is absent.
+
+For danger testing, first obtain a low-health state with a hit, advance gameplay past cooldown, then hit again below 25% HP if needed. Inspect `music-probe status` (`sourcePitch`, with `heldPitch` null) and `query_objects(type="MusicController", fields=["currentDangerPitch"])`. Editor pause filtering is not the low-health reaction; exit the editor to observe the natural pitch change. These are source-state checks, **not an audible confirmation**; listening remains a human check. Shield, cooldown and the 1 HP floor can prevent a requested follow-up from being an actual HP hit.
 
 ## Player invulnerability
 

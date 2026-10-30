@@ -12,6 +12,35 @@ import time
 from pathlib import Path
 
 
+@pytest.mark.parametrize("amount", [1, 5, 10, 37, 90, 99])
+def test_damage_integer_amount_and_default_safety(amount) -> None:
+    args = run.parse_args(["damage", str(amount)])
+    assert run.build_damage_command(args.amount, args.nonlethal) == {"command": "damage", "amount": amount, "nonlethal": True}
+
+
+def test_damage_explicit_lethal_opt_out() -> None:
+    args = run.parse_args(["damage", "99", "--no-nonlethal"])
+    assert run.build_damage_command(args.amount, args.nonlethal)["nonlethal"] is False
+
+
+@pytest.mark.parametrize("amount", [0, -1, 100, 1.5, True, "5", None])
+def test_damage_builder_rejects_invalid_amount(amount) -> None:
+    with pytest.raises(ValueError, match="integer.*1.*99"):
+        run.build_damage_command(amount)
+
+
+@pytest.mark.parametrize("nonlethal", [None, "false", 0])
+def test_damage_builder_rejects_nonboolean_safety(nonlethal) -> None:
+    with pytest.raises(ValueError, match="boolean"):
+        run.build_damage_command(5, nonlethal)
+
+
+@pytest.mark.parametrize("amount", ["0", "-1", "100", "1.5", "five"])
+def test_damage_cli_rejects_invalid_amount(amount) -> None:
+    with pytest.raises(SystemExit):
+        run.parse_args(["damage", amount])
+
+
 @pytest.mark.parametrize(
     "action",
     [
