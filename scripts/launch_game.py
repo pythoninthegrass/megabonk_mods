@@ -49,13 +49,20 @@ def _wine_env(prefix: Path) -> dict[str, str]:
     return {"WINEPREFIX": str(prefix), "WINEMSYNC": "1", "USER": WINDOWS_USER, "LOGNAME": WINDOWS_USER}
 
 
+def game_winedebug(lookup=os.environ.get) -> str:
+    """The Wine debug channels for a game launch; MEGABONK_WINEDEBUG_EXTRA appends channels (e.g. +seh) for a diagnostic run."""
+    debug = GAME_WINEDEBUG
+    extra = (lookup("MEGABONK_WINEDEBUG_EXTRA") or "").strip()
+    return f"{debug},{extra}" if extra else debug
+
+
 def build_game_launch(wine: Path, prefix: Path, game: Path) -> Launch:
     env = {
         **_wine_env(prefix),
         "SteamAppId": APP_ID,
         "SteamGameId": APP_ID,
         "WINEDLLOVERRIDES": GAME_DLL_OVERRIDES,
-        "WINEDEBUG": GAME_WINEDEBUG,
+        "WINEDEBUG": game_winedebug(),
         "MVK_CONFIG_LOG_LEVEL": "1",
         "DXVK_LOG_LEVEL": "error",
     }
@@ -84,9 +91,26 @@ def watcher_argv(launch: Launch) -> list[str]:
     return [sys.executable, str(Path(__file__).resolve()), "watch", "--log", str(launch.log), "--", *launch.argv]
 
 
+WATCH_ENV_PREFIXES = ("WINE", "DOTNET_", "DYLD_", "MVK_", "DXVK_", "MEGABONK_", "Steam")
+
+
+def launch_context_header(argv: list[str], env: dict[str, str]) -> str:
+    """A header naming the launching context (process ids, cwd, tty, and the env that could poison a boot), written before the game starts so a dead log can be compared against a known-good launch after the parent shell is gone."""
+    try:
+        tty = os.ttyname(0)
+    except OSError:
+        tty = "none"
+    interesting = sorted(name for name in env if name.startswith(WATCH_ENV_PREFIXES))
+    pairs = " ".join(f"{name}={env[name]!r}" for name in interesting) or "(none)"
+    return (f"watch: launched pid={os.getpid()} ppid={os.getppid()} session={os.getsid(0)} cwd={os.getcwd()} tty={tty}\n"
+            f"watch: argv={' '.join(argv)}\nwatch: env {pairs}\n")
+
+
 def watch_launch(log: Path, argv: list[str]) -> int:
     """Run the game to completion from the detached watcher and append its exit status to the log; only the game's parent can wait on it, which is why spawn() detaches this process instead of the game."""
     with log.open("ab") as stream:
+        stream.write(launch_context_header(argv, dict(os.environ)).encode())
+        stream.flush()
         proc = subprocess.Popen(argv, stdout=stream, stderr=stream)
         status = proc.wait()
         stream.write(f"\nwine: game process exited with status {status}\n".encode())

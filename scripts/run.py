@@ -66,7 +66,10 @@ directory or this script, then the per-runtime default (see game_paths.py). Keys
 MEGABONK_WINE_PREFIX, MEGABONK_BOTTLE, MEGABONK_MACOS_RUNTIME (wine or crossover; selects the task relaunch
 starts the game with), MEGABONK_RELAUNCH_SPAWNS (default true; false stops enemy spawns after relaunch),
 MEGABONK_RELAUNCH_INVULNERABLE (default false; true makes the player invulnerable after relaunch),
-MEGABONK_RELAUNCH_FEATHERS (default 2; the Feathers amount set after relaunch, 0 leaves it alone).
+MEGABONK_RELAUNCH_FEATHERS (default 2; the Feathers amount set after relaunch, 0 leaves it alone),
+MEGABONK_RELAUNCH_DIAG (default false; true hides UnityCrashHandler64.exe and adds Wine +seh tracing so a
+native startup crash reports itself instead of exiting silently; MEGABONK_EVIDENCE_DIR overrides where a
+dead boot's logs are copied).
 """
 
 import argparse
@@ -75,6 +78,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -171,6 +175,10 @@ def resolve_relaunch_feathers(lookup: Lookup) -> int:
 
 def resolve_relaunch_invulnerable(lookup: Lookup) -> bool:
     return resolve_flag(lookup, "MEGABONK_RELAUNCH_INVULNERABLE", False)
+
+
+def resolve_relaunch_diag(lookup: Lookup) -> bool:
+    return resolve_flag(lookup, "MEGABONK_RELAUNCH_DIAG", False)
 
 
 def launch_task(runtime: str, system: str | None = None) -> str:
@@ -990,8 +998,67 @@ def wine_log_tail(game_dir: Path) -> str:
     return "\n" + "\n".join(f"  {line}" for line in tail)
 
 
+def failure_evidence_root() -> Path:
+    override = (os.environ.get("MEGABONK_EVIDENCE_DIR") or "").strip()
+    if override:
+        return Path(override).expanduser()
+    if platform.system() == "Darwin":
+        return Path.home() / "Library" / "Logs" / "megabonk-relaunch-failures"
+    return Path.home() / ".local" / "state" / "megabonk-relaunch-failures"
+
+
+def player_log_dir(game_dir: Path) -> Path | None:
+    prefix = wine_prefix(game_dir)
+    if prefix is None:
+        return None
+    return prefix / "drive_c" / "users" / "crossover" / "AppData" / "LocalLow" / "Ved" / "Megabonk"
+
+
+def save_failure_evidence(game_dir: Path) -> Path | None:
+    """Copy the launch logs out of the game directory the moment a boot dies; every later launch rotates wine-latest.log over its only copy, so evidence must leave the tree to survive. Returns the saved folder, or None when nothing was there to save."""
+    sources = [game_dir / "MelonLoader" / "wine-latest.log", latest_log_path(game_dir)]
+    if (players := player_log_dir(game_dir)) is not None:
+        sources += [players / "Player.log", players / "Player-prev.log"]
+    present = [path for path in sources if path.is_file()]
+    if not present:
+        return None
+    destination = failure_evidence_root() / time.strftime("%Y-%m-%d_%H-%M-%S")
+    try:
+        destination.mkdir(parents=True, exist_ok=True)
+        for path in present:
+            shutil.copyfile(path, destination / path.name)
+    except OSError:
+        return None
+    return destination
+
+
 def game_exited_error(game_dir: Path) -> str:
-    return f"relaunch: game exited during startup (see {latest_log_path(game_dir)}){wine_log_tail(game_dir)}"
+    saved = save_failure_evidence(game_dir)
+    saved_note = f"; evidence saved to {saved}" if saved else ""
+    return f"relaunch: game exited during startup (see {latest_log_path(game_dir)}){saved_note}{wine_log_tail(game_dir)}"
+
+
+CRASH_HANDLER_EXE = "UnityCrashHandler64.exe"
+
+
+def unity_crash_handler_diag(game_dir: Path, diag: bool) -> None:
+    """Prepare the game directory for a boot: in diag mode hide Unity's crash handler (it swallows native faults and exits the game with status 1 reporting to MelonLoader's RemoteAPI) and ask Wine to trace exceptions itself; outside diag mode undo that so normal launches keep their handler."""
+    handler = game_dir / CRASH_HANDLER_EXE
+    disabled = handler.with_name(f"{CRASH_HANDLER_EXE}.disabled")
+    if diag:
+        if handler.exists():
+            handler.replace(disabled)
+        os.environ["MEGABONK_WINEDEBUG_EXTRA"] = "+seh"
+        subprocess.run(
+            [str(wine_bin()), "reg", "add", "HKCU\\Software\\Wine\\WineDbg", "/v", "ShowCrashDialog", "/t", "REG_DWORD", "/d", "0", "/f"],
+            env={**os.environ, "WINEPREFIX": str(resolve_wine_prefix())},
+            capture_output=True,
+            check=False,
+        )
+    else:
+        if disabled.exists():
+            disabled.replace(handler)
+        os.environ.pop("MEGABONK_WINEDEBUG_EXTRA", None)
 
 
 def relaunch(
@@ -1006,9 +1073,10 @@ def relaunch(
     spawns: bool = True,
     invulnerable: bool = False,
     feathers: int = 2,
+    diag: bool = False,
     is_alive: Callable[[], bool] = game_is_running,
 ) -> bool:
-    """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable if asked, set the Feathers amount unless it is 0, stop enemy spawns unless spawns is set, and enter editor. A level of None stops at the main menu once Steamworks is ready. A game that stays not-ready but keeps answering (an offline run with the Steam stub) continues after a grace period; one that stops answering or exits fails."""
+    """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable if asked, set the Feathers amount unless it is 0, stop enemy spawns unless spawns is set, and enter editor. A level of None stops at the main menu once Steamworks is ready. A game that stays not-ready but keeps answering (an offline run with the Steam stub) continues after a grace period; one that stops answering or exits fails. diag hides Unity's crash handler and traces Wine exceptions so a native fault reports itself."""
     started = time.time()
 
     def prepare_harness() -> str | None:
@@ -1018,6 +1086,7 @@ def relaunch(
         if not wait_for_wineserver_to_exit():
             return "relaunch: wineserver did not exit before launch"
         clear_harness_queue(harness)
+        unity_crash_handler_diag(game_dir, diag)
         on_step("relaunch: starting game")
         launched = time.time()
         if not launch_game(task):
@@ -1186,6 +1255,7 @@ def main(argv: list[str] | None = None) -> int:
                 spawns=resolve_relaunch_spawns(load_lookup()),
                 invulnerable=resolve_relaunch_invulnerable(load_lookup()),
                 feathers=resolve_relaunch_feathers(load_lookup()),
+                diag=resolve_relaunch_diag(load_lookup()),
             )
     return 0 if ok else 1
 

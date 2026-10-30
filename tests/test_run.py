@@ -783,7 +783,8 @@ def test_relaunch_reports_the_game_exiting_during_startup(monkeypatch) -> None:
     assert errors == ["relaunch: game exited during startup (see /g/MelonLoader/Latest.log)"]
 
 
-def test_game_exited_error_appends_the_wine_log_tail(tmp_path) -> None:
+def test_game_exited_error_appends_the_wine_log_tail(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("MEGABONK_EVIDENCE_DIR", str(tmp_path / "evidence"))
     log = tmp_path / "MelonLoader" / "wine-latest.log"
     log.parent.mkdir(parents=True)
     log.write_text(
@@ -800,6 +801,83 @@ def test_game_exited_error_appends_the_wine_log_tail(tmp_path) -> None:
 
 def test_game_exited_error_without_a_wine_log_is_unchanged(tmp_path) -> None:
     assert run.game_exited_error(tmp_path) == f"relaunch: game exited during startup (see {tmp_path}/MelonLoader/Latest.log)"
+
+
+def evidence_tree(tmp_path, monkeypatch):
+    monkeypatch.setenv("MEGABONK_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    game = tmp_path / "game"
+    (game / "MelonLoader").mkdir(parents=True)
+    (game / "MelonLoader" / "wine-latest.log").write_text("wine log\n", encoding="utf-8")
+    (game / "MelonLoader" / "Latest.log").write_text("melon log\n", encoding="utf-8")
+    players = tmp_path / "prefix" / "drive_c/users/crossover/AppData/LocalLow/Ved/Megabonk"
+    players.mkdir(parents=True)
+    (players / "Player.log").write_text("player log\n", encoding="utf-8")
+    monkeypatch.setattr(run, "wine_prefix", lambda game_dir: tmp_path / "prefix")
+    return game
+
+
+def test_save_failure_evidence_copies_every_launch_log(tmp_path, monkeypatch) -> None:
+    game = evidence_tree(tmp_path, monkeypatch)
+    saved = run.save_failure_evidence(game)
+    assert saved is not None
+    assert saved.parent == tmp_path / "evidence"
+    assert sorted(path.name for path in saved.iterdir()) == ["Latest.log", "Player.log", "wine-latest.log"]
+    assert (saved / "wine-latest.log").read_text(encoding="utf-8") == "wine log\n"
+
+
+def test_save_failure_evidence_returns_none_when_nothing_was_written(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("MEGABONK_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    monkeypatch.setattr(run, "wine_prefix", lambda game_dir: None)
+    assert run.save_failure_evidence(tmp_path / "game") is None
+    assert not (tmp_path / "evidence").exists()
+
+
+def test_game_exited_error_names_the_saved_evidence_folder(tmp_path, monkeypatch) -> None:
+    game = evidence_tree(tmp_path, monkeypatch)
+    message = run.game_exited_error(game)
+    assert "evidence saved to " in message
+    assert str(tmp_path / "evidence") in message
+
+
+def test_unity_crash_handler_diag_hides_and_restores_the_handler(tmp_path, monkeypatch) -> None:
+    game = tmp_path / "game"
+    game.mkdir()
+    handler = game / "UnityCrashHandler64.exe"
+    handler.write_text("exe", encoding="utf-8")
+    runs = []
+    monkeypatch.setattr(run, "wine_bin", lambda: Path("/w/wine"))
+    monkeypatch.setattr(run, "resolve_wine_prefix", lambda: tmp_path / "prefix")
+    monkeypatch.setattr(run.subprocess, "run", lambda cmd, **kwargs: runs.append(cmd))
+    monkeypatch.delenv("MEGABONK_WINEDEBUG_EXTRA", raising=False)
+    run.unity_crash_handler_diag(game, True)
+    assert not handler.exists()
+    assert (game / "UnityCrashHandler64.exe.disabled").read_text(encoding="utf-8") == "exe"
+    assert os.environ["MEGABONK_WINEDEBUG_EXTRA"] == "+seh"
+    assert runs[0][:3] == ["/w/wine", "reg", "add"]
+    assert "ShowCrashDialog" in runs[0]
+    run.unity_crash_handler_diag(game, False)
+    assert handler.read_text(encoding="utf-8") == "exe"
+    assert not (game / "UnityCrashHandler64.exe.disabled").exists()
+    assert "MEGABONK_WINEDEBUG_EXTRA" not in os.environ
+
+
+def test_relaunch_diag_prepares_the_crash_handler_before_launching(monkeypatch) -> None:
+    calls = relaunch_stubs(monkeypatch)
+    monkeypatch.setattr(run, "unity_crash_handler_diag", lambda game_dir, diag: calls.append(("diag", diag)))
+    ok = run.relaunch(Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=lambda m: None, diag=True)
+    assert ok is True
+    assert calls[:5] == ["quit", "wineserver", "clear", ("diag", True), ("launch", "game:run")]
+
+
+def test_resolve_relaunch_diag_defaults_to_off() -> None:
+    assert run.resolve_relaunch_diag({}.get) is False
+
+
+def test_resolve_relaunch_diag_reads_the_setting() -> None:
+    for value in ("1", "true", "YES", "on"):
+        assert run.resolve_relaunch_diag({"MEGABONK_RELAUNCH_DIAG": value}.get) is True
+    for value in ("0", "false", "no", "off"):
+        assert run.resolve_relaunch_diag({"MEGABONK_RELAUNCH_DIAG": value}.get) is False
 
 
 def test_relaunch_leaves_no_game_or_wine_processes_after_a_failure(monkeypatch) -> None:

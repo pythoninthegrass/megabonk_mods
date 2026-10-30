@@ -35,6 +35,49 @@ def test_game_launch_env_is_exact() -> None:
     }
 
 
+def test_game_winedebug_appends_the_extra_channels(monkeypatch) -> None:
+    monkeypatch.delenv("MEGABONK_WINEDEBUG_EXTRA", raising=False)
+    assert lg.game_winedebug() == lg.GAME_WINEDEBUG
+    assert lg.game_winedebug({"MEGABONK_WINEDEBUG_EXTRA": "+seh"}.get) == f"{lg.GAME_WINEDEBUG},+seh"
+
+
+def test_game_launch_winedebug_carries_the_extra_from_the_environment(monkeypatch) -> None:
+    monkeypatch.setenv("MEGABONK_WINEDEBUG_EXTRA", "+seh,-timestamp")
+    env = lg.build_game_launch(WINE, PREFIX, GAME).env
+    assert env["WINEDEBUG"] == f"{lg.GAME_WINEDEBUG},+seh,-timestamp"
+
+
+def test_launch_context_header_names_the_launching_context() -> None:
+    header = lg.launch_context_header(
+        ["/w/wine", "Megabonk.exe"],
+        {"WINEPREFIX": "/b/Steam", "MEGABONK_WINEDEBUG_EXTRA": "+seh", "UNRELATED": "x"},
+    )
+    assert header.startswith("watch: launched pid=")
+    assert "watch: argv=/w/wine Megabonk.exe" in header
+    assert "WINEPREFIX='/b/Steam'" in header
+    assert "MEGABONK_WINEDEBUG_EXTRA='+seh'" in header
+    assert "UNRELATED" not in header
+
+
+def test_watch_launch_writes_the_header_before_the_game_output(tmp_path, monkeypatch) -> None:
+    log = tmp_path / "wine-latest.log"
+
+    class FakeProc:
+        def __init__(self, stdout) -> None:
+            stdout.write(b"child output\n")
+            stdout.flush()
+
+        def wait(self) -> int:
+            return 1
+
+    monkeypatch.setattr(lg.subprocess, "Popen", lambda argv, stdout, stderr: FakeProc(stdout))
+    assert lg.watch_launch(log, ["wine", "Megabonk.exe"]) == 1
+    text = log.read_text(encoding="utf-8")
+    assert text.startswith("watch: launched pid=")
+    assert text.index("watch: argv=wine Megabonk.exe") < text.index("child output")
+    assert text.rstrip().endswith("wine: game process exited with status 1")
+
+
 def test_game_launch_logs_under_melonloader_and_steam_does_not() -> None:
     assert lg.build_game_launch(WINE, PREFIX, GAME).log == GAME / "MelonLoader" / "wine-latest.log"
     assert lg.build_steam_launch(WINE, PREFIX).log is None
