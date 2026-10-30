@@ -1,11 +1,11 @@
 ---
 id: TASK-024.03
 title: Create production runtime clips with bounded decode ownership
-status: In Progress
+status: Done
 assignee:
   - Assistant
 created_date: '2026-10-30T02:24:00Z'
-updated_date: '2026-10-30T02:47:00Z'
+updated_date: '2026-10-30T02:48:00Z'
 labels:
   - music
 dependencies:
@@ -35,7 +35,7 @@ The successful native mp3 probe is diagnostic and retains whole-track PCM. Produ
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -59,3 +59,9 @@ Default Wine verified at ~/.local/share/megabonk/wine, with rebuilt DLL and fres
 
 Malformed MPEG input (docs/music.md supplied explicitly to the diagnostic) returned 'Not a valid MPEG file!'; status still reported Police Truck active. A bare '14 Strobe.mp3' lookup correctly reported absent before explicit host-path audition; no source files were copied or packs rebuilt. Fresh human audible confirmation not claimed. Native Linux remains guarded/unverified, and production track: stage/radio/prefetch lifecycle hooks remain for 024.04. Generic disposal/cancellation and native replacement cleanup are verified here; actual level-exit integration will be checked there.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added shared guarded native clip creation with block uploads/full PCM readback, bounded NLayer decoding (64 MiB input/256 MiB PCM), a game-thread resource owner with one cancellable managed prefetch, and disposable runtime MusicTrack/AudioClip ownership. Native probe now uses the production primitives; existing diagnostic action names remain intact. Test-first policy coverage plus generated-MP3 integration tests; task check passes 1,346 C# and 513 Python tests, build/deploy and lint. Default Wine tone/44.1 kHz and 48 kHz tracks, long tracks, replacement/replay and malformed-input preservation verified with zero PCM roundtrip error. Commit a68e2ac. Stage/radio integration, actual level-exit lifecycle wiring and production prefetch scheduling remain 024.04; native Linux remains 024.05. Fresh human listening confirmation was not claimed; Strobe left reporting active in frozen editor.
+<!-- SECTION:FINAL_SUMMARY:END -->
