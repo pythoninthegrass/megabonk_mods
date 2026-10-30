@@ -47,6 +47,9 @@ Measured in the running game (build 1.0.69, CrossOver):
 
 ## Structure to catalog mapping
 
+For the additive editable kit, see the [construction piece inventory](thps-warehouse-pieces.md).
+The mapping below describes the unchanged shipped level, not the future kit.
+
 The Warehouse is one `bundle:thps/Warehouse` placement built from the extracted mesh (see [asset-bundles.md](asset-bundles.md)): the floor, banks, half pipes, decks, ledges, walls, windows, doors and trusses are all in that mesh, so no structure needs its own catalog entry. The Megabonk catalog supplies what the mesh does not:
 
 | Feature | How it is built |

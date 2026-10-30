@@ -605,11 +605,33 @@ To check it, run `task thps` to install the level and pack, then run `relaunch(n
 
 ## Python tests
 
-The tooling scripts under `scripts/` are covered by pytest tests in `tests/` (the C# tests live in `tests/MegabonkLevels.Tests`). `task scripts:test` runs them, and `task test` runs them after the C# tests. `pytest.ini` at the repo root sets `testpaths = tests` and puts `scripts/` on the import path, so a test does `import game_paths` directly and no `pyproject.toml` is needed.
+The tooling scripts under `scripts/` are covered by pytest tests in `tests/` (the C# tests live in `tests/MegabonkLevels.Tests`). `task scripts:test` runs them, and `task test` runs them after the C# tests. `pytest.ini` at the repo root sets `testpaths = tests` and puts `scripts/` on the import path, so a test does `import game_paths` directly. It takes precedence over `[tool.pytest.ini_options]` in `pyproject.toml`; pytest does not merge the two configurations.
+
+`pyproject.toml` declares runtime dependencies and optional `test` and `dev`
+extras; `uv.lock` records their resolved versions. Run tests from the repo root:
+
+```sh
+uv run --extra test pytest
+uv run --extra test pytest tests/test_build_thps_level.py -q
+```
+
+Extras are not selected by default. Use `--extra test` even if a previous
+`uv sync --extra test` installed them, so the command declares what it needs.
+Once that extra is selected, `--with pytest` is redundant; runtime packages
+such as `python-decouple`, `mcp` and `pillow` also come from the project without
+`--with`. Reserve `--with` for a genuinely ad-hoc dependency not declared by
+the project. `uv run` automatically checks the lockfile and syncs the project
+environment; add `--locked` when the command must fail instead of updating an
+out-of-date lockfile. Optional extras use `--extra`, not `--group`.
 
 `tests/conftest.py` has an autouse fixture that removes every `MEGABONK_*` environment variable and points `game_paths.ENV_FILE` at a nonexistent file for each test, so a developer's shell or `.env` (for example `MEGABONK_WINE_PREFIX`) cannot change a result. A test that needs a setting sets it with `monkeypatch.setenv` or passes `env_file_values` to the function under test. Async tests use `@pytest.mark.anyio`; the conftest pins `anyio_backend` to `asyncio`, so no trio dependency is needed.
 
-`pytest`, `python-decouple` and `mcp` are not in a lockfile. The `--exclude-newer` date on the `uv run` line in `taskfile.yml` fixes what `uv` resolves, the same way the PEP 723 headers of the scripts do, so move that date forward deliberately when updating the dependencies.
+The current `task scripts:test` wrapper still lists explicit `--with`
+requirements and an `--exclude-newer` date in `Taskfile.yml`; that legacy
+invocation is not the template for new project commands. Project dependency
+updates belong in `pyproject.toml` and `uv.lock`. PEP 723 scripts run with
+`uv run --script` use their own inline dependencies rather than project extras;
+keep their headers/pins current separately.
 
 ## Reading the game's code
 

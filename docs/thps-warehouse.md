@@ -300,6 +300,11 @@ Rails named in the guide: the big rail (M15); the short rail on the ledge by the
 
 ## Extracted game data
 
+The [construction piece inventory](thps-warehouse-pieces.md) assigns every
+extracted polygon and script-added element to an editable kit piece, including
+ramp profiles, windows and the cross-check against the landmarks above. It is
+additive; the shipped monolithic Warehouse remains unchanged.
+
 The mesh, textures and collectible positions come from the USA PS1 disc (SLUS-00860, raw MODE2/2352 `.bin`, sha256 `f1398cd1...`). Nothing ripped is committed: the disc image lives in `tools/thps1/` and every output in `.tools/thps1/`, both gitignored.
 
 ### Rerunning the extraction
