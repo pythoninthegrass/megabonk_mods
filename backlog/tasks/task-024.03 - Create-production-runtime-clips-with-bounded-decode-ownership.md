@@ -5,7 +5,7 @@ status: Done
 assignee:
   - Assistant
 created_date: '2026-10-30T02:24:00Z'
-updated_date: '2026-10-30T02:48:00Z'
+updated_date: '2026-10-30T02:53:00Z'
 labels:
   - music
 dependencies:
@@ -58,6 +58,8 @@ Test-first red: task mod:test failed on missing PcmAudio and RuntimeMusicOwner A
 Default Wine verified at ~/.local/share/megabonk/wine, with rebuilt DLL and fresh relaunch. Native-tone: 88,200 frames, 44.1 kHz mono, 2 seconds, full roundtrip max error 0. Police Truck: 6,394,752 frames, 44.1 kHz stereo, 145.005 seconds, full roundtrip error 0. Le Hot '99: 26,992,512 frames, 48 kHz stereo, 562.344 seconds, full roundtrip error 0. Strobe: 28,041,984 frames, 44.1 kHz stereo, 635.872 seconds, full roundtrip error 0. Switches long-track → tone → Police Truck and Le Hot → Strobe succeeded with sourceIsPlaying true, no crash. Le Hot/Strobe were accessed through explicit Wine Z: host paths, not installed/discovered runtime tracks. Strobe left in frozen editor for user listening.
 
 Malformed MPEG input (docs/music.md supplied explicitly to the diagnostic) returned 'Not a valid MPEG file!'; status still reported Police Truck active. A bare '14 Strobe.mp3' lookup correctly reported absent before explicit host-path audition; no source files were copied or packs rebuilt. Fresh human audible confirmation not claimed. Native Linux remains guarded/unverified, and production track: stage/radio/prefetch lifecycle hooks remain for 024.04. Generic disposal/cancellation and native replacement cleanup are verified here; actual level-exit integration will be checked there.
+
+Fresh human listening confirmation after delivery: Lance connected earphones and requested a relaunch. Relaunched default Wine into THPS frozen editor and replayed 14 Strobe through the shared native factory/owner (635.872s, 44.1kHz stereo, full roundtrip error 0, sourceIsPlaying true). Lance confirmed: 'Yes! Works perfectly'. This confirms audible playback on this Wine setup; native Linux and stage/radio integration remain unverified.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

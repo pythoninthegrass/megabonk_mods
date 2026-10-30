@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - Assistant
 created_date: '2026-10-29 08:43'
-updated_date: '2026-10-30T02:25:00Z'
+updated_date: '2026-10-30T03:00:00Z'
 labels:
   - music
   - level-editor
@@ -88,4 +88,8 @@ Approved breakdown: TASK-024.02 discovery/order/lookup tests → TASK-024.03 sha
 
 <!-- SECTION:NOTES:BEGIN -->
 Backlog reconciliation after spike delivery: TASK-024.01 marked Done with native-clip evidence and pushed commit 36257ac; Linux remains unverified, and original exploratory code's test-first process deviation is explicitly recorded. This parent stays To Do with all feature acceptance criteria unchecked: discovery, numeric ordering, track: level references and runtime boombox integration are still absent. Newly added tools/ost/14 Strobe.mp3 is a source asset only, not automatically part of the installed runtime playlist.
+
+Follow-up danger modulation report: Lance reported no modulation at 26 HP. Read-only live inspection showed Strobe playing at sourcePitch 1, no heldPitch/heldCutoff, and a level-up screen (frozen=true). Screenshot showed 26/77 HP and 0 overheal. Native GameAssembly inspection: PlayerEffects.Update RVA 0x3384B0 compares GetCombinedHp()/GetCombinedMaxHp() against 0.25 and resets dangerTarget above/equal that threshold; under threshold it accumulates damage/maxHP * 4, smooths dangerValue, and decays after sustained low HP. GetDangerRatioMusic RVA 0x337F70 returns clamp01((dangerValue - 0.6)/0.4); MusicController.UpdatePitch RVA 0x359C90 applies the game danger result, gated by the saved effect setting, without inspecting the current clip. GetCombinedHp/MaxHp include current overheal, not shield. At 26/77 (~34%) normal pitch is expected; no custom-music defect established. Retest below 25% (19 HP or less with max77/no overheal) and allow the native damage-driven danger value to rise before changing code. Did not resume the low-HP run, force damage, change settings or add a modulation override.
+
+Human danger-modulation confirmation: Lance tested against a stone golem and reported 'the audio slows down dramatically as expected'. This resolves the earlier suspected 26-HP modulation issue for the current native runtime track on default Wine; do not add a replacement modulation engine or change stock thresholds. Filed TASK-004.06.01 for controlled nonlethal harness damage so future low-health testing is repeatable without relying on enemies. This does not complete stage/radio integration or Linux verification.
 <!-- SECTION:NOTES:END -->
