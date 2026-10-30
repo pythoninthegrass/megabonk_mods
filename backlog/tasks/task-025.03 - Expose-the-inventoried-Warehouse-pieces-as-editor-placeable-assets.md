@@ -1,10 +1,10 @@
 ---
 id: TASK-025.03
 title: Expose the inventoried Warehouse pieces as editor-placeable assets
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-30T16:24:00Z'
-updated_date: '2026-10-30T17:03:00Z'
+updated_date: '2026-10-30T17:43:00Z'
 labels:
   - level-editor
   - thps
@@ -37,20 +37,20 @@ Scope is mesh geometry only: the 214 source-face pieces plus the pack-added piec
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Every piece in scope exists as its own prefab in the thps pack, listed in manifest.json, named by its inventory ID verbatim (piece-taxi, added-post-0, ...), and appears in the editor's Packs palette
-- [ ] #2 Pieces share the existing Warehouse_* materials with no duplicated materials or textures; each piece prefab carries its own collision mesh except window pieces, which ship render-only so their pass-through behaviour travels with the piece; window frames stay solid inside their wall pieces
-- [ ] #3 Ramp modules follow the pivot conventions in docs/thps-warehouse-pieces.md (pivot at the lower riding edge midpoint, +Y up, +Z toe toward lip; decks and flats at walking-surface centres; corners at extended-lip intersections; props and walls bottom-centre; roof panels at lower-face centre) and keep every profile vertex, so sections placed end to end form a continuous riding surface without seams or steps
-- [ ] #4 A placed piece can be selected, moved, rotated, scaled, duplicated and deleted with the existing object tools, verified in the running game; no mod code change is expected
-- [ ] #5 The original single Warehouse asset and its collision mesh are still built byte-identically, still listed first in the manifest, and still loadable so the shipped level is unaffected; the TASK-025.01 preservation check stays green
-- [ ] #6 Tests written first cover the partition, pivot and placement logic outside Unity, and docs describe the palette, the module set, piece naming, per-piece collision rules and the additive-assets version exception
+- [x] #1 Every piece in scope exists as its own prefab in the thps pack, listed in manifest.json, named by its inventory ID verbatim (piece-taxi, added-post-0, ...), and appears in the editor's Packs palette
+- [x] #2 Pieces share the existing Warehouse_* materials with no duplicated materials or textures; each piece prefab carries its own collision mesh except window pieces, which ship render-only so their pass-through behaviour travels with the piece; window frames stay solid inside their wall pieces
+- [x] #3 Ramp modules follow the pivot conventions in docs/thps-warehouse-pieces.md (pivot at the lower riding edge midpoint, +Y up, +Z toe toward lip; decks and flats at walking-surface centres; corners at extended-lip intersections; props and walls bottom-centre; roof panels at lower-face centre) and keep every profile vertex, so sections placed end to end form a continuous riding surface without seams or steps
+- [x] #4 A placed piece can be selected, moved, rotated, scaled, duplicated and deleted with the existing object tools, verified in the running game; no mod code change is expected
+- [x] #5 The original single Warehouse asset and its collision mesh are still built byte-identically, still listed first in the manifest, and still loadable so the shipped level is unaffected; the TASK-025.01 preservation check stays green
+- [x] #6 Tests written first cover the partition, pivot and placement logic outside Unity, and docs describe the palette, the module set, piece naming, per-piece collision rules and the additive-assets version exception
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -98,3 +98,19 @@ Constraints found while planning, with evidence:
 
 ---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Built the additive Warehouse construction kit in the thps pack. ThpsPack now partitions the extracted mesh by the inventory tables in docs/thps-warehouse-pieces.md (parsed at build time by the new Unity-free Assets/Editor/WarehousePieces.cs) and emits 214 source-face prefabs plus 1,552 pack-added prefabs (1,541 roof quads, 10 rail posts, one floor patch) alongside the untouched merged Warehouse and its collision mesh. Each piece: pivot-relative vertices in raw OBJ units under its convention pivot (RidingTransition, SurfaceCentre, CornerLipIntersection, LowerFaceCentre, BottomCentre), one submesh per material in ordinal order sharing the Warehouse materials, a per-piece collision mesh except render-only window pieces, and root localScale 79.2 so the editor's place tool spawns pieces at world size (found via in-game MeshRenderer bounds: unscaled clones were 20 cm pebbles).
+
+The build rewrites the committed unity/pack-authoring/packs/thps/pieces.json sidecar (schema thps-pieces/1: module, convention, pivot, yaw, world position, collider flag per asset, plus meshToWorld scale) and manifest.json from the built asset list, keeping id/name/author/version; the pack version stays 2.0.21 per the additive-assets exception.
+
+Tests written first: 49 C# tests (tests/MegabonkLevels.Tests/warehouse_pieces_tests.cs) over the parser and pivot maths, 9 Python tests (tests/test_thps_pack_pieces.py) cross-checking manifest, sidecar and prefab root scale. task check green (588 Python tests, C# tests, build, lint) and scripts/check_thps_preservation.py matches the shipped baseline.
+
+Verified in the running editor through the megabonk MCP harness: palette lists 1843 entries, Tab:Packs and search filter find pieces by name with thumbnails; piece-taxi, added-post-0 and piece-room-window-se place at correct world extents (7.9x4.4x5.4, 0.5x2.7x0.5, flat pane); selection (red ring, 'selected placement:48 via nearest'), R rotation (yaw 0->90), Shift-drag move, stack guard ('place ignored, already stands'), Delete, and Undo/Redo both directions all logged; editor edits were restored to the 1241-edit baseline with nothing saved to levels/thps.mblevel.json.
+
+Docs: docs/asset-bundles.md gained a Warehouse pieces section (naming, collision rules, sidecar, root-scale rationale, additive version exception); docs/thps-warehouse-pieces.md header and closing audit note now reflect live palette assets and separate harness-verified behaviour from open items (joint collision, hidden grind paths, save/reload, visual equivalence).
+
+Committed as `feat(thps): expose Warehouse pieces as editor-placeable assets` (see git log). Open work deliberately deferred: grind/coping paths (TASK-025.04), game-prefab placements and settings-* rows (TASK-025.05).
+<!-- SECTION:FINAL_SUMMARY:END -->
