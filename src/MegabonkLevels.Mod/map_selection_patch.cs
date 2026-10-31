@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using HarmonyLib;
 using Il2Cpp;
+using Il2CppAssets.Scripts.Managers;
 using MelonLoader;
 using UnityEngine;
 using UnityEngine.UI;
@@ -19,6 +20,7 @@ public static class MapSelectionPatch
     private static readonly List<GameObject> _spawned = new();
     private static readonly Dictionary<int, CustomMapEntry> _entryByButton = new();
     private static CustomMapEntry? _selectedEntry;
+    private static readonly Dictionary<int, (Selectable Button, Navigation Navigation)> _navigation = new();
 
     public static void Install(MelonLogger.Instance logger)
     {
@@ -64,6 +66,7 @@ public static class MapSelectionPatch
 
     private static void DestroySpawned()
     {
+        RestoreNavigation();
         foreach (var entry in _spawned)
         {
             if (entry != null)
@@ -157,37 +160,94 @@ public static class MapSelectionPatch
         }
     }
 
-    // A custom level fixes its own tier, so its entry offers only the first tier button; the game sets the buttons itself for a native map, as it does for Graveyard.
-    private static void LimitTiers(MapStatsWindow window)
+    private static void RestoreNavigation()
+    {
+        foreach (var saved in _navigation.Values)
+        {
+            if (saved.Button != null)
+            {
+                saved.Button.navigation = saved.Navigation;
+            }
+        }
+
+        _navigation.Clear();
+    }
+
+    private sealed class TierMenu : ICustomTierMenu
+    {
+        private readonly MapStatsWindow _window;
+
+        public TierMenu(MapStatsWindow window) => _window = window;
+        public int TierCount => _window.tierButtons.Length;
+
+        public void SetAvailable(int index, bool available)
+        {
+            var button = _window.tierButtons[index];
+            button.gameObject.SetActive(available);
+            button.CanSelect(available);
+        }
+
+        private Selectable Redirect(Selectable target)
+        {
+            for (var i = 1; i < TierCount; i++)
+            {
+                if (target == _window.tierButtons[i].GetComponent<Selectable>())
+                {
+                    return _window.tierButtons[0].GetComponent<Selectable>();
+                }
+            }
+
+            return target;
+        }
+
+        public void RebuildNavigation()
+        {
+            foreach (var button in _window.transform.root.GetComponentsInChildren<Selectable>(true))
+            {
+                var nav = button.navigation;
+                // Navigation is a reference-backed interop value; capture a separate copy before changing it.
+                var original = button.navigation;
+                nav.selectOnUp = Redirect(nav.selectOnUp);
+                nav.selectOnDown = Redirect(nav.selectOnDown);
+                nav.selectOnLeft = Redirect(nav.selectOnLeft);
+                nav.selectOnRight = Redirect(nav.selectOnRight);
+                if (nav.selectOnUp != original.selectOnUp || nav.selectOnDown != original.selectOnDown
+                    || nav.selectOnLeft != original.selectOnLeft || nav.selectOnRight != original.selectOnRight)
+                {
+                    _navigation.TryAdd(button.GetInstanceID(), (button, original));
+                    button.navigation = nav;
+                }
+            }
+
+            var first = _window.tierButtons[0].GetComponent<Selectable>();
+            _navigation.TryAdd(first.GetInstanceID(), (first, first.navigation));
+            var down = first.navigation;
+            down.selectOnDown = _window.btnChallenges.GetComponent<Selectable>();
+            first.navigation = down;
+
+            var challenges = _window.btnChallenges.GetComponent<Selectable>();
+            _navigation.TryAdd(challenges.GetInstanceID(), (challenges, challenges.navigation));
+            var up = challenges.navigation;
+            up.selectOnUp = first;
+            challenges.navigation = up;
+        }
+
+        public void SelectFirst()
+        {
+            _window.tierSelection.ForceSelect(0);
+            ButtonManager.ForceHoverButton(_window.tierButtons[0]);
+        }
+    }
+
+    private static void LimitTiers(MapStatsWindow window, bool select = false)
     {
         try
         {
-            for (var i = 1; i < window.tierButtons.Length; i++)
-            {
-                window.tierButtons[i].gameObject.SetActive(false);
-            }
+            CustomTierSelection.Repair(new TierMenu(window), select);
         }
         catch (Exception ex)
         {
             _logger?.Warning($"MapSelection: could not limit the tier buttons: {ex.Message}");
-        }
-    }
-
-    // The selection is recorded before the stats window refreshes, so every refresh that follows already knows the entry is custom.
-    [HarmonyPatch(typeof(MapStatsWindow), "OnMapSelected")]
-    private static class StatsMapSelectedPatch
-    {
-        private static void Prefix(SelectionGroupToggleSingleButton mapButton)
-        {
-            _selectedEntry = _entryByButton.TryGetValue(mapButton.GetInstanceID(), out var entry) ? entry : null;
-        }
-
-        private static void Postfix(MapStatsWindow __instance)
-        {
-            if (_selectedEntry != null)
-            {
-                LimitTiers(__instance);
-            }
         }
     }
 
@@ -204,11 +264,21 @@ public static class MapSelectionPatch
     }
 
     [HarmonyPatch(typeof(MapSelectionUi), "OnMapSelected")]
-    private static class OnMapSelectedPostfix
+    private static class MapSelectedPatch
     {
-        private static void Postfix(SelectionGroupToggleSingleButton btn)
+        private static void Prefix(SelectionGroupToggleSingleButton btn)
         {
+            RestoreNavigation();
             _selectedEntry = _entryByButton.TryGetValue(btn.GetInstanceID(), out var entry) ? entry : null;
+        }
+
+        private static void Postfix(MapSelectionUi __instance)
+        {
+            if (_selectedEntry != null)
+            {
+                LimitTiers(__instance.mapStatsWindow, select: true);
+            }
+
             _logger?.Msg($"MapSelection: selected {(_selectedEntry is { } selected ? Path.GetFileName(selected.Path) : "native map")}");
         }
     }

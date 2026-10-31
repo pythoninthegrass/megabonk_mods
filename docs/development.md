@@ -313,9 +313,30 @@ ssh wm2 'cd ~/mb-player
 ssh wm2 'steam steam://rungameid/3405340'
 ```
 
-Packs are cached per process, so a restart is required. Warehouse appearing in Map Selection and `MapSelection: listed 'Warehouse'` prove discovery, **not a successful level start or rendered Warehouse**. The live gamepadui test is currently blocked: selecting Warehouse leaves Tier 1 unselectable and highlights a blank Tier 3 option, preventing Confirm. TODO: repair tier selection/focus and verify the normal mouse/controller flow through to a running custom level. The mod-loaded-under-Proton proof is complete; the custom-level menu/playthrough proof is not. Character restrictions on this menu path are checked at custom-map Confirm, not by locking every character on the preceding screen.
+Packs are cached per process, so a restart is required. Warehouse appearing in Map Selection and `MapSelection: listed 'Warehouse'` prove discovery, **not a successful level start or rendered Warehouse**. Character restrictions on this menu path are checked at custom-map Confirm, not by locking every character on the preceding screen.
 
-The local `megabonk` MCP server and `run.py` do not automatically target this SSH host. The packaged run had no harness enabled; editor-input injection also does not drive the stock Rewired menus. Keep player-menu verification separate from a future explicitly configured remote harness session, and do not bypass this menu blocker with a developer load and call the player flow verified.
+The local `megabonk` MCP server and `run.py` do not automatically target this SSH host. To use the target checkout for diagnostics, run its tools over SSH with `MEGABONK_GAME_DIR` set to the game directory. Enable the harness before launching for screenshots and object queries; leave `MEGABONK_DEV` unset. Editor-input injection does not drive the stock Rewired menus: use real mouse/controller input or OS-level virtual input, not `load-level`, to verify the player flow.
+
+With the repository and mise runtimes installed on the target, a menu-only mod change needs no Unity editor or pack rebuild. Quit the game, then build against its installed MelonLoader and generated interop assemblies:
+
+```sh
+ssh wm2 'cd ~/git/megabonk_mods &&
+  MEGABONK_GAME_DIR=/media/sdcard/SteamLibrary/steamapps/common/Megabonk \
+    ~/.local/bin/mise exec -- dotnet build src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj'
+ssh wm2 'steam steam://rungameid/3405340'
+```
+
+The build deploys the DLL and dependencies directly into that game installation. Restart after every rebuild; a running MelonLoader process keeps the old DLL.
+
+### Verified menu regression on wm2
+
+Verified on 2026-10-31 with the Proton/game/loader versions above, the installed Windows THPS pack, and Calcium selected. Input came through Linux uinput mouse clicks (with X11 absolute pointer positioning) and a virtual Xbox 360 controller into the stock menus; the harness supplied screenshots, read-only object queries and quit between DLL builds. No save reset, developer character override or `load-level` command was used.
+
+1. On Forest, select Tier 3, then select Warehouse. Only Tier 1 remains visible, selected and selectable; hidden tiers are unselected and cannot be selected. Click Tier 1 and Confirm with the mouse: Warehouse renders and the pause panel identifies `Warehouse / Tier 1`.
+2. Using controller D-pad/A, select Forest Tier 3, move left to the map list, down to Warehouse and select it. Focus lands on visible Tier 1. Down goes directly to Challenges and Up returns to Tier 1. Selecting Tier 1 again moves focus to Confirm; A starts Warehouse. The final launch logged `LevelLoader: starting map=Forest stage=0 tier=0 seed=20261007`, then `KillFloor: armed`, and the rendered pause panel identified Warehouse.
+3. Switch from Warehouse to a native map before starting. Forest again offers its three unlocked tiers, and controller navigation can select Tier 3. Graveyard retains its native single-tier layout. Selecting a different native map can leave focus in the map list; select the same entry again to move into its tiers, as in the unmodified menu.
+
+Regression unit tests cover a locked first tier with a stale higher-tier selection, navigation repair on refresh without premature selection, and repair after native visibility has been restored. Keep the group indexes stable during the native handler; hiding buttons alone reproduces the stale hidden-tier bug.
 
 ## Launching under Wine (macOS)
 
@@ -733,7 +754,9 @@ To confirm which character spawned, aim the camera at the player (`run.py camera
 
 A postfix on `MapSelectionUi.OnMapSelected` records whether the selected button is a custom entry. A prefix on `MapSelectionUi.StartMap` handles Confirm. Confirm on a native map drops any level held earlier. Confirm on a custom entry checks `CharacterMenu.selectedCharacter` against the level's `allowedCharacters`: a character outside the list cancels the start, logs the refusal and shows it through `MenuNotice` (`menu_notice.cs`), a short overlay near the top of the screen for refusals on the game's own menus. An allowed character holds the level through `LevelLoaderPatch.HoldForNextStart`, and the `MapController.StartNewMap` call that `StartMap` makes next is swapped for the level's `RunConfig`. Unlike the harness hold, this does not restrict the character screen, because the character is picked before the map. `MEGABONK_DEV` has no effect on this path.
 
-A custom level fixes its own tier, so its entry shows only the first tier button, like Graveyard. A prefix on `MapStatsWindow.OnMapSelected` records the selection before the stats window refreshes, and that method and `RefreshTiers` hide every tier button after the first while the entry is selected. The game sets the buttons itself for a native map, so nothing is restored. The right-hand panel still shows the base map's runs, highscore and speedrun, because the entry carries that map's `MapData`. The hover methods of the selection buttons share their native code with unrelated methods and cannot be patched, so nothing reacts to hover.
+A custom level fixes its own tier, so its entry offers only the first tier button, like Graveyard; the level file still determines the actual run tier. A prefix on `MapSelectionUi.OnMapSelected` records the custom/native selection before the first stats refresh. Each `RefreshTiers` repair explicitly enables and unlocks the first button, hides and locks the others, and redirects navigation away from hidden tiers. Tier 1 links directly to Challenges and back. Navigation values are captured separately before mutation, because generated non-blittable interop values can be reference-backed.
+
+The outer map-selection postfix selects and focuses the first tier after the game has restored the base map's remembered tier. Do not shorten/reindex the selection group during `RefreshTiers`: the native handler still uses that remembered index afterward. Selecting the first tier emits another native stats refresh, so navigation repair must also run on refresh, not just once afterward. Before the next map selection, restore captured navigation and let the native refresh set tier visibility and unlocks. The right-hand panel still shows the base map's name, runs, highscore and speedrun, because the entry carries that map's `MapData`. The hover methods of the selection buttons share their native code with unrelated methods and cannot be patched, so nothing reacts to hover.
 
 To check it, run `task thps` to install the level and pack, then run `relaunch(no_level=true)` and click through Play, the character, Map Selection and Confirm by hand. The log shows `MapSelection: listed 'Warehouse'`, `MapSelection: selected thps.mblevel.json` and `LevelLoader: starting map=Forest`. A relaunch starts the game unfocused, so click its window before using the menu.
 
