@@ -33,6 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Install MelonLoader and the MegabonkLevels map editor on Linux (Steam Play / Proton).",
     )
     parser.add_argument("--package", help="the unzipped MegabonkLevels player package directory")
+    parser.add_argument("--python", dest="python", default=None, help="the interpreter install.sh chose; accepted so the flag survives the wrapper")
     parser.add_argument("--home", help="home directory to search for Steam (default: $HOME)")
     parser.add_argument("--game-dir", help="install straight into this Megabonk folder, skipping Steam discovery")
     parser.add_argument("--prefix", help="Proton prefix to write the .NET runtime and version.dll override into")

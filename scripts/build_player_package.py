@@ -43,7 +43,7 @@ DOTNET_WINDOWS_URL = (
 DOTNET_WINDOWS_SHA256 = "c077ccc342c5571ceb7a3c06d1dfbc99b989ed5a6e0f3a0b0b450531c1259615"
 MELONLOADER_ASSET = "MelonLoader.x64.zip"
 
-MIN_PYTHON = (3, 13)
+MIN_PYTHON = (3, 11)
 _MIN_PYTHON_TEXT = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}"
 
 # f-string template: a literal shell brace has to be doubled.
@@ -53,20 +53,47 @@ set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-if ! command -v python3 >/dev/null 2>&1; then
+PYTHON=${{MEGABONK_PYTHON:-}}
+EXPLICIT=0
+if [ -n "$PYTHON" ]; then
+  EXPLICIT=1
+else
+  PYTHON=python3
+fi
+after_python=0
+for argument in "$@"; do
+  if [ "$after_python" = 1 ]; then
+    PYTHON=$argument
+    EXPLICIT=1
+    after_python=0
+    continue
+  fi
+  case "$argument" in
+    --python) after_python=1 ;;
+    --python=*) PYTHON=${{argument#--python=}}; EXPLICIT=1 ;;
+  esac
+done
+
+if [ ! -x "$PYTHON" ] && ! command -v "$PYTHON" >/dev/null 2>&1; then
+  if [ "$EXPLICIT" = 1 ]; then
+    echo "no interpreter at $PYTHON, given by --python or MEGABONK_PYTHON." >&2
+    echo "Pass the full path of a Python {_MIN_PYTHON_TEXT} interpreter, for example --python /usr/bin/python{_MIN_PYTHON_TEXT}." >&2
+    exit 2
+  fi
   echo "python3 is required but was not found on PATH." >&2
-  echo "Install Python {_MIN_PYTHON_TEXT} (for example: sudo dnf install python{_MIN_PYTHON_TEXT})." >&2
+  echo "Install Python {_MIN_PYTHON_TEXT} (for example: sudo dnf install python{_MIN_PYTHON_TEXT}), or point this script at one you have: --python /path/to/python{_MIN_PYTHON_TEXT}." >&2
   exit 1
 fi
 
-if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= {MIN_PYTHON!r} else 1)' 2>/dev/null; then
-  PY_VERSION=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || echo "unknown")
-  echo "This installer needs Python {_MIN_PYTHON_TEXT} or newer; found $PY_VERSION." >&2
-  echo "Install Python {_MIN_PYTHON_TEXT} (for example: sudo dnf install python{_MIN_PYTHON_TEXT}) and run ./install.sh again." >&2
+if ! "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info >= {MIN_PYTHON!r} else 1)' 2>/dev/null; then
+  PY_VERSION=$("$PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || echo "unknown")
+  echo "This installer needs Python {_MIN_PYTHON_TEXT} or newer; found $PY_VERSION ($PYTHON)." >&2
+  echo "Install Python {_MIN_PYTHON_TEXT} (for example: sudo dnf install python{_MIN_PYTHON_TEXT}), or run this with one you already have:" >&2
+  echo "  --python /path/to/python{_MIN_PYTHON_TEXT}   (or MEGABONK_PYTHON=/path/to/python{_MIN_PYTHON_TEXT} ./install.sh)" >&2
   exit 1
 fi
 
-exec env PYTHONPATH="$SCRIPT_DIR/installer${{PYTHONPATH:+:$PYTHONPATH}}" python3 -m player_installer --package "$SCRIPT_DIR" "$@"
+exec env PYTHONPATH="$SCRIPT_DIR/installer${{PYTHONPATH:+:$PYTHONPATH}}" "$PYTHON" -m player_installer --package "$SCRIPT_DIR" "$@"
 """
 
 

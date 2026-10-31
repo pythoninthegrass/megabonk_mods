@@ -1,3 +1,4 @@
+import ast
 import build_player_package as module
 import hashlib
 import io
@@ -179,7 +180,7 @@ class TestVendorHandling:
 class TestInstallSh:
     def test_wrapper_runs_the_package_installer(self):
         text = install_sh_content()
-        assert "python3 -m player_installer" in text
+        assert '"$PYTHON" -m player_installer' in text
         assert "--package" in text
         assert text.startswith("#!/bin/sh")
 
@@ -191,7 +192,7 @@ class TestInstallSh:
         version = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}"
         assert f"Requires Python {version} or newer" in text
         assert f"sys.version_info >= {MIN_PYTHON!r}" in text
-        assert "3.9" not in text
+        assert "--python" in text
 
     def test_wrapper_is_valid_sh(self, tmp_path):
         path = tmp_path / "install.sh"
@@ -204,6 +205,155 @@ class TestInstallSh:
         env = {**os.environ, "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"}
         result = subprocess.run(
             [str(script), "--help"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(workspace["output"].parent),
+        )
+        assert result.returncode == 0, result.stderr
+        assert "usage: player_installer" in result.stdout
+
+
+FLOOR_TEXT = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}"
+
+
+def _stub_python(path: Path, *, version: str, at_or_above_floor: bool) -> Path:
+    """A python3 that reports a chosen version and hands module runs to the real interpreter."""
+    body = (
+        "#!/bin/sh\n"
+        'if [ -n "${STUB_LOG:-}" ]; then printf \'%s\\n\' "$*" >> "$STUB_LOG"; fi\n'
+        'code="$2"\n'
+        "case \"$code\" in\n"
+        f'  *"sys.exit(0 if"*) exit {0 if at_or_above_floor else 1};;\n'
+        f'  *"version_info"*) echo "{version}";;\n'
+        "esac\n"
+        'case "$*" in\n'
+        '  *"-m player_installer"*) exec "$STUB_REAL" "$@";;\n'
+        "esac\n"
+        "exit 0\n"
+    )
+    path.write_text(body, encoding="utf-8")
+    path.chmod(0o755)
+    return path
+
+
+class TestPythonFloor:
+    def test_bundled_modules_stay_parseable_on_the_floor(self):
+        for path in sorted(INSTALLER_SOURCE.glob("*.py")):
+            ast.parse(path.read_text(encoding="utf-8"), filename=str(path), feature_version=MIN_PYTHON)
+
+    def test_bundled_modules_stay_importable_below_the_floor(self):
+        # ruff targets 3.13 and would autofix timezone.utc to datetime.UTC, which is 3.11+:
+        # a real player box still runs a 3.10-era interpreter, and the modules must load there.
+        for path in sorted(INSTALLER_SOURCE.glob("*.py")):
+            assert "from datetime import UTC" not in path.read_text(encoding="utf-8"), path.name
+
+    def test_the_floor_stays_within_the_interpreter_a_current_lts_ships(self):
+        assert MIN_PYTHON <= (3, 12)
+
+    def test_wrapper_accepts_an_interpreter_at_the_floor(self, workspace, tmp_path):
+        build(workspace)
+        stub_dir = tmp_path / "bin"
+        stub_dir.mkdir()
+        _stub_python(stub_dir / "python3", version=FLOOR_TEXT, at_or_above_floor=True)
+        env = {
+            **os.environ,
+            "PATH": f"{stub_dir}{os.pathsep}{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}",
+            "STUB_REAL": sys.executable,
+        }
+        result = subprocess.run(
+            [str(workspace["output"] / "install.sh"), "--help"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(workspace["output"].parent),
+        )
+        assert result.returncode == 0, result.stderr
+        assert "usage: player_installer" in result.stdout
+
+    def test_wrapper_refuses_an_interpreter_below_the_floor_by_name(self, workspace, tmp_path):
+        build(workspace)
+        stub_dir = tmp_path / "bin"
+        stub_dir.mkdir()
+        below = (MIN_PYTHON[0], MIN_PYTHON[1] - 1)
+        _stub_python(stub_dir / "python3", version=f"{below[0]}.{below[1]}", at_or_above_floor=False)
+        env = {**os.environ, "PATH": f"{stub_dir}{os.pathsep}{os.environ['PATH']}", "STUB_REAL": sys.executable}
+        result = subprocess.run(
+            [str(workspace["output"] / "install.sh"), "--help"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(workspace["output"].parent),
+        )
+        assert result.returncode == 1
+        assert f"needs Python {FLOOR_TEXT} or newer" in result.stderr
+        assert f"found {below[0]}.{below[1]}" in result.stderr
+        assert "--python" in result.stderr
+
+    def test_wrapper_runs_with_an_explicit_interpreter(self, workspace, tmp_path):
+        build(workspace)
+        stub = _stub_python(tmp_path / "py-3.99", version="3.99", at_or_above_floor=True)
+        log = tmp_path / "calls.log"
+        env = {
+            **os.environ,
+            "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}",
+            "STUB_REAL": sys.executable,
+            "STUB_LOG": str(log),
+        }
+        result = subprocess.run(
+            [str(workspace["output"] / "install.sh"), "--python", str(stub), "--help"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(workspace["output"].parent),
+        )
+        assert result.returncode == 0, result.stderr
+        assert "usage: player_installer" in result.stdout
+        assert "-m player_installer" in log.read_text(encoding="utf-8")
+
+    def test_wrapper_runs_with_an_interpreter_named_in_the_environment(self, workspace, tmp_path):
+        build(workspace)
+        stub = _stub_python(tmp_path / "py-env", version="3.99", at_or_above_floor=True)
+        env = {
+            **os.environ,
+            "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}",
+            "STUB_REAL": sys.executable,
+            "STUB_LOG": str(tmp_path / "calls.log"),
+            "MEGABONK_PYTHON": str(stub),
+        }
+        result = subprocess.run(
+            [str(workspace["output"] / "install.sh"), "--help"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(workspace["output"].parent),
+        )
+        assert result.returncode == 0, result.stderr
+        assert (tmp_path / "calls.log").exists()
+
+    def test_wrapper_refuses_an_interpreter_path_it_cannot_run(self, workspace, tmp_path):
+        build(workspace)
+        missing = tmp_path / "no-such-python"
+        env = {**os.environ, "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"}
+        result = subprocess.run(
+            [str(workspace["output"] / "install.sh"), "--python", str(missing), "--help"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(workspace["output"].parent),
+        )
+        assert result.returncode == 2
+        assert str(missing) in result.stderr
+
+    def test_built_wrapper_runs_on_a_floor_interpreter_when_one_is_installed(self, workspace):
+        homes = Path.home() / ".local/share/mise/installs/python"
+        candidates = sorted(homes.glob(f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}*/bin/python3")) if homes.is_dir() else []
+        if not candidates:
+            pytest.skip(f"no mise interpreter at the {FLOOR_TEXT} floor installed")
+        build(workspace)
+        env = {**os.environ, "PATH": f"{candidates[-1].parent}{os.pathsep}{os.environ['PATH']}"}
+        result = subprocess.run(
+            [str(workspace["output"] / "install.sh"), "--help"],
             capture_output=True,
             text=True,
             env=env,

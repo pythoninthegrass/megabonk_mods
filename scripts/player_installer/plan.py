@@ -11,7 +11,7 @@ import shutil
 import zipfile
 from . import content, gamebuild, manifest as mf, proton
 from dataclasses import dataclass
-from datetime import UTC, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 RUNTIME_MODES = ("prefix", "gamedir")
@@ -341,7 +341,7 @@ def _write_record(plan: Plan, override_via: str | None = None) -> None:
             "mod_version": plan.manifest.mod_version,
             "melonloader_version": plan.manifest.melonloader_version,
             "game_buildid": plan.manifest.game_buildid,
-            "installed_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "installed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "game_dir": str(game),
         }
     )
