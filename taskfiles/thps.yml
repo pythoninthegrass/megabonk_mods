@@ -76,7 +76,7 @@ tasks:
   pack:
     desc: "Build the THPS pack bundles for Windows and Linux with Unity"
     sources:
-      - unity/pack-authoring/Assets/Editor/ThpsPack.cs
+      - unity/pack-authoring/Assets/Editor/*.cs
       - unity/pack-authoring/packs/thps/**/*
       - .tools/thps1/warehouse/**/*
       - tools/ost/*.mp3

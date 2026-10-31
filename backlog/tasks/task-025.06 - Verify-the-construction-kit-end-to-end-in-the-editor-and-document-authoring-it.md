@@ -4,12 +4,13 @@ title: Verify the construction kit end to end in the editor and document authori
 status: To Do
 assignee: []
 created_date: '2026-10-30T16:24:00Z'
-updated_date: '2026-10-30T16:24:00Z'
+updated_date: '2026-10-31T02:58:00Z'
 labels:
   - level-editor
   - thps
 dependencies:
   - TASK-025.05
+  - TASK-025.07
 references:
   - scripts/mcp_server.py
   - scripts/run.py

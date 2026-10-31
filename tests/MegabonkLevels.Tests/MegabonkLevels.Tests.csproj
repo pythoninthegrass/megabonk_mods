@@ -114,6 +114,7 @@
     <Compile Include="../../unity/pack-authoring/Assets/Editor/CoplanarLayering.cs" Link="CoplanarLayering.cs" />
     <Compile Include="../../unity/pack-authoring/Assets/Editor/WarehouseRoof.cs" Link="WarehouseRoof.cs" />
     <Compile Include="../../unity/pack-authoring/Assets/Editor/WarehousePieces.cs" Link="WarehousePieces.cs" />
+    <Compile Include="../../unity/pack-authoring/Assets/Editor/WarehouseKit.cs" Link="WarehouseKit.cs" />
   </ItemGroup>
 
   <ItemGroup>

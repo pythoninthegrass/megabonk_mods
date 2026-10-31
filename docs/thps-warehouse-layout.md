@@ -138,14 +138,21 @@ it, or `task thps:editable-install` to install it alongside the shipped level an
 the already-built pack. Build a missing pack first with `task pack:thps`, then
 relaunch with `relaunch(level="levels/thps-editable.mblevel.json")`.
 
-The generator uses the committed `pieces.json` world positions/yaws and
-`meshToWorld.scale`, not a second implementation of partition/pivot maths.
-It snapshots `attachments.json` defaults into each owner placement. The current
-layout has 1,740 roots, 17 attached supports and 41 attached grind paths; all
-1,541 generated roof quads remain individually editable. The nine archival
-`suppressed-post` assets are intentionally absent. Attached supports are not
-also placed at the root, and legacy hidden rails are not emitted again.
+The generator uses `pieces.json` instance positions, full rotations/scales and
+canonical `catalogAsset` references, not a second implementation of mesh maths.
+Repeated signs, boards, kicker parts, posts and props reuse a compact asset
+library. Roof quads are merged into larger selectable sections, with shared
+panel assets wherever their shape permits. It snapshots `attachments.json`
+per-instance defaults into each owner placement: 17 supports and 41 grind paths.
+The nine archival `suppressed-post` instances are intentionally absent. Attached
+supports are not also placed at the root, and legacy rails are not emitted again.
 Placement IDs reserve each owner's ordered children before the next root.
+
+The consolidated library has 200 construction assets plus the legacy Warehouse.
+The reference uses 32 roof sections instead of 1,541 individual quads, including
+12 instances of the same stock flat panel. Its 24 loose planks use six artwork
+variants; different kicker top artwork remains separate. The source-face
+inventory remains complete without requiring an asset for each source instance.
 
 Terrain bootstrap, generated-clutter removals, boss portal, radio and the 14
 collectibles reuse the shipped generator's final transforms and overrides.
@@ -180,6 +187,9 @@ derived at save time; schema/build metadata are compatibility data, not props.
 
 The kit has its own revision (`packKitVersions`) in addition to the preserved
 legacy pack version. See [pack versions](level-format.md#pack-versions).
+Revision 2 replaces the original quad-per-prefab kit without compatibility
+aliases; regenerate this reference after rebuilding the pack. The preserved
+`thps.mblevel.json` and `forest_custom.mblevel.json` do not depend on those kit IDs.
 
 ### Shipped monolithic reference
 

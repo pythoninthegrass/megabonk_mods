@@ -16,16 +16,18 @@ public class ThpsEditableLevelTests
         var stack = new EditStack(new LevelState());
         foreach (var op in level.Edits) stack.Apply(op);
         var placed = stack.State.Objects.Where(pair => pair.Key.Kind == ObjectTargetKind.PlacementId).ToArray();
-        Assert.Equal(1813, placed.Length);
+        var roots = level.Edits.Count(op => op.OpType == PlaceObject.OpType);
+        Assert.Equal(roots + 58, placed.Length);
+        Assert.True(roots < 615);
         Assert.Equal(58, placed.Count(pair => pair.Value.Owner != null));
         Assert.Equal(41, placed.Count(pair => pair.Value.CatalogId == "interactable/rail/0"));
         Assert.DoesNotContain(placed, pair => pair.Value.CatalogId == "bundle:thps/Warehouse");
         Assert.Single(stack.State.Tiles);
         Assert.Equal(new TileState(-1, SlopeDirection.None), stack.State.GetTile(10, 7));
-        Assert.Equal("1", level.PackKitVersions["thps"]);
+        Assert.Equal("2", level.PackKitVersions["thps"]);
         Assert.Equal(level, LevelFileSerializer.Deserialize(LevelFileSerializer.Serialize(level)));
         var actions = LiveEditPlan.Build(level.Edits, new LevelState());
-        Assert.Equal(1755, actions.Count(action => action.Kind == LiveActionKind.SpawnObject));
+        Assert.Equal(roots, actions.Count(action => action.Kind == LiveActionKind.SpawnObject));
     }
 
     [Fact]

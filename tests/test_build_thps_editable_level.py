@@ -17,46 +17,47 @@ def test_assembly_covers_geometry_once_and_snapshots_paths():
     children = [child for root in roots for child in root.get("attachments", [])]
     geometry = [root["catalogId"].split("/", 1)[1] for root in roots]
     geometry += [child["catalogId"].split("/", 1)[1] for child in children if child["catalogId"].startswith("bundle:thps/")]
-    expected = [piece["asset"] for piece in pieces["pieces"] if piece["module"] != "suppressed-post"]
+    expected = [piece["catalogAsset"] for piece in pieces["pieces"] if piece["module"] != "suppressed-post"]
     assert sorted(geometry) == sorted(expected)
-    assert len(geometry) == len(set(geometry))
-    assert len(roots) == 1740
+    assert len(roots) < 600
     assert len(children) == 58
     assert sum(child["catalogId"] == "interactable/rail/0" for child in children) == 41
-    assert sum(asset.startswith("added-roof-quad-") for asset in geometry) == 1541
+    assert not any(asset.startswith("added-roof-quad-") for asset in geometry)
 
 
 def test_recorded_transforms_and_monotonic_reserved_ids():
     pieces, defaults = kit.read_inputs()
-    by_asset = {piece["asset"]: piece for piece in pieces["pieces"]}
+    supports = {child["sourceInstance"] for children in defaults["instances"].values() for child in children if child["catalogId"].startswith("bundle:thps/")}
+    entries = [piece for piece in pieces["pieces"] if piece["module"] != "suppressed-post" and piece["asset"] not in supports]
     next_id = 0
-    for root in placements(kit.piece_edits(pieces, defaults)):
-        piece = by_asset[root["catalogId"].split("/", 1)[1]]
+    for root, piece in zip(placements(kit.piece_edits(pieces, defaults)), entries, strict=True):
+        assert root["catalogId"] == f"bundle:thps/{piece['catalogAsset']}"
         assert root["placementId"] == next_id
         assert list(root["position"].values()) == piece["position"]
-        assert root["rotation"] == {"x": 0, "y": piece["yaw"], "z": 0}
-        assert list(root["scale"].values()) == [79.2] * 3
+        assert list(root["rotation"].values()) == piece["rotation"]
+        assert list(root["scale"].values()) == piece["scale"]
         next_id += 1 + len(root.get("attachments", []))
-    assert next_id == 1798
+    assert next_id == len(entries) + 58
 
 
 @pytest.mark.parametrize("failure", ["duplicate", "missing_owner", "missing_support", "double_owner", "schema", "nonfinite", "child_scale", "suppressed_owner"])
 def test_invalid_sidecars_fail_explicitly(failure):
     pieces, defaults = copy.deepcopy(kit.read_inputs())
+    assets = defaults["instances"]
     if failure == "duplicate":
         pieces["pieces"].append(pieces["pieces"][0])
     elif failure == "missing_owner":
-        defaults["assets"]["not-a-piece"] = []
+        assets["not-a-piece"] = []
     elif failure == "missing_support":
-        defaults["assets"]["piece-room-floor"][0]["catalogId"] = "bundle:thps/missing"
+        assets["piece-room-floor"][0]["catalogId"] = "bundle:thps/missing"
     elif failure == "double_owner":
-        defaults["assets"]["piece-room-roof"].append(defaults["assets"]["piece-room-floor"][0])
+        assets["piece-room-roof"].append(assets["piece-room-floor"][0])
     elif failure == "schema":
         pieces["schema"] = "unknown"
     elif failure == "child_scale":
-        defaults["assets"]["piece-room-floor"][0]["localTransform"]["scale"]["x"] = 0
+        assets["piece-room-floor"][0]["localTransform"]["scale"]["x"] = 0
     elif failure == "suppressed_owner":
-        defaults["assets"]["piece-post-remnant-01"] = defaults["assets"].pop("piece-room-floor")
+        assets["piece-post-remnant-01"] = assets.pop("piece-room-floor")
     else:
         pieces["pieces"][0]["position"][0] = float("nan")
     with pytest.raises(ValueError):
@@ -69,7 +70,7 @@ def test_level_keeps_legacy_arena_without_monolith_or_duplicate_rails():
     for key, value in shipped.items():
         if key not in {"edits", "title"}:
             assert level[key] == value, key
-    assert level["packKitVersions"] == {"thps": "1"}
+    assert level["packKitVersions"] == {"thps": "2"}
     placed = placements(level["edits"])
     assert not any(p["catalogId"] in {"bundle:thps/Warehouse", "interactable/rail/0"} for p in placed)
     assert level["edits"][: len(legacy.tile_edits())] == legacy.tile_edits()

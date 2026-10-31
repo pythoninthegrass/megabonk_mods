@@ -103,7 +103,15 @@ The level schema carries an optional top-level `packs` map (`{"<packId>": "<vers
 
 ## THPS Warehouse pack
 
-`Assets/Editor/ThpsPack.cs` builds the `thps` pack: one merged `Warehouse` prefab, one prefab per [construction piece](#warehouse-pieces) (the inventoried faces plus the pack-added geometry), and one soundtrack clip per mp3 in `tools/ost`. The prefab is made from the THPS1 Warehouse level extracted into `.tools/thps1/warehouse` (`warehouse.obj`, `warehouse.mtl` and the PNGs; `-warehouseSource` overrides the directory); each clip is imported from `tools/ost/*.mp3` and named by its file name with runs of other characters made an underscore (`04 Superman.mp3` becomes `04_Superman`); `-musicSource` overrides the directory, and the build skips the clips with a log line when it is absent. The generated `Assets/Thps/` folder and the extraction are gitignored; the committed inputs are `ThpsPack.cs`, its helpers in `Assets/Editor/` (including `WarehousePieces.cs`), and `unity/pack-authoring/packs/thps/manifest.json` and `pieces.json` (both rewritten by the build).
+`Assets/Editor/ThpsPack.cs` builds the `thps` pack: the merged `Warehouse`, a
+[canonical construction library](#warehouse-pieces), and one clip per mp3 in
+`tools/ost`. Geometry comes from `.tools/thps1/warehouse` (`warehouse.obj`,
+`warehouse.mtl`, PNGs; override with `-warehouseSource`). Soundtrack filenames
+become clip names with non-word runs replaced by underscores (`04 Superman.mp3`
+becomes `04_Superman`); `-musicSource` overrides the source directory. Missing
+music is logged and skipped. Generated `Assets/Thps/` and extraction files are
+gitignored; the builder/helpers, manifest, instance sidecar and attachment
+metadata are committed. The build rewrites the manifest and sidecars.
 
 ```sh
 task pack:thps
@@ -117,9 +125,24 @@ The task builds the bundle (`task pack:build PACK_METHOD=ThpsPack.Build`) and ru
 
 ### Warehouse pieces
 
-Alongside the merged `Warehouse`, the builder emits every face of the [piece inventory](thps-warehouse-pieces.md) and the pack-added geometry as its own placeable prefab, so the Packs palette lists each piece individually (`bundle:thps/piece-taxi`, `bundle:thps/added-post-0`, `bundle:thps/added-roof-quad-000`, …). Asset names are the inventory IDs verbatim; roof quads added by the builder are `added-roof-quad-NNN` with a three-digit ordinal. Piece vertices are stored pivot-relative in raw OBJ units, rotated by the piece's convention yaw, and the prefab root carries `localScale` 79.2 so the editor's place (which copies the prefab's scale) spawns the piece at world size; a piece placed at the sidecar's `position` reproduces its shipped pose inside the Warehouse. Each piece shares the Warehouse materials one submesh per material in ordinal order. Window pieces render only: they get no collider at all, mirroring the pass-through faces of the shipped collision mesh.
+The [piece inventory](thps-warehouse-pieces.md) describes source instances, not a requirement for one palette asset per instance. Alongside the untouched merged `Warehouse`, the builder emits a canonical asset library. Repeated posters/banners, boards, kicker parts, posts and props share assets when their normalized geometry, artwork/UVs, winding and collision agree. Their placements carry the differences in position, rotation and size. Names for these reusable assets contain a deterministic geometry signature, not a location in the Warehouse. Distinct artwork and genuinely different shapes remain separate. Ramp modules keep their mating conventions and local grind paths. Window panes remain render-only; solid frames keep their collision.
 
-The build also rewrites the committed sidecar `unity/pack-authoring/packs/thps/pieces.json` (schema `thps-pieces/1`): per piece asset the module, convention, pivot, yaw (`0` except for the riding conventions), world position (`pivot × 79.2 + (100, 0.5, 0)`, the shipped pose) and whether it has a collider, in manifest order, plus the `meshToWorld` scale. `manifest.json` is rewritten from the built asset list the same way, keeping the `id`, `name`, `author` and `version` fields of the existing file. `tests/test_thps_pack_pieces.py` cross-checks both files against the inventory tables and the built prefabs, and `WarehousePieces.cs` (the sidecar's pivot maths) is covered in `tests/MegabonkLevels.Tests/`.
+The generated roof is consolidated only for the kit: adjoining coplanar quads first merge into larger rectangles/trapezoids, then faces are clipped into 40-by-40-world-unit roof sections. A section includes its ceiling, steps and edge skirts, not one prefab per tiny face. Steps, openings, edge profiles and inward/downward facing are retained. Equal normalized sections share a scalable `added-roof-panel-*` asset. This does not change the legacy roof grid, spill computation, merged mesh or collision mesh. The former quad-per-prefab kit is discarded, without aliases or hidden old palette entries.
+
+Plain rectangular ceiling sections all use `added-roof-panel-flat`, a stock
+40-by-40 panel; partial edge sections scale it to fit. Internal triangulation is
+removed only when the whole rectangle is covered, so holes are not filled.
+Other roof sections retain their distinct step/skirt profiles.
+
+Disconnected copies inside a source sign row become independent placements;
+opposite faces at the same location stay together. Loose planks use shared
+artwork/crop variants, fitted to each source instance's size and pose. Minor
+source skew, missing edge slivers and triangulation differences are standardized
+instead of becoming new products. This is a deliberate kit simplification,
+not a rewrite of the preserved mesh. Other geometry uses strict matching. Riding
+kickers remain rigid-sized and different top artwork stays a separate variant.
+
+The build rewrites `packs/thps/pieces.json` (`thps-pieces/1`). Each row is an instance: `asset` is its inventory/assembly identity, `catalogAsset` names the reusable prefab, and `position`, full Euler `rotation` and absolute `scale` reproduce its world pose. Source rows retain their group/face coverage; archival suppressed-post rows have an empty `catalogAsset` and are not built. `pivot` remains in mesh coordinates, and `yaw` is a convenience value, not a substitute for the full rotation. Prefab roots carry scale 79.2; canonical geometry uses the first matching instance's dimensions so fresh palette placements have a useful size. `manifest.json` lists unique built prefabs only, with `Warehouse` first. Legacy version remains pinned while `kitVersion` identifies the incompatible kit revision. Tests cross-check source coverage, canonical references, positive transforms and prefab scales; `WarehouseKit.cs` tests normalization/reconstruction and roof unions outside Unity.
 
 #### Piece attachments
 
@@ -131,6 +154,14 @@ rotations and scales use the owner's prefab-local frame, including its 79.2 root
 scale. Extra `start`/`end` fields record the original world-space grind endpoints
 for auditing, not runtime world-position tests. The merged `Warehouse` has no
 entry and gains no extra rails or supports.
+
+An `instances` map records the original assembly's per-instance attachment
+transforms. It is consumed by the editable-level generator, while the palette
+uses canonical `assets` defaults. A support's `sourceInstance` identifies which
+assembly row it replaces; its `catalogId` names the shared prefab. The generator
+does not emit a second root copy. Full owner rotation and scale are included in
+the world-to-local conversion; kicker owners stay rigid-sized so supports do
+not acquire shear under a nonuniform parent.
 
 The palette copies this list into the placed object's serialized edit. Each
 attachment receives its own placement ID and is parented to the owner at runtime:
@@ -166,7 +197,7 @@ expecting a solid wall to be carved automatically.
 - Build through the explicit `AssetBundleBuild[]` overload of `BuildAssetBundles`, so a build of the pack does not rebuild the test bundles in the same project.
 - The authoring project enables the `com.unity.modules.audio` package module. Without it the build logs `'AudioClip' is not supported because the module Audio is disabled in the build` and leaves the clip out of the bundle.
 - Unity's bundle build is incremental and keeps an output whose inputs it considers unchanged, so delete `.tools/bundles/<platform>/thps` and its `.manifest` to force a rebuild after changing project settings.
-- List every prefab in `manifest.json`; a prefab the manifest omits resolves as `Missing:` even when the bundle holds it. Audio clips are not listed and are not filtered by the manifest. The generator checks the manifest against the placement. Bump the manifest `version` and `PACK_VERSION` in `scripts/build_thps_level.py` together whenever the bundle changes, except for purely additive piece assets: shipped levels pin the manifest version, so a build that only adds prefabs keeps the version and the pinned level still loads them.
+- List every prefab in `manifest.json`; an omitted prefab resolves as `Missing:` even when the bundle holds it. Audio clips are not filtered by the manifest. Keep the legacy manifest `version` and generator `PACK_VERSION` pinned while the preserved level's dependencies remain unchanged; use `kitVersion` for kit additions, consolidation or removals. Changing a protected dependency requires a deliberate legacy version/baseline update, not a kit revision.
 
 ### Warehouse collision
 

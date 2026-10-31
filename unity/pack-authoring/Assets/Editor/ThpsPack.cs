@@ -61,6 +61,7 @@ public static class ThpsPack
     // The merged Warehouse prefab first (byte-identical to the shipped one), then one prefab per inventory piece and per pack-added piece; assetNames is the manifest and bundle order.
     static (List<string> Prefabs, List<string> AssetNames, List<PieceRecord> Records) BuildWarehouseAndPieces()
     {
+        KitMeshes.Clear();
         var source = WarehouseSource();
         var materials = LoadWarehouseMaterials(source);
         var mesh = ParseWarehouseObj(Path.Combine(source, "warehouse.obj"), materials.Keys.ToList(), out var usedMaterials, out var vertices, out var vertexUvs, out var faces, out var floorPatches, out var posts, out var roofQuads);
@@ -80,31 +81,47 @@ public static class ThpsPack
         var faceByOrdinal = faces.ToDictionary(face => face.Ordinal);
         foreach (var piece in inventory)
         {
-            var build = new PieceBuild(piece.Id, piece.Module);
-            foreach (var ordinal in piece.Faces)
-                build.AddFace(faceByOrdinal[ordinal], vertices, vertexUvs);
-            prefabs.Add(SavePiece(build, materials));
-            assetNames.Add(piece.Id);
-            records.Add(new PieceRecord
+            var groups = piece.Module == "sign"
+                ? WarehouseKit.ConnectedFaces(piece.Faces.Select(n => faceByOrdinal[n].Corners.Select(index => new System.Numerics.Vector3(vertices[index].x, vertices[index].y, vertices[index].z)).ToArray()).ToArray())
+                : new List<int[]> { Enumerable.Range(0, piece.Faces.Length).ToArray() };
+            for (var component = 0; component < groups.Count; component++)
             {
-                Asset = piece.Id,
-                Kind = "source",
-                Module = piece.Module,
-                Groups = piece.Groups,
-                Faces = piece.Faces,
-                Placement = LastPlacement,
-                Collider = LastHadCollider,
-            });
+                var asset = piece.Id + (component == 0 ? "" : "-copy-" + component);
+                var ordinals = groups[component].Select(n => piece.Faces[n]).ToArray();
+                var build = new PieceBuild(asset, piece.Module);
+                foreach (var ordinal in ordinals) build.AddFace(faceByOrdinal[ordinal], vertices, vertexUvs);
+                prefabs.Add(SavePiece(build, materials));
+                records.Add(new PieceRecord
+                {
+                    Asset = asset, SourceId = piece.Id, CatalogAsset = LastCatalogAsset, Kind = "source", Module = piece.Module,
+                    Groups = piece.Groups, Faces = ordinals, Placement = LastPlacement, Collider = LastHadCollider,
+                    Rotation = LastRotation, Scale = LastScale,
+                });
+            }
         }
 
         for (var i = 0; i < floorPatches.Count; i++)
             prefabs.Add(SaveAdded(floorPatches[i], vertices, "added-floor-patch-" + i, "floor", "FloorPatches[" + i + "]", materials, assetNames, records));
         for (var i = 0; i < posts.Count; i++)
             prefabs.Add(SaveAdded(posts[i], vertices, "added-post-" + i, "prop", "RailPosts[" + i + "]", materials, assetNames, records));
-        var pad = roofQuads.Count < 100 ? 2 : 3;
-        for (var i = 0; i < roofQuads.Count; i++)
-            prefabs.Add(SaveAdded(roofQuads[i], vertices, "added-roof-quad-" + i.ToString("D" + pad), "roof", "WarehouseRoof.Quads", materials, assetNames, records));
-        Debug.Log("ThpsPack: " + inventory.Count + " inventory pieces, " + (floorPatches.Count + posts.Count + roofQuads.Count) + " added pieces (" + roofQuads.Count + " roof quads)");
+        var roofs = WarehouseKit.MergeRoof(roofQuads.Select(q => q.Indices.Select(index => new System.Numerics.Vector3(vertices[index].x, vertices[index].y, vertices[index].z)).ToArray()), 1600f / (WarehouseScale * WarehouseScale));
+        var sections = WarehouseKit.RoofSections(roofs, 40f / WarehouseScale);
+        for (var i = 0; i < sections.Count; i++)
+        {
+            var asset = "added-roof-section-" + i.ToString("D3");
+            var build = new PieceBuild(asset, "roof-panel");
+            foreach (var polygon in sections[i])
+            {
+                var points = polygon.Select(v => new Vector3(v.X, v.Y, v.Z)).ToArray();
+                var triangles = Enumerable.Range(1, points.Length - 2).SelectMany(n => new[] { 0, n, n + 1 }).ToArray();
+                build.AddGeometry(RoofMaterial, points, Enumerable.Repeat(Vector2.zero, points.Length).ToArray(), triangles);
+            }
+            prefabs.Add(SavePiece(build, materials));
+            records.Add(new PieceRecord { Asset = asset, CatalogAsset = LastCatalogAsset, Kind = "added", Module = "roof-panel", Source = "WarehouseRoof.Quads", Placement = LastPlacement, Collider = LastHadCollider, Rotation = LastRotation, Scale = LastScale });
+        }
+        prefabs = prefabs.Where(path => path != null).Distinct(StringComparer.Ordinal).ToList();
+        assetNames = prefabs.Select(Path.GetFileNameWithoutExtension).ToList();
+        Debug.Log("ThpsPack: " + records.Count + " instances, " + assetNames.Count + " unique assets; " + roofQuads.Count + " roof quads consolidated into " + sections.Count + " sections");
         return (prefabs, assetNames, records);
     }
 
@@ -114,7 +131,7 @@ public static class ThpsPack
         build.AddGeometry(geometry.Material, geometry.Indices.Select(index => vertices[index]).ToArray(), geometry.Uvs, geometry.Tris);
         var path = SavePiece(build, materials);
         assetNames.Add(asset);
-        records.Add(new PieceRecord { Asset = asset, Kind = "added", Module = module, Source = origin, Placement = LastPlacement, Collider = LastHadCollider });
+        records.Add(new PieceRecord { Asset = asset, CatalogAsset = LastCatalogAsset, Kind = "added", Module = module, Source = origin, Placement = LastPlacement, Collider = LastHadCollider, Rotation = LastRotation, Scale = LastScale });
         return path;
     }
 
@@ -562,6 +579,9 @@ public static class ThpsPack
     // One pieces.json row: where the asset came from and how it is placed, so the level generator can reassemble without re-deriving geometry.
     sealed class PieceRecord
     {
+        public string CatalogAsset;
+        public string SourceId;
+        public Vector3 Rotation, Scale;
         public string Asset;
         public string Kind;
         public string Module;
@@ -610,54 +630,111 @@ public static class ThpsPack
     // Placement and collider presence of the last SavePiece call, picked up by the caller for its pieces.json record.
     static WarehousePieces.Placement LastPlacement;
     static bool LastHadCollider;
+    static string LastCatalogAsset;
+    static Vector3 LastRotation, LastScale;
+    static readonly Dictionary<string, (string Asset, Vector3 Size)> KitMeshes = new Dictionary<string, (string, Vector3)>(StringComparer.Ordinal);
 
     // Builds one construction piece: vertices folded into its convention pivot frame, submeshes per material in ordinal order sharing the Warehouse materials, and a collision mesh without the pass-through faces (no MeshCollider at all when nothing solid is left).
     static string SavePiece(PieceBuild build, Dictionary<string, Material> materials)
     {
         var meshVerts = build.Verts.Select(v => new System.Numerics.Vector3(v.x, v.y, v.z)).ToList();
-        var placement = WarehousePieces.ComputePlacement(WarehousePieces.RuleFor(build.Module), meshVerts);
+        var placement = WarehousePieces.ComputePlacement(WarehousePieces.RuleFor(build.Module == "roof-panel" ? "roof" : build.Module), meshVerts);
         var vertices = WarehousePieces.ToLocal(meshVerts, placement).Select(v => new Vector3(v.X, v.Y, v.Z)).ToArray();
         var ordered = build.Triangles.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
-        var mesh = new Mesh { name = build.Asset, vertices = vertices, uv = build.Uvs.ToArray(), subMeshCount = ordered.Count };
+        var kept = PieceCollisionTriangles(build, ordered);
+        LastHadCollider = kept.Any(list => list.Count > 0);
+        LastPlacement = placement;
+        LastRotation = new Vector3(0, placement.YawDegrees, 0);
+        LastScale = Vector3.one * WarehouseScale;
+        LastCatalogAsset = build.Asset;
+        if (build.Module == "suppressed-post")
+        {
+            LastCatalogAsset = "";
+            return null;
+        }
+        var reusable = new[] { "sign", "prop", "kicker", "roof-panel" }.Contains(build.Module);
+        if (reusable)
+        {
+            var triangles = ordered.SelectMany(material => build.Triangles[material]).ToArray();
+            var signatures = new List<string>();
+            for (var m = 0; m < ordered.Count; m++)
+                for (var t = 0; t < build.Triangles[ordered[m]].Count; t += 3)
+                {
+                    var indices = build.Triangles[ordered[m]].Skip(t).Take(3).ToArray();
+                    var solid = Enumerable.Range(0, kept[m].Count / 3).Any(n => kept[m].Skip(n*3).Take(3).SequenceEqual(indices));
+                    signatures.Add(ordered[m] + (solid ? ":solid" : ":open"));
+                }
+            var normalized = WarehouseKit.Normalize(meshVerts.ToArray(), build.Uvs.Select(uv => new System.Numerics.Vector2(uv.x, uv.y)).ToArray(), triangles, signatures.ToArray(), LastHadCollider, build.Module == "sign", build.Module != "kicker", build.Module == "roof-panel", build.Module == "prop" && build.Asset.Contains("board"));
+            var family = build.Module == "roof-panel" ? "added-roof-panel" : build.Asset.Contains("board") ? "piece-board" : build.Module == "kicker" ? "piece-kicker-frame" : build.Asset.StartsWith("added-post-", StringComparison.Ordinal) ? "added-post" : "piece-" + build.Module;
+            var key = family + ":" + normalized.Key;
+            var size = new Vector3(normalized.Scale.X, normalized.Scale.Y, normalized.Scale.Z);
+            var exists = KitMeshes.TryGetValue(key, out var canonical);
+            if (!exists)
+            {
+                using var sha = SHA256.Create();
+                var hash = string.Concat(sha.ComputeHash(Encoding.UTF8.GetBytes(key)).Take(5).Select(b => b.ToString("x2")));
+                var rectangleArea = (build.Verts.Max(v => v.x)-build.Verts.Min(v => v.x))*(build.Verts.Max(v => v.z)-build.Verts.Min(v => v.z));
+                var flatRoof = build.Module == "roof-panel" && build.Verts.Count == 4 && build.Verts.All(v => Mathf.Abs(v.y - build.Verts[0].y) < 1e-7f)
+                    && Mathf.Abs(WarehouseKit.Area(meshVerts.ToArray())-rectangleArea)<rectangleArea*1e-5f;
+                canonical = (flatRoof ? "added-roof-panel-flat" : family + "-" + hash, flatRoof ? new Vector3(40f/WarehouseScale,1,40f/WarehouseScale) : size);
+                KitMeshes.Add(key, canonical);
+            }
+            LastCatalogAsset = canonical.Asset;
+            var z = new Vector3(normalized.Z.X, normalized.Z.Y, normalized.Z.Z);
+            var y = new Vector3(normalized.Y.X, normalized.Y.Y, normalized.Y.Z);
+            LastRotation = Quaternion.LookRotation(z, y).eulerAngles;
+            LastScale = new Vector3(size.x/canonical.Size.x, size.y/canonical.Size.y, size.z/canonical.Size.z) * WarehouseScale;
+            LastPlacement = new WarehousePieces.Placement(normalized.Origin, LastRotation.y);
+            if (exists) return PackDirectory + "/" + LastCatalogAsset + ".prefab";
+            vertices = normalized.Vertices.Select(v => new Vector3(v.X*canonical.Size.x, v.Y*canonical.Size.y, v.Z*canonical.Size.z)).ToArray();
+        }
+        var mesh = new Mesh { name = LastCatalogAsset, vertices = vertices, uv = build.Uvs.ToArray(), subMeshCount = ordered.Count };
         for (var i = 0; i < ordered.Count; i++)
             mesh.SetTriangles(build.Triangles[ordered[i]], i);
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
 
-        var root = new GameObject(build.Asset);
+        var root = new GameObject(LastCatalogAsset);
         root.transform.localScale = Vector3.one * WarehouseScale;
-        root.AddComponent<MeshFilter>().sharedMesh = SaveAsset(mesh, PackDirectory + "/" + build.Asset + ".asset");
+        root.AddComponent<MeshFilter>().sharedMesh = SaveAsset(mesh, PackDirectory + "/" + LastCatalogAsset + ".asset");
         root.AddComponent<MeshRenderer>().sharedMaterials = ordered.Select(material => materials[material]).ToArray();
-        var collision = SavePieceCollisionMesh(build, ordered, vertices);
+        var collision = SavePieceCollisionMesh(LastCatalogAsset, kept, vertices, build.Uvs.ToArray());
         LastHadCollider = collision != null;
         if (collision != null)
             root.AddComponent<MeshCollider>().sharedMesh = collision;
-        LastPlacement = placement;
         return SavePrefab(root);
     }
 
-    static Mesh SavePieceCollisionMesh(PieceBuild build, List<string> ordered, Vector3[] vertices)
+    static List<List<int>> PieceCollisionTriangles(PieceBuild build, List<string> ordered)
     {
         var kept = new List<List<int>>();
         for (var i = 0; i < ordered.Count; i++)
         {
             var material = ordered[i];
             if (PassThroughMaterials.Contains(material))
+            {
+                kept.Add(new List<int>());
                 continue;
+            }
             var triangles = build.Triangles[material];
             if (PassThroughInRoomMaterials.Contains(material))
                 triangles = WithoutTrianglesInOpenedWindows(triangles.ToArray(), build.Verts.ToArray()).ToList();
-            if (triangles.Count > 0)
-                kept.Add(triangles);
+            kept.Add(triangles);
         }
 
+        return kept;
+    }
+
+    static Mesh SavePieceCollisionMesh(string asset, List<List<int>> triangles, Vector3[] vertices, Vector2[] uvs)
+    {
+        var kept = triangles.Where(list => list.Count > 0).ToList();
         if (kept.Count == 0)
             return null;
-        var collision = new Mesh { name = build.Asset + "Collision", vertices = vertices, uv = build.Uvs.ToArray(), subMeshCount = kept.Count };
+        var collision = new Mesh { name = asset + "Collision", vertices = vertices, uv = uvs, subMeshCount = kept.Count };
         for (var i = 0; i < kept.Count; i++)
             collision.SetTriangles(kept[i], i);
         collision.RecalculateBounds();
-        return SaveAsset(collision, PackDirectory + "/" + build.Asset + "Collision.asset");
+        return SaveAsset(collision, PackDirectory + "/" + asset + "Collision.asset");
     }
 
     // Rewrites the committed manifest with the built asset list; id, name, author and version are kept from the existing file, whose version the shipped level pins, so adding pieces never bumps it.
@@ -685,14 +762,20 @@ public static class ThpsPack
             var record = records[i];
             json.Append("    { \"asset\": \"").Append(record.Asset).Append("\", \"kind\": \"").Append(record.Kind)
                 .Append("\", \"module\": \"").Append(record.Module).Append("\"");
+            json.Append(", \"catalogAsset\": \"").Append(record.CatalogAsset).Append("\"");
             if (record.Kind == "source")
+            {
+                json.Append(", \"sourceId\": \"").Append(record.SourceId).Append("\"");
                 json.Append(", \"groups\": [").Append(string.Join(", ", record.Groups.Select(group => "\"" + group + "\"")))
                     .Append("], \"faces\": [").Append(string.Join(", ", record.Faces)).Append("]");
+            }
             else
                 json.Append(", \"source\": \"").Append(record.Source).Append("\"");
             var pivot = record.Placement.Pivot;
             json.Append(", \"pivot\": [").Append(Number(pivot.X)).Append(", ").Append(Number(pivot.Y)).Append(", ").Append(Number(pivot.Z)).Append("]");
             json.Append(", \"yaw\": ").Append(Number(record.Placement.YawDegrees));
+            json.Append(", \"rotation\": [").Append(Number(record.Rotation.x)).Append(", ").Append(Number(record.Rotation.y)).Append(", ").Append(Number(record.Rotation.z)).Append("]");
+            json.Append(", \"scale\": [").Append(Number(record.Scale.x)).Append(", ").Append(Number(record.Scale.y)).Append(", ").Append(Number(record.Scale.z)).Append("]");
             json.Append(", \"position\": [").Append(Number(pivot.X * WarehouseScale + WarehouseWorldX)).Append(", ")
                 .Append(Number(pivot.Y * WarehouseScale + WarehouseLift)).Append(", ").Append(Number(pivot.Z * WarehouseScale + WarehouseWorldZ)).Append("]");
             json.Append(", \"collider\": ").Append(record.Collider ? "true" : "false").Append(" }").Append(i + 1 < records.Count ? ",\n" : "\n");

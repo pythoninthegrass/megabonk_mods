@@ -1,8 +1,8 @@
 # Warehouse construction piece inventory
 
-This is the additive construction kit's source partition, and the pieces it
-names are live assets: the pack builder ships each row below as a placeable
-`bundle:thps/<id>` prefab in the editor's Packs palette. The shipped
+This is the construction kit's source partition, not its palette asset list.
+The builder maps source instances to reusable prefabs through `catalogAsset`
+in `pieces.json`; source IDs below are not necessarily loadable catalog IDs. The shipped
 `bundle:thps/Warehouse`, its assets and `levels/thps.mblevel.json` remain
 unchanged. See [asset-bundles.md](asset-bundles.md) for the piece prefabs,
 their pivots and the `pieces.json` sidecar, and the
@@ -20,8 +20,9 @@ whole file, before triangulation, coplanar separation or importer filtering.
 Ranges are inclusive; comma-separated ranges form one piece. Groups are the
 literal `o` hashes, not material hashes. Every source face has exactly one
 owner, including double-sided faces and suppressed post remnants. There is no
-catch-all remainder. Each table row is one independently editable instance;
-module types describe reuse, not a second assignment of its faces.
+catch-all remainder. A source row may yield multiple independently editable
+instances when it contains disconnected sign copies; `sourceId` records their
+common inventory owner. Module types describe reuse, not a second face assignment.
 
 Empty objects: `947969A2`, `0D703818`, `7A77088E`, `E4139D2D`, `9314ADBB`, `0A1DFC01`, `7D1ACC97`, `0108955F`, `9801C4E5`, `EF06F473`, `B31D819B`, `D0B9495C`, `2A14D021`, `49B018E6`, `BE5B0A8C`, `27525B36`, `50556BA0`, `CE31FE03`, `DFB35C91`, `46BA0D2B`, `6F12583B`, `954EED36`, `F61B0981`, `811C3917`, `1F78ACB4`, `687F9C22`, `1E575FE1`, `875E0E5B`, `370A0C19`, `AE035DA3`, `271B3BAD`, `D9046D35`, `BA664D03`, `CABEDA1B`, `4760F896`, `9F9D74DB`, `86B0FA50`, `0C47BC8C`, `EF5B1379`, `817474C9`, `27CBD007`, `187D2573`, `F673445F`, `6FD0D543`, `0DE57681`, `F28254C7`, `A114B35C`, `94EC273B`, `7B408C1A`, `E52419B9`, `F0593ECD`, `6E3DAB6E`
 
@@ -45,10 +46,13 @@ below are rounded for reading, never snapping targets.
 Use one canonical pivot at the midpoint of a module's lower riding edge,
 with local +Y up and +Z pointing from toe toward lip; deck/flat pivots are
 their walking-surface centres. Corner pivots are at the intersection of the
-extended lip lines at deck height. Props use bottom-centre; wall/window pivots
-use bottom-centre of the panel; roof tiles use centre of the lower face.
+extended lip lines at deck height. Wall/window pivots use bottom-centre of the
+panel. Reusable signs/props/kicker parts use canonical geometry frames; their
+full sidecar transforms, rather than a source location or yaw alone, define the
+placement. Roof sections retain the Warehouse axes and use their geometry centre.
 Store the inverse pivot transform so reassembly restores the original world
-vertices exactly. These are kit conventions to implement, not changes to the
+vertices; standardized loose planks retain their fitted bounds/artwork rather
+than incidental source skew. These are kit conventions, not changes to the
 legacy mesh's centre pivot.
 
 The start area contains paired state/double-sided geometry that the importer
@@ -315,6 +319,11 @@ near z 61.13–64.28, board tops y 3.30.
 
 ### Signs, posters and graffiti overlays
 
+These IDs identify source instances for face accounting. The palette uses
+deduplicated artwork/geometry assets; `pieces.json` maps each instance to its
+`catalogAsset` and placement transform. Identical artwork need not have an entry
+for each wall where it appeared.
+
 These are textured overlay faces, not new mesh lettering or remake props.
 Each row can move independently of its supporting wall. Paired start-area
 copies stay with the same sign. Materials identify appearance, while the
@@ -406,7 +415,7 @@ see [piece attachments](asset-bundles.md#piece-attachments).
 
 | Inventory ID / instances | Authoritative source | Editable form and ownership |
 | --- | --- | --- |
-| added-roof-quad-`ordinal` | `ThpsPack.AddRoof`, `WarehouseRoof.Quads`, spill-level ceiling and edge wall profiles | Bake each emitted quad as an addressed roof panel in emission order, recording its top/step/skirt/underside kind, cell/edge and original vertices. Preserve all generated quads and their lowered underside/inset; do not substitute a flat lid. Roof pieces have their own collision and may be selected/deleted individually. The room/source roof rows above are separate. |
+| added-roof-section-`ordinal` | `ThpsPack.AddRoof`, `WarehouseRoof.Quads`, spill-level ceiling and edge wall profiles | Consolidate emitted faces into larger 40-by-40-world-unit footprint sections, preserving every ceiling step, skirt, underside and inset rather than substituting a flat lid. Shared canonical panel assets are referenced through `pieces.json`; each placed section has its own collision and selection. The room/source roof rows above are separate. |
 | added-floor-patch-0 | `FloorPatches[0]`, `AddFloorPatches` | One floor patch, OBJ x 0.52–0.76, z 2.58–3.04, y -0.003 after Y flip; world x 20.876–39.884, z 48.614–85.046, y 0.2624. Keep fitted floor UVs and depth under decals. |
 | added-post-0 through added-post-6 | `RailPosts[0:7]`, `AddRailPosts` | Seven independent 0.5-wide box posts below big rail: (x,z) (75,4), (75,16), (75,28), (75,40), (75,52), (78.3,56.8), (81.4,60.5). Bottom y 0.5, top 3.17, five faces each. Associate with straight/bend bars without baking into them. |
 | added-post-7 through added-post-9 | `RailPosts[7:10]` | Three deck rail posts at (175.66,49.1), (175.66,61.3), (175.66,73.45), bottom 0.5, top 8.31. Same independent selection and collision as big rail posts. |

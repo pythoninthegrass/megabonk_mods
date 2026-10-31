@@ -32,7 +32,7 @@ def piece_edits(pieces, defaults):
     scale = pieces["meshToWorld"]["scale"]
     if not math.isfinite(scale) or scale <= 0:
         raise ValueError("invalid meshToWorld scale")
-    assets = defaults["assets"]
+    assets = defaults["instances"]
     supports = set()
     for owner, children in assets.items():
         if owner not in by_asset or by_asset[owner]["module"] == "suppressed-post":
@@ -47,8 +47,8 @@ def piece_edits(pieces, defaults):
             if any(child["localTransform"]["scale"][axis] <= 0 for axis in "xyz"):
                 raise ValueError(f"nonpositive attachment scale on {owner}")
             if child["catalogId"].startswith("bundle:thps/"):
-                support = child["catalogId"].split("/", 1)[1]
-                if support not in by_asset or support in supports or support in assets:
+                support = child["sourceInstance"]
+                if support not in by_asset or support in supports or support in assets or child["catalogId"] != f"bundle:thps/{by_asset[support]['catalogAsset']}":
                     raise ValueError(f"missing, duplicate or nested support {support}")
                 supports.add(support)
     edits, next_id = [], 0
@@ -64,10 +64,10 @@ def piece_edits(pieces, defaults):
             for child in assets.get(asset, [])
         ]
         payload = {
-            "catalogId": f"bundle:thps/{asset}",
+            "catalogId": f"bundle:thps/{piece['catalogAsset']}",
             "position": position,
-            "rotation": vector([0, piece["yaw"], 0]),
-            "scale": vector([scale] * 3),
+            "rotation": vector(piece["rotation"]),
+            "scale": vector(piece["scale"]),
             "placementId": next_id,
         }
         if children:
@@ -84,7 +84,7 @@ def build_level():
     level["packKitVersions"] = {"thps": manifest["kitVersion"]}
     pieces, defaults = read_inputs()
     kit_assets = {asset for asset in manifest["assets"] if any(asset.startswith(prefix) for prefix in manifest["kitAssetPrefixes"])}
-    if {piece["asset"] for piece in pieces["pieces"]} != kit_assets:
+    if {piece["catalogAsset"] for piece in pieces["pieces"] if piece["catalogAsset"]} != kit_assets:
         raise ValueError("manifest kit assets and pieces.json disagree")
     level["edits"] = legacy.tile_edits() + legacy.clutter_removals() + legacy.spawn_moves() + piece_edits(pieces, defaults) + legacy.radio_edits() + legacy.collectible_edits()
     return level

@@ -63,17 +63,21 @@ def split_path(start, end, cuts, axis):
 
 
 def local_transform(owner, position, rotation, scale):
-    inverse = euler_matrix(0, -owner["yaw"], 0)
-    local_position = [dot(row, sub(position, owner["position"])) / SCALE for row in inverse]
+    matrix = euler_matrix(*owner.get("rotation", [0, owner["yaw"], 0]))
+    inverse = tuple(zip(*matrix, strict=True))
+    owner_scale = owner.get("scale", [SCALE] * 3)
+    child_scale = [scale] * 3 if isinstance(scale, (float, int)) else scale
+    local_position = [dot(row, sub(position, owner["position"])) / size for row, size in zip(inverse, owner_scale, strict=True)]
     local_rotation = unity_euler(matmul(inverse, euler_matrix(*rotation)))
-    return {"position": dict(zip("xyz", local_position, strict=True)), "rotation": dict(zip("xyz", local_rotation, strict=True)), "scale": dict.fromkeys("xyz", scale / SCALE)}
+    return {"position": dict(zip("xyz", local_position, strict=True)), "rotation": dict(zip("xyz", local_rotation, strict=True)), "scale": dict(zip("xyz", [a / b for a, b in zip(child_scale, owner_scale, strict=True)], strict=True))}
 
 
 def world_transform(owner, local):
-    rotation = euler_matrix(0, owner["yaw"], 0)
-    position = tuple(local["position"][axis] * SCALE for axis in "xyz")
+    rotation = euler_matrix(*owner.get("rotation", [0, owner["yaw"], 0]))
+    owner_scale = owner.get("scale", [SCALE] * 3)
+    position = tuple(local["position"][axis] * size for axis, size in zip("xyz", owner_scale, strict=True))
     angles = unity_euler(matmul(rotation, euler_matrix(*(local["rotation"][axis] for axis in "xyz"))))
-    return {"position": [dot(row, position) + offset for row, offset in zip(rotation, owner["position"], strict=True)], "rotation": angles, "scale": [local["scale"][axis] * SCALE for axis in "xyz"]}
+    return {"position": [dot(row, position) + offset for row, offset in zip(rotation, owner["position"], strict=True)], "rotation": angles, "scale": [local["scale"][axis] * size for axis, size in zip("xyz", owner_scale, strict=True)]}
 
 
 def source_bounds():
@@ -122,8 +126,12 @@ def build():
     for owner, supports in SUPPORTS.items():
         for support in supports:
             piece = pieces[support]
-            add(owner, support, f"bundle:thps/{support}", piece["position"], (0, piece["yaw"], 0), SCALE)
-    return {"schema": "pack-attachments/1", "assets": assets}
+            add(owner, support, f"bundle:thps/{piece['catalogAsset']}", piece["position"], piece["rotation"], piece["scale"])
+            assets[owner][-1]["sourceInstance"] = support
+    canonical = {}
+    for owner, children in assets.items():
+        canonical.setdefault(pieces[owner]["catalogAsset"], children)
+    return {"schema": "pack-attachments/1", "assets": canonical, "instances": assets}
 
 
 def main():

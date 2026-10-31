@@ -57,7 +57,7 @@ def test_posts_are_owned_once_by_their_bar_with_original_world_transform():
     pieces = json.loads(attachments.PIECES.read_text())["pieces"]
     records = {entry["asset"]: entry for entry in pieces}
     found = []
-    for owner, children in data["assets"].items():
+    for owner, children in data["instances"].items():
         names = [child["name"] for child in children]
         assert len(names) == len(set(names))
         for child in children:
@@ -66,7 +66,7 @@ def test_posts_are_owned_once_by_their_bar_with_original_world_transform():
             found.append(child["name"])
             world = attachments.world_transform(records[owner], child["localTransform"])
             assert world["position"] == pytest.approx(records[child["name"]]["position"])
-            assert world["scale"] == pytest.approx([79.2] * 3)
+            assert world["scale"] == pytest.approx(records[child["name"]]["scale"])
             n = int(child["name"].rsplit("-", 1)[1])
             assert owner == ("piece-rail-big-straight" if n < 5 else "piece-rail-big-bend" if n < 7 else "piece-rail-deck")
     assert sorted(found) == [f"added-post-{i}" for i in range(10)]
@@ -76,7 +76,7 @@ def test_every_local_grind_path_reconstructs_its_world_endpoints_on_its_owner():
     data = attachments.build()
     records = {piece["asset"]: piece for piece in json.loads(attachments.PIECES.read_text())["pieces"]}
     bounds = attachments.source_bounds()
-    for owner, children in data["assets"].items():
+    for owner, children in data["instances"].items():
         for child in children:
             if not child["hidden"]:
                 continue

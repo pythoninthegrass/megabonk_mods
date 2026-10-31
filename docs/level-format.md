@@ -54,7 +54,7 @@ The level records the manifest `version` of each pack it references, so a run ca
 
 Construction kits can declare a separate `kitVersion` and `kitAssetPrefixes` in
 the manifest without changing a legacy version pinned by preserved levels.
-For THPS these are revision `"1"` and prefixes `"piece-"`, `"added-"`; only assets
+For THPS these are revision `"2"` and prefixes `"piece-"`, `"added-"`; only assets
 actually listed in the manifest qualify. Kit-using levels record the optional
 `packKitVersions` dictionary, for example `{"thps":"1"}`. Save inspects root and
 attachment catalog IDs, records installed revisions and retains loaded
