@@ -42,8 +42,12 @@ def _is_steam_root(candidate: Path) -> bool:
     return candidate.is_dir() and all((candidate / marker).exists() for marker in CLIENT_MARKERS)
 
 
-def client_roots(home: Path | str, xdg_data_home: Path | str | None = None) -> list[SteamClient]:
-    """Steam clients for a user: the native install first, then a Flatpak one."""
+def client_roots(
+    home: Path | str,
+    xdg_data_home: Path | str | None = None,
+    granted_paths: list[Path] | None = None,
+) -> list[SteamClient]:
+    """Steam clients for a user: native first, then Flatpak, whose root may sit in a granted path rather than under ~/.var."""
     home = Path(home).expanduser()
     data_homes: list[Path] = []
     if xdg_data_home:
@@ -62,6 +66,7 @@ def client_roots(home: Path | str, xdg_data_home: Path | str | None = None) -> l
         ("flatpak", home / ".var" / "app" / FLATPAK_ID / ".local" / "share" / "Steam"),
         ("flatpak", home / ".var" / "app" / FLATPAK_ID / "data" / "Steam"),
     ]
+    candidates += [("flatpak", Path(path).expanduser()) for path in granted_paths or []]
     clients: list[SteamClient] = []
     seen: set[Path] = set()
     for kind, candidate in candidates:

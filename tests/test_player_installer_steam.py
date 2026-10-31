@@ -81,6 +81,22 @@ def test_client_roots_honours_xdg_data_home(tmp_path: Path) -> None:
     assert any(c.root == home / "games" / "Steam" for c in clients)
 
 
+def test_client_roots_accepts_a_granted_path_as_the_flatpak_steam_root(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    relocated = _make_client(tmp_path / "media" / "steam", [])
+    assert steam.client_roots(home) == []
+    assert steam.client_roots(home, granted_paths=[relocated]) == [steam.SteamClient("flatpak", relocated)]
+
+
+def test_client_roots_keeps_native_first_and_does_not_repeat_a_granted_root(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    native = _make_client(home / ".local" / "share" / "Steam", [])
+    granted = _make_client(tmp_path / "media" / "steam", [])
+    clients = steam.client_roots(home, granted_paths=[granted, native])
+    assert [(c.kind, c.root) for c in clients] == [("native", native), ("flatpak", granted)]
+
+
 def test_flatpak_override_paths_reads_granted_filesystems() -> None:
     text = "[Context]\nfilesystems=/media/steam;\nfilesystems=!/secret;/data;\n"
     assert steam.flatpak_override_paths(text) == [Path("/media/steam"), Path("/data")]

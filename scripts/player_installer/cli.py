@@ -82,12 +82,10 @@ def resolve_package_dir(raw: str) -> Path | None:
 
 
 def find_install(home: Path, extra_libraries: list[str], reporter: Reporter) -> tuple[Path | None, Path | None, list[str]]:
-    clients = steam.client_roots(home)
-    granted: list[Path] = []
-    if any(client.kind == "flatpak" for client in clients):
-        granted = steam.flatpak_granted_paths(home)
-        if granted:
-            reporter.say("Flatpak Steam may only read: " + ", ".join(str(path) for path in granted))
+    granted = steam.flatpak_granted_paths(home)
+    clients = steam.client_roots(home, granted_paths=granted)
+    if granted:
+        reporter.say("Flatpak Steam may only read: " + ", ".join(str(path) for path in granted))
     roots = steam.library_roots(
         clients,
         overrides=granted,

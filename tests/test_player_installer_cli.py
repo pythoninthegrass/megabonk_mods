@@ -162,6 +162,22 @@ def test_a_missing_install_exits_with_a_tell_what_to_do(tmp_path: Path, package:
     assert "--game-dir" in capsys.readouterr().err
 
 
+def test_a_granted_flatpak_library_is_searched_without_a_client_at_a_default_path(tmp_path: Path, monkeypatch, capsys) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    library = tmp_path / "media" / "steam"
+    game = library / "steamapps" / "common" / "Megabonk"
+    game.mkdir(parents=True)
+    (game / "Megabonk.exe").write_bytes(b"MZ")
+    (library / "config").mkdir()
+    monkeypatch.setattr(cli, "MOUNT_ROOTS", ())
+    monkeypatch.setattr(cli.steam, "flatpak_granted_paths", lambda home_value: [library])
+    game_dir, prefix, searched = cli.find_install(home, [], cli.Reporter())
+    assert game_dir == game
+    assert searched == [str(library)]
+    assert "Flatpak Steam may only read" in capsys.readouterr().out
+
+
 def test_an_explicit_game_dir_bypasses_discovery(tmp_path: Path, package: Path) -> None:
     game = tmp_path / "somewhere" / "Megabonk"
     game.mkdir(parents=True)

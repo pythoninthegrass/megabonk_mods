@@ -101,12 +101,12 @@ The installer classifies the game directory before touching it (`scripts/player_
 
 ### Finding Steam and the game
 
-`scripts/player_installer/steam.py` looks for a Steam install under `$XDG_DATA_HOME/Steam`, `~/.local/share/Steam`, `~/.steam/root`, `~/.steam/steam`, and the two Flatpak locations (`~/.var/app/com.valvesoftware.Steam/...`). A directory counts as a client when it has `steamapps/`. Library folders are read out of `config/libraryfolders.vdf` (`vdf.py`, a read-only parser — the installer never writes VDF) and scanned for `steamapps/common/Megabonk`.
+`scripts/player_installer/steam.py` looks for a Steam install under `$XDG_DATA_HOME/Steam`, `~/.local/share/Steam`, `~/.steam/root`, `~/.steam/steam`, the two Flatpak locations (`~/.var/app/com.valvesoftware.Steam/...`), and any Flatpak-granted path. A directory counts as a client when it has `steamapps/`. Library folders are read out of `config/libraryfolders.vdf` (`vdf.py`, a read-only parser — the installer never writes VDF) and scanned for `steamapps/common/Megabonk`.
 
 Two things make this sturdier than it looks:
 
-- **A library on a detached drive** shows up as a configured root whose `steamapps` is gone. Those roots are skipped rather than reported as a missing game, and only when the even the parent directory is missing.
-- **Flatpak Steam can only read paths granted to it**, so granted paths from `flatpak override --show` (or the persisted `local-overrides` file) are added as extra search roots. Without this, a game on a second disk is simply invisible to a Flatpak install.
+- **A library on a detached drive** shows up as a configured root whose `steamapps` is gone. Those roots are skipped rather than reported as a missing game, and only when even the parent directory is missing.
+- **Flatpak Steam can only read paths granted to it**, so granted paths from `flatpak override --show` (or the persisted `local-overrides` file) are read on every run and added as extra search roots. They also count as the Flatpak client itself when one of them holds `steamapps/`: a maintainer machine exists where the entire Steam root — `config/`, `userdata/` and `steamapps/` — was moved to a data disk, so no client is left at any default location, and the grants are the only way back to it. Without this, a game on a second disk is simply invisible to a Flatpak install.
 
 ### .NET placement and the launch option
 
@@ -147,11 +147,13 @@ Verified offline, on macOS, against a synthetic Windows-layout game directory an
 
 The `install.sh` wrapper is checked apart from the game-directory fixtures: `sh -n` parses it, and the version gate was exercised against a real 3.9 interpreter and a stand-in reporting 3.11, each refused with exit 1 and the install hint, while a 3.13 run reaches the bundled module and `--help` prints.
 
+Verified on the AlmaLinux 10.2 maintainer host, against its real Flatpak Steam with the whole root relocated to a data disk: the distributed zip's sha256 survived the transfer and `install.sh --help` runs the bundled module from any directory; the Python floor refuses that host's real 3.12 with exit 1 and the package-manager hint, and passes on 3.13; discovery finds the relocated root through its Flatpak grant, reports the granted path, skips the unmounted library that `libraryfolders.vdf` still lists, and stops with exit 4 and the Windows-build steps on the native install; and `--uninstall` with no record leaves the game's `Mods` alone.
+
 Not yet verified, because it needs a real Linux desktop with Steam and Proton:
 
 - **that the mod loads at all under Proton** — no run has ever proven it. The Windows-build path is the plan, not a measured result. If a live run shows the mod not loading, that is a finding to report, not something to route around.
 - `reg add` through a real Proton `wine` binary (`via: wine`);
 - the .NET runtime resolving from inside a real prefix, and the printed launch option working when Steam actually applies it;
-- Flatpak-granted-path discovery against a real `flatpak override --show`;
+- the persisted `local-overrides` file as the source of the Flatpak grants — the real host went through `flatpak override --show`, which is the other of the two paths in `flatpak_granted_paths`;
 - the zenity/yad progress dialog on a real desktop session;
 - Steam's own behaviour around the download, including whether the Windows build needs the "Only download on my OS" untick on a given Steam version.
