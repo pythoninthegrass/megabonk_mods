@@ -4,6 +4,7 @@ title: Player guide for installing the mod and sharing levels
 status: To Do
 assignee: []
 created_date: '2026-10-06 21:44'
+updated_date: '2026-10-31T03:12:00Z'
 labels:
   - level-editor
 dependencies: []
@@ -43,3 +44,17 @@ Link this guide from `docs/modding-setup.md` (TASK-001.04) and from the Map Sele
 - [ ] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+created: 2026-10-31T03:12:00Z
+
+---
+
+The packaging gap this task must flag (AC #5) is now tracked rather than open-ended: TASK-006.04 defines the packaged player download and the shared installer contract, with TASK-006.04.01 (Linux), TASK-006.04.02 (Windows) and TASK-006.04.03 (macOS) implementing it per platform. Nothing exists yet, so the guide still documents the manual steps as the working route and links those tasks as the gap rather than glossing over it.
+
+The guide's verification run also feeds those installer tasks: it settles how the .NET 6 runtime reaches MelonLoader under Proton (a runtime directory inside the game folder versus installing into the Proton prefix) and whether a DLL-override launch option is needed. Record both findings in the guide, because the installer tasks depend on them.
+
+---
+<!-- COMMENTS:END -->
