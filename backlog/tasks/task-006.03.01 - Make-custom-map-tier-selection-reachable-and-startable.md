@@ -1,9 +1,10 @@
 ---
 id: TASK-006.03.01
 title: Make custom-map tier selection reachable and startable
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-31T17:10:00Z'
+updated_date: '2026-10-31T17:23:00Z'
 labels:
   - level-editor
 dependencies: []
