@@ -46,6 +46,7 @@ MELONLOADER_ASSET = "MelonLoader.x64.zip"
 MIN_PYTHON = (3, 13)
 _MIN_PYTHON_TEXT = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}"
 
+# f-string template: a literal shell brace has to be doubled.
 INSTALL_SH = f"""#!/bin/sh
 # Installs the Megabonk Levels mod on Linux. Requires Python {_MIN_PYTHON_TEXT} or newer.
 set -eu
@@ -65,7 +66,7 @@ if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= {MIN_PYTHON!r} el
   exit 1
 fi
 
-exec python3 -m player_installer --package "$SCRIPT_DIR" "$@"
+exec env PYTHONPATH="$SCRIPT_DIR/installer${{PYTHONPATH:+:$PYTHONPATH}}" python3 -m player_installer --package "$SCRIPT_DIR" "$@"
 """
 
 

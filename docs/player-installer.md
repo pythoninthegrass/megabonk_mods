@@ -16,7 +16,7 @@ megabonk-levels-<mod>-ml<melonloader>-linux/
 └── content/packs/<pack-id>/      bundle + manifest.json (+ attachments.json) per pack
 ```
 
-`install.sh` is the only entry point a player needs. It checks for `python3`, checks that it is new enough, and in both cases names the package manager command that installs a version that is, then hands the rest to `python3 -m player_installer --package <its own directory>`. The floor lives in one place, `MIN_PYTHON` in `scripts/build_player_package.py`, which the wrapper text is built from.
+`install.sh` is the only entry point a player needs. It checks for `python3`, checks that it is new enough, and in both cases names the package manager command that installs a version that is, then hands the rest to `python3 -m player_installer --package <its own directory>`. Because `-m` resolves modules from the working directory rather than the script's own, the wrapper also puts the bundled `installer/` directory on `PYTHONPATH` — running the module by name without that fails with `No module named player_installer` no matter where the player stands. The floor lives in one place, `MIN_PYTHON` in `scripts/build_player_package.py`, which the wrapper text is built from.
 
 ## The manifest
 

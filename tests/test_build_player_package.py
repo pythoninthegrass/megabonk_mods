@@ -1,8 +1,10 @@
 import build_player_package as module
 import hashlib
 import io
+import os
 import pytest
 import subprocess
+import sys
 import zipfile
 from build_player_package import (
     DOTNET_WINDOWS_ASSET,
@@ -195,6 +197,20 @@ class TestInstallSh:
         path = tmp_path / "install.sh"
         path.write_text(install_sh_content(), encoding="utf-8")
         subprocess.run(["sh", "-n", str(path)], check=True)
+
+    def test_wrapper_reaches_the_bundled_installer(self, workspace):
+        build(workspace)
+        script = workspace["output"] / "install.sh"
+        env = {**os.environ, "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"}
+        result = subprocess.run(
+            [str(script), "--help"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(workspace["output"].parent),
+        )
+        assert result.returncode == 0, result.stderr
+        assert "usage: player_installer" in result.stdout
 
 
 class TestZip:
