@@ -4,7 +4,7 @@ title: Linux player installer
 status: In Progress
 assignee: []
 created_date: '2026-10-31T03:12:00Z'
-updated_date: '2026-10-31T04:30:00Z'
+updated_date: '2026-10-31T08:06:00Z'
 labels:
   - tooling
 dependencies: []
@@ -56,7 +56,7 @@ Packs are per-platform: the windows bundle is the one that matters on the recomm
 - [x] #3 The installer distinguishes the native Linux build from the Windows build and steers the player to the working one, stating why the native build cannot be used with the current MelonLoader
 - [x] #4 Re-running is a no-op when everything is at the expected version, and repairs only what is missing or stale when it is not
 - [x] #5 Optional inputs are honored: a chosen level file lands in UserData/Levels/, a pack bundle and its manifest land in UserData/LevelPacks/<id>/, and UserData/Levels/ is created when absent
-- [ ] #6 Progress shows through a GUI progress dialog in a desktop session and as plain text when run headless, such as over ssh; a failure it cannot resolve exits nonzero with a message that says what to do
+- [x] #6 Progress shows through a GUI progress dialog in a desktop session and as plain text when run headless, such as over ssh; a failure it cannot resolve exits nonzero with a message that says what to do
 - [x] #7 Uninstall restores a vanilla game
 - [ ] #8 The verified command sequence is documented and the player guide's Linux section points at the installer
 <!-- AC:END -->
@@ -99,6 +99,10 @@ Packs are per-platform: the windows bundle is the one that matters on the recomm
 - Verification touches live machines: writing into a real game install on an SD card, creating Proton prefixes, stopping Steam, editing `localconfig.vdf`, and launching a game on a gamepadui box's display. Needs user consent per machine.
 - `mf` has no Windows build; AC #1 "both machines" may need a multi-GB Steam download there.
 - Package/contract pieces overlap the unstarted parent TASK-006.04 and the player guide TASK-006.02.
+
+Python slice, landed before any Go work. (1) Lower the floor: MIN_PYTHON (3,13) to (3,11) in scripts/build_player_package.py. Measured cause, running the bundled modules directly: install, --check, prefix-mode registry override and uninstall all exit 0 on 3.11.18 and 3.12.11; 3.10.22 and 3.9.25 die on one line, `from datetime import UTC` at plan.py:14, so UTC becomes timezone.utc and nothing else changes. That makes the AlmaLinux host's system python3 3.12.15 usable with no installs, where the 3.13 floor refused it. (2) --python PATH plus MEGABONK_PYTHON, handled inside install.sh before the version gate and stripped from the arguments handed to the module: a PATH python too old to parse the module cannot reach an argparse flag, so the choice has to live in the wrapper. (3) kdialog as a third dialog backend in ui.py: the host has neither zenity nor yad but ships kdialog 25.12.3 with KDE, so AC #6 needs no package install; kdialog's --progressbar answers over D-Bus (qdbus-qt6) instead of stdin, so GuiProgress needs a per-flavour driver and a text fallback when D-Bus is absent. (4) Guards: every bundled module parsed with ast feature_version (3,11) so newer syntax is caught on any machine, and the built install.sh run under a mise 3.11 where one is installed. Docs re-stated honestly in the same pass, including that the 3.12 refusal recorded earlier belongs to the 3.13 floor.
+
+Sequencing after this slice: TASK-006.04.01.01 ports the installer to a single static Go CLI binary (no cgo, CGO_ENABLED=0; bitfield/script where pipeline sugar helps, stdlib elsewhere), keeping the package/manifest contract and exit codes, with the Python installer as reference until the Go binary reproduces the live checks. TASK-006.04.01.02 adds a MyGo native-UI progress window on that binary - native UI, not the webview mode, because the webview path dlopens WebKitGTK 4.1 on Linux while native UI needs only GTK 3.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -123,4 +127,6 @@ Live pass 1 on mf (AlmaLinux 10.2, Flatpak Steam 1.0.0.87 with its whole root re
 Also from that machine: the Python floor bump landed on a host whose system python3 is 3.12.15, so the gate is what a player without a devbox toolchain meets - it refuses with exit 1 and the dnf hint and passes under mise's 3.13.16. mise is only on PATH from the interactive rc, so a non-interactive ssh needs the absolute ~/.local/bin/mise exec -- (bash -lc still gives 3.12), and python3.13 is an EPEL package, absent by default. Verified against the real layout: the distributed zip's sha256 survives transfer; install.sh is mode 755; the default run and --check exit 4 with the native-build refusal naming /media/steam/steamapps/common/Megabonk; --uninstall with no record exits 0 and leaves the dev-built Mods/MegabonkLevels.Mod.dll alone; prefix_for_game_dir correctly returns None while compatdata/3405340 is an empty skeleton with no pfx. 829 python tests pass and task lint is clean.
 
 Follow-up worth its own decision, noticed on the Flatpak host: a library listed in libraryfolders.vdf but never granted to the Flatpak is still installed into, and nothing warns the player that Steam then cannot read those files - LibraryRoot.granted is metadata only, with no consumer.
+
+Live pass 2 on mf, the Python slice (4de078c, 6df2663, d8eeb30), on the distributed zip (sha256 survived transfer). The 3.11 floor makes the host's system python3 3.12.15 usable with nothing installed: with a bare PATH=/usr/bin:/bin, --help exits 0, the default run exits 4 with the grant line and native-build steps, and --uninstall with no record exits 0. --python and MEGABONK_PYTHON are honoured - a mise 3.13.16 reaches argparse with rc 0, a dead path exits 2 naming itself - and --python survives the hand-off into the module. Progress on the host's KDE session: pick_progress chose GuiProgress /usr/bin/kdialog with qdbus-qt6, and the scripted harness read the live dialog's D-Bus properties back - value 40 at 2/5 with the label set, 100 at 5/5, close clean - while the same call with no session bus chose TextProgress. The real entry point was then exercised: ./install.sh doing a prefix-mode install with the registry override against a synthetic Windows-layout tree under /tmp (not the machine's game dir) exited 0, a pgrep -x watcher saw the real /usr/bin/kdialog --title MegabonkLevels --progressbar process, the install record landed, user.reg carried the override, and --uninstall exited 0 with the value gone. That closes AC #6: dialog proven on a real desktop, text on every ssh run, and the nonzero-exit-with-message paths (4 native build, 2 dead interpreter path, 1 below floor) all observed live. The zenity/yad branches stay test-only - the host has neither installed. Go follow-ups created as subtasks: TASK-006.04.01.01 (single static Go binary, CGO_ENABLED=0, bitfield/script only for pipeline sugar) and TASK-006.04.01.02 (MyGo native-UI progress window, blocked on the first); an earlier plan note cited them as 006.04.02/006.04.03, which are the Windows and macOS installer tasks.
 <!-- SECTION:NOTES:END -->
