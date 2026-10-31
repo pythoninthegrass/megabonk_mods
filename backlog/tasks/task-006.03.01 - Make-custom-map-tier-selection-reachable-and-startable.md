@@ -4,7 +4,7 @@ title: Make custom-map tier selection reachable and startable
 status: Done
 assignee: []
 created_date: '2026-10-31T17:10:00Z'
-updated_date: '2026-10-31T17:48:00Z'
+updated_date: '2026-10-31T17:50:00Z'
 labels:
   - level-editor
 dependencies: []
@@ -62,6 +62,8 @@ Final wm2 verification passed on the final runtime implementation. OS mouse clic
 Final task check passed: build, 1498 C# tests, 849 Python tests, markdownlint and Ruff. Tests were observed failing against hide-only behavior before implementing the repair; refresh-navigation regression also observed red before its fix. Existing nullable/pytest configuration warnings remain unchanged. docs/development.md documents lifecycle ordering, reference-backed Navigation copies, remote build steps and live verification. Game quit after testing, harness marker disabled back to its original state, and temporary virtual input devices stopped. No Unity editor, asset rebuild, save reset or developer load was used.
 
 Implementation committed as f59d865 (fix: repair custom map tier selection and navigation).
+
+Post-commit checkout sync to wm2 completed cleanly at d568575. An additional full on-device task check built successfully and ran 1498 C# tests: 1488 passed, including the new tier regressions; 10 existing THPS fixture tests failed before Python/lint could run. Root cause verified in thps_level_tests.cs and thps_editable_level_tests.cs: root discovery searches for Taskfile.yml, while git tracks lowercase taskfile.yml. The case-insensitive macOS checkout passes all 1498 tests; wm2's Linux filesystem does not find that marker. This unrelated case-sensitive test portability issue is not changed in the menu fix. Local full task check and final live wm2 menu acceptance remain passed. No follow-up task created without approval.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -72,4 +74,6 @@ Fixed custom-map tier availability, selection and controller focus in f59d865. C
 Verified on wm2 through normal mouse and virtual Xbox controller menus: Forest Tier 3 → Warehouse → Confirm loads rendered Warehouse; Tier 1 ↔ Challenges navigation works; returning to Forest restores all unlocked tiers and controller selection of Tier 3. No save reset, Unity editor or developer load required. Screenshots and live-query evidence are listed in implementation notes.
 
 Three regression tests added first and observed failing before fixes. Final task check passed (1498 C# tests, 849 Python tests, build and lint). Development documentation updated with remote build instructions, lifecycle constraints and live verification. Game and temporary input devices stopped and original disabled harness-marker state restored after testing.
+
+Additional on-device full-suite limitation: wm2 build passed and 1488/1498 C# tests passed (including all new regressions). Ten existing THPS tests fail because they search for Taskfile.yml rather than the tracked lowercase taskfile.yml on a case-sensitive filesystem; Python/lint were not reached on that run. This unrelated portability issue was left unchanged. Full local task check remains green.
 <!-- SECTION:FINAL_SUMMARY:END -->
