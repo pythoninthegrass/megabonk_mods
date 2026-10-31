@@ -191,6 +191,110 @@ Revision 2 replaces the original quad-per-prefab kit without compatibility
 aliases; regenerate this reference after rebuilding the pack. The preserved
 `thps.mblevel.json` and `forest_custom.mblevel.json` do not depend on those kit IDs.
 
+### Authoring with the construction kit
+
+Kit authoring happens in the editor on `levels/thps-editable.mblevel.json` or a
+scratch copy of it, and saves go to `UserData/Levels/<name>.mblevel.json`
+through the toolbar. Nothing edited there touches the shipped file: see
+[Preserving the shipped Warehouse](development.md#preserving-the-shipped-warehouse),
+where `uv run scripts/check_thps_preservation.py` fails `task check` if
+`levels/thps.mblevel.json` drifts from its baseline. `task thps:editable-level`
+regenerates the editable reference from scratch, so save custom arrangements
+under another name instead of editing that file in place.
+
+**Palette.** The kit's pieces sit in the palette's `Packs` tab next to the
+legacy `Warehouse` monolith (see [Catalog palette](development.md#catalog-palette)).
+The search field filters as you type; clicking it focuses the field with the
+caret at the end, so a second search appends to the previous text — Escape
+blurs the field and a second Escape clears it. Clicking a slot only *selects*
+the entry; press 5 (or click **Place**) to arm placement, then click on the
+map. Middle-clicking a placed object selects its palette entry and switches to
+Place, which is the duplicate flow (`EditorObjectTools: pick block ...`).
+
+**Where a click lands.** The Warehouse levels keep only the generated spawn
+cell (10, 7) and remove the other 224 tiles, and the tile ray only sees the
+baked ground collision, so a place or tile click outside that kept cell is
+silently ignored — no log line, nothing happens. The yellow outline shows the
+targeted cell and, in Place, an orange circle marks the exact point; objects
+do not snap to the quarter-tile guide lines.
+
+**Placement height — the "invisible piece" trap.** A placed piece's Y follows
+the kept tile's surface, and that tile sits at level −1, whose top is at
+y −20 (20 per level, see development.md's camera-pose formula), under the mesh
+that hides it. A fresh click therefore buries the piece 20 units below the
+visible Warehouse floor, where it looks invisible from any interior vantage
+while its collider and selection stay live (Select still gets it `via
+nearest`). Raise the cell to level 0 with tool 1 to place at floor height, or
+drag the piece up afterwards; `query_objects` on `Renderer` bounds tells you
+in one call whether a piece is at floor level or under it. The main-pipe
+modules in the recipe below mate at pivots y 0 to −4.93, so they want the
+raised tile.
+
+**Mating.** [Ramp module profiles and mating contract](thps-warehouse-pieces.md#ramp-module-profiles-and-mating-contract)
+is the reference for profiles, widths and terminal edges. The numbers that
+matter for the main pipe: a transition strip's pivot sits at its toe, like-side
+strips butt together at pitch 19.722656 along x, the lip sits 11.37 units from
+the toe, and a rectangular flat mates on the toe side with its centre
+6.245470 south of the strip it joins (its north edge meets the strip pivot; the
+authored flat covers three strips). Palette placement uses the prefab's own
+scale and rotation, so kit copies come in at the authored instances' transform
+(scale 79.2, rot 0); keep scaling uniform, and compare ordered boundary
+vertices after placement, not bounding boxes. Grind copings and supports
+snapshot from `attachments.json` into each placement at the moment of placing
+(`LiveEdit: attached 'added-grind-coping-1/...' as placement:<id> to
+placement:<id>`), so a placed strip carries its own coping rails; the joint
+gaps they leave (about 1.4 units between adjacent copings at correct pitch) are
+inside `RailHandoff.SearchRadius`, so grinds chain across them (see
+[Coping rails on the half pipes and wall quarter pipes](#coping-rails-on-the-half-pipes-and-wall-quarter-pipes)).
+
+**Ramp rebuild, checked in the running editor.** The authored south half of the
+main pipe (`piece-main-south-01` at x 129.641983, `piece-main-south-02` at x
+149.364639, `piece-main-flat` at (149.364639, −4.933436, 26.190527), all scale
+79.2) was removed and rebuilt from three palette copies on the kept cell:
+
+| Piece copy | Position | Result |
+| --- | --- | --- |
+| `piece-main-south-02` | (114.40, 0, 6.53) | west strip |
+| `piece-main-south-01` | (134.06, 0, 6.53) | seam pitch 19.66 against the nominal 19.722656; coping joint gap 1.34 against the authored 1.403 |
+| `piece-main-flat` | (110.14, 0, −0.66) | 0.95 south of the nominal centre z 0.285 (strip z − 6.245470) |
+
+- **Ride.** A drop on the strip seam (x 124.2) slid continuously down both
+  strips, over the toe/flat joint with its 0.95 gap, and came to rest at
+  (124.2, 3.15, 1.61) — no catch at either joint.
+- **Grind.** With slide held, the catch took the west strip's coping rail at
+  (114.4, 10.6, 17.9) running east, and at the seam
+  `RailHandoff: moved onto rail at distance 0.00, progress 0.000, direction 1.0`
+  chained onto the east strip's rail at (134.1, 10.6, 17.9): one continuous
+  grind across the joint at the game's grind speed. Which way a catch runs
+  follows the approach side, so drop onto the rail from the end you want to
+  travel toward.
+- **Save/reload.** The save reloaded with all three copies at exactly the
+  saved transforms, verified through `query_objects`.
+
+**Performance with the full kit.** With the whole edit stack live (1,447
+edits) entering editor mode rendered the palette's 277 thumbnails in one frame
+in 360 ms, `LiveEdit: applied` the stack at load in about 40 ms, and a save
+wrote in about 207 ms; selection stays usable in dense stacks because the
+raycast falls back to the nearest object within an eighth of a tile of the
+cursor's ground point.
+
+**Gotchas.**
+
+- **Undo is strictly LIFO.** To drop an edit buried under others, undo
+  everything above it and redo the rest. The keyboard chord needs `Ctrl`
+  held at least 0.2 seconds (`UndoRedoCtrlHoldSeconds`) before `Z`/`Y`
+  registers; the toolbar **Undo**/**Redo** buttons have no hold requirement.
+- **Floor-flush pieces can be invisible from a low vantage** and hard to hit
+  with the ray. The nearest-pick fallback usually still gets them, and the log
+  distinguishes the two paths: `selected placement:<id> '<name>(Clone)' via
+  raycast` versus `... via nearest`. Verify positions after edits with
+  `query_objects` on `Renderer` bounds; destroyed clones stay listed, so
+  filter on `activeSelf` or a non-zero extent.
+- **Identical stacking is refused.** Placing or moving a piece onto the exact
+  position (within 0.01) of another of the same prefab is ignored with a log
+  line, so nudge the second piece rather than re-clicking the same point (see
+  [Object tools](development.md#object-tools)).
+
 ### Shipped monolithic reference
 
 `levels/thps.mblevel.json` is generated, not hand-edited: `scripts/build_thps_level.py` writes it (`uv run scripts/build_thps_level.py`) and `tests/test_build_thps_level.py` covers the generator. `ThpsLevelTests` in `tests/MegabonkLevels.Tests` replays the saved file through `EditStack` and `ReachabilityValidator` and checks that the kept tile is reachable from the generated spawn cell, that the authored kill floor sits below it, that the boss portal stands on the floor inside the hanging box, and that the authored `bossSpawnPosition` puts the boss on the pipe floor outside it. Regenerate and reload with `uv run scripts/build_thps_level.py` then `relaunch(level="levels/thps.mblevel.json")`.
