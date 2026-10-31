@@ -119,6 +119,14 @@ def test_library_roots_reads_every_client_libraryfolders(tmp_path: Path) -> None
     assert {r.source for r in roots} == {"client"}
 
 
+def test_library_roots_marks_a_client_library_the_flatpak_is_granted(tmp_path: Path) -> None:
+    library = tmp_path / "media" / "steam"
+    client = _make_client(tmp_path / "steam", [library])
+    (library / "steamapps").mkdir(parents=True)
+    roots = steam.library_roots([steam.SteamClient("flatpak", client)], overrides=[library])
+    assert [(r.path, r.source, r.granted) for r in roots] == [(library, "client", True)]
+
+
 def test_library_roots_skips_stale_libraries_that_are_gone(tmp_path: Path) -> None:
     client = _make_client(tmp_path / "steam", [tmp_path / "lib1", tmp_path / "mnt" / "games" / "GameLibrary" / "Steam"])
     _make_library(tmp_path / "lib1")

@@ -168,6 +168,8 @@ def library_roots(
     """Libraries to search, in priority order: the client's own list, Flatpak grants, explicit paths, then a media scan."""
     found: list[LibraryRoot] = []
     seen: set[Path] = set()
+    granted_paths = list(overrides or [])
+    granted = {granted_path for granted_path in granted_paths}
 
     def add(path: Path, source: str, client: SteamClient | None = None, granted: bool | None = None) -> None:
         path = Path(path)
@@ -181,12 +183,10 @@ def library_roots(
 
     for client in clients:
         for path in libraryfolders(client):
-            add(path, "client", client)
+            add(path, "client", client, granted=True if path in granted else None)
 
-    granted_paths = list(overrides or [])
-    granted = {granted_path for granted_path in granted_paths}
     for path in granted_paths:
-        add(path, "flatpak-override", granted=True if path in granted else None)
+        add(path, "flatpak-override", granted=True)
 
     for path in extra_paths or []:
         add(Path(path), "explicit", granted=None)
