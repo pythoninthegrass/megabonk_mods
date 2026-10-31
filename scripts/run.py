@@ -4,6 +4,7 @@
 # requires-python = ">=3.13,<3.14"
 # dependencies = [
 #     "python-decouple>=3.8",
+#     "evdev>=1.9; sys_platform == 'linux'",
 # ]
 # [tool.uv]
 # exclude-newer = "2026-10-31T00:00:00Z"
@@ -43,6 +44,10 @@ Usage:
     run.py mouse move X Y          Move the injected mouse to screenshot pixels (origin top left)
     run.py mouse click|down|up [--button N] [X Y]  Click or press/release a button (0 left, 1 right, 2 middle), moving first when X Y is given
     run.py mouse clear             Return the mouse to the real pointer
+    run.py menu start|status|stop   Manage persistent Linux input devices for stock gamepadui menus
+    run.py menu drive '<JSON>' [--out screenshot.png]
+                                   Drive OS-level menu input, not editor injection; use @file or - for a batch file/stdin
+                                   Each menu command accepts --host HOST --remote-repo PATH for SSH execution
     run.py ui-tree [X Y]           Print the editor widgets and their rects in screenshot pixels, and the widget at X Y when given
     run.py save-level [name]       Save the editor's level, as <name> when given, and print the file written
     run.py list-levels             Print the saved custom-level files and their directory
@@ -78,14 +83,17 @@ import json
 import os
 import platform
 import re
+import shlex
 import shutil
 import signal
 import subprocess
 import sys
 import time
+import uuid
 from collections.abc import Callable, Mapping
 from decouple import Config, RepositoryEmpty, RepositoryEnv
 from game_paths import latest_log_path, resolve_game_dir as _resolve_game_dir, wine_bin, wine_prefix
+from menu_input import request as menu_request, serve as serve_menu, validate_batch
 from pathlib import Path
 
 MACOS_RUNTIMES = ("wine", "crossover")
@@ -743,10 +751,195 @@ def send_screenshot(harness: Path, out: Path, timeout: float) -> bool:
     return True
 
 
+def menu_socket(args: argparse.Namespace) -> Path:
+    if args.socket is not None:
+        return args.socket.expanduser()
+    root = Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home() / ".cache")
+    return root / "megabonk-menu" / "input.sock"
+
+
+def read_menu_batch(source: str) -> list:
+    if source == "-":
+        text = sys.stdin.read(65537)
+    elif source.startswith("@"):
+        with Path(source[1:]).open() as batch:
+            text = batch.read(65537)
+    else:
+        text = source
+    if len(text.encode()) > 65535:
+        raise ValueError("menu: command batch exceeds 64 KiB")
+    return validate_batch(json.loads(text))
+
+
+def menu_remote(args: argparse.Namespace, commands: list | None) -> int:
+    if not args.remote_repo or not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.@:\[\]-]*", args.host):
+        raise ValueError("menu: SSH requires a safe host name and an explicit --remote-repo")
+    if args.menu_action == "serve":
+        raise ValueError("menu: use 'start' instead of serving over SSH")
+    repo = args.remote_repo
+    directory = '"$HOME"/' + shlex.quote(repo[2:]) if repo.startswith("~/") else shlex.quote(repo)
+    remote_out = f".tools/menu-{uuid.uuid4().hex}.png" if args.out else None
+    command = [args.remote_python, "scripts/run.py", "--timeout", str(args.timeout), "menu", args.menu_action]
+    if commands is not None:
+        command.append("-")
+        command += ["--settle", str(args.settle)]
+    for flag, value in (("--game-dir", args.game_dir), ("--socket", args.socket), ("--display", args.display), ("--out", remote_out)):
+        if value is not None:
+            command += [flag, str(value)]
+    if args.no_gamepad:
+        command.append("--no-gamepad")
+    ssh = ["ssh", "-oBatchMode=yes", "--", args.host]
+    budget = args.timeout * (len(commands or []) + 2) + 10
+    result = subprocess.run([*ssh, f"cd {directory} && {shlex.join(command)}"],
+                            input=json.dumps(commands) if commands is not None else "", text=True, timeout=budget, check=False)
+    if result.returncode or remote_out is None:
+        return result.returncode
+    download = subprocess.run([*ssh, f"cd {directory} && cat -- {shlex.quote(remote_out)}"], capture_output=True, timeout=args.timeout, check=False)
+    if download.returncode or not download.stdout.startswith(PNG_SIGNATURE):
+        raise RuntimeError("menu: remote screenshot download failed or did not contain a PNG")
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    staging = args.out.with_name(f".{args.out.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        staging.write_bytes(download.stdout)
+        staging.replace(args.out)
+    finally:
+        staging.unlink(missing_ok=True)
+    print(f"menu: downloaded {args.out} (remote evidence: {repo}/{remote_out})")
+    return 0
+
+
+def start_menu_service(args: argparse.Namespace, path: Path) -> bool:
+    if path.exists():
+        status = menu_request(path, {"command": "status"}, args.timeout)
+        raise RuntimeError(f"menu: service already running: {status}; use status/stop first")
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    command = [sys.executable, str(Path(__file__).resolve()), "menu", "serve", "--socket", str(path)]
+    display = args.display or os.environ.get("DISPLAY")
+    if display:
+        command += ["--display", display]
+    if args.no_gamepad:
+        command.append("--no-gamepad")
+    log = path.with_suffix(".log")
+    unit = None
+    child = None
+    if shutil.which("systemd-run"):
+        unit = f"megabonk-menu-{uuid.uuid4().hex}"
+        launch = ["systemd-run", "--user", "--collect", "--quiet", f"--unit={unit}",
+                  f"--working-directory={Path.cwd()}", f"--property=StandardOutput=append:{log}", "--property=StandardError=inherit"]
+        if os.environ.get("XAUTHORITY"):
+            launch += [f"--setenv=XAUTHORITY={os.environ['XAUTHORITY']}"]
+        try:
+            launched = subprocess.run([*launch, *command], capture_output=True, text=True, timeout=args.timeout, check=False)
+            if launched.returncode:
+                raise RuntimeError(f"menu: user service launch failed: {launched.stderr}; a running systemd user manager is required")
+        except BaseException:
+            try:
+                subprocess.run(["systemctl", "--user", "stop", unit], capture_output=True, timeout=5, check=False)
+            except (OSError, subprocess.SubprocessError):
+                print(f"menu: check cleanup of user service {unit}", file=sys.stderr)
+            raise
+    else:
+        with log.open("ab") as output:
+            child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
+    deadline = time.monotonic() + args.timeout
+    try:
+        while (child is None or child.poll() is None) and time.monotonic() < deadline:
+            try:
+                status = menu_request(path, {"command": "status"}, min(args.timeout, 0.5))
+                print(json.dumps(status))
+                return True
+            except RuntimeError:
+                time.sleep(POLL_SECONDS)
+        detail = log.read_text(errors="replace")[-2000:] if log.exists() else "no service log was written"
+        raise RuntimeError(f"menu: input service did not start; see {log}:\n{detail}")
+    except BaseException:
+        if unit is not None:
+            subprocess.run(["systemctl", "--user", "stop", unit], timeout=5, check=False)
+        if child is not None and child.poll() is None:
+            child.terminate()
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+        raise
+
+
+def run_menu(args: argparse.Namespace) -> int:
+    commands = read_menu_batch(args.commands) if args.menu_action == "drive" else None
+    if not 0 < args.timeout <= 300 or not 0 <= args.settle <= 10:
+        raise ValueError("menu: timeout must be 0–300 seconds (exclusive of 0), settle must be 0–10 seconds")
+    if args.host:
+        return menu_remote(args, commands)
+    if args.remote_repo or args.remote_python != ".venv/bin/python":
+        raise ValueError("menu: --remote-repo/--remote-python require --host; refusing to drive the local machine")
+    if platform.system() != "Linux":
+        raise RuntimeError("menu: OS-level menu input requires Linux; use --host and --remote-repo for an SSH target")
+    path = menu_socket(args)
+    if args.menu_action == "start":
+        return 0 if start_menu_service(args, path) else 1
+    if args.menu_action == "serve":
+        def terminate(_signum, _frame):
+            raise KeyboardInterrupt
+        previous = signal.signal(signal.SIGTERM, terminate)
+        try:
+            serve_menu(path, display=args.display or os.environ.get("DISPLAY"), gamepad=not args.no_gamepad)
+        finally:
+            signal.signal(signal.SIGTERM, previous)
+        return 0
+    if args.menu_action in ("status", "stop"):
+        print(json.dumps(menu_request(path, {"command": args.menu_action}, args.timeout)))
+        if args.menu_action == "stop":
+            deadline = time.monotonic() + args.timeout
+            while path.exists() and time.monotonic() < deadline:
+                time.sleep(POLL_SECONDS)
+            if path.exists():
+                raise RuntimeError(f"menu: stop was acknowledged but {path} still exists")
+        return 0
+    game_dir = args.game_dir.expanduser() if args.game_dir else resolve_game_dir(load_lookup())
+    harness = game_dir / "harness"
+    if (args.out or any(isinstance(command, dict) for command in commands)) and not (harness / "enabled").is_file():
+        raise RuntimeError(f"menu: diagnostics/screenshots need the harness enabled at {harness}; input-only batches do not")
+    status = menu_request(path, {"command": "status"}, args.timeout)
+    if not status.get("gamepad") and any(isinstance(command, list) and command[0] in ("pad", "axis") for command in commands):
+        raise ValueError("menu: gamepad is disabled; stop and start without --no-gamepad")
+    for command in commands:
+        if isinstance(command, dict):
+            ok, result = send_for_result(harness, command, args.timeout)
+            if not ok:
+                return 1
+            if result is None:
+                raise RuntimeError(f"menu: {command['command']} completed without a diagnostic result file")
+            print(json.dumps(result))
+        else:
+            menu_request(path, command, args.timeout)
+        time.sleep(args.settle)
+    if args.out:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        return 0 if send_screenshot(harness, args.out, args.timeout) else 1
+    return 0
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Drive the MegabonkLevels dev harness.")
     parser.add_argument("--timeout", type=float, default=15.0, help="seconds to wait for each command")
     sub = parser.add_subparsers(dest="action", required=True)
+    menu = sub.add_parser("menu", help="drive stock Linux menus through OS-level devices, locally or over SSH")
+    menu_sub = menu.add_subparsers(dest="menu_action", required=True)
+    for verb in ("start", "serve", "status", "stop", "drive"):
+        command = menu_sub.add_parser(verb)
+        command.add_argument("--host", help="SSH host; runs the target checkout, never the local game")
+        command.add_argument("--remote-repo", help="repository path on the SSH host; ~/ is supported")
+        command.add_argument("--remote-python", default=".venv/bin/python", help="single interpreter path in the remote checkout's environment")
+        command.add_argument("--socket", type=Path, help="target input service socket (default: XDG_RUNTIME_DIR or ~/.cache, under megabonk-menu)")
+        command.add_argument("--display", help="target game's X11 display; start defaults to the target DISPLAY")
+        command.add_argument("--no-gamepad", action="store_true", help="start keyboard/mouse only, without a virtual controller")
+        command.add_argument("--game-dir", type=Path, help="target game directory for diagnostics/screenshots")
+        command.add_argument("--settle", type=float, default=0.35, help="seconds between batch actions (0–10)")
+        command.set_defaults(out=None)
+        if verb == "drive":
+            command.add_argument("commands", help="JSON batch, @file, or - to read stdin")
+            command.add_argument("--out", type=Path, help="screenshot path on this machine, downloaded when --host is used")
     sub.add_parser("enable")
     sub.add_parser("disable")
     sub.add_parser("quit")
@@ -1161,6 +1354,12 @@ def relaunch(
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
+    if args.action == "menu":
+        try:
+            return run_menu(args)
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+            print(f"{error}", file=sys.stderr)
+            return 1
     game_dir = resolve_game_dir(load_lookup())
     harness = game_dir / "harness"
 

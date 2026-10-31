@@ -328,6 +328,53 @@ ssh wm2 'steam steam://rungameid/3405340'
 
 The build deploys the DLL and dependencies directly into that game installation. Restart after every rebuild; a running MelonLoader process keeps the old DLL.
 
+### Driving stock menus with run.py
+
+`run.py menu` drives stock Rewired menus through Linux virtual devices. It is separate from `run.py key`/`mouse`, which inject input into the map editor. The CLI runs locally on Linux or forwards to an explicitly configured SSH checkout; there is no implicit remote host, game path or display.
+
+On the target, run `mise exec -- uv sync` after updating the checkout. The Linux-only `evdev` dependency is also in `run.py`'s standalone script metadata; building it may require a compiler and Linux headers. The desktop user needs access to `/dev/uinput` (and the uinput kernel module must be loaded). Permission failures are reported without trying sudo or changing device permissions. Mouse positioning additionally requires `libX11.so.6` and the game's X11/Xwayland display and authorization, not necessarily the desktop's display. `wm2` used `:1`; inspect the running game's environment rather than assuming this on another launch or host.
+
+Start before launching the game when possible so Rewired discovers the devices. A single service keeps the keyboard, mouse and virtual Xbox 360 controller connected across CLI calls:
+
+```sh
+uv run scripts/run.py menu start --host wm2 --remote-repo '~/git/megabonk_mods' --display :1
+uv run scripts/run.py menu status --host wm2 --remote-repo '~/git/megabonk_mods'
+uv run scripts/run.py menu drive '[["key","KEY_ENTER"],["pad","BTN_SOUTH"]]' \
+  --host wm2 --remote-repo '~/git/megabonk_mods'
+uv run scripts/run.py menu stop --host wm2 --remote-repo '~/git/megabonk_mods'
+```
+
+Omit `--host`/`--remote-repo` to run directly on Linux. SSH uses the target's `.venv/bin/python` by default; `--remote-python` takes a single interpreter path, not shell code. Both maintained Python files must be present in the target checkout. JSON travels over stdin, not interpolated into a remote shell program. `--remote-repo` supports `~/`; the remote interpreter path must be absolute or relative to that checkout. No local `.env` is forwarded. Use `--game-dir` for remote diagnostics, or configure the target's own environment.
+
+`start` uses a transient systemd user service when `systemd-run` is available, because SSH logout can reap a merely detached child. A running user manager is required for that path; a refused launch fails clearly. Without systemd, `start` detaches a child; on hosts that kill it at SSH logout, run `menu serve` on the target through a persistent foreground SSH session instead. `stop` closes the devices and waits for socket removal. The per-user socket defaults to `$XDG_RUNTIME_DIR/megabonk-menu/input.sock`, or `~/.cache/megabonk-menu/input.sock`, with mode 0600. `--socket` overrides it on the target. Startup logs are beside it as `input.log`. An existing socket is never silently removed: use `status`/`stop`; only remove a stale socket after confirming its process is gone.
+
+Batches are JSON arrays (up to 256 commands / 64 KiB), supplied inline, as `@actions.json`, or as `-` for stdin. Every action is validated before input starts:
+
+| Action | Meaning |
+| --- | --- |
+| `["key", "KEY_ENTER"]` | Tap a keyboard key; supported keys: ENTER, ESC, UP, DOWN, LEFT, RIGHT, TAB, SPACE, with the `KEY_` prefix. |
+| `["pad", "BTN_SOUTH"]` | Tap A; other buttons: EAST/B, WEST/X, NORTH/Y, START, SELECT, TL, TR, THUMBL, THUMBR, with the `BTN_` prefix. |
+| `["axis", "ABS_HAT0Y", 1]` | Pulse D-pad Down; -1 is Up. HAT0X uses -1 Left / 1 Right. |
+| `["axis", "ABS_X", -32768]` | Pulse a stick axis (X, Y, RX, RY): -32768–32767. Triggers Z/RZ accept 0–255. All use `ABS_`. |
+| `["move", 350, 790]` | Absolute X11 pointer coordinates, origin top left. Match the display to the game's screenshot resolution; windowed/scaled sessions may require coordinate conversion. |
+| `["click"]` | Tap the left mouse button at the current pointer position. |
+| `{"command":"query-objects","type":"MapSelectionUi","fields":["runConfig"]}` | Run a read-only harness diagnostic; `state` and `steam-ready` are also allowed. Other harness commands are rejected. |
+
+Buttons/sticks release to neutral in `finally` even when a tap is interrupted. Taps last 0.12 seconds; `--settle` controls the pause after each batch action (default 0.35 seconds). Large relative mouse jumps were unreliable under gamepadui, so movement uses absolute X11 warps plus a small real device-motion pulse to switch Rewired out of controller mode. `start --no-gamepad` omits the virtual controller for mouse/keyboard-only checks; restart the service to change that setting. These devices can affect the active graphical session, so do not leave them running or drive another application accidentally.
+
+Input-only batches need no mod harness. Diagnostics and `--out` require the target harness to be enabled before game launch; they do not turn on developer mode or bypass stock menus. For example, after reaching Map Selection with Warehouse installed:
+
+```sh
+uv run scripts/run.py menu drive \
+  '[["move",350,790],["click"],{"command":"query-objects","type":"SelectionGroupToggleSingleButtonTier","fields":["canSelect","isSelected"]}]' \
+  --host wm2 --remote-repo '~/git/megabonk_mods' \
+  --game-dir /media/sdcard/SteamLibrary/steamapps/common/Megabonk --out .tools/menu.png
+```
+
+A diagnostic rejection, timeout, service error or failed screenshot returns nonzero and aborts the batch. Screenshot capture waits for command completion **and** a PNG, then downloads it to the local `--out` path; remote evidence remains under the target checkout's `.tools/menu-<unique-id>.png`. A failed download does not replace an existing local image. Inspect each screenshot before sending another batch; focus-dependent sequences are not assertions that the expected menu was reached. Use global `--timeout` before `menu` to adjust per-command waits.
+
+The maintained CLI was verified on wm2 with keyboard Enter, controller A/D-pad and absolute mouse movement/clicks, read-only tier queries, screenshot download, and service status/stop across separate SSH sessions. It requires neither a Unity editor nor a developer `load-level` command.
+
 ### Verified menu regression on wm2
 
 Verified on 2026-10-31 with the Proton/game/loader versions above, the installed Windows THPS pack, and Calcium selected. Input came through Linux uinput mouse clicks (with X11 absolute pointer positioning) and a virtual Xbox 360 controller into the stock menus; the harness supplied screenshots, read-only object queries and quit between DLL builds. No save reset, developer character override or `load-level` command was used.
