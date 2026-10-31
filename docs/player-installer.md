@@ -2,13 +2,13 @@
 
 The player-facing download: a folder a Linux player unzips and runs `./install.sh` in, which installs MelonLoader, the MegabonkLevels mod, the .NET 6 runtime it needs, and any levels or packs the package carries. This doc is the contract between the two halves — the **package** the build produces and the **installer** that consumes it — plus the Linux-specific behaviour that contract cannot express.
 
-Everything here is Python standard library only, on both sides. The installer runs as `python3 -m player_installer` from a copy of `scripts/player_installer/` that travels inside the package, so a player needs Python 3.13 or newer and nothing else: no uv, no repo checkout, no .NET SDK, no Wine installation. That floor is the repo's own pin, and `install.sh` enforces it rather than just advertising it — the modules import `datetime.UTC`, which arrived in 3.11, so an older interpreter dies at import rather than at a useful message.
+Everything here is Python standard library only, on both sides. The installer runs as `python3 -m player_installer` from a copy of `scripts/player_installer/` that travels inside the package, so a player needs Python 3.11 or newer and nothing else: no uv, no repo checkout, no .NET SDK, no Wine installation. The floor is set by the newest feature the bundled modules use and is enforced by `install.sh` rather than just advertised, so an older interpreter gets a package-manager hint instead of a traceback.
 
 ## Package layout
 
 ```text
 megabonk-levels-<mod>-ml<melonloader>-linux/
-├── install.sh                    sh wrapper: finds a new enough python3, execs the bundled installer
+├── install.sh                    sh wrapper: picks a new enough interpreter, execs the bundled installer
 ├── manifest.json                 the contract, described below
 ├── installer/player_installer/   the installer's own modules, copied in
 ├── vendor/                       vendor archives, named exactly as the manifest names them
@@ -16,7 +16,7 @@ megabonk-levels-<mod>-ml<melonloader>-linux/
 └── content/packs/<pack-id>/      bundle + manifest.json (+ attachments.json) per pack
 ```
 
-`install.sh` is the only entry point a player needs. It checks for `python3`, checks that it is new enough, and in both cases names the package manager command that installs a version that is, then hands the rest to `python3 -m player_installer --package <its own directory>`. Because `-m` resolves modules from the working directory rather than the script's own, the wrapper also puts the bundled `installer/` directory on `PYTHONPATH` — running the module by name without that fails with `No module named player_installer` no matter where the player stands. The floor lives in one place, `MIN_PYTHON` in `scripts/build_player_package.py`, which the wrapper text is built from.
+`install.sh` is the only entry point a player needs. It picks an interpreter — `--python PATH`, else `MEGABONK_PYTHON`, else `python3` on PATH — checks that it is new enough, and in both failure cases names the package manager command that installs a version that is, then hands the rest to `"$PYTHON" -m player_installer --package <its own directory>`. The interpreter choice is resolved in the wrapper, not by the module: a PATH `python3` too old to parse the bundled code cannot reach an argparse flag, so `--python` has to be read by `sh`; `player_installer` merely declares the flag so it survives the hand-off. A bad explicit path exits 2, an explicit or default interpreter below the floor exits 1, and a missing default `python3` exits 1. Because `-m` resolves modules from the working directory rather than the script's own, the wrapper also puts the bundled `installer/` directory on `PYTHONPATH` — running the module by name without that fails with `No module named player_installer` no matter where the player stands. The floor lives in one place, `MIN_PYTHON` in `scripts/build_player_package.py`, which the wrapper text is built from; the tests parse every bundled module with `ast` at that `feature_version`, and `ruff.toml` exempts `scripts/player_installer/` from pyupgrade so a repo-wide autofix on the 3.13-targeted config cannot raise the bundled code's floor behind the tests' back.
 
 ## The manifest
 
@@ -135,6 +135,12 @@ The method actually used is recorded and echoed back, so a player reporting a pr
 
 `--level <file>` and `--pack <dir>` install extra content the package does not carry, through the same record so `--uninstall` removes it too. Both are validated before anything is copied — a bad pack is reported as a list of problems and nothing is half-installed.
 
+### Progress reporting
+
+`pick_progress` in `scripts/player_installer/ui.py` gives a desktop session (`DISPLAY`, or `WAYLAND_DISPLAY`, plus a session bus for kdialog) a GUI progress dialog and everything else numbered lines on stdout. Every message also goes through plain text, so nothing depends on the dialog and an install driven over ssh reads the same as one on the desktop.
+
+Three backends, tried in order: zenity and yad are driven by writing `NN` and `# label` lines to their stdin; KDE's kdialog takes `--progressbar <label> 100` and prints its D-Bus reference (`org.kde.kdialog-<pid> /ProgressDialog`) on stdout, so `GuiProgress` drives it with `qdbus-qt6` (or `qdbus`) instead — `<service> <path> org.kde.kdialog.ProgressDialog.value N` sets progress (the dotted property assignment; `org.freedesktop.DBus.Properties.Set` fails with `InternalError` on this object), `setLabelText` retitles, and `close()` dismisses. kdialog aborts with rc 134 without a display or session bus, so it is only chosen when both are present and a qdbus tool exists; if the dialog never answers or a D-Bus call fails, that step and all later ones fall back to text rather than losing the message.
+
 ## What is verified, and what is not
 
 Verified offline, on macOS, against a synthetic Windows-layout game directory and a synthetic `steamapps/compatdata/<appid>/pfx` prefix:
@@ -145,9 +151,9 @@ Verified offline, on macOS, against a synthetic Windows-layout game directory an
 - refusal of a native-Linux game directory with exit 4;
 - every plan, prefix-selection, VDF-parsing, Steam-discovery and manifest rule under `tests/test_player_installer_*.py` and `tests/test_build_player_package.py`.
 
-The `install.sh` wrapper is checked apart from the game-directory fixtures: `sh -n` parses it, and the version gate was exercised against a real 3.9 interpreter and a stand-in reporting 3.11, each refused with exit 1 and the install hint, while a 3.13 run reaches the bundled module and `--help` prints.
+The `install.sh` wrapper is checked apart from the game-directory fixtures: `sh -n` parses it, and the version gate was exercised against stub interpreters reporting versions above and below the floor — the floor run reaches the bundled module and `--help` prints, an older one is refused with exit 1, the found version, and the `--python` hint, and a `--python`/`MEGABONK_PYTHON` path that cannot run is refused with exit 2 naming it. The built wrapper also runs end to end under a mise interpreter at exactly the floor version where one is installed locally.
 
-Verified on the AlmaLinux 10.2 maintainer host, against its real Flatpak Steam with the whole root relocated to a data disk: the distributed zip's sha256 survived the transfer and `install.sh --help` runs the bundled module from any directory; the Python floor refuses that host's real 3.12 with exit 1 and the package-manager hint, and passes on 3.13; discovery finds the relocated root through its Flatpak grant, reports the granted path, skips the unmounted library that `libraryfolders.vdf` still lists, and stops with exit 4 and the Windows-build steps on the native install; and `--uninstall` with no record leaves the game's `Mods` alone.
+Verified on the AlmaLinux 10.2 maintainer host, against its real Flatpak Steam with the whole root relocated to a data disk: the distributed zip's sha256 survived the transfer and `install.sh` runs the bundled module from any directory on the host's system `python3` 3.12.15 with a bare `PATH=/usr/bin:/bin` — no mise, nothing installed — where an earlier 3.13 floor had refused that interpreter; `--python` and `MEGABONK_PYTHON` honour an explicit interpreter and refuse a dead path with exit 2; discovery finds the relocated root through its Flatpak grant, reports the granted path, skips the unmounted library that `libraryfolders.vdf` still lists, and stops with exit 4 and the Windows-build steps on the native install; `--uninstall` with no record leaves the game's `Mods` alone; and on that host's KDE session the progress dialog is a real kdialog driven over D-Bus — value read back from the live dialog as 40 at 2/5 and 100 at 5/5, closed cleanly — while the same call with no session bus picks plain text.
 
 Not yet verified, because it needs a real Linux desktop with Steam and Proton:
 
@@ -155,5 +161,5 @@ Not yet verified, because it needs a real Linux desktop with Steam and Proton:
 - `reg add` through a real Proton `wine` binary (`via: wine`);
 - the .NET runtime resolving from inside a real prefix, and the printed launch option working when Steam actually applies it;
 - the persisted `local-overrides` file as the source of the Flatpak grants — the real host went through `flatpak override --show`, which is the other of the two paths in `flatpak_granted_paths`;
-- the zenity/yad progress dialog on a real desktop session;
+- the zenity and yad dialog paths — the verified host has neither installed, so those branches run only in tests (the kdialog-over-D-Bus path above is the one with desktop evidence);
 - Steam's own behaviour around the download, including whether the Windows build needs the "Only download on my OS" untick on a given Steam version.
