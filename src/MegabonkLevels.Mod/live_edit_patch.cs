@@ -29,6 +29,7 @@ public static class LiveEditPatch
     private static float? _killFloorY;
     private static IReadOnlyList<float> _bossSpawnPosition;
     private static bool _grindRequiresSlide;
+    private static IReadOnlyDictionary<string, string> _packKitVersions;
     private static Session _session;
     private static int _runGeneration;
 
@@ -45,7 +46,7 @@ public static class LiveEditPatch
 
     // Set by LevelLoaderPatch right before it starts a run, consumed (and cleared) by the next
     // generation so a later vanilla run is never edited.
-    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null, float? killFloorY = null, IReadOnlyList<float> bossSpawnPosition = null, bool grindRequiresSlide = false)
+    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null, float? killFloorY = null, IReadOnlyList<float> bossSpawnPosition = null, bool grindRequiresSlide = false, IReadOnlyDictionary<string, string> packKitVersions = null)
     {
         _pendingEdits = edits;
         _levelEdits = edits;
@@ -55,6 +56,28 @@ public static class LiveEditPatch
         _killFloorY = killFloorY;
         _bossSpawnPosition = bossSpawnPosition;
         _grindRequiresSlide = grindRequiresSlide;
+        _packKitVersions = packKitVersions;
+    }
+
+    public static void ApplySettings(LevelFile settings, MelonLogger.Instance logger)
+    {
+        LevelSettings.Validate(settings);
+        _noGrass = settings.NoGrass;
+        _playerStart = settings.PlayerStart;
+        _bossSpawnPosition = settings.BossSpawnPosition;
+        _killFloorY = settings.KillFloorY;
+        _maxSlopeAngle = settings.MaxSlopeAngle;
+        _grindRequiresSlide = settings.GrindRequiresSlide;
+        _packKitVersions = settings.PackKitVersions;
+        LevelLoaderPatch.ApplyMetadata(settings);
+        LevelTitle.Prepare(settings.Title, settings.Description, logger);
+        if (LevelMusic.Reference != settings.Music) LevelMusic.Prepare(settings.Music, logger);
+        if (LiveSession is { } session)
+        {
+            if (session.Controller.grassRenderer != null) session.Controller.grassRenderer.enabled = !_noGrass;
+            if (session.TileGen != null) KillFloorWatcher.Arm(session.TileGen, logger, _killFloorY);
+        }
+        TickMaxSlopeAngle(logger);
     }
 
     // Queues the loaded level's edits again for the next generation, which a native restart runs without going through LevelLoaderPatch.
@@ -250,7 +273,36 @@ public static class LiveEditPatch
             Title: LevelTitle.Title,
             Description: LevelTitle.Description,
             AllowedCharacters: LevelLoaderPatch.AllowedCharacters,
-            MapDescription: LevelLoaderPatch.MapDescription);
+            MapDescription: LevelLoaderPatch.MapDescription,
+            PackKitVersions: BuildKitVersions(edits));
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildKitVersions(IReadOnlyList<EditOp> edits)
+    {
+        var versions = _packKitVersions == null ? new Dictionary<string, string>() : new Dictionary<string, string>(_packKitVersions);
+        var manifests = new Dictionary<string, PackManifest?>();
+        foreach (var op in edits.Where(op => op.OpType == PlaceObject.OpType))
+        {
+            var place = PlaceObject.FromEditOp(op);
+            foreach (var raw in new[] { place.CatalogId }.Concat(place.Attachments.Select(child => child.CatalogId)))
+            {
+                if (CatalogId.TryParse(raw, out var id, out _) && id.Namespace == CatalogNamespace.Bundle)
+                {
+                    var pack = id.Segments[0];
+                    var asset = string.Join("/", id.Segments.Skip(1));
+                    if (!manifests.TryGetValue(pack, out var manifest))
+                    {
+                        manifest = PackPrefabs.Manifest(pack);
+                        manifests[pack] = manifest;
+                    }
+                    if (manifest is { } found && found.IsKitAsset(asset) && found.KitVersion is { } revision)
+                    {
+                        versions[pack] = revision;
+                    }
+                }
+            }
+        }
+        return versions.Count == 0 ? null : versions;
     }
 
     // The packs referenced by the level's edits, mapped to the version recorded in each installed
@@ -446,12 +498,12 @@ public static class LiveEditPatch
         var index = BuildIndex(controller);
         logger.Msg($"LiveEdit: indexed {index.Count} objects: {SummarizeCategories(index)}");
         DisableGrassIfRequested(controller, logger);
-        SchedulePlayerStart();
 
         var tileGen = controller.proceduralTileGeneration;
         if (tileGen?.proceduralTiles == null)
         {
             OnTerrainGenerationComplete(logger, controller, index, edits);
+            SchedulePlayerStart();
             return;
         }
 
@@ -464,6 +516,7 @@ public static class LiveEditPatch
         }
 
         _session = session;
+        SchedulePlayerStart();
         if (edits == null)
         {
             KillFloorWatcher.Disarm();

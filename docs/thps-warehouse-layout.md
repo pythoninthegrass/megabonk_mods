@@ -48,7 +48,7 @@ Measured in the running game (build 1.0.69, CrossOver):
 ## Structure to catalog mapping
 
 For the additive editable kit, see the [construction piece inventory](thps-warehouse-pieces.md).
-The mapping below describes the unchanged shipped level, not the future kit.
+The mapping below describes the unchanged shipped level, not the separate kit assembly.
 
 The Warehouse is one `bundle:thps/Warehouse` placement built from the extracted mesh (see [asset-bundles.md](asset-bundles.md)): the floor, banks, half pipes, decks, ledges, walls, windows, doors and trusses are all in that mesh, so no structure needs its own catalog entry. The Megabonk catalog supplies what the mesh does not:
 
@@ -129,6 +129,59 @@ The PS1 transparency key (magenta) is baked to alpha 0 in every texture that car
 - **The structure map itself is low confidence.** Box pile numbering, the start block's role and the exact positions are ambiguous in the source analysis; see its Unresolved list.
 
 ## Building the level
+
+### Editable construction assembly
+
+`levels/thps-editable.mblevel.json` is a separate reference layout assembled by
+`scripts/build_thps_editable_level.py`. Run `task thps:editable-level` to regenerate
+it, or `task thps:editable-install` to install it alongside the shipped level and
+the already-built pack. Build a missing pack first with `task pack:thps`, then
+relaunch with `relaunch(level="levels/thps-editable.mblevel.json")`.
+
+The generator uses the committed `pieces.json` world positions/yaws and
+`meshToWorld.scale`, not a second implementation of partition/pivot maths.
+It snapshots `attachments.json` defaults into each owner placement. The current
+layout has 1,740 roots, 17 attached supports and 41 attached grind paths; all
+1,541 generated roof quads remain individually editable. The nine archival
+`suppressed-post` assets are intentionally absent. Attached supports are not
+also placed at the root, and legacy hidden rails are not emitted again.
+Placement IDs reserve each owner's ordered children before the next root.
+
+Terrain bootstrap, generated-clutter removals, boss portal, radio and the 14
+collectibles reuse the shipped generator's final transforms and overrides.
+There is no `bundle:thps/Warehouse` placement. The shipped level and generator
+remain the byte-preserved monolithic reference; the editable generator refuses
+to overwrite that file. Regeneration resets the reference layout, so save custom
+arrangements under another name rather than regenerating over them.
+
+In the editor, the **Level** panel cycles through settings with `<` and `>`.
+Enter marker coordinates as `[x,y,z]`, booleans as `true`/`false`, and `null` for
+an optional setting's default; text fields take plain text and character lists
+take a JSON array. **Clear** empties the input; **Apply** or Enter commits it;
+**Cancel** or Escape discards the draft. Settings have their own **Undo/Redo**
+buttons, separate from object history. Save includes both histories' current
+state, and settings-only changes count as dirty.
+
+The cyan player-start marker uses body height; the magenta boss destination uses
+floor height. **Locate marker** flies the camera to the selected marker, and
+**Marker to camera** moves it to the current camera position. Numeric input
+also edits either marker. They are editor-only lines without colliders.
+The boss destination remains independent of the portal and hanging room.
+The portal, radio, collectibles and construction geometry use normal object
+tools; Ctrl-click selects a hidden grind path instead of its visible owner.
+
+Gameplay controls apply immediately and persist on save: kill floor (still
+clamped above the catch floor), slope limit, slide-gated grinding and grass.
+Music, title/descriptions and character restrictions are editable as well.
+Map, stage, tier and seed changes are refused when existing edits target the
+current generation; start a fresh level or regenerate the layout instead.
+In-place Load similarly refuses a different generation. Pack dependencies are
+derived at save time; schema/build metadata are compatibility data, not props.
+
+The kit has its own revision (`packKitVersions`) in addition to the preserved
+legacy pack version. See [pack versions](level-format.md#pack-versions).
+
+### Shipped monolithic reference
 
 `levels/thps.mblevel.json` is generated, not hand-edited: `scripts/build_thps_level.py` writes it (`uv run scripts/build_thps_level.py`) and `tests/test_build_thps_level.py` covers the generator. `ThpsLevelTests` in `tests/MegabonkLevels.Tests` replays the saved file through `EditStack` and `ReachabilityValidator` and checks that the kept tile is reachable from the generated spawn cell, that the authored kill floor sits below it, that the boss portal stands on the floor inside the hanging box, and that the authored `bossSpawnPosition` puts the boss on the pipe floor outside it. Regenerate and reload with `uv run scripts/build_thps_level.py` then `relaunch(level="levels/thps.mblevel.json")`.
 

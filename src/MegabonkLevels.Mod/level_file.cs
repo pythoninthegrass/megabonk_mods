@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace MegabonkLevels;
 
@@ -38,7 +39,8 @@ public readonly record struct LevelFile(
     string MapDescription = null,
     float? KillFloorY = null,
     IReadOnlyList<float> BossSpawnPosition = null,
-    bool GrindRequiresSlide = false)
+    bool GrindRequiresSlide = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, string> PackKitVersions = null)
 {
     public const int CurrentSchemaVersion = 3;
 
@@ -50,6 +52,7 @@ public readonly record struct LevelFile(
         && Tier == other.Tier
         && Seed == other.Seed
         && PacksDictionaryEquals(Packs, other.Packs)
+        && (PackKitVersions == null ? other.PackKitVersions == null : other.PackKitVersions != null && PacksDictionaryEquals(PackKitVersions, other.PackKitVersions))
         && NoGrass == other.NoGrass
         && ListEquals(PlayerStart, other.PlayerStart)
         && MaxSlopeAngle == other.MaxSlopeAngle

@@ -52,6 +52,19 @@ One consequence of staying in the same project: the Mod project compiles against
 
 The level records the manifest `version` of each pack it references, so a run can warn when a pack changed since the level was saved. The recorded values come from the installed manifests at save time, not from the catalogIds, so the map is `"<packId>": "<manifest version>"`. The compatibility check (`GamePackVersionCheck.MismatchWarning`, mirroring `GameBuildIdCheck`) compares each recorded version to the installed manifest version by exact string match: a mismatch logs a warning and the run still starts, and an absent recorded version or absent installed manifest produces no warning. It runs in both load paths (`LevelLoaderPatch.Start` and `EditorTileTools.LoadSelected`). The editor save fills the map from the manifests of the packs the level references (`LiveEditPatch.BuildPacks`), reading each referenced pack's manifest version (`PackPrefabs.ManifestVersion`).
 
+Construction kits can declare a separate `kitVersion` and `kitAssetPrefixes` in
+the manifest without changing a legacy version pinned by preserved levels.
+For THPS these are revision `"1"` and prefixes `"piece-"`, `"added-"`; only assets
+actually listed in the manifest qualify. Kit-using levels record the optional
+`packKitVersions` dictionary, for example `{"thps":"1"}`. Save inspects root and
+attachment catalog IDs, records installed revisions and retains loaded
+requirements when the pack is unavailable. Both load paths warn on a different
+or missing installed kit revision, without preventing loading. Older manifests
+have no kit revision and cannot silently satisfy a kit-using file. Legacy levels
+omit the field and retain their compatibility behavior. The field is additive;
+schema remains 3. Bump kit revision when kit geometry, transforms or attachment
+defaults change; do not refresh the preservation baseline to advertise additions.
+
 ## Edit operation types
 
 `src/MegabonkLevels.Mod/edit_operations.cs` defines seven typed edit operations that replace `EditOp`'s placeholder payload shape, each a Unity-free `readonly record struct` with a validating constructor plus a `ToEditOp()`/static `FromEditOp(EditOp)` pair that (de)serializes the op's fields to/from `EditOp.Payload` (a `System.Text.Json` camelCase JSON string) and, for object ops that reference an existing object, `EditOp.Target`:

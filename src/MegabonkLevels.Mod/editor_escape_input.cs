@@ -9,7 +9,7 @@ public static class EditorEscapeInput
     private static EditorTextField FocusedField => EditorPalette.SearchFocused ? EditorTextField.Search
         : EditorTileTools.SaveInputFocused ? EditorTextField.Save : EditorTextField.None;
 
-    public static bool BlocksMenu => _sequence.BlocksMenu(FocusedField, Time.frameCount, EditorPalette.SearchHasText, EditorTileTools.SaveInputHasText);
+    public static bool BlocksMenu => EditorSettingsPanel.Focused || EditorSettingsPanel.CapturedThisFrame || _sequence.BlocksMenu(FocusedField, Time.frameCount, EditorPalette.SearchHasText, EditorTileTools.SaveInputHasText);
 
     public static bool CapturedThisFrame => _sequence.CapturedInFrame(Time.frameCount);
 
@@ -19,6 +19,12 @@ public static class EditorEscapeInput
     {
         if (!EditorInput.GetKeyDown(KeyCode.Escape))
         {
+            return;
+        }
+
+        if (EditorSettingsPanel.Focused)
+        {
+            EditorSettingsPanel.Cancel();
             return;
         }
 

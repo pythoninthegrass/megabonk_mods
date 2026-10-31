@@ -135,6 +135,13 @@ public static class EditorMode
         logger.Msg($"EditorMode: exited, MyTime.paused={MyTime.paused}.");
     }
 
+    public static void LocateMarker(float x, float y, float z)
+    {
+        _overviewAwaitsGrid = false;
+        _pose = new CameraPose(x, y + 3, z + 6, 26.565f, 180, 0);
+        CameraOverride.Set(_pose);
+    }
+
     private static void Fly()
     {
         if (EditorTileTools.TextInputFocused)

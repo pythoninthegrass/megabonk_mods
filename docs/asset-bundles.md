@@ -1,5 +1,11 @@
 # AssetBundle authoring
 
+The THPS construction kit has a separate manifest `kitVersion` alongside its
+preserved legacy version. Levels using `piece-` or `added-` assets record this
+revision so an older pack warns even while `version` remains `2.0.21`. See
+[level compatibility](level-format.md#pack-versions) and the
+[editable reference assembly](thps-warehouse-layout.md#editable-construction-assembly).
+
 Megabonk runs Unity 2023.2.22f1 on the built-in render pipeline (the game references Post Processing v2 and MK.Toon, not URP; confirm the engine version from `Megabonk_Data/globalgamemanagers` or the first lines of `Player.log`). A bundle for the game has to be built by that exact editor version for the game's platform.
 
 ## Authoring project

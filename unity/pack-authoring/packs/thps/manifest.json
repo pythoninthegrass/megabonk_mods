@@ -3,6 +3,8 @@
   "name": "THPS Warehouse",
   "author": "pythoninthegrass",
   "version": "2.0.21",
+  "kitVersion": "1",
+  "kitAssetPrefixes": ["piece-", "added-"],
   "assets": [
     "Warehouse",
     "piece-room-wall-south",

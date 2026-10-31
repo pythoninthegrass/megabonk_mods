@@ -668,7 +668,7 @@ public static class ThpsPack
             throw new Exception("missing pack manifest " + path);
         var text = File.ReadAllText(path);
         string Field(string name) => System.Text.RegularExpressions.Regex.Match(text, "\"" + name + "\": \"([^\"]*)\"").Groups[1].Value;
-        var json = "{\n  \"id\": \"" + Field("id") + "\",\n  \"name\": \"" + Field("name") + "\",\n  \"author\": \"" + Field("author") + "\",\n  \"version\": \"" + Field("version") + "\",\n  \"assets\": [\n"
+        var json = "{\n  \"id\": \"" + Field("id") + "\",\n  \"name\": \"" + Field("name") + "\",\n  \"author\": \"" + Field("author") + "\",\n  \"version\": \"" + Field("version") + "\",\n  \"kitVersion\": \"" + Field("kitVersion") + "\",\n  \"kitAssetPrefixes\": [\"piece-\", \"added-\"],\n  \"assets\": [\n"
             + string.Join(",\n", assetNames.Select(name => "    \"" + name + "\"")) + "\n  ]\n}\n";
         if (File.ReadAllText(path) != json)
             File.WriteAllText(path, json);

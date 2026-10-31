@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -12,7 +13,9 @@ public readonly record struct PackManifest(
     string Name,
     string Author,
     string Version,
-    IReadOnlyList<string> Assets)
+    IReadOnlyList<string> Assets,
+    string KitVersion = null,
+    IReadOnlyList<string> KitAssetPrefixes = null)
 {
     public const string FileName = "manifest.json";
 
@@ -40,8 +43,16 @@ public readonly record struct PackManifest(
             throw new InvalidOperationException($"manifest id '{id}' does not match its pack folder '{packFolder}'.");
         }
 
-        return new PackManifest(id, name, author, version, assets);
+        var kitVersion = root.ContainsKey("kitVersion") ? RequireString(root, "kitVersion") : null;
+        var prefixes = root.ContainsKey("kitAssetPrefixes") ? RequireAssets(root, "kitAssetPrefixes") : Array.Empty<string>();
+        if (kitVersion != null && (string.IsNullOrWhiteSpace(kitVersion) || prefixes.Count == 0 || prefixes.Any(string.IsNullOrWhiteSpace)))
+        {
+            throw new InvalidOperationException("kitVersion requires nonempty kitAssetPrefixes.");
+        }
+        return new PackManifest(id, name, author, version, assets, kitVersion, prefixes);
     }
+
+    public bool IsKitAsset(string asset) => Assets.Contains(asset) && KitAssetPrefixes != null && KitAssetPrefixes.Any(prefix => asset.StartsWith(prefix, StringComparison.Ordinal));
 
     private static string RequireString(JsonObject root, string field)
     {

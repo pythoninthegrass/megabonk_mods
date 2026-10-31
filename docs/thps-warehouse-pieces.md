@@ -399,9 +399,9 @@ face boundaries (or an explicitly recorded new cut with interpolated UVs).
 No source-face selector is possible for these: their source is the named
 code/config value below. Every enumerated instance needs an editable transform
 or setting, not a hidden consequence of the monolithic Warehouse placement.
-Geometry assets and local grind/support attachment defaults are implemented;
-the remaining game placements and level settings below describe the assembly
-contract. Ownership does not prevent selecting an individual support or path;
+The separate [editable assembly](thps-warehouse-layout.md#editable-construction-assembly)
+uses these geometry assets, snapshots local grind/support attachments and keeps
+the game placements and level settings below editable. Ownership does not prevent selecting an individual support or path;
 see [piece attachments](asset-bundles.md#piece-attachments).
 
 | Inventory ID / instances | Authoritative source | Editable form and ownership |

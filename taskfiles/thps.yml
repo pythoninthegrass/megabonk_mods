@@ -8,6 +8,32 @@ vars:
   LEVEL: '{{.LEVEL | default "levels/thps.mblevel.json"}}'
 
 tasks:
+  editable-level:
+    desc: "Regenerate the separate piece-assembled editable Warehouse"
+    sources:
+      - scripts/build_thps_editable_level.py
+      - scripts/build_thps_level.py
+      - scripts/thps_item_overrides.json
+      - unity/pack-authoring/packs/thps/pieces.json
+      - unity/pack-authoring/packs/thps/attachments.json
+      - unity/pack-authoring/packs/thps/manifest.json
+      - .tools/thps1/warehouse/**/*
+    generates:
+      - levels/thps-editable.mblevel.json
+    cmds:
+      - uv run scripts/build_thps_editable_level.py
+
+  editable-install:
+    desc: "Install the existing THPS pack and the separate editable Warehouse"
+    cmds:
+      - task: editable-level
+      - task: :pack:install
+        vars: {PACK: thps}
+      - |
+        dest="$(uv run scripts/game_paths.py | jq -r .game_dir)/UserData/Levels"
+        mkdir -p "$dest"
+        cp levels/thps-editable.mblevel.json "$dest/"
+
   default:
     desc: "Extract, build and install the THPS Warehouse level and its pack into the game"
     summary: |

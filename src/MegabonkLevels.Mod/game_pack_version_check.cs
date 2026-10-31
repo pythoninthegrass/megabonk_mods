@@ -5,6 +5,11 @@ namespace MegabonkLevels;
 // Mirrors GameBuildIdCheck: a mismatch logs a warning and the run still starts, never blocking.
 public static class GamePackVersionCheck
 {
+    public static string KitMismatchWarning(string packId, string recordedVersion, string installedVersion) =>
+        string.IsNullOrEmpty(recordedVersion) || recordedVersion == installedVersion
+            ? null
+            : $"Pack '{packId}' construction kit was saved at revision '{recordedVersion}' but the installed kit is '{installedVersion ?? "missing"}'; the level may not reproduce as expected.";
+
     public static string MismatchWarning(string packId, string recordedVersion, string installedVersion)
     {
         if (recordedVersion is null || installedVersion is null || recordedVersion == installedVersion)

@@ -118,7 +118,7 @@ public static class EditorTileTools
 
     public static bool PointerOverEditorOverlay => PointerOverOverlay();
 
-    public static bool TextInputFocused => _saveInputFocused || _textInputCaptured || EditorPalette.TextInputCaptured || EditorEscapeInput.CapturedThisFrame;
+    public static bool TextInputFocused => _saveInputFocused || _textInputCaptured || EditorPalette.TextInputCaptured || EditorEscapeInput.CapturedThisFrame || EditorSettingsPanel.Focused || EditorSettingsPanel.CapturedThisFrame;
 
     public static bool SaveInputFocused => _saveInputFocused;
 
@@ -138,6 +138,7 @@ public static class EditorTileTools
         _validateSummary = "validate: not run";
         EditorObjectTools.OnEditorEntered(logger);
         BuildToolbar();
+        EditorSettingsPanel.Enter(logger);
         BuildOutline();
         _target = null;
         RefreshLoadList();
@@ -146,6 +147,7 @@ public static class EditorTileTools
 
     public static void OnEditorExited()
     {
+        EditorSettingsPanel.Exit();
         EditorObjectTools.OnEditorExited();
         if (_root != null)
         {
@@ -200,6 +202,7 @@ public static class EditorTileTools
             CentreToolbar();
         }
 
+        EditorSettingsPanel.Tick();
         _textInputCaptured = _saveInputFocused || EditorPalette.TextInputCaptured;
         HandleOverlayInput();
         _textInputCaptured |= _saveInputFocused;
@@ -624,6 +627,7 @@ public static class EditorTileTools
         _session = session;
         _sessionRunGeneration = generation;
         _lastSavedEditCount = saved;
+        EditorSettingsPanel.Synchronize(session.CurrentEdits);
         return true;
     }
 
@@ -740,7 +744,7 @@ public static class EditorTileTools
         return null;
     }
 
-    private static bool IsDirty() => _session != null && _session.CurrentEdits.Count != _lastSavedEditCount;
+    private static bool IsDirty() => _session != null && (_session.CurrentEdits.Count != _lastSavedEditCount || EditorSettingsPanel.Dirty);
 
     public static EditsSnapshot ReadEdits() =>
         new(_session?.CurrentEdits.Count ?? 0, IsDirty(), _lastSavedName, _saveStatus);
@@ -789,7 +793,7 @@ public static class EditorTileTools
         var path = Path.Combine(LiveEditPatch.LevelsDirectoryPath(), fileName);
         try
         {
-            File.WriteAllText(path, LevelFileSerializer.Serialize(level.Value));
+            File.WriteAllText(path, LevelFileSerializer.Serialize(EditorSettingsPanel.ForSave(level.Value)));
         }
         catch (Exception ex)
         {
@@ -799,6 +803,7 @@ public static class EditorTileTools
         }
 
         _lastSavedEditCount = _session.CurrentEdits.Count;
+        EditorSettingsPanel.MarkSaved();
         _lastSavedName = fileName;
         _saveStatus = "saved";
         _validateSummary = $"saved {fileName}";
@@ -824,6 +829,7 @@ public static class EditorTileTools
         try
         {
             level = LevelFileSerializer.DeserializeWithMigration(File.ReadAllText(path));
+            LevelSettings.Validate(level);
         }
         catch (Exception ex)
         {
@@ -846,6 +852,19 @@ public static class EditorTileTools
             }
         }
 
+        foreach (var (packId, revision) in level.PackKitVersions ?? new Dictionary<string, string>())
+        {
+            var kitWarning = GamePackVersionCheck.KitMismatchWarning(packId, revision, PackPrefabs.KitVersion(packId));
+            if (kitWarning != null) _logger.Warning(kitWarning);
+        }
+
+        var currentLevel = LiveEditPatch.SnapshotLevelFile(_session?.CurrentEdits ?? LiveEditPatch.SeedEdits);
+        if (currentLevel is { } current && (current.Map != level.Map || current.StageIndex != level.StageIndex || current.Seed != level.Seed || current.Tier != level.Tier))
+        {
+            Fail("load requires a fresh run: map, stage, tier or seed differs");
+            return;
+        }
+
         if (!LiveEditPatch.ResetAndApplyEdits(level.Edits, _logger))
         {
             Fail("load failed: no active run");
@@ -853,6 +872,8 @@ public static class EditorTileTools
         }
 
         _session = new EditorEditSession(level.Edits);
+        LiveEditPatch.ApplySettings(level, _logger);
+        EditorSettingsPanel.Synchronize(level.Edits, force: true);
         _sessionRunGeneration = LiveEditPatch.RunGeneration;
         _lastSavedEditCount = level.Edits.Count;
         _lastSavedName = name;
@@ -981,11 +1002,11 @@ public static class EditorTileTools
 
         widgets.Add(ToWidget("Toolbar", _toolbarRect));
         widgets.Add(ToWidget("LoadPanel", _loadRect));
-        return widgets.Where(widget => widget.HasValue).Select(widget => widget.Value);
+        return widgets.Where(widget => widget.HasValue).Select(widget => widget.Value).Concat(EditorSettingsPanel.Widgets());
     }
 
     private static bool PointerOverOverlay() =>
-        (_toolbarRect != null && RectTransformUtility.RectangleContainsScreenPoint(_toolbarRect, EditorInput.MousePosition, null))
+        EditorSettingsPanel.PointerOver || (_toolbarRect != null && RectTransformUtility.RectangleContainsScreenPoint(_toolbarRect, EditorInput.MousePosition, null))
         || PointerOverToast()
         || (_loadRect != null && RectTransformUtility.RectangleContainsScreenPoint(_loadRect, EditorInput.MousePosition, null));
 

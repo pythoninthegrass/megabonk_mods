@@ -32,6 +32,12 @@ public static class LevelLoaderPatch
     // The level's mapDescription as loaded, kept so an editor save writes it back.
     public static string MapDescription { get; private set; }
 
+    public static void ApplyMetadata(LevelFile level)
+    {
+        AllowedCharacters = level.AllowedCharacters;
+        MapDescription = level.MapDescription;
+    }
+
     private static bool TryRead(string path, MelonLogger.Instance logger, LoadOverrides overrides, out LevelFile level)
     {
         level = default;
@@ -51,6 +57,15 @@ public static class LevelLoaderPatch
             if (packWarning != null)
             {
                 logger.Warning(packWarning);
+            }
+        }
+
+        foreach (var (packId, revision) in level.PackKitVersions ?? new Dictionary<string, string>())
+        {
+            var kitWarning = GamePackVersionCheck.KitMismatchWarning(packId, revision, PackPrefabs.KitVersion(packId));
+            if (kitWarning != null)
+            {
+                logger.Warning(kitWarning);
             }
         }
 
@@ -177,7 +192,7 @@ public static class LevelLoaderPatch
     private static RunConfig PrepareRun(LevelFile level, MelonLogger.Instance logger, MapData mapData)
     {
         SeedForcePatch.ForceLevelSeed(level.Seed);
-        LiveEditPatch.SetPendingEdits(level.Edits, level.NoGrass, level.PlayerStart, level.MaxSlopeAngle, level.KillFloorY, level.BossSpawnPosition, level.GrindRequiresSlide);
+        LiveEditPatch.SetPendingEdits(level.Edits, level.NoGrass, level.PlayerStart, level.MaxSlopeAngle, level.KillFloorY, level.BossSpawnPosition, level.GrindRequiresSlide, level.PackKitVersions);
         LevelMusic.Prepare(level.Music, logger);
         LevelTitle.Prepare(level.Title, level.Description, logger);
         AllowedCharacters = level.AllowedCharacters;

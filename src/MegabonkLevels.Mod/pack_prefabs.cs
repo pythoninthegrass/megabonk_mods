@@ -133,6 +133,10 @@ public static class PackPrefabs
     // The version recorded in the pack's manifest, or null when it has no valid manifest. Editor save writes it into the level so a later load can warn if the pack changed.
     public static string ManifestVersion(string pack) => ReadManifest(pack)?.Version;
 
+    public static string KitVersion(string pack) => ReadManifest(pack)?.KitVersion;
+
+    public static PackManifest? Manifest(string pack) => ReadManifest(pack);
+
     // The pack's parsed manifest.json, or null when the file is absent or invalid; an invalid one is warned about once and leaves the pack unfiltered.
     private static PackManifest? ReadManifest(string pack)
     {
