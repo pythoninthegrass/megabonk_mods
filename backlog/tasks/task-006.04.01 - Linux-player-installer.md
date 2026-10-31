@@ -4,7 +4,7 @@ title: Linux player installer
 status: In Progress
 assignee: []
 created_date: '2026-10-31T03:12:00Z'
-updated_date: '2026-10-31T04:29:00Z'
+updated_date: '2026-10-31T04:30:00Z'
 labels:
   - tooling
 dependencies: []
@@ -63,10 +63,10 @@ Packs are per-platform: the windows bundle is the one that matters on the recomm
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
+- [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
