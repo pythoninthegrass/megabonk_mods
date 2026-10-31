@@ -39,6 +39,88 @@ def _found(*names: str):
     return lambda name: f"/usr/bin/{name}" if name in names else None
 
 
+DESKTOP = {"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus"}
+
+
+class FakeRun:
+    def __init__(self, returncode: int = 0) -> None:
+        self.calls: list[list[str]] = []
+        self.returncode = returncode
+
+    def __call__(self, argv, **kwargs):
+        self.calls.append(list(argv))
+        return type("Done", (), {"returncode": self.returncode})()
+
+    def flat(self) -> str:
+        return " ".join(" ".join(call) for call in self.calls)
+
+
+class KDialogPopen(FakePopen):
+    def __call__(self, argv, **kwargs) -> "KDialogPopen":
+        self.argv = list(argv)
+        return self
+
+    @property
+    def stdout(self):
+        return type("Out", (), {"readline": lambda self=None: "org.kde.kdialog-4242 /ProgressDialog\n"})()
+
+
+def test_kdialog_is_chosen_when_kde_has_no_zenity_or_yad() -> None:
+    progress = ui.pick_progress(DESKTOP, find_binary=_found("kdialog", "qdbus-qt6"))
+    assert isinstance(progress, ui.GuiProgress)
+    assert progress.binary.endswith("kdialog")
+
+
+def test_kdialog_is_skipped_without_a_session_bus() -> None:
+    progress = ui.pick_progress({"DISPLAY": ":0"}, find_binary=_found("kdialog", "qdbus-qt6"), writer=lambda s: None)
+    assert isinstance(progress, ui.TextProgress)
+
+
+def test_kdialog_is_skipped_when_no_qdbus_tool_can_reach_it() -> None:
+    progress = ui.pick_progress(DESKTOP, find_binary=_found("kdialog"), writer=lambda s: None)
+    assert isinstance(progress, ui.TextProgress)
+
+
+def test_gui_progress_drives_kdialog_over_dbus() -> None:
+    popen, run = KDialogPopen(), FakeRun()
+    progress = ui.GuiProgress("/usr/bin/kdialog", popen=popen, run=run)
+    progress.start(4, "install")
+    assert popen.argv[:2] == ["/usr/bin/kdialog", "--title"]
+    assert "--progressbar" in popen.argv and "100" in popen.argv
+    progress.step("MelonLoader")
+    progress.step("runtime")
+    progress.finish("done")
+    assert "org.kde.kdialog-4242 /ProgressDialog" in run.flat()
+    assert run.flat().count("ProgressDialog.value") >= 3
+    assert "org.kde.kdialog.ProgressDialog.setLabelText MelonLoader" in run.flat()
+    assert "org.kde.kdialog.ProgressDialog.close" in run.flat()
+    assert popen.terminated is True
+
+
+def test_gui_progress_falls_back_to_text_when_dbus_calls_fail() -> None:
+    popen, run = KDialogPopen(), FakeRun(returncode=1)
+    progress = ui.GuiProgress("/usr/bin/kdialog", popen=popen, run=run)
+    lines: list[str] = []
+    progress.fallback_writer = lines.append
+    progress.start(2, "install")
+    progress.step("MelonLoader")
+    assert any("MelonLoader" in line for line in lines)
+
+
+def test_gui_progress_falls_back_to_text_when_kdialog_never_answers() -> None:
+    class Silent(FakePopen):
+        @property
+        def stdout(self):
+            return type("Out", (), {"readline": lambda self=None: ""})()
+
+    progress = ui.GuiProgress("/usr/bin/kdialog", popen=Silent(), run=FakeRun())
+    lines: list[str] = []
+    progress.fallback_writer = lines.append
+    progress.start(2, "install")
+    progress.step("MelonLoader")
+    assert any("MelonLoader" in line for line in lines)
+
+
 def test_plain_text_when_there_is_no_display_session() -> None:
     progress = ui.pick_progress({}, find_binary=_found("zenity"), writer=lambda s: None)
     assert isinstance(progress, ui.TextProgress)
