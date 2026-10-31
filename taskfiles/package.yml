@@ -1,0 +1,58 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+vars:
+  OUTPUT: '{{.OUTPUT | default ".tools/player-package"}}'
+  MOD_VERSION: '{{.MOD_VERSION | default "dev"}}'
+  LEVELS: '{{.LEVELS | default "example-forest.mblevel.json"}}'
+  PACKS: '{{.PACKS | default ""}}'
+
+tasks:
+  linux:
+    desc: "Build the Linux player package and its distributable zip into .tools/player-package"
+    summary: |
+      Usage: task package:linux [LEVELS=...] [PACKS=...] [MOD_VERSION=...] [OUTPUT=...]
+
+      Assembles the download a player unzips and runs ./install.sh on: the mod DLL,
+      the vendored Windows MelonLoader and .NET 6 archives, the installer, and any
+      levels or packs you name. Nothing is bundled unless you ask for it, so a dev
+      map never reaches a player by accident.
+
+        task package:linux
+        task package:linux LEVELS="example-forest.mblevel.json thps.mblevel.json" PACKS=thps
+        task package:linux MOD_VERSION=0.4.2
+
+      LEVELS are filenames under levels/ and PACKS are pack ids built by task pack:*.
+      Vendor archives are reused from .tools/vendor-cache; add ALLOW_DOWNLOAD=true to
+      fetch anything missing. Set SOURCE_DATE_EPOCH for a byte-identical zip.
+    cmds:
+      - task mod:build
+      - |-
+        set -eu
+        args=()
+        for level in {{.LEVELS}}; do args+=(--level "$level"); done
+        for pack in {{.PACKS}}; do args+=(--pack "$pack"); done
+        [ "${ALLOW_DOWNLOAD:-}" = true ] && args+=(--allow-download)
+        uv run scripts/build_player_package.py \
+          --output "{{.OUTPUT}}" \
+          --mod-dir src/MegabonkLevels.Mod/bin/Release/net6.0 \
+          --mod-version "{{.MOD_VERSION}}" \
+          "${args[@]}"
+
+  check:
+    desc: "Verify a built player package still matches its manifest"
+    vars:
+      OUTPUT: '{{.OUTPUT | default ".tools/player-package"}}'
+    cmds:
+      - |-
+        PYTHONPATH=scripts uv run python - <<'PY'
+        import sys
+        from pathlib import Path
+        from player_installer.manifest import verify_package
+
+        problems = verify_package(Path("{{.OUTPUT}}"))
+        for problem in problems:
+            print(f"  {problem}", file=sys.stderr)
+        raise SystemExit(1 if problems else 0)
+        PY

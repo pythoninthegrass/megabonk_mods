@@ -28,6 +28,20 @@ To compile without copying the DLL into the game's `Mods` folder, pass `-p:ModIn
 
 Run `uv run scripts/game_paths.py` at any point to see the paths actually resolved.
 
+## Installing for players on Linux
+
+MelonLoader's native Linux support does not work yet: 0.7.3 segfaults `Megabonk.x86_64` while generating the Il2Cpp assemblies, and the upstream fix is not in a release. The supported Linux route is the **Windows** build of Megabonk under Steam Play/Proton, with the Windows MelonLoader and a Windows .NET 6 runtime — which is what the player installer does for them.
+
+```sh
+task package:linux LEVELS="example-forest.mblevel.json thps.mblevel.json" PACKS=thps MOD_VERSION=0.4.2
+```
+
+That produces `.tools/player-package/` and a distributable zip beside it. A player unzips it and runs `./install.sh`; it needs Python 3.9+ and nothing else — no uv, no repo, no Wine install. It finds the Steam install (native or Flatpak) and the game directory, refuses a native-Linux game directory with instructions for switching to the Windows build, installs MelonLoader, the mod, and the .NET runtime, sets the `version.dll` override in the Proton prefix, and writes a record that makes `--check` and `--uninstall` exact. When the .NET runtime cannot go inside the prefix it prints a `DOTNET_ROOT=... %command%` launch option for the player to paste — it never edits Steam's `localconfig.vdf`, which Steam rewrites while it runs.
+
+The package format, the manifest contract, and the Linux behaviour are documented in [player-installer.md](player-installer.md), including what has been verified offline and what still needs a real Linux desktop.
+
+For developing on Linux rather than installing for a player, the mod and its harness work under Proton the same way; the caveats for the native build (no Proton prefix, `LD_PRELOAD` MelonLoader, the .NET 6 runtime Flatpak Steam can actually read) are in [development.md](development.md).
+
 ## Running and verifying the mod
 
 ```sh

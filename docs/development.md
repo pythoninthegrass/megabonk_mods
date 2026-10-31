@@ -642,6 +642,10 @@ A custom level fixes its own tier, so its entry shows only the first tier button
 
 To check it, run `task thps` to install the level and pack, then run `relaunch(no_level=true)` and click through Play, the character, Map Selection and Confirm by hand. The log shows `MapSelection: listed 'Warehouse'`, `MapSelection: selected thps.mblevel.json` and `LevelLoader: starting map=Forest`. A relaunch starts the game unfocused, so click its window before using the menu.
 
+## Player installer
+
+`task package:linux` builds the player-facing Linux download — the mod, the vendored Windows MelonLoader and .NET 6 archives, the installer, and any levels or packs you name — into `.tools/player-package/` plus a distributable zip, and `task package:check` re-verifies a built package against its manifest. Levels and packs are never bundled unless you pass `LEVELS=` and `PACKS=`, so a dev regression map cannot reach a player by accident. The package format, the manifest contract, and the Proton-specific behaviour are in [player-installer.md](player-installer.md).
+
 ## Python tests
 
 The tooling scripts under `scripts/` are covered by pytest tests in `tests/` (the C# tests live in `tests/MegabonkLevels.Tests`). `task scripts:test` runs them, and `task test` runs them after the C# tests. `[tool.pytest.ini_options]` in `pyproject.toml` is the only pytest configuration: it sets `testpaths = tests`, puts `scripts/` on the import path with `pythonpath` so a test does `import game_paths` directly, and runs the suite in parallel across CPU cores through pytest-xdist (`addopts = -n auto`, ~24s serial becomes ~7s). Pass `-n 0` for a serial run, which keeps `--durations` and failures in file order; `-p no:xdist` does not work because `addopts` still passes `-n`. Async tests are marked `pytest.mark.anyio` and select the asyncio backend in `tests/conftest.py`.
