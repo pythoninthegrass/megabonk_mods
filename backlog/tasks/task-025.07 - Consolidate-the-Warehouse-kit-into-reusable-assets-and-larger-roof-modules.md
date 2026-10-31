@@ -1,7 +1,7 @@
 ---
 id: TASK-025.07
 title: Consolidate the Warehouse kit into reusable assets and larger roof modules
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-31T02:56:00Z'
 updated_date: '2026-10-31T03:40:00Z'
@@ -46,7 +46,7 @@ The face-by-face kit exposes1541 generated roof quads and spatially named duplic
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -73,6 +73,8 @@ Final Windows/Linux pack rebuilt and installed: 201 total prefabs (200 construct
 Validation: task check passed with 1,495 C# and 673 Python tests, zero build warnings/errors, markdownlint and Ruff. Latest docs passed task lint; git diff --check passed. check_thps_preservation.py passed after final build; forest_custom SHA-256 remains b8d44d467f94130d0a45cc4a02f2a4902a6eb3dac1b4d60314f17ca4f877fc8a. Both protected levels successfully loaded.
 
 Runtime evidence under .tools/evidence/02507-*: six matched-camera visual comparisons, canonical palette, 32 live roof colliders (12 flat panels), no old roof-quad objects, kicker selection/rotation/undo and attached-frame save/relaunch. Native grind crossed both main-north seams and continued onto hip with three distance-0.00 handoffs; log saved as 02507-grind-save-replay.log. Final-pack save 02507-final-kit-check.mblevel.json reloaded cleanly with 1,444 edits and no Missing: objects. Restored levels/thps-editable.mblevel.json in editor mode with normal damage/spawns and device-controlled slide input. TASK-025.06 remains To Do; unrelated Linux installer task edits are excluded.
+
+Committed implementation, generated metadata/reference, tests/docs and TASK-025.06 dependency as e6bebf0 (feat(thps): consolidate reusable kit assets and roof sections). No attribution footer; unrelated TASK-006.04.01 changes left unstaged.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
