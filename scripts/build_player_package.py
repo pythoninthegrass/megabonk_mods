@@ -43,15 +43,25 @@ DOTNET_WINDOWS_URL = (
 DOTNET_WINDOWS_SHA256 = "c077ccc342c5571ceb7a3c06d1dfbc99b989ed5a6e0f3a0b0b450531c1259615"
 MELONLOADER_ASSET = "MelonLoader.x64.zip"
 
-INSTALL_SH = """#!/bin/sh
-# Installs the Megabonk Levels mod on Linux. Requires Python 3.9 or newer.
+MIN_PYTHON = (3, 13)
+_MIN_PYTHON_TEXT = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}"
+
+INSTALL_SH = f"""#!/bin/sh
+# Installs the Megabonk Levels mod on Linux. Requires Python {_MIN_PYTHON_TEXT} or newer.
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "python3 is required but was not found on PATH." >&2
-  echo "Install Python 3 (for example: sudo dnf install python3)." >&2
+  echo "Install Python {_MIN_PYTHON_TEXT} (for example: sudo dnf install python{_MIN_PYTHON_TEXT})." >&2
+  exit 1
+fi
+
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= {MIN_PYTHON!r} else 1)' 2>/dev/null; then
+  PY_VERSION=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || echo "unknown")
+  echo "This installer needs Python {_MIN_PYTHON_TEXT} or newer; found $PY_VERSION." >&2
+  echo "Install Python {_MIN_PYTHON_TEXT} (for example: sudo dnf install python{_MIN_PYTHON_TEXT}) and run ./install.sh again." >&2
   exit 1
 fi
 

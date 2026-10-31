@@ -2,13 +2,13 @@
 
 The player-facing download: a folder a Linux player unzips and runs `./install.sh` in, which installs MelonLoader, the MegabonkLevels mod, the .NET 6 runtime it needs, and any levels or packs the package carries. This doc is the contract between the two halves — the **package** the build produces and the **installer** that consumes it — plus the Linux-specific behaviour that contract cannot express.
 
-Everything here is Python standard library only, on both sides. The installer runs as `python3 -m player_installer` from a copy of `scripts/player_installer/` that travels inside the package, so a player needs Python 3.9+ and nothing else: no uv, no repo checkout, no .NET SDK, no Wine installation.
+Everything here is Python standard library only, on both sides. The installer runs as `python3 -m player_installer` from a copy of `scripts/player_installer/` that travels inside the package, so a player needs Python 3.13 or newer and nothing else: no uv, no repo checkout, no .NET SDK, no Wine installation. That floor is the repo's own pin, and `install.sh` enforces it rather than just advertising it — the modules import `datetime.UTC`, which arrived in 3.11, so an older interpreter dies at import rather than at a useful message.
 
 ## Package layout
 
 ```text
 megabonk-levels-<mod>-ml<melonloader>-linux/
-├── install.sh                    sh wrapper: finds python3, execs the bundled installer
+├── install.sh                    sh wrapper: finds a new enough python3, execs the bundled installer
 ├── manifest.json                 the contract, described below
 ├── installer/player_installer/   the installer's own modules, copied in
 ├── vendor/                       vendor archives, named exactly as the manifest names them
@@ -16,7 +16,7 @@ megabonk-levels-<mod>-ml<melonloader>-linux/
 └── content/packs/<pack-id>/      bundle + manifest.json (+ attachments.json) per pack
 ```
 
-`install.sh` is the only entry point a player needs. It checks for `python3`, names the package manager command to install it if missing, and hands the rest to `python3 -m player_installer --package <its own directory>`.
+`install.sh` is the only entry point a player needs. It checks for `python3`, checks that it is new enough, and in both cases names the package manager command that installs a version that is, then hands the rest to `python3 -m player_installer --package <its own directory>`. The floor lives in one place, `MIN_PYTHON` in `scripts/build_player_package.py`, which the wrapper text is built from.
 
 ## The manifest
 
@@ -144,6 +144,8 @@ Verified offline, on macOS, against a synthetic Windows-layout game directory an
 - `version.dll` recorded as `via: registry` with `user.reg` actually carrying the key, and cleared on uninstall;
 - refusal of a native-Linux game directory with exit 4;
 - every plan, prefix-selection, VDF-parsing, Steam-discovery and manifest rule under `tests/test_player_installer_*.py` and `tests/test_build_player_package.py`.
+
+The `install.sh` wrapper is checked apart from the game-directory fixtures: `sh -n` parses it, and the version gate was exercised against a real 3.9 interpreter and a stand-in reporting 3.11, each refused with exit 1 and the install hint, while a 3.13 run reaches the bundled module and `--help` prints.
 
 Not yet verified, because it needs a real Linux desktop with Steam and Proton:
 

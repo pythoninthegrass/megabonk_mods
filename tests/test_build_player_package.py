@@ -2,10 +2,12 @@ import build_player_package as module
 import hashlib
 import io
 import pytest
+import subprocess
 import zipfile
 from build_player_package import (
     DOTNET_WINDOWS_ASSET,
     MELONLOADER_ASSET,
+    MIN_PYTHON,
     BuildError,
     build_package,
     install_sh_content,
@@ -181,6 +183,18 @@ class TestInstallSh:
 
     def test_wrapper_says_what_to_install_when_python_is_missing(self):
         assert "sudo dnf install python3" in install_sh_content()
+
+    def test_wrapper_declares_and_enforces_the_python_floor(self):
+        text = install_sh_content()
+        version = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}"
+        assert f"Requires Python {version} or newer" in text
+        assert f"sys.version_info >= {MIN_PYTHON!r}" in text
+        assert "3.9" not in text
+
+    def test_wrapper_is_valid_sh(self, tmp_path):
+        path = tmp_path / "install.sh"
+        path.write_text(install_sh_content(), encoding="utf-8")
+        subprocess.run(["sh", "-n", str(path)], check=True)
 
 
 class TestZip:
