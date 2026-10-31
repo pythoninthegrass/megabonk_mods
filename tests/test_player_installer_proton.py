@@ -89,6 +89,73 @@ def test_set_dll_override_replaces_an_existing_entry_without_duplicating(tmp_pat
     assert proton.read_dll_override(prefix, "version") == "native,builtin"
 
 
+WINE_USER_REG = (
+    "WINE REGISTRY Version 2\n"
+    ";; All keys relative to REGISTRY\\User\\S-1-5-21-2418631443-35145925-1000-1000\n"
+    "\n"
+    "#arch=win64\n"
+    "\n"
+    "[Software\\\\Wine\\\\AppDefaults\\\\ffxvi.exe\\\\DllOverrides] 1793463286\n"
+    "#time=1dd6952f286302a\n"
+    '"atiadlxx"="builtin"\n'
+    "\n"
+    "[Software\\\\Wine\\\\DllOverrides] 1793463301\n"
+    "#time=1dd6952fb51ad38\n"
+    '"api-ms-win-crt-heap-l1-1-0"="native,builtin"\n'
+    '"version"="native,builtin"\n'
+    "\n"
+    "[Software\\\\Wine\\\\Fonts] 1793463286\n"
+    "#time=1dd6952f285031c\n"
+    '@=""\n'
+)
+
+
+def _real_prefix(tmp_path: Path, text: str = WINE_USER_REG) -> Path:
+    """A prefix whose user.reg is in the format a real Proton prefix carries:
+    WINE REGISTRY Version 2, double-escaped section names, trailing timestamps."""
+    prefix = _prefix(tmp_path)
+    (prefix / "user.reg").write_text(text, encoding="utf-8")
+    return prefix
+
+
+def test_read_dll_override_finds_an_entry_wine_itself_wrote(tmp_path: Path) -> None:
+    prefix = _real_prefix(tmp_path)
+    assert proton.read_dll_override(prefix, "version") == "native,builtin"
+
+
+def test_read_dll_override_stays_out_of_appdefaults_sections(tmp_path: Path) -> None:
+    prefix = _real_prefix(tmp_path)
+    assert proton.read_dll_override(prefix, "atiadlxx") is None
+
+
+def test_set_dll_override_edits_the_real_wine_section_in_place(tmp_path: Path) -> None:
+    prefix = _real_prefix(tmp_path, WINE_USER_REG.replace('\n"version"="native,builtin"', ""))
+    assert proton.set_dll_override(prefix, "version", "native,builtin") == "registry"
+    text = (prefix / "user.reg").read_text(encoding="utf-8")
+    assert text.count("[Software\\\\Wine\\\\DllOverrides]") == 1
+    assert proton.read_dll_override(prefix, "version") == "native,builtin"
+    section = text[text.index("[Software\\\\Wine\\\\DllOverrides]") : text.index("[Software\\\\Wine\\\\Fonts]")]
+    assert '"version"="native,builtin"' in section
+
+
+def test_set_dll_override_adds_a_wine_style_header_when_the_real_file_lacks_one(tmp_path: Path) -> None:
+    without = WINE_USER_REG[: WINE_USER_REG.index("[Software\\\\Wine\\\\DllOverrides]")] + "[Software\\\\Wine\\\\Fonts] 1793463286\n"
+    prefix = _real_prefix(tmp_path, without)
+    assert proton.read_dll_override(prefix, "version") is None
+    assert proton.set_dll_override(prefix, "version", "native,builtin") == "registry"
+    assert proton.read_dll_override(prefix, "version") == "native,builtin"
+    assert "[Software\\\\Wine\\\\DllOverrides]" in (prefix / "user.reg").read_text(encoding="utf-8")
+
+
+def test_clear_dll_override_removes_an_entry_wine_itself_wrote(tmp_path: Path) -> None:
+    prefix = _real_prefix(tmp_path)
+    assert proton.clear_dll_override(prefix, "version") == "registry"
+    assert proton.read_dll_override(prefix, "version") is None
+    text = (prefix / "user.reg").read_text(encoding="utf-8")
+    assert '"api-ms-win-crt-heap-l1-1-0"="native,builtin"' in text
+    assert "[Software\\\\Wine\\\\DllOverrides]" in text
+
+
 def test_set_dll_override_creates_user_reg_when_absent(tmp_path: Path) -> None:
     prefix = _prefix(tmp_path)
     assert proton.set_dll_override(prefix, "version", "native,builtin") == "registry"

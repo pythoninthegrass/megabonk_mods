@@ -83,6 +83,18 @@ def _entry_line(name: str, value: str) -> str:
 
 
 _ENTRY = re.compile(r'^"(?P<name>[^"]+)"\s*=\s*(?:\([^)]*\)\s*)?"(?P<value>.*)"\s*$')
+_SECTION = re.compile(r"^\[(?P<section>.+)\](?:\s+\d+)?\s*$")
+
+
+def _section_name(line: str) -> str | None:
+    """The normalised name of a .reg section header line.
+
+    A real Proton user.reg trails every header with a unix timestamp
+    ("[Software\\\\Wine\\\\DllOverrides] 1793463301"), so accepting the
+    optional trailing number is what lets the installer see sections Wine wrote.
+    """
+    match = _SECTION.match(line.strip())
+    return _normalise_section(match.group("section")) if match else None
 
 
 def _lines(prefix: Path | str) -> list[str] | None:
@@ -101,8 +113,9 @@ def read_dll_override(prefix: Path | str, name: str = DLL_NAME, *, section: str 
     inside = False
     for line in lines:
         stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            inside = _normalise_section(stripped) == wanted
+        seen = _section_name(stripped)
+        if seen is not None:
+            inside = seen == wanted
             continue
         if not inside:
             continue
@@ -179,22 +192,22 @@ def _run(argv: list[str], env: dict[str, str]) -> int:
 def _set_in_registry(prefix: Path | str, name: str, value: str, section: str) -> None:
     lines = _lines(prefix)
     entry = _entry_line(name, value)
-    header = f"[{section.strip().strip('[]')}]"
     wanted = _normalise_section(section)
     if lines is None:
         user_reg_path(prefix).parent.mkdir(parents=True, exist_ok=True)
-        user_reg_path(prefix).write_text(f"REGEDIT4\n\n{header}\n{entry}\n", encoding="utf-8")
+        user_reg_path(prefix).write_text(f"REGEDIT4\n\n[{section.strip().strip('[]')}]\n{entry}\n", encoding="utf-8")
         return
     inside = False
     out: list[str] = []
     replaced = False
     for line in lines:
         stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
+        seen = _section_name(stripped)
+        if seen is not None:
             if inside and not replaced:
                 out.append(entry)
                 replaced = True
-            inside = _normalise_section(stripped) == wanted
+            inside = seen == wanted
             out.append(line)
             continue
         if inside and not replaced:
@@ -210,8 +223,17 @@ def _set_in_registry(prefix: Path | str, name: str, value: str, section: str) ->
     if not replaced:
         if out and out[-1].strip():
             out.append("")
-        out.extend([header, entry])
+        out.extend([_header_for(lines, section), entry])
     user_reg_path(prefix).write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+def _header_for(lines: list[str], section: str) -> str:
+    """A new section header in the file's own style: Wine's user.reg escapes backslashes in key
+    names, a hand-written REGEDIT4 file does not."""
+    body = section.strip().strip("[]")
+    if lines and lines[0].strip().upper().startswith("WINE REGISTRY"):
+        body = body.replace("\\", "\\\\")
+    return f"[{body}]"
 
 
 def _clear_in_registry(prefix: Path | str, name: str, section: str) -> None:
@@ -223,8 +245,9 @@ def _clear_in_registry(prefix: Path | str, name: str, section: str) -> None:
     out: list[str] = []
     for line in lines:
         stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            inside = _normalise_section(stripped) == wanted
+        seen = _section_name(stripped)
+        if seen is not None:
+            inside = seen == wanted
             out.append(line)
             continue
         if inside:
