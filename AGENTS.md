@@ -4,7 +4,9 @@ This file provides guidance to AI agents when working with code in this reposito
 
 ## Linux and Flatpak Steam caveats
 
-Megabonk ships a native Linux build (`Megabonk.x86_64`), so there is no Proton or Wine prefix and the CrossOver `version.dll` override does not apply. `compatdata/3405340` stays an empty directory.
+Megabonk ships a native Linux build (`Megabonk.x86_64`); when running that build there is no Proton or Wine prefix and the CrossOver `version.dll` override does not apply. `compatdata/3405340` can stay empty. The caveats below concern that native-build setup, not the Windows build under Proton.
+
+For the Windows build under Proton, see [SteamOS, CachyOS and gamepadui over SSH](docs/development.md#steamos-cachyos-and-gamepadui-over-ssh) for prefix detection, installation, launch/quit and content transfer.
 
 - MelonLoader loads through `LD_PRELOAD`, set in the game's Steam launch options. Reference the library by filename only and add the game directory to `LD_LIBRARY_PATH`: `DOTNET_ROOT="<dotnet6>" LD_LIBRARY_PATH="<game dir>:$LD_LIBRARY_PATH" LD_PRELOAD="MelonLoader.Bootstrap.so:$LD_PRELOAD" %command%`.
 - Il2Cpp MelonLoader needs a .NET 6 runtime. A newer runtime on the host (the repo's mise toolchain provides .NET 10) is not enough. Install 6.0 with `dotnet-install.sh --runtime dotnet --channel 6.0 --install-dir <dir> --no-path` and point `DOTNET_ROOT` at it.
