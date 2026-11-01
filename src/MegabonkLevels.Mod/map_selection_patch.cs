@@ -283,7 +283,27 @@ public static class MapSelectionPatch
         }
     }
 
-    // Confirm on a custom entry holds the level for the StartNewMap call that follows, and is refused when the selected character is not allowed; Confirm on a native map drops any level held earlier.
+    [HarmonyPatch(typeof(MapStatsInfoUi), nameof(MapStatsInfoUi.SetConfig))]
+    private static class StatsConfigPostfix
+    {
+        private static void Postfix(MapStatsInfoUi __instance)
+        {
+            if (_selectedEntry != null)
+            {
+                __instance.t_mapRuns.text = string.Empty;
+                __instance.t_highscore.text = string.Empty;
+                __instance.t_fastestTime.text = string.Empty;
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(MapSelectionUi), "OnDisable")]
+    private static class OnDisablePostfix
+    {
+        private static void Postfix() => LevelLoaderPatch.OnMenuDisabled();
+    }
+
+    // Custom Confirm holds the level for StartNewMap; native Confirm drops any previously held level.
     [HarmonyPatch(typeof(MapSelectionUi), nameof(MapSelectionUi.StartMap))]
     private static class StartMapPrefix
     {

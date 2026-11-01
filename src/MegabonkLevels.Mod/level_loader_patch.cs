@@ -215,9 +215,27 @@ public static class LevelLoaderPatch
     // A load held back until the player confirms a character on the restricted character screen.
     private static (LevelFile Level, MelonLogger.Instance Logger, bool RestrictsScreen)? _awaitingCharacter;
 
+    public static bool HasAwaitingCharacter => _awaitingCharacter != null;
+
+    public static void OnMenuDisabled(bool movingToMaps = false)
+    {
+        if (!MenuBackout.ShouldCancel(HasAwaitingCharacter, CharacterScreenPatch.Restricted, movingToMaps))
+        {
+            return;
+        }
+
+        CancelAwaitingCharacter();
+        CharacterScreenPatch.SetRestricted(false);
+    }
+
     public static void CancelAwaitingCharacter()
     {
-        StartupCover.OnCancelled("load cancelled while waiting for a character");
+        if (_awaitingCharacter is var (_, logger, _))
+        {
+            StartupCover.OnCancelled("load cancelled while waiting for a character");
+            logger.Msg("LevelLoader: cancelled held load");
+        }
+
         _awaitingCharacter = null;
     }
 

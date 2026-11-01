@@ -240,4 +240,15 @@ public static class CharacterScreenPatch
             }
         }
     }
+
+    [HarmonyPatch(typeof(CharacterMenu), "OnDisable")]
+    private static class OnDisablePostfix
+    {
+        private static void Postfix(CharacterMenu __instance)
+        {
+            // Forward navigation enables the map tab before disabling the character tab.
+            var maps = __instance.mainMenu?.tabMaps;
+            LevelLoaderPatch.OnMenuDisabled(maps != null && maps.activeInHierarchy);
+        }
+    }
 }
