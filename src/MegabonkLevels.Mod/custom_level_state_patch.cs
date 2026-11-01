@@ -22,6 +22,7 @@ public static class CustomLevelStatePatch
         private static void Prefix()
         {
             CustomLevelState.OnRunStarting();
+            StartupCover.OnRunStarting(CustomLevelState.IsActive);
             if (!CustomLevelState.IsActive) LevelMusic.Clear();
             _logger?.Msg($"CustomLevelState: run starting, IsActive={CustomLevelState.IsActive}");
         }

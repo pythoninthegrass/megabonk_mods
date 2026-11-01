@@ -52,7 +52,7 @@ public class MegabonkLevelsMod : MelonMod
         EditorInput.Queue.BeginFrame(Time.frameCount, Time.unscaledTime, (Input.mousePosition.x, Input.mousePosition.y));
         DevHarness.Poll();
         LevelLoaderPatch.Pump();
-        LiveEditPatch.TickPlayerStart(LoggerInstance);
+        StartupCover.Tick(LoggerInstance);
         LiveEditPatch.TickMaxSlopeAngle(LoggerInstance);
         KillFloorWatcher.Tick();
         GrindAssistWatcher.Tick();

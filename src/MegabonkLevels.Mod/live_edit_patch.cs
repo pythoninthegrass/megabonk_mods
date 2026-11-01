@@ -117,6 +117,8 @@ public static class LiveEditPatch
 
     public static void Install(MelonLogger.Instance logger)
     {
+        MapGenerationController.A_PreGeneration += (Il2CppSystem.Action)StartupCover.OnGenerationStarting;
+        SpawnPlayerPortal.A_PortalClosed += (Il2CppSystem.Action)StartupCover.OnPortalClosed;
         MapGenerationController.A_GenerationComplete += (Il2CppSystem.Action)(() => OnGenerationComplete(logger));
     }
 
@@ -483,6 +485,7 @@ public static class LiveEditPatch
 
     private static void OnGenerationComplete(MelonLogger.Instance logger)
     {
+        StartupCover.OnProgress();
         var edits = _pendingEdits;
         _pendingEdits = null;
         _runGeneration++;
@@ -503,7 +506,7 @@ public static class LiveEditPatch
         if (tileGen?.proceduralTiles == null)
         {
             OnTerrainGenerationComplete(logger, controller, index, edits);
-            SchedulePlayerStart();
+            StartupCover.OnContentReady();
             return;
         }
 
@@ -516,7 +519,7 @@ public static class LiveEditPatch
         }
 
         _session = session;
-        SchedulePlayerStart();
+        StartupCover.OnContentReady();
         if (edits == null)
         {
             KillFloorWatcher.Disarm();
@@ -539,17 +542,8 @@ public static class LiveEditPatch
         logger.Msg("LiveEdit: grass disabled by the level");
     }
 
-    private const float PlayerStartWatchSeconds = 5f;
-    private const float PlayerStartToleranceXz = 1f;
-    private static float _playerStartUntil;
-    private static bool _playerStartLogged;
-
-    // The game places the player at the generated spawn around generation, and moving the spawn portal does not move it, so the level start is re-applied for a few seconds.
-    private static void SchedulePlayerStart()
-    {
-        _playerStartUntil = _playerStart == null ? 0f : Time.realtimeSinceStartup + PlayerStartWatchSeconds;
-        _playerStartLogged = false;
-    }
+    // Where the level authors the player starting at, or null to leave the player where the game put it.
+    public static IReadOnlyList<float> PlayerStart => _playerStart;
 
     private static float? _defaultMaxSlopeAngle;
 
@@ -582,30 +576,6 @@ public static class LiveEditPatch
         }
 
         movement.maxSlopeAngle = wanted.Value;
-    }
-
-    public static void TickPlayerStart(MelonLogger.Instance logger)
-    {
-        var player = MyPlayer.Instance;
-        if (Time.realtimeSinceStartup > _playerStartUntil || player == null)
-        {
-            return;
-        }
-
-        var target = new Vector3(_playerStart[0], _playerStart[1] - TeleportTarget.PlayerBodyOffsetY, _playerStart[2]);
-        var body = player.playerMovement.rb.position;
-        if (Mathf.Abs(body.x - target.x) <= PlayerStartToleranceXz && Mathf.Abs(body.z - target.z) <= PlayerStartToleranceXz)
-        {
-            return;
-        }
-
-        var facing = player.transform.forward;
-        player.TeleportPlayerImmediate(target, facing, facing, 20f);
-        if (!_playerStartLogged)
-        {
-            logger.Msg($"LiveEdit: player moved to level start {target}");
-            _playerStartLogged = true;
-        }
     }
 
     // A ProceduralMesh map: the session holds only objects, over an empty tile baseline.
@@ -667,6 +637,7 @@ public static class LiveEditPatch
             try
             {
                 session.Applier.Apply(action);
+                StartupCover.OnProgress();
             }
             catch (Exception ex)
             {

@@ -182,6 +182,7 @@ public static class LevelLoaderPatch
         }
         catch (Exception ex)
         {
+            StartupCover.OnStartFailed("MapController.StartNewMap threw");
             logger.Error($"LevelLoader: StartNewMap threw: {ex}");
         }
 
@@ -216,6 +217,7 @@ public static class LevelLoaderPatch
 
     public static void CancelAwaitingCharacter()
     {
+        StartupCover.OnCancelled("load cancelled while waiting for a character");
         _awaitingCharacter = null;
     }
 

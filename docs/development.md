@@ -697,6 +697,46 @@ Reach the screen with the `kill` command (`run.py kill` or the MCP `kill` tool),
 
 Not checked: `PauseUi.Restart` and the hold-to-reset `ResetRunUi` may also reach `RestartRun`, and with the prefix in place they would re-arm the edits the same way. What natively enables `B_Retry` on some maps (a report that Desert and Graveyard show it more often) was not found; it is not driven by any code reached from the death screen.
 
+## Custom-level startup cover
+
+A custom level is not playable when the run starts. The game generates its own baseline map, spawns the player inside it, and only then does the mod tear that baseline down and apply the level's edits, which for the Warehouse is 1241 edits including every rail and pack mesh. Measured from the stock menu (Confirm to sound), the order is fixed:
+
+```text
+t=0.000 MapController.StartNewMap, then TransitionUI.A_transitionStart, A_MapTransitionStart, MapController.A_NewRunStarted
+t=1.225 MapGenerationController.A_PreGeneration           the game's own baseline map
+t=1.262 MyPlayer.Spawn (120, 0, 0), A_PrePlayerSpawn, MyPlayer.StartPlayer (Calcium)
+t=3.166 MapGenerationController.A_GenerationComplete      then the mod indexes, clears and edits
+t=5.2   level content in the world, player placed
+```
+
+Two consequences drive the design. The stock transition's fade is finished about a second in, long before the content is ready, so it cannot be the thing that hides the build-up; and the player is spawned once, inside generation, at the baseline map's own spawn point, well before there is anything to stand on.
+
+`StartupGate` (`startup_gate.cs`) decides what happens and when, in plain C# with no Unity or game types, so the rules are unit-tested in `tests/MegabonkLevels.Tests/startup_gate_tests.cs`. It moves through `Idle`, `Covering`, `Placing` and `Open`, and only ever reacts to events: a run starting (cover only for a custom run), the game spawning the player, the content being ready, the spawn portal finishing, a placement landing, a cancel or failure, and the clock for the timeout. It never looks at where the player is. `StartupCover` (`startup_cover.cs`) applies what the gate decided: it shows and hides the cover, pins the body, and calls `MyPlayer.TeleportPlayerImmediate` once per placement.
+
+The three rules that matter:
+
+- **One placement.** The authored start is applied once, when generation and the level's edits are in the world and the stock spawn portal has finished. Nothing re-applies it because the player drifted. An earlier version watched the XZ distance from the authored start for 5 seconds and teleported whenever it passed 1 metre, which on the Warehouse's 26 degree half-pipe was never satisfied: the player fell about 7 metres, was yanked back, and fell again about every 0.84 seconds, re-arming the pipe launch each time, until the window expired.
+- **A game-driven spawn is corrected once.** `MyPlayer.Spawn`, `MyPlayer.StartPlayer` and `MyPlayer.TeleportPlayerNextStage` postfixes tell the gate the game moved the player, and the next Tick places it at the authored start once. The menu flow fires all three within about 4 milliseconds, so triggers inside 0.25 seconds count as one. This assumes a level file describes one stage (`stageIndex` and one `playerStart`): a portal's next-stage teleport also resolves to that start. Multi-stage levels are not supported by this placement policy; they will need stage-specific starts and transition handling before this hook can distinguish their destinations.
+- **The player is held, not chased.** Between the game's spawn and the placement the body is pinned where the game put it (`Rigidbody.position` written back, velocity zeroed each Tick), which keeps it from falling through a map that is being torn down underneath it. The hold ends at the placement, or at the timeout, and movement, falling and sliding are the game's from then on.
+
+`SpawnPlayerPortal.MovePlayer` is a separate late writer: its native code moves the player's Transform along cached baseline spawn positions, without calling any of the three spawn hooks. Placing while that animation is pending does not stick. On macOS Wine, a trace showed the same body at the authored start for about 1.8 seconds before the portal moved it back to `(120, 2, -3)`, underneath Warehouse. Direct body/Transform assignments do not solve a later animation write. Instead, custom starts wait for `SpawnPlayerPortal.A_PortalClosed` as well as content readiness, in either order. Native code confirms that the event follows the portal's movement phase and also fires when the animation is skipped. The single placement runs on the next Tick, after the event's remaining game callbacks have returned. Duplicate completion events do not request another placement. No extra physics write, fixed delay, distance enforcement or additional Harmony hook is needed.
+
+The cover is a canvas the mod owns (`EditorUi.NewCanvas`, `Image`, `TextMeshProUGUI`, sorting order 30000) showing black with the level's title. It is built on first use and hidden otherwise, so it is absent from the main menu. It arms in the `MapController.StartNewMap` prefix next to `CustomLevelState.OnRunStarting`, so a vanilla launch never sees one, and it is released by the placement, by `LevelLoaderPatch`'s `StartNewMap` exception path, by a cancelled load waiting on the character screen, and by the inactivity timeout, whichever comes first. The timeout releases the cover and the hold together and logs a warning, so a level that never finishes building degrades to the run being visible rather than to a screen that stays black; a placement still happens if the content or the player arrive afterwards.
+
+`MEGABONK_STARTUP_TIMEOUT_SECONDS` sets the real-time no-progress interval (default 8 seconds). Set it in the game's environment, or in `.env` when launching through `task`, and relaunch for changes to take effect. Values must be positive, finite seconds with a decimal point independent of locale; missing, malformed, zero, negative, NaN and infinite values use the default. `A_PreGeneration`, changing generated tile/flat-tile/fill-tile counts, `A_GenerationComplete`, successful edit actions, content readiness and the awaited portal completion renew the deadline. Ticks, `isGenerating` staying true, and unsuccessful placement retries do not: slow-but-advancing generation can stay covered beyond 8 seconds, but a stalled stage still releases. Terrain generation has no tile-count heartbeat, so increase the interval for terrain maps whose generation goes longer between milestones. Progress after release never brings the cover back. If the portal never finishes, the cover and hold still time out, but an owed placement waits until the portal stops owning the position. A blocked game main thread cannot draw or process a timeout until it resumes; initial Il2Cpp assembly generation happens before this run-start cover exists.
+
+What to read in `MelonLoader/Latest.log` for one startup:
+
+```text
+StartupCover: player placed at the level start (109.00, 36.08, -116.00)
+```
+
+One such line per placement, `LiveEdit: indexed ...` and the `LiveEdit: spawned ...` lines before it, and nothing that moves the player after it. Repeated placements, or a `StartupCover: startup cover released after the timeout` warning, both point at a specific cause: the former means the game spawned the player more than once, the latter that generation or the edits did not finish in time.
+
+To see the cover itself, send the harness `screenshot` a couple of times during the window, a second or two apart. Do not burst it: each capture does a synchronous `Texture2D.ReadPixels` of the whole backbuffer, a `GetPixels32` copy and a PNG encode on the game's main thread, and one every half second for fifteen seconds reads as several seconds of heavy stutter. A run measured that way is not a run worth measuring frame times on; judge smoothness only from a run that sent no harness commands at all.
+
+The gate's decisions are recorded as commands (`ShowCover`, `HideCover`, `HoldPlayer`, `ReleaseHold`, `PlacePlayer`, `Log`), which the tests assert on. The adapter drains this decision log each Tick to update the UI and emit messages. `PlacePlayer` and `ReleaseHold` are explicitly acknowledged log entries, not executable actions: placement (including retries) and hold release are driven by polling `ShouldAttemptPlace` and `ShouldHoldPlayer`. This avoids executing a placement twice or applying stale release side effects from an earlier run's queued decisions.
+
 ## Enemy spawns
 
 `spawns` with `enabled:false` (`run.py spawns off`, MCP `spawns(on=false)`) sets `EnemyManager.enabledWaves` to false, which stops the wave spawner; `enabled:true` sets it back. `state` reports `spawnsOff`, true only while the current `EnemyManager` is the one the harness switched off. The switch does not outlive a scene: a level load or new run builds a new `EnemyManager` with the default `enabledWaves`, so spawns are on again after a `load`; send `spawns off` again after each. `relaunch` sends `spawns off` itself before entering editor mode only when `MEGABONK_RELAUNCH_SPAWNS` is false.
