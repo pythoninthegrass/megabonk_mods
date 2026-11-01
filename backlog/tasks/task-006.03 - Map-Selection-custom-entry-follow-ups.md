@@ -1,10 +1,10 @@
 ---
 id: TASK-006.03
 title: Map Selection custom entry follow-ups
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-29T18:30:00Z'
-updated_date: '2026-11-01T01:32:00Z'
+updated_date: '2026-11-01T01:33:00Z'
 labels:
   - level-editor
 dependencies: []
@@ -42,7 +42,7 @@ Code: src/MegabonkLevels.Mod/map_selection_patch.cs, level_loader_patch.cs, char
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -68,6 +68,8 @@ Live Wine checks using OS-level mouse/Escape input: Warehouse selection blanked 
 With MEGABONK_DEV=false, loaded thps into a held restricted setup. Character Confirm -> maps preserved hold (no cancellation log). Clicking map X cancelled the held load at 20:30:32.209, restored saved TonyMcZoom and stock grid (megabonk-1793496634468693000.png). Holding again and pressing Escape from characters cancelled at 20:30:41.531 (megabonk-1793496643997192000.png). Next normal menu start logged CustomLevelState IsActive=False and native Forest StartNewMap at 20:30:53, not a held custom run. Successful native menu closure did not cancel startup.
 
 At user's request, relaunched Warehouse through the harness afterward; kill floor armed, 1241 edits loaded, spawnsOff=false, invulnerable=false. Left in editor mode (frozen) without further game interaction. Honcho unavailable in this session.
+
+Implementation committed as 380174b (fix: cancel abandoned custom loads and hide base map records).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
