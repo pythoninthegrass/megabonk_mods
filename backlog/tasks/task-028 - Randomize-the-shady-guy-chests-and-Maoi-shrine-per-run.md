@@ -1,10 +1,10 @@
 ---
 id: TASK-028
 title: 'Randomize the shady guy, chests and Maoi shrine per run'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-02T04:32:00Z'
-updated_date: '2026-11-02T05:51:00Z'
+updated_date: '2026-11-02T05:52:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -44,7 +44,7 @@ In stock Megabonk the interactables that matter run to run land at fixed spots f
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -92,3 +92,17 @@ Final authored fixture moved 50 eligible generated targets while preserving the 
 
 Final task check passed: mod build clean, 1,562 C# tests passed, 919 Python tests passed, markdownlint and ruff passed. git diff --check passed. Native-up policy, compatibility defaults/migration, independent toggles/history/copy, authored pinning, bounded candidate rejection and sample routing have 13 new Unity-free test cases. Unity Thps assets were materialized into an ignored test-assets directory after the temporary directory symlink showed as untracked; no asset symlink is being committed.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented per-level, default-off randomizeShadyGuy, randomizeChests and randomizeMoai flags, including editor settings/history and save/load round-trip. The enabled-only pass runs after native Start initialization, preserves generated identities and authored edits, and relocates only generated targets using private randomness. Ground support, sampled physical reachability, object clearance and native upright axes are validated; exhausted searches retain original positions. Terrain-only maps warn and keep their placements.
+
+Verified the Windows build offline through Proton on wm2, not Fedora. Two final Forest runs moved all 52 target interactables to different positions; native-up dot checks exceeded 0.9999 for every target, offsets stayed on the ground, chests-only moved exactly 46, authored move/remove/place operations stayed pinned, and the no-safe fixture moved zero. In-game saves retained flags without recording runtime rolls. Matching disabled-baseline comparisons changed only enabled target kinds; disabled restoration matched the prior disabled cohort exactly.
+
+task check passed: 1,562 C# tests (13 new cases), 919 Python tests, build and lint. Feature committed as 3a830ac (feat(levels): randomize selected interactables per run). Main checkout changes were untouched.
+
+Existing limitation documented: Forest seed 20261008 can drift in baseline prop generation before this pass, including disabled runs; this change does not alter shared generation RNGs. Verification isolates the feature using matching baseline cohorts.
+
+The wm2 test game and this task's transient launch units were stopped. Latest DLL/PDB and final sources remain in the isolated wm2 verification setup; the offline shim remains installed as requested, with its original backup available through scripts/swap_steam_stub.py restore. Detailed logs, snapshots and saved fixtures remain under .tools/task028 locally and in ~/git/megabonk-task028 on wm2.
+<!-- SECTION:FINAL_SUMMARY:END -->
