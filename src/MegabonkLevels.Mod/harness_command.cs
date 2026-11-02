@@ -435,11 +435,11 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
 
         if (!TryGetString(root, "action", out var action) || action.Length == 0)
         {
-            error = "missing string field 'action' (report, status, start, reset, spawn, timescale, toggle, vsync, health)";
+            error = "missing string field 'action' (report, status, start, reset, spawn, timescale, toggle, vsync, health, census)";
             return false;
         }
 
-        var allowed = new[] { "report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health" };
+        var allowed = new[] { "report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health", "census" };
         if (Array.IndexOf(allowed, action) < 0)
         {
             error = $"unknown action '{action}'; expected {string.Join(", ", allowed)}";

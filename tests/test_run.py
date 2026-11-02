@@ -1637,7 +1637,7 @@ def test_relaunch_forwards_the_overrides_to_the_load(monkeypatch) -> None:
 
 @pytest.mark.parametrize(
     "verb",
-    ["report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health"],
+    ["report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health", "census"],
 )
 def test_perf_verb_is_a_subcommand_argument(verb: str) -> None:
     args = run.parse_args(["perf", verb])

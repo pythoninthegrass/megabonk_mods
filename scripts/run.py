@@ -275,7 +275,7 @@ def build_heartbeat_command(enabled: bool) -> dict[str, object]:
     return {"command": "heartbeat", "enabled": enabled}
 
 
-PERF_ACTIONS = ("report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health")
+PERF_ACTIONS = ("report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health", "census")
 PERF_MAX_ENEMIES = 300
 PERF_MIN_TIME_SCALE = 0.05
 PERF_MAX_TIME_SCALE = 20.0

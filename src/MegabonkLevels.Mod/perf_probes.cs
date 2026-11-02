@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Text.Json.Nodes;
 using HarmonyLib;
 using Il2Cpp;
 using Il2CppActors.Enemies;
@@ -16,6 +19,43 @@ public static class PerfProbes
 {
     public static void Install(MelonLogger.Instance logger)
     {
+    }
+
+    // Each probe's patch target, keyed by the report name, so the attach status can be checked against the ones the attribute patcher should have reached.
+    private static readonly (string Name, Type Type, string Method)[] ProbeTargets =
+    {
+        ("EnemyManager.Update", typeof(EnemyManager), "Update"),
+        ("EnemyManager.FixedUpdate", typeof(EnemyManager), "FixedUpdate"),
+        ("Enemy.MyUpdate", typeof(Enemy), "MyUpdate"),
+        ("Enemy.MyFixedUpdate", typeof(Enemy), "MyFixedUpdate"),
+        ("EnemyMovementRb.MyFixedUpdate", typeof(EnemyMovementRb), "MyFixedUpdate"),
+        ("AnimatedMesh.Update", typeof(AnimatedMesh), "Update"),
+        ("EnemyHpBar.Update", typeof(EnemyHpBar), "Update"),
+        ("EnemyDissolve.Update", typeof(EnemyDissolve), "Update"),
+        ("VisualizeTargeting.Update", typeof(VisualizeTargeting), "Update"),
+        ("MinimapUi.Update", typeof(MinimapUi), "Update"),
+        ("AlwaysManager.Update", typeof(AlwaysManager), "Update"),
+    };
+
+    // Cached rows rather than a cached JsonArray: a JsonNode takes one parent and every report embeds a fresh copy.
+    private static List<(string Name, bool Patched)> _attachRows;
+
+    // Whether Harmony holds a patch on each target; resolved the same way the attribute patcher resolves it. Patches land at startup, so one pass is enough.
+    public static JsonArray AttachNode()
+    {
+        if (_attachRows == null)
+        {
+            var rows = new List<(string, bool)>();
+            foreach (var (name, type, method) in ProbeTargets)
+            {
+                var target = AccessTools.Method(type, method);
+                rows.Add((name, target != null && Harmony.GetPatchInfo(target) != null));
+            }
+
+            _attachRows = rows;
+        }
+
+        return PerfProbePlan.AttachNode(_attachRows);
     }
 
     [HarmonyPatch(typeof(EnemyManager), "Update")]

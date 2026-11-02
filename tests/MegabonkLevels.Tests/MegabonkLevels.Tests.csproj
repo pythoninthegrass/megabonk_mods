@@ -68,6 +68,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/harness_command.cs" Link="harness_command.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/perf_stats.cs" Link="perf_stats.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/perf_gc_plan.cs" Link="perf_gc_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/perf_probe_plan.cs" Link="perf_probe_plan.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/player_damage_policy.cs" Link="player_damage_policy.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/fall_damage_policy.cs" Link="fall_damage_policy.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/load_overrides.cs" Link="load_overrides.cs" />
