@@ -4,7 +4,7 @@ title: Spawn extra random shrines with object-aware placement
 status: In Progress
 assignee: []
 created_date: '2026-11-02T04:32:00Z'
-updated_date: '2026-11-02T06:02:00Z'
+updated_date: '2026-11-02T06:26:00Z'
 labels: []
 dependencies: []
 priority: medium
@@ -49,3 +49,15 @@ Implemented as a level-file feature sharing TASK-028's post-generation placement
 6. Verify in game on Forest via megabonk MCP: fixture levels derived from levels/example-forest.mblevel.json; several seeds; one run with extraShrineKinds ["charge"] to prove a charge shrine spawn; logs carry per-shrine positions checked against keep-clear numbers; screenshots of each placement from close camera; activation evidence: charge zone standing (progress UI in screenshot) and real-keyboard interact on a regular shrine via scripts/run.py menu drive; extraShrines 0 restores stock shrine count.
 7. Docs: level-format.md table rows + Extra shrines section; map-generation-determinism.md private-RNG note; task check; conventional commit.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Paused with implementation, tests and docs committed at 4069d07 (feat(levels): spawn extra random shrines with object-aware placement). task check green at pause: 1662 C# + 959 pytest + lint. Fixtures levels/extra-shrines.mblevel.json (extraShrines 4) and levels/extra-shrines-charge.mblevel.json (extraShrines 3, kinds charge) are in the commit.
+
+Verified in game (Forest, megabonk MCP, three runs of the extra-shrines fixture): 4/4 spawned every run; kinds seen Cursed/Charge/Moai/Greed, Magnet/Charge/Moai/Moai, Challenge/Greed/Greed/Magnet; all ExtraShrines: log lines show nearestShrine/nearestRoute >= 12.5; pool=6, reachableFlatSamples ~2319-2324. Charge activation proven twice: zone sphere + rune glow while standing in it (teleport), then the Charge Shrine reward window with three offers and Ignore Offers. Upright screenshots for magnet, charge monolith and two Moai (Z-up fix). Evidence under .tools/evidence/ (extra-*.png).
+
+Remaining for finalization: (1) run levels/extra-shrines-charge.mblevel.json and confirm Charge-only spawns; (2) a second seed (e.g. relaunch with seed override 1234567); (3) example-forest run showing no ExtraShrines: lines and stock shrine count for extraShrines 0; (4) real Interact evidence for a regular (non-charge) shrine. Item 4 needs OS-level input because harness key/mouse inject into EditorInput.Queue and never reach Rewired gameplay UI (Escape/E no-ops; menu drive is Linux-only) — the dismiss commands from TASK-033 are the intended unblock, so finish TASK-033 first or use osascript keystrokes into the CrossOver window.
+
+Known caveat: extras use a per-run Guid seed, so the same level seed spawns different extra mixes between runs by design (documented in docs/map-generation-determinism.md).
+<!-- SECTION:NOTES:END -->
