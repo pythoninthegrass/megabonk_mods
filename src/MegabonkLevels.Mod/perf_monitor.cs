@@ -446,45 +446,48 @@ public static class PerfMonitor
         return new JsonObject { ["target"] = target, ["kind"] = "probe", ["enabled"] = enabled };
     }
 
-    // The components the probes attach to, plus their carrier, so a zero-call probe can be told apart from a zero-instance component.
-    private static readonly (string Name, Type Type)[] CensusTypes =
-    {
-        ("Enemy", typeof(Enemy)),
-        ("EnemyHpBar", typeof(EnemyHpBar)),
-        ("VisualizeTargeting", typeof(VisualizeTargeting)),
-        ("AnimatedMesh", typeof(AnimatedMesh)),
-    };
-
     // One-shot component census: scene = components on active game objects, live = also enabled and active in hierarchy,
     // any = everything Resources sees, prefabs and inactive included. A zero-call probe with live > 0 is an attach failure.
     public static JsonObject Census()
     {
-        var rows = new List<(string, int, int, int)>();
-        var line = "census:";
-        foreach (var (name, type) in CensusTypes)
+        var rows = new List<(string, int, int, int)>
         {
-            var scene = UnityEngine.Object.FindObjectsOfType(type);
-            var all = Resources.FindObjectsOfTypeAll(type);
-            var live = 0;
-            if (all != null)
-            {
-                foreach (UnityEngine.Object obj in all)
-                {
-                    if (obj is Behaviour behaviour && behaviour.enabled && behaviour.gameObject.activeInHierarchy)
-                    {
-                        live++;
-                    }
-                }
-            }
+            CensusRow("Enemy", CountBy<Enemy>()),
+            CensusRow("EnemyHpBar", CountBy<EnemyHpBar>()),
+            CensusRow("VisualizeTargeting", CountBy<VisualizeTargeting>()),
+            CensusRow("AnimatedMesh", CountBy<AnimatedMesh>()),
+        };
 
-            var sceneCount = scene?.Length ?? 0;
-            var anyCount = all?.Length ?? 0;
-            rows.Add((name, sceneCount, live, anyCount));
-            line += $" {name}={sceneCount}/{live}/{anyCount}";
+        var line = "census:";
+        foreach (var (name, scene, live, any) in rows)
+        {
+            line += $" {name}={scene}/{live}/{any}";
         }
 
         Log(line);
         return new JsonObject { ["census"] = PerfProbePlan.CensusNode(rows) };
+    }
+
+    private static (string, int, int, int) CensusRow(string name, (int Scene, int Live, int Any) counts)
+        => (name, counts.Scene, counts.Live, counts.Any);
+
+    private static (int Scene, int Live, int Any) CountBy<T>() where T : Behaviour
+    {
+        var scene = UnityEngine.Object.FindObjectsOfType<T>();
+        var all = Resources.FindObjectsOfTypeAll<T>();
+        var live = 0;
+        if (all != null)
+        {
+            foreach (var behaviour in all)
+            {
+                if (behaviour.enabled && behaviour.gameObject.activeInHierarchy)
+                {
+                    live++;
+                }
+            }
+        }
+
+        return (scene?.Length ?? 0, live, all?.Length ?? 0);
     }
 
     // Prefix half of a patch probe; a zero start means the postfix has nothing to time.

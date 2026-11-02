@@ -49,7 +49,7 @@ public static class PerfProbes
             foreach (var (name, type, method) in ProbeTargets)
             {
                 var target = AccessTools.Method(type, method);
-                rows.Add((name, target != null && Harmony.GetPatchInfo(target) != null));
+                rows.Add((name, target != null && HarmonyLib.Harmony.GetPatchInfo(target) != null));
             }
 
             _attachRows = rows;
