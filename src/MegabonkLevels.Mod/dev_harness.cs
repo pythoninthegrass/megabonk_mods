@@ -3,11 +3,13 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Reflection;
 using System.Linq;
 using System.Text;
 using System.Text.Json.Nodes;
 using Il2Cpp;
 using Il2CppAssets.Scripts.Actors.Player;
+using Il2CppAssets.Scripts.UI.InGame.Levelup;
 using Il2CppAssets.Scripts.UI.InGame.Levelup;
 using Il2CppAssets.Scripts.UI.InGame.Rewards;
 using Il2CppAssets.Scripts.Utility;
@@ -489,9 +491,11 @@ public static class DevHarness
         bool closed;
         string reason = null;
 
-        // Detection uses either flag; the close check uses isLevelingUp alone because Skip() clears it in the same call while
-        // EncounterWindows clears encounterInProgress later in the frame.
+        // Detection uses either flag. Skip and choose clear LevelupScreen.isLevelingUp in the same call, which is the only
+        // signal for them; a close clears EncounterWindows.encounterInProgress synchronously, and isLevelingUp is already
+        // false on a shrine offer window, so closing has to read the encounter flag to mean anything.
         bool LevelupClosed() => !LevelupScreen.isLevelingUp;
+        bool LevelupClosedByClose() => !(encounterWindows?.encounterInProgress ?? false);
 
         if (skip)
         {
@@ -546,7 +550,7 @@ public static class DevHarness
                 window.OnClose();
             }
 
-            closed = window is LevelupScreen ? LevelupClosed() : !window.gameObject.activeInHierarchy;
+            closed = window is LevelupScreen ? LevelupClosedByClose() : !window.gameObject.activeInHierarchy;
             action = "close";
         }
 
