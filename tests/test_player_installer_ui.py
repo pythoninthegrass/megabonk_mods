@@ -5,7 +5,18 @@ Covers choosing between the GUI progress dialog and plain text, which is how
 the same script behaves on a desktop session and over ssh.
 """
 
+import os
 import player_installer.ui as ui
+import pytest
+import subprocess
+import sys
+from pathlib import Path
+
+
+@pytest.fixture(autouse=True)
+def attached_tty(monkeypatch, request):
+    if not request.node.name.startswith("test_tty_detection"):
+        monkeypatch.setattr(ui, "has_tty", lambda: True, raising=False)
 
 
 class FakePopen:
@@ -149,6 +160,85 @@ def test_plain_text_when_no_dialog_binary_exists() -> None:
 def test_force_text_overrides_a_desktop_session() -> None:
     progress = ui.pick_progress({"DISPLAY": ":0"}, find_binary=_found("zenity"), force_text=True, writer=lambda s: None)
     assert isinstance(progress, ui.TextProgress)
+
+
+def test_display_without_controlling_tty_is_headless(monkeypatch) -> None:
+    monkeypatch.setattr(ui, "has_tty", lambda: False)
+    assert isinstance(ui.pick_progress(DESKTOP, find_binary=_found("zenity")), ui.TextProgress)
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "on"])
+def test_non_interactive_environment_forces_text(value) -> None:
+    env = {**DESKTOP, "MEGABONK_NON_INTERACTIVE": value}
+    assert isinstance(ui.pick_progress(env, find_binary=_found("zenity")), ui.TextProgress)
+
+
+@pytest.mark.parametrize("value", ["", "0", "false", "no", "off"])
+def test_false_non_interactive_environment_preserves_desktop(value) -> None:
+    env = {**DESKTOP, "MEGABONK_NON_INTERACTIVE": value}
+    assert isinstance(ui.pick_progress(env, find_binary=_found("zenity")), ui.GuiProgress)
+
+
+def test_tty_detection_uses_dev_tty_without_reading_stdin(monkeypatch) -> None:
+    import builtins
+
+    calls = []
+    monkeypatch.setattr(os, "open", lambda path, flags: calls.append(path) or 42)
+    monkeypatch.setattr(os, "isatty", lambda fd: fd == 42)
+    monkeypatch.setattr(os, "close", lambda fd: calls.append(fd))
+    monkeypatch.setattr(builtins, "input", lambda *args: pytest.fail("read stdin"))
+    assert ui.has_tty() is True
+    assert calls == ["/dev/tty", 42]
+
+
+def test_tty_detection_handles_an_unavailable_terminal(monkeypatch) -> None:
+    def unavailable(*args):
+        raise OSError("no controlling terminal")
+
+    monkeypatch.setattr(os, "open", unavailable)
+    assert ui.has_tty() is False
+
+
+def test_tty_detection_closes_a_non_terminal_descriptor(monkeypatch) -> None:
+    closed = []
+    monkeypatch.setattr(os, "open", lambda *args: 42)
+    monkeypatch.setattr(os, "isatty", lambda fd: False)
+    monkeypatch.setattr(os, "close", closed.append)
+    assert ui.has_tty() is False
+    assert closed == [42]
+
+
+def test_piped_stdin_with_and_without_a_controlling_tty() -> None:
+    import fcntl
+    import pty
+    import termios
+
+    scripts = Path(__file__).resolve().parents[1] / "scripts"
+    code = (
+        "import sys; from player_installer import ui; "
+        "p = ui.pick_progress({'DISPLAY': ':0'}, find_binary=lambda name: '/usr/bin/zenity'); "
+        "print(type(p).__name__); print(sys.stdin.read())"
+    )
+    env = {**os.environ, "PYTHONPATH": str(scripts)}
+    result = subprocess.run([sys.executable, "-c", code], input="untouched", capture_output=True, text=True, env=env, start_new_session=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["TextProgress", "untouched"]
+
+    master, slave = pty.openpty()
+    try:
+        def attach_tty():
+            os.setsid()
+            fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+
+        result = subprocess.run(
+            [sys.executable, "-c", code], input="untouched", capture_output=True, text=True,
+            env=env, pass_fds=(slave,), preexec_fn=attach_tty, timeout=10,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.splitlines() == ["GuiProgress", "untouched"]
+    finally:
+        os.close(master)
+        os.close(slave)
 
 
 def test_yad_is_accepted_when_zenity_is_absent() -> None:

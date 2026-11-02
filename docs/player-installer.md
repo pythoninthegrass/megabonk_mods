@@ -4,6 +4,51 @@ The player-facing download: a folder a Linux player unzips and runs `./install.s
 
 Everything here is Python standard library only, on both sides. The installer runs as `python3 -m player_installer` from a copy of `scripts/player_installer/` that travels inside the package, so a player needs Python 3.11 or newer and nothing else: no uv, no repo checkout, no .NET SDK, no Wine installation. The floor is set by the newest feature the bundled modules use and is enforced by `install.sh` rather than just advertised, so an older interpreter gets a package-manager hint instead of a traceback.
 
+## Linux player setup
+
+Use the **Windows game under Proton/Wine**, not the native Linux build. In Steam,
+open Megabonk's Properties → Compatibility and select Proton, then wait for the
+Windows download to finish. Selecting Proton in the GUI triggered the depot
+switch on Fedora; editing Steam's configuration alone did not. Launch vanilla
+once to create the prefix, choose **DX11 - Recommended**, then quit the game
+before installing. `-force-d3d11` in Steam's Launch Options pins that renderer.
+
+Unzip the player package and run `./install.sh` with Python 3.11 or newer.
+Packages are currently built with `task package:linux`; a published player
+download URL is not yet available. No separate Wine install is needed with
+Steam Proton. For a game whose prefix is in a different Steam library, pass
+`--prefix` explicitly on both install and check: automatic prefix discovery
+currently assumes the game's library.
+
+The following prefix-mode sequence loaded the mod on the CachyOS Proton host.
+Replace both paths with your actual game and active prefix paths; while vanilla
+is running, its `STEAM_COMPAT_DATA_PATH` environment variable names the compatdata
+directory (append `/pfx`). See [the gamepadui guide](gamepadui.md#install-launch-and-verify)
+for measurement, package transfer, and remote launch commands.
+
+```sh
+cd /path/to/unzipped-player-package
+G=/media/sdcard/SteamLibrary/steamapps/common/Megabonk
+P="$HOME/.local/share/Steam/steamapps/compatdata/3405340/pfx"
+./install.sh --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry
+./install.sh --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry --check
+```
+
+`--check` must exit 0 and report that the install matches the package. Start
+Megabonk from Steam and check the **new launch's** `MelonLoader/Latest.log` for
+the pinned version banner, `1 Mod loaded.` and
+`[MegabonkLevels] MegabonkLevels mod initialized.`. First-launch assembly
+generation took about 40 seconds on the tested host; a cached launch need not
+repeat `Assembly Generation Successful!`. Prefix-mode .NET needed no
+`DOTNET_ROOT` launch option. Inspect the install record for the actual DLL
+override method: the observed run reported `via: wine` despite requesting
+registry mode. Do not infer success from the Steam launch command or an old log.
+
+Re-run the same install command to repair drift. With the game stopped,
+`./install.sh --game-dir "$G" --prefix "$P" --uninstall` removes recorded
+installer-owned files, not unrelated mods or saves. Packs must contain Windows
+bundles even though the host OS is Linux.
+
 ## Package layout
 
 ```text
@@ -137,7 +182,20 @@ The method actually used is recorded and echoed back, so a player reporting a pr
 
 ### Progress reporting
 
-`pick_progress` in `scripts/player_installer/ui.py` gives a desktop session (`DISPLAY`, or `WAYLAND_DISPLAY`, plus a session bus for kdialog) a GUI progress dialog and everything else numbered lines on stdout. Every message also goes through plain text, so nothing depends on the dialog and an install driven over ssh reads the same as one on the desktop.
+`pick_progress` in `scripts/player_installer/ui.py` requires both a controlling
+terminal (`/dev/tty` opens and passes `isatty`) and a desktop session (`DISPLAY`
+or `WAYLAND_DISPLAY`, plus a session bus for kdialog) for a GUI progress dialog.
+Without either it uses numbered lines on stdout. The terminal probe never reads
+stdin, so piped input is left untouched; a pipe alone does not imply headless
+when the caller still has a controlling terminal. A tty alone cannot supply a
+missing display/session environment, and an SSH session with display variables
+but no controlling tty stays headless.
+
+`--non-interactive`, `--no-gui` or `MEGABONK_NON_INTERACTIVE=1` forces plain text
+for install and uninstall, even on a desktop with a tty. The environment setting
+also accepts `true`, `yes` and `on` (case-insensitive); empty, `0`, `false`, `no`
+and `off` leave automatic selection enabled. `--json` suppresses progress output
+and dialogs. No installer prompt reads stdin.
 
 Three backends, tried in order: zenity and yad are driven by writing `NN` and `# label` lines to their stdin; KDE's kdialog takes `--progressbar <label> 100` and prints its D-Bus reference (`org.kde.kdialog-<pid> /ProgressDialog`) on stdout, so `GuiProgress` drives it with `qdbus-qt6` (or `qdbus`) instead — `<service> <path> org.kde.kdialog.ProgressDialog.value N` sets progress (the dotted property assignment; `org.freedesktop.DBus.Properties.Set` fails with `InternalError` on this object), `setLabelText` retitles, and `close()` dismisses. kdialog aborts with rc 134 without a display or session bus, so it is only chosen when both are present and a qdbus tool exists; if the dialog never answers or a D-Bus call fails, that step and all later ones fall back to text rather than losing the message.
 
@@ -155,11 +213,25 @@ The `install.sh` wrapper is checked apart from the game-directory fixtures: `sh 
 
 Verified on the AlmaLinux 10.2 maintainer host, against its real Flatpak Steam with the whole root relocated to a data disk: the distributed zip's sha256 survived the transfer and `install.sh` runs the bundled module from any directory on the host's system `python3` 3.12.15 with a bare `PATH=/usr/bin:/bin` — no mise, nothing installed — where an earlier 3.13 floor had refused that interpreter; `--python` and `MEGABONK_PYTHON` honour an explicit interpreter and refuse a dead path with exit 2; discovery finds the relocated root through its Flatpak grant, reports the granted path, skips the unmounted library that `libraryfolders.vdf` still lists, and stops with exit 4 and the Windows-build steps on the native install; `--uninstall` with no record leaves the game's `Mods` alone; and on that host's KDE session the progress dialog is a real kdialog driven over D-Bus — value read back from the live dialog as 40 at 2/5 and 100 at 5/5, closed cleanly — while the same call with no session bus picks plain text.
 
-Not yet verified, because it needs a real Linux desktop with Steam and Proton:
+Verified on the CachyOS Proton host: the player-package install and `--check`,
+Windows .NET 6 resolving inside the active home-library prefix while the game
+lives on SD-card storage, the DLL override recorded as `via: wine`, and a fresh
+launch logging the mod-initialized marker. The live prefix also exposed Wine's
+timestamped registry section headers, now covered by regression tests. See
+[gamepadui.md](gamepadui.md) for the measured workflow.
 
-- **that the mod loads at all under Proton** — no run has ever proven it. The Windows-build path is the plan, not a measured result. If a live run shows the mod not loading, that is a finding to report, not something to route around.
-- `reg add` through a real Proton `wine` binary (`via: wine`);
-- the .NET runtime resolving from inside a real prefix, and the printed launch option working when Steam actually applies it;
+The fleet also includes Fedora 42 with GNOME Wayland, Intel Arc graphics and a
+gamescope + Steam gamepadui launcher. Its verified setup includes switching to
+Windows depot `3405342` through Steam's GUI and selecting DX11 (confirmed in the
+active prefix's `Player.log`). This is not yet evidence of a wiped player-package
+install with the mod loaded. Native Linux loader installation is out of scope;
+the AlmaLinux host supplies Flatpak discovery and KDE progress evidence only.
+
+Still pending:
+
+- clean-install verification on both CachyOS and Fedora, with fresh mod-load logs;
+- automatic removable-media game selection on CachyOS: library discovery finds the mounted SD-card library, but game discovery incorrectly selects an unrelated home-library game (`1000xRESIST`) because its `GameAssembly.dll` matches first; pass explicit `--game-dir` and the measured `--prefix` until this is fixed;
+- the printed game-directory `DOTNET_ROOT` launch option working when Steam actually applies it (the live proof uses prefix mode);
 - the persisted `local-overrides` file as the source of the Flatpak grants — the real host went through `flatpak override --show`, which is the other of the two paths in `flatpak_granted_paths`;
 - the zenity and yad dialog paths — the verified host has neither installed, so those branches run only in tests (the kdialog-over-D-Bus path above is the one with desktop evidence);
 - Steam's own behaviour around the download, including whether the Windows build needs the "Only download on my OS" untick on a given Steam version.

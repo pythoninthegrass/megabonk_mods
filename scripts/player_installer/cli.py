@@ -44,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--wine-override", choices=WINE_OVERRIDE_MODES, default="auto", help="how to set version.dll = native,builtin")
     parser.add_argument("--proton", help="force a named Proton compatibility tool when looking for wine")
     parser.add_argument("--no-gui", action="store_true", help="never open a progress dialog")
+    parser.add_argument("--non-interactive", action="store_true", help="force plain text without terminal input (also MEGABONK_NON_INTERACTIVE=1)")
     parser.add_argument("--check", action="store_true", help="report drift instead of changing anything")
     parser.add_argument("--dry-run", action="store_true", help="print what would be done and change nothing")
     parser.add_argument("--uninstall", action="store_true", help="remove what this installer placed")
@@ -187,7 +188,7 @@ def do_install(args: argparse.Namespace, reporter: Reporter, game_dir: Path, pac
 
     progress = ui.pick_progress(
         dict(os.environ),
-        force_text=args.no_gui or args.as_json,
+        force_text=args.no_gui or args.non_interactive or args.as_json,
         writer=(lambda line: None) if args.as_json else None,
     )
     taken = plan.apply_plan(result, progress=progress)
@@ -225,7 +226,11 @@ def do_uninstall(args: argparse.Namespace, reporter: Reporter, game_dir: Path) -
     if not record:
         reporter.say(f"nothing to uninstall: no installer record in {game_dir}")
         return EXIT_OK
-    progress = ui.pick_progress(dict(os.environ), force_text=args.no_gui)
+    progress = ui.pick_progress(
+        dict(os.environ),
+        force_text=args.no_gui or args.non_interactive or args.as_json,
+        writer=(lambda line: None) if args.as_json else None,
+    )
     removed = plan.uninstall(game_dir, progress=progress)
     reporter.say(f"removed {len(removed)} item(s) from {game_dir}")
     for path in removed:

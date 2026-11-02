@@ -302,3 +302,36 @@ def test_progress_goes_to_the_gui_in_a_desktop_session(tmp_path: Path, package: 
     monkeypatch.setenv("DISPLAY", ":0")
     assert cli.main(["--home", str(home), "--package", str(package)]) == cli.EXIT_OK
     assert started and started[0] > 0
+
+
+@pytest.mark.parametrize("flag", ["--non-interactive", "--no-gui", "--json"])
+def test_plain_text_flags_cover_install_and_uninstall(tmp_path: Path, package: Path, monkeypatch, flag) -> None:
+    home, game = _install_tree(tmp_path)
+    forced = []
+
+    def pick(env, **kwargs):
+        forced.append(kwargs.get("force_text", False))
+        return cli.ui.TextProgress(writer=lambda line: None)
+
+    monkeypatch.setattr(cli.ui, "pick_progress", pick)
+    argv = ["--home", str(home), "--package", str(package), "--wine-override", "off", flag]
+    assert cli.main(argv) == cli.EXIT_OK
+    assert cli.main([*argv, "--uninstall"]) == cli.EXIT_OK
+    assert forced == [True, True]
+
+
+def test_non_interactive_environment_covers_install_and_uninstall(tmp_path: Path, package: Path, monkeypatch, capsys) -> None:
+    home, game = _install_tree(tmp_path)
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setenv("MEGABONK_NON_INTERACTIVE", "1")
+    monkeypatch.setattr(cli.ui, "has_tty", lambda: True)
+
+    def no_dialog(*args, **kwargs):
+        pytest.fail("non-interactive run looked for a dialog")
+
+    monkeypatch.setattr(cli.ui, "find_dialog_binary", no_dialog)
+    argv = ["--home", str(home), "--package", str(package), "--wine-override", "off"]
+    assert cli.main(argv) == cli.EXIT_OK
+    assert "1/" in capsys.readouterr().out
+    assert cli.main([*argv, "--uninstall"]) == cli.EXIT_OK
+    assert "removed" in capsys.readouterr().out

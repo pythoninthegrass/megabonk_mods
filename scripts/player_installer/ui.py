@@ -180,9 +180,19 @@ class GuiProgress(Progress):
 
 
 def has_display(env: dict) -> bool:
-    if env.get("SSH_TTY") or env.get("SSH_CONNECTION"):
-        return bool(env.get("DISPLAY") or env.get("WAYLAND_DISPLAY"))
     return bool(env.get("DISPLAY") or env.get("WAYLAND_DISPLAY"))
+
+
+def has_tty() -> bool:
+    """Probe the controlling terminal without consuming the installer's stdin."""
+    try:
+        fd = os.open("/dev/tty", os.O_RDONLY | os.O_NONBLOCK | os.O_NOCTTY)
+        try:
+            return os.isatty(fd)
+        finally:
+            os.close(fd)
+    except OSError:
+        return False
 
 
 def _kdialog_usable(locate: Callable[[str], str | None], env: dict) -> bool:
@@ -210,9 +220,10 @@ def pick_progress(
     force_text: bool = False,
     title: str = "MegabonkLevels",
 ) -> Progress:
-    """A dialog when this is a desktop session with a dialog tool, plain text otherwise."""
-    env = dict(env if env is not None else {})
-    if not force_text and has_display(env):
+    """A dialog with a controlling tty and desktop session, plain text otherwise."""
+    env = dict(env if env is not None else os.environ)
+    non_interactive = env.get("MEGABONK_NON_INTERACTIVE", "").strip().lower() in {"1", "true", "yes", "on"}
+    if not force_text and not non_interactive and has_display(env) and has_tty():
         binary = find_dialog_binary(find_binary, env=env)
         if binary:
             locate = find_binary or shutil.which
