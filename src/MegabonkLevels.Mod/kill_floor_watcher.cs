@@ -30,6 +30,8 @@ public static class KillFloorWatcher
     private static float _lowestEnemyY = float.PositiveInfinity;
     private static float _lowestBossY = float.PositiveInfinity;
     private static readonly KillTracker _enemyKills = new(RetryKillAfterSeconds);
+    private static readonly Dictionary<uint, Enemy> _actors = new();
+    private static readonly Dictionary<uint, float> _lowestById = new();
 
     public static bool Armed => _armed;
 
@@ -125,85 +127,98 @@ public static class KillFloorWatcher
             return;
         }
 
-        var actors = new Dictionary<uint, Enemy>();
+        _actors.Clear();
+        _lowestById.Clear();
         foreach (var enemy in manager.enemies.Values)
         {
-            AddActor(actors, enemy);
+            AddActor(enemy, isBoss: false);
         }
 
         // Stage bosses are kept in their own list and were not found in `enemies` in testing.
-        if (manager.stageBosses != null)
+        var bosses = manager.stageBosses;
+        if (bosses != null)
         {
-            foreach (var boss in manager.stageBosses)
+            for (var i = 0; i < bosses.Count; i++)
             {
-                AddActor(actors, boss);
+                AddActor(bosses[i], isBoss: true);
             }
         }
 
         if (_heartbeatEnabled)
         {
-            LogHeartbeat(manager, actors);
+            LogHeartbeat(manager);
         }
 
-        var candidates = actors.Select(a => (a.Key, LowestPoint(a.Value)));
-        foreach (var (id, attempt) in _enemyKills.Select(candidates, _floorY, Time.unscaledTime))
+        foreach (var (id, attempt) in _enemyKills.Select(_lowestById, _floorY, Time.unscaledTime))
         {
-            var enemy = actors[id];
+            var enemy = _actors[id];
             var position = enemy.transform.position;
-            var lowest = LowestPoint(enemy);
             var stillPresent = attempt > 1 ? $" (still present, attempt {attempt})" : string.Empty;
-            _logger.Msg($"KillFloor: enemy '{enemy.name}' id={id} fell to ({position.x}, {position.y}, {position.z}) lowest={lowest}, killing{stillPresent}");
+            _logger.Msg($"KillFloor: enemy '{enemy.name}' id={id} fell to ({position.x}, {position.y}, {position.z}) lowest={_lowestById[id]}, killing{stillPresent}");
             enemy.Kill(DamageSource);
+        }
+    }
+
+    // The pivot alone decides for everyone standing far above the floor; the collider is read only within reaching
+    // distance of it, where reading bounds is what the kill decision actually needs.
+    private static void AddActor(Enemy enemy, bool isBoss)
+    {
+        if (enemy == null)
+        {
+            return;
+        }
+
+        var pivotY = enemy.transform.position.y;
+        var collider = KillFloor.ShouldProbeCollider(pivotY, _floorY) ? enemy.collider : null;
+        var colliderMinY = collider != null && collider.enabled ? collider.bounds.min.y : (float?)null;
+        var id = enemy.id;
+        _actors[id] = enemy;
+        _lowestById[id] = KillFloor.LowestPoint(pivotY, colliderMinY);
+        if (!_heartbeatEnabled)
+        {
+            return;
+        }
+
+        if (isBoss)
+        {
+            _lowestBossY = Mathf.Min(_lowestBossY, pivotY);
+        }
+        else
+        {
+            _lowestEnemyY = Mathf.Min(_lowestEnemyY, pivotY);
         }
     }
 
     // Once every few seconds, reports how many actors the watcher sees and the lowest height each group reached since
     // the last report, so a boss that never shows up in a kill line can be told apart from one that never fell.
-    private static void LogHeartbeat(EnemyManager manager, Dictionary<uint, Enemy> actors)
+    private static void LogHeartbeat(EnemyManager manager)
     {
-        foreach (var enemy in manager.enemies.Values)
+        if (Time.unscaledTime < _nextHeartbeat)
         {
-            if (enemy != null)
-            {
-                _lowestEnemyY = Mathf.Min(_lowestEnemyY, LowestPoint(enemy));
-            }
+            return;
         }
 
         var bosses = manager.stageBosses;
         var bossReport = new List<string>();
         if (bosses != null)
         {
-            foreach (var boss in bosses.ToArray().Where(b => b != null))
+            for (var i = 0; i < bosses.Count; i++)
             {
-                _lowestBossY = Mathf.Min(_lowestBossY, LowestPoint(boss));
-                bossReport.Add($"'{boss.name}' id={boss.id} y={boss.transform.position.y} lowest={LowestPoint(boss)} inEnemies={manager.enemies.ContainsKey(boss.id)}");
-            }
-        }
+                var boss = bosses[i];
+                if (boss == null)
+                {
+                    continue;
+                }
 
-        if (Time.unscaledTime < _nextHeartbeat)
-        {
-            return;
+                var lowest = _lowestById.TryGetValue(boss.id, out var recorded) ? recorded : boss.transform.position.y;
+                bossReport.Add($"'{boss.name}' id={boss.id} y={boss.transform.position.y} lowest={lowest} inEnemies={manager.enemies.ContainsKey(boss.id)}");
+            }
         }
 
         _nextHeartbeat = Time.unscaledTime + HeartbeatSeconds;
         _logger.Msg($"KillFloor: watch enemies={manager.enemies.Count} stageBosses={bosses?.Count ?? -1} lowestEnemyY={_lowestEnemyY} lowestBossY={_lowestBossY} bosses=[{string.Join("; ", bossReport)}]");
         _lowestEnemyY = float.PositiveInfinity;
         _lowestBossY = float.PositiveInfinity;
-    }
-
-    private static float LowestPoint(Enemy enemy)
-    {
-        var collider = enemy.collider;
-        float? colliderMinY = collider != null && collider.enabled ? collider.bounds.min.y : null;
-        return KillFloor.LowestPoint(enemy.transform.position.y, colliderMinY);
-    }
-
-    private static void AddActor(Dictionary<uint, Enemy> actors, Enemy enemy)
-    {
-        if (enemy != null)
-        {
-            actors[enemy.id] = enemy;
-        }
     }
 
     private static IEnumerable<int> LiveLevels(ProceduralTileGeneration tileGen)

@@ -115,4 +115,26 @@ public class KillFloorTests
         Assert.Equal(float.NegativeInfinity, floor);
         Assert.False(KillFloor.ShouldKill(-1_000_000f, floor));
     }
+
+    [Fact]
+    public void ShouldProbeCollider_ActorWithinReachingDistance_IsProbed()
+    {
+        Assert.True(KillFloor.ShouldProbeCollider(-80f, -80f));
+        Assert.True(KillFloor.ShouldProbeCollider(-60f, -80f));
+        Assert.True(KillFloor.ShouldProbeCollider(-200f, -80f));
+    }
+
+    [Fact]
+    public void ShouldProbeCollider_ActorFarAboveTheFloor_IsSkipped()
+    {
+        Assert.False(KillFloor.ShouldProbeCollider(-40f, -80f));
+        Assert.False(KillFloor.ShouldProbeCollider(40f, -80f));
+    }
+
+    [Fact]
+    public void ShouldProbeCollider_AtAndPastTheMargin()
+    {
+        Assert.True(KillFloor.ShouldProbeCollider(-80f + KillFloor.ColliderProbeMargin, -80f));
+        Assert.False(KillFloor.ShouldProbeCollider(-80f + KillFloor.ColliderProbeMargin + 0.01f, -80f));
+    }
 }

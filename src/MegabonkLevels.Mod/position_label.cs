@@ -13,7 +13,9 @@ namespace MegabonkLevels;
 public static class PositionLabel
 {
     private const float UpdateIntervalSeconds = 0.1f;
-    private const float ActorIntervalSeconds = 0.25f;
+    // The actor overlay walks every live enemy, so it runs well below the readout's own cadence; at a few hundred
+    // enemies a 4 Hz full sweep is a measurable share of a frame for text nobody reads that fast.
+    private const float ActorIntervalSeconds = 0.75f;
     private const float FontSize = 20f;
     private const float WidthMargin = 20f;
     private const float RightOffsetX = 0f;

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 
 namespace MegabonkLevels;
 
@@ -10,41 +9,54 @@ public sealed class KillTracker
 {
     private readonly float _retryAfterSeconds;
     private readonly Dictionary<uint, (float LastAttemptAt, int Attempts)> _attempts = new();
+    private readonly HashSet<uint> _seen = new();
+    private readonly List<uint> _stale = new();
 
     public KillTracker(float retryAfterSeconds)
     {
         _retryAfterSeconds = retryAfterSeconds;
     }
 
-    public IReadOnlyList<(uint Id, int Attempt)> Select(IEnumerable<(uint Id, float Y)> candidates, float floorY, float now)
+    // `lowestById` maps each actor the watcher can see to its lowest point, so a duplicate id cannot arrive here twice.
+    public IReadOnlyList<(uint Id, int Attempt)> Select(IReadOnlyDictionary<uint, float> lowestById, float floorY, float now)
     {
-        var present = candidates.GroupBy(c => c.Id).ToDictionary(g => g.Key, g => g.First().Y);
-        foreach (var id in _attempts.Keys.Where(id => !present.ContainsKey(id) || !KillFloor.ShouldKill(present[id], floorY)).ToList())
-        {
-            _attempts.Remove(id);
-        }
-
+        _seen.Clear();
         var picks = new List<(uint, int)>();
-        foreach (var (id, y) in present)
+        foreach (var (id, y) in lowestById)
         {
             if (!KillFloor.ShouldKill(y, floorY))
             {
                 continue;
             }
 
-            var attempts = 0;
-            if (_attempts.TryGetValue(id, out var previous))
+            _seen.Add(id);
+            if (!_attempts.TryGetValue(id, out var previous))
             {
-                if (now - previous.LastAttemptAt < _retryAfterSeconds)
-                {
-                    continue;
-                }
-
-                attempts = previous.Attempts;
+                _attempts[id] = (now, 1);
+                picks.Add((id, 1));
+                continue;
             }
 
-            _attempts[id] = (now, attempts + 1);
-            picks.Add((id, attempts + 1));
+            if (now - previous.LastAttemptAt >= _retryAfterSeconds)
+            {
+                var attempt = previous.Attempts + 1;
+                _attempts[id] = (now, attempt);
+                picks.Add((id, attempt));
+            }
+        }
+
+        _stale.Clear();
+        foreach (var id in _attempts.Keys)
+        {
+            if (!_seen.Contains(id))
+            {
+                _stale.Add(id);
+            }
+        }
+
+        foreach (var id in _stale)
+        {
+            _attempts.Remove(id);
         }
 
         return picks;

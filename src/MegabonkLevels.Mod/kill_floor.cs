@@ -37,6 +37,15 @@ public static class KillFloor
 
     public static bool ShouldKill(float y, float floorY) => y < floorY;
 
+    // How far above the kill floor an actor's pivot can sit and still have its collider reach it, so a watcher can skip
+    // the collider bounds query for everyone standing well above it. Bounds are read lazily in Unity, so asking for one
+    // on a freshly spawned collider rebuilds it; with a large population that per-actor cost is what shows up in the
+    // frame. It bounds the tallest collider the floor is expected to catch, and no actor can fall unseen through it:
+    // by the time an actor is at the floor its pivot is below it and always probed.
+    public const float ColliderProbeMargin = 25f;
+
+    public static bool ShouldProbeCollider(float pivotY, float floorY) => pivotY - floorY <= ColliderProbeMargin;
+
     // An actor's pivot can sit well above its feet, so a tall one standing on the catch floor never has a pivot below
     // the kill floor; the collider bottom is what has actually fallen.
     public static float LowestPoint(float pivotY, float? colliderMinY) =>
