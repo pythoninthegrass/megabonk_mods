@@ -40,6 +40,8 @@ public readonly record struct LevelFile(
     float? KillFloorY = null,
     IReadOnlyList<float> BossSpawnPosition = null,
     bool GrindRequiresSlide = false,
+    // Character whose fall damage a landing on this level is scored with, or null to leave each character's own.
+    string FallDamageCharacter = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, string> PackKitVersions = null)
 {
     public const int CurrentSchemaVersion = 3;
@@ -58,6 +60,7 @@ public readonly record struct LevelFile(
         && MaxSlopeAngle == other.MaxSlopeAngle
         && KillFloorY == other.KillFloorY
         && GrindRequiresSlide == other.GrindRequiresSlide
+        && FallDamageCharacter == other.FallDamageCharacter
         && ListEquals(BossSpawnPosition, other.BossSpawnPosition)
         && Music == other.Music
         && Title == other.Title

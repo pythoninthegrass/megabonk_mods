@@ -17,6 +17,7 @@
   "maxSlopeAngle": 88,
   "killFloorY": -35.0,
   "grindRequiresSlide": true,
+  "fallDamageCharacter": "tonymczoom",
   "bossSpawnPosition": [
     170,
     -4.9334368,

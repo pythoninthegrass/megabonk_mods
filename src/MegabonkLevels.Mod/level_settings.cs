@@ -8,8 +8,8 @@ namespace MegabonkLevels;
 
 public static class LevelSettings
 {
-    public static readonly string[] Fields = { "playerStart", "bossSpawnPosition", "killFloorY", "maxSlopeAngle", "grindRequiresSlide", "noGrass", "music", "title", "description", "mapDescription", "allowedCharacters", "map", "stageIndex", "tier", "seed" };
-    private static readonly string[] TextFields = { "music", "title", "description", "mapDescription" };
+    public static readonly string[] Fields = { "playerStart", "bossSpawnPosition", "killFloorY", "maxSlopeAngle", "grindRequiresSlide", "fallDamageCharacter", "noGrass", "music", "title", "description", "mapDescription", "allowedCharacters", "map", "stageIndex", "tier", "seed" };
+    private static readonly string[] TextFields = { "music", "title", "description", "mapDescription", "fallDamageCharacter" };
 
     public static string Read(LevelFile level, string field)
     {
@@ -61,6 +61,10 @@ public static class LevelSettings
         if (level.AllowedCharacters != null && level.AllowedCharacters.Any(name => !new[] { "calcium", "tony", "tonymczoom" }.Contains(name, StringComparer.OrdinalIgnoreCase)))
         {
             throw new ArgumentException("Allowed characters are calcium, tony and tonymczoom.");
+        }
+        if (!string.IsNullOrEmpty(level.FallDamageCharacter) && FallDamagePolicy.ReferenceCharacter(level.FallDamageCharacter) == null)
+        {
+            throw new ArgumentException("The fall damage character must be calcium, tony or tonymczoom.");
         }
     }
 

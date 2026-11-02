@@ -244,6 +244,31 @@ public class LevelFileTests
     }
 
     [Fact]
+    public void RoundTrip_FallDamageCharacter_Survives()
+    {
+        var level = SampleLevel() with { FallDamageCharacter = "tony" };
+
+        var restored = LevelFileSerializer.DeserializeWithMigration(LevelFileSerializer.Serialize(level));
+
+        Assert.Equal("tony", restored.FallDamageCharacter);
+        Assert.Equal(level, restored);
+    }
+
+    [Fact]
+    public void Deserialize_WithoutFallDamageCharacterKey_LeavesItNull()
+    {
+        var json = """{"schemaVersion":3,"gameBuildId":"1","map":1,"stageIndex":0,"tier":0,"seed":1,"packs":{},"edits":[]}""";
+
+        Assert.Null(LevelFileSerializer.DeserializeWithMigration(json).FallDamageCharacter);
+    }
+
+    [Fact]
+    public void Equals_LevelsDifferingOnlyInFallDamageCharacter_AreNotEqual()
+    {
+        Assert.NotEqual(SampleLevel(), SampleLevel() with { FallDamageCharacter = "tony" });
+    }
+
+    [Fact]
     public void CurrentSchemaVersion_IsThree()
     {
         Assert.Equal(3, LevelFile.CurrentSchemaVersion);

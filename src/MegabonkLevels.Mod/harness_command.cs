@@ -42,6 +42,7 @@ public enum HarnessCommandKind
     QueryObjects,
     Item,
     GrindSlide,
+    FallDamage,
     MusicProbe,
 }
 
@@ -221,6 +222,10 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseItem(root, out command, out error);
             case "grind-slide":
                 return TryParseGrindSlide(root, out command, out error);
+            case "fall-damage":
+                command = new HarnessCommand(HarnessCommandKind.FallDamage, null);
+                error = null;
+                return true;
             case "music-probe":
                 return TryParseMusicProbe(root, out command, out error);
             case "teleport":

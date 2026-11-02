@@ -31,6 +31,7 @@ public class LevelSettingsTests
     [InlineData("grindRequiresSlide", "yes")]
     [InlineData("music", "bad:path")]
     [InlineData("allowedCharacters", "[\"unknown\"]")]
+    [InlineData("fallDamageCharacter", "randy")]
     [InlineData("edits", "[]")]
     public void InvalidEditsDoNotMutateTheSource(string field, string text)
     {
@@ -45,6 +46,25 @@ public class LevelSettingsTests
         var level = Level() with { Edits = new[] { new RemoveTile(0, 0).ToEditOp() } };
         Assert.Throws<ArgumentException>(() => LevelSettings.Change(level, "seed", "12"));
         Assert.Equal(12, LevelSettings.Change(Level(), "seed", "12").Seed);
+    }
+
+    [Theory]
+    [InlineData("tony")]
+    [InlineData("TonyMcZoom")]
+    [InlineData("calcium")]
+    public void FallDamageCharacterAcceptsTheNamesTheHarnessAccepts(string name)
+    {
+        Assert.Equal(name, LevelSettings.Change(Level(), "fallDamageCharacter", name).FallDamageCharacter);
+    }
+
+    [Fact]
+    public void FallDamageCharacterRoundTripsThroughReadAndClearsToNull()
+    {
+        var changed = LevelSettings.Change(Level(), "fallDamageCharacter", "tony");
+
+        Assert.Equal("tony", LevelSettings.Read(changed, "fallDamageCharacter"));
+        Assert.Null(LevelSettings.Change(changed, "fallDamageCharacter", "").FallDamageCharacter);
+        Assert.Equal(Level(), LevelSettings.Change(Level(), "fallDamageCharacter", ""));
     }
 
     [Fact]

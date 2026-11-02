@@ -353,6 +353,11 @@ def build_query_objects_command(type_name: str, fields: list[str] | None = None)
     return {"command": "query-objects", "type": type_name, "fields": list(fields or [])}
 
 
+def build_fall_damage_command() -> dict[str, object]:
+    """Report the live player's fall-damage inputs, plus both characters' stored values."""
+    return {"command": "fall-damage"}
+
+
 def build_dismiss_levelup_command(choice: int) -> dict[str, object]:
     return {"command": "dismiss-levelup", "choice": choice}
 
@@ -995,6 +1000,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     item.add_argument("amount", type=int, nargs="?", help="set the amount to this exact number; omit to read it")
     grind_slide = sub.add_parser("grind-slide")
     grind_slide.add_argument("state", choices=["on", "off", "auto"], help="hold the slide button, release it, or read the real device again")
+    sub.add_parser("fall-damage", help="report the player's fall-damage inputs: thresholds, FallDamageReduction, fall speed, and both characters' stored values")
     dismiss = sub.add_parser("dismiss-levelup")
     dismiss.add_argument("--choice", type=int, default=0, help="zero-based index of the offered upgrade")
     music_probe = sub.add_parser("music-probe")
@@ -1408,6 +1414,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, item_payload(args), args.timeout)
         case "grind-slide":
             ok = send_printing_result(harness, grind_slide_payload(args), args.timeout)
+        case "fall-damage":
+            ok = send_printing_result(harness, build_fall_damage_command(), args.timeout)
         case "dismiss-levelup":
             ok = send_printing_result(harness, dismiss_levelup_payload(args), args.timeout)
         case "music-probe":

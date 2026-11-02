@@ -520,6 +520,14 @@ def test_the_level_asks_for_the_slide_button_to_start_a_grind() -> None:
 
 
 @needs_extract
+def test_the_level_scores_fall_damage_with_the_reference_character() -> None:
+    # Calcium carries no FallDamageReduction, so an ollie off a half pipe costs him his whole health bar.
+    level = b.build_level()
+    assert level["fallDamageCharacter"] == b.FALL_DAMAGE_CHARACTER == "tonymczoom"
+    assert b.FALL_DAMAGE_CHARACTER in b.ALLOWED_CHARACTERS
+
+
+@needs_extract
 def test_the_kill_floor_is_below_the_only_kept_tile_and_above_the_meshs_lowest_point() -> None:
     # Below the kept tile so standing on it is safe, above the Warehouse's lowest geometry so anything that
     # ends up under the mesh dies instead of resting there out of reach of the game's own catch floor.

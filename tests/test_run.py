@@ -466,6 +466,16 @@ def test_build_grind_slide_command_omits_held_when_the_device_is_read() -> None:
     assert run.build_grind_slide_command() == {"command": "grind-slide"}
 
 
+def test_build_fall_damage_command_sends_the_bare_read() -> None:
+    assert run.build_fall_damage_command() == {"command": "fall-damage"}
+
+
+def test_parse_args_accepts_fall_damage_without_arguments() -> None:
+    assert run.parse_args(["fall-damage"]).action == "fall-damage"
+    with pytest.raises(SystemExit):
+        run.parse_args(["fall-damage", "calcium"])
+
+
 def test_grind_slide_payload_maps_the_state_to_the_wire_command() -> None:
     assert run.grind_slide_payload(run.parse_args(["grind-slide", "on"])) == {"command": "grind-slide", "held": True}
     assert run.grind_slide_payload(run.parse_args(["grind-slide", "off"])) == {"command": "grind-slide", "held": False}

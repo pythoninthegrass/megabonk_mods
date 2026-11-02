@@ -84,6 +84,16 @@ public class ThpsLevelTests
     }
 
     [Fact]
+    public void Level_ScoresFallDamageWithTonyMcZoom()
+    {
+        var level = LevelFileSerializer.DeserializeWithMigration(File.ReadAllText(RepoFile("levels/thps.mblevel.json")));
+
+        // Calcium carries no FallDamageReduction, so the drop off a half pipe lip would otherwise empty his health bar.
+        Assert.Equal(CharacterOverride.TonyMcZoomId, FallDamagePolicy.ReferenceCharacter(level.FallDamageCharacter));
+        Assert.True(FallDamagePolicy.Applies(true, FallDamagePolicy.ReferenceCharacter(level.FallDamageCharacter), CharacterOverride.CalciumId));
+    }
+
+    [Fact]
     public void Level_StandsTheBossPortalOnTheFloorInsideTheGlassBox()
     {
         var level = LevelFileSerializer.DeserializeWithMigration(File.ReadAllText(RepoFile("levels/thps.mblevel.json")));

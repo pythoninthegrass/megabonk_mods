@@ -423,6 +423,12 @@ async def grind_slide(held: bool | None = None) -> CallToolResult:
     return await _command(_harness(), run.build_grind_slide_command(held), TIMEOUT)
 
 
+@mcp.tool()
+async def fall_damage() -> CallToolResult:
+    """Report the fall-damage inputs for the live player: character, hp, maxHp, minFallDamageSpeed, maxFallDamageSpeed, the FallDamageReduction stat, grounded and fallSpeed, plus the same thresholds and stat modifiers stored for Calcium and Tony McZoom. Read-only; used to compare how the two characters fall before and after a patch."""
+    return await _command(_harness(), run.build_fall_damage_command(), TIMEOUT)
+
+
 def _compile_jq(expression: str) -> "jq._Program":
     try:
         return jq.compile(expression)

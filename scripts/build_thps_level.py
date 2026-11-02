@@ -147,6 +147,8 @@ TITLE = "Warehouse"
 DESCRIPTION = "I'm trying to sleep"
 MAP_DESCRIPTION = "A warehouse built for grinding"
 ALLOWED_CHARACTERS = ["calcium", "tonymczoom"]
+# Tony's FallDamageReduction is a full 1 and Calcium has none, so landings here are scored with Tony's stats.
+FALL_DAMAGE_CHARACTER = "tonymczoom"
 # The game's boombox, placed as the radio on the top platform of the start half pipe (surface height 35.85), at its left end looking down the pipe, within this distance of the player spawn.
 RADIO_CATALOG_ID = "interactable/boombox"
 RADIO_POSITION = (90, 35.9, -123.5)
@@ -582,6 +584,8 @@ def build_level() -> dict:
         # The coping lips are rails, so without this the game catches one the moment a skater rides over it and
         # hijacks the ollie off the lip. A grind starts on demand instead, with the slide button. See GrindGatePatch.
         "grindRequiresSlide": True,
+        # Big airs are the point of the level, and without this the landing off a half pipe takes Calcium's whole health bar.
+        "fallDamageCharacter": FALL_DAMAGE_CHARACTER,
         "bossSpawnPosition": list(boss_spawn_position()),
         "music": MUSIC,
         "title": TITLE,

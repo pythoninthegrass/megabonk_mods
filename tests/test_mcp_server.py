@@ -348,6 +348,7 @@ INPUT_TOOL_CASES = [
     ("grind_slide", {"held": True}, {"command": "grind-slide", "held": True}),
     ("grind_slide", {"held": False}, {"command": "grind-slide", "held": False}),
     ("grind_slide", {}, {"command": "grind-slide"}),
+    ("fall_damage", {}, {"command": "fall-damage"}),
     ("dismiss_levelup", {}, {"command": "dismiss-levelup", "choice": 0}),
     ("dismiss_levelup", {"choice": 2}, {"command": "dismiss-levelup", "choice": 2}),
 ]

@@ -29,6 +29,7 @@ public static class LiveEditPatch
     private static float? _killFloorY;
     private static IReadOnlyList<float> _bossSpawnPosition;
     private static bool _grindRequiresSlide;
+    private static string _fallDamageCharacter;
     private static IReadOnlyDictionary<string, string> _packKitVersions;
     private static Session _session;
     private static int _runGeneration;
@@ -44,9 +45,12 @@ public static class LiveEditPatch
     // Whether a rail touch on this level needs the slide button held. See GrindGatePatch.
     public static bool GrindRequiresSlide => _grindRequiresSlide;
 
+    // Name of the character whose fall damage this level scores landings with, or null. See FallDamagePatch.
+    public static string FallDamageCharacter => _fallDamageCharacter;
+
     // Set by LevelLoaderPatch right before it starts a run, consumed (and cleared) by the next
     // generation so a later vanilla run is never edited.
-    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null, float? killFloorY = null, IReadOnlyList<float> bossSpawnPosition = null, bool grindRequiresSlide = false, IReadOnlyDictionary<string, string> packKitVersions = null)
+    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null, float? killFloorY = null, IReadOnlyList<float> bossSpawnPosition = null, bool grindRequiresSlide = false, IReadOnlyDictionary<string, string> packKitVersions = null, string fallDamageCharacter = null)
     {
         _pendingEdits = edits;
         _levelEdits = edits;
@@ -56,6 +60,7 @@ public static class LiveEditPatch
         _killFloorY = killFloorY;
         _bossSpawnPosition = bossSpawnPosition;
         _grindRequiresSlide = grindRequiresSlide;
+        _fallDamageCharacter = fallDamageCharacter;
         _packKitVersions = packKitVersions;
     }
 
@@ -68,6 +73,7 @@ public static class LiveEditPatch
         _killFloorY = settings.KillFloorY;
         _maxSlopeAngle = settings.MaxSlopeAngle;
         _grindRequiresSlide = settings.GrindRequiresSlide;
+        _fallDamageCharacter = settings.FallDamageCharacter;
         _packKitVersions = settings.PackKitVersions;
         LevelLoaderPatch.ApplyMetadata(settings);
         LevelTitle.Prepare(settings.Title, settings.Description, logger);
@@ -271,6 +277,7 @@ public static class LiveEditPatch
             KillFloorY: _killFloorY,
             BossSpawnPosition: _bossSpawnPosition,
             GrindRequiresSlide: _grindRequiresSlide,
+            FallDamageCharacter: _fallDamageCharacter,
             Music: LevelMusic.Reference,
             Title: LevelTitle.Title,
             Description: LevelTitle.Description,
@@ -524,6 +531,7 @@ public static class LiveEditPatch
         {
             KillFloorWatcher.Disarm();
             _grindRequiresSlide = false;
+            _fallDamageCharacter = null;
             return;
         }
 

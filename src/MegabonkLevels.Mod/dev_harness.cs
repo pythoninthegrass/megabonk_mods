@@ -242,6 +242,8 @@ public static class DevHarness
                 return PlayerItems.Apply(command.Item);
             case HarnessCommandKind.GrindSlide:
                 return GrindSlide(command.Held);
+            case HarnessCommandKind.FallDamage:
+                return FallDamage.Read();
             case HarnessCommandKind.MusicProbe:
                 return MusicProbe.Run(command.Input.Action, command.Path, command.Input.Variant, command.Input.Value, _logger);
             case HarnessCommandKind.DismissLevelUp:
