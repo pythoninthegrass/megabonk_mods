@@ -9,7 +9,7 @@ import time
 from contextlib import ExitStack
 from pathlib import Path
 
-KEYS = ("KEY_ENTER", "KEY_ESC", "KEY_UP", "KEY_DOWN", "KEY_LEFT", "KEY_RIGHT", "KEY_TAB", "KEY_SPACE")
+KEYS = ("KEY_ENTER", "KEY_ESC", "KEY_UP", "KEY_DOWN", "KEY_LEFT", "KEY_RIGHT", "KEY_TAB", "KEY_SPACE", "KEY_F12")
 BUTTONS = ("BTN_SOUTH", "BTN_EAST", "BTN_NORTH", "BTN_WEST", "BTN_START", "BTN_SELECT", "BTN_TL", "BTN_TR", "BTN_THUMBL", "BTN_THUMBR")
 AXES = {
     "ABS_X": (-32768, 32767), "ABS_Y": (-32768, 32767),
