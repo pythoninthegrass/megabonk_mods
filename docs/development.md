@@ -222,162 +222,18 @@ The default was chosen by a rule fixed before measuring: switch to TOON only if 
 
 TOON wins on the uniform array of widgets and loses on the small nested `state` object, so the total passes the 15% bar and the per-payload bar fails. The default is therefore `json-min`, which was 37% below indented JSON in total on the same payloads (2148 tokens against 3399) and does worse than TOON only on `ui_tree`. Set `MEGABONK_MCP_ENCODING=toon` for sessions that read many `ui_tree` results, or `json` to get indented text with `structuredContent` back. `json-min` was checked live through Claude Code: `state`, `list_levels` and `ui_tree` return parseable compact JSON, errors stay plain text and `screenshot` still returns an image. The uniform-rows case from the live-object query was not measured because that query does not exist yet; re-measure once it lands, since its rows are the shape TOON suits best.
 
-## SteamOS, CachyOS and gamepadui over SSH
+## Remote Steam hosts and gamepadui
 
-Use the **Windows build under Proton**, launched by the existing Steam session, rather than the native Linux build or a directly invoked Wine executable. This workflow was verified on a CachyOS host with Steam in gamepadui mode, Proton Experimental, Megabonk 1.0.69 and MelonLoader 0.7.3. SteamOS is an intended use of the same workflow, not a separately verified host; substitute its user, library paths and selected Proton tool. Examples use `game-host` as a placeholder SSH alias; replace it with your target host. Keep the desktop/gamepadui session logged in. The player package needs Python 3.11 or newer, but no repository checkout, uv, .NET SDK or separate Wine installation on the target.
-
-### Establish the vanilla baseline and actual prefix
-
-In Steam, force a Proton tool under Megabonk's Compatibility settings, launch the unmodified game once, confirm it reaches the menu, and quit before installing. Verify the game directory contains `Megabonk.exe` and `GameAssembly.dll`. A native `Megabonk.x86_64` install uses a different loader path and is not this workflow.
-
-**Do not derive the prefix from the game's library.** A moved game can run from an SD card while Steam keeps its prefix in the home library. Example paths for that layout are:
-
-| Purpose | Path |
-| --- | --- |
-| Game | `/media/sdcard/SteamLibrary/steamapps/common/Megabonk` |
-| Active prefix | `$HOME/.local/share/Steam/steamapps/compatdata/3405340/pfx` |
-
-While the vanilla game is running, inspect the process environment over SSH; `STEAM_COMPAT_DATA_PATH` is the compatdata directory, so append `/pfx` for the installer:
-
-```sh
-ssh game-host 'pid=$(pgrep -x Megabonk.exe | head -1)
-  test -n "$pid" || exit 1
-  tr "\0" "\n" < "/proc/$pid/environ" |
-    grep -E "^(STEAM_COMPAT_DATA_PATH|STEAM_COMPAT_INSTALL_PATH)="'
-```
-
-An existing `drive_c` alone does not prove Steam uses that prefix: invoking Wine with a wrong `WINEPREFIX` can create a convincing unused prefix. Automatic installer discovery currently assumes the game's library, so pass the measured `--prefix` on **every install and check**. Do not delete another prefix merely because it is not active in this launch.
-
-### Install, launch and verify
-
-Quit through the game first. When that is unavailable, the following SSH fallback sends SIGTERM only to the exact Windows game process name, leaving Steam alone:
-
-```sh
-ssh game-host 'pkill -TERM -x Megabonk.exe || true'
-ssh game-host 'pgrep -ia -x Megabonk.exe'
-```
-
-The second command must report no process before changing files or prefix state. SIGTERM is process termination, not a guarantee of in-game saving. Never use `pkill -f Megabonk`: it can match the SSH shell's own command line. Do not kill Steam or all Wine processes to quit one game.
-
-Build the package on the development machine, transfer it, and run its bundled installer on the target. Use a fresh extraction directory; these commands assume `~/mb-player` does not already contain another package:
-
-```sh
-task package:linux
-scp .tools/megabonk-levels-dev-ml0.7.3-linux.zip game-host:~/
-ssh game-host 'mkdir -p ~/mb-player && cd ~/mb-player &&
-  unzip -q ~/megabonk-levels-dev-ml0.7.3-linux.zip'
-ssh game-host 'cd ~/mb-player
-  G=/media/sdcard/SteamLibrary/steamapps/common/Megabonk
-  P="$HOME/.local/share/Steam/steamapps/compatdata/3405340/pfx"
-  ./install.sh --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry &&
-  ./install.sh --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry --check'
-ssh game-host 'steam steam://rungameid/3405340'
-```
-
-The archive name above is the development build's name; substitute the package produced by the current build. The installed runtime is Windows .NET 6 inside the actual prefix. This configuration loaded the mod without a `DOTNET_ROOT` Steam launch option. The observed install record reported the override as `via: wine`, so inspect the recorded result rather than assuming the requested registry mode describes the mechanism used. `--check` must say the install matches the package and exit 0. Omitting `--prefix` can instead report runtime/override drift against the wrong library.
-
-The Steam URI successfully launched the tested gamepadui session over SSH without exporting display variables. If Steam reports a display/session error on another host, use its actual graphical-session environment or launch from the gamepad UI; do not assume `DISPLAY=:0` works everywhere. A successful URI command only means the request was sent, not that the game or mod is ready.
-
-Read the **new launch's** `MelonLoader/Latest.log` in the game directory. First-launch assembly generation took about 40 seconds on the tested host; subsequent launches used the generated cache. The measured success markers were:
-
-```text
-Assembly Generation Successful!
-1 Mod loaded.
-[MegabonkLevels] MegabonkLevels mod initialized.
-```
-
-The assembly-generation success line need not recur on a cached launch. Check timestamps, the MelonLoader version banner and the mod-initialized line, not merely process existence or a stale log. If bootstrap never runs, inspect `/proc/<pid>/maps` for `version.dll`: the failing wrong-prefix launch mapped Proton's builtin DLL rather than the game's loader DLL. Steam's `~/.local/share/Steam/logs/gameprocess_log.txt` records launch/process tracking. Preserve these logs and report a failed mod load rather than trying unverified runtime or launch-option workarounds.
-
-### Transfer THPS content and test the player menus
-
-The tested player package contains only `example-forest`; Warehouse requires both `thps.mblevel.json` and the `thps` pack. Use the **Windows bundle even though the host is Linux**, because the Unity player runs under Proton. Build it on the authoring machine (see [Loading the THPS level](#loading-the-thps-level)), then stage the matching bundle, manifest and attachment metadata on the target:
-
-```sh
-ssh game-host 'mkdir -p ~/mb-player/thps-source/thps'
-scp .tools/bundles/windows/thps \
-  unity/pack-authoring/packs/thps/manifest.json \
-  unity/pack-authoring/packs/thps/attachments.json \
-  game-host:mb-player/thps-source/thps/
-scp levels/thps.mblevel.json game-host:mb-player/thps-source/
-```
-
-Quit the game and confirm it exited as above, then install through the same record so uninstall covers the added content:
-
-```sh
-ssh game-host 'cd ~/mb-player
-  ./install.sh --game-dir /media/sdcard/SteamLibrary/steamapps/common/Megabonk \
-    --prefix "$HOME/.local/share/Steam/steamapps/compatdata/3405340/pfx" \
-    --dotnet-in prefix --wine-override registry \
-    --level "$HOME/mb-player/thps-source/thps.mblevel.json" \
-    --pack "$HOME/mb-player/thps-source/thps"'
-ssh game-host 'steam steam://rungameid/3405340'
-```
-
-Packs are cached per process, so a restart is required. Warehouse appearing in Map Selection and `MapSelection: listed 'Warehouse'` prove discovery, **not a successful level start or rendered Warehouse**. Character restrictions on this menu path are checked at custom-map Confirm, not by locking every character on the preceding screen.
-
-The local `megabonk` MCP server and `run.py` do not automatically target this SSH host. To use the target checkout for diagnostics, run its tools over SSH with `MEGABONK_GAME_DIR` set to the game directory. Enable the harness before launching for screenshots and object queries; leave `MEGABONK_DEV` unset. Editor-input injection does not drive the stock Rewired menus: use real mouse/controller input or OS-level virtual input, not `load-level`, to verify the player flow.
-
-With the repository and mise runtimes installed on the target, a menu-only mod change needs no Unity editor or pack rebuild. Quit the game, then build against its installed MelonLoader and generated interop assemblies:
-
-```sh
-ssh game-host 'cd ~/git/megabonk_mods &&
-  MEGABONK_GAME_DIR=/media/sdcard/SteamLibrary/steamapps/common/Megabonk \
-    ~/.local/bin/mise exec -- dotnet build src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj'
-ssh game-host 'steam steam://rungameid/3405340'
-```
-
-The build deploys the DLL and dependencies directly into that game installation. Restart after every rebuild; a running MelonLoader process keeps the old DLL.
-
-### Driving stock menus with run.py
-
-`run.py menu` drives stock Rewired menus through Linux virtual devices. It is separate from `run.py key`/`mouse`, which inject input into the map editor. The CLI runs locally on Linux or forwards to an explicitly configured SSH checkout; there is no implicit remote host, game path or display.
-
-On the target, run `mise exec -- uv sync` after updating the checkout. The Linux-only `evdev` dependency is also in `run.py`'s standalone script metadata; building it may require a compiler and Linux headers. The desktop user needs access to `/dev/uinput` (and the uinput kernel module must be loaded). Permission failures are reported without trying sudo or changing device permissions. Mouse positioning additionally requires `libX11.so.6` and the game's X11/Xwayland display and authorization, not necessarily the desktop's display. The tested session used `:1`; inspect the running game's environment rather than assuming this on another launch or host.
-
-Start before launching the game when possible so Rewired discovers the devices. A single service keeps the keyboard, mouse and virtual Xbox 360 controller connected across CLI calls:
-
-```sh
-uv run scripts/run.py menu start --host game-host --remote-repo '~/git/megabonk_mods' --display :1
-uv run scripts/run.py menu status --host game-host --remote-repo '~/git/megabonk_mods'
-uv run scripts/run.py menu drive '[["key","KEY_ENTER"],["pad","BTN_SOUTH"]]' \
-  --host game-host --remote-repo '~/git/megabonk_mods'
-uv run scripts/run.py menu stop --host game-host --remote-repo '~/git/megabonk_mods'
-```
-
-Omit `--host`/`--remote-repo` to run directly on Linux. SSH uses the target's `.venv/bin/python` by default; `--remote-python` takes a single interpreter path, not shell code. Both maintained Python files must be present in the target checkout. JSON travels over stdin, not interpolated into a remote shell program. `--remote-repo` supports `~/`; the remote interpreter path must be absolute or relative to that checkout. No local `.env` is forwarded. Use `--game-dir` for remote diagnostics, or configure the target's own environment.
-
-`start` uses a transient systemd user service when `systemd-run` is available, because SSH logout can reap a merely detached child. A running user manager is required for that path; a refused launch fails clearly. Without systemd, `start` detaches a child; on hosts that kill it at SSH logout, run `menu serve` on the target through a persistent foreground SSH session instead. `stop` closes the devices and waits for socket removal. The per-user socket defaults to `$XDG_RUNTIME_DIR/megabonk-menu/input.sock`, or `~/.cache/megabonk-menu/input.sock`, with mode 0600. `--socket` overrides it on the target. Startup logs are beside it as `input.log`. An existing socket is never silently removed: use `status`/`stop`; only remove a stale socket after confirming its process is gone.
-
-Batches are JSON arrays (up to 256 commands / 64 KiB), supplied inline, as `@actions.json`, or as `-` for stdin. Every action is validated before input starts:
-
-| Action | Meaning |
-| --- | --- |
-| `["key", "KEY_ENTER"]` | Tap a keyboard key; supported keys: ENTER, ESC, UP, DOWN, LEFT, RIGHT, TAB, SPACE, with the `KEY_` prefix. |
-| `["pad", "BTN_SOUTH"]` | Tap A; other buttons: EAST/B, WEST/X, NORTH/Y, START, SELECT, TL, TR, THUMBL, THUMBR, with the `BTN_` prefix. |
-| `["axis", "ABS_HAT0Y", 1]` | Pulse D-pad Down; -1 is Up. HAT0X uses -1 Left / 1 Right. |
-| `["axis", "ABS_X", -32768]` | Pulse a stick axis (X, Y, RX, RY): -32768–32767. Triggers Z/RZ accept 0–255. All use `ABS_`. |
-| `["move", 350, 790]` | Absolute X11 pointer coordinates, origin top left. Match the display to the game's screenshot resolution; windowed/scaled sessions may require coordinate conversion. |
-| `["click"]` | Tap the left mouse button at the current pointer position. |
-| `{"command":"query-objects","type":"MapSelectionUi","fields":["runConfig"]}` | Run a read-only harness diagnostic; `state` and `steam-ready` are also allowed. Other harness commands are rejected. |
-
-Buttons/sticks release to neutral in `finally` even when a tap is interrupted. Taps last 0.12 seconds; `--settle` controls the pause after each batch action (default 0.35 seconds). Large relative mouse jumps were unreliable under gamepadui, so movement uses absolute X11 warps plus a small real device-motion pulse to switch Rewired out of controller mode. `start --no-gamepad` omits the virtual controller for mouse/keyboard-only checks; restart the service to change that setting. These devices can affect the active graphical session, so do not leave them running or drive another application accidentally.
-
-Input-only batches need no mod harness. Diagnostics and `--out` require the target harness to be enabled before game launch; they do not turn on developer mode or bypass stock menus. For example, after reaching Map Selection with Warehouse installed:
-
-```sh
-uv run scripts/run.py menu drive \
-  '[["move",350,790],["click"],{"command":"query-objects","type":"SelectionGroupToggleSingleButtonTier","fields":["canSelect","isSelected"]}]' \
-  --host game-host --remote-repo '~/git/megabonk_mods' \
-  --game-dir /media/sdcard/SteamLibrary/steamapps/common/Megabonk --out .tools/menu.png
-```
-
-A diagnostic rejection, timeout, service error or failed screenshot returns nonzero and aborts the batch. Screenshot capture waits for command completion **and** a PNG, then downloads it to the local `--out` path; remote evidence remains under the target checkout's `.tools/menu-<unique-id>.png`. A failed download does not replace an existing local image. Inspect each screenshot before sending another batch; focus-dependent sequences are not assertions that the expected menu was reached. Use global `--timeout` before `menu` to adjust per-command waits.
-
-The maintained CLI was verified on the CachyOS host with keyboard Enter, controller A/D-pad and absolute mouse movement/clicks, read-only tier queries, screenshot download, and service status/stop across separate SSH sessions. It requires neither a Unity editor nor a developer `load-level` command.
+Standing up a gamescope + Steam gamepadui session, forcing the Proton baseline
+and measuring the real prefix, installing and verifying the player package,
+transferring THPS content, and driving stock menus over SSH with `run.py menu`
+are documented in [gamepadui.md](gamepadui.md). The player package needs Python
+3.11 or newer on the target, but no repository checkout, uv, .NET SDK or separate
+Wine installation.
 
 ### Verified menu regression under Proton
 
-Verified on 2026-10-31 with the Proton/game/loader versions above, the installed Windows THPS pack, and Calcium selected. Input came through Linux uinput mouse clicks (with X11 absolute pointer positioning) and a virtual Xbox 360 controller into the stock menus; the harness supplied screenshots, read-only object queries and quit between DLL builds. No save reset, developer character override or `load-level` command was used.
+Verified on 2026-10-31 under Proton Experimental with Megabonk 1.0.69 and MelonLoader 0.7.3 (see [gamepadui.md](gamepadui.md) for the host setup), the installed Windows THPS pack, and Calcium selected. Input came through Linux uinput mouse clicks (with X11 absolute pointer positioning) and a virtual Xbox 360 controller into the stock menus; the harness supplied screenshots, read-only object queries and quit between DLL builds. No save reset, developer character override or `load-level` command was used.
 
 1. On Forest, select Tier 3, then select Warehouse. Only Tier 1 remains visible, selected and selectable; hidden tiers are unselected and cannot be selected. Click Tier 1 and Confirm with the mouse: Warehouse renders and the pause panel identifies `Warehouse / Tier 1`.
 2. Using controller D-pad/A, select Forest Tier 3, move left to the map list, down to Warehouse and select it. Focus lands on visible Tier 1. Down goes directly to Challenges and Up returns to Tier 1. Selecting Tier 1 again moves focus to Confirm; A starts Warehouse. The final launch logged `LevelLoader: starting map=Forest stage=0 tier=0 seed=20261007`, then `KillFloor: armed`, and the rendered pause panel identified Warehouse.
@@ -475,7 +331,7 @@ task game:editor -- levels/thps.mblevel.json
 - `thps:pack` builds the bundle for Windows and Linux with Unity from `.tools/thps1/warehouse/` and `tools/ost/*.mp3` (both gitignored; without the mp3s the pack builds with no music).
 - `thps:install` copies the bundle and manifest into `UserData/LevelPacks/thps` and the level into `UserData/Levels`, through `task pack:install PACK=thps`.
 
-Building a pack requires the disc image, the mp3s and Unity 2023.2.22f1 on the authoring machine. A test machine can instead receive the built bundle with its matching manifest and attachment metadata; the [SteamOS/CachyOS workflow](#steamos-cachyos-and-gamepadui-over-ssh) shows the transfer and installer commands. Select the bundle for the game runtime, not the host: Proton uses the Windows bundle. The disc path, the extraction marker and the level path are variables that default to their usual values, so `task thps DISC=<path>` and `task thps LEVEL=<path>` override them. Rebuild runs whenever `ThpsPack.cs` or the pack inputs change, and a running game only sees the pack and level after a relaunch.
+Building a pack requires the disc image, the mp3s and Unity 2023.2.22f1 on the authoring machine. A test machine can instead receive the built bundle with its matching manifest and attachment metadata; the [gamepadui workflow](gamepadui.md#transfer-thps-content-and-test-the-player-menus) shows the transfer and installer commands. Select the bundle for the game runtime, not the host: Proton uses the Windows bundle. The disc path, the extraction marker and the level path are variables that default to their usual values, so `task thps DISC=<path>` and `task thps LEVEL=<path>` override them. Rebuild runs whenever `ThpsPack.cs` or the pack inputs change, and a running game only sees the pack and level after a relaunch.
 
 A missing pack does not fail the load. The level opens with a placeholder at the Warehouse position and the log shows `Packs: 'bundle:thps/Warehouse': pack 'thps' is not installed; using a placeholder.` Packs load once per session, so install the pack before the relaunch.
 

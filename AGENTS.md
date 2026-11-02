@@ -6,7 +6,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 Megabonk ships a native Linux build (`Megabonk.x86_64`); when running that build there is no Proton or Wine prefix and the CrossOver `version.dll` override does not apply. `compatdata/3405340` can stay empty. The caveats below concern that native-build setup, not the Windows build under Proton.
 
-For the Windows build under Proton, see [SteamOS, CachyOS and gamepadui over SSH](docs/development.md#steamos-cachyos-and-gamepadui-over-ssh) for prefix detection, installation, launch/quit and content transfer.
+For the Windows build under Proton, see [Gamepadui and remote Steam hosts](docs/gamepadui.md) for prefix detection, installation, launch/quit and content transfer.
 
 - MelonLoader loads through `LD_PRELOAD`, set in the game's Steam launch options. Reference the library by filename only and add the game directory to `LD_LIBRARY_PATH`: `DOTNET_ROOT="<dotnet6>" LD_LIBRARY_PATH="<game dir>:$LD_LIBRARY_PATH" LD_PRELOAD="MelonLoader.Bootstrap.so:$LD_PRELOAD" %command%`.
 - Il2Cpp MelonLoader needs a .NET 6 runtime. A newer runtime on the host (the repo's mise toolchain provides .NET 10) is not enough. Install 6.0 with `dotnet-install.sh --runtime dotnet --channel 6.0 --install-dir <dir> --no-path` and point `DOTNET_ROOT` at it.
@@ -17,13 +17,22 @@ For the Windows build under Proton, see [SteamOS, CachyOS and gamepadui over SSH
 - `task game:run` falls back to `flatpak run com.valvesoftware.Steam steam://rungameid/3405340` when no native `steam` binary exists, and defaults `DISPLAY` and `XAUTHORITY` itself.
 - The first launch with MelonLoader runs the Il2Cpp assembly generator (Cpp2IL, Il2CppInterop) and takes about 30 seconds. Check `MelonLoader/Latest.log` in the game directory for `Assembly Generation Successful!` and the `Mods loaded` line.
 
+## Gamepadui and remote Steam hosts
+
+`docs/gamepadui.md` covers standing up a gamescope + Steam gamepadui session (distro `gamescope`, `steam-devices`, `mangohud`, and the `pvermeer/gamescope-session-guide` COPR for a GDM session or a `~/.local/share/applications` launcher: `gamescope -e -f --mangoapp -- steam -steamdeck -steamos3`; `-f` because it runs nested in GNOME) and the Proton install/verify workflow over SSH. Its "What it took" section records the details that cost real time to discover; the ones that change what to try first:
+
+- Screenshots: the compositor is `gamescope-wl` (so `pkill -x gamescope` never matches) and its wlserver exposes no `zwlr_screencopy_manager_v1`, GNOME's screenshot D-Bus refuses callers arriving over SSH, and the game's nested Xwayland (`:2`, `XAUTHORITY=/run/pressure-vessel/Xauthority`) is rootless so `import -window root` has no root window. Capture through the freedesktop portal inside the graphical session and crop the window region; a full-frame grab of a running game reads near-black.
+- Under a gamescope session Steam **respawns when killed** and rewrites `localconfig.vdf` while alive, so a Compatibility edit made against a live client is silently lost. Bring the whole session down first. `steam steam://shutdownsteam` is a no-op there; `pkill -TERM -x steam` works.
+- `compat_log.txt` can log `Mapping AppID 3405340 to tool "native" with priority 85` even with correct `CompatToolMapping` and `Apps/3405340/compat` keys. `appmanifest_3405340.acf` depot ids are the ground truth for which build is installed: 3405341 is Linux, 1391111 Windows.
+- Where `uv` comes from mise it is absent from the non-interactive SSH PATH: invoke with `mise exec -- uv run ...` and give `menu --remote-python` an **absolute** venv interpreter path (`~/…` is passed unexpanded).
+
 ## Verifying changes in the running game
 
 The mod has a development harness that loads a level, captures the game's rendered frame, drives the editor with injected key, mouse and text input, teleports the player, and quits, without OS-level input. Prefer it through the MCP server named `megabonk` (`scripts/mcp_server.py`): an agent calls typed tools (`relaunch`, `load`, `screenshot`, `state`, `key`, `mouse`, `type_text`, `teleport`, `dismiss_levelup`, and the rest) and gets screenshots back inline. See the "MCP server" section and its "End-to-end check" walkthrough in `docs/development.md`.
 
 The fallback is the same harness through `scripts/run.py`. Enable it once with `uv run scripts/run.py enable`, launch the game, then run `uv run scripts/run.py cycle <level> <out.png>` (or `relaunch`, below) and read the PNG. See `docs/development.md` for the commands, launch steps, and caveats.
 
-Stock Rewired menus/gamepadui need OS-level input, not the harness's editor `key`/`mouse` injection. Use `scripts/run.py menu start|status|drive|stop` (Linux uinput and X11), with `--host` and `--remote-repo` for SSH targets. The maintained batch driver supports real keyboard/controller/mouse input, read-only harness diagnostics and downloading screenshots. Start devices before the game when possible and always stop them afterward. See [Driving stock menus with run.py](docs/development.md#driving-stock-menus-with-runpy) for dependencies, permissions, display selection and examples; do not recreate the scratch wm2 input scripts.
+Stock Rewired menus/gamepadui need OS-level input, not the harness's editor `key`/`mouse` injection. Use `scripts/run.py menu start|status|drive|stop` (Linux uinput and X11), with `--host` and `--remote-repo` for SSH targets. The maintained batch driver supports real keyboard/controller/mouse input, read-only harness diagnostics and downloading screenshots. Start devices before the game when possible and always stop them afterward. See [Driving stock menus with run.py](docs/gamepadui.md#driving-stock-menus-with-runpy) for dependencies, permissions, display selection and examples; do not recreate the scratch wm2 input scripts. `drive` takes the JSON batch as a positional argument with `--settle` seconds between actions (no `--batch` flag, no `[ms]` delay element), and keyboard input must name the whitelisted constants (`["key","KEY_DOWN"]`) — `menu` has no `key`/`mouse`/`type` verbs, and the top-level `run.py` commands of those names post to the editor harness, which ignores them outside editor mode while still reporting success.
 
 ### Reloading a rebuilt mod
 
