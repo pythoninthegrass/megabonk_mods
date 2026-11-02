@@ -36,10 +36,10 @@ public class PerfProbePlanTests
     [Fact]
     public void AttachNode_writes_the_patched_flag_per_probe()
     {
-        var node = PerfProbePlan.AttachNode(new[] { ("Enemy.MyUpdate", false), ("Enemy.MyFixedUpdate", true) });
+        var node = PerfProbePlan.AttachNode(new[] { ("EnemyDissolve.Update", false), ("Enemy.MyFixedUpdate", true) });
 
         Assert.Equal(2, node.Count);
-        Assert.Equal("Enemy.MyUpdate", node[0]["name"].GetValue<string>());
+        Assert.Equal("EnemyDissolve.Update", node[0]["name"].GetValue<string>());
         Assert.False(node[0]["patched"].GetValue<bool>());
         Assert.True(node[1]["patched"].GetValue<bool>());
     }

@@ -57,13 +57,10 @@ public static class PerfMonitor
     {
         "EnemyManager.Update",
         "EnemyManager.FixedUpdate",
-        "Enemy.MyUpdate",
         "Enemy.MyFixedUpdate",
         "EnemyMovementRb.MyFixedUpdate",
         "AnimatedMesh.Update",
-        "EnemyHpBar.Update",
         "EnemyDissolve.Update",
-        "VisualizeTargeting.Update",
         "MinimapUi.Update",
         "AlwaysManager.Update",
     };
@@ -447,7 +444,8 @@ public static class PerfMonitor
     }
 
     // One-shot component census: scene = components on active game objects, live = also enabled and active in hierarchy,
-    // any = everything Resources sees, prefabs and inactive included. A zero-call probe with live > 0 is an attach failure.
+    // any = everything Resources sees, prefabs and inactive included. Settled that EnemyHpBar and VisualizeTargeting never
+    // spawn (prefab-only / absent), so probes on their Update would time nothing; a game update that changes this shows up here.
     public static JsonObject Census()
     {
         var rows = new List<(string, int, int, int)>

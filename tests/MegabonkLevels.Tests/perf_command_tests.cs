@@ -59,10 +59,10 @@ public class PerfCommandTests
     [Fact]
     public void TryParse_Perf_TogglePreservesTargetAndEnabled()
     {
-        Assert.True(HarnessCommand.TryParse("""{"command":"perf","action":"toggle","target":"EnemyHpBar.Update","enabled":false}""", out var command, out _));
+        Assert.True(HarnessCommand.TryParse("""{"command":"perf","action":"toggle","target":"EnemyManager.Update","enabled":false}""", out var command, out _));
 
         Assert.Equal("toggle", command.Perf.Action);
-        Assert.Equal("EnemyHpBar.Update", command.Perf.Target);
+        Assert.Equal("EnemyManager.Update", command.Perf.Target);
         Assert.False(command.Perf.Enabled);
     }
 

@@ -953,16 +953,16 @@ async def test_perf_tool_sends_toggle_target_and_enabled(tmp_path, monkeypatch) 
 
     def responder(payload):
         seen.append(payload)
-        return ok_result(payload, {"target": "EnemyHpBar.Update", "enabled": False})
+        return ok_result(payload, {"target": "EnemyManager.Update", "enabled": False})
 
     stop = start_fake_mod(harness, responder)
     try:
         async with Client(mcp_server.mcp) as client:
-            result = await client.call_tool("perf", {"verb": "toggle", "target": "EnemyHpBar.Update", "enabled": False})
+            result = await client.call_tool("perf", {"verb": "toggle", "target": "EnemyManager.Update", "enabled": False})
     finally:
         stop.set()
     assert not result.is_error
-    assert seen == [{"command": "perf", "action": "toggle", "target": "EnemyHpBar.Update", "enabled": False}]
+    assert seen == [{"command": "perf", "action": "toggle", "target": "EnemyManager.Update", "enabled": False}]
 
 
 async def test_perf_tool_omits_arguments_a_verb_does_not_use(tmp_path, monkeypatch) -> None:

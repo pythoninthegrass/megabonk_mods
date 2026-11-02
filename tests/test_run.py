@@ -1685,11 +1685,11 @@ def test_perf_timescale_rejects_values_outside_the_range(value: str) -> None:
 
 
 def test_perf_toggle_payload_carries_target_and_state() -> None:
-    args = run.parse_args(["perf", "toggle", "--target", "EnemyHpBar.Update", "--disable"])
+    args = run.parse_args(["perf", "toggle", "--target", "EnemyManager.Update", "--disable"])
     assert run.perf_payload(args) == {
         "command": "perf",
         "action": "toggle",
-        "target": "EnemyHpBar.Update",
+        "target": "EnemyManager.Update",
         "enabled": False,
     }
 

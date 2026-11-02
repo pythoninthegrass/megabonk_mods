@@ -5,7 +5,6 @@ using HarmonyLib;
 using Il2Cpp;
 using Il2CppActors.Enemies;
 using Il2CppAssets.Scripts.Actors.Enemies;
-using Il2CppAssets.Scripts.Inventory__Items__Pickups.Weapons;
 using Il2CppAssets.Scripts.Managers;
 using MelonLoader;
 
@@ -26,13 +25,10 @@ public static class PerfProbes
     {
         ("EnemyManager.Update", typeof(EnemyManager), "Update"),
         ("EnemyManager.FixedUpdate", typeof(EnemyManager), "FixedUpdate"),
-        ("Enemy.MyUpdate", typeof(Enemy), "MyUpdate"),
         ("Enemy.MyFixedUpdate", typeof(Enemy), "MyFixedUpdate"),
         ("EnemyMovementRb.MyFixedUpdate", typeof(EnemyMovementRb), "MyFixedUpdate"),
         ("AnimatedMesh.Update", typeof(AnimatedMesh), "Update"),
-        ("EnemyHpBar.Update", typeof(EnemyHpBar), "Update"),
         ("EnemyDissolve.Update", typeof(EnemyDissolve), "Update"),
-        ("VisualizeTargeting.Update", typeof(VisualizeTargeting), "Update"),
         ("MinimapUi.Update", typeof(MinimapUi), "Update"),
         ("AlwaysManager.Update", typeof(AlwaysManager), "Update"),
     };
@@ -89,18 +85,9 @@ public static class PerfProbes
         private static void Postfix(double __state) => PerfMonitor.ProbeExit(Name, __state);
     }
 
-    // The game dispatches its own actor ticks through MyUpdate/MyFixedUpdate rather than Unity's Update, so the per-enemy AI
-    // and movement work is invisible to the EnemyManager probe alone.
-    [HarmonyPatch(typeof(Enemy), "MyUpdate")]
-    private static class EnemyMyUpdateProbe
-    {
-        private const string Name = "Enemy.MyUpdate";
-
-        private static void Prefix(out double __state) => PerfMonitor.ProbeEnter(Name, out __state);
-
-        private static void Postfix(double __state) => PerfMonitor.ProbeExit(Name, __state);
-    }
-
+    // The game dispatches its own fixed actor tick through MyFixedUpdate rather than Unity's FixedUpdate, so the per-enemy
+    // movement work is invisible to the EnemyManager probe alone. Enemy.MyUpdate, EnemyHpBar.Update and VisualizeTargeting.Update
+    // are deliberately not probed: never called, or never instantiated (docs/performance.md).
     [HarmonyPatch(typeof(Enemy), "MyFixedUpdate")]
     private static class EnemyMyFixedUpdateProbe
     {
@@ -121,30 +108,10 @@ public static class PerfProbes
         private static void Postfix(double __state) => PerfMonitor.ProbeExit(Name, __state);
     }
 
-    [HarmonyPatch(typeof(EnemyHpBar), "Update")]
-    private static class EnemyHpBarUpdateProbe
-    {
-        private const string Name = "EnemyHpBar.Update";
-
-        private static void Prefix(out double __state) => PerfMonitor.ProbeEnter(Name, out __state);
-
-        private static void Postfix(double __state) => PerfMonitor.ProbeExit(Name, __state);
-    }
-
     [HarmonyPatch(typeof(EnemyDissolve), "Update")]
     private static class EnemyDissolveUpdateProbe
     {
         private const string Name = "EnemyDissolve.Update";
-
-        private static void Prefix(out double __state) => PerfMonitor.ProbeEnter(Name, out __state);
-
-        private static void Postfix(double __state) => PerfMonitor.ProbeExit(Name, __state);
-    }
-
-    [HarmonyPatch(typeof(VisualizeTargeting), "Update")]
-    private static class VisualizeTargetingUpdateProbe
-    {
-        private const string Name = "VisualizeTargeting.Update";
 
         private static void Prefix(out double __state) => PerfMonitor.ProbeEnter(Name, out __state);
 

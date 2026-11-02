@@ -732,12 +732,15 @@ The harness carries a frame profiler, for the question "what costs what when the
 | `toggle --target NAME --enable\|--disable` | Switches one mod tick (`KillFloor`), one probe (`EnemyManager.Update`) or `all` | the target's new state |
 | `vsync --disable` | Sets `QualitySettings.vSyncCount` to 0 and `targetFrameRate` to 0, which is what uncaps the frame rate enough to measure | `vSyncCount`, `targetFrameRate` |
 | `health [--hp N]` | Keeps the player alive through a window: the invulnerability grant (20 Mirror stacks, cooldown zeroed, plus 2 Feathers) and `PlayerHealth.hp`/`maxHp` written to 1,000,000/100,000,000, or `--hp` | `playerHp`, `playerGrantRestored` |
+| `census` | Counts loaded instances of `Enemy`, `EnemyHpBar`, `VisualizeTargeting` and `AnimatedMesh`: `scene` = on active game objects, `live` = also enabled and active in hierarchy, `any` = everything `Resources` sees, prefabs included. The way to tell a dead method from a ghost component | `census` array of `{name, scene, live, any}` |
 
 `run.py perf report` and the MCP `perf` tool return the JSON; `perf health` is the invulnerability setup of the "Player invulnerability" section plus a hit-point floor, applied in one command so it can be sent before a spawn.
 
 **Frames.** One sample per frame from `Time.unscaledDeltaTime` in the mod's `OnUpdate`, while `MyTime.paused` is false. While it is true the frame is counted and not sampled (`Perf: pause: on/off` is logged on each transition). Paused frames are UI frames: Unity keeps rendering a frozen run at a rate that says nothing about gameplay, and those frames are long, so a window that contains any is a different measurement than the one being asked for. `pausedFrames` is how the caller finds out.
 
-**Ticks and probes.** Each mod tick is wrapped in `PerfMonitor.Timed`, and eleven Harmony prefix/postfix pairs instrument the game's own enemy path: `EnemyManager.Update`, `EnemyManager.FixedUpdate`, `Enemy.MyUpdate`, `Enemy.MyFixedUpdate`, `EnemyMovementRb.MyFixedUpdate`, `EnemyHpBar.Update`, `EnemyDissolve.Update`, `VisualizeTargeting.Update`, `AnimatedMesh.Update`, `MinimapUi.Update` and `AlwaysManager.Update`. Both use `Stopwatch.GetTimestamp()`, never `Time.*`, because a tick can run inside a frame whose delta is the thing being measured. `calls` matters as much as `ms`: at 154 fps the 50 Hz fixed update is 0.35 of a call per frame, so 240 enemies is 84 `Enemy.MyFixedUpdate` calls per frame. `maxMs` is the one to read when the complaint is a hitch rather than a low average — an average of 0.013 ms/frame can hide a 112 ms single call.
+**Ticks and probes.** Each mod tick is wrapped in `PerfMonitor.Timed`, and eight Harmony prefix/postfix pairs instrument the game's own enemy path: `EnemyManager.Update`, `EnemyManager.FixedUpdate`, `Enemy.MyFixedUpdate`, `EnemyMovementRb.MyFixedUpdate`, `EnemyDissolve.Update`, `AnimatedMesh.Update`, `MinimapUi.Update` and `AlwaysManager.Update`. `Enemy.MyUpdate`, `EnemyHpBar.Update` and `VisualizeTargeting.Update` were probed and dropped: never called, or never instantiated ([performance.md](performance.md#frame-time-against-enemy-count)). Both use `Stopwatch.GetTimestamp()`, never `Time.*`, because a tick can run inside a frame whose delta is the thing being measured. `calls` matters as much as `ms`: at 154 fps the 50 Hz fixed update is 0.35 of a call per frame, so 240 enemies is 84 `Enemy.MyFixedUpdate` calls per frame. `maxMs` is the one to read when the complaint is a hitch rather than a low average — an average of 0.013 ms/frame can hide a 112 ms single call.
+
+Every `report` and `status` also carries a `probeAttach` array of `{name, patched}` from Harmony's patch info, so a zero-call probe is classified in one step: `patched: false` is an attach failure, `patched: true` with zero calls means the method was not invoked, and `perf census` then separates "never invoked" from "never instantiated" by counting live instances of the components the probes attach to.
 
 `toggle all off` is the control that separates the three kinds of cost: mod work (the `ticks` array), stock work the probes can see (the `probes` array), and everything else, which is engine work — rendering, the physics broadphase and solver, GC. Probes measure the game, they are not part of playing it, and a report should be read as a diagnostic build's numbers.
 
@@ -767,8 +770,10 @@ uv run scripts/perf_sweep.py --count 240 --captures 2 --capture-dir /tmp/RenderD
 On a direct-Proton Linux host (no `task game:run` available), pass `--launch-cmd` to relaunch instead:
 
 ```sh
-uv run scripts/perf_sweep.py --count 0 --count 240 --launch-cmd "sh ~/.local/share/scripts/launch-megabonk.sh"
+uv run scripts/perf_sweep.py --count 0 --count 240 --launch-cmd "sh /home/lance/.local/share/scripts/launch-megabonk.sh"
 ```
+
+The command is split with `shlex` and run without a login shell, so a leading `~` is never expanded — give absolute paths. The launcher must return promptly: detach the game (`setsid ... &`) rather than exec it, and export `DISPLAY`/`XAUTHORITY` yourself — over SSH they are unset, and the Proton launcher inherits them; take `XAUTHORITY` from the running Xwayland's `-auth` argument.
 
 **Density A/B** (`--density gathered|strung`). `gathered` (default) teleports the player to a fixed point so the swarm converges there. `strung` does the same spawn, then teleports the player `--strung-offset` world units along +X so the swarm is left behind — isolating contact-density cost at equal enemy counts. The A/B result and what it showed are in [performance.md](performance.md#attributing-the-22-ms-unprobed-per-enemy-cost).
 
