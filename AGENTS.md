@@ -58,7 +58,7 @@ uv run scripts/run.py editor on
 
 ### Launching without a Steam session
 
-Steam allows one session per account across devices, so a second Mac signing in signs the first out. For multi-machine work, `tools/steamstub/` provides a drop-in `steam_api64.dll` that lets the game launch and play with Steam stopped — no login, no `SteamAppId`/`SteamGameId`. Install it with `task steamstub:install` (reversible with `task steamstub:restore`), then launch through the same `task game:run` and `relaunch`. The game tolerates the failed `SteamAPI.Init()` and continues to the main menu, and `load-level` still works. See "Launching without a Steam session" in `docs/development.md`.
+Prefer the steamstub for offline development: with `tools/steamstub/`'s drop-in `steam_api64.dll` installed (`task steamstub:install`, reversible with `task steamstub:restore`), the game launches and plays with Steam stopped — no login and no signing other machines out. Launch through the same `task game:run` and `relaunch`; direct-Proton runs on Linux hosts use the same stub. See "Launching without a Steam session" in `docs/development.md`.
 
 ## Reading the game's code
 
