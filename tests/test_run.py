@@ -545,6 +545,31 @@ def test_dismiss_offers_payload_defaults_to_closing_without_choosing() -> None:
     }
 
 
+def test_build_interact_command_carries_the_optional_filters() -> None:
+    assert run.build_interact_command(None, None, False) == {"command": "interact"}
+    assert run.build_interact_command("Magnet", None, False) == {"command": "interact", "type": "Magnet"}
+    assert run.build_interact_command(None, 4.5, False) == {"command": "interact", "maxDistance": 4.5}
+    assert run.build_interact_command("Magnet", 4.5, True) == {
+        "command": "interact",
+        "type": "Magnet",
+        "maxDistance": 4.5,
+        "force": True,
+    }
+
+
+def test_interact_payload_reads_the_cli_flags() -> None:
+    assert run.interact_payload(run.parse_args(["interact"])) == {"command": "interact"}
+    assert run.interact_payload(run.parse_args(["interact", "--type", "Magnet"])) == {
+        "command": "interact",
+        "type": "Magnet",
+    }
+    assert run.interact_payload(run.parse_args(["interact", "--max-distance", "4"])) == {
+        "command": "interact",
+        "maxDistance": 4.0,
+    }
+    assert run.interact_payload(run.parse_args(["interact", "--force"])) == {"command": "interact", "force": True}
+
+
 def test_teleport_prints_the_result_json(capsys) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         game = fake_game(tmp, '{"command":"teleport","ok":true,"result":{"position":[1,2,3],"cell":[4,5]}}')

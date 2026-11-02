@@ -36,6 +36,7 @@ public enum HarnessCommandKind
     Teleport,
     DismissLevelUp,
     DismissOffers,
+    Interact,
     ClickWidget,
     UiTree,
     SaveLevel,
@@ -89,6 +90,16 @@ public sealed class ItemArgs
     public int? Amount { get; init; }
 }
 
+// Which interactable to activate: null Type means nearest, null MaxDistance means unbounded, Force bypasses CanInteract.
+public sealed class InteractArgs
+{
+    public string Type { get; init; }
+
+    public float? MaxDistance { get; init; }
+
+    public bool Force { get; init; }
+}
+
 public sealed class DamageArgs
 {
     public int Amount { get; init; }
@@ -121,7 +132,7 @@ public sealed class QueryArgs
 }
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null, PerfArgs Perf = null, int? Offer = null, bool Skip = false)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null, PerfArgs Perf = null, int? Offer = null, bool Skip = false, InteractArgs Interact = null)
 {
     public const int MaxTypeLength = 200;
 
@@ -254,6 +265,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseDismissLevelUp(root, out command, out error);
             case "dismiss-offers":
                 return TryParseDismissOffers(root, out command, out error);
+            case "interact":
+                return TryParseInteract(root, out command, out error);
             case "camera":
                 return TryParseCamera(root, out command, out error);
             case "load-level":
@@ -603,6 +616,48 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.DismissOffers, null, Offer: offer, Skip: skip);
+        error = null;
+        return true;
+    }
+
+    private static bool TryParseInteract(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        string type = null;
+        if (root.TryGetPropertyValue("type", out var typeNode) && typeNode != null)
+        {
+            if (typeNode is not JsonValue typeValue || !typeValue.TryGetValue(out type) || string.IsNullOrWhiteSpace(type))
+            {
+                error = "field 'type' must be a non-empty string";
+                return false;
+            }
+        }
+
+        float? maxDistance = null;
+        var parsed = 0f;
+        if (root.TryGetPropertyValue("maxDistance", out var distanceNode) && distanceNode != null)
+        {
+            if (distanceNode is not JsonValue distanceValue || !distanceValue.TryGetValue(out parsed) || float.IsNaN(parsed) || float.IsInfinity(parsed) || parsed <= 0)
+            {
+                error = "field 'maxDistance' must be a positive number";
+                return false;
+            }
+
+            maxDistance = parsed;
+        }
+
+        var force = false;
+        if (root.TryGetPropertyValue("force", out var forceNode) && forceNode != null)
+        {
+            if (forceNode is not JsonValue forceValue || !forceValue.TryGetValue(out force))
+            {
+                error = "field 'force' must be a boolean";
+                return false;
+            }
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.Interact, null, Interact: new InteractArgs { Type = type, MaxDistance = maxDistance, Force = force });
         error = null;
         return true;
     }

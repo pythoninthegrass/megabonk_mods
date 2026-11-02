@@ -64,6 +64,7 @@ Usage:
     run.py grind-slide <on|off|auto>  Hold the slide button down, release it, or read the real device again, for the grind gate on a grindRequiresSlide level
     run.py dismiss-levelup [--choice N]  Pick offer N (default 0) in the open level-up dialog; prints dialogWasOpen and chosen
     run.py dismiss-offers [--choice N] [--skip]  Close the open reward window (level-up, shrine offers, chest, microwave); --choice N picks offer N, --skip skips a level-up without choosing
+    run.py interact [--type SUBSTRING] [--max-distance N] [--force]  Activate the nearest interactable through the game's own Interact, bypassing the hover gate
     run.py quit                    Quit the game, wait for the process to exit, and stop leftover Wine processes (macOS)
     run.py relaunch [level] [--no-level] [--map N] [--stage N] [--tier N] [--seed N] [--character NAME]
                                    Quit and relaunch the game, load a level (default: the test forest) and enter editor; --no-level stops at the main menu
@@ -434,6 +435,17 @@ def build_dismiss_offers_command(choice: int | None, skip: bool) -> dict[str, ob
         payload["choice"] = choice
     if skip:
         payload["skip"] = True
+    return payload
+
+
+def build_interact_command(type_filter: str | None, max_distance: float | None, force: bool) -> dict[str, object]:
+    payload: dict[str, object] = {"command": "interact"}
+    if type_filter is not None:
+        payload["type"] = type_filter
+    if max_distance is not None:
+        payload["maxDistance"] = max_distance
+    if force:
+        payload["force"] = True
     return payload
 
 
@@ -1089,6 +1101,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     dismiss_offers = sub.add_parser("dismiss-offers")
     dismiss_offers.add_argument("--choice", type=int, default=None, help="zero-based index of the offered upgrade to pick instead of closing the window")
     dismiss_offers.add_argument("--skip", action="store_true", help="skip the level-up window without choosing; only valid there")
+    interact = sub.add_parser("interact")
+    interact.add_argument("--type", help="only interactables whose class or object name contains this substring, e.g. Magnet")
+    interact.add_argument("--max-distance", type=float, help="only interactables within this many units of the player")
+    interact.add_argument("--force", action="store_true", help="call Interact even when the game's CanInteract returns false")
     music_probe = sub.add_parser("music-probe")
     music_probe.add_argument(
         "probe_action",
@@ -1225,6 +1241,10 @@ def dismiss_levelup_payload(args: argparse.Namespace) -> dict[str, object]:
 
 def dismiss_offers_payload(args: argparse.Namespace) -> dict[str, object]:
     return build_dismiss_offers_command(args.choice, args.skip)
+
+
+def interact_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_interact_command(args.type, args.max_distance, args.force)
 
 
 def music_probe_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -1531,6 +1551,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, dismiss_levelup_payload(args), args.timeout)
         case "dismiss-offers":
             ok = send_printing_result(harness, dismiss_offers_payload(args), args.timeout)
+        case "interact":
+            ok = send_printing_result(harness, interact_payload(args), args.timeout)
         case "music-probe":
             ok = send_printing_result(harness, music_probe_payload(args), args.timeout)
         case "character-screen":

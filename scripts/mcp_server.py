@@ -500,6 +500,12 @@ async def dismiss_offers(choice: int | None = None, skip: bool = False) -> CallT
 
 
 @mcp.tool()
+async def interact(type: str | None = None, max_distance: float | None = None, force: bool = False) -> CallToolResult:
+    """Activate the nearest interactable through the game's own CanInteract/Interact, bypassing the hover gate in DetectInteractables. type filters by substring of the class or object name (e.g. Magnet); max_distance limits candidates to that many units from the player; force calls Interact even when CanInteract returns false. Returns interacted, name, type, distance, prompt, canInteract, result and candidates."""
+    return await _command(_harness(), run.build_interact_command(type, max_distance, force), TIMEOUT)
+
+
+@mcp.tool()
 async def log_tail(pattern: str | None = None, since_launch: bool = True, max_lines: int = 50) -> list[str]:
     """Read the game's Latest.log: filter to the current session, to lines matching a regex, and to the last N lines."""
     regex = _compile_pattern("log_tail", pattern) if pattern is not None else None

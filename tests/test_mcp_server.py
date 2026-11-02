@@ -354,6 +354,10 @@ INPUT_TOOL_CASES = [
     ("dismiss_offers", {}, {"command": "dismiss-offers"}),
     ("dismiss_offers", {"choice": 2}, {"command": "dismiss-offers", "choice": 2}),
     ("dismiss_offers", {"skip": True}, {"command": "dismiss-offers", "skip": True}),
+    ("interact", {}, {"command": "interact"}),
+    ("interact", {"type": "Magnet"}, {"command": "interact", "type": "Magnet"}),
+    ("interact", {"max_distance": 4.5}, {"command": "interact", "maxDistance": 4.5}),
+    ("interact", {"force": True}, {"command": "interact", "force": True}),
 ]
 
 

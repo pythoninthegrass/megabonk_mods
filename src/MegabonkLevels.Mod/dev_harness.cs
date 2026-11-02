@@ -255,6 +255,8 @@ public static class DevHarness
                 return DismissLevelUp(command.Choice);
             case HarnessCommandKind.DismissOffers:
                 return DismissOffers(command.Offer, command.Skip);
+            case HarnessCommandKind.Interact:
+                return Interact(command.Interact);
             case HarnessCommandKind.Quit:
                 _logger.Msg("DevHarness: quit requested, calling Application.Quit.");
                 Application.Quit();
@@ -587,6 +589,126 @@ public static class DevHarness
             ["closed"] = closed,
             ["reason"] = reason,
         };
+    }
+
+    // Activates the nearest interactable through the game's own CanInteract/Interact, bypassing DetectInteractables'
+    // hover gate, which no harness key press can reach because harness input never enters Rewired gameplay UI.
+    private static JsonObject Interact(InteractArgs args)
+    {
+        var player = MyPlayer.Instance;
+        if (player == null)
+        {
+            throw new InvalidOperationException("no player: start a run first");
+        }
+
+        var origin = player.transform.position;
+        BaseInteractable target = null;
+        var targetType = (Type)null;
+        var targetDistance = 0f;
+        var candidates = 0;
+        var seen = new HashSet<IntPtr>();
+        foreach (var type in InteractableTypes())
+        {
+            foreach (var found in Resources.FindObjectsOfTypeAll(Il2CppType.From(type)))
+            {
+                if (found == null) continue;
+
+                BaseInteractable item;
+                try
+                {
+                    item = (BaseInteractable)Activator.CreateInstance(type, found.Pointer);
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                // Prefab assets and inactive copies report a useless origin and must never be activated; the base-type
+                // sweep returns every subclass, so also drop instances an earlier sweep already recorded.
+                if (item?.gameObject == null || !item.gameObject.activeInHierarchy || !seen.Add(found.Pointer)) continue;
+
+                if (args.Type is { } filter
+                    && !type.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                    && !item.gameObject.name.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var distance = Vector3.Distance(item.transform.position, origin);
+                if (args.MaxDistance is { } max && distance > max) continue;
+
+                candidates++;
+                if (target == null || distance < targetDistance)
+                {
+                    target = item;
+                    targetType = type;
+                    targetDistance = distance;
+                }
+            }
+        }
+
+        if (target == null)
+        {
+            throw new InvalidOperationException(
+                $"no interactable matched (type={args.Type ?? "any"}, maxDistance={args.MaxDistance?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "any"})");
+        }
+
+        var name = target.gameObject.name;
+        var canInteract = target.CanInteract();
+        if (!canInteract && !args.Force)
+        {
+            _logger.Msg($"DevHarness: interact refused on {name} ({targetType.Name}), CanInteract returned false.");
+            return new JsonObject
+            {
+                ["interacted"] = false,
+                ["reason"] = "CanInteract returned false; pass force to call Interact anyway",
+                ["name"] = name,
+                ["type"] = targetType.Name,
+                ["distance"] = targetDistance,
+                ["candidates"] = candidates,
+            };
+        }
+
+        string prompt;
+        try
+        {
+            prompt = target.GetInteractString();
+        }
+        catch (Exception)
+        {
+            prompt = null;
+        }
+
+        var result = target.Interact();
+        _logger.Msg($"DevHarness: interact with {name} ({targetType.Name}) at {targetDistance:F1}, prompt '{prompt}', result {result}.");
+        return new JsonObject
+        {
+            ["interacted"] = true,
+            ["name"] = name,
+            ["type"] = targetType.Name,
+            ["distance"] = targetDistance,
+            ["prompt"] = prompt,
+            ["canInteract"] = canInteract,
+            ["result"] = result,
+            ["candidates"] = candidates,
+        };
+    }
+
+    private static List<Type> _interactableTypes;
+
+    // Derived wrappers first so a candidate reports its real class; the abstract base's non-abstract wrapper
+    // runs last as the fallback that still sees subclasses whose own wrapper failed to load.
+    private static List<Type> InteractableTypes()
+    {
+        if (_interactableTypes == null)
+        {
+            _interactableTypes = UnityObjectTypes()
+                .Where(type => typeof(BaseInteractable).IsAssignableFrom(type) && !type.IsAbstract)
+                .OrderByDescending(type => type != typeof(BaseInteractable))
+                .ToList();
+        }
+
+        return _interactableTypes;
     }
 
     // Why the game kept the level-up window open after Skip(): its own private skip counters and utility price.

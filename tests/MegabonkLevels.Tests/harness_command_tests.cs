@@ -568,6 +568,45 @@ public class HarnessCommandTests
     }
 
     [Fact]
+    public void TryParse_Interact_DefaultsToTheNearestInteractable()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"interact"}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.Interact, command.Kind);
+        Assert.Equal("interact", command.Name);
+        Assert.Null(command.Interact.Type);
+        Assert.Null(command.Interact.MaxDistance);
+        Assert.False(command.Interact.Force);
+    }
+
+    [Fact]
+    public void TryParse_Interact_CarriesTheTypeFilterDistanceAndForce()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"interact","type":"Magnet","maxDistance":7.5,"force":true}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Equal("Magnet", command.Interact.Type);
+        Assert.Equal(7.5f, command.Interact.MaxDistance);
+        Assert.True(command.Interact.Force);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"interact","type":""}""", "type")]
+    [InlineData("""{"command":"interact","type":5}""", "type")]
+    [InlineData("""{"command":"interact","maxDistance":"near"}""", "maxDistance")]
+    [InlineData("""{"command":"interact","maxDistance":-1}""", "maxDistance")]
+    [InlineData("""{"command":"interact","force":"yes"}""", "force")]
+    public void TryParse_InteractWithUnusableArguments_FailsNamingTheField(string json, string expectedFragment)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains(expectedFragment, error);
+    }
+
+    [Fact]
     public void KeyNames_ListsTheDocumentedGroupsAndNoDuplicates()
     {
         string[] expected =
