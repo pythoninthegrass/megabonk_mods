@@ -58,6 +58,8 @@ Usage:
     run.py item NAME [AMOUNT]      Print the player's amount of an item; with AMOUNT set it exactly (0 removes it), printing before and after
     run.py grind-slide <on|off|auto>  Hold the slide button down, release it, or read the real device again, for the grind gate on a grindRequiresSlide level
     run.py dismiss-levelup [--choice N]  Pick offer N (default 0) in the open level-up dialog; prints dialogWasOpen and chosen
+    run.py dismiss-levelup [--choice N]  Pick offer N (default 0) in the open level-up dialog; prints dialogWasOpen and chosen
+    run.py dismiss-offers [--choice N] [--skip]  Close the open reward window (level-up, shrine offers, chest, microwave); --choice N picks offer N, --skip skips a level-up without choosing
     run.py quit                    Quit the game, wait for the process to exit, and stop leftover Wine processes (macOS)
     run.py relaunch [level] [--no-level] [--map N] [--stage N] [--tier N] [--seed N] [--character NAME]
                                    Quit and relaunch the game, load a level (default: the test forest) and enter editor; --no-level stops at the main menu
@@ -361,6 +363,14 @@ def build_fall_damage_command() -> dict[str, object]:
 def build_dismiss_levelup_command(choice: int) -> dict[str, object]:
     return {"command": "dismiss-levelup", "choice": choice}
 
+
+def build_dismiss_offers_command(choice: int | None, skip: bool) -> dict[str, object]:
+    payload: dict[str, object] = {"command": "dismiss-offers"}
+    if choice is not None:
+        payload["choice"] = choice
+    if skip:
+        payload["skip"] = True
+    return payload
 
 def write_command(commands_dir: Path, payload: dict[str, object]) -> Path:
     name = f"{time.time_ns()}-{payload['command']}.json"
@@ -1003,7 +1013,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("fall-damage", help="report the player's fall-damage inputs: thresholds, FallDamageReduction, fall speed, and both characters' stored values")
     dismiss = sub.add_parser("dismiss-levelup")
     dismiss.add_argument("--choice", type=int, default=0, help="zero-based index of the offered upgrade")
-    music_probe = sub.add_parser("music-probe")
+    dismiss_offers = sub.add_parser("dismiss-offers")
+    dismiss_offers.add_argument("--choice", type=int, default=None, help="zero-based index of the offered upgrade to pick instead of closing the window")
+    dismiss_offers.add_argument("--skip", action="store_true", help="skip the level-up window without choosing; only valid there")    music_probe = sub.add_parser("music-probe")
     music_probe.add_argument(
         "probe_action",
         choices=[
@@ -1136,6 +1148,9 @@ def teleport_payload(args: argparse.Namespace) -> dict[str, object]:
 def dismiss_levelup_payload(args: argparse.Namespace) -> dict[str, object]:
     return build_dismiss_levelup_command(args.choice)
 
+
+def dismiss_offers_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_dismiss_offers_command(args.choice, args.skip)
 
 def music_probe_payload(args: argparse.Namespace) -> dict[str, object]:
     payload: dict[str, object] = {"command": "music-probe", "action": args.probe_action}
@@ -1418,6 +1433,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, build_fall_damage_command(), args.timeout)
         case "dismiss-levelup":
             ok = send_printing_result(harness, dismiss_levelup_payload(args), args.timeout)
+        case "dismiss-offers":
+            ok = send_printing_result(harness, dismiss_offers_payload(args), args.timeout)
         case "music-probe":
             ok = send_printing_result(harness, music_probe_payload(args), args.timeout)
         case "character-screen":

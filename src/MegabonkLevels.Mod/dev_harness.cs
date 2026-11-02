@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Il2Cpp;
 using Il2CppAssets.Scripts.Actors.Player;
+using Il2CppAssets.Scripts.UI.InGame.Rewards;
 using Il2CppAssets.Scripts.Utility;
 using Il2CppInterop.Runtime;
 using MelonLoader;
@@ -248,6 +249,8 @@ public static class DevHarness
                 return MusicProbe.Run(command.Input.Action, command.Path, command.Input.Variant, command.Input.Value, _logger);
             case HarnessCommandKind.DismissLevelUp:
                 return DismissLevelUp(command.Choice);
+            case HarnessCommandKind.DismissOffers:
+                return DismissOffers(command.Offer, command.Skip);
             case HarnessCommandKind.Quit:
                 _logger.Msg("DevHarness: quit requested, calling Application.Quit.");
                 Application.Quit();
@@ -456,6 +459,80 @@ public static class DevHarness
         _logger.Msg($"DevHarness: dismiss-levelup chose {choice} '{chosen}'.");
         return new JsonObject { ["dialogWasOpen"] = true, ["chosen"] = chosen };
     }
+
+    // Closes, skips or picks the visible reward window (level-up, shrine offers, chest, microwave).
+    // The windows are BaseEncounterWindow subclasses sharing Open/OnClose/ChooseOffer; see docs/development.md.
+    private static JsonObject DismissOffers(int? offer, bool skip)
+    {
+        var windows = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>().OfType<BaseEncounterWindow>().ToList();
+        var window = windows.FirstOrDefault(w => w is LevelupScreen && LevelupScreen.isLevelingUp)
+            ?? windows.FirstOrDefault(w => w.gameObject.activeInHierarchy);
+        if (window == null)
+        {
+            return new JsonObject { ["windowWasOpen"] = false, ["window"] = null };
+        }
+
+        var label = $"{window.GetType().Name} ({window.gameObject.name})";
+        string action;
+        bool closed;
+
+        if (skip)
+        {
+            if (window is not LevelupScreen skipScreen)
+            {
+                throw new InvalidOperationException($"'{label}' is not the level-up window; skip only applies there");
+            }
+
+            skipScreen.Skip();
+            closed = !LevelupScreen.isLevelingUp;
+            action = "skip";
+        }
+        else if (offer is int index)
+        {
+            if (window is LevelupScreen levelup)
+            {
+                var buttons = levelup.upgradePicker.buttons;
+                if (index >= buttons.Length)
+                {
+                    throw new InvalidOperationException($"choice {index} is out of range; the window offers {buttons.Length} upgrades");
+                }
+            }
+
+            window.ChooseOffer(index);
+            closed = window is LevelupScreen ? !LevelupScreen.isLevelingUp : !window.gameObject.activeInHierarchy;
+            action = $"choose {index}";
+        }
+        else
+        {
+            if (window is LevelupScreen levelupScreen)
+            {
+                levelupScreen.CloseLevelupScreen();
+            }
+            else
+            {
+                window.OnClose();
+            }
+
+            closed = window is LevelupScreen ? !LevelupScreen.isLevelingUp : !window.gameObject.activeInHierarchy;
+            action = "close";
+        }
+
+        // Closing the window unpauses the run, which would end an editor session's freeze.
+        if (closed && EditorMode.Active)
+        {
+            MyTime.Pause();
+        }
+
+        _logger.Msg($"DevHarness: dismiss-offers {action} on {label}, closed={closed}.");
+        return new JsonObject
+        {
+            ["windowWasOpen"] = true,
+            ["window"] = label,
+            ["action"] = action,
+            ["closed"] = closed,
+        };
+    }
+
 
     // Ends the run through PlayerHealth.KillPlayer, the same call the kill floor uses, so it ignores invulnerability.
     private static void KillPlayer()

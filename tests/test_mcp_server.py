@@ -351,6 +351,9 @@ INPUT_TOOL_CASES = [
     ("fall_damage", {}, {"command": "fall-damage"}),
     ("dismiss_levelup", {}, {"command": "dismiss-levelup", "choice": 0}),
     ("dismiss_levelup", {"choice": 2}, {"command": "dismiss-levelup", "choice": 2}),
+    ("dismiss_offers", {}, {"command": "dismiss-offers"}),
+    ("dismiss_offers", {"choice": 2}, {"command": "dismiss-offers", "choice": 2}),
+    ("dismiss_offers", {"skip": True}, {"command": "dismiss-offers", "skip": True}),
 ]
 
 

@@ -526,6 +526,24 @@ def test_dismiss_levelup_payload_defaults_to_the_first_offer() -> None:
     }
 
 
+def test_build_dismiss_offers_command_carries_the_choice_and_skip() -> None:
+    assert run.build_dismiss_offers_command(None, False) == {"command": "dismiss-offers"}
+    assert run.build_dismiss_offers_command(0, False) == {"command": "dismiss-offers", "choice": 0}
+    assert run.build_dismiss_offers_command(2, False) == {"command": "dismiss-offers", "choice": 2}
+    assert run.build_dismiss_offers_command(None, True) == {"command": "dismiss-offers", "skip": True}
+
+
+def test_dismiss_offers_payload_defaults_to_closing_without_choosing() -> None:
+    assert run.dismiss_offers_payload(run.parse_args(["dismiss-offers"])) == {"command": "dismiss-offers"}
+    assert run.dismiss_offers_payload(run.parse_args(["dismiss-offers", "--choice", "2"])) == {
+        "command": "dismiss-offers",
+        "choice": 2,
+    }
+    assert run.dismiss_offers_payload(run.parse_args(["dismiss-offers", "--skip"])) == {
+        "command": "dismiss-offers",
+        "skip": True,
+    }
+
 def test_teleport_prints_the_result_json(capsys) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         game = fake_game(tmp, '{"command":"teleport","ok":true,"result":{"position":[1,2,3],"cell":[4,5]}}')

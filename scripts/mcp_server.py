@@ -465,6 +465,13 @@ async def dismiss_levelup(choice: int = 0) -> CallToolResult:
 
 
 @mcp.tool()
+async def dismiss_offers(choice: int | None = None, skip: bool = False) -> CallToolResult:
+    """Act on the open reward window (level-up, shrine offers, chest, microwave) without a click. Default closes it without choosing; choice N picks the offer at zero-based index N; skip skips a level-up without choosing (level-up window only). With no window open it succeeds and changes nothing (windowWasOpen false). Returns windowWasOpen, window, action and closed."""
+    return await _command(_harness(), run.build_dismiss_offers_command(choice, skip), TIMEOUT)
+
+
+
+@mcp.tool()
 async def log_tail(pattern: str | None = None, since_launch: bool = True, max_lines: int = 50) -> list[str]:
     """Read the game's Latest.log: filter to the current session, to lines matching a regex, and to the last N lines."""
     regex = _compile_pattern("log_tail", pattern) if pattern is not None else None

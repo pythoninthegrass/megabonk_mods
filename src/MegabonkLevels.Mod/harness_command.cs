@@ -35,6 +35,7 @@ public enum HarnessCommandKind
     Type,
     Teleport,
     DismissLevelUp,
+    DismissOffers,
     ClickWidget,
     UiTree,
     SaveLevel,
@@ -103,7 +104,7 @@ public sealed class QueryArgs
 }
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null, int? Offer = null, bool Skip = false)
 {
     public const int MaxTypeLength = 200;
 
@@ -232,6 +233,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseTeleport(root, out command, out error);
             case "dismiss-levelup":
                 return TryParseDismissLevelUp(root, out command, out error);
+            case "dismiss-offers":
+                return TryParseDismissOffers(root, out command, out error);
             case "camera":
                 return TryParseCamera(root, out command, out error);
             case "load-level":
@@ -467,6 +470,38 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         error = null;
         return true;
     }
+
+    private static bool TryParseDismissOffers(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+        int? offer = null;
+        var skip = false;
+
+        if (root.TryGetPropertyValue("choice", out var choiceNode) && choiceNode != null)
+        {
+            if (choiceNode is not JsonValue choiceValue || !choiceValue.TryGetValue(out int choice) || choice < 0)
+            {
+                error = "field 'choice' must be a non-negative integer";
+                return false;
+            }
+
+            offer = choice;
+        }
+
+        if (root.TryGetPropertyValue("skip", out var skipNode) && skipNode != null)
+        {
+            if (skipNode is not JsonValue skipValue || !skipValue.TryGetValue(out skip))
+            {
+                error = "field 'skip' must be a boolean";
+                return false;
+            }
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.DismissOffers, null, Offer: offer, Skip: skip);
+        error = null;
+        return true;
+    }
+
 
     private static bool TryParseKey(JsonObject root, out HarnessCommand command, out string error)
     {

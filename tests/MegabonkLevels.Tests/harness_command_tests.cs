@@ -512,6 +512,62 @@ public class HarnessCommandTests
     }
 
     [Fact]
+    public void TryParse_DismissOffers_DefaultsToCloseWithoutChoosing()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"dismiss-offers"}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.DismissOffers, command.Kind);
+        Assert.Equal("dismiss-offers", command.Name);
+        Assert.Null(command.Offer);
+        Assert.False(command.Skip);
+    }
+
+    [Fact]
+    public void TryParse_DismissOffers_CarriesTheOfferAndSkip()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"dismiss-offers","choice":2,"skip":true}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Equal(2, command.Offer);
+        Assert.True(command.Skip);
+    }
+
+    [Fact]
+    public void TryParse_DismissOffers_ZeroOfferIsDistinctFromAbsent()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"dismiss-offers","choice":0}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Equal(0, command.Offer);
+        Assert.False(command.Skip);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"dismiss-offers","choice":-1}""")]
+    [InlineData("""{"command":"dismiss-offers","choice":1.5}""")]
+    [InlineData("""{"command":"dismiss-offers","choice":"first"}""")]
+    public void TryParse_DismissOffersWithABadChoice_FailsNamingTheField(string json)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains("choice", error);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"dismiss-offers","skip":"yes"}""")]
+    [InlineData("""{"command":"dismiss-offers","skip":1}""")]
+    public void TryParse_DismissOffersWithABadSkip_FailsNamingTheField(string json)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains("skip", error);
+    }
+
+    [Fact]
     public void KeyNames_ListsTheDocumentedGroupsAndNoDuplicates()
     {
         string[] expected =
