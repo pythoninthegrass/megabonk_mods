@@ -275,7 +275,7 @@ def build_heartbeat_command(enabled: bool) -> dict[str, object]:
     return {"command": "heartbeat", "enabled": enabled}
 
 
-PERF_ACTIONS = ("report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health", "phases")
+PERF_ACTIONS = ("report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health")
 PERF_MAX_ENEMIES = 300
 PERF_MIN_TIME_SCALE = 0.05
 PERF_MAX_TIME_SCALE = 20.0
@@ -1279,7 +1279,7 @@ def perf_payload(args: argparse.Namespace) -> dict[str, object]:
     if verb == "spawn" and args.count is None:
         raise SystemExit(f"perf spawn: give --count N (1-{PERF_MAX_ENEMIES})")
     enabled = None
-    if verb in ("toggle", "vsync", "phases"):
+    if verb in ("toggle", "vsync"):
         if args.enable == args.disable:
             raise SystemExit(f"perf {verb}: give exactly one of --enable or --disable")
         enabled = args.enable

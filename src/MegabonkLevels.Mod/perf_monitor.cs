@@ -182,7 +182,7 @@ public static class PerfMonitor
             slot.Calls = 0;
         }
 
-        PerfPhases.ClearWindow();
+        PerfGc.ClearWindow();
 
         Log($"start: window={_windowId}, frame buffer and timers cleared");
         return new JsonObject { ["started"] = true, ["window"] = _windowId };
@@ -223,13 +223,7 @@ public static class PerfMonitor
             ["probes"] = ProbesNode(),
         };
 
-        var phases = PerfPhases.ReportNode();
-        if (phases != null)
-        {
-            root["phases"] = phases;
-        }
-
-        PerfPhases.AddGcTo(root, summary.Frames);
+        PerfGc.AddTo(root, summary.Frames);
 
         Log(
             $"report: window={_windowId} frames={summary.Frames} mean={Number(summary.MeanMs)}ms p50={Number(summary.MedianMs)}ms " +

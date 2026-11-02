@@ -280,7 +280,6 @@ public static class DevHarness
             "toggle" => PerfMonitor.Toggle(args.Target, args.Enabled),
             "vsync" => PerfMonitor.SetVSync(args.Enabled),
             "health" => PerfMonitor.SetPlayerHealth(args.Hp ?? PerfLimits.DefaultPlayerHp),
-            "phases" => args.Enabled ? PerfPhases.Enable() : PerfPhases.Disable(),
             _ => throw new InvalidOperationException($"unknown perf action '{args.Action}'"),
         };
     }
