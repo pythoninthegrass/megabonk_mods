@@ -68,6 +68,21 @@ Verify the game directory contains `Megabonk.exe` and `GameAssembly.dll`. A
 native `Megabonk.x86_64` install uses a different loader path and is not this
 workflow.
 
+Selecting Proton in the GUI triggers Steam to replace the native depot with
+the Windows depot; a separate uninstall is not necessary. Wait for the update
+to finish. In `appmanifest_3405340.acf`, Windows is depot `3405342` and Linux is
+`3405341`. Hand-writing `CompatToolMapping` alone did not trigger this switch
+on the tested Fedora client.
+
+The launch dialog offers **Play Megabonk (DX11 - Recommended)** and a DX12
+fallback. Select DX11. Set `-force-d3d11` in Steam's launch options to pin the
+renderer, then verify the running game rather than trusting the flag:
+`Player.log` under the active prefix's
+`drive_c/users/*/AppData/LocalLow/Ved/Megabonk/` must report
+`Version: Direct3D 11.0`. The live game's `/proc/<pid>/maps` should show
+`d3d11.dll` and `dxgi.dll`, not D3D12/vkd3d modules. The tested Proton prefix
+uses the Windows user `steamuser`, not the Linux account name.
+
 **Do not derive the prefix from the game's library.** A moved game can run from
 an SD card while Steam keeps its prefix in the home library. Example paths for
 that layout are:

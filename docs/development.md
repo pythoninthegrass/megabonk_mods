@@ -231,6 +231,19 @@ are documented in [gamepadui.md](gamepadui.md). The player package needs Python
 3.11 or newer on the target, but no repository checkout, uv, .NET SDK or separate
 Wine installation.
 
+### GNOME screenshots over SSH
+
+GNOME exposes screenshot capture through D-Bus. Direct calls to
+`org.gnome.Shell.Screenshot` can return `AccessDenied` over SSH; use the session
+bus's `org.freedesktop.portal.Desktop` service at
+`/org/freedesktop/portal/desktop`, calling
+`org.freedesktop.portal.Screenshot.Screenshot` with an empty parent window and
+`interactive=false`. Subscribe to `org.freedesktop.portal.Request.Response`
+before calling: the method returns a request handle, while the response supplies
+the saved PNG's `uri` (on success, response code 0). This worked over SSH in the
+logged-in GNOME session, saving under `~/Pictures`; retrieve that file with
+`scp`. Unlike a nested Xwayland capture, it showed the game's warning overlay.
+
 ### Verified menu regression under Proton
 
 Verified on 2026-10-31 under Proton Experimental with Megabonk 1.0.69 and MelonLoader 0.7.3 (see [gamepadui.md](gamepadui.md) for the host setup), the installed Windows THPS pack, and Calcium selected. Input came through Linux uinput mouse clicks (with X11 absolute pointer positioning) and a virtual Xbox 360 controller into the stock menus; the harness supplied screenshots, read-only object queries and quit between DLL builds. No save reset, developer character override or `load-level` command was used.
