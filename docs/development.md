@@ -760,9 +760,55 @@ Dismiss reward windows during the window, at about 1 Hz: kill-floor deaths award
 uv run scripts/perf_sweep.py --out /tmp/perf                      # the default 0, 40, 80, 120, 160, 200, 240
 uv run scripts/perf_sweep.py --count 0 --count 240 --seconds 30 --seed 20261102
 uv run scripts/perf_sweep.py --no-relaunch --out /tmp/perf_probe  # measure the run already loaded
+uv run scripts/perf_sweep.py --count 0 --count 240 --density strung  # see density A/B section below
+uv run scripts/perf_sweep.py --count 240 --captures 2 --capture-dir /tmp/RenderDoc  # RenderDoc F12 frames per window
 ```
 
-It runs on the machine hosting the game; on the SSH gamescope host that means `mise exec -- uv run scripts/perf_sweep.py …` inside the repo. `--help` lists the rest. The window gates are pure functions in `discard_reasons` and `suspect_reason`, unit tested in `tests/test_perf_sweep.py`.
+On a direct-Proton Linux host (no `task game:run` available), pass `--launch-cmd` to relaunch instead:
+
+```sh
+uv run scripts/perf_sweep.py --count 0 --count 240 --launch-cmd "sh ~/.local/share/scripts/launch-megabonk.sh"
+```
+
+**Density A/B** (`--density gathered|strung`). `gathered` (default) teleports the player to a fixed point so the swarm converges there. `strung` does the same spawn, then teleports the player `--strung-offset` world units along +X so the swarm is left behind — isolating contact-density cost at equal enemy counts. The A/B result and what it showed are in [performance.md](performance.md#attributing-the-22-ms-unprobed-per-enemy-cost).
+
+**RenderDoc captures** (`--captures N`). Requires the game to have been launched with `ENABLE_VULKAN_RENDERDOC_CAPTURE=1` (the Vulkan implicit layer registered in `~/.local/share/vulkan/implicit_layer.d`). The sweep triggers F12 through `run.py menu drive` N times per window (evenly spaced); new `.rdc` files in `--capture-dir` (default `/tmp/RenderDoc`) are paired with the window JSON and moved under `<out>/captures/`. F12 freezes rendering for the capture frame, so **capture runs perturb frame times** and should be separate from the timing sweep. See "RenderDoc on a direct-Proton Linux host" below.
+
+**GC sampler.** Every `perf report` includes `gcPauseMsPerFrame` and `gcCollections`: time the mod's .NET CLR spent suspended for GC during the window, divided by frames. This measures the mod's own managed GC (which allocates nothing in steady state and reads 0.000 everywhere in practice). The game's il2cpp Boehm GC has no managed events and is invisible here — it appears only as frame-time outliers in `p99Ms`/`maxMs`.
+
+### RenderDoc on a direct-Proton Linux host
+
+The RenderDoc Vulkan implicit layer captures frames from the DXVK layer underneath Proton, making GPU-level frame analysis available without a development build.
+
+**Install (user-level, no root).** Download the official tarball from renderdoc.org, extract to `~/.local/share/renderdoc`, and symlink the binaries:
+
+```sh
+curl -sL -o /tmp/renderdoc.tar.gz https://renderdoc.org/stable/1.47/renderdoc_1.47.tar.gz
+tar xzf /tmp/renderdoc.tar.gz -C ~/.local/share
+mv ~/.local/share/renderdoc_1.47 ~/.local/share/renderdoc
+ln -sf ~/.local/share/renderdoc/bin/renderdoccmd ~/.local/bin/renderdoccmd
+```
+
+**Register the layer.** Copy the layer JSON and fix its `library_path` to point at the extracted `.so` (the tarball ships `/io/dist/lib/…` which only resolves inside the build container):
+
+```sh
+mkdir -p ~/.local/share/vulkan/implicit_layer.d
+cp ~/.local/share/renderdoc/etc/vulkan/implicit_layer.d/renderdoc_capture.json \
+   ~/.local/share/vulkan/implicit_layer.d/
+python3 -c "
+import json, pathlib
+p = pathlib.Path.home()/'.local/share/vulkan/implicit_layer.d/renderdoc_capture.json'
+d = json.loads(p.read_text())
+d['layer']['library_path'] = str(pathlib.Path.home()/'.local/share/renderdoc/lib/librenderdoc.so')
+p.write_text(json.dumps(d, indent=2))
+"
+```
+
+**Add the capture env var to the launch.** On a direct-Proton systemd-run launch, add `--setenv=ENABLE_VULKAN_RENDERDOC_CAPTURE=1`. The layer is confirmed loaded when `librenderdoc.so` appears in the game's `/proc/<pid>/maps`.
+
+**Trigger a capture.** F12 is RenderDoc's default capture hotkey. Via `run.py menu drive` (KEY_F12 is in the uinput whitelist): `uv run scripts/run.py menu drive '[["key","KEY_F12"]]'`. Captures land in `/tmp/RenderDoc/` as `wine64-preloader_<date>_frame<N>.rdc`.
+
+**Headless GPU timing extraction.** The RenderDoc pymodule requires the Qt host to initialise — standalone import segfaults in v1.47 regardless of build flags. `renderdoccmd convert -f capture.rdc -o frame.xml` writes an XML export, but that format does not include GPU timestamps. Extracting per-frame GPU ms requires either the Qt host (qrenderdoc running on fedora with the captures open) or a future RenderDoc version with a standalone replay API. The captures from this task's measurements are stored on fedora at `/tmp/perf-captures-g/captures/` and `/tmp/perf-captures-s/captures/` until that path is available.
 
 ### What ruined a measurement before it was understood
 
