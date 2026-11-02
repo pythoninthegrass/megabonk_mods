@@ -206,14 +206,20 @@ class Sweeper:
         raise SystemExit("ABORT: the run never started, the game is probably sitting at the main menu")
 
     def live(self, label: str) -> dict:
-        """Gate a measurement on a real, unpaused, playing run, dismissing whatever reward screen got in the way."""
+        """Gate a measurement on a real, unpaused, playing run, dismissing whatever reward screen got in the way.
+
+        A level-up storm (several rewards queued from one burst of kills) re-pauses the run the moment it is resumed,
+        so the dismiss-and-resume cycle gets a few tries before the gate gives up on this window.
+        """
         state = self.verb("state")
         self.require(state["levelLoaded"], f"{label}: no level loaded")
         self.require(state["killFloorArmed"], f"{label}: kill floor not armed")
         self.require(not state["editor"], f"{label}: still in editor mode")
         self.require(not state["frozen"], f"{label}: run is frozen")
         status = self.perf("status")
-        if status["paused"]:
+        for _ in range(4):
+            if not status["paused"]:
+                return status
             if self.dismiss_reward().get("windowWasOpen"):
                 self.log_line(f"{label}: a reward window had the run paused")
             self.send({"command": "resume"})
@@ -412,8 +418,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--tier", type=int, default=None, help="tier to load")
     parser.add_argument("--seed", type=int, default=None, help="seed to load, so a sweep is reproducible")
     parser.add_argument("--no-relaunch", dest="relaunch", action="store_false", help="measure the run already loaded")
-    parser.set_defaults(counts=list(DEFAULT_COUNTS), relaunch=True)
+    parser.set_defaults(counts=None, relaunch=True)
     args = parser.parse_args(argv)
+    if args.counts is None:
+        args.counts = list(DEFAULT_COUNTS)
     if any(count < 0 for count in args.counts):
         parser.error("counts must be 0 or greater")
     if args.seconds <= 0:

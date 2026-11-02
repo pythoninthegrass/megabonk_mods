@@ -142,6 +142,15 @@ def test_density_flag_accepts_strung() -> None:
     assert args.density == "strung"
 
 
+def test_counts_replace_the_default_ladder() -> None:
+    """--count names the whole ladder: passing two counts must not measure the untouched seven as well."""
+    assert perf_sweep.parse_args(["--count", "0", "--count", "240"]).counts == [0, 240]
+
+
+def test_counts_default_to_the_full_ladder() -> None:
+    assert perf_sweep.parse_args([]).counts == list(perf_sweep.DEFAULT_COUNTS)
+
+
 def test_density_flag_rejects_unknown_densities() -> None:
     with pytest.raises(SystemExit):
         perf_sweep.parse_args(["--density", "bunched"])
