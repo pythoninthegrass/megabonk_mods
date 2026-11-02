@@ -57,6 +57,7 @@ public class MegabonkLevelsMod : MelonMod
         DevHarness.Install(LoggerInstance);
         PerfProbes.Install(LoggerInstance);
         PerfMonitor.Install(LoggerInstance);
+        PerfPhases.Install(LoggerInstance);
     }
 
     public override void OnLateUpdate()
@@ -64,7 +65,11 @@ public class MegabonkLevelsMod : MelonMod
         CameraOverride.Apply();
     }
 
-    public override void OnDeinitializeMelon() => LevelMusic.Clear();
+    public override void OnDeinitializeMelon()
+    {
+        PerfPhases.Shutdown();
+        LevelMusic.Clear();
+    }
 
     public override void OnUpdate()
     {
