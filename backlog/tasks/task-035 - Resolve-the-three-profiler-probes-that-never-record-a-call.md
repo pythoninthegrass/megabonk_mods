@@ -1,10 +1,10 @@
 ---
 id: TASK-035
 title: Resolve the three profiler probes that never record a call
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-02T07:48:00Z'
-updated_date: '2026-11-02T20:41:00Z'
+updated_date: '2026-11-02T21:06:00Z'
 labels: []
 dependencies: []
 modified_files:
@@ -25,10 +25,10 @@ Until this is settled, do not treat those three costs as zero in any attribution
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -44,12 +44,30 @@ Three probes record zero calls: Enemy.MyUpdate, EnemyHpBar.Update, VisualizeTarg
 - Enemy has NO MonoBehaviour Update; MyUpdate/MyFixedUpdate are game-dispatched. Enemy has no subclasses and the methods are non-virtual. MyFixedUpdate records (dispatched from EnemyManager.FixedUpdate native loop, direct call); MyUpdate zero. Candidates: never called on the live path, or the call site was C++-inlined by the il2cpp toolchain.
 
 Steps:
-1. [pending] Runtime diagnostics in the mod (gated on DevHarness like the rest of perf): (a) patch-attach report - Harmony.GetAllPatchedMethods() matched against the KnownProbes targets, surfaced in perf status/report as probeAttach; (b) perf census action - live component counts for Enemy, EnemyHpBar, VisualizeTargeting, AnimatedMesh with enabled/activeInHierarchy flags. Pure aggregation logic gets unit tests first.
-2. [pending] Static caller scan (one-off, not committed): parse the fedora Windows GameAssembly.dll for E8 rel32 call sites to each probe RVA (target rva - site rip); positive control = Enemy.MyFixedUpdate 0x4AEE90 which must show sites; absence for MyUpdate distinguishes never-called-or-inlined from dispatched.
-3. [pending] Reproduce on fedora: relaunch harness, spawn 240, one gated window, read probes + probeAttach + census in the report JSON.
-4. [pending] Resolve per finding: ghost components -> drop the probes (and KnownProbes entries) and say so in docs/performance.md; attach failure -> fix the patch target; MyUpdate inlined/uncalled -> drop or retarget to the dispatch site and update the attribution table wording so the three are no longer an open question.
-5. [pending] Docs: docs/performance.md replaces the "Three probes recorded zero calls" paragraph and the trailing open item with the settled finding; docs/development.md records the method if a new one was needed.
-6. [pending] task scripts:test + dotnet tests green; conventional commit; finalize per guide.
+1. [done] Runtime diagnostics in the mod (gated on DevHarness like the rest of perf): (a) patch-attach report - Harmony GetPatchInfo per KnownProbes target, surfaced in perf status/report as probeAttach; (b) perf census action - component counts for Enemy, EnemyHpBar, VisualizeTargeting, AnimatedMesh with scene/live/any levels. Pure aggregation logic (PerfProbePlan) got unit tests first.
+2. [done] Static caller scan (one-off, not committed): E8 rel32 scan of the fedora Windows GameAssembly.dll. Outcome: ALL FOUR targets (positive control MyFixedUpdate included) have zero direct call sites and exactly one .data function-pointer reference each - dispatch goes through stored pointers, so the scan ruled inlining out for MyUpdate but could not distinguish called-vs-uncalled; the runtime counters do that.
+3. [done] Reproduced on fedora: gated 20s window at 240 enemies, fresh offline launch. probeAttach patched=true for all eleven targets (attach failure ruled out); probes array still showed zero calls for the three; census Enemy=232/232/241, EnemyHpBar=0/0/1 (prefab only), VisualizeTargeting=0/0/0, AnimatedMesh=232/232/241.
+4. [done] Resolved as ghost/dead code: EnemyHpBar and VisualizeTargeting never instantiate; Enemy.MyUpdate is dead code (259k MyFixedUpdate calls on the same live enemies, attached MyUpdate prefix never fires). Dropped the three probes from perf_probes.cs and KnownProbes; kept the attach report and census verb as the classifier for future zero-call probes.
+5. [done] Docs: docs/performance.md replaces the "Three probes recorded zero calls" paragraph with the settled finding and drops the trailing open item; docs/development.md documents the probeAttach array, the census verb, the retired probes, and the --launch-cmd absolute-path/detach requirements for direct-Proton hosts.
+6. [done] task check exit 0 (build+tests+lint), 1702 C# and 1014 Python tests green on mbp; conventional commits; finalized per guide.
 
-Risks: FindObjectsOfType(Type) interop under Il2CppInterop (fallback: EnemyManager.enemies iteration for Enemy, and Object.FindFirstObjectByType per type); census allocates - only inside harness mode and on demand.
+Risks: FindObjectsOfType(Type) interop under Il2CppInterop (materialized: use the generic form) ; census allocates - only inside harness mode and on demand (accepted).
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+fedora worktree ~/git/megabonk_mods-035 set up (branch perf-035-probe-zero-calls, .env/.venv symlinked). Mod compiles and deploys on fedora; 2 interop fixes needed (FindObjectsOfType needs the generic form; Harmony class needs full qualification under the mod's usings). fedora test baseline note: 11 THPS C# tests and 8 Python tests (6 thps + 2 wineserver) fail on fedora's main checkout too - pre-existing per-machine failures from missing thps pack/wine environment, not from this branch. Same suites fully green on mbp (1702 C#, my 5 new PerfProbePlan tests + census command tests included).
+
+Verification (fedora, offline direct-Proton launch via ~/.local/share/scripts/launch-megabonk.sh, recreated for the sweep): gated 20s window at 240 enemies with the diagnostics build -> probeAttach patched=true for all eleven targets, the three probes still zero calls, census Enemy=232/232/241, EnemyHpBar=0/0/1, VisualizeTargeting=0/0/0, AnimatedMesh=232/232/241. After retiring the probes: fresh launch of the final DLL, sweep wrote three gated windows, probes array lists exactly the eight kept probes, attach_count=8 all patched, perf census still counts all four component types (Enemy 240/240/241 in that run). mbp: task check exit 0 (build+tests+lint), 1702 C# tests, full pytest 1014 passed. Binary-scan surprise (corrected in plan): the E8 scan found zero direct call sites even for the positive control MyFixedUpdate - all four methods are reached through stored .data pointers - so static scanning cannot classify zero-call probes; attach report + census + runtime counters can.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Settled the three zero-call probes: all three patches DO attach (Harmony patch report in every perf report/status), so the old "maybe the patch never attached" question is closed. The methods simply never run in a live game: a component census during a 240-enemy window finds EnemyHpBar only as its uninstantiated prefab (scene 0, live 0, any 1), VisualizeTargeting nowhere in the loaded assets (0/0/0), and Enemy.MyUpdate dead on the same 232-240 live enemies that logged ~259k sibling MyFixedUpdate calls. An E8 call-site scan of GameAssembly.dll ruled out inlining (all four probe targets, positive control included, are reached through stored .data pointers rather than direct calls - so static scanning cannot classify zero-call probes; attach report + census + runtime counters can).
+
+Changed: PerfProbes keeps eight probes (the three dead ones and their ProbeTargets/KnownProbes rows are dropped); PerfProbePlan (pure, unit-tested) shapes the probeAttach and census JSON; PerfMonitor.Census counts Enemy/EnemyHpBar/VisualizeTargeting/AnimatedMesh at scene/live/any levels; new perf census harness verb wired through HarnessCommand, dev_harness and run.py. docs/performance.md now states the settled finding where the open question stood and drops the trailing open item; docs/development.md documents the classifier workflow, the census verb, and the --launch-cmd requirements (absolute paths, detached launcher, exported DISPLAY/XAUTHORITY) for direct-Proton hosts.
+
+Verification: fedora gated sweeps before and after the removal - the after-DLL reports exactly eight probes, all patched, and the census still separates live (Enemy 240/240/241) from ghost (EnemyHpBar 0/0/1, VisualizeTargeting 0/0/0). mbp task check exit 0; 1702 C# + 1014 Python tests pass. Follow-up: none open; if a game update ever makes the ghost components live, perf census is the tripwire.
+<!-- SECTION:FINAL_SUMMARY:END -->

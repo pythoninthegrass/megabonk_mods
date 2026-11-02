@@ -106,8 +106,6 @@ Density effect: +0.18 ms (gathered vs strung at 240). This is small — the per-
 | **frame total** | **6.32** | |
 | mod CLR GC pause | 0.000 | EventListener on GCSuspendEE |
 
-
-
 Nothing here is fixed. Each is listed with the number that would have to move.
 
 - **Stock `Enemy.MyFixedUpdate` and `EnemyMovementRb.MyFixedUpdate` are the only meaningful lever**: 2.81 µs and 0.92 µs per call, 84 calls per frame per 240 enemies, 0.31 ms/frame, and they carry the steepest slopes of anything measured (1.04 and 0.32 µs per extra enemy). They run at the 50 Hz fixed-update rate. Lowering `Time.fixedDeltaTime`'s cost is not available to a mod, and the game's own movement is a Rigidbody under Unity's physics solver, which is where the unprobed ~2.8 ms of enemy-sensitive time most likely lives. Any work here means patching stock movement, and should start with a frame capture of a 240-enemy run rather than another Harmony probe.
