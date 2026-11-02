@@ -34,6 +34,8 @@ One consequence of staying in the same project: the Mod project compiles against
 | `randomizeShadyGuy` | `bool` | Optional, default `false`. Relocate generated shady guy merchants to new safe ground positions each run. See "Interactable randomization" below. |
 | `randomizeChests` | `bool` | Optional, default `false`. Relocate generated chests each run, independently of the other kinds. |
 | `randomizeMoai` | `bool` | Optional, default `false`. Relocate generated stone-head Maoi shrines each run, independently of the other kinds. The game's class spells this `InteractableShrineMoai`; its prefab is `ShrineMaoi`. |
+| `extraShrines` | `int` | Optional, default `0`. How many extra shrines to spawn beyond what the generator places, up to 32 (`ExtraShrines.MaxCount`). Each one is a random kind from the map's shrine pool, probed onto clear ground away from objects and hot paths. `0` or absent keeps stock behaviour. See "Extra shrines" below. |
+| `extraShrineKinds` | `string[]` | Optional. Restricts the extra shrines to a subset of kinds: `challenge`, `magnet`, `cursed`, `greed`, `balance`, `moai` or `charge` (case-insensitive). The editor's Level settings panel rejects unknown names; a level file loaded with unknown names warns and ignores them. Absent or empty allows every kind in the map's shrine pool. |
 | `title` | `string` | Optional. Replaces the stage name on the run-start banner (`MapTitle`) and the run-config panel (`RunConfigUi`) while the custom level runs. Without it the stock stage name shows. `LevelTitle` (`level_title.cs`) applies it. The tier line is untouched, so `tier: 0` still reads "Tier 1". Additive, so `schemaVersion` stays `3`. |
 | `description` | `string` | Optional. Replaces the description typed out under the title on the run-start banner while the custom level runs. Without it the stock stage description shows. Additive, so `schemaVersion` stays `3`. |
 | `mapDescription` | `string` | Optional. The description on the level's entry on the game's Map Selection screen. Without it the entry shows `description`. The run-start banner always uses `description`, so the two can differ as they do for the native maps. Additive, so `schemaVersion` stays `3`. |
@@ -77,6 +79,55 @@ native up axis to world up (Y for merchants; Z for chests and Maoi). Each
 object tries at most 256 candidate samples and stays at its original position,
 with a warning, when no safe candidate is found. Terrain-only maps without a
 tile grid retain their original placements with a warning.
+
+## Extra shrines
+
+`extraShrines` and `extraShrineKinds` are additive schema-3 settings, editable in
+the editor's Level settings panel, where typing either one reports *Takes effect
+next run*. For example, this adds four shrines of any kind:
+
+```json
+{
+  "extraShrines": 4,
+  "extraShrineKinds": []
+}
+```
+
+and this adds three, drawn only from charge shrines:
+
+```json
+{
+  "extraShrines": 3,
+  "extraShrineKinds": ["charge"]
+}
+```
+
+Each extra shrine is a random kind from the map's own shrine pool: the stage's
+`MapData.shrines` entries plus the stage `RandomObjectPlacer`'s charge and greed
+spawn lists. A kind with a live shrine already in the scene is cloned from it,
+which preserves the authored pivot and upright rotation; otherwise the prefab is
+instantiated with a native-up correction (Moai models are authored Z-up, the rest
+Y-up). Kinds outside `extraShrineKinds` are never chosen; an empty or absent list
+means the full pool.
+
+Placement runs after generation and any interactable relocation, before the
+startup cover opens and the kill floor arms, and uses a private random source
+seeded per run — tile and prop determinism is untouched, and the extras themselves
+vary between runs of the same seed. Candidate points come from the same probe the
+relocation pass uses (`placement_probe.cs`): flat ground samples connected to the
+player start and clear of spawned objects, including shrines placed earlier in the
+same pass. Each candidate is validated by trial instantiation and destroyed on
+rejection. A point must also sit at least `ExtraShrines.ChargeZoneReach` (12.5
+units) from every hot-path anchor — spawn portal, spawn platform, boss portal,
+final boss portal, graveyard boss portal and the player start — from the straight
+routes spawn→boss and boss→final, and from every other shrine, so no charge
+sphere overlaps an object, another shrine, or the route a run takes. Each shrine
+tries at most 256 candidates; when a shrine finds no valid point it is skipped
+with a warning and the run keeps the shrines that did place. `ExtraShrines`
+(`extra_shrines.cs`) decides, `ExtraShrinesPatch` (`extra_shrines_patch.cs`)
+applies, and the editor save writes both fields back. `0` or absent spawns
+nothing and the level is stock. Placements log under `ExtraShrines:` with each
+shrine's position, nearest-shrine and nearest-route distance.
 
 ## Migration mechanism
 

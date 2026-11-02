@@ -289,7 +289,9 @@ public static class LiveEditPatch
             PackKitVersions: BuildKitVersions(edits),
             RandomizeShadyGuy: _randomizationSettings.RandomizeShadyGuy,
             RandomizeChests: _randomizationSettings.RandomizeChests,
-            RandomizeMoai: _randomizationSettings.RandomizeMoai);
+            RandomizeMoai: _randomizationSettings.RandomizeMoai,
+            ExtraShrines: _randomizationSettings.ExtraShrines,
+            ExtraShrineKinds: _randomizationSettings.ExtraShrineKinds);
     }
 
     private static IReadOnlyDictionary<string, string> BuildKitVersions(IReadOnlyList<EditOp> edits)
@@ -505,6 +507,7 @@ public static class LiveEditPatch
         _runGeneration++;
         _session = null;
         BossSpawnRedirectPatch.Disarm();
+        ExtraShrinesPatch.ClearStale();
 
         var controller = UnityEngine.Object.FindObjectOfType<MapGenerationController>();
         if (controller == null)
@@ -522,6 +525,8 @@ public static class LiveEditPatch
             OnTerrainGenerationComplete(logger, controller, index, edits);
             if (edits != null && InteractableRandomization.Enabled(_randomizationSettings))
                 logger.Warning("InteractableRandomization: no tile ground available; keeping original placements");
+            if (edits != null && ExtraShrines.Enabled(_randomizationSettings))
+                logger.Warning("ExtraShrines: no tile ground available; no extra shrines spawned");
             StartupCover.OnContentReady();
             return;
         }
@@ -535,7 +540,7 @@ public static class LiveEditPatch
         }
 
         _session = session;
-        if (edits != null && InteractableRandomization.Enabled(_randomizationSettings))
+        if (edits != null && (InteractableRandomization.Enabled(_randomizationSettings) || ExtraShrines.Enabled(_randomizationSettings)))
         {
             MelonCoroutines.Start(FinishRandomizedGeneration(session, index, edits, _randomizationSettings));
             return;
@@ -558,8 +563,10 @@ public static class LiveEditPatch
     {
         yield return null;
         if (_session != session || session.Controller == null) yield break;
+        var ground = session.GroundCollider();
         InteractableRandomizationPatch.Apply(settings, index, edits, session.Planner.State,
-            session.TileGen, session.GroundCollider(), settings.PlayerStart, session.Logger);
+            session.TileGen, ground, settings.PlayerStart, session.Logger);
+        ExtraShrinesPatch.Spawn(settings, index, session.Planner.State, session.TileGen, ground, session.Controller, session.Logger);
         StartupCover.OnContentReady();
         KillFloorWatcher.Arm(session.TileGen, session.Logger, settings.KillFloorY);
     }

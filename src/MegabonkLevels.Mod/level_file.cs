@@ -45,7 +45,9 @@ public readonly record struct LevelFile(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, string> PackKitVersions = null,
     bool RandomizeShadyGuy = false,
     bool RandomizeChests = false,
-    bool RandomizeMoai = false)
+    bool RandomizeMoai = false,
+    int ExtraShrines = 0,
+    IReadOnlyList<string> ExtraShrineKinds = null)
 {
     public const int CurrentSchemaVersion = 3;
 
@@ -67,6 +69,8 @@ public readonly record struct LevelFile(
         && RandomizeShadyGuy == other.RandomizeShadyGuy
         && RandomizeChests == other.RandomizeChests
         && RandomizeMoai == other.RandomizeMoai
+        && ExtraShrines == other.ExtraShrines
+        && ListEquals(ExtraShrineKinds, other.ExtraShrineKinds)
         && ListEquals(BossSpawnPosition, other.BossSpawnPosition)
         && Music == other.Music
         && Title == other.Title

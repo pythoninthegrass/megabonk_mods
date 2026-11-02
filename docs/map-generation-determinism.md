@@ -84,6 +84,15 @@ playable positions. Compare the `InteractableRandomization` placement log or
 live transforms to verify variety. With all flags absent or false the
 relocation pass returns without consuming randomness or touching transforms.
 
+Extra shrines (`extraShrines`, `extraShrineKinds`) spawn after the relocation
+pass from a private RNG seeded from a fresh `Guid` per run, so they consume
+neither `UnityEngine.Random` nor the game's `ConsistentRandom`. The baseline —
+tiles, props, genIds and the reported hashes — reproduces identically across
+runs of a seed whether or not the field is set; the extra shrines themselves
+deliberately vary between runs of the same seed. They are added after the
+generation report captures its hashes, so the extras never appear in them.
+Compare the `ExtraShrines:` placement log or live scene objects to verify them.
+
 On the Windows build under Proton, Forest seed `20261008` has also produced
 different baseline `objectsHash` values across launches with relocation both
 disabled and enabled, while the tile hash stayed identical. Those hashes are

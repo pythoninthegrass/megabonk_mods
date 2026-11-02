@@ -8,7 +8,7 @@ namespace MegabonkLevels;
 
 public static class LevelSettings
 {
-    public static readonly string[] Fields = { "playerStart", "bossSpawnPosition", "killFloorY", "maxSlopeAngle", "grindRequiresSlide", "fallDamageCharacter", "noGrass", "randomizeShadyGuy", "randomizeChests", "randomizeMoai", "music", "title", "description", "mapDescription", "allowedCharacters", "map", "stageIndex", "tier", "seed" };
+    public static readonly string[] Fields = { "playerStart", "bossSpawnPosition", "killFloorY", "maxSlopeAngle", "grindRequiresSlide", "fallDamageCharacter", "noGrass", "randomizeShadyGuy", "randomizeChests", "randomizeMoai", "extraShrines", "extraShrineKinds", "music", "title", "description", "mapDescription", "allowedCharacters", "map", "stageIndex", "tier", "seed" };
     private static readonly string[] TextFields = { "music", "title", "description", "mapDescription", "fallDamageCharacter" };
 
     public static string Read(LevelFile level, string field)
@@ -66,6 +66,14 @@ public static class LevelSettings
         {
             throw new ArgumentException("The fall damage character must be calcium, tony or tonymczoom.");
         }
+        if (level.ExtraShrines < 0 || level.ExtraShrines > ExtraShrines.MaxCount)
+        {
+            throw new ArgumentException($"Extra shrine count must be between 0 and {ExtraShrines.MaxCount}.");
+        }
+        if (level.ExtraShrineKinds != null && level.ExtraShrineKinds.Any(name => !ExtraShrines.IsKnownKind(name)))
+        {
+            throw new ArgumentException("Extra shrine kinds are challenge, magnet, cursed, greed, balance, moai and charge.");
+        }
     }
 
     private static void ValidatePosition(IReadOnlyList<float> position)
@@ -81,6 +89,7 @@ public static class LevelSettings
         NoGrass = settings.NoGrass, PlayerStart = settings.PlayerStart, BossSpawnPosition = settings.BossSpawnPosition,
         KillFloorY = settings.KillFloorY, MaxSlopeAngle = settings.MaxSlopeAngle, GrindRequiresSlide = settings.GrindRequiresSlide,
         RandomizeShadyGuy = settings.RandomizeShadyGuy, RandomizeChests = settings.RandomizeChests, RandomizeMoai = settings.RandomizeMoai,
+        ExtraShrines = settings.ExtraShrines, ExtraShrineKinds = settings.ExtraShrineKinds,
         Music = settings.Music, Title = settings.Title, Description = settings.Description, MapDescription = settings.MapDescription,
         AllowedCharacters = settings.AllowedCharacters, Map = settings.Map, StageIndex = settings.StageIndex, Tier = settings.Tier, Seed = settings.Seed,
     };
