@@ -31,6 +31,7 @@ public static class LiveEditPatch
     private static bool _grindRequiresSlide;
     private static string _fallDamageCharacter;
     private static IReadOnlyDictionary<string, string> _packKitVersions;
+    private static LevelFile _randomizationSettings;
     private static Session _session;
     private static int _runGeneration;
 
@@ -50,7 +51,7 @@ public static class LiveEditPatch
 
     // Set by LevelLoaderPatch right before it starts a run, consumed (and cleared) by the next
     // generation so a later vanilla run is never edited.
-    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null, float? killFloorY = null, IReadOnlyList<float> bossSpawnPosition = null, bool grindRequiresSlide = false, IReadOnlyDictionary<string, string> packKitVersions = null, string fallDamageCharacter = null)
+    public static void SetPendingEdits(IReadOnlyList<EditOp> edits, bool noGrass = false, IReadOnlyList<float> playerStart = null, float? maxSlopeAngle = null, float? killFloorY = null, IReadOnlyList<float> bossSpawnPosition = null, bool grindRequiresSlide = false, IReadOnlyDictionary<string, string> packKitVersions = null, string fallDamageCharacter = null, LevelFile randomizationSettings = default)
     {
         _pendingEdits = edits;
         _levelEdits = edits;
@@ -62,6 +63,7 @@ public static class LiveEditPatch
         _grindRequiresSlide = grindRequiresSlide;
         _fallDamageCharacter = fallDamageCharacter;
         _packKitVersions = packKitVersions;
+        _randomizationSettings = randomizationSettings;
     }
 
     public static void ApplySettings(LevelFile settings, MelonLogger.Instance logger)
@@ -75,6 +77,7 @@ public static class LiveEditPatch
         _grindRequiresSlide = settings.GrindRequiresSlide;
         _fallDamageCharacter = settings.FallDamageCharacter;
         _packKitVersions = settings.PackKitVersions;
+        _randomizationSettings = settings;
         LevelLoaderPatch.ApplyMetadata(settings);
         LevelTitle.Prepare(settings.Title, settings.Description, logger);
         if (LevelMusic.Reference != settings.Music) LevelMusic.Prepare(settings.Music, logger);
@@ -283,7 +286,10 @@ public static class LiveEditPatch
             Description: LevelTitle.Description,
             AllowedCharacters: LevelLoaderPatch.AllowedCharacters,
             MapDescription: LevelLoaderPatch.MapDescription,
-            PackKitVersions: BuildKitVersions(edits));
+            PackKitVersions: BuildKitVersions(edits),
+            RandomizeShadyGuy: _randomizationSettings.RandomizeShadyGuy,
+            RandomizeChests: _randomizationSettings.RandomizeChests,
+            RandomizeMoai: _randomizationSettings.RandomizeMoai);
     }
 
     private static IReadOnlyDictionary<string, string> BuildKitVersions(IReadOnlyList<EditOp> edits)
@@ -495,6 +501,7 @@ public static class LiveEditPatch
         StartupCover.OnProgress();
         var edits = _pendingEdits;
         _pendingEdits = null;
+        if (edits == null) _randomizationSettings = default;
         _runGeneration++;
         _session = null;
         BossSpawnRedirectPatch.Disarm();
@@ -513,6 +520,8 @@ public static class LiveEditPatch
         if (tileGen?.proceduralTiles == null)
         {
             OnTerrainGenerationComplete(logger, controller, index, edits);
+            if (edits != null && InteractableRandomization.Enabled(_randomizationSettings))
+                logger.Warning("InteractableRandomization: no tile ground available; keeping original placements");
             StartupCover.OnContentReady();
             return;
         }
@@ -526,6 +535,11 @@ public static class LiveEditPatch
         }
 
         _session = session;
+        if (edits != null && InteractableRandomization.Enabled(_randomizationSettings))
+        {
+            MelonCoroutines.Start(FinishRandomizedGeneration(session, index, edits, _randomizationSettings));
+            return;
+        }
         StartupCover.OnContentReady();
         if (edits == null)
         {
@@ -536,6 +550,18 @@ public static class LiveEditPatch
         }
 
         KillFloorWatcher.Arm(tileGen, logger, _killFloorY);
+    }
+
+    // Chest.Start adds random tilt, so relocate after native Start callbacks but before releasing the startup cover.
+    private static System.Collections.IEnumerator FinishRandomizedGeneration(Session session, Dictionary<string, GameObject> index,
+        IReadOnlyList<EditOp> edits, LevelFile settings)
+    {
+        yield return null;
+        if (_session != session || session.Controller == null) yield break;
+        InteractableRandomizationPatch.Apply(settings, index, edits, session.Planner.State,
+            session.TileGen, session.GroundCollider(), settings.PlayerStart, session.Logger);
+        StartupCover.OnContentReady();
+        KillFloorWatcher.Arm(session.TileGen, session.Logger, settings.KillFloorY);
     }
 
     // The grass manager raycasts onto the ground layer, so it would grow through a level's placed floor meshes.

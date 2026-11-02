@@ -163,7 +163,9 @@ public static class EditorSettingsPanel
         {
             _history.Apply(Field, _field.Text, LiveEditPatch.CurrentState()?.Objects.Count > 0 || LiveEditPatch.SeedEdits.Count > 0);
             LiveEditPatch.ApplySettings(_history.Current, _logger);
-            _message.text = $"Applied {Field}. Save to keep it across relaunch.";
+            _message.text = Field.StartsWith("randomize", StringComparison.Ordinal)
+                ? $"Applied {Field}. Takes effect next run; save to keep it."
+                : $"Applied {Field}. Save to keep it across relaunch.";
             _logger.Msg($"EditorSettings: applied {Field}={_field.Text}");
             ResetInput();
         }

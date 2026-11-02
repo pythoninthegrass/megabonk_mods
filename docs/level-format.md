@@ -31,11 +31,52 @@ One consequence of staying in the same project: the Mod project compiles against
 | `music` | `string` | Optional. `bundle:<pack>/<clip>` names a bundled `AudioClip`, such as `bundle:thps/04_Superman`. `track:<filename without extension>`, such as `track:14 Strobe`, selects a case-insensitive filename discovered at startup in `<game>/UserData/CustomMusic/`. Spaces and dots are preserved; paths are not accepted. Runtime radio and automatic progression follow numeric filename components (`6`, `06.02`, `06.10`, `14`), then unnumbered names, and wrap; bundle playlists stay separate and sort by clip name. Missing, unreadable, invalid or unsupported audio warns and falls back to stock without failing level loading. Omitting music uses stock music without a warning. References are not part of the `packs` version check. See [music.md](music.md) for limits and platform support. Added in schema `3`. |
 | `grindRequiresSlide` | `bool` | Optional, default `false`. When `true` the game's slide button is what grinding means, held rather than tapped: a rail touch starts a grind only while it is down, so riding over a coping rail or ollieing off a lip keeps the player's momentum instead of catching the nearest rail, and releasing it comes the player off the rail at once instead of leaving them riding to the next junction. Held through a joint, the grind carries onto the next rail; held near one, `GrindAssist` also catches a rail within 2 units of the player's feet, which the game's contact catch leaves behind. The game's own behaviour is kept everywhere else, so vanilla runs and levels without the key grind on contact. `GrindGate.AllowsGrind` (`grind_gate.cs`) decides, `GrindGatePatch` (`grind_gate_patch.cs`) applies it to `PlayerMovement.CanStartGrind`, `PlayerMovement.StartRail` and `PlayerMovement.RailMovement`, and the editor save writes it back. Additive, so `schemaVersion` stays `3`. |
 | `fallDamageCharacter` | `string` | Optional. Name of the character whose fall damage a landing on this level is scored with: `calcium`, `tony` or `tonymczoom`, case-insensitive, the same names `allowedCharacters` takes. What differs between characters is `EStat.FallDamageReduction` — `PlayerHealth.OnPlayerLanded` scales its damage by the player's own total of it, while the `minFallDamageSpeed`/`maxFallDamageSpeed` thresholds sit on the one shared `PlayerHealth` component and so are every character's — so a character whose asset carries no such modifier is cut down by drops the other walks away from. With the field set, the mod puts the named character's own total into the player's stat dictionaries for the duration of that one landing call and puts the player's value back afterwards, which leaves the named character's own landings untouched. Absent, every character keeps its own stats, and so does any run the mod did not load. `FallDamagePolicy` (`fall_damage_policy.cs`) decides and computes the total from the character's `CharacterData.statModifiers`, `FallDamagePatch` (`fall_damage_patch.cs`) applies it, and the editor save writes it back. See "Fall damage" in [development.md](development.md) for the measured curve. Additive, so `schemaVersion` stays `3`. |
+| `randomizeShadyGuy` | `bool` | Optional, default `false`. Relocate generated shady guy merchants to new safe ground positions each run. See "Interactable randomization" below. |
+| `randomizeChests` | `bool` | Optional, default `false`. Relocate generated chests each run, independently of the other kinds. |
+| `randomizeMoai` | `bool` | Optional, default `false`. Relocate generated stone-head Maoi shrines each run, independently of the other kinds. The game's class spells this `InteractableShrineMoai`; its prefab is `ShrineMaoi`. |
 | `title` | `string` | Optional. Replaces the stage name on the run-start banner (`MapTitle`) and the run-config panel (`RunConfigUi`) while the custom level runs. Without it the stock stage name shows. `LevelTitle` (`level_title.cs`) applies it. The tier line is untouched, so `tier: 0` still reads "Tier 1". Additive, so `schemaVersion` stays `3`. |
 | `description` | `string` | Optional. Replaces the description typed out under the title on the run-start banner while the custom level runs. Without it the stock stage description shows. Additive, so `schemaVersion` stays `3`. |
 | `mapDescription` | `string` | Optional. The description on the level's entry on the game's Map Selection screen. Without it the entry shows `description`. The run-start banner always uses `description`, so the two can differ as they do for the native maps. Additive, so `schemaVersion` stays `3`. |
 | `allowedCharacters` | `string[]` | Optional. Names of the characters that may play the level: `calcium`, `tony` or `tonymczoom` (case-insensitive). Absent, empty, or with no recognised name means any character may play it. The Map Selection entry refuses Confirm for any other character, and a held load restricts the game's Character Selection screen to these characters. `CharacterPolicy` (`character_policy.cs`) applies it and the editor save writes it back. Additive, so `schemaVersion` stays `3`. |
 | `edits` | `EditOp[]` | Ordered list of edit operations applied on top of the generated map. `EditOp(OpType, Target, Payload)` is a minimal shape (string opcode + string target id + a JSON-string payload) that round-trips and migrates correctly independent of any particular operation's payload shape — see "Edit operation types" below. |
+
+## Interactable randomization
+
+The three `randomize*` flags are additive schema-3 settings, editable as `true`
+or `false` in the editor's Level settings panel. For example, this varies chests
+while keeping merchants and Maoi shrines deterministic:
+
+```json
+{
+  "randomizeShadyGuy": false,
+  "randomizeChests": true,
+  "randomizeMoai": false
+}
+```
+
+The flags take effect on the next run, not immediately when edited. They survive
+save/load and settings undo/redo. Omitted flags are false; disabling them restores
+the seed's original placement on the next run.
+
+Only surviving generator-spawned interactables are eligible. An explicit
+`object.move` or `object.remove` targeting a generated object pins that object;
+editor-placed objects and their attachments remain authored. Randomization never
+adds objects or changes their counts. A kind absent from the generated map stays
+absent. Runtime rolls do not become saved edit operations.
+
+Placement runs after the deterministic objects have been indexed and saved edits
+have been applied. It uses a private random source, leaving the tile seed and
+both of the game's spawn RNGs alone. The pass waits one frame for native `Start`
+callbacks (which add chest tilt), then finishes before the startup cover opens.
+Candidates are flat surfaces on the edited
+tile grid, connected to the player start by tile topology and clear physical
+paths through a four-by-four sample grid within each tile. Ground raycasts, footprint support and object
+clearance checks reject edges, obstructions and overlaps. Successful placements
+keep the original ground-to-pivot offset and heading, aligning the prefab's
+native up axis to world up (Y for merchants; Z for chests and Maoi). Each
+object tries at most 256 candidate samples and stays at its original position,
+with a warning, when no safe candidate is found. Terrain-only maps without a
+tile grid retain their original placements with a warning.
 
 ## Migration mechanism
 

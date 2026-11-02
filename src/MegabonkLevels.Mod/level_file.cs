@@ -42,7 +42,10 @@ public readonly record struct LevelFile(
     bool GrindRequiresSlide = false,
     // Character whose fall damage a landing on this level is scored with, or null to leave each character's own.
     string FallDamageCharacter = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, string> PackKitVersions = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, string> PackKitVersions = null,
+    bool RandomizeShadyGuy = false,
+    bool RandomizeChests = false,
+    bool RandomizeMoai = false)
 {
     public const int CurrentSchemaVersion = 3;
 
@@ -61,6 +64,9 @@ public readonly record struct LevelFile(
         && KillFloorY == other.KillFloorY
         && GrindRequiresSlide == other.GrindRequiresSlide
         && FallDamageCharacter == other.FallDamageCharacter
+        && RandomizeShadyGuy == other.RandomizeShadyGuy
+        && RandomizeChests == other.RandomizeChests
+        && RandomizeMoai == other.RandomizeMoai
         && ListEquals(BossSpawnPosition, other.BossSpawnPosition)
         && Music == other.Music
         && Title == other.Title

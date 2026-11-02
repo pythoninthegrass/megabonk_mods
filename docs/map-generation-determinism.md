@@ -66,3 +66,29 @@ Object placement draws from two independent RNGs, neither tied to `debugSeed`:
 - **Per-prefab counts**: `RandomMapObject.GetAmount()` rolls on `Utility.MyRandom.random`, a single static `ConsistentRandom` (the game's `System.Random` subclass). Its static constructor seeds it **once from `QueryPerformanceCounter`** (wall-clock ticks), so counts are different every process run and uncontrollable through any map/stage/seed field. Because the count drives how many position draws happen, drifting counts also shift positions even when `UnityEngine.Random` is reseeded. `MapGenerationController.mapSeed` has no effect here either.
 
 To reproduce props, the mod reseeds **both** RNGs from the forced seed before each spawn sub-phase (`seed_force_patch.cs`): `UnityEngine.Random.InitState(phaseSeed)` and `Utility.MyRandom.random = new ConsistentRandom(phaseSeed)`, hooked as Harmony prefixes on `GenerateTileObjects.Generate`, `SpawnInteractables.SpawnChests`/`SpawnShrines`, and `RandomObjectPlacer.GenerateInteractables`. Each phase gets a distinct derived seed (`SpawnSeed.PhaseSeed`) so a phase reproduces independently of unrelated `UnityEngine.Random` consumers running between phases. With this in place the full `objectsHash` (every spawned prop's world transform) is identical across runs while `mapSeed` still varies freely. The generation report logs `objectsHash` alongside the tile `hash` for this check.
+
+### Opt-in interactable variety
+
+Level files can opt into per-run relocation with `randomizeShadyGuy`,
+`randomizeChests` and `randomizeMoai`. All default to false. They do not change
+phase seeds or spawn counts: generation and genId assignment remain exactly as
+before. After saved edits are applied, only eligible generated objects of the
+enabled kinds are relocated using a private RNG. Explicitly moved or placed
+objects remain pinned, and unrelated objects retain their deterministic
+transforms. See [the level format](level-format.md#interactable-randomization)
+for settings and candidate-validation rules.
+
+The generation report's hashes are captured before this post-edit relocation,
+so they continue to describe the deterministic baseline, not the randomized
+playable positions. Compare the `InteractableRandomization` placement log or
+live transforms to verify variety. With all flags absent or false the
+relocation pass returns without consuming randomness or touching transforms.
+
+On the Windows build under Proton, Forest seed `20261008` has also produced
+different baseline `objectsHash` values across launches with relocation both
+disabled and enabled, while the tile hash stayed identical. Those hashes are
+logged before the relocation pass. Full prop determinism in that configuration
+is therefore not yet confirmed; shared RNG consumers and placement timing need
+further investigation. Compare runs with matching baseline hashes when isolating
+the effect of the relocation flags, rather than attributing baseline drift to
+the private randomization pass.
