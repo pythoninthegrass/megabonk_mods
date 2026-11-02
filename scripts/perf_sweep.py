@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import run as hb
+import shlex
 import shutil
 import subprocess
 import sys
@@ -28,6 +29,9 @@ DEFAULT_MIN_FPS = 30
 DEFAULT_ATTEMPTS = 4
 PROCESSES = ("Megabonk.exe", "Megabonk.x86_64", "Megabonk")
 LOW_POPULATION_FRACTION = 0.8
+DEFAULT_STRUNG_OFFSET = 150.0
+DEFAULT_CAPTURE_DIR = Path("/tmp/RenderDoc")
+RENDERDOC_ENV = "ENABLE_VULKAN_RENDERDOC_CAPTURE"
 
 
 def discard_reasons(report: dict, *, window_seconds: float, min_fps: int) -> list[str]:
@@ -73,6 +77,29 @@ def origin_from_state(state: dict) -> tuple[float, float, float]:
     return (x, y, z)
 
 
+def strung_position(origin: tuple[float, float, float], offset: float) -> tuple[float, float, float]:
+    """Where the strung-out density puts the player: a fixed walk away along +X, the swarm left behind at the origin."""
+    x, y, z = origin
+    return (x + offset, y, z)
+
+
+def capture_trigger_batch() -> list:
+    """The menu-driver input that fires RenderDoc's capture hotkey."""
+    return [["key", "KEY_F12"]]
+
+
+def pair_captures(before: dict[str, float], after: dict[str, float]) -> list[str]:
+    """The capture files that appeared during a window, oldest first, so capture i maps to trigger i."""
+    return sorted((name for name in after if name not in before and name.endswith(".rdc")), key=after.__getitem__)
+
+
+def snapshot_captures(directory: Path) -> dict[str, float]:
+    """Every capture file's mtime in a capture directory; a missing directory is an empty snapshot."""
+    if not directory.is_dir():
+        return {}
+    return {entry.name: entry.stat().st_mtime for entry in directory.iterdir() if entry.is_file()}
+
+
 class Sweeper:
     """Drives one game instance through launch, load, and the window sequence."""
 
@@ -97,6 +124,20 @@ class Sweeper:
 
     def game_alive(self) -> bool:
         return any(subprocess.run(["pgrep", "-x", name], capture_output=True).returncode == 0 for name in PROCESSES)
+
+    def game_pid(self) -> int | None:
+        for name in PROCESSES:
+            proc = subprocess.run(["pgrep", "-x", name], capture_output=True, text=True)
+            if proc.returncode == 0:
+                return int(proc.stdout.split()[0])
+        return None
+
+    def require_renderdoc_armed(self) -> None:
+        """Captures only ever land if the game was launched with the RenderDoc Vulkan layer enabled."""
+        pid = self.game_pid()
+        environ = Path(f"/proc/{pid}/environ") if pid else None
+        armed = environ and environ.exists() and RENDERDOC_ENV.encode() + b"=1" in environ.read_bytes().split(b"\0")
+        self.require(bool(armed), f"the game (pid {pid}) was not launched with {RENDERDOC_ENV}=1, captures would never land")
 
     def send(self, payload: dict, timeout: float = 60.0) -> dict:
         outcome, result = hb.request_result(self.harness, payload, timeout)
@@ -137,7 +178,10 @@ class Sweeper:
             time.sleep(2)
         if self.args.relaunch:
             self.log.unlink(missing_ok=True)
-            self.sh("task", "game:run", timeout=180)
+            if self.args.launch_cmd:
+                self.sh(*shlex.split(self.args.launch_cmd))
+            else:
+                self.sh("task", "game:run", timeout=180)
         self.require(self.wait_for_log("DevHarness: enabled", 300), "the harness never came up after launch")
         self.require(self.game_alive(), "the game is not running after launch")
         verdict = hb.wait_for_steamworks_ready(lambda: hb.steam_ready_verdict(self.harness, 2.0), 180, alive=self.game_alive)
@@ -188,6 +232,33 @@ class Sweeper:
             return {}
         return result.get("result") or {}
 
+    def trigger_capture(self) -> None:
+        """Fire RenderDoc's capture hotkey through the stock-menu input driver."""
+        proc = subprocess.run(
+            [sys.executable, str(REPO / "scripts" / "run.py"), "menu", "drive", json.dumps(capture_trigger_batch())],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.require(proc.returncode == 0, f"capture trigger failed: {proc.stdout} {proc.stderr}")
+
+    def collect_captures(self, name: str, attempt: int, before: dict[str, float]) -> list[str]:
+        """Move the window's new capture files under the sweep's out directory and name them in the window JSON."""
+        after = snapshot_captures(self.args.capture_dir)
+        captured = pair_captures(before, after)
+        if len(captured) < self.args.captures:
+            self.log_line(f"  {name}: only {len(captured)} of {self.args.captures} captures landed")
+        destination = self.args.out / "captures"
+        destination.mkdir(parents=True, exist_ok=True)
+        paths = []
+        for index, path in enumerate(captured):
+            label = f"{name}#{attempt}" if attempt > 1 else name
+            moved = destination / f"{label}_{index}.rdc"
+            shutil.move(self.args.capture_dir / path, moved)
+            paths.append(moved.name)
+        return paths
+
     def measure(self, name: str, target: int, attempt: int, origin: tuple[float, float, float]) -> dict | None:
         """One window, or None when the gates say to take it again.
 
@@ -204,11 +275,20 @@ class Sweeper:
         if target - current > 0:
             spawned = self.perf("spawn", count=target - current)
             self.log_line(f"  spawn: asked={spawned['requested']} got={spawned['spawned']} pool={spawned['enemies']}/{spawned['poolMax']}")
+        if self.args.density == "strung":
+            self.send(hb.build_teleport_command(position=list(strung_position(origin, self.args.strung_offset))))
+            time.sleep(0.5)
+        before = snapshot_captures(self.args.capture_dir) if self.args.captures else {}
         self.perf("start")
         dismissed = 0
-        deadline = time.time() + self.args.seconds
+        triggers = [self.args.seconds * (i + 1) / (self.args.captures + 1) for i in range(self.args.captures)]
+        started = time.time()
+        deadline = started + self.args.seconds
         while time.time() < deadline:
             time.sleep(1.0)
+            while triggers and time.time() - started >= triggers[0]:
+                triggers.pop(0)
+                self.trigger_capture()
             closed = self.dismiss_reward()
             if closed.get("windowWasOpen"):
                 dismissed += 1
@@ -226,13 +306,20 @@ class Sweeper:
         report["_window_seconds"] = self.args.seconds
         report["_rewardsSkipped"] = dismissed
         report["_attempt"] = attempt
+        report["_density"] = self.args.density
+        if self.args.density == "strung":
+            report["_strungOffset"] = self.args.strung_offset
+        if self.args.captures:
+            report["_captures"] = self.collect_captures(name, attempt, before)
         report["_suspect"] = suspect_reason(report, target=target)
         (self.args.out / f"{name}.json").write_text(json.dumps(report, indent=1))
         self.log_line(
             f"{tag:>23} target={target:3d} alive={report['enemiesMin']:3d}..{report['enemiesMax']:3d} "
             f"frames={report['frames']:5d} mean={report['meanMs']:6.2f} p50={report['p50Ms']:6.2f} "
             f"p90={report['p90Ms']:6.2f} p99={report['p99Ms']:7.2f} max={report['maxMs']:7.2f} "
-            f"mod={report['modMsPerFrame']:6.3f}" + (f"  SUSPECT: {report['_suspect']}" if report["_suspect"] else "")
+            f"mod={report['modMsPerFrame']:6.3f} gc={report['gcPauseMsPerFrame']:6.3f}"
+            + (f" density={self.args.density}" if self.args.density != "gathered" else "")
+            + (f"  SUSPECT: {report['_suspect']}" if report["_suspect"] else "")
         )
         return report
 
@@ -263,13 +350,25 @@ class Sweeper:
         origin = origin_from_state(self.verb("state"))
         self.log_line(f"  standing at {origin}")
 
-        for name, target in plan(self.args.counts):
-            if name.endswith("_modoff"):
-                self.perf("toggle", target="all", enabled=False)
-            elif name.endswith("_reenabled"):
-                self.perf("toggle", target="all", enabled=True)
-            self.window(name, target, origin)
-            self.log_line(f"  player at {(self.verb('state').get('player') or {}).get('position')} after {name}")
+        if self.args.captures:
+            self.require_renderdoc_armed()
+            self.sh("uv", "run", "scripts/run.py", "menu", "start")
+            self.log_line(
+                f"capture mode: {self.args.captures} RenderDoc frames per window; capture runs perturb frame times, "
+                "so timing tables come from capture-free runs"
+            )
+
+        try:
+            for name, target in plan(self.args.counts):
+                if name.endswith("_modoff"):
+                    self.perf("toggle", target="all", enabled=False)
+                elif name.endswith("_reenabled"):
+                    self.perf("toggle", target="all", enabled=True)
+                self.window(name, target, origin)
+                self.log_line(f"  player at {(self.verb('state').get('player') or {}).get('position')} after {name}")
+        finally:
+            if self.args.captures:
+                subprocess.run([sys.executable, str(REPO / "scripts" / "run.py"), "menu", "stop"], cwd=REPO, capture_output=True)
 
         (self.args.out / "status.json").write_text(json.dumps(self.perf("status"), indent=1))
         (self.args.out / "final_state.json").write_text(json.dumps(self.verb("state"), indent=1))
@@ -293,6 +392,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--min-fps", type=int, default=DEFAULT_MIN_FPS, help="below this average a window is retaken")
     parser.add_argument("--attempts", type=int, default=DEFAULT_ATTEMPTS, help="tries per window before giving up")
     parser.add_argument("--hp", type=int, default=None, help=f"hit points to park the player at (1-{hb.PERF_MAX_PLAYER_HP})")
+    parser.add_argument(
+        "--density",
+        choices=["gathered", "strung"],
+        default="gathered",
+        help="gathered stands the swarm at the player; strung spawns it there and walks the player --strung-offset "
+        "away before the window, so contact-dependent cost falls out of the A/B",
+    )
+    parser.add_argument("--strung-offset", type=float, default=DEFAULT_STRUNG_OFFSET, help="world units along +X for --density strung")
+    parser.add_argument("--captures", type=int, default=0, help="RenderDoc frames to trigger inside each window (0 = none)")
+    parser.add_argument("--capture-dir", type=Path, default=DEFAULT_CAPTURE_DIR, help="where RenderDoc writes .rdc files")
+    parser.add_argument(
+        "--launch-cmd",
+        default=None,
+        help="how to relaunch the game between sweeps instead of 'task game:run', e.g. a systemd unit on a "
+        "direct-Proton host; only used when --relaunch is on (the default)",
+    )
     parser.add_argument("--map", type=int, default=None, help="eMap value to load instead of the level file's")
     parser.add_argument("--tier", type=int, default=None, help="tier to load")
     parser.add_argument("--seed", type=int, default=None, help="seed to load, so a sweep is reproducible")
@@ -303,6 +418,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("counts must be 0 or greater")
     if args.seconds <= 0:
         parser.error("--seconds must be positive")
+    if args.strung_offset < 0:
+        parser.error("--strung-offset must be 0 or greater")
+    if not 0 <= args.captures <= 8:
+        parser.error("--captures must be between 0 and 8")
     return args
 
 
