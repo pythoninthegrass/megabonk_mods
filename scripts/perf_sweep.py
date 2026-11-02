@@ -249,6 +249,18 @@ class Sweeper:
         )
         self.require(proc.returncode == 0, f"capture trigger failed: {proc.stdout} {proc.stderr}")
 
+    def ensure_menu_service(self) -> None:
+        """A menu service left over from an earlier session is fine to reuse; anything else is fatal."""
+        proc = subprocess.run(
+            [sys.executable, str(REPO / "scripts" / "run.py"), "menu", "start"],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if proc.returncode != 0 and "already running" not in proc.stdout + proc.stderr:
+            self.require(False, f"menu service start failed: {proc.stdout} {proc.stderr}")
+
     def collect_captures(self, name: str, attempt: int, before: dict[str, float]) -> list[str]:
         """Move the window's new capture files under the sweep's out directory and name them in the window JSON."""
         after = snapshot_captures(self.args.capture_dir)
@@ -358,7 +370,7 @@ class Sweeper:
 
         if self.args.captures:
             self.require_renderdoc_armed()
-            self.sh("uv", "run", "scripts/run.py", "menu", "start")
+            self.ensure_menu_service()
             self.log_line(
                 f"capture mode: {self.args.captures} RenderDoc frames per window; capture runs perturb frame times, "
                 "so timing tables come from capture-free runs"
