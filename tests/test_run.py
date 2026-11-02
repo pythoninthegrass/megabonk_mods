@@ -1637,7 +1637,7 @@ def test_relaunch_forwards_the_overrides_to_the_load(monkeypatch) -> None:
 
 @pytest.mark.parametrize(
     "verb",
-    ["report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health"],
+    ["report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health", "phases"],
 )
 def test_perf_verb_is_a_subcommand_argument(verb: str) -> None:
     args = run.parse_args(["perf", verb])
@@ -1732,6 +1732,16 @@ def test_perf_vsync_payload_carries_the_state() -> None:
     assert run.perf_payload(args) == {"command": "perf", "action": "vsync", "enabled": False}
     args = run.parse_args(["perf", "vsync", "--enable"])
     assert run.perf_payload(args) == {"command": "perf", "action": "vsync", "enabled": True}
+
+
+def test_perf_phases_payload_carries_the_state() -> None:
+    args = run.parse_args(["perf", "phases", "--enable"])
+    assert run.perf_payload(args) == {"command": "perf", "action": "phases", "enabled": True}
+    args = run.parse_args(["perf", "phases", "--disable"])
+    assert run.perf_payload(args) == {"command": "perf", "action": "phases", "enabled": False}
+    args = run.parse_args(["perf", "phases"])
+    with pytest.raises(SystemExit):
+        run.perf_payload(args)
 
 
 @pytest.mark.parametrize("flags", [[], ["--enable", "--disable"]])
