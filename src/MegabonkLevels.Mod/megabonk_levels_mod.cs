@@ -57,6 +57,7 @@ public class MegabonkLevelsMod : MelonMod
         DevHarness.Install(LoggerInstance);
         PerfProbes.Install(LoggerInstance);
         PerfMonitor.Install(LoggerInstance);
+        PerfGc.Install(LoggerInstance);
     }
 
     public override void OnLateUpdate()

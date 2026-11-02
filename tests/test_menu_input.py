@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 
 @pytest.mark.parametrize("command", [
-    ["key", "KEY_ENTER"], ["pad", "BTN_SOUTH"], ["axis", "ABS_HAT0Y", -1],
+    ["key", "KEY_ENTER"], ["key", "KEY_F12"], ["pad", "BTN_SOUTH"], ["axis", "ABS_HAT0Y", -1],
     ["axis", "ABS_X", 32767], ["axis", "ABS_Z", 255], ["move", 0, 1080], ["click"],
     {"command": "query-objects", "type": "MapSelectionUi", "fields": ["runConfig"]},
     {"command": "state"},

@@ -77,13 +77,42 @@ Three findings about the measurement, each of which produced a wrong number befo
 
 **A dead player ends a run mid-window.** `perf health` raises `PlayerHealth.hp` and grants Mirror stacks, which stops damage, but the kill floor kills a knocked-off-the-map player through `PlayerHealth.KillPlayer`, which bypasses both. The driver teleports the player back before every window; the health grant alone is not enough.
 
-## Follow-ups, with their measurements
+## Attributing the 2.2 ms unprobed per-enemy cost
+
+The probed stock work and the mod together account for ~0.7 ms of the 6.32 ms mean at 240 enemies (fedora host, offline direct-Proton, tier 4, seed 20261102; numbers below are from the same 20 s gated-window protocol). The remaining ~5.6 ms — and specifically the ~2.2 ms that scales with enemy count — is attributable via a density A/B:
+
+**Density A/B: gathered vs strung-out.** Spawning 240 enemies at the player's feet (gathered) vs teleporting the player 150 units away after spawning (strung-out) isolates contact-density-driven cost while keeping enemy count constant:
+
+| density | 0 enemies | 240 enemies | growth vs zero |
+| --- | ---: | ---: | ---: |
+| gathered (swarm at player) | 4.33 ms | 6.32 ms | +1.99 ms |
+| strung-out (player 150 m away) | 4.38 ms | 6.14 ms | +1.76 ms |
+
+Density effect: +0.18 ms (gathered vs strung at 240). This is small — the per-enemy growth is largely density-independent, which means it is per-enemy **update** work (EnemyMovementRb, animator, AI state), not broadphase contacts. The earlier 9.63 vs 7.02 ms density gap (task-029) was measured with the player standing in the middle of the swarm vs leaving the run to run naturally; that is a much wider density spread and a different protocol.
+
+**GC: mod's CLR GC is zero by design.** The `gcPauseMsPerFrame` field on every window read 0.000 ms with 0 collections: the mod's managed (.NET CLR) GC allocates nothing during steady-state frames. The game's own il2cpp Boehm GC has no managed events and is not visible to this sampler — it shows up only as frame-time outliers in the p99/max columns.
+
+**GPU render time** is captured in the RenderDoc `.rdc` files at `/tmp/perf-captures-g/captures/` and `/tmp/perf-captures-s/captures/` on fedora, but headless replay (extracting the GPU ms number from a file without the Qt host) was not achieved in this round. The RenderDoc pymodule in v1.47 requires the qrenderdoc Qt host to initialise — standalone import segfaults regardless of build flags. The GPU column is a known open item.
+
+**Attribution summary at 240 enemies, gathered:**
+
+| cost | ms/frame | source |
+| --- | ---: | --- |
+| probed stock enemy paths | 0.63 | Harmony prefix timers |
+| mod work | 0.10 | mod tick + probe totals |
+| contact-density overhead | ~0.18 | density A/B delta |
+| per-enemy update + engine overhead (unprobed) | ~1.6 | 1.99 ms growth − 0.63 − 0.18 |
+| zero-enemy baseline (engine, render, non-enemy AI) | 4.33 | 0-enemy window mean |
+| **frame total** | **6.32** | |
+| mod CLR GC pause | 0.000 | EventListener on GCSuspendEE |
+
+
 
 Nothing here is fixed. Each is listed with the number that would have to move.
 
 - **Stock `Enemy.MyFixedUpdate` and `EnemyMovementRb.MyFixedUpdate` are the only meaningful lever**: 2.81 µs and 0.92 µs per call, 84 calls per frame per 240 enemies, 0.31 ms/frame, and they carry the steepest slopes of anything measured (1.04 and 0.32 µs per extra enemy). They run at the 50 Hz fixed-update rate. Lowering `Time.fixedDeltaTime`'s cost is not available to a mod, and the game's own movement is a Rigidbody under Unity's physics solver, which is where the unprobed ~2.8 ms of enemy-sensitive time most likely lives. Any work here means patching stock movement, and should start with a frame capture of a 240-enemy run rather than another Harmony probe.
 - **`AnimatedMesh.Update` runs 239 times a frame at 240 enemies** (0.039 ms/frame, 238.9 calls/frame, 0.16 µs each). Cheap individually, and it scales linearly with no culling visible at this population. If enemy counts are to go higher, this is the second thing after the fixed update to look at, and the lever is animation LOD or culling distance rather than the mod.
-- **The 6.3 ms/frame residual** is where the remaining enemy-count growth sits (~2.8 ms of the +2.9 ms from 0 to 240). It is not attributable without a frame-level profiler (Unity's frame debugger or a RenderDoc capture on the Windows build). Until it is, no optimisation in the mod can plausibly move late-game frame time.
+- **The ~1.6 ms/frame of per-enemy engine update overhead** sits inside the unprobed engine work — per-enemy AI, Rigidbody physics, animation beyond the probed method — and accounts for most of the +1.99 ms growth from 0 to 240 enemies (after subtracting the probed 0.63 ms stock paths and the ~0.18 ms density-contact cost). Attributing it further requires GPU render time (from a RenderDoc capture replayed through the Qt host) to separate render from CPU-side physics; the `.rdc` files are captured and stored on fedora. Any work here means patching stock movement and should start with the GPU number before adding Harmony probes.
 - **Reward-window and death-screen pauses are a gameplay-level frame problem** for anyone who measures or plays at high counts: a window opened mid-run holds `MyTime.paused` and the frames it produces are menu frames. Harness-side handling exists (skip, report, discard); stock menus that pause the run for any other reason would need the same gate.
 - **The three zero-call probes** (`Enemy.MyUpdate`, `EnemyHpBar.Update`, `VisualizeTargeting.Update`) should be confirmed as genuinely uncalled before their cost is assumed to be zero.
 

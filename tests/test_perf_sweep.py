@@ -114,3 +114,75 @@ def test_a_thinned_window_is_flagged_not_thrown_away() -> None:
 
     assert perf_sweep.discard_reasons(thin, window_seconds=20.0, min_fps=30) == []
     assert perf_sweep.suspect_reason(thin, target=240) is not None
+
+
+# --- density A/B: gathered is the swarm at the player, strung leaves the player a fixed offset away ---
+
+
+def test_strung_position_moves_the_player_downstream_along_x() -> None:
+    assert perf_sweep.strung_position((-8.0, 0.6, -9.8), 150.0) == (142.0, 0.6, -9.8)
+
+
+def test_strung_position_with_a_zero_offset_is_the_origin() -> None:
+    assert perf_sweep.strung_position((-8.0, 0.6, -9.8), 0.0) == (-8.0, 0.6, -9.8)
+
+
+def test_density_defaults_to_gathered_with_no_captures() -> None:
+    args = perf_sweep.parse_args(["--count", "0"])
+
+    assert args.density == "gathered"
+    assert args.strung_offset == 150.0
+    assert args.captures == 0
+    assert str(args.capture_dir) == "/tmp/RenderDoc"
+
+
+def test_density_flag_accepts_strung() -> None:
+    args = perf_sweep.parse_args(["--density", "strung"])
+
+    assert args.density == "strung"
+
+
+def test_counts_replace_the_default_ladder() -> None:
+    """--count names the whole ladder: passing two counts must not measure the untouched seven as well."""
+    assert perf_sweep.parse_args(["--count", "0", "--count", "240"]).counts == [0, 240]
+
+
+def test_counts_default_to_the_full_ladder() -> None:
+    assert perf_sweep.parse_args([]).counts == list(perf_sweep.DEFAULT_COUNTS)
+
+
+def test_density_flag_rejects_unknown_densities() -> None:
+    with pytest.raises(SystemExit):
+        perf_sweep.parse_args(["--density", "bunched"])
+
+
+def test_launch_cmd_defaults_to_the_taskfile_launch() -> None:
+    assert perf_sweep.parse_args(["--count", "0"]).launch_cmd is None
+
+
+def test_launch_cmd_overrides_the_game_launch() -> None:
+    args = perf_sweep.parse_args(["--launch-cmd", "systemctl --user restart megabonk-034"])
+
+    assert args.launch_cmd == "systemctl --user restart megabonk-034"
+
+
+# --- RenderDoc capture pairing: new .rdc files in the capture dir belong to the window that triggered them ---
+
+
+def test_capture_trigger_is_an_f12_keypress_for_the_menu_driver() -> None:
+    assert perf_sweep.capture_trigger_batch() == [["key", "KEY_F12"]]
+
+
+def test_pair_captures_takes_only_new_rdc_files_in_capture_order() -> None:
+    assert perf_sweep.pair_captures({}, {"b.rdc": 2.0, "a.rdc": 5.0}) == ["b.rdc", "a.rdc"]
+
+
+def test_pair_captures_ignores_preexisting_files() -> None:
+    before = {"old.rdc": 1.0}
+    after = {"old.rdc": 1.0, "new.rdc": 2.0}
+
+    assert perf_sweep.pair_captures(before, after) == ["new.rdc"]
+
+
+def test_pair_captures_ignores_files_that_are_not_captures() -> None:
+    assert perf_sweep.pair_captures({}, {"log.txt": 9.0, "frame1.rdc.tmp": 3.0}) == []
