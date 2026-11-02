@@ -4,6 +4,7 @@ title: Port the player installer to a single static Go binary
 status: To Do
 assignee: []
 created_date: '2026-10-31T08:14:00Z'
+updated_date: '2026-11-02T03:08:00Z'
 labels:
   - tooling
 dependencies: []
@@ -38,6 +39,9 @@ The Python installer works but still asks the player for an interpreter: the 3.1
 - [ ] #6 Third-party Go dependencies are limited to what is justified in writing: bitfield/script only where pipeline sugar beats stdlib, with the final dependency list recorded in the task
 - [ ] #7 Parity tests run the Go binary and the Python installer against identical fixtures and compare stdout, the install record, and exit codes; Python remains the reference until the Go binary reproduces the live host checks, and no docs advertise Go as the default before then
 - [ ] #8 docs/player-installer.md gains the Go section (build targets, contract inheritance) and taskfiles produce the binary alongside the zip
+- [ ] #9 Interactive versus headless is decided by an attached tty probed at /dev/tty (os.OpenFile plus ModeCharDevice, stdlib only, no golang.org/x/term) together with the session environment, and --non-interactive or MEGABONK_NON_INTERACTIVE forces TextProgress; no prompt ever reads stdin
+- [ ] #10 Failure output matches the Python installer the parity harness compares: discovery failures name the candidates tried, why each was rejected and the exact retry flag (--library, --game-dir, --prefix, --proton), and a skipped optional step prints the command that finishes it without changing the exit code
+- [ ] #11 Any download checks the HTTP status before writing the body, pins the host across redirects and requires TLS 1.2 or newer, so a 404 or captive-portal page reads as a missing asset and never as a sha256 mismatch
 <!-- AC:END -->
 
 ## Definition of Done
@@ -51,3 +55,9 @@ The Python installer works but still asks the player for an interpreter: the 3.1
 - [ ] #7 Docs updated
 - [ ] #8 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Adopted from the installer-script review recorded on TASK-006.04.01 (setup.atuin.sh, getmic.ro). The tty probe is deliberate: Go has no stdlib isatty, and opening /dev/tty and testing ModeCharDevice is both enough and keeps golang.org/x/term off the dependency list AC #6 counts. The interactive decision and the failure-message wording have to exist in the Python reference first, because AC #7 compares stdout between the two - implement there, then mirror. Cross-compiling linux/arm64 covers the installer binary only; the game is x86_64 under Proton, so the Go section under AC #8 states that outright rather than letting an arm64 build read as arm64 game support.
+<!-- SECTION:PLAN:END -->
