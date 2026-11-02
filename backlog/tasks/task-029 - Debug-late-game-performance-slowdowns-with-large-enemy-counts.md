@@ -1,10 +1,10 @@
 ---
 id: TASK-029
 title: Debug late-game performance slowdowns with large enemy counts
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-02T04:32:00Z'
-updated_date: '2026-11-02T07:48:00Z'
+updated_date: '2026-11-02T08:06:00Z'
 labels: []
 dependencies: []
 references:
@@ -35,7 +35,7 @@ Late in a run, once stage scaling has spawned a large number of enemies, the gam
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -83,3 +83,15 @@ Two findings about the measurement itself, each of which produced a wrong number
 
 Cleanup: fedora's Mods/MegabonkLevels.Mod.dll restored byte-for-byte from MegabonkLevels.Mod.dll.task029.bak (90b51146...) and the instrumented game stopped. The Mac's installed DLL is rebuilt from the committed source, which carries the profiler gated on the harness. Follow-ups filed for the ~2.2 ms unprobed engine cost and the three probes that never fired.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Frame time roughly doubles from an empty level to 240 enemies (4.15 to 7.02 ms mean, 260 to 154 fps on the Windows build under Proton), and essentially all of that growth is the game's own enemy update and physics: 0.63 ms/frame of probed stock enemy work, ~2.2 ms of unprobed engine cost, and 0.044 ms of mod work - the mod is 1.2% of a 240-enemy frame. The one cost the mod owned was a hitch: the kill-floor watcher read collider bounds on every actor every check, and Unity builds them lazily, which produced a 112.55 ms single call at 120 enemies. Probing distance, reused dictionaries, a collection-in KillTracker and a slower actor-overlay sweep took that to 0.53 ms and the tick from 0.022 to 0.013 ms/frame, with before and after measured on one protocol.
+
+Shipped as tooling rather than a fix to gameplay: a harness-gated frame profiler (frame buffer that counts paused frames apart from sampled ones, per-tick timers, eleven probes over the enemy path) behind the perf verbs, and scripts/perf_sweep.py, which drives a fresh launch through gated measurement windows. Findings, limits and follow-ups are in docs/performance.md and the method in docs/development.md.
+
+Two results were about the measurement, not the game: paused frames are UI frames, so a window holding any is retaken (one discarded window held 784); and the same 240 enemies measured 9.63 ms gathered on the player against 7.02 ms strung out across the map, so windows fix the player's position - which is also what keeps the run alive, because PlayerHealth.KillPlayer bypasses both Mirror and the hit-point floor. Window-to-window spread at 240 was 6.5 to 9.6 ms, so totals under ~1.5 ms between runs are not evidence; per-tick totals and worst calls are.
+
+task check green (1687 C# tests, 993 Python tests, lint clean). Instrumented DLL removed from fedora and its original restored byte-for-byte from backup, the instrumented game stopped, the Mac's DLL rebuilt from committed source. Left open and filed with measurements: TASK-034 for the unprobed per-enemy engine cost, TASK-035 for three probes that never recorded a call.
+<!-- SECTION:FINAL_SUMMARY:END -->
