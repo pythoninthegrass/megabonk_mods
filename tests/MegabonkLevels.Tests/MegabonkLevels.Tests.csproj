@@ -21,6 +21,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/generation_report.cs" Link="generation_report.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/generation_hash.cs" Link="generation_hash.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/spawn_seed.cs" Link="spawn_seed.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/interactable_randomization.cs" Link="interactable_randomization.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_file.cs" Link="level_file.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_settings.cs" Link="level_settings.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_file_migration.cs" Link="level_file_migration.cs" />

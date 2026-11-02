@@ -40,7 +40,10 @@ public readonly record struct LevelFile(
     float? KillFloorY = null,
     IReadOnlyList<float> BossSpawnPosition = null,
     bool GrindRequiresSlide = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, string> PackKitVersions = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, string> PackKitVersions = null,
+    bool RandomizeShadyGuy = false,
+    bool RandomizeChests = false,
+    bool RandomizeMoai = false)
 {
     public const int CurrentSchemaVersion = 3;
 
@@ -58,6 +61,9 @@ public readonly record struct LevelFile(
         && MaxSlopeAngle == other.MaxSlopeAngle
         && KillFloorY == other.KillFloorY
         && GrindRequiresSlide == other.GrindRequiresSlide
+        && RandomizeShadyGuy == other.RandomizeShadyGuy
+        && RandomizeChests == other.RandomizeChests
+        && RandomizeMoai == other.RandomizeMoai
         && ListEquals(BossSpawnPosition, other.BossSpawnPosition)
         && Music == other.Music
         && Title == other.Title

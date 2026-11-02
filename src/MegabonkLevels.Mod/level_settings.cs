@@ -8,7 +8,7 @@ namespace MegabonkLevels;
 
 public static class LevelSettings
 {
-    public static readonly string[] Fields = { "playerStart", "bossSpawnPosition", "killFloorY", "maxSlopeAngle", "grindRequiresSlide", "noGrass", "music", "title", "description", "mapDescription", "allowedCharacters", "map", "stageIndex", "tier", "seed" };
+    public static readonly string[] Fields = { "playerStart", "bossSpawnPosition", "killFloorY", "maxSlopeAngle", "grindRequiresSlide", "noGrass", "randomizeShadyGuy", "randomizeChests", "randomizeMoai", "music", "title", "description", "mapDescription", "allowedCharacters", "map", "stageIndex", "tier", "seed" };
     private static readonly string[] TextFields = { "music", "title", "description", "mapDescription" };
 
     public static string Read(LevelFile level, string field)
@@ -76,6 +76,7 @@ public static class LevelSettings
     {
         NoGrass = settings.NoGrass, PlayerStart = settings.PlayerStart, BossSpawnPosition = settings.BossSpawnPosition,
         KillFloorY = settings.KillFloorY, MaxSlopeAngle = settings.MaxSlopeAngle, GrindRequiresSlide = settings.GrindRequiresSlide,
+        RandomizeShadyGuy = settings.RandomizeShadyGuy, RandomizeChests = settings.RandomizeChests, RandomizeMoai = settings.RandomizeMoai,
         Music = settings.Music, Title = settings.Title, Description = settings.Description, MapDescription = settings.MapDescription,
         AllowedCharacters = settings.AllowedCharacters, Map = settings.Map, StageIndex = settings.StageIndex, Tier = settings.Tier, Seed = settings.Seed,
     };
