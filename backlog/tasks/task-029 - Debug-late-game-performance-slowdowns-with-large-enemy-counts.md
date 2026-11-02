@@ -4,9 +4,13 @@ title: Debug late-game performance slowdowns with large enemy counts
 status: In Progress
 assignee: []
 created_date: '2026-11-02T04:32:00Z'
-updated_date: '2026-11-02T06:11:00Z'
+updated_date: '2026-11-02T07:48:00Z'
 labels: []
 dependencies: []
+references:
+  - docs/performance.md
+  - scripts/perf_sweep.py
+  - src/MegabonkLevels.Mod/perf_monitor.cs
 priority: medium
 type: spike
 ordinal: 136000
@@ -20,17 +24,17 @@ Late in a run, once stage scaling has spawned a large number of enemies, the gam
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A repeatable profiling method for a late-game run with a large enemy count exists (harness-driven, spawns on, invulnerable player, forced stage/tier) and is documented in docs/development.md
-- [ ] #2 Frame-time attribution identifies the top cost centers with measurements, separating stock game systems from mod-added per-frame work
-- [ ] #3 Every mod-side cost that scales with enemy count is measured; small ones are fixed in this task and larger ones are filed as follow-up tasks with the measurement attached
-- [ ] #4 Findings are written up in docs: what scales with enemy count and what does not, so future performance work starts from evidence
+- [x] #1 A repeatable profiling method for a late-game run with a large enemy count exists (harness-driven, spawns on, invulnerable player, forced stage/tier) and is documented in docs/development.md
+- [x] #2 Frame-time attribution identifies the top cost centers with measurements, separating stock game systems from mod-added per-frame work
+- [x] #3 Every mod-side cost that scales with enemy count is measured; small ones are fixed in this task and larger ones are filed as follow-up tasks with the measurement attached
+- [x] #4 Findings are written up in docs: what scales with enemy count and what does not, so future performance work starts from evidence
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
@@ -65,3 +69,17 @@ Phase 5 - Docs (AC#4) + closeout:
 
 Risks: stock attribution inferential; forced counts may drift (spawn verb mitigates); fedora WIP must be reconciled first; repeated quit/relaunch on the live fedora session approved by Lance.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Method and evidence. All measurement on fedora (Windows build under Proton Experimental, -force-d3d11), every window gated on a verified live run: state's levelLoaded/killFloorArmed true, editor/frozen false, perf status paused false, then vSyncCount 0 and pausedFrames 0 on the kept report. Protocol per window: teleport the player to a fixed point, perf health, spawn the top-up, perf start, 20 s while dismissing reward windows at 1 Hz, perf report. Driver is scripts/perf_sweep.py; the gates are unit tested in tests/test_perf_sweep.py (14 new tests). Results JSON per window in /tmp/t029_before2 (pre-fix build) and /tmp/t029 (fixed build) on fedora, copies in t029_results_before2/ and t029_results_after/ in the session temp dir.
+
+Frame time vs enemy count, fixed build, one protocol throughout: 0 enemies 4.15 ms mean (260 fps), 40 4.45, 80 4.77, 120 5.07, 160 4.99, 200 7.37, 240 7.02 ms (154 fps). Mod-attributed 0.042 to 0.086 ms/frame, 1.0% to 1.2% of the frame. Probed stock enemy work at 240: EnemyManager.FixedUpdate 0.279, Enemy.MyFixedUpdate 0.236 (84 calls/frame, 2.81 us each), EnemyMovementRb.MyFixedUpdate 0.077, AnimatedMesh.Update 0.039 (239 calls/frame). Residual 6.30 ms/frame at 240, 4.11 ms at 0.
+
+Mod-side costs that scaled with the population, all fixed with before/after measured on the same protocol: the kill-floor watcher's collider.bounds read on every actor every check (Unity builds bounds lazily, so on a fresh actor it rebuilds them) produced a 112.55 ms single call at 120 enemies and 58.41 ms at 160; KillFloor tick 0.022 to 0.013 ms/frame and 22.1 to 13.1 us/call at 240. KillTracker's LINQ/GroupBy allocations per check (now keyed dictionary in, reused scratch collections). The position overlay's actor sweep 0.25 s to 0.75 s cadence: 0.022 to 0.012 ms/frame at 240. 1687 C# tests and 993 Python tests pass; task check green.
+
+Two findings about the measurement itself, each of which produced a wrong number first: paused frames are UI frames (one 160-enemy window held 784 and was discarded, so any window with pausedFrames > 0 is retaken), and perf health alone does not keep a run alive because PlayerHealth.KillPlayer bypasses both Mirror and hp, so the driver must teleport per window. Same-count spread across repeat windows at 240 was 6.5/7.0/7.8/9.6 ms, so total-frame-time deltas under ~1.5 ms are not evidence; per-tick totals and maxMs are.
+
+Cleanup: fedora's Mods/MegabonkLevels.Mod.dll restored byte-for-byte from MegabonkLevels.Mod.dll.task029.bak (90b51146...) and the instrumented game stopped. The Mac's installed DLL is rebuilt from the committed source, which carries the profiler gated on the harness. Follow-ups filed for the ~2.2 ms unprobed engine cost and the three probes that never fired.
+<!-- SECTION:NOTES:END -->
