@@ -2,11 +2,13 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Linq;
 using System.Text;
 using System.Text.Json.Nodes;
 using Il2Cpp;
 using Il2CppAssets.Scripts.Actors.Player;
+using Il2CppAssets.Scripts.UI.InGame.Levelup;
 using Il2CppAssets.Scripts.UI.InGame.Rewards;
 using Il2CppAssets.Scripts.Utility;
 using Il2CppInterop.Runtime;
@@ -464,17 +466,32 @@ public static class DevHarness
     // The windows are BaseEncounterWindow subclasses sharing Open/OnClose/ChooseOffer; see docs/development.md.
     private static JsonObject DismissOffers(int? offer, bool skip)
     {
-        var windows = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>().OfType<BaseEncounterWindow>().ToList();
-        var window = windows.FirstOrDefault(w => w is LevelupScreen && LevelupScreen.isLevelingUp)
-            ?? windows.FirstOrDefault(w => w.gameObject.activeInHierarchy);
+        // The game's own gate: EncounterWindows.encounterInProgress is true while a reward window is up, and false once it closed,
+        // which is what keeps a LevelupScreen whose GameObject lingers active from being read as an open window.
+        var encounterWindows = FindAll<EncounterWindows>().FirstOrDefault();
+        var encounterInProgress = encounterWindows?.encounterInProgress ?? false;
+        var levelingUp = LevelupScreen.isLevelingUp;
+
+        var activeLevelup = FindAll<LevelupScreen>().FirstOrDefault(w => w.gameObject.activeInHierarchy && (levelingUp || encounterInProgress));
+        var window = (BaseEncounterWindow)activeLevelup
+            ?? (BaseEncounterWindow)FindAll<EncounterUi>().FirstOrDefault(w => w.gameObject.activeInHierarchy)
+            ?? (BaseEncounterWindow)FindAll<ChestWindowUi>().FirstOrDefault(w => w.gameObject.activeInHierarchy)
+            ?? (BaseEncounterWindow)FindAll<MicrowaveUi>().FirstOrDefault(w => w.gameObject.activeInHierarchy);
         if (window == null)
         {
+            _logger.Msg($"DevHarness: dismiss-offers found no active reward window (levelup={levelingUp}, encounterInProgress={encounterInProgress}, " +
+                $"encounterUis=[{string.Join(", ", FindAll<EncounterUi>().Select(w => $"{w.gameObject.name}:{w.gameObject.activeInHierarchy}"))}]).");
             return new JsonObject { ["windowWasOpen"] = false, ["window"] = null };
         }
 
-        var label = $"{window.GetType().Name} ({window.gameObject.name})";
+        var label = $"{window.GetIl2CppType().Name} ({window.gameObject.name})";
         string action;
         bool closed;
+        string reason = null;
+
+        // Detection uses either flag; the close check uses isLevelingUp alone because Skip() clears it in the same call while
+        // EncounterWindows clears encounterInProgress later in the frame.
+        bool LevelupClosed() => !LevelupScreen.isLevelingUp;
 
         if (skip)
         {
@@ -484,22 +501,38 @@ public static class DevHarness
             }
 
             skipScreen.Skip();
-            closed = !LevelupScreen.isLevelingUp;
+            closed = LevelupClosed();
             action = "skip";
+            if (!closed)
+            {
+                reason = SkipRefusal(skipScreen);
+            }
         }
         else if (offer is int index)
         {
             if (window is LevelupScreen levelup)
             {
+                // LevelupScreen.ChooseOffer is an empty override; its picks go through the UpgradeButton, as in dismiss-levelup.
                 var buttons = levelup.upgradePicker.buttons;
                 if (index >= buttons.Length)
                 {
                     throw new InvalidOperationException($"choice {index} is out of range; the window offers {buttons.Length} upgrades");
                 }
+
+                if (buttons[index].upgradable == null)
+                {
+                    throw new InvalidOperationException($"offer {index} on '{label}' has no upgrade to select; a shrine reward window is dismissed with the default close, not chosen");
+                }
+
+                buttons[index].SelectUpgrade();
+                closed = LevelupClosed();
+            }
+            else
+            {
+                window.ChooseOffer(index);
+                closed = !window.gameObject.activeInHierarchy;
             }
 
-            window.ChooseOffer(index);
-            closed = window is LevelupScreen ? !LevelupScreen.isLevelingUp : !window.gameObject.activeInHierarchy;
             action = $"choose {index}";
         }
         else
@@ -513,7 +546,7 @@ public static class DevHarness
                 window.OnClose();
             }
 
-            closed = window is LevelupScreen ? !LevelupScreen.isLevelingUp : !window.gameObject.activeInHierarchy;
+            closed = window is LevelupScreen ? LevelupClosed() : !window.gameObject.activeInHierarchy;
             action = "close";
         }
 
@@ -523,16 +556,68 @@ public static class DevHarness
             MyTime.Pause();
         }
 
-        _logger.Msg($"DevHarness: dismiss-offers {action} on {label}, closed={closed}.");
+        _logger.Msg($"DevHarness: dismiss-offers {action} on {label}, closed={closed}" + (reason is null ? "." : $", reason={reason}."));
         return new JsonObject
         {
             ["windowWasOpen"] = true,
             ["window"] = label,
             ["action"] = action,
             ["closed"] = closed,
+            ["reason"] = reason,
         };
     }
 
+    // Why the game kept the level-up window open after Skip(): its own private skip counters and utility price.
+    private static string SkipRefusal(LevelupScreen screen)
+    {
+        var hasSkips = typeof(LevelupScreen).GetField("hasSkips", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)?.GetValue(null) as bool?;
+        if (hasSkips == false)
+        {
+            return "no skips left";
+        }
+
+        var used = InvokeLevelupInt(screen, "GetSkipsUsed");
+        var price = used is int spent ? InvokeLevelupInt(screen, "GetShopToolPrice", spent) : null;
+        return price is int cost
+            ? $"the game refused the skip; skip price {cost}, skips used {used}"
+            : "the game refused the skip and left the window open";
+    }
+
+    private static int? InvokeLevelupInt(LevelupScreen screen, string name, params object[] args)
+    {
+        var method = typeof(LevelupScreen).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        if (method is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Convert.ToInt32(method.Invoke(screen, args));
+        }
+        catch (Exception e)
+        {
+            _logger.Msg($"DevHarness: LevelupScreen.{name} failed: {e.GetBaseException().Message}");
+            return null;
+        }
+    }
+
+    // Instance wrappers built from Resources.FindObjectsOfTypeAll, the one sweep proven to see the UI objects;
+    // generic FindObjectsOfType and C# type filters over MonoBehaviour sweeps both miss them under interop.
+    private static List<T> FindAll<T>()
+        where T : class
+    {
+        var items = new List<T>();
+        foreach (var found in Resources.FindObjectsOfTypeAll(Il2CppType.From(typeof(T))))
+        {
+            if (found != null)
+            {
+                items.Add((T)Activator.CreateInstance(typeof(T), found.Pointer));
+            }
+        }
+
+        return items;
+    }
 
     // Ends the run through PlayerHealth.KillPlayer, the same call the kill floor uses, so it ignores invulnerability.
     private static void KillPlayer()
