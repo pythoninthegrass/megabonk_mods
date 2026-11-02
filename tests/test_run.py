@@ -544,6 +544,7 @@ def test_dismiss_offers_payload_defaults_to_closing_without_choosing() -> None:
         "skip": True,
     }
 
+
 def test_teleport_prints_the_result_json(capsys) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         game = fake_game(tmp, '{"command":"teleport","ok":true,"result":{"position":[1,2,3],"cell":[4,5]}}')
@@ -1607,3 +1608,109 @@ def test_relaunch_forwards_the_overrides_to_the_load(monkeypatch) -> None:
     assert ok is True
     load = next(p for p in sent if p["command"] == "load-level")
     assert (load["map"], load["stageIndex"]) == (64, 1)
+
+
+@pytest.mark.parametrize(
+    "verb",
+    ["report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health"],
+)
+def test_perf_verb_is_a_subcommand_argument(verb: str) -> None:
+    args = run.parse_args(["perf", verb])
+    assert args.action == "perf"
+    assert args.perf_action == verb
+    assert run.build_perf_command(verb) == {"command": "perf", "action": verb}
+
+
+def test_perf_rejects_an_unknown_verb() -> None:
+    with pytest.raises(SystemExit):
+        run.parse_args(["perf", "profile"])
+
+
+def test_perf_spawn_payload_carries_the_count() -> None:
+    args = run.parse_args(["perf", "spawn", "--count", "120"])
+    assert run.perf_payload(args) == {"command": "perf", "action": "spawn", "count": 120}
+
+
+@pytest.mark.parametrize("count", ["0", "301", "-1", "many", "1.5"])
+def test_perf_spawn_rejects_counts_outside_the_range(count: str) -> None:
+    with pytest.raises(SystemExit):
+        run.parse_args(["perf", "spawn", "--count", count])
+
+
+def test_perf_spawn_without_a_count_stops() -> None:
+    args = run.parse_args(["perf", "spawn"])
+    with pytest.raises(SystemExit, match="count"):
+        run.perf_payload(args)
+
+
+def test_perf_timescale_payload_carries_the_value() -> None:
+    args = run.parse_args(["perf", "timescale", "--value", "3.5"])
+    assert run.perf_payload(args) == {"command": "perf", "action": "timescale", "value": 3.5}
+
+
+def test_perf_timescale_without_a_value_releases_the_hold() -> None:
+    args = run.parse_args(["perf", "timescale"])
+    assert run.perf_payload(args) == {"command": "perf", "action": "timescale"}
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "20.5", "abc"])
+def test_perf_timescale_rejects_values_outside_the_range(value: str) -> None:
+    with pytest.raises(SystemExit):
+        run.parse_args(["perf", "timescale", "--value", value])
+
+
+def test_perf_toggle_payload_carries_target_and_state() -> None:
+    args = run.parse_args(["perf", "toggle", "--target", "EnemyHpBar.Update", "--disable"])
+    assert run.perf_payload(args) == {
+        "command": "perf",
+        "action": "toggle",
+        "target": "EnemyHpBar.Update",
+        "enabled": False,
+    }
+
+
+def test_perf_toggle_needs_a_target() -> None:
+    args = run.parse_args(["perf", "toggle", "--enable"])
+    with pytest.raises(SystemExit, match="target"):
+        run.perf_payload(args)
+
+
+def test_perf_health_payload_carries_the_hp() -> None:
+    args = run.parse_args(["perf", "health", "--hp", "250000"])
+    assert run.perf_payload(args) == {"command": "perf", "action": "health", "hp": 250000}
+
+
+def test_perf_health_without_hp_leaves_the_choice_to_the_profiler() -> None:
+    assert run.perf_payload(run.parse_args(["perf", "health"])) == {"command": "perf", "action": "health"}
+
+
+@pytest.mark.parametrize("hp", ["0", "-3", "100000001", "plenty"])
+def test_perf_health_rejects_hp_outside_the_range(hp: str) -> None:
+    with pytest.raises(SystemExit):
+        run.parse_args(["perf", "health", "--hp", hp])
+
+
+@pytest.mark.parametrize("flags", [[], ["--enable", "--disable"]])
+def test_perf_toggle_needs_exactly_one_state_flag(flags: list[str]) -> None:
+    args = run.parse_args(["perf", "toggle", "--target", "KillFloor", *flags])
+    with pytest.raises(SystemExit, match="enable"):
+        run.perf_payload(args)
+
+
+def test_perf_report_and_reset_carry_no_arguments() -> None:
+    assert run.perf_payload(run.parse_args(["perf", "report"])) == {"command": "perf", "action": "report"}
+    assert run.perf_payload(run.parse_args(["perf", "reset"])) == {"command": "perf", "action": "reset"}
+
+
+def test_perf_vsync_payload_carries_the_state() -> None:
+    args = run.parse_args(["perf", "vsync", "--disable"])
+    assert run.perf_payload(args) == {"command": "perf", "action": "vsync", "enabled": False}
+    args = run.parse_args(["perf", "vsync", "--enable"])
+    assert run.perf_payload(args) == {"command": "perf", "action": "vsync", "enabled": True}
+
+
+@pytest.mark.parametrize("flags", [[], ["--enable", "--disable"]])
+def test_perf_vsync_needs_exactly_one_state_flag(flags: list[str]) -> None:
+    args = run.parse_args(["perf", "vsync", *flags])
+    with pytest.raises(SystemExit, match="vsync"):
+        run.perf_payload(args)

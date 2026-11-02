@@ -922,3 +922,111 @@ async def test_relaunch_tool_error_carries_the_failing_log_line(tmp_path, monkey
         result = await client.call_tool("relaunch", {})
     assert result.is_error
     assert "LevelLoader: load failed: no MapData found for map=32" in result.content[0].text
+
+
+async def test_perf_tool_sends_the_verb_and_its_arguments(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def responder(payload):
+        seen.append(payload)
+        return ok_result(payload, {"frames": 900, "p50Ms": 16.7})
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("perf", {"verb": "spawn", "count": 120})
+    finally:
+        stop.set()
+    assert not result.is_error
+    assert seen == [{"command": "perf", "action": "spawn", "count": 120}]
+    assert json.loads(result.content[0].text)["result"]["p50Ms"] == 16.7
+
+
+async def test_perf_tool_sends_toggle_target_and_enabled(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def responder(payload):
+        seen.append(payload)
+        return ok_result(payload, {"target": "EnemyHpBar.Update", "enabled": False})
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("perf", {"verb": "toggle", "target": "EnemyHpBar.Update", "enabled": False})
+    finally:
+        stop.set()
+    assert not result.is_error
+    assert seen == [{"command": "perf", "action": "toggle", "target": "EnemyHpBar.Update", "enabled": False}]
+
+
+async def test_perf_tool_omits_arguments_a_verb_does_not_use(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def responder(payload):
+        seen.append(payload)
+        return ok_result(payload, {"window": 1})
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            await client.call_tool("perf", {"verb": "start"})
+            await client.call_tool("perf", {"verb": "timescale", "value": 4})
+    finally:
+        stop.set()
+    assert seen == [
+        {"command": "perf", "action": "start"},
+        {"command": "perf", "action": "timescale", "value": 4},
+    ]
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"verb": "profile"}, "unknown perf verb"),
+        ({"verb": "spawn"}, "count"),
+        ({"verb": "spawn", "count": 0}, "count"),
+        ({"verb": "spawn", "count": 301}, "count"),
+        ({"verb": "timescale", "value": 25}, "value"),
+        ({"verb": "toggle", "target": "KillFloor"}, "enabled"),
+        ({"verb": "toggle", "enabled": False}, "target"),
+        ({"verb": "health", "hp": 0}, "hp"),
+        ({"verb": "health", "hp": 100000001}, "hp"),
+    ],
+)
+async def test_perf_tool_rejects_bad_arguments_before_sending(tmp_path, monkeypatch, arguments, message) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("perf", arguments)
+    assert result.is_error
+    assert message in result.content[0].text
+    assert not list((harness / "commands").glob("*.json"))
+
+
+async def test_perf_tool_sends_vsync(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def responder(payload):
+        seen.append(payload)
+        return ok_result(payload, {"vsync": False, "vSyncCount": 0})
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("perf", {"verb": "vsync", "enabled": False})
+    finally:
+        stop.set()
+    assert not result.is_error
+    assert seen == [{"command": "perf", "action": "vsync", "enabled": False}]
+
+
+async def test_perf_tool_requires_enabled_for_vsync(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("perf", {"verb": "vsync"})
+    assert result.is_error
+    assert "enabled" in result.content[0].text
+    assert not list((harness / "commands").glob("*.json"))

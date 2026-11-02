@@ -318,6 +318,35 @@ async def spawns(on: bool) -> CallToolResult:
 
 
 @mcp.tool()
+async def perf(
+    verb: str,
+    count: int | None = None,
+    value: float | None = None,
+    target: str | None = None,
+    enabled: bool | None = None,
+    hp: int | None = None,
+) -> CallToolResult:
+    """Frame-time profiler, gated on the dev harness. verb is report, status, start, reset, spawn, timescale, toggle, vsync or health. start clears the frame buffer and timers and begins a window; report returns frame percentiles (mean/p50/p90/p99/max ms), enemy counts, live player hp and the per-tick and per-patch ms totals; status returns the live toggles. spawn adds count enemies (1-300) in a dense disc around the player. timescale holds MyTime.timeScale at value (0.05-20), or releases it when value is omitted. toggle switches one mod tick (target KillFloor, PositionLabel, LevelMusic, ...) or one stock patch probe (target EnemyManager.Update, AnimatedMesh.Update, ...) off and on with enabled, or every tick and probe with target all. vsync off lifts the 60 fps cap so cost inside the frame budget shows up; restore it with vsync on. health keeps the player alive through a window the way the invulnerable verb does (Mirror and Feathers stacks) and additionally writes hit points (hp, default 1000000): a death screen pauses the run and poisons the sample, so call health before spawning a swarm. reset restores the time scale, every toggle and the invulnerability grant. Frames are only counted while the game runs, so resume and vsync off before a window and never call screenshot inside one."""
+    if verb not in run.PERF_ACTIONS:
+        raise ToolError(f"unknown perf verb '{verb}'; expected {', '.join(run.PERF_ACTIONS)}")
+    if verb == "spawn" and not (count is not None and 1 <= count <= run.PERF_MAX_ENEMIES):
+        raise ToolError(f"perf spawn needs count from 1 to {run.PERF_MAX_ENEMIES}")
+    if verb == "timescale" and value is not None and not run.PERF_MIN_TIME_SCALE <= value <= run.PERF_MAX_TIME_SCALE:
+        raise ToolError(f"perf timescale needs value from {run.PERF_MIN_TIME_SCALE} to {run.PERF_MAX_TIME_SCALE}")
+    if verb == "toggle" and (not target or enabled is None):
+        raise ToolError("perf toggle needs target and enabled")
+    if verb == "vsync" and enabled is None:
+        raise ToolError("perf vsync needs enabled")
+    if verb == "health" and hp is not None and not 1 <= hp <= run.PERF_MAX_PLAYER_HP:
+        raise ToolError(f"perf health needs hp from 1 to {run.PERF_MAX_PLAYER_HP}")
+    return await _command(
+        _harness(),
+        run.build_perf_command(verb, count, value, target, enabled, hp if verb == "health" else None),
+        TIMEOUT,
+    )
+
+
+@mcp.tool()
 async def camera(position: list[float] | None = None, rotation: list[float] | None = None, clear: bool = False) -> CallToolResult:
     """Hold the camera at a world pose (position and rotation euler degrees), or return it to the game with clear."""
     if clear:
@@ -468,7 +497,6 @@ async def dismiss_levelup(choice: int = 0) -> CallToolResult:
 async def dismiss_offers(choice: int | None = None, skip: bool = False) -> CallToolResult:
     """Act on the open reward window (level-up, shrine offers, chest, microwave) without a click. Default closes it without choosing; choice N picks the offer at zero-based index N; skip skips a level-up without choosing (level-up window only). With no window open it succeeds and changes nothing (windowWasOpen false). Returns windowWasOpen, window, action and closed."""
     return await _command(_harness(), run.build_dismiss_offers_command(choice, skip), TIMEOUT)
-
 
 
 @mcp.tool()

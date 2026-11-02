@@ -35,6 +35,11 @@ Usage:
     run.py character-screen <on|off>  Restrict the game's character screen to Calcium and Tony McZoom (a custom run is being set up) or restore the stock grid
     run.py spawns <on|off>         Allow or stop new enemy spawns (off leaves enemies already alive; resets on level load)
     run.py heartbeat <on|off>      Start or stop the kill-floor heartbeat (actor counts and lowest heights every 5 seconds)
+    run.py perf <verb> [--count N] [--value X] [--target NAME] [--enable|--disable] [--hp N]
+                                   Frame-time profiler: start|report|status|reset a measurement window, spawn N enemies (1-300),
+                                   hold or release a time scale (0.05-20), toggle one mod tick or stock patch probe off and on,
+                                   turn vsync off for an uncapped window, keep the player alive (health: invulnerable
+                                   plus hp) so a swarm cannot end the run inside a window
     run.py cells <on|off>          Start or stop logging the player's and boss-tier actors' grid cell on change
     run.py editor <on|off>         Enter or leave editor mode (frozen run, free-fly camera), like pressing F8
     run.py camera X Y Z --rot RX RY RZ  Hold the camera at a world pose (euler degrees)
@@ -57,7 +62,6 @@ Usage:
     run.py teleport --cell CX CY   Move the player to a grid cell's centre, on the tile surface there
     run.py item NAME [AMOUNT]      Print the player's amount of an item; with AMOUNT set it exactly (0 removes it), printing before and after
     run.py grind-slide <on|off|auto>  Hold the slide button down, release it, or read the real device again, for the grind gate on a grindRequiresSlide level
-    run.py dismiss-levelup [--choice N]  Pick offer N (default 0) in the open level-up dialog; prints dialogWasOpen and chosen
     run.py dismiss-levelup [--choice N]  Pick offer N (default 0) in the open level-up dialog; prints dialogWasOpen and chosen
     run.py dismiss-offers [--choice N] [--skip]  Close the open reward window (level-up, shrine offers, chest, microwave); --choice N picks offer N, --skip skips a level-up without choosing
     run.py quit                    Quit the game, wait for the process to exit, and stop leftover Wine processes (macOS)
@@ -270,6 +274,66 @@ def build_heartbeat_command(enabled: bool) -> dict[str, object]:
     return {"command": "heartbeat", "enabled": enabled}
 
 
+PERF_ACTIONS = ("report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health")
+PERF_MAX_ENEMIES = 300
+PERF_MIN_TIME_SCALE = 0.05
+PERF_MAX_TIME_SCALE = 20.0
+PERF_MAX_PLAYER_HP = 100_000_000
+
+
+def build_perf_command(
+    action: str,
+    count: int | None = None,
+    value: float | None = None,
+    target: str | None = None,
+    enabled: bool | None = None,
+    hp: int | None = None,
+) -> dict[str, object]:
+    """One profiler verb: spawn carries a count, timescale an optional value, toggle a target and its new state."""
+    payload: dict[str, object] = {"command": "perf", "action": action}
+    if count is not None:
+        payload["count"] = count
+    if value is not None:
+        payload["value"] = value
+    if target is not None:
+        payload["target"] = target
+    if enabled is not None:
+        payload["enabled"] = enabled
+    if hp is not None:
+        payload["hp"] = hp
+    return payload
+
+
+def perf_count(value: str) -> int:
+    try:
+        count = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"count must be an integer from 1 to {PERF_MAX_ENEMIES}") from error
+    if not 1 <= count <= PERF_MAX_ENEMIES:
+        raise argparse.ArgumentTypeError(f"count must be an integer from 1 to {PERF_MAX_ENEMIES}")
+    return count
+
+
+def perf_hp(value: str) -> int:
+    try:
+        hp = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"hp must be an integer from 1 to {PERF_MAX_PLAYER_HP}") from error
+    if not 1 <= hp <= PERF_MAX_PLAYER_HP:
+        raise argparse.ArgumentTypeError(f"hp must be an integer from 1 to {PERF_MAX_PLAYER_HP}")
+    return hp
+
+
+def perf_time_scale(value: str) -> float:
+    try:
+        scale = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"time scale must be a number from {PERF_MIN_TIME_SCALE} to {PERF_MAX_TIME_SCALE}") from error
+    if not PERF_MIN_TIME_SCALE <= scale <= PERF_MAX_TIME_SCALE:
+        raise argparse.ArgumentTypeError(f"time scale must be a number from {PERF_MIN_TIME_SCALE} to {PERF_MAX_TIME_SCALE}")
+    return scale
+
+
 def build_cells_command(enabled: bool) -> dict[str, object]:
     return {"command": "cells", "enabled": enabled}
 
@@ -371,6 +435,7 @@ def build_dismiss_offers_command(choice: int | None, skip: bool) -> dict[str, ob
     if skip:
         payload["skip"] = True
     return payload
+
 
 def write_command(commands_dir: Path, payload: dict[str, object]) -> Path:
     name = f"{time.time_ns()}-{payload['command']}.json"
@@ -977,6 +1042,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     heartbeat.add_argument("state", choices=["on", "off"])
     cells = sub.add_parser("cells")
     cells.add_argument("state", choices=["on", "off"])
+    perf = sub.add_parser("perf")
+    perf.add_argument("perf_action", choices=list(PERF_ACTIONS))
+    perf.add_argument("--count", type=perf_count, help=f"enemies to spawn around the player (1-{PERF_MAX_ENEMIES}), for 'spawn'")
+    perf.add_argument("--value", type=perf_time_scale, help=f"time scale to hold ({PERF_MIN_TIME_SCALE}-{PERF_MAX_TIME_SCALE}) for 'timescale'; omit to release it")
+    perf.add_argument("--target", help="for 'toggle': a tick name (KillFloor), a patch probe (EnemyManager.Update), or all")
+    perf.add_argument("--enable", action="store_true", help="with 'toggle', turn the target on")
+    perf.add_argument("--disable", action="store_true", help="with 'toggle', turn the target off")
+    perf.add_argument("--hp", type=perf_hp, help=f"player hit points to park the player at (1-{PERF_MAX_PLAYER_HP}), for 'health'")
     editor = sub.add_parser("editor")
     editor.add_argument("state", choices=["on", "off"])
     camera = sub.add_parser("camera")
@@ -1015,7 +1088,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     dismiss.add_argument("--choice", type=int, default=0, help="zero-based index of the offered upgrade")
     dismiss_offers = sub.add_parser("dismiss-offers")
     dismiss_offers.add_argument("--choice", type=int, default=None, help="zero-based index of the offered upgrade to pick instead of closing the window")
-    dismiss_offers.add_argument("--skip", action="store_true", help="skip the level-up window without choosing; only valid there")    music_probe = sub.add_parser("music-probe")
+    dismiss_offers.add_argument("--skip", action="store_true", help="skip the level-up window without choosing; only valid there")
+    music_probe = sub.add_parser("music-probe")
     music_probe.add_argument(
         "probe_action",
         choices=[
@@ -1152,6 +1226,7 @@ def dismiss_levelup_payload(args: argparse.Namespace) -> dict[str, object]:
 def dismiss_offers_payload(args: argparse.Namespace) -> dict[str, object]:
     return build_dismiss_offers_command(args.choice, args.skip)
 
+
 def music_probe_payload(args: argparse.Namespace) -> dict[str, object]:
     payload: dict[str, object] = {"command": "music-probe", "action": args.probe_action}
     if args.path:
@@ -1177,6 +1252,27 @@ def spawns_payload(args: argparse.Namespace) -> dict[str, object]:
 
 def heartbeat_payload(args: argparse.Namespace) -> dict[str, object]:
     return build_heartbeat_command(args.state == "on")
+
+
+def perf_payload(args: argparse.Namespace) -> dict[str, object]:
+    verb = args.perf_action
+    if verb == "spawn" and args.count is None:
+        raise SystemExit(f"perf spawn: give --count N (1-{PERF_MAX_ENEMIES})")
+    enabled = None
+    if verb in ("toggle", "vsync"):
+        if args.enable == args.disable:
+            raise SystemExit(f"perf {verb}: give exactly one of --enable or --disable")
+        enabled = args.enable
+    if verb == "toggle" and not args.target:
+        raise SystemExit("perf toggle: give --target NAME")
+    return build_perf_command(
+        verb,
+        count=args.count,
+        value=args.value,
+        target=args.target,
+        enabled=enabled,
+        hp=args.hp if verb == "health" else None,
+    )
 
 
 def cells_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -1445,6 +1541,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send(harness, heartbeat_payload(args), args.timeout)
         case "cells":
             ok = send(harness, cells_payload(args), args.timeout)
+        case "perf":
+            ok = send_printing_result(harness, perf_payload(args), args.timeout)
         case "editor":
             ok = send(harness, editor_payload(args), args.timeout)
         case "key":

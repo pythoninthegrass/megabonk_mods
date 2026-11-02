@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using MelonLoader;
 using MelonLoader.Utils;
@@ -15,8 +16,23 @@ public class MegabonkLevelsMod : MelonMod
     // is not implemented.
     private const string TestLevelFileName = "megabonklevels-test-level.mblevel.json";
 
+    private static MelonLogger.Instance _logger;
+
+    // Cached so the per-frame perf timers cost no delegate allocations; see PerfMonitor.Timed.
+    private static readonly Action _pollHarness = DevHarness.Poll;
+    private static readonly Action _pumpLoad = LevelLoaderPatch.Pump;
+    private static readonly Action _tickStartupCover = () => StartupCover.Tick(_logger);
+    private static readonly Action _tickMaxSlopeAngle = () => LiveEditPatch.TickMaxSlopeAngle(_logger);
+    private static readonly Action _tickKillFloor = KillFloorWatcher.Tick;
+    private static readonly Action _tickGrindAssist = GrindAssistWatcher.Tick;
+    private static readonly Action _tickLevelMusic = LevelMusic.Tick;
+    private static readonly Action _tickMenuNotice = MenuNotice.Tick;
+    private static readonly Action _tickPositionLabel = PositionLabel.Tick;
+    private static readonly Action _tickEditorMode = () => EditorMode.Tick(_logger);
+
     public override void OnInitializeMelon()
     {
+        _logger = LoggerInstance;
         LoggerInstance.Msg("MegabonkLevels mod initialized.");
         GenerationPatch.Install(LoggerInstance);
         SeedForcePatch.Install(LoggerInstance);
@@ -39,6 +55,8 @@ public class MegabonkLevelsMod : MelonMod
         MapSelectionPatch.Install(LoggerInstance);
         SteamWriteGuard.Install(LoggerInstance);
         DevHarness.Install(LoggerInstance);
+        PerfProbes.Install(LoggerInstance);
+        PerfMonitor.Install(LoggerInstance);
     }
 
     public override void OnLateUpdate()
@@ -50,21 +68,22 @@ public class MegabonkLevelsMod : MelonMod
 
     public override void OnUpdate()
     {
+        PerfMonitor.Tick();
         EditorInput.Queue.BeginFrame(Time.frameCount, Time.unscaledTime, (Input.mousePosition.x, Input.mousePosition.y));
-        DevHarness.Poll();
-        LevelLoaderPatch.Pump();
-        StartupCover.Tick(LoggerInstance);
-        LiveEditPatch.TickMaxSlopeAngle(LoggerInstance);
-        KillFloorWatcher.Tick();
-        GrindAssistWatcher.Tick();
-        LevelMusic.Tick();
-        MenuNotice.Tick();
-        PositionLabel.Tick();
-        EditorMode.Tick(LoggerInstance);
+        PerfMonitor.Timed(PerfTick.DevHarnessPoll, _pollHarness);
+        PerfMonitor.Timed(PerfTick.LoadPump, _pumpLoad);
+        PerfMonitor.Timed(PerfTick.StartupCover, _tickStartupCover);
+        PerfMonitor.Timed(PerfTick.MaxSlopeAngle, _tickMaxSlopeAngle);
+        PerfMonitor.Timed(PerfTick.KillFloor, _tickKillFloor);
+        PerfMonitor.Timed(PerfTick.GrindAssist, _tickGrindAssist);
+        PerfMonitor.Timed(PerfTick.LevelMusic, _tickLevelMusic);
+        PerfMonitor.Timed(PerfTick.MenuNotice, _tickMenuNotice);
+        PerfMonitor.Timed(PerfTick.PositionLabel, _tickPositionLabel);
+        PerfMonitor.Timed(PerfTick.EditorMode, _tickEditorMode);
 
         if (DevHarness.Enabled && EditorMode.Active)
         {
-            EditorInput.LogRealTextInput(LoggerInstance, EditorTileTools.TextInputFocused);
+            EditorInput.LogRealTextInput(_logger, EditorTileTools.TextInputFocused);
         }
 
         if (EditorInput.GetKeyDown(KeyCode.F9))
@@ -76,7 +95,7 @@ public class MegabonkLevelsMod : MelonMod
         if (EditorInput.GetKeyDown(KeyCode.F6))
         {
             var path = Path.Combine(MelonEnvironment.ModsDirectory, TestLevelFileName);
-            LevelLoaderPatch.LoadAndStart(path, LoggerInstance);
+            LevelLoaderPatch.LoadAndStart(path, _logger);
         }
     }
 }

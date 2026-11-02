@@ -45,6 +45,7 @@ public enum HarnessCommandKind
     GrindSlide,
     FallDamage,
     MusicProbe,
+    Perf,
 }
 
 // World-space camera position and euler rotation in degrees.
@@ -95,6 +96,22 @@ public sealed class DamageArgs
     public bool Nonlethal { get; init; } = true;
 }
 
+// The perf-sampler action and its one argument: count for spawn, value for timescale, target/enabled for toggle.
+public sealed class PerfArgs
+{
+    public string Action { get; init; }
+
+    public string Target { get; init; }
+
+    public bool Enabled { get; init; } = true;
+
+    public int Count { get; init; }
+
+    public float? Value { get; init; }
+
+    public int? Hp { get; init; }
+}
+
 // The type to enumerate and the public fields to read besides name.
 public sealed class QueryArgs
 {
@@ -104,7 +121,7 @@ public sealed class QueryArgs
 }
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null, int? Offer = null, bool Skip = false)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null, PerfArgs Perf = null, int? Offer = null, bool Skip = false)
 {
     public const int MaxTypeLength = 200;
 
@@ -229,6 +246,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return true;
             case "music-probe":
                 return TryParseMusicProbe(root, out command, out error);
+            case "perf":
+                return TryParsePerf(root, out command, out error);
             case "teleport":
                 return TryParseTeleport(root, out command, out error);
             case "dismiss-levelup":
@@ -396,6 +415,92 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         return true;
     }
 
+    // The frame-time profiler: spawn sizes an enemy population, timescale holds MyTime.timeScale, toggle switches one tick or probe.
+    private static bool TryParsePerf(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+
+        if (!TryGetString(root, "action", out var action) || action.Length == 0)
+        {
+            error = "missing string field 'action' (report, status, start, reset, spawn, timescale, toggle, vsync, health)";
+            return false;
+        }
+
+        var allowed = new[] { "report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health" };
+        if (Array.IndexOf(allowed, action) < 0)
+        {
+            error = $"unknown action '{action}'; expected {string.Join(", ", allowed)}";
+            return false;
+        }
+
+        var count = 0;
+        if (action == "spawn")
+        {
+            if (!TryGetOptionalInt(root, "count", out var parsedCount, out error))
+            {
+                return false;
+            }
+
+            count = parsedCount ?? 0;
+            if (!PerfLimits.ValidSpawnCount(count))
+            {
+                error = $"field 'count' must be an integer from 1 to {PerfSpawnPlan.MaxEnemies}";
+                return false;
+            }
+        }
+
+        if (!TryGetOptionalFloat(root, "value", out var value, out error))
+        {
+            return false;
+        }
+
+        if (action == "timescale" && value.HasValue && !PerfLimits.ValidTimeScale(value.Value))
+        {
+            error = $"field 'value' must be a number from {PerfLimits.MinTimeScale} to {PerfLimits.MaxTimeScale}";
+            return false;
+        }
+
+        int? hp = null;
+        if (action == "health")
+        {
+            if (!TryGetOptionalInt(root, "hp", out var parsedHp, out error))
+            {
+                return false;
+            }
+
+            hp = parsedHp;
+            if (hp.HasValue && !PerfLimits.ValidPlayerHp(hp.Value))
+            {
+                error = $"field 'hp' must be an integer from 1 to {PerfLimits.MaxPlayerHp}";
+                return false;
+            }
+        }
+
+        TryGetString(root, "target", out var target);
+        var enabled = true;
+        if (action is "toggle" or "vsync")
+        {
+            if (action == "toggle" && string.IsNullOrEmpty(target))
+            {
+                error = "field 'target' must name a perf tick or a probe";
+                return false;
+            }
+
+            if (!root.TryGetPropertyValue("enabled", out var flag) || flag is not JsonValue flagValue || !flagValue.TryGetValue(out enabled))
+            {
+                error = "missing boolean field 'enabled'";
+                return false;
+            }
+        }
+
+        command = new HarnessCommand(
+            HarnessCommandKind.Perf,
+            null,
+            Perf: new PerfArgs { Action = action, Target = target, Enabled = enabled, Count = count, Value = value, Hp = hp });
+        error = null;
+        return true;
+    }
+
     private static bool TryParseTeleport(JsonObject root, out HarnessCommand command, out string error)
     {
         command = default;
@@ -501,7 +606,6 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         error = null;
         return true;
     }
-
 
     private static bool TryParseKey(JsonObject root, out HarnessCommand command, out string error)
     {

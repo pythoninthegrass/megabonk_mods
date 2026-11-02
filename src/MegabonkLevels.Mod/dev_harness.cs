@@ -2,14 +2,12 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
-using System.Reflection;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
 using Il2Cpp;
 using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.UI.InGame.Levelup;
 using Il2CppAssets.Scripts.UI.InGame.Levelup;
 using Il2CppAssets.Scripts.UI.InGame.Rewards;
 using Il2CppAssets.Scripts.Utility;
@@ -251,6 +249,8 @@ public static class DevHarness
                 return FallDamage.Read();
             case HarnessCommandKind.MusicProbe:
                 return MusicProbe.Run(command.Input.Action, command.Path, command.Input.Variant, command.Input.Value, _logger);
+            case HarnessCommandKind.Perf:
+                return RunPerf(command.Perf);
             case HarnessCommandKind.DismissLevelUp:
                 return DismissLevelUp(command.Choice);
             case HarnessCommandKind.DismissOffers:
@@ -262,6 +262,24 @@ public static class DevHarness
         }
 
         return null;
+    }
+
+    // The frame profiler's verbs: a measurement window, its report, live enemy counts and a held time scale. See docs/development.md.
+    private static JsonObject RunPerf(PerfArgs args)
+    {
+        return args.Action switch
+        {
+            "start" => PerfMonitor.StartWindow(),
+            "report" => PerfMonitor.Report(),
+            "status" => PerfMonitor.Status(),
+            "reset" => PerfMonitor.Reset(),
+            "spawn" => PerfMonitor.Spawn(args.Count),
+            "timescale" => PerfMonitor.SetTimeScale(args.Value),
+            "toggle" => PerfMonitor.Toggle(args.Target, args.Enabled),
+            "vsync" => PerfMonitor.SetVSync(args.Enabled),
+            "health" => PerfMonitor.SetPlayerHealth(args.Hp ?? PerfLimits.DefaultPlayerHp),
+            _ => throw new InvalidOperationException($"unknown perf action '{args.Action}'"),
+        };
     }
 
     // The interop wrappers for the synchronous AssetBundle loaders fail on Il2CppSystem span types, so this uses the async API (the parameterless LoadAllAssetsAsync has no native body, hence the Type overload); reading .assetBundle and .allAssets blocks until the load completes.
