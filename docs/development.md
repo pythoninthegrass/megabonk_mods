@@ -49,6 +49,7 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | List loaded Unity objects of a type with chosen fields | `{"command":"query-objects","type":"MapData","fields":["eMap"]}` | MCP `query_objects` |
 | Type text | `{"command":"type","text":"chest"}` | `run.py type chest` |
 | Read or set a player item amount | `{"command":"item","name":"Mirror"}` or `{"command":"item","name":"Mirror","amount":3}` | `run.py item Mirror`, `run.py item Mirror 3` |
+| Profile frame time over a measurement window (see "Frame-time profiling") | `{"command":"perf","action":"start"}`, `{"action":"report"}`, `{"action":"status"}`, `{"action":"reset"}`, `{"action":"spawn","count":120}`, `{"action":"timescale","value":4}`, `{"action":"toggle","target":"KillFloor","enabled":false}`, `{"action":"vsync","enabled":false}`, `{"action":"health","hp":1000000}` | `run.py perf start\|report\|status\|reset`, `perf spawn --count N`, `perf timescale [--value X]`, `perf toggle --target NAME --enable\|--disable`, `perf vsync --disable`, `perf health [--hp N]` |
 | Hold or release the slide button the grind gate reads (see "Grind gate") | `{"command":"grind-slide","held":true}` or `{"command":"grind-slide"}` | `run.py grind-slide <on\|off\|auto>` |
 | Read the live player's fall-damage inputs (see "Fall damage") | `{"command":"fall-damage"}` | `run.py fall-damage` |
 | Move the player | `{"command":"teleport","position":[x,y,z]}` or `{"command":"teleport","cell":[cx,cz]}` | `run.py teleport X Y Z`, `run.py teleport --cell CX CY` |
@@ -550,7 +551,9 @@ Caveats:
 - It is not a god mode. Damage that does not go through `A_CheckStopDamage` is still applied, and stronger enemies such as mini bosses can still kill the player. Which damage sources bypass Mirror was not enumerated.
 - Mirror reflects damage back at the attacker, so enemies take damage from hitting the player.
 - A surviving, idle player can still reach the level-up dialog, which pauses play and puts a window in the frame. `freeze` after the settle wait does not close it, so keep the settle time short or take the screenshot before the first level-up.
-- The kill floor still wins. `KillFloorWatcher` ends a fall through `PlayerHealth.KillPlayer()`, which does not pass through the damage check. Verified with a level that removes every tile but one: the invulnerable player logged `KillFloor: player fell to y=-49.8, killing` and the run ended on the death screen.
+- The kill floor still wins. `KillFloorWatcher` ends a fall through `PlayerHealth.KillPlayer()`, which does not pass through the damage check. Verified with a level that removes every tile but one: the invulnerable player logged `KillFloor: player fell to y=-49.8, killing` and the run ended on the death screen. For the same reason it also bypasses the hit-point floor that `perf health` sets; a long profiling window has to move the player back rather than only make them tough (see "Frame-time profiling").
+
+`perf health` is the same grant plus a `PlayerHealth.hp`/`maxHp` floor in one command, for measurement windows that must outlast a swarm (see "Frame-time profiling").
 
 ## Fall damage
 
@@ -656,7 +659,9 @@ The kill floor (see "Kill floor" in [runtime-map-structure.md](runtime-map-struc
 KillFloor: watch enemies=26 stageBosses=1 lowestEnemyY=-69.03 lowestBossY=-66.47 bosses=['Enemy1(Clone)' id=18 y=-66.2 lowest=-66.4 inEnemies=True]
 ```
 
-`enemies` is the size of `EnemyManager.enemies` and `stageBosses` the size of the manager's stage boss list. `lowestEnemyY` and `lowestBossY` are the lowest point (pivot or collider bottom, whichever is lower) any enemy or boss reached since the previous heartbeat, and each boss entry gives its id, pivot `y`, current `lowest` point, and whether it is also in `enemies`. A boss is only identified by id, because it has the same `Enemy1(Clone)` name as every other enemy.
+`enemies` is the size of `EnemyManager.enemies` and `stageBosses` the size of the manager's stage boss list. `lowestEnemyY` and `lowestBossY` are the lowest point any enemy or boss reached since the previous heartbeat, and each boss entry gives its id, pivot `y`, current `lowest` point, and whether it is also in `enemies`. A boss is only identified by id, because it has the same `Enemy1(Clone)` name as every other enemy.
+
+The lowest figure is the collider bottom where one was read and the pivot otherwise. The watcher reads an actor's collider only while its pivot is within `KillFloor.ColliderProbeMargin` (25 units) of the kill floor, because Unity builds bounds lazily and asking a freshly spawned actor for them rebuilds them; the heartbeat's running minimum therefore reports pivots for actors standing well above the floor. The kill decision itself always gets the collider when the actor is in that band, so nothing falls through unseen: by the time an actor reaches the floor its pivot is below it and is always probed. A heartbeat line is also where a mod-side hitch shows up first — `perf report`'s `maxMs` for the `KillFloor` tick is the figure to compare when one appears.
 
 It is off by default, because it adds a line every 5 seconds. Turn it on with `run.py heartbeat on` and off with `run.py heartbeat off`; both log `KillFloor: heartbeat on` or `off` and apply at once, including to a level that is already running. To start with it on, set `MEGABONK_KILL_FLOOR_HEARTBEAT` to `1` or `true` in the environment of the game process, for example in the `.env` that the taskfile reads or in front of the launch command. The variable is read once when the mod loads, and a later command overrides it. Verified in the game that the variable reaches the process under CrossOver.
 
@@ -671,7 +676,7 @@ me:        pos(120, 2, 3) floor -72
 enemy: 4   pos(125, 2, -10)
 ```
 
-Every line shares the same columns (label, id, then `pos(x, y, z)`), but the column widths are computed each refresh from what is actually on screen that refresh (`PositionReadout.Render`), not a fixed guess: the label column is as wide as the longest label shown (at least `me:`), the id column at least 3 digits (wider only if an id needs more, so ids don't jitter the column within a normal run), and each of x/y/z is as wide as that coordinate's widest current value. A value wider than its column still prints in full, only pushing what comes after it on that line; lines share these widths so the `pos` column lines up between them. `pos` itself is the world position rounded to whole units. `floor` on the player's line is the kill-floor height, and `BELOW FLOOR` is appended when an actor's position is below it (the kill floor uses the lower of the position and the collider bottom, so an actor can be killed a moment before its line is flagged). Boss-tier lines also carry the enemy's type name, directly after the position or the `BELOW FLOOR` flag with a single space — it is not column-aligned across lines, since reserving width for it on every line left large dead space when only one boss-tier actor was shown. The player's line is refreshed ten times a second, the actor lines four times a second.
+Every line shares the same columns (label, id, then `pos(x, y, z)`), but the column widths are computed each refresh from what is actually on screen that refresh (`PositionReadout.Render`), not a fixed guess: the label column is as wide as the longest label shown (at least `me:`), the id column at least 3 digits (wider only if an id needs more, so ids don't jitter the column within a normal run), and each of x/y/z is as wide as that coordinate's widest current value. A value wider than its column still prints in full, only pushing what comes after it on that line; lines share these widths so the `pos` column lines up between them. `pos` itself is the world position rounded to whole units. `floor` on the player's line is the kill-floor height, and `BELOW FLOOR` is appended when an actor's position is below it (the kill floor uses the lower of the position and the collider bottom, so an actor can be killed a moment before its line is flagged). Boss-tier lines also carry the enemy's type name, directly after the position or the `BELOW FLOOR` flag with a single space — it is not column-aligned across lines, since reserving width for it on every line left large dead space when only one boss-tier actor was shown. The player's line is refreshed ten times a second, the actor lines every 0.75 seconds: that sweep walks every live enemy, so at a few hundred of them a 4 Hz pass was a measurable share of a frame for text nobody reads that fast.
 
 It is drawn only when the harness is enabled and the level is mod-loaded, which is when the kill floor arms; a vanilla level or a disabled harness draws nothing. The label is a copy of one of the minimap's own direction letters, parented to the minimap root; its box is resized every refresh to the actual rendered text (`GetPreferredValues`), so it hugs the minimap instead of carrying a fixed width. If the minimap does not exist yet it logs `PositionLabel: no minimap found, readout not drawn` once and retries on the next tick; the log line `PositionLabel: created under the minimap` marks the first draw. The conversion and the text format are pure logic in `position_readout.cs`.
 
@@ -689,7 +694,7 @@ Actors are classified by the game's own `EEnemyFlag` bits (`Elite=1, Boss=2, Sta
 
 Final bosses, stage bosses and minibosses are always listed (read from `EnemyManager.stageBosses` first, then any other boss-tier actor found walking `EnemyManager.enemies`, deduplicated by id); boss-tier lines append the enemy's `EnemyData.enemyName` (e.g. `MinibossGolem`) after the position. Elites and ordinary enemies each go through their own `NearbyEnemySelector` (`nearby_enemy_selector.cs`): below the kill floor first, then the rest ordered by horizontal distance (x and z) to the player, ties by lower id, capped at 3 each. With hundreds of enemies alive the readout stays bounded (boss tier plus at most 6 more lines).
 
-The selectors reuse fixed buffers, so a refresh allocates only the few strings it shows. With about 400 enemies a refresh took 0.6 to 1.4 ms and allocated 3 to 5 KB, four times a second; nothing runs on every frame.
+The selectors reuse fixed buffers, so a refresh allocates only the few strings it shows. With about 400 enemies a refresh took 0.6 to 1.4 ms and allocated 3 to 5 KB; nothing runs on every frame, and the sweep's cost is now the 0.75 s cadence rather than 0.25 s — at 240 enemies the whole `PositionLabel` tick measured 0.022 ms/frame at the old cadence and 0.012 ms/frame at the new one, with the per-refresh figure unchanged.
 
 Verified in the running game: the player's `pos` tracked the player through a level with tiles removed, and a miniboss spawned by a scratch probe calling the game's own `SummonerController.EventMiniboss` showed `miniboss … MinibossGolem` with `IsBoss()` true. A boss spawned by the boss portal, a final boss, and elites were not exercised.
 
@@ -711,9 +716,67 @@ Caveats:
 - The kill floor kills the player within a quarter of a second of crossing the floor, so `BELOW FLOOR` is on screen only for those few frames and was not captured in the running game.
 - Cell and height level come from an actor's transform, not from the tile under it, so on a slope or while falling they are an approximation.
 
+## Frame-time profiling
+
+The harness carries a frame profiler, for the question "what costs what when the screen is full of enemies". Everything in it is gated on the harness being enabled — every timer, every patch, every verb — so a normal session makes no timing calls at all. Measured results and the follow-ups they opened are in [performance.md](performance.md).
+
+| Verb | What it does | Result |
+| --- | --- | --- |
+| `start` | Clears the frame buffer and every tick and probe total, so the next report describes only what follows | `window` id, `cleared` |
+| `report` | Summarises what has been sampled since `start`, leaving it running | `frames`, `pausedFrames`, `meanMs`, `p50Ms`, `p90Ms`, `p99Ms`, `maxMs`, `minMs`, `modMsPerFrame`, `enemiesMin`/`enemiesMax`, `playerHp`, `timeScale`, `paused`, `vSyncCount`, `targetFrameRate`, and a `ticks` and `probes` array of `{name, ms, calls, maxMs, enabled}` |
+| `status` | The same view without ending the window, logged every 2 seconds as `Perf: state:` | as `report` |
+| `reset` | Releases a held time scale, re-enables every tick and probe, and revokes the player grant `health` applied | the released values |
+| `spawn --count N` | Places N enemies in rings around the player through the game's own spawn path, up to 300, stopping after 10 consecutive null spawns | `requested`, `spawned`, `enemies`, `poolMax` |
+| `timescale [--value X]` | Holds `MyTime.timeScale` at 0.05–20 every frame, or releases it when no value is given | `timeScale`, `heldTimeScale` |
+| `toggle --target NAME --enable\|--disable` | Switches one mod tick (`KillFloor`), one probe (`EnemyManager.Update`) or `all` | the target's new state |
+| `vsync --disable` | Sets `QualitySettings.vSyncCount` to 0 and `targetFrameRate` to 0, which is what uncaps the frame rate enough to measure | `vSyncCount`, `targetFrameRate` |
+| `health [--hp N]` | Keeps the player alive through a window: the invulnerability grant (20 Mirror stacks, cooldown zeroed, plus 2 Feathers) and `PlayerHealth.hp`/`maxHp` written to 1,000,000/100,000,000, or `--hp` | `playerHp`, `playerGrantRestored` |
+
+`run.py perf report` and the MCP `perf` tool return the JSON; `perf health` is the invulnerability setup of the "Player invulnerability" section plus a hit-point floor, applied in one command so it can be sent before a spawn.
+
+**Frames.** One sample per frame from `Time.unscaledDeltaTime` in the mod's `OnUpdate`, while `MyTime.paused` is false. While it is true the frame is counted and not sampled (`Perf: pause: on/off` is logged on each transition). Paused frames are UI frames: Unity keeps rendering a frozen run at a rate that says nothing about gameplay, and those frames are long, so a window that contains any is a different measurement than the one being asked for. `pausedFrames` is how the caller finds out.
+
+**Ticks and probes.** Each mod tick is wrapped in `PerfMonitor.Timed`, and eleven Harmony prefix/postfix pairs instrument the game's own enemy path: `EnemyManager.Update`, `EnemyManager.FixedUpdate`, `Enemy.MyUpdate`, `Enemy.MyFixedUpdate`, `EnemyMovementRb.MyFixedUpdate`, `EnemyHpBar.Update`, `EnemyDissolve.Update`, `VisualizeTargeting.Update`, `AnimatedMesh.Update`, `MinimapUi.Update` and `AlwaysManager.Update`. Both use `Stopwatch.GetTimestamp()`, never `Time.*`, because a tick can run inside a frame whose delta is the thing being measured. `calls` matters as much as `ms`: at 154 fps the 50 Hz fixed update is 0.35 of a call per frame, so 240 enemies is 84 `Enemy.MyFixedUpdate` calls per frame. `maxMs` is the one to read when the complaint is a hitch rather than a low average — an average of 0.013 ms/frame can hide a 112 ms single call.
+
+`toggle all off` is the control that separates the three kinds of cost: mod work (the `ticks` array), stock work the probes can see (the `probes` array), and everything else, which is engine work — rendering, the physics broadphase and solver, GC. Probes measure the game, they are not part of playing it, and a report should be read as a diagnostic build's numbers.
+
+### Taking a measurement
+
+The sequence that produces a number worth comparing, and the reason each step is there:
+
+1. Relaunch rather than reload. A rebuilt DLL loads once, at startup, and a `load` into a running game restarts the run while leaving whatever the previous run left behind.
+2. Load with a fixed `--seed` (and `--tier`/`--map` if they matter), then `spawns off` so the wave spawner cannot move the population during a window.
+3. `invulnerable`, `editor off`, `resume`. The editor freezes the run, which is the wrong thing to measure.
+4. `perf vsync off`. At a locked 60 fps every window reads 16.7 ms and none of the differences are real.
+5. Per window: gate on the run being live (`state`'s `levelLoaded`, `killFloorArmed`, and not `editor` or `frozen`; `perf status`' `paused` false), teleport the player to a fixed point, `perf health`, spawn the top-up to the target count, `perf start`, wait, `perf report`. Spawn and teleport stay outside the window.
+6. Keep the report only if `pausedFrames` is 0, `vSyncCount` is 0, the frame count is plausible for the window length, and `enemiesMin..enemiesMax` brackets the target. Otherwise take it again.
+
+Dismiss reward windows during the window, at about 1 Hz: kill-floor deaths award XP, XP opens the level-up screen, and the level-up screen pauses the run. A 160-enemy window collected 784 paused frames this way before it was thrown out.
+
+`scripts/perf_sweep.py` drives all of it — a fresh launch, the load with retries until `KillFloor: armed`, the count sequence, and the two controls at the top count (every tick and probe off, then back on) — writing one JSON per window with the report plus the window's target, attempt count, rewards skipped, and a `_suspect` note when the population thinned below 80% of target:
+
+```sh
+uv run scripts/perf_sweep.py --out /tmp/perf                      # the default 0, 40, 80, 120, 160, 200, 240
+uv run scripts/perf_sweep.py --count 0 --count 240 --seconds 30 --seed 20261102
+uv run scripts/perf_sweep.py --no-relaunch --out /tmp/perf_probe  # measure the run already loaded
+```
+
+It runs on the machine hosting the game; on the SSH gamescope host that means `mise exec -- uv run scripts/perf_sweep.py …` inside the repo. `--help` lists the rest. The window gates are pure functions in `discard_reasons` and `suspect_reason`, unit tested in `tests/test_perf_sweep.py`.
+
+### What ruined a measurement before it was understood
+
+- **A paused window looks like a slow window.** `state`'s `frozen` is the harness freeze, not `MyTime.paused`, so a run held by the death screen reports `frozen: false`; `perf status`'s `paused` and `pausedFrames` are the only reliable gate. `dismiss-offers` cannot close `DeathScreen`.
+- **`perf health` alone does not keep the run alive.** A player knocked off the map is killed by the kill floor through `PlayerHealth.KillPlayer`, which bypasses both Mirror and `PlayerHealth.hp`, and the run ends mid-window on the death screen. Teleporting the player back before each window is what keeps a sweep going.
+- **Enemy count is not the variable, the swarm's shape is.** Teleporting the player to a fixed point gathers the whole population around them; leaving the player where the run drifted leaves the same 240 enemies strung out across the map. Those two states measured 9.63 ms and 7.02 ms, because physics contacts scale with local density. Fix the position and the counts become comparable — and note that convergence grows through a session, so later windows in a sweep read high.
+- **Total frame time is noisy; per-tick totals are not.** Repeating the same 240-enemy window in one session gave means of 6.5, 7.0, 7.8 and 9.6 ms, so anything smaller than about 1.5 ms in a total is not evidence. `ticks` totals and `maxMs` are steady enough to compare builds.
+- **Do not screenshot a measured run.** Each capture is a synchronous whole-backbuffer readback on the game's main thread (see "Custom-level startup cover"); a window that took one is not a frame-time measurement.
+- **The harness is inside the numbers.** It polls twice a second, so a 20-second window contains about 40 `DevHarnessPoll` ticks — 0.027 ms/frame of diagnostic cost at 240 enemies, in the `ticks` array where it can be subtracted.
+
+Verified on the Windows build under Proton on the gamescope host, over populations of 0 to 240 enemies with the kill floor armed and `perf vsync off`; the resulting tables are in [performance.md](performance.md).
+
 ## Not covered
 
-The harness does not press menu buttons or open the level-up dialog. Only `state`, `ui-tree`, `click-widget`, `save-level`, `list-levels`, `query-objects`, `teleport`, `item`, `dismiss-levelup` and `dismiss-offers` return data; the other commands report success or failure and nothing else, and `state` does not report health, inventory, enemies or the level-up dialog. Use `freeze` to stop an idle player dying during a screenshot, or `invulnerable` when enemies must keep moving.
+The harness does not press menu buttons or open the level-up dialog. Only `state`, `ui-tree`, `click-widget`, `save-level`, `list-levels`, `query-objects`, `teleport`, `item`, `dismiss-levelup`, `dismiss-offers` and `perf` return data; the other commands report success or failure and nothing else, and `state` does not report health, inventory, enemies or the level-up dialog (the profiler's `perf status` reports live enemy counts and the player's hit points). Use `freeze` to stop an idle player dying during a screenshot, or `invulnerable` when enemies must keep moving.
 
 ## Character selection
 
