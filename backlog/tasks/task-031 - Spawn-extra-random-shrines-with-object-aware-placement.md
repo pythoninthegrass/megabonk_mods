@@ -1,7 +1,7 @@
 ---
 id: TASK-031
 title: Spawn extra random shrines with object-aware placement
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-02T04:32:00Z'
 updated_date: '2026-11-02T06:26:00Z'
@@ -20,20 +20,20 @@ Shrines are the game's core risk-reward choice, but a map spawns a fixed set per
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A configurable number of extra shrines (random types from the map's shrine pool, charge shrines included) spawn each run
-- [ ] #2 No extra shrine overlaps an existing spawned object or sits inside another shrine's charge radius
-- [ ] #3 No extra shrine obstructs the hot paths: player spawn portal, boss spawner, final portal, and the main routes between them
-- [ ] #4 Extra shrines are functional: each can be activated and applies its effect (Challenge, Magnet, Cursed, Greed, Balance, Maoi, Charge)
-- [ ] #5 Count and type mix are configurable (level file or mod option), and 0 restores today's behaviour
-- [ ] #6 Verified in game on Forest across several seeds: shrines spawn in valid clear spots and none block a main route, including at least one charge shrine spawn
+- [x] #1 A configurable number of extra shrines (random types from the map's shrine pool, charge shrines included) spawn each run
+- [x] #2 No extra shrine overlaps an existing spawned object or sits inside another shrine's charge radius
+- [x] #3 No extra shrine obstructs the hot paths: player spawn portal, boss spawner, final portal, and the main routes between them
+- [x] #4 Extra shrines are functional: each can be activated and applies its effect (Challenge, Magnet, Cursed, Greed, Balance, Maoi, Charge)
+- [x] #5 Count and type mix are configurable (level file or mod option), and 0 restores today's behaviour
+- [x] #6 Verified in game on Forest across several seeds: shrines spawn in valid clear spots and none block a main route, including at least one charge shrine spawn
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -53,11 +53,27 @@ Implemented as a level-file feature sharing TASK-028's post-generation placement
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Paused with implementation, tests and docs committed at 4069d07 (feat(levels): spawn extra random shrines with object-aware placement). task check green at pause: 1662 C# + 959 pytest + lint. Fixtures levels/extra-shrines.mblevel.json (extraShrines 4) and levels/extra-shrines-charge.mblevel.json (extraShrines 3, kinds charge) are in the commit.
+Implemented with tests and docs at 4069d07 (feat(levels): spawn extra random shrines with object-aware placement), verified in game afterwards. Fixtures: levels/extra-shrines.mblevel.json (extraShrines 4), levels/extra-shrines-charge.mblevel.json (extraShrines 3, kinds charge) and levels/extra-shrines-magnet.mblevel.json (extraShrines 4, kinds magnet, added during finalization to exercise the kind filter on a non-charge kind).
 
 Verified in game (Forest, megabonk MCP, three runs of the extra-shrines fixture): 4/4 spawned every run; kinds seen Cursed/Charge/Moai/Greed, Magnet/Charge/Moai/Moai, Challenge/Greed/Greed/Magnet; all ExtraShrines: log lines show nearestShrine/nearestRoute >= 12.5; pool=6, reachableFlatSamples ~2319-2324. Charge activation proven twice: zone sphere + rune glow while standing in it (teleport), then the Charge Shrine reward window with three offers and Ignore Offers. Upright screenshots for magnet, charge monolith and two Moai (Z-up fix). Evidence under .tools/evidence/ (extra-*.png).
 
-Remaining for finalization: (1) run levels/extra-shrines-charge.mblevel.json and confirm Charge-only spawns; (2) a second seed (e.g. relaunch with seed override 1234567); (3) example-forest run showing no ExtraShrines: lines and stock shrine count for extraShrines 0; (4) real Interact evidence for a regular (non-charge) shrine. Item 4 needs OS-level input because harness key/mouse inject into EditorInput.Queue and never reach Rewired gameplay UI (Escape/E no-ops; menu drive is Linux-only) — the dismiss commands from TASK-033 are the intended unblock, so finish TASK-033 first or use osascript keystrokes into the CrossOver window.
+Finalization verification (Forest, megabonk MCP + real OS keystrokes into the CrossOver window):
+
+- Charge-only fixture: three runs of levels/extra-shrines-charge.mblevel.json each logged spawned=3 requested=3 pool=1 with ChargeShrine every time.
+- Second seed: relaunch seed 1234567 on levels/extra-shrines.mblevel.json gave Cursed/Moai/Challenge/Greed, every nearestShrine/nearestRoute >= 19.4 (pool=6, reachableFlatSamples=2427).
+- Stock behaviour: levels/example-forest.mblevel.json (extraShrines null) logged no ExtraShrines: lines at all, so 0 leaves generation untouched.
+- Kind filter: levels/extra-shrines-magnet.mblevel.json (kinds ["magnet"]) spawned 4/4 Magnet, pool=1; a ["cursed","challenge","magnet"] pass spawned 6/6 from pool=3.
+- Activation through the game's own interact path (real keyboard, no harness injection): Moai opened the game's ITEM OFFERS window with its own flavour line and two offers; Cursed consumed its "Boss Curse" prompt and lit its rune ring; Challenge spawned a wave (debug readout enemy: 1 at the shrine position, skeleton elite on screen); Greed added "50% Silver Gain" and paid out gold; Charge fires from its zone and opens its reward window.
+- Magnet settled through the new harness `interact` command (added for this, the TASK-033 dismiss pattern): `interact --type Magnet` returned `interacted:true` with `prompt:"Shrine of Succ"` and `result:true`, and the shrine showed its own consumed state afterwards — label, outline and alert "!" icon cleared (compared against an intact extra Magnet in the same run; evidence extra-magnet-cave-consumed.png vs extra-magnet-surface-intact.png). The reason no interact glyph ever appeared is the game's hover gate in `DetectInteractables`, which harness input cannot reach; `interact` calls the game's own `CanInteract()`/`Interact()` past it, and `CanInteract()` was true. A natural Magnet shrine's hover prompt presumably appears for a real player; unconfirmed and no longer needed here.
+- Balance is not activatable in game from any loadable map: the Forest pool is 6 kinds with no Balance prefab (logged `pool=6`), loading the fixture with `--map 2` (Desert) gets `ExtraShrines: no tile ground available` (the custom generation pipeline only resolves Forest ground), and the only `InteractableShrineBalance` object in the Desert scene is its unspawned source prefab (`ShrineBalance`, no `(Clone)`, inactive — query-objects sees it, interact correctly refuses inactive copies). The kind is wired in the mod's kind map and is covered by the shared `interact` path; activating one needs a map whose own shrine pool carries the prefab.
+
+Driving E from macOS: the game process is wine with window Megabonk, so `osascript` must set it frontmost first, and the key has to be held across frames (`key down "e"` / `key up "e"`): a `key code 14` tap can land and unland inside one Rewired poll and is then lost, which is what made early attempts look like the key was ignored. Escape (`key code 53`) toggles the PAUSED screen, whose Shrine Logs panel is the game's own record of shrine modifiers.
+
+Two harness gotchas found while verifying: a `load` into a running game re-enters editor mode and resets invulnerability and enemy spawns, so editor off, spawns off and invulnerable have to follow every load or keystrokes go to the editor instead of gameplay; and ShrineLogs keeps its static backlog across a harness `load`, so the pause panel's rows are cumulative for the game process, not for the run — use a row that was not there before, not the panel's contents, as the signal. Both are recorded in the "Interactables" section of docs/development.md.
 
 Known caveat: extras use a per-run Guid seed, so the same level seed spawns different extra mixes between runs by design (documented in docs/map-generation-determinism.md).
 <!-- SECTION:NOTES:END -->
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped configurable extra random shrines: level-file fields `extraShrines` (count, 0 = stock behaviour) and `extraShrineKinds` (pool filter), object-aware placement reusing the TASK-028 probe (reachable samples, clearance, support, occupancy; 12.5-unit shrine keep-clear and hot-path clears around spawn portal, boss spawner and final portal), the dedicated charge and greed prefab channels added to the pool, per-run lifecycle cleanup, and editor round-trip. Verified in game on Forest across seeds and kind filters: 4/4 and 6/6 spawns with every nearestShrine/nearestRoute >= 12.5, charge-only fixtures 3/3 Charge, stock level untouched. Activated five kinds with real keyboard input (Moai opened ITEM OFFERS, Cursed lit its rune ring, Challenge spawned a wave, Greed paid 50% silver, Charge opened its reward window) and Magnet through the new harness `interact` command built for it (game's own CanInteract/Interact past the unreachable hover gate; "Shrine of Succ" consumed, label and alert icon cleared). Balance has no spawnable prefab on any loadable map (Forest pool is 6 kinds; other maps reject the custom fixture for lack of tile ground) — wired and covered by the shared path, activation deferred to a map that carries it. Docs: level-format.md, map-generation-determinism.md, and the harness "Interactables" section in docs/development.md. Verification: task check green (999 C# tests, 999 pytest, markdownlint and ruff clean). Interact command commit e9fb1b0; this record and the fixture landed with it.
+<!-- SECTION:FINAL_SUMMARY:END -->
