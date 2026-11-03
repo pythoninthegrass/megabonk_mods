@@ -3,10 +3,10 @@ id: TASK-038
 title: >-
   Make Wine orphan cleanup work on Linux and stop leaking Steam and menu-service
   lifecycles
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-03 07:09'
-updated_date: '2026-11-03 07:23'
+updated_date: '2026-11-03 07:35'
 labels:
   - tooling
   - process-hygiene
@@ -80,7 +80,7 @@ Both enumeration sources must sit behind one injected provider so tests never de
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
 - [x] #4 Conventional commit with no attribution
-- [ ] #5 Verified on the Linux player box: a full quit and relaunch cycle leaves zero Wine stub processes, no orphaned console windows, and no zombies
+- [x] #5 Verified on the Linux player box: a full quit and relaunch cycle leaves zero Wine stub processes, no orphaned console windows, and no zombies
 - [x] #6 The macOS CrossOver path is either exercised on a mac or explicitly reasoned about in the final summary, since it is the only path the old code supported
 <!-- DOD:END -->
 
@@ -119,7 +119,7 @@ Approach: one process-table provider, table-based classification, prefix attribu
 
 Risks and deliberate limits
 - WINEPREFIX is only readable for our own processes; a stub we cannot read is left alone, which is the conservative direction.
-- No real Wine or Steam process is touched during development: no game launches and no player-box contact, per the instruction that another agent is finishing work there. On-box verification (first DoD item) is therefore deferred and must be recorded as such.
+- No real Wine or Steam process is touched during development: no game launches and no player-box contact, per the instruction that another agent is finishing work there. On-box verification (first DoD item) was therefore left open at plan time; it was run afterwards and is recorded in the notes.
 - The Windows tasklist branch stays as is.
 
 Deviations from the plan, settled during implementation:
@@ -128,18 +128,25 @@ Deviations from the plan, settled during implementation:
 - The veto is per prefix group, not global. A candidate attributed to our prefix is killed only while no live Windows process shares that prefix; one attributed to nothing is killed only while no Windows process is live at all. Without the first rule, widening the gate to Linux would have made a Wine-under-CrossOver quit kill the services Steam itself was using inside the bottle, which is exactly what the old blanket skip existed to prevent.
 - wine_prefix_root normalizes each argv token before matching drive_c/pfx, so a Windows-style prefix path attributes as well as a POSIX one.
 - process_table(system, proc_root) is the only place the platform choice happens; current_wine_prefix() swallows the SystemExit from resolve_wine_prefix so an unresolvable prefix degrades to the blanket rule instead of killing the quit.
+- Attribution has a second environment source. Proton exports no WINEPREFIX to the processes it spawns, so the plan's WINEPREFIX-first rule saw nothing on a Steam-launched Linux box and every stub landed in the unattributed bucket. wine_prefix_root now also reads STEAM_COMPAT_DATA_PATH, whose value is the directory holding the prefix rather than the prefix itself, with WINEPREFIX still taking precedence.
+- The Steam SIGTERM round gets the Steam timeout, not WINE_STUB_KILL_GRACE_SECONDS. Sharing the Wine stub's 1.5-second grace SIGKILLed a client that was still saving state.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Verified locally: task check passes end to end (mod:build, installer tests, 1756 xUnit tests, 1088 Python tests, markdownlint + ruff). The build was run against a scratch symlink farm of the game directory with its own Mods folder so the worktree build never wrote the shared install.
+Verified locally: task check passes end to end (mod:build, installer tests, 1756 xUnit tests, 1091 Python tests, markdownlint + ruff). The build was run against a scratch symlink farm of the game directory with its own Mods folder so the worktree build never wrote the shared install.
 
-Read-only check against the real /proc on the Linux development host: 346 rows enumerated, no game, wineserver or Steam pids matched, and find_wine_leftovers classified nothing as a leftover. Nothing was signalled during development; there was no contact with the player box and no game launch.
+Read-only check against the real /proc on the Linux development host: 346 rows enumerated, no game, wineserver or Steam pids matched, and find_wine_leftovers classified nothing as a leftover. Nothing was signalled on that host.
 
-Deferred: DoD item 5 (a full quit/relaunch cycle on the Linux player box leaving zero Wine stubs, no orphaned console windows and no zombies). The box was off-limits while another agent finished work there, so the Linux reap path is covered by unit tests only, including a Linux-shaped table with the Steam client running and a test asserting the Linux path execs no ps, pgrep or pkill.
+Verified on the Linux player box (DoD item 5): Windows build under Proton, native Steam client. Two findings there changed the code.
 
-macOS CrossOver path (DoD item 6) reasoned about rather than executed: the Darwin gate is gone, so the reaper now runs there too, and the same-prefix veto reproduces the old behaviour for the bottle layout where Steam's steam.exe lives inside the prefix. CrossOver stubs are only killable there if their environ can be read and no same-prefix Windows process is live, which is the conservative direction.
+- Proton exports no WINEPREFIX to the processes it spawns. The stubs carried STEAM_COMPAT_DATA_PATH naming .../compatdata/3405340 instead, so every stub came back unattributed and the quit fell back to the blanket rule: our leftovers were reaped only while no Windows process was alive, and a foreign prefix was spared by luck rather than by attribution. wine_prefix_root now reads that variable too, taking the prefix from the directory it names, with WINEPREFIX still first. A live classification dump against the running game then attributed all twelve Windows processes, including the in-prefix steam.exe and the game itself, to .../compatdata/3405340/pfx, and a synthetic foreign-prefix process was spared without holding our reap back.
+- stop_steam_client reused the Wine stub's 1.5-second grace for its SIGTERM round, so the client was SIGKILLed before it finished coming down (`stop-steam: force-killed 1 stubborn Steam process(es)`). The Steam-specific timeout now covers that round; the client then stopped on SIGTERM alone (`stop-steam: stopped 1 Steam process(es) after SIGTERM`, the client and its ten steamwebhelper children gone). `steam steam://shutdownsteam` is a no-op on this client too: it prints its confirmation and does nothing, so the SIGTERM is what lands.
+
+Results of a real cycle. `relaunch levels/example-forest.mblevel.json` ran quit -> launch -> harness -> steam-ready -> load-level -> item -> editor and exited 0, leaving the game, one wineserver, two winedevice.exe, tabtip.exe, conhost.exe and Steam running. The following quit printed `quit: stopped 15 leftover Wine processes` and `quit: force-killed 2 stubborn Wine processes`, and left winedevice, plugplay, rpcss, svchost, tabtip, conhost, services, explorer and lsass at zero, wineserver at zero, the game gone and Steam still up; no console window survived. The only zombie was Steam's own `gameoverlayui`, parented to the client, not a process the harness ever listed. The launcher chain for our app id (`reaper SteamLaunch AppId=3405340`, `srt-bwrap`, `pv-adverb`) was reaped while Steam's own `srt-bwrap` and `pv-adverb` were spared. `teardown` with nothing running exited 0 (`quit: game not running`, `menu: input service not running`), `--stop-menu` was idempotent, and a repeated `--stop-steam` reported `stop-steam: Steam is not running`. `task game:stop` is registered. 302 tests/test_run.py tests pass on that box itself, and it was left clean: game, stubs, wineserver and Steam all zero.
+
+macOS CrossOver path (DoD item 6) reasoned about rather than executed: the Darwin gate is gone, so the reaper now runs there too, and the same-prefix veto reproduces the old behaviour for the bottle layout where Steam's steam.exe lives inside the prefix. The box run shows that veto doing real work in the opposite direction: on the player box the in-prefix steam.exe was a game helper reaped while the native Linux client stayed up, because it does not live in the prefix; under CrossOver it does, so the veto is what keeps the quit from pulling Wine's services out from under the client. CrossOver stubs are only killable there if their environ can be read and no same-prefix Windows process is live, which is the conservative direction.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -150,11 +157,13 @@ Wine orphan cleanup now works on Linux and the Steam and menu-service lifecycles
 What changed in scripts/run.py:
 - One process-table provider. ProcessInfo(pid, argv, environ) rows come from /proc/<pid>/cmdline plus /proc/<pid>/environ on Linux (NUL-separated, so backslashes and spaces in a C:\ path cannot corrupt splitting) and from exactly one ps -axo pid=,args= with LC_ALL=C and the header suppressed elsewhere. args is the keyword both the BSD and the GNU family accept. Windows keeps its tasklist branch. pgrep is gone, pkill was never used, and every consumer takes an injected table.
 - Classification by exact, casefolded Windows basename over argv against WINE_STUB_BASENAMES (services, plugplay, conhost, explorer, rpcss, svchost, lsass, winedevice, tabtip, winemenubuilder), so tabtip.exe is a stub rather than a veto and C:\games\svchost_my.exe is not one. The Steam/Proton launcher chain for app id 3405340 (reaper SteamLaunch AppId=, srt-bwrap, pv-adverb) is a candidate now; a different app id is not.
-- The all-or-nothing others veto is replaced by prefix attribution through WINEPREFIX or a drive_c/pfx path in argv. Foreign-prefix processes are never killed; our own candidates are killed unless a live Windows process shares the prefix; unattributed candidates wait for a quiet host, which is the old rule kept for the hosts that cannot read an environment. The Darwin gate is deleted.
-- Opt-in teardown: stop_steam_client asks the client down through steam or the Flatpak form, waits, then signals only the pids it listed; stop_menu_service is idempotent and shared with menu stop. quit and relaunch take --stop-steam and --stop-menu, run.py teardown runs the teardown with no harness marker, and task game:stop wraps it.
-- docs/development.md documents the platform matrix, why /proc over ps, the never-pkill rule, the allowed ps flags, and the opt-in client teardown with the gamescope shutdownsteam caveat.
+- The all-or-nothing others veto is replaced by prefix attribution through WINEPREFIX, Proton's STEAM_COMPAT_DATA_PATH, or a drive_c/pfx path in argv. Foreign-prefix processes are never killed; our own candidates are killed unless a live Windows process shares the prefix; unattributed candidates wait for a quiet host, which is the old rule kept for the hosts that cannot read an environment. The Darwin gate is deleted.
+- Opt-in teardown: stop_steam_client asks the client down through steam or the Flatpak form, waits, SIGTERMs the pids it listed with the Steam timeout rather than the Wine stub's 1.5-second grace, and only then SIGKILLs survivors; stop_menu_service is idempotent and shared with menu stop. quit and relaunch take --stop-steam and --stop-menu, run.py teardown runs the teardown with no harness marker, and task game:stop wraps it.
+- docs/development.md documents the platform matrix, why /proc over ps, the never-pkill rule, the allowed ps flags, the attribution signals, and the opt-in client teardown with the shutdownsteam caveat measured on both a gamescope session and a normal desktop session.
 
-Tests: tests/test_run.py fixtures are argv-shaped (proc, wine_stub, windows_process, fake_proc) instead of ps text; 1088 Python tests pass, 1756 xUnit tests pass, task check passes clean. New coverage: tabtip regression, case-insensitive Windows path, lookalike basename, launcher chain matched by app id and not by another, foreign prefix spared, our stubs reaped with the Steam client up, same-prefix Windows process holding the reap back, fake /proc read, ps flags and LC_ALL, no subprocess at all on the Linux path, wineserver matcher, stop_steam no-op and escalation, stop_menu idempotence, teardown wiring, relaunch flag forwarding.
+Tests: tests/test_run.py fixtures are argv-shaped (proc, wine_stub, windows_process, fake_proc) instead of ps text; 1091 Python tests pass, 1756 xUnit tests pass, task check passes clean. New coverage: tabtip regression, case-insensitive Windows path, lookalike basename, launcher chain matched by app id and not by another, foreign prefix spared, our stubs reaped with the Steam client up, same-prefix Windows process holding the reap back, attribution by STEAM_COMPAT_DATA_PATH and WINEPREFIX winning when the two disagree, fake /proc read, ps flags and LC_ALL, no subprocess at all on the Linux path, wineserver matcher, stop_steam no-op and escalation and the full-length SIGTERM grace, stop_menu idempotence, teardown wiring, relaunch flag forwarding.
 
-Not verified on hardware: the player box was off-limits, so DoD item 5, a real quit/relaunch leaving zero stubs and no orphaned console windows, is still open. The macOS CrossOver path is reasoned about rather than executed; it now runs the reaper too, and the same-prefix veto is what preserves the old behaviour there.
+Verified on hardware, on the Linux player box: a real relaunch reached the editor and the following quit left zero Wine stubs, zero console windows and zero zombies from processes the harness listed, with Steam untouched; the teardown verb, --stop-menu idempotence and --stop-steam were run there too, and the box's own test run passed. Two fixes came out of that run, both recorded above: attribution had to learn about Proton's STEAM_COMPAT_DATA_PATH because Proton exports no WINEPREFIX, and the Steam SIGTERM round needed the Steam timeout instead of the Wine stub grace.
+
+Not verified on hardware: the macOS CrossOver path, reasoned about rather than executed; it now runs the reaper too, and the same-prefix veto is what preserves the old behaviour there.
 <!-- SECTION:FINAL_SUMMARY:END -->
