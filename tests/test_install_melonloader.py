@@ -5,8 +5,10 @@ Covers idempotency checking and checksum verification without touching the
 network or a real game install.
 """
 
+import asset_download
 import install_melonloader as im
 import os
+import sys
 import tempfile
 from pathlib import Path
 
@@ -155,3 +157,27 @@ def test_release_asset_url_overridable_via_env() -> None:
         assert im.release_asset("Linux", "0.7.3")[0] == "https://example.invalid/ml.zip"
     finally:
         del os.environ["MELONLOADER_URL_LINUX"]
+
+
+def test_download_goes_through_the_hardened_fetcher(monkeypatch) -> None:
+    seen: list[str] = []
+
+    def fake(url: str, **kwargs) -> bytes:
+        seen.append(url)
+        return b"PK archive"
+
+    monkeypatch.setattr(asset_download, "download", fake)
+    assert im._download("https://example.test/MelonLoader.x64.zip") == b"PK archive"
+    assert seen == ["https://example.test/MelonLoader.x64.zip"]
+
+
+def test_main_reports_a_missing_asset_as_an_error(monkeypatch, capsys, tmp_path) -> None:
+    def not_there(url: str, **kwargs) -> bytes:
+        raise asset_download.MissingAsset(f"{url} returned HTTP 404: the asset is not there")
+
+    monkeypatch.setattr(asset_download, "download", not_there)
+    monkeypatch.setattr(im, "is_installed", lambda version, game=None: False)
+    monkeypatch.setattr(im.gp, "game_dir", lambda: tmp_path)
+    monkeypatch.setattr(sys, "argv", ["install_melonloader.py"])
+    assert im.main() == 1
+    assert "404" in capsys.readouterr().err

@@ -134,7 +134,9 @@ Two choices are intentional:
 - **Nothing is bundled unless asked.** `levels/` is a working directory full of dev regression maps, so levels are named individually with `--level` and packs with `--pack`. A `.local.mblevel.json` file is skipped even when named: it is a scratch file.
 - **Packs come from two places, the way `task pack:install` assembles them**: the built AssetBundle from `.tools/bundles/<platform>/<pack>` and the manifest (plus optional attachments) from `unity/pack-authoring/packs/<pack>/`. `--pack-platform` picks the bundle; `windows` is right on Linux because the game runs the Windows build. Staged packs are validated with `validate_pack_source`, which reproduces the game's own rules — required `id`/`name`/`author`/`version`/`assets` fields, `id` matching the folder name, a bundle file present, and a `pack-attachments/1` sidecar when there is one — so a broken pack fails the build instead of landing in the Warehouse as a placeholder.
 
-Vendor archives are taken from `.tools/vendor-cache/` and only verified there, never downloaded unless you pass `--allow-download`. The build writes into a staging directory and swaps it in at the end, so a failure leaves the previous package untouched.
+Vendor archives are taken from `.tools/vendor-cache/` and only verified there, never downloaded unless you pass `--allow-download` (`ALLOW_DOWNLOAD=true` to the task, which forwards it). The build writes into a staging directory and swaps it in at the end, so a failure leaves the previous package untouched.
+
+When a download does happen it goes through `scripts/asset_download.py`, the only code in `scripts/` that touches the network (a test pins that). The rules: https only, TLS 1.2 floor with certificate verification; the status is checked before the body is read, so a 404, a login or captive-portal page, or an empty body reads as a missing asset rather than a checksum mismatch, and nothing poisoned ever lands in the cache; the body is capped, and an archive whose digest does not match the manifest pin is refused before it is cached. Redirects stay on the original host except for an explicit CDN allowance — GitHub release assets hand off to `release-assets.githubusercontent.com` and dotnetcli to azureedge/microsoft hosts — so an off-list redirect is refused as a missing asset. `install_melonloader.py` uses the same fetcher. The `url` in a manifest entry stays provenance for the player side: the installer itself never downloads.
 
 The zip is deterministic — sorted entries, fixed timestamps, modes 0755 for `install.sh` and 0644 elsewhere — so two builds of the same inputs are byte-identical once `SOURCE_DATE_EPOCH` is pinned.
 
@@ -300,6 +302,13 @@ the Il2Cpp install it refused with its reason, the SD-card install writes the .N
 runtime into the home library's prefix and says so, and the two-prefix case prints both
 candidates with the `--prefix` hint and falls back to `gamedir` mode until `--prefix`
 picks one.
+
+The download path is exercised against the real vendors, not just fakes: both pinned
+archives — the GitHub MelonLoader release and the dotnetcli .NET 6 runtime — download
+through their cross-host redirects with digests matching the pins, a real GitHub 404
+reads as a missing asset, plain http and an off-list redirect host are refused, and a
+404 leaves nothing in the cache; a cold-cache `--allow-download` rebuilds the whole
+package from scratch.
 
 The fleet also includes Fedora 42 with GNOME Wayland, Intel Arc graphics and a
 gamescope + Steam gamepadui launcher. Its verified setup includes switching to

@@ -4,6 +4,7 @@ import hashlib
 import io
 import os
 import pytest
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -73,8 +74,22 @@ def workspace(tmp_path, monkeypatch):
         "bundles": tmp_path / "repo/.tools/bundles",
         "packs_src": tmp_path / "repo/unity/pack-authoring/packs",
         "cache": cache,
+        "melonloader": melonloader,
+        "dotnet": dotnet,
         "output": tmp_path / "dist/pkg",
     }
+
+
+def _dry_run(*variables: str) -> str:
+    """The commands `task package:linux` would run, with the given task variables."""
+    result = subprocess.run(
+        ["task", "--dry", "package:linux", *variables],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).resolve().parent.parent,
+        check=False,
+    )
+    return result.stdout + result.stderr
 
 
 def build(workspace, **overrides):
@@ -171,10 +186,62 @@ class TestVendorHandling:
         def explode(*args, **kwargs):
             raise AssertionError("network use")
 
+        import asset_download
+
+        monkeypatch.setattr(asset_download, "download_to", explode)
+        build(workspace)
+
+    def test_a_404_from_the_vendor_url_reads_as_a_missing_archive(self, workspace, monkeypatch):
+        import asset_download
         import build_player_package as module
 
-        monkeypatch.setattr(module.urllib.request, "urlopen", explode)
-        build(workspace)
+        (workspace["cache"] / DOTNET_WINDOWS_ASSET).unlink()
+
+        def not_there(url, destination, **kwargs):
+            raise asset_download.MissingAsset(f"{url} returned HTTP 404: the asset is not there")
+
+        monkeypatch.setattr(asset_download, "download_to", not_there)
+        with pytest.raises(module.MissingInput, match="404") as caught:
+            build(workspace, allow_download=True)
+        assert "place the file at" in str(caught.value).lower()
+        assert not (workspace["cache"] / (DOTNET_WINDOWS_ASSET + ".part")).exists()
+
+    def test_a_network_failure_is_an_error_rather_than_a_missing_input(self, workspace, monkeypatch):
+        import asset_download
+        import build_player_package as module
+
+        (workspace["cache"] / DOTNET_WINDOWS_ASSET).unlink()
+
+        def broken(url, destination, **kwargs):
+            raise asset_download.DownloadError(f"{url} redirects to a different host")
+
+        monkeypatch.setattr(asset_download, "download_to", broken)
+        with pytest.raises(module.BuildError, match="different host") as caught:
+            build(workspace, allow_download=True)
+        assert not isinstance(caught.value, module.MissingInput)
+
+    def test_a_download_is_verified_against_the_pinned_digest_before_it_is_cached(self, workspace, monkeypatch):
+        import asset_download
+
+        (workspace["cache"] / DOTNET_WINDOWS_ASSET).unlink()
+        seen: dict[str, object] = {}
+        real_to = asset_download.download_to
+
+        def record(url, destination, **kwargs):
+            seen[Path(destination).name] = kwargs.get("expected_sha256")
+            return real_to(url, destination, **kwargs)
+
+        monkeypatch.setattr(asset_download, "download_to", record)
+        monkeypatch.setattr(asset_download, "download", lambda url, **kwargs: workspace["dotnet"])
+        build(workspace, allow_download=True)
+        assert seen[DOTNET_WINDOWS_ASSET] == hashlib.sha256(workspace["dotnet"]).hexdigest()
+        assert (workspace["cache"] / DOTNET_WINDOWS_ASSET).read_bytes() == workspace["dotnet"]
+
+    def test_the_package_task_forwards_allow_download_to_the_script(self):
+        if shutil.which("task") is None:
+            pytest.skip("task is not installed")
+        assert 'if [ "true" = "true" ]; then args+=(--allow-download); fi' in _dry_run("ALLOW_DOWNLOAD=true")
+        assert 'if [ "false" = "true" ]; then args+=(--allow-download); fi' in _dry_run()
 
 
 class TestInstallSh:

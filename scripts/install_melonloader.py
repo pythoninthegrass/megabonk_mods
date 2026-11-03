@@ -28,13 +28,13 @@ import os
 import platform
 import subprocess
 import sys
-import urllib.request
 import zipfile
 from decouple import config
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import asset_download
 import game_paths as gp
 
 CROSSOVER_WINE_CANDIDATES = [
@@ -78,8 +78,7 @@ def is_installed(version: str, game: Path | None = None) -> bool:
 
 
 def _download(url: str) -> bytes:
-    with urllib.request.urlopen(url) as response:  # noqa: S310
-        return response.read()
+    return asset_download.download(url)
 
 
 def _verify_sha256(data: bytes, expected: str) -> None:
@@ -219,7 +218,11 @@ def main() -> int:
         print(f"MelonLoader {MELONLOADER_VERSION} installed: {installed}")
         return 0 if installed else 1
 
-    install()
+    try:
+        install()
+    except (asset_download.MissingAsset, asset_download.DownloadError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 

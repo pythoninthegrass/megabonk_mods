@@ -7,6 +7,7 @@ vars:
   MOD_VERSION: '{{.MOD_VERSION | default "dev"}}'
   LEVELS: '{{.LEVELS | default "example-forest.mblevel.json"}}'
   PACKS: '{{.PACKS | default ""}}'
+  ALLOW_DOWNLOAD: '{{.ALLOW_DOWNLOAD | default "false"}}'
 
 tasks:
   linux:
@@ -33,7 +34,7 @@ tasks:
         args=()
         for level in {{.LEVELS}}; do args+=(--level "$level"); done
         for pack in {{.PACKS}}; do args+=(--pack "$pack"); done
-        [ "${ALLOW_DOWNLOAD:-}" = true ] && args+=(--allow-download)
+        if [ "{{.ALLOW_DOWNLOAD}}" = "true" ]; then args+=(--allow-download); fi
         uv run scripts/build_player_package.py \
           --output "{{.OUTPUT}}" \
           --mod-dir src/MegabonkLevels.Mod/bin/Release/net6.0 \

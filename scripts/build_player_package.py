@@ -7,14 +7,13 @@ import hashlib
 import os
 import shutil
 import sys
-import urllib.error
-import urllib.request
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import asset_download  # noqa: E402
 from build_thps_level import GAME_BUILD_ID  # noqa: E402
 from install_melonloader import ASSET_WINDOWS, MELONLOADER_VERSION, release_asset  # noqa: E402
 from player_installer import manifest as manifest_mod  # noqa: E402
@@ -121,7 +120,7 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def fetch(url: str, destination: Path, allow_download: bool) -> Path:
+def fetch(url: str, destination: Path, allow_download: bool, expected_sha256: str | None = None) -> Path:
     if destination.exists():
         return destination
     if not allow_download:
@@ -130,16 +129,12 @@ def fetch(url: str, destination: Path, allow_download: bool) -> Path:
             f"{url}, or place the file at {destination}."
         )
     say(f"Downloading {url}")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(destination.name + ".part")
     try:
-        with urllib.request.urlopen(url, timeout=600) as response:
-            temporary.write_bytes(response.read())
-    except (urllib.error.URLError, OSError) as exc:
-        temporary.unlink(missing_ok=True)
-        raise BuildError(f"Could not download {url}: {exc}") from exc
-    temporary.rename(destination)
-    return destination
+        return asset_download.download_to(url, destination, expected_sha256=expected_sha256)
+    except asset_download.MissingAsset as exc:
+        raise MissingInput(f"{exc}. Place the file at {destination} to build without downloading.") from exc
+    except asset_download.DownloadError as exc:
+        raise BuildError(str(exc)) from exc
 
 
 def verify_sha256(path: Path, expected: str | None, label: str) -> str:
@@ -187,7 +182,7 @@ def add_vendors(staging: Path, cache: Path, allow_download: bool) -> list[dict]:
         ("melonloader", MELONLOADER_VERSION, melonloader_url, ASSET_WINDOWS, melonloader_sha),
         ("dotnet", DOTNET_VERSION, DOTNET_WINDOWS_URL, DOTNET_WINDOWS_ASSET, DOTNET_WINDOWS_SHA256),
     ]:
-        archive = fetch(url, cache / asset, allow_download)
+        archive = fetch(url, cache / asset, allow_download, expected)
         digest = verify_sha256(archive, expected, asset)
         shutil.copy2(archive, staging / "vendor" / asset)
         entries.append({"name": asset, "url": url, "sha256": digest, "kind": kind, "version": version})

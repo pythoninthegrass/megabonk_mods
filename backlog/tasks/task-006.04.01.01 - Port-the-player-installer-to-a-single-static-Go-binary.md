@@ -4,7 +4,7 @@ title: Port the player installer to a single static Go binary
 status: In Progress
 assignee: []
 created_date: '2026-10-31T08:14:00Z'
-updated_date: '2026-11-03 06:06'
+updated_date: '2026-11-03 06:32'
 labels:
   - tooling
 dependencies: []
@@ -47,7 +47,7 @@ The Python installer works but still asks the player for an interpreter: the 3.1
 - [x] #8 docs/player-installer.md gains the Go section (build targets, contract inheritance) and taskfiles produce the binary alongside the zip
 - [x] #9 Interactive versus headless is decided by an attached tty probed at /dev/tty (os.OpenFile plus ModeCharDevice, stdlib only, no golang.org/x/term) together with the session environment, and --non-interactive or MEGABONK_NON_INTERACTIVE forces TextProgress; no prompt ever reads stdin
 - [x] #10 Failure output names the candidates tried, why each was rejected and the exact retry flag (--library, --game-dir, --prefix, --proton), and a skipped optional step prints the command that finishes it without changing the exit code; compared on stable anchors rather than byte-for-byte
-- [ ] #11 Any download checks the HTTP status before writing the body, pins the host across redirects and requires TLS 1.2 or newer, so a 404 or captive-portal page reads as a missing asset and never as a sha256 mismatch
+- [x] #11 Any download checks the HTTP status before writing the body, pins the host across redirects and requires TLS 1.2 or newer, so a 404 or captive-portal page reads as a missing asset and never as a sha256 mismatch
 <!-- AC:END -->
 
 ## Definition of Done
