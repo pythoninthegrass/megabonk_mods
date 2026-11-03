@@ -299,6 +299,17 @@ without any development leftovers beside the game. The launch initially did noth
 because a Steam Cloud save-conflict dialog was pending; see
 [gamepadui.md](gamepadui.md) for the three launch traps that cost time there.
 
+The Fedora player box carries the matching proof for auto-discovery: uninstalling
+its development install to a vanilla tree, then running the distributed package's
+`install.sh` with **no flags at all** against a real single library that holds an
+unrelated Il2Cpp title sorting before Megabonk — discovery picked Megabonk through
+the appmanifest and the library's own prefix. `--check` matched, and with Steam
+stopped the game launched directly under Proton through the offline Steamworks
+stub (the pressure-vessel `_v2-entry-point --verb=waitforexitandrun` chain, Proton
+Experimental, `XAUTHORITY` pointed at the desktop's Xwayland cookie) to the same
+three markers, stable over three minutes of mod telemetry, then a clean TERM
+shutdown.
+
 The four library layouts the discovery code has to survive are run through both
 implementations in containers as well as fixtures: a single library holding Megabonk
 beside an unrelated Il2Cpp title that sorts first, the same library with no Megabonk
@@ -348,8 +359,7 @@ Windows-build refusal.
 
 Still pending:
 
-- clean-install verification on the Fedora player box, with a fresh mod-load log (the CachyOS host is done — see above); that machine is also the only place the decoy-title layout exists as a real Steam install — the container matrix above reproduces those layouts, not the machines;
-- the printed game-directory `DOTNET_ROOT` launch option working when Steam actually applies it (the live proof uses prefix mode);
+- the printed game-directory `DOTNET_ROOT` launch option working when Steam actually applies it (both live proofs use prefix mode);
 - the persisted `local-overrides` file as the source of the Flatpak grants — the real host went through `flatpak override --show`, which is the other of the two paths in `flatpak_granted_paths`;
 - the zenity and yad dialog paths — the verified host has neither installed, so those branches run only in tests (the kdialog-over-D-Bus path above is the one with desktop evidence);
 - Steam's own behaviour around the download, including whether the Windows build needs the "Only download on my OS" untick on a given Steam version.
