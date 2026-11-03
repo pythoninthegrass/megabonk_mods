@@ -1,10 +1,10 @@
 ---
 id: TASK-006.04.01
 title: Linux player installer
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-31T03:12:00Z'
-updated_date: '2026-11-03 07:14'
+updated_date: '2026-11-03 07:58'
 labels:
   - tooling
 dependencies: []
@@ -155,3 +155,9 @@ wm2 live proof closed the CachyOS half of AC #1/#2 (2026-11-03): wiped the mod i
 
 fedora live proof closed the other half (2026-11-03), completing AC #1/#2: backed up the development install (Mods/MelonLoader/UserData, 90 MB + 265 MB saves), ran the package's --uninstall (13 items including the thps pack and prefix dotnet) to a vanilla tree, then ran install.sh with no flags at all against the real decoy layout - a single library holding Heroes of Might and Magic Olden Era (an Il2Cpp title sorting before Megabonk) - and discovery chose Megabonk through the appmanifest and the library's own prefix, --check matched. With Steam stopped, the game launched directly under Proton Experimental through the offline steamstub (SteamLinuxRuntime_4 _v2-entry-point --verb=waitforexitandrun + proton waitforexitandrun, SteamAppId/SteamGameId exported, XAUTHORITY set to the desktop's /run/user/1000/.mutter-Xwaylandauth.* cookie - the taskfile's xauth_* fallback finds nothing on this GNOME host and the game hangs pre-MelonLoader on "Authorization required" without it). Fresh Latest.log: HostFXR from C:\Program Files\dotnet\host\fxr\6.0.36 (prefix mode, dev leftover gone), Assembly Generation Successful!, 1 Mod loaded., [MegabonkLevels] MegabonkLevels mod initialized.; stable over 180 s with the mod's Perf telemetry in the log, clean TERM shutdown, --check still matching. Both player boxes are left in the verified installed state.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Player installer delivered: install.sh + bundled Python module in the distributable zip (checksum-pinned MelonLoader, mod DLL, NLayer, levels/packs, Windows .NET 6 into the Proton prefix, version.dll override), discovery with named-candidate diagnostics, --check/--uninstall/repair, GUI-or-text progress chosen from tty and session, and docs. Live-proven on both player boxes: the gamescope/CachyOS host (pinned-flag install of the 0.4.2 package after its own --uninstall, Steam launch with Assembly Generation Successful! / 1 Mod loaded. / mod initialized., prefix-mode .NET 6.0.36 only) and the Fedora 42 box (no-flags install on the real decoy layout, discovery picking Megabonk over an Il2Cpp title via appmanifest, direct-Proton launch through the steamstub to the same markers, stable 180 s). Container matrix (fedora:42, ubuntu:24.04, no network) covers the four library layouts plus Flatpak-relocated; the full suite is green on the host and on the Fedora box (1090 passed, 86 skipped). Subtask 01 (Go port) closed alongside; the MyGo native-UI progress window (02) remains open as future work.
+<!-- SECTION:FINAL_SUMMARY:END -->

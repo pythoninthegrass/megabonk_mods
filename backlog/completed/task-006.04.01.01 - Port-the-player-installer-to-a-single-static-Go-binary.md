@@ -1,10 +1,10 @@
 ---
 id: TASK-006.04.01.01
 title: Port the player installer to a single static Go binary
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-31T08:14:00Z'
-updated_date: '2026-11-03 06:32'
+updated_date: '2026-11-03 07:58'
 labels:
   - tooling
 dependencies: []
@@ -217,3 +217,9 @@ The Windows guest run caught one real port bug: `filepath.Abs` and `filepath.Eva
 Open: AC #11, which has nothing to test until either implementation downloads anything (neither has HTTP code, vendor archives are verified from cache), so it needs either a download path or a scope cut; and switching the default install path to the Go binary, which is a maintainer decision, not a port gap.
 ---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Go port delivered: static CGO_ENABLED=0 binaries per target, manifest-contract compatibility, full install/check/repair/uninstall parity against the Python reference on identical fixtures (29 parity scenarios, exit codes and anchored output compared), tty-probed headless detection, named-candidate failure reports with retry flags, and docs plus taskfile build targets. Python remains the reference. AC #11 (download hardening) landed on the shared fetcher, scripts/asset_download.py - the Go installer contains no network code, so nothing to mirror there.
+<!-- SECTION:FINAL_SUMMARY:END -->
