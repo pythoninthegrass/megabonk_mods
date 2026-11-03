@@ -12,7 +12,7 @@ LIBRARYFOLDERS = """
 {
 \t"0"
 \t{
-\t\t"path"\t\t"/home/lance/.local/share/Steam"
+\t\t"path"\t\t"/home/user/.local/share/Steam"
 \t\t"label"\t\t""
 \t\t"apps"
 \t\t{
@@ -53,7 +53,7 @@ LOCALCONFIG = """
 def test_parse_vdf_reads_nested_sections_and_values() -> None:
     data = vdf.parse_vdf(LIBRARYFOLDERS)
     folders = data["libraryfolders"]
-    assert folders["0"]["path"] == "/home/lance/.local/share/Steam"
+    assert folders["0"]["path"] == "/home/user/.local/share/Steam"
     assert folders["1"]["path"] == "/media/sdcard/SteamLibrary"
     assert folders["0"]["apps"]["3405340"] == "522734781"
 
@@ -77,7 +77,7 @@ def test_parse_vdf_ignores_comments_and_blank_lines() -> None:
 def test_find_all_returns_every_wildcard_hit() -> None:
     data = vdf.parse_vdf(LIBRARYFOLDERS)
     assert vdf.find_all(data, ("libraryfolders", "*", "path")) == [
-        "/home/lance/.local/share/Steam",
+        "/home/user/.local/share/Steam",
         "/media/sdcard/SteamLibrary",
     ]
 

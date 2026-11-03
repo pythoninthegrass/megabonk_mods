@@ -19,6 +19,7 @@ includes:
   steamstub: taskfiles/steamstub.yml
   pack: taskfiles/pack.yml
   package: taskfiles/package.yml
+  installer: taskfiles/installer.yml
   thps: taskfiles/thps.yml
   re: taskfiles/re.yml
   ghidra: taskfiles/ghidra.yml
@@ -62,5 +63,11 @@ tasks:
     desc: "Build, test, and lint in sequence; non-zero exit on any failure"
     cmds:
       - task: build
+      - |-
+        if command -v go >/dev/null 2>&1; then
+          task installer:test
+        else
+          echo "skipping the Go installer checks: no go toolchain installed" >&2
+        fi
       - task: test
       - task: lint

@@ -1,0 +1,172 @@
+package ui
+
+import (
+	"strings"
+	"testing"
+)
+
+func found(names ...string) Locate {
+	return func(name string) string {
+		for _, candidate := range names {
+			if candidate == name {
+				return "/usr/bin/" + name
+			}
+		}
+		return ""
+	}
+}
+
+var desktop = map[string]string{"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus"}
+
+type recorder struct{ lines []string }
+
+func (r *recorder) write(line string) { r.lines = append(r.lines, line) }
+
+func TestTextProgressNumbersTheSteps(t *testing.T) {
+	rec := &recorder{}
+	progress := NewTextProgress(rec.write)
+	progress.Start(3, "install")
+	progress.Step("MelonLoader")
+	progress.Step("mod DLL")
+	progress.Finish("done", true)
+	if len(rec.lines) != 3 {
+		t.Fatalf("lines = %v", rec.lines)
+	}
+	if rec.lines[0] != "1/3 MelonLoader" || rec.lines[1] != "2/3 mod DLL" || rec.lines[2] != "done" {
+		t.Errorf("lines = %v", rec.lines)
+	}
+}
+
+func TestTextProgressStartsWithNoActions(t *testing.T) {
+	rec := &recorder{}
+	progress := NewTextProgress(rec.write)
+	progress.Start(0, "install")
+	progress.Step("only")
+	if len(rec.lines) != 1 || rec.lines[0] != "1/1 only" {
+		t.Errorf("a zero total must not divide by zero: %v", rec.lines)
+	}
+}
+
+func TestTextProgressWritesToItsWriterOnly(t *testing.T) {
+	calls := 0
+	progress := NewTextProgress(func(string) { calls++ })
+	progress.Start(1, "x")
+	progress.Step("a")
+	progress.Finish("b", false)
+	if calls != 2 {
+		t.Errorf("calls = %d, want 2", calls)
+	}
+}
+
+func TestNullProgressSwallowsEverything(t *testing.T) {
+	var progress Progress = NullProgress{}
+	progress.Start(2, "x")
+	progress.Step("a")
+	progress.Finish("b", true)
+}
+
+func TestHasDisplayReadsTheSessionEnvironment(t *testing.T) {
+	cases := []struct {
+		env  map[string]string
+		want bool
+	}{
+		{map[string]string{"DISPLAY": ":0"}, true},
+		{map[string]string{"WAYLAND_DISPLAY": "wayland-0"}, true},
+		{map[string]string{"DISPLAY": "", "WAYLAND_DISPLAY": "", "SSH_CONNECTION": "10.0.0.1 5000 10.0.0.2 22"}, false},
+		{map[string]string{}, false},
+	}
+	for _, item := range cases {
+		if got := HasDisplay(item.env); got != item.want {
+			t.Errorf("HasDisplay(%v) = %v, want %v", item.env, got, item.want)
+		}
+	}
+}
+
+func TestNonInteractiveEnvironmentForcesText(t *testing.T) {
+	for _, value := range []string{"1", "true", "TRUE", " yes ", "on"} {
+		env := map[string]string{"MEGABONK_NON_INTERACTIVE": value}
+		if !NonInteractive(env) {
+			t.Errorf("MEGABONK_NON_INTERACTIVE=%q should force plain text", value)
+		}
+	}
+	for _, value := range []string{"", "0", "false", "no", "off"} {
+		env := map[string]string{"MEGABONK_NON_INTERACTIVE": value}
+		if NonInteractive(env) {
+			t.Errorf("MEGABONK_NON_INTERACTIVE=%q should not force plain text", value)
+		}
+	}
+}
+
+func TestFindDialogBinaryPrefersTheOrderAndNeedsDBusForKdialog(t *testing.T) {
+	if got := FindDialogBinary(found("zenity", "yad"), desktop); got != "/usr/bin/zenity" {
+		t.Errorf("zenity should win: %q", got)
+	}
+	if got := FindDialogBinary(found("yad"), desktop); got != "/usr/bin/yad" {
+		t.Errorf("yad = %q", got)
+	}
+	if got := FindDialogBinary(found("kdialog", "qdbus-qt6"), desktop); got != "/usr/bin/kdialog" {
+		t.Errorf("kdialog with a qdbus tool = %q", got)
+	}
+	if got := FindDialogBinary(found("kdialog", "qdbus-qt6"), map[string]string{"DISPLAY": ":0"}); got != "" {
+		t.Errorf("kdialog without a session bus is unusable: %q", got)
+	}
+	if got := FindDialogBinary(found("kdialog"), desktop); got != "" {
+		t.Errorf("kdialog without a qdbus tool is unusable: %q", got)
+	}
+	if got := FindDialogBinary(found(), desktop); got != "" {
+		t.Errorf("nothing installed = %q", got)
+	}
+}
+
+func TestDialogSkipNoteOnlyOnADesktopWithNoBackend(t *testing.T) {
+	restore := HasTTY
+	HasTTY = func() bool { return true }
+	defer func() { HasTTY = restore }()
+
+	if note := DialogSkipNote(map[string]string{}, found()); note != "" {
+		t.Errorf("with no display there is nothing to apologise for: %q", note)
+	}
+	if note := DialogSkipNote(map[string]string{"DISPLAY": ":0"}, found("zenity")); note != "" {
+		t.Errorf("a dialog exists, so no note: %q", note)
+	}
+	if note := DialogSkipNote(map[string]string{"DISPLAY": ":0", "MEGABONK_NON_INTERACTIVE": "1"}, found()); note != "" {
+		t.Errorf("plain text was deliberate: %q", note)
+	}
+	note := DialogSkipNote(map[string]string{"DISPLAY": ":0"}, found())
+	for _, want := range []string{"zenity", "--no-gui", "sudo", "no progress dialog found"} {
+		if !strings.Contains(note, want) {
+			t.Errorf("note %q should name %q", note, want)
+		}
+	}
+
+	HasTTY = func() bool { return false }
+	if note := DialogSkipNote(map[string]string{"DISPLAY": ":0"}, found()); note != "" {
+		t.Errorf("without a controlling terminal plain text is not a surprise: %q", note)
+	}
+}
+
+func TestPickProgressAlwaysReportsInText(t *testing.T) {
+	restore := HasTTY
+	HasTTY = func() bool { return true }
+	defer func() { HasTTY = restore }()
+
+	for _, env := range []map[string]string{desktop, {"DISPLAY": ":0"}, {}} {
+		progress := PickProgress(env, false, func(string) {})
+		if _, ok := progress.(*TextProgress); !ok {
+			t.Errorf("PickProgress(%v) = %T, want *TextProgress", env, progress)
+		}
+	}
+}
+
+func TestHasTTYDoesNotPanicWithoutATerminal(t *testing.T) {
+	if got := hasTTY(); got {
+		t.Log("/dev/tty is attached in this test run")
+	}
+}
+
+func TestEnvironReadsTheProcessEnvironment(t *testing.T) {
+	t.Setenv("MEGABONK_UI_PROBE", "yes")
+	if Environ()["MEGABONK_UI_PROBE"] != "yes" {
+		t.Errorf("Environ() = %v", Environ())
+	}
+}

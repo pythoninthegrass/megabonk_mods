@@ -21,7 +21,9 @@ EXIT_NOT_FOUND = 3
 EXIT_UNSUPPORTED_BUILD = 4
 EXIT_OUT_OF_DATE = 10
 
-MOUNT_ROOTS = ("/media", "/run/media", "/mnt", "/Volumes")
+MOUNT_ROOTS = tuple(
+    root for root in os.environ.get("MEGABONK_MOUNT_ROOTS", "/media,/run/media,/mnt,/Volumes").split(",") if root
+)
 DOTNET_IN_MODES = {"prefix": "prefix", "gamedir": "gamedir"}
 WINE_OVERRIDE_MODES = ("auto", "registry", "wine", "off")
 LOG_HINT = "MelonLoader/Latest.log"

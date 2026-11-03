@@ -1,0 +1,86 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+vars:
+  OUT: '{{.OUT | default ".tools/installer"}}'
+  # Targets the installer ships for. linux/arm64 is left out on purpose: the
+  # game and its Proton prefixes are x86_64, so an arm64 player would only ever
+  # run the installer, never the mod.
+  TARGETS: '{{.TARGETS | default "darwin/arm64 linux/amd64 windows/amd64"}}'
+
+tasks:
+  build:
+    desc: "Cross-compile the static installer binaries into .tools/installer"
+    summary: |
+      Usage: task installer:build [OUT=.tools/installer] [TARGETS="linux/amd64 ..."]
+
+      Builds one pure-Go binary per target with CGO disabled, so each is a single
+      static file a player can download and run. The binaries land in
+      .tools/installer and are never added to the player package zip: install.sh
+      keeps running the Python reference.
+
+        task installer:build
+        task installer:build TARGETS=linux/amd64
+    cmds:
+      - |-
+        set -eu
+        out="$(pwd)/{{.OUT}}"
+        mkdir -p "$out"
+        cd go
+        for target in {{.TARGETS}}; do
+          os="${target%/*}"
+          arch="${target#*/}"
+          suffix=""
+          [ "$os" = windows ] && suffix=".exe"
+          name="megabonk-installer-${os}-${arch}${suffix}"
+          echo "building $name"
+          CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w" \
+            -o "$out/$name" ./cmd/megabonk-installer
+        done
+        ls -l "$out"
+
+  test:
+    desc: "Format-check, vet, and unit-test the Go installer"
+    cmds:
+      - |-
+        set -eu
+        cd go
+        command -v go >/dev/null 2>&1 || { echo "no go toolchain installed" >&2; exit 1; }
+        unformatted="$(gofmt -l .)"
+        [ -z "$unformatted" ] || { echo "not gofmt-ed: $unformatted" >&2; exit 1; }
+        go vet ./...
+        go test ./...
+
+  verify-static:
+    desc: "Check the built binaries are static and the Go module has no dependencies"
+    depends: [build]
+    cmds:
+      - |-
+        set -eu
+        cd go
+        modules="$(go list -m all | wc -l | tr -d ' ')"
+        [ "$modules" = 1 ] || { echo "go.mod has external dependencies:" >&2; go list -m all >&2; exit 1; }
+        cd ..
+        for target in {{.TARGETS}}; do
+          os="${target%/*}"
+          arch="${target#*/}"
+          suffix=""
+          [ "$os" = windows ] && suffix=".exe"
+          binary="{{.OUT}}/megabonk-installer-${os}-${arch}${suffix}"
+          [ -f "$binary" ] || { echo "$binary is missing" >&2; exit 1; }
+          go version -m "$binary" | grep -q 'CGO_ENABLED=0' || { echo "$binary was built with cgo" >&2; exit 1; }
+          if [ "$os" = linux ]; then
+            if file "$binary" | grep -q 'dynamically linked'; then
+              echo "$binary is dynamically linked" >&2
+              exit 1
+            fi
+          fi
+          echo "static: $binary"
+        done
+
+  parity:
+    desc: "Run the Go installer and the Python reference over the same scenarios"
+    depends: [build]
+    cmds:
+      - uv run pytest tests/test_installer_parity.py

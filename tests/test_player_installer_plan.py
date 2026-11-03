@@ -216,7 +216,7 @@ def _pack_source(tmp_path: Path, pack_id: str = "thps") -> Path:
     source.mkdir(parents=True)
     (source / pack_id).write_bytes(b"bundle bytes")
     (source / "manifest.json").write_text(
-        json.dumps({"id": pack_id, "name": "THPS", "author": "lance", "version": "1", "assets": ["a"]})
+        json.dumps({"id": pack_id, "name": "THPS", "author": "user", "version": "1", "assets": ["a"]})
     )
     (source / "attachments.json").write_text('{"schema":"pack-attachments/1"}')
     return source

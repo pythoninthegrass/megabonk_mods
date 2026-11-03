@@ -104,7 +104,7 @@ def test_flatpak_override_paths_reads_granted_filesystems() -> None:
 
 def test_flatpak_override_paths_skips_special_tokens_and_resolves_home_relative() -> None:
     text = "[Context]\nfilesystems=host;xdg-config;~/games;relative/dir;\n"
-    assert steam.flatpak_override_paths(text, home=Path("/home/lance")) == [Path("/home/lance/games"), Path("/home/lance/relative/dir")]
+    assert steam.flatpak_override_paths(text, home=Path("/home/user")) == [Path("/home/user/games"), Path("/home/user/relative/dir")]
 
 
 def test_flatpak_override_paths_ignores_other_sections_and_other_keys() -> None:
@@ -186,7 +186,7 @@ def test_prefix_root_follows_steam_compatdata_layout(tmp_path: Path) -> None:
 
 
 def test_steam_running_detects_the_process(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(steam.subprocess, "run", lambda *a, **k: type("R", (), {"stdout": "123 /home/lance/.local/share/Steam/ubuntu12_32/steam\n"})())
+    monkeypatch.setattr(steam.subprocess, "run", lambda *a, **k: type("R", (), {"stdout": "123 /home/user/.local/share/Steam/ubuntu12_32/steam\n"})())
     assert steam.steam_running() is True
 
 

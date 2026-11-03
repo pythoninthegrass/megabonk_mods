@@ -199,6 +199,61 @@ and dialogs. No installer prompt reads stdin.
 
 Three backends, tried in order: zenity and yad are driven by writing `NN` and `# label` lines to their stdin; KDE's kdialog takes `--progressbar <label> 100` and prints its D-Bus reference (`org.kde.kdialog-<pid> /ProgressDialog`) on stdout, so `GuiProgress` drives it with `qdbus-qt6` (or `qdbus`) instead — `<service> <path> org.kde.kdialog.ProgressDialog.value N` sets progress (the dotted property assignment; `org.freedesktop.DBus.Properties.Set` fails with `InternalError` on this object), `setLabelText` retitles, and `close()` dismisses. kdialog aborts with rc 134 without a display or session bus, so it is only chosen when both are present and a qdbus tool exists; if the dialog never answers or a D-Bus call fails, that step and all later ones fall back to text rather than losing the message.
 
+## The Go port
+
+`go/` holds a port of the same installer in Go: `go/cmd/megabonk-installer` builds one
+static binary per platform with no runtime dependency and no external module — the module
+requires nothing but the standard library, and `task installer:verify-static` fails if that
+stops being true. It is a companion to the Python reference, not a replacement: `install.sh`
+still runs `scripts/player_installer`, the player package zip carries no Go binary, and the
+binaries land in gitignored `.tools/installer/`.
+
+```sh
+task installer:build            # cross-compile into .tools/installer
+task installer:test             # gofmt check, go vet, go test
+task installer:verify-static    # CGO off, no dependencies, not dynamically linked
+task installer:parity           # both installers over the same scenarios
+```
+
+Targets are `darwin/arm64`, `linux/amd64` and `windows/amd64`. `linux/arm64` is left out on
+purpose: the game and its Proton prefixes are x86_64, so an arm64 Linux player would run the
+installer and never the mod. The Windows binary is built to prove the port is portable and is
+not executed by any test.
+
+### The parity contract
+
+The two implementations agree **semantically**, not byte for byte:
+
+- **Exact**: exit codes; the installed, repaired and removed file trees (every path and
+  content digest under the game directory and the prefix); the install record compared as
+  parsed JSON, so key order and the `null` spelling of an absent launch option are free.
+- **Anchored**: refusal, discovery and help lines must name the same path, registry key or
+  flag and the same stable verb phrase — `no usable Proton prefix at <path>`, `pass --prefix
+  <path to the pfx directory>`, `no wine binary found in the Proton tools under <lib>`, the
+  `Steam clients considered:` / `Libraries searched:` / `Libraries skipped:` blocks with
+  their `— retry with --library <path>` hints, and the numbered `N/M label` progress lines.
+  Quoting style is free: Go may print `"%q"` or a codec error where Python prints `!r`.
+- **Not compared**: `--help` and any other argparse-rendered text. Go's flag package cannot
+  reproduce argparse's wrapping and it is not worth a formatter for it.
+
+`tests/test_installer_parity.py` is the Go test suite of record. It builds a fixture tree
+twice, under `python/` and `go/`, drives the same argv list through `python -m
+player_installer` and the host-native Go binary, and compares exit codes, both streams, both
+trees, and both records; scenario anchors then pin the phrases that must survive in either
+run. Fixture paths, timestamps and the program name are normalised away (`<ROOT>`, `<TIME>`,
+`<PROG>`) — the one thing two installers named differently cannot share is their own name.
+
+Runs are hermetic by construction. `MEGABONK_MOUNT_ROOTS` replaces the removable-media scan
+list (empty scans nothing) so a maintainer's mounted library cannot turn a "not found"
+scenario into an install, and each fixture home carries a `local-overrides` file with no
+grants, which is the source `flatpak_granted_paths` prefers, so the host's `flatpak` CLI is
+never asked. Go unit tests cover only what is awkward to reach through a subprocess — path
+arithmetic, the VDF and registry parsers, the flag seam above — rather than mirroring
+`tests/test_player_installer_*.py` one for one.
+
+Dialogs are the exception: the Go `PickProgress` always returns plain numbered text. The
+zenity/yad/kdialog backends stay Python-only until the GUI work is ported.
+
 ## What is verified, and what is not
 
 Verified offline, on macOS, against a synthetic Windows-layout game directory and a synthetic `steamapps/compatdata/<appid>/pfx` prefix:
@@ -229,6 +284,10 @@ the AlmaLinux host supplies Flatpak discovery and KDE progress evidence only.
 
 Still pending:
 
+- the Go binaries beyond the host the parity harness runs on: `linux/amd64` is exercised by
+  `task installer:parity`, the `darwin/arm64` and `windows/amd64` builds are compiled and
+  checked for being static but never executed, and no Go binary has yet installed the mod on
+  a maintainer host;
 - clean-install verification on both CachyOS and Fedora, with fresh mod-load logs;
 - automatic removable-media game selection on CachyOS: library discovery finds the mounted SD-card library, but game discovery incorrectly selects an unrelated home-library game (`1000xRESIST`) because its `GameAssembly.dll` matches first; pass explicit `--game-dir` and the measured `--prefix` until this is fixed;
 - the printed game-directory `DOTNET_ROOT` launch option working when Steam actually applies it (the live proof uses prefix mode);

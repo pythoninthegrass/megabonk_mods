@@ -4,7 +4,7 @@ title: Port the player installer to a single static Go binary
 status: In Progress
 assignee: []
 created_date: '2026-10-31T08:14:00Z'
-updated_date: '2026-11-03 03:53'
+updated_date: '2026-11-03 04:38'
 labels:
   - tooling
 dependencies: []
@@ -15,7 +15,13 @@ documentation:
   - docs/player-installer.md
 modified_files:
   - go/
-  - taskfiles/package.yml
+  - taskfiles/installer.yml
+  - taskfile.yml
+  - tests/test_installer_parity.py
+  - tests/test_player_installer_plan.py
+  - tests/test_player_installer_steam.py
+  - tests/test_player_installer_vdf.py
+  - scripts/player_installer/cli.py
   - docs/player-installer.md
 parent_task_id: TASK-006.04.01
 priority: medium
@@ -32,15 +38,15 @@ The Python installer works but still asks the player for an interpreter: the 3.1
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 A clean checkout cross-compiles with CGO_ENABLED=0 to one static binary per target (at least linux/amd64 and linux/arm64); file/ldd confirm no dynamic dependency beyond libc-not-at-all, and the binary runs on a host with no Go and no Python
-- [ ] #2 The manifest contract is byte-compatible: load of megabonk-player-package/1, refusal of every malformed manifest the Python loader refuses (naming the same bad key), and vendor kind lookup behave identically
-- [ ] #3 Full lifecycle on the synthetic Windows-layout trees the Python tests use - install, --check no-drift, drift repair naming exactly the missing files with exit 10, uninstall - matches the Python installer's behaviour and exit codes 0/1/2/3/4/10
+- [x] #2 The manifest contract is behavior-compatible: load of megabonk-player-package/1, refusal of every malformed manifest the Python loader refuses while naming the same bad key, and vendor kind lookup behave identically. Refusal messages are compared on stable anchors, not bytes.
+- [x] #3 Full lifecycle on the synthetic Windows-layout trees the Python tests use - install, --check no-drift, drift repair naming exactly the missing files with exit 10, uninstall - matches the Python installer's behaviour and exit codes 0/1/2/3/4/10
 - [ ] #4 On the AlmaLinux host's real layout: the relocated Flatpak root is found through its grant, the unmounted library is skipped, and the native-Linux build is refused with exit 4 and the Windows-build steps
-- [ ] #5 Headless runs print the same numbered plain-text progress as the Python TextProgress; GUI dialogs are out of scope here (TASK-006.04.01.02)
-- [ ] #6 Third-party Go dependencies are limited to what is justified in writing: bitfield/script only where pipeline sugar beats stdlib, with the final dependency list recorded in the task
-- [ ] #7 Parity tests run the Go binary and the Python installer against identical fixtures and compare stdout, the install record, and exit codes; Python remains the reference until the Go binary reproduces the live host checks, and no docs advertise Go as the default before then
-- [ ] #8 docs/player-installer.md gains the Go section (build targets, contract inheritance) and taskfiles produce the binary alongside the zip
-- [ ] #9 Interactive versus headless is decided by an attached tty probed at /dev/tty (os.OpenFile plus ModeCharDevice, stdlib only, no golang.org/x/term) together with the session environment, and --non-interactive or MEGABONK_NON_INTERACTIVE forces TextProgress; no prompt ever reads stdin
-- [ ] #10 Failure output matches the Python installer the parity harness compares: discovery failures name the candidates tried, why each was rejected and the exact retry flag (--library, --game-dir, --prefix, --proton), and a skipped optional step prints the command that finishes it without changing the exit code
+- [x] #5 Headless runs print numbered plain-text progress in the reference's N/M label format; GUI dialogs are out of scope here (TASK-006.04.01.02)
+- [x] #6 Third-party Go dependencies are limited to what is justified in writing: bitfield/script only where pipeline sugar beats stdlib, with the final dependency list recorded in the task
+- [x] #7 Parity tests run the Go binary and the Python installer against identical fixtures and compare exit codes, the install record parsed as JSON, the installed file trees, and stdout/stderr on message anchors; Python remains the reference until the Go binary reproduces the live host checks, and no docs advertise Go as the default before then
+- [x] #8 docs/player-installer.md gains the Go section (build targets, contract inheritance) and taskfiles produce the binary alongside the zip
+- [x] #9 Interactive versus headless is decided by an attached tty probed at /dev/tty (os.OpenFile plus ModeCharDevice, stdlib only, no golang.org/x/term) together with the session environment, and --non-interactive or MEGABONK_NON_INTERACTIVE forces TextProgress; no prompt ever reads stdin
+- [x] #10 Failure output names the candidates tried, why each was rejected and the exact retry flag (--library, --game-dir, --prefix, --proton), and a skipped optional step prints the command that finishes it without changing the exit code; compared on stable anchors rather than byte-for-byte
 - [ ] #11 Any download checks the HTTP status before writing the body, pins the host across redirects and requires TLS 1.2 or newer, so a 404 or captive-portal page reads as a missing asset and never as a sha256 mismatch
 <!-- AC:END -->
 
@@ -73,6 +79,12 @@ Phases:
 5. Docs: player-installer.md Go section (build targets, contract inheritance, arm64-x86_64 caveats, Go not yet default). Binaries land in .tools/installer/ alongside the zip, never inside it.
 
 Out of scope: GUI dialogs (TASK-006.04.01.02), wm2 discovery-identity fix (parent AC #2, Python first), package zip contents unchanged.
+
+## Contract amendment (user-approved 2026-11-03): byte parity -> semantic parity
+
+Amends AC #2/#5/#7/#10 and Phase 3. The Go binary is contract-compatible, not byte-compatible. Exact: exit codes 0/1/2/3/4/10, the installed/repaired/removed file trees, the progress line format N/M label, and the install record compared as parsed JSON. Anchored: refusal and discovery messages must name the same offending path/key/flag and a stable verb phrase (checksum mismatch, missing from the package, is not valid JSON, unsafe path, no AssetBundle file, expected a .mblevel.json file, the top level must be a JSON object, no usable Proton prefix, pass --prefix, no wine binary found in the Proton tools under, pass --proton, Steam clients considered, Libraries searched/skipped, the flatpak override --user --filesystem= finishing command, the exit-4 native-build refusal); quoting style may differ. Freed: Python repr() quoting -> %q, json.dumps byte layout -> encoding/json, Python JSONDecodeError and UnicodeDecodeError text -> Go error text.
+
+Consequences: internal/pyjson and internal/pyrepr are deleted and the UTF-8 codec-message machinery in internal/ppath goes with them (~1.4k lines); manifest and content move onto plain structs plus encoding/json with DisallowUnknownFields; ppath keeps only the slash-separated path semantics so the record stays portable. The Go test suite is the parity harness over golden scenarios plus unit tests for tricky locals (vdf parsing, path normalization, refusal paths) instead of a mirror of every tests/test_player_installer_*.py. Dependency list stays empty: bitfield/script remains rejected, no library reproduces Python's repr/JSON-error bytes without reimplementing them, so this is a scope cut rather than a dependency.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -87,4 +99,33 @@ Real bug found on this host: Path.is_dir()/is_file()/exists() re-raise Permissio
 Test hygiene: test_player_installer_cli.py gains an autouse fixture pinning MOUNT_ROOTS=() and a neutral flatpak_probe; without it the real host's /media/steam grant and Flatpak overrides leaked into synthetic-tree tests and made the not-found test exit 4 against the real native Megabonk.
 
 8 pytest failures (test_thps_attachments, test_build_thps_editable_level, two test_run wineserver cases) reproduce in a clean HEAD worktree without this change; they belong to unrelated in-flight THPS/boss-spawn work in the tree. Ruff clean; 128 installer tests pass.
+
+Adopted the semantic-parity contract (see the amendment in the plan): deleted the Python-formatting layer (Go pyjson writer/parser, pyrepr, ppath codec-error machinery) after manifest/content moved onto encoding/json structs; ppath keeps slash joins, parents, suffix, and the EACCES-safe stat probes. Parity harness compares exit codes, the install record parsed as JSON, file trees, and anchored messages.
+
+## Go port landed (2026-11-03)
+
+11 packages under go/internal plus cmd/megabonk-installer: 27 files, ~9.1k lines,
+gofmt/vet/test clean, `go list -m all` is one line (stdlib only), CGO_ENABLED=0, the linux
+binary is not dynamically linked (`task installer:verify-static`).
+
+`tests/test_installer_parity.py` is the Go test suite of record: 25 scenarios, twin fixture
+trees, the same argv through `python -m player_installer` and the host-native binary,
+comparing exit codes, both streams, the game and prefix trees by digest, and the install
+record as parsed JSON. Go unit tests cover only the awkward-to-reach locals (ppath, vdf,
+proton registry, jsonx, manifest, steam, ui, cli flag seam).
+
+Hermeticity: the harness sets `MEGABONK_MOUNT_ROOTS=` (a new seam in cli.py honoured by both
+implementations, so a maintainer's mounted library cannot turn a not-found scenario into an
+install) and writes a grant-less `local-overrides` file into each fixture home so the
+persisted-override path answers before the host's flatpak CLI is asked. Parity caught one
+real divergence: Go read an empty `MEGABONK_MOUNT_ROOTS` as "use the defaults" where Python
+read it as "scan nothing"; fixed and pinned by `TestMountRootsHonoursTheEnvironment`.
+
+Docs: docs/player-installer.md gained "The Go port" (targets, contract inheritance, tasks,
+what is exact versus anchored, Go is not the default) and a still-pending entry for the
+un-executed darwin/windows binaries.
+
+Open: AC #1's "runs on a host with no Go and no Python" and AC #4 are the same scheduled
+window on the AlmaLinux (mf) host; AC #11 stays open until something in the installer
+downloads at all (vendor archives are verified from cache, never fetched).
 <!-- SECTION:NOTES:END -->
