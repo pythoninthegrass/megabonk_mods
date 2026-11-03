@@ -4,7 +4,7 @@ title: Port the player installer to a single static Go binary
 status: In Progress
 assignee: []
 created_date: '2026-10-31T08:14:00Z'
-updated_date: '2026-11-03 05:29'
+updated_date: '2026-11-03 05:32'
 labels:
   - tooling
 dependencies: []
@@ -56,10 +56,6 @@ The Python installer works but still asks the player for an interpreter: the 3.1
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
 - [x] #4 Conventional commit with no attribution
-- [x] #5 task check passes
-- [x] #6 Tests written first for ported logic
-- [x] #7 Docs updated
-- [x] #8 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -98,7 +94,7 @@ Real bug found on this host: Path.is_dir()/is_file()/exists() re-raise Permissio
 
 Test hygiene: test_player_installer_cli.py gains an autouse fixture pinning MOUNT_ROOTS=() and a neutral flatpak_probe; without it the real host's /media/steam grant and Flatpak overrides leaked into synthetic-tree tests and made the not-found test exit 4 against the real native Megabonk.
 
-8 pytest failures (test_thps_attachments, test_build_thps_editable_level, two test_run wineserver cases) reproduce in a clean HEAD worktree without this change; they belong to unrelated in-flight THPS/boss-spawn work in the tree. Ruff clean; 128 installer tests pass.
+8 pytest failures (test_thps_attachments, test_build_thps_editable_level, two test_run wineserver cases) reproduce in a clean HEAD worktree without this change; at the time they looked like unrelated in-flight THPS/boss-spawn work, but that reading was wrong - see "Unblocking task check" below. Ruff clean; 128 installer tests pass.
 
 Adopted the semantic-parity contract (see the amendment in the plan): deleted the Python-formatting layer (Go pyjson writer/parser, pyrepr, ppath codec-error machinery) after manifest/content moved onto encoding/json structs; ppath keeps slash joins, parents, suffix, and the EACCES-safe stat probes. Parity harness compares exit codes, the install record parsed as JSON, file trees, and anchored messages.
 
@@ -204,10 +200,12 @@ live process. That tripwire flagged exactly those two tests across 1005 others.
 <!-- COMMENTS:BEGIN -->
 created: 2026-11-03 05:18
 ---
-AC #1 and AC #4 are now evidenced, not assumed. The same fixture and the same expected tree go through the full lifecycle (install, `--check` no-drift, drift `--check` with exit 10, repair, uninstall) in seven environments: the host's Python reference, the host Go binary, `ubuntu:24.04`, `fedora:42`, the SteamOS-based `thevakhovske/holoiso`, and in the Windows 11 Docker guest both the `windows/amd64` binary and a `python -m player_installer` reference. All seven agree on exit codes, both streams, the install record as parsed JSON, and the installed and final trees; the images have no `python`, `python3`, `go`, `pip` or `pip3`, and a `FROM scratch` image with nothing but the binary installs with exit 0. On the AlmaLinux maintainer host the Go binary prints byte-identical output to the Python reference (exit 4, relocated Flatpak root, stale unmounted library) on the real layout.
+AC #1 and AC #4 are now evidenced, not assumed. The same fixture and the same expected tree go through the full lifecycle (install, `--check` no-drift, drift `--check` with exit 10, repair, uninstall) in seven environments: the host's Python reference, the host Go binary, `ubuntu:24.04`, `fedora:42`, the SteamOS-based `thevakhovske/holoiso`, and in the Windows 11 Docker guest both the `windows/amd64` binary and a `python -m player_installer` reference. All seven agree on exit codes, both streams, the install record as parsed JSON, and the installed and final trees; the images have no `python`, `python3`, `go`, `pip` or `pip3`, and a `FROM scratch` image whose entire filesystem is 46 entries - the binary plus the fixture tree, no `/bin/sh`, no interpreter, no libc - runs the same five steps with the same exits. On the AlmaLinux maintainer host the Go binary prints byte-identical output to the Python reference (exit 4, relocated Flatpak root, stale unmounted library) on the real layout.
 
 The Windows guest run caught one real port bug: `filepath.Abs` and `filepath.EvalSymlinks` return backslash paths there, and comparing them against slash-separated install paths made every zip member look like it escaped the game directory. `plan.resolve` and `steam.resolve` now normalise both through a `resolveWith` seam, pinned by a new test in each package that injects a backslash-returning `Abs` and a native-form `EvalSymlinks`.
 
-Remaining open: AC #11 has nothing to test until either implementation downloads (neither has HTTP code), and `task check` still trips over the 8 pre-existing THPS/wineserver failures in the tree.
+`task check` is green (1007 passed, 56 skipped). The 8 failures this comment originally called pre-existing turned out to be two real defects, now fixed: six tests read a gitignored build product with no guard (the repo rule is that they skip), and two wineserver tests reached a real `os.kill` on an injected pid while `wait_for_wineserver_to_exit` caught only `ProcessLookupError` - see the "Unblocking task check" notes.
+
+Open: AC #11, which has nothing to test until either implementation downloads anything (neither has HTTP code, vendor archives are verified from cache), so it needs either a download path or a scope cut; and switching the default install path to the Go binary, which is a maintainer decision, not a port gap.
 ---
 <!-- COMMENTS:END -->
