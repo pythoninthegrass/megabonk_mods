@@ -74,7 +74,9 @@ Two conftest rules surprise people: a `FileNotFoundError` on any path in `GENERA
 
 ## Honcho memory
 
-Honcho is the persistent memory here (workspace `lance`, peers `lance` and `Assistant`); Serena's memory and onboarding tools are disabled. The calls that matter, in order: `create_session` (`workspace_id: "lance"`, a unique `session_id`, `metadata` a JSON string naming the repo path), `add_peers_to_session` (`lance` with `observe_me` and `observe_others` true, `Assistant` with `observe_me: false`), then `add_messages_to_session` reusing that one `session_id` for the whole conversation rather than minting one per turn.
+Honcho is the persistent memory here; Serena's memory and onboarding tools are disabled. The workspace id and the two peer ids to use are listed under "Honcho" in `CLAUDE.local.md` (untracked, per-fleet). The calls that matter, in order: `create_session` (that workspace id, a unique `session_id`, `metadata` a JSON string naming the repo path), `add_peers_to_session` (the human peer with `observe_me` and `observe_others` true, the `Assistant` peer with `observe_me: false`), then `add_messages_to_session` reusing that one `session_id` for the whole conversation rather than minting one per turn.
+
+- Redact before writing. Nothing personal goes into Honcho or into a tracked file even when it is true: names, usernames, emails, LAN or tailscale addresses, account ids, and host-specific home paths. Write the role instead ("the maintainer host", "the Linux player box", `<user>`), and put the identifier itself in `CLAUDE.local.md`.
 
 - Confirm a write with `get_session_context`, not `search`. Derivation is asynchronous and `search` ranks across the whole workspace, so a message written seconds ago can be missing from the top hits; re-adding it on that evidence produces duplicates.
 - Expect a second session holding the raw transcript, recorded automatically under an `opencode-<repo>` id. Curated durable facts belong in your own session; read both before concluding Honcho knows nothing.
