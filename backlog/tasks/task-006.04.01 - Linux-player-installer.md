@@ -4,7 +4,7 @@ title: Linux player installer
 status: In Progress
 assignee: []
 created_date: '2026-10-31T03:12:00Z'
-updated_date: '2026-11-02T04:31:00Z'
+updated_date: '2026-11-03 06:06'
 labels:
   - tooling
 dependencies: []
@@ -60,8 +60,8 @@ docs/player-installer.md is the current player setup and package contract. Keep 
 - [x] #7 Uninstall restores a vanilla game
 - [x] #8 docs/player-installer.md documents the current player setup, verified Proton command sequence, and outstanding verification limits, linking to the Linux gamepadui guide
 - [x] #9 Headless versus desktop is chosen from an attached tty (/dev/tty) as well as the session environment, and --non-interactive or MEGABONK_NON_INTERACTIVE forces plain text; nothing is ever read from stdin, which under a piped run is the pipe itself
-- [ ] #10 Every discovery failure names the candidates considered and why each was rejected (unmounted library, Flatpak root not granted, missing prefix) and prints the exact flag to retry with: --library, --game-dir, --prefix or --proton
-- [ ] #11 A step skipped because of the environment (no GUI backend, no flatpak CLI, no prefix, launch option not written) prints the command that finishes it by hand and leaves the exit code unchanged
+- [x] #10 Every discovery failure names the candidates considered and why each was rejected (unmounted library, Flatpak root not granted, missing prefix) and prints the exact flag to retry with: --library, --game-dir, --prefix or --proton
+- [x] #11 A step skipped because of the environment (no GUI backend, no flatpak CLI, no prefix, launch option not written) prints the command that finishes it by hand and leaves the exit code unchanged
 <!-- AC:END -->
 
 ## Definition of Done
@@ -140,4 +140,14 @@ wm2 reachable on retry. Read-only verification: hostname wm2; /media/sdcard is m
 The existing install record points at the home-library prefix /home/lance/.local/share/Steam/steamapps/compatdata/3405340/pfx (drive_c exists), whereas prefix_for_game_dir returns the SD-library prefix. Read-only --check using explicit --game-dir and the recorded home --prefix exits 10 with exactly one stale file: Mods/MegabonkLevels.Mod.dll versus the old ~/mb-player package. No repair performed. Existing Latest.log (mtime 2026-11-01) contains MelonLoader v0.7.3, 1 Mod loaded, and mod initialized; this is prior-launch evidence, not a new clean-install proof. No Steam/game launch, install/uninstall, sync or remote file edit was performed.
 
 User requested commit and push of the current documentation, AC9 implementation/tests, task-premise update and wm2 verification findings. Preparing a conventional commit; AC2's discovery bug is documented but deliberately not fixed in this changeset. Earlier notes saying this pass was uncommitted describe the pre-commit state.
+
+Discovery identity and prefix selection fixed (commit e7c3b0f). Game discovery had been accepting any directory holding GameAssembly.dll, so wm2's home-library 1000xRESIST was chosen over the SD-card Megabonk; that false positive is gone.
+
+Selection now runs through steam.game_candidates in trust order - the library's own appmanifest_3405340.acf installdir, then steamapps/common/Megabonk by name, then any other Il2Cpp install - and accepts a candidate only on Megabonk's own names (Megabonk.exe, Megabonk.x86_64, Megabonk_Data/). find_game_dir takes the first accepted candidate; the not-found report names each rejected install with its reason, so an unrelated Unity/Il2Cpp title is reported rather than installed into.
+
+Prefix selection: steam.find_prefix now searches the libraries Steam reported, not just the one beside the game. It prefers the game's own library, falls back to the only other usable prefix (the wm2 SD-card layout) and prints "Proton prefix: <path> (Steam keeps it in that library, not beside the game)"; two usable prefixes is treated as a guess - both are printed with the --prefix hint and the plan falls back to gamedir mode. Passing --prefix silences that reporting (found while writing the container evidence: the nag contradicted the flag).
+
+Latent bug fixed on the way: _install_dir_from_manifests never matched a real manifest. It looked up appid/installdir as nested keys, but a real appmanifest is one top-level section holding both, so the manifest tier had never contributed a candidate.
+
+Evidence: new Python and Go unit tests (identity, ordering, prefix selection, reporting), four new scenarios in tests/test_installer_parity.py (decoy library, decoy-only report, remote prefix, two prefixes with and without --prefix), and a container matrix run as a non-root user on fedora:42 and ubuntu:24.04 with --network none - four layouts x {host python reference, host go binary, fedora container, ubuntu container}, all compared on exit codes, stdout, stderr and tree digests, with the decoy directory digest-checked before and after every install to prove nothing was written into it. AC #10 and #11 are ticked on this; #1 and #2 stay open until the same layouts are run against the real wm2 card and fedora install, which needs those machines idle.
 <!-- SECTION:NOTES:END -->

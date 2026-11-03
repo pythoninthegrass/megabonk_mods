@@ -4,7 +4,7 @@ title: Port the player installer to a single static Go binary
 status: In Progress
 assignee: []
 created_date: '2026-10-31T08:14:00Z'
-updated_date: '2026-11-03 05:32'
+updated_date: '2026-11-03 06:06'
 labels:
   - tooling
 dependencies: []
@@ -193,6 +193,12 @@ signalled. run.py now counts killed and refused pids separately and treats `EPER
 server it cannot kill (pinned by a new test), and an autouse conftest fixture stubs `os.kill`
 to raise, so a test that reaches a real kill fails with instructions instead of signalling a
 live process. That tripwire flagged exactly those two tests across 1005 others.
+
+Go mirror of the discovery-identity and prefix-selection change (parent AC #2, commit e7c3b0f): steam.GameCandidates / FindGameDir, isMegabonk/isIl2Cpp, commonChildren, PrefixCandidates and FindPrefix in go/internal/steam, reportPrefix and the Il2Cpp section of notFoundLines in go/internal/cli, with ReasonNotMegabonk, ReasonNoPrefix and ReasonNoDriveC as the anchored strings Python and Go share. FindInstall gained a prefixChosen argument so an explicit --prefix suppresses the ambiguity nag, matching the Python flag.
+
+installDirFromManifests had the same manifest-matching bug as the Python side (it looked up appid/installdir as nested keys instead of searching the manifest's own section) and is fixed the same way, with the appid check skipping only manifests that state a different id.
+
+Go tests: nine new cases in internal/steam (decoy rejected, manifest candidate ordering and ReasonMissing, manifest beats a folder merely named Megabonk, native build accepted, own-library prefix, only-other-usable prefix, two prefixes refused, drive_c reason) and four in internal/cli, plus four parity scenarios in tests/test_installer_parity.py. task installer:build/test/parity green (29 scenarios), task check green (1034 passed, 56 skipped).
 <!-- SECTION:NOTES:END -->
 
 ## Comments
