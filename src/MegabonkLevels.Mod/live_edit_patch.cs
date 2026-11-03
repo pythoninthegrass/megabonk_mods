@@ -43,6 +43,9 @@ public static class LiveEditPatch
     // boss at the portal itself. See BossSpawnRedirectPatch.
     public static IReadOnlyList<float> BossSpawnPosition => _bossSpawnPosition;
 
+    // The level's authored kill floor, or null when it derives from the tiles. See BossSpawnRedirectPatch.
+    public static float? KillFloorY => _killFloorY;
+
     // Whether a rail touch on this level needs the slide button held. See GrindGatePatch.
     public static bool GrindRequiresSlide => _grindRequiresSlide;
 
