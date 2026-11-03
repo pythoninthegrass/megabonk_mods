@@ -70,6 +70,8 @@ Megabonk is an Il2Cpp build with no managed IL anywhere in the install. `MelonLo
 
 The Python tests are in `tests/` and run with `task scripts:test` or `uv run pytest` (append a test path for a focused run). Dependencies come from `pyproject.toml` and `uv.lock`: runtime packages under `[project.dependencies]`, test tooling under `[dependency-groups] dev`, which uv installs by default, so no `--extra` or `--with` flags are needed. `tests/conftest.py` isolates every test from `MEGABONK_*` settings and the repo `.env`. See [Python tests](docs/development.md#python-tests) for the pytest configuration, the `[tool.uv]` resolution pins and the separate PEP 723 script environment.
 
+Two conftest rules surprise people: a `FileNotFoundError` on any path in `GENERATED_ARTIFACTS` skips the test rather than failing (so a missing gitignored build product is never a red suite, and a product that exists but is malformed still fails), and an autouse fixture replaces `os.kill` with a stub that raises, so a test that signals a process installs its own recorder.
+
 ## Comments in code (all languages)
 
 No section-banner or multi-paragraph comments, in `.cs`, `.py`, `.sh`, or anywhere else. Code should be self-explanatory; put design rationale in `docs/*.md` instead. A comment above a function, method, or field is at most 1-2 lines, and only when naming alone doesn't make intent clear.
