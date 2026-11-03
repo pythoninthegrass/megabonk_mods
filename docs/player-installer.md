@@ -289,6 +289,16 @@ launch logging the mod-initialized marker. The live prefix also exposed Wine's
 timestamped registry section headers, now covered by regression tests. See
 [gamepadui.md](gamepadui.md) for the measured workflow.
 
+That host now also carries the clean-install proof itself: uninstalling a previous
+install to a vanilla tree, installing the distributed 0.4.2 package with the
+documented pinned flags, `--check` reporting a match, and a Steam launch whose fresh
+`MelonLoader/Latest.log` shows `Assembly Generation Successful!`, `1 Mod loaded.`
+and `[MegabonkLevels] MegabonkLevels mod initialized.` with Bootstrap resolving
+`hostfxr.dll` under the vendored prefix runtime — prefix mode proven end to end
+without any development leftovers beside the game. The launch initially did nothing
+because a Steam Cloud save-conflict dialog was pending; see
+[gamepadui.md](gamepadui.md) for the three launch traps that cost time there.
+
 The four library layouts the discovery code has to survive are run through both
 implementations in containers as well as fixtures: a single library holding Megabonk
 beside an unrelated Il2Cpp title that sorts first, the same library with no Megabonk
@@ -338,7 +348,7 @@ Windows-build refusal.
 
 Still pending:
 
-- clean-install verification on both CachyOS and Fedora, with fresh mod-load logs; the two machines are also the only place the removable-media and decoy-title layouts exist as real Steam installs — the container matrix above reproduces those layouts, not the machines;
+- clean-install verification on the Fedora player box, with a fresh mod-load log (the CachyOS host is done — see above); that machine is also the only place the decoy-title layout exists as a real Steam install — the container matrix above reproduces those layouts, not the machines;
 - the printed game-directory `DOTNET_ROOT` launch option working when Steam actually applies it (the live proof uses prefix mode);
 - the persisted `local-overrides` file as the source of the Flatpak grants — the real host went through `flatpak override --show`, which is the other of the two paths in `flatpak_granted_paths`;
 - the zenity and yad dialog paths — the verified host has neither installed, so those branches run only in tests (the kdialog-over-D-Bus path above is the one with desktop evidence);

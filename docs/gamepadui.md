@@ -176,6 +176,23 @@ Proton's builtin DLL rather than the game's loader DLL. Steam's
 tracking. Preserve these logs and report a failed mod load rather than trying
 unverified runtime or launch-option workarounds.
 
+Three launch traps measured on the gamescope host. A **Steam Cloud save-conflict
+dialog blocks every `steam://rungameid` silently** — the URI is forwarded and does
+nothing until the dialog is answered ("You must make a selection to launch the
+application"); back up the game's `UserData/` first, pick whichever side is newer
+(the dialog's buttons carry the real timestamps), and expect a follow-up "Unable to
+Sync — Play anyway" prompt. **Direct-Proton launches of the Windows build do not
+work on that host**: `proton run` and even the pressure-vessel
+`waitforexitandrun` chain return exit 0 within ~10 seconds with a correct install,
+so launch through the Steam client and use the client's own binary
+(`~/.local/share/Steam/ubuntu12_32/steam steam://rungameid/3405340`) to forward the
+request. And the gamepadui screen is **not capturable over X** — `x11grab` of the
+gamescope display returns black frames — but the client answers Chrome DevTools
+queries on its `--remote-debugging-port` (8080): `GET /json` lists the pages, and
+`Runtime.evaluate` on the "Steam Big Picture Mode" page reads `document.body.innerText`
+and clicks dialog buttons, which is how the blocking dialog is identified without a
+screenshot.
+
 ## Transfer THPS content and test the player menus
 
 The tested player package contains only `example-forest`; Warehouse requires both
