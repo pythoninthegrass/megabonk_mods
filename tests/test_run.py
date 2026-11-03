@@ -1413,6 +1413,27 @@ def test_find_wine_leftovers_attributes_a_prefix_from_argv_in_either_separator_s
     assert leftovers.withheld == [3]
 
 
+def test_find_wine_leftovers_attributes_a_proton_stub_by_its_compat_data_path() -> None:
+    """Proton exports no WINEPREFIX for the processes it spawns; STEAM_COMPAT_DATA_PATH names the directory holding pfx."""
+    ours = proc(1, "C:\\windows\\system32\\winedevice.exe", environ={"STEAM_COMPAT_DATA_PATH": "/steam/steamapps/compatdata/3405340"})
+    foreign = proc(2, "C:\\windows\\system32\\regedit.exe", environ={"STEAM_COMPAT_DATA_PATH": "/steam/steamapps/compatdata/999999/"})
+    leftovers = run.find_wine_leftovers([ours, foreign], WINE_PREFIX)
+    assert leftovers.stubs == [1]
+    assert leftovers.others == [2]
+    assert leftovers.withheld == []
+
+
+def test_find_wine_leftovers_prefers_wineprefix_when_the_two_prefix_vars_disagree() -> None:
+    table = [
+        proc(
+            1,
+            "C:\\windows\\system32\\winedevice.exe",
+            environ={"WINEPREFIX": WINE_PREFIX, "STEAM_COMPAT_DATA_PATH": "/steam/steamapps/compatdata/999999"},
+        )
+    ]
+    assert run.find_wine_leftovers(table, WINE_PREFIX).stubs == [1]
+
+
 def test_find_wine_leftovers_withholds_unattributed_stubs_while_another_windows_process_runs() -> None:
     table = [wine_stub(1, "winedevice", prefix=None), windows_process(2, STEAM_EXE, "-silent")]
     leftovers = run.find_wine_leftovers(table, WINE_PREFIX)
@@ -1667,6 +1688,36 @@ def test_stop_steam_client_stops_after_sigterm_without_reaching_sigkill(monkeypa
     )
     assert ok is True
     assert {sig for _, sig in signaled} == {signal.SIGTERM}
+
+
+def test_stop_steam_client_gives_a_slow_client_the_full_steam_grace(monkeypatch, capsys) -> None:
+    """Steam takes seconds to come down after SIGTERM; reusing the 1.5-second Wine stub grace SIGKILLed it outright."""
+    signaled: list[tuple[int, int]] = []
+    sleeps_after_term: list[float] = []
+    live = [20]
+    clock = {"now": 0.0}
+
+    monkeypatch.setattr(os, "kill", lambda pid, sig: signaled.append((pid, sig)))
+
+    def tick(seconds: float) -> None:
+        clock["now"] += 1
+        if any(sig == signal.SIGTERM for _, sig in signaled):
+            sleeps_after_term.append(seconds)
+            if len(sleeps_after_term) >= 5:
+                live.clear()
+
+    ok = run.stop_steam_client(
+        timeout=30.0,
+        table=lambda: steam_table(*live),
+        request=lambda launcher: None,
+        launcher=None,
+        sleep=tick,
+        now=lambda: clock["now"],
+    )
+    assert ok is True
+    assert {sig for _, sig in signaled} == {signal.SIGTERM}
+    assert len(sleeps_after_term) == 5
+    assert "after SIGTERM" in capsys.readouterr().out
 
 
 def test_stop_menu_service_reports_a_service_that_was_never_running(tmp_path, capsys) -> None:

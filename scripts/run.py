@@ -148,6 +148,8 @@ WINE_STUB_BASENAMES = frozenset(
 )
 WINDOWS_DRIVE_ROOT = re.compile(r"^[A-Za-z]:[\\/]")
 WINE_PREFIX_ROOT = re.compile(r"(.*?)(?:^|/)(?:drive_c|pfx)(?:/|$)", re.IGNORECASE)
+# Environment variables naming a prefix, with the path the prefix sits at inside it; Proton sets only the second.
+PREFIX_ENV_KEYS = (("WINEPREFIX", ""), ("STEAM_COMPAT_DATA_PATH", "/pfx"))
 LAUNCHER_CHAIN_COMMANDS = (
     re.compile(rf"(?:^|/)reaper\s+SteamLaunch\s+AppId={STEAM_APP_ID}(?=\s|$)"),
     re.compile(rf"(?:^|/)srt-bwrap\b.*(?:\b{STEAM_APP_ID}\b|Megabonk\.exe)", re.IGNORECASE),
@@ -827,10 +829,12 @@ def is_steam_client(info: ProcessInfo) -> bool:
 
 
 def wine_prefix_root(info: ProcessInfo) -> str | None:
-    """The prefix a process belongs to, from WINEPREFIX or a drive_c/pfx path in its argv; None when neither says."""
-    configured = (info.environ or {}).get("WINEPREFIX")
-    if configured:
-        return normalize_path_root(configured)
+    """The prefix a process belongs to, from WINEPREFIX, Proton's STEAM_COMPAT_DATA_PATH, or a drive_c/pfx path in argv."""
+    environ = info.environ or {}
+    for key, suffix in PREFIX_ENV_KEYS:
+        value = environ.get(key)
+        if value:
+            return normalize_path_root(f"{value.rstrip('/')}{suffix}")
     for argument in info.argv:
         match = WINE_PREFIX_ROOT.match(normalize_path_root(argument))
         if match:
@@ -987,7 +991,7 @@ def stop_steam_client(
         return True
     for pid in live():
         signal_process(pid, signal.SIGTERM, killer)
-    if not settle(now() + WINE_STUB_KILL_GRACE_SECONDS):
+    if not settle(now() + min(timeout, STEAM_EXIT_TIMEOUT_SECONDS)):
         print(f"stop-steam: stopped {len(listed)} Steam process(es) after SIGTERM")
         return True
     stubborn = live()
