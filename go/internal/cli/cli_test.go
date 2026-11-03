@@ -149,7 +149,6 @@ func run(t *testing.T, argv ...string) session {
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
 	command := NewCommand(stdout, stderr)
 	command.Env = map[string]string{"HOME": t.TempDir(), "MEGABONK_NON_INTERACTIVE": "1"}
-	command.Locate = func(string) string { return "" }
 	command.PickProgress = func(env map[string]string, forceText bool, writer func(string)) ui.Progress {
 		return ui.NewTextProgress(writer)
 	}
@@ -740,34 +739,153 @@ func TestHelpExitsZero(t *testing.T) {
 	}
 }
 
-func TestDialogSkipNoteOnlyWithoutNoGUI(t *testing.T) {
-	restore := ui.HasTTY
-	ui.HasTTY = func() bool { return true }
-	defer func() { ui.HasTTY = restore }()
+// fakeWindowProgress stands in for window.Progress in the cli tests.
+type fakeWindowProgress struct {
+	steps       int
+	cancelAfter int
+	decline     bool
+	prompts     []string
+}
 
+func (f *fakeWindowProgress) Confirm(prompt string) bool {
+	f.prompts = append(f.prompts, prompt)
+	return !f.decline
+}
+
+func (f *fakeWindowProgress) Start(int, string)   {}
+func (f *fakeWindowProgress) Step(string)         { f.steps++ }
+func (f *fakeWindowProgress) Finish(string, bool) {}
+func (f *fakeWindowProgress) Cancelled() bool     { return f.cancelAfter >= 0 && f.steps >= f.cancelAfter }
+
+func windowed(t *testing.T, driver func(title string, work func(ui.Progress) int) (int, bool)) *Command {
+	t.Helper()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	command := NewCommand(stdout, stderr)
+	command.Env = map[string]string{"HOME": t.TempDir(), "DISPLAY": ":0"}
+	command.StartWindow = driver
+	restoreRoots := MountRoots
+	MountRoots = nil
+	restoreGOOS := ui.GOOS
+	ui.GOOS = "linux"
+	restoreRunner := steam.CommandRunner
+	steam.CommandRunner = func(argv []string, timeout time.Duration) (int, string, error) {
+		return 1, "", errors.New("stubbed")
+	}
+	t.Cleanup(func() {
+		MountRoots = restoreRoots
+		ui.GOOS = restoreGOOS
+		steam.CommandRunner = restoreRunner
+	})
+	return command
+}
+
+func TestInstallThroughTheWindowDriver(t *testing.T) {
 	packageDir, game := makePackage(t), makeGame(t)
-	command := NewCommand(&bytes.Buffer{}, &bytes.Buffer{})
-	command.Env = map[string]string{"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus"}
-	command.Locate = func(string) string { return "" }
-	options, err := ParseFlags([]string{"--package", packageDir, "--game-dir", game})
-	if err != nil {
-		t.Fatal(err)
+	var titles []string
+	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
+		titles = append(titles, title)
+		return work(&fakeWindowProgress{cancelAfter: -1}), true
+	})
+	exit := command.Main([]string{"--package", packageDir, "--game-dir", game})
+	if exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", exit, command.Stdout, command.Stderr)
 	}
-	reporter := &Reporter{Stdout: command.Stdout, Stderr: command.Stderr}
-	command.noteDialogSkip(reporter, options)
-	if !strings.Contains(command.Stderr.(*bytes.Buffer).String(), "no progress dialog found") {
-		t.Errorf("a desktop with no dialog should be told why progress is on stdout")
+	if len(titles) != 1 || titles[0] != "Megabonk Levels installer" {
+		t.Errorf("titles = %v", titles)
 	}
+	out := command.Stdout.(*bytes.Buffer).String()
+	if strings.Contains(out, "1/") {
+		t.Errorf("the window path must not print numbered text lines:\n%s", out)
+	}
+	if content.LoadRecord(game) == nil {
+		t.Error("the install did not happen through the window driver")
+	}
+}
 
-	quiet, err := ParseFlags([]string{"--package", packageDir, "--game-dir", game, "--no-gui"})
-	if err != nil {
-		t.Fatal(err)
+func TestUninstallThroughTheWindowDriver(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	if got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui"); got.exit != ExitOK {
+		t.Fatalf("seed install exited %d: %s %s", got.exit, got.stdout, got.stderr)
 	}
-	buffer := &bytes.Buffer{}
-	command.Stderr = buffer
-	command.noteDialogSkip(&Reporter{Stdout: command.Stdout, Stderr: buffer}, quiet)
-	if buffer.String() != "" {
-		t.Errorf("--no-gui should silence the note: %s", buffer)
+	var titles []string
+	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
+		titles = append(titles, title)
+		return work(&fakeWindowProgress{cancelAfter: -1}), true
+	})
+	exit := command.Main([]string{"--game-dir", game, "--uninstall"})
+	if exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", exit, command.Stdout, command.Stderr)
+	}
+	if len(titles) != 1 || titles[0] != "Megabonk Levels uninstaller" {
+		t.Errorf("titles = %v", titles)
+	}
+	if content.LoadRecord(game) != nil {
+		t.Error("the uninstall did not happen through the window driver")
+	}
+}
+
+func TestWindowUnavailableFallsBackToText(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	attempted := 0
+	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
+		attempted++
+		return 0, false
+	})
+	exit := command.Main([]string{"--package", packageDir, "--game-dir", game})
+	if exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", exit, command.Stdout, command.Stderr)
+	}
+	if attempted != 1 {
+		t.Errorf("the window should be attempted once, got %d", attempted)
+	}
+	out := command.Stdout.(*bytes.Buffer).String()
+	if !strings.Contains(out, "1/") {
+		t.Errorf("the failed window must fall back to the unchanged text reporter:\n%s", out)
+	}
+	note := command.Stderr.(*bytes.Buffer).String()
+	if !strings.Contains(note, "GTK 3") || !strings.Contains(note, "--no-gui") {
+		t.Errorf("a desktop whose window failed should be told why: %s", note)
+	}
+	if content.LoadRecord(game) == nil {
+		t.Error("the fallback install did not happen")
+	}
+}
+
+func TestNoGUINeverAttemptsTheWindow(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	attempted := 0
+	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
+		attempted++
+		return work(&fakeWindowProgress{cancelAfter: -1}), true
+	})
+	exit := command.Main([]string{"--package", packageDir, "--game-dir", game, "--no-gui"})
+	if exit != ExitOK {
+		t.Fatalf("exit = %d", exit)
+	}
+	if attempted != 0 {
+		t.Error("--no-gui must not attempt the window")
+	}
+	note := command.Stderr.(*bytes.Buffer).String()
+	if strings.Contains(note, "GTK 3") {
+		t.Errorf("--no-gui silences the note: %s", note)
+	}
+}
+
+func TestCancelledInstallThroughTheWindowReportsRollback(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
+		return work(&fakeWindowProgress{cancelAfter: 2}), true
+	})
+	exit := command.Main([]string{"--package", packageDir, "--game-dir", game})
+	if exit != ExitError {
+		t.Fatalf("exit = %d\n%s\n%s", exit, command.Stdout, command.Stderr)
+	}
+	out := command.Stdout.(*bytes.Buffer).String()
+	if !strings.Contains(out, "cancelled") || !strings.Contains(out, "rolled back") {
+		t.Errorf("a cancelled install should say it rolled back:\n%s", out)
+	}
+	if content.LoadRecord(game) != nil || ppath.Exists(ppath.Join(game, "MelonLoader")) {
+		t.Error("the cancelled install left installer files behind")
 	}
 }
 
@@ -867,5 +985,40 @@ func TestApplyPlanThroughTheCommandUsesTheProgressReporter(t *testing.T) {
 	}
 	if lines[len(lines)-1] != "installed" {
 		t.Errorf("last progress line = %q", lines[len(lines)-1])
+	}
+}
+
+func TestDecliningTheWindowConfirmationChangesNothing(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	fake := &fakeWindowProgress{cancelAfter: -1, decline: true}
+	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
+		return work(fake), true
+	})
+	exit := command.Main([]string{"--package", packageDir, "--game-dir", game})
+	if exit != ExitError {
+		t.Fatalf("exit = %d\n%s\n%s", exit, command.Stdout, command.Stderr)
+	}
+	if len(fake.prompts) != 1 || !strings.Contains(fake.prompts[0], "Install") {
+		t.Errorf("prompts = %v", fake.prompts)
+	}
+	if content.LoadRecord(game) != nil {
+		t.Error("declining must not install anything")
+	}
+	if !strings.Contains(command.Stdout.(*bytes.Buffer).String(), "nothing was changed") {
+		t.Errorf("stdout = %s", command.Stdout)
+	}
+}
+
+func TestAcceptingTheWindowConfirmationInstalls(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	fake := &fakeWindowProgress{cancelAfter: -1}
+	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
+		return work(fake), true
+	})
+	if exit := command.Main([]string{"--package", packageDir, "--game-dir", game}); exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", exit, command.Stdout, command.Stderr)
+	}
+	if len(fake.prompts) != 1 || content.LoadRecord(game) == nil {
+		t.Errorf("prompts = %v, record = %v", fake.prompts, content.LoadRecord(game))
 	}
 }

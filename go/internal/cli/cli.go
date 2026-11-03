@@ -6,6 +6,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/ppath"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/steam"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/ui"
+	"github.com/pythoninthegrass/megabonk_mods/installer/internal/window"
 )
 
 // Stable exit codes: a desktop shortcut or a script can act on them.
@@ -97,8 +99,10 @@ type Command struct {
 	Environ func() map[string]string
 	// PickProgress chooses the progress reporter; nil uses ui.PickProgress.
 	PickProgress func(env map[string]string, forceText bool, writer func(string)) ui.Progress
-	// Locate finds a dialog binary; nil uses the PATH.
-	Locate ui.Locate
+	// StartWindow opens the MyGo native-UI progress window; nil uses
+	// window.Run. It reports (code, started): started is false when the app
+	// could not launch and the caller must fall back to plain text.
+	StartWindow func(title string, work func(ui.Progress) int) (int, bool)
 }
 
 // NewCommand returns a Command wired to the given streams.
@@ -410,13 +414,47 @@ func (c *Command) progress(options *Options, reporter *Reporter) ui.Progress {
 	return c.pickProgress(c.environment(), options.NoGUI || options.NonInteractive || reporter.AsJSON, writer)
 }
 
-func (c *Command) noteDialogSkip(reporter *Reporter, options *Options) {
-	if options.NoGUI || options.NonInteractive || options.AsJSON {
-		return
+func (c *Command) startWindow(title string, work func(ui.Progress) int) (int, bool) {
+	if c.StartWindow != nil {
+		return c.StartWindow(title, work)
 	}
-	if note := ui.DialogSkipNote(c.environment(), c.Locate); note != "" {
-		reporter.Warn(note)
+	return window.Run(title, work)
+}
+
+// runProgress reports a long run: the MyGo native-UI window first when this
+// session can show one — GTK 3 on Linux, nothing extra elsewhere — and the
+// unchanged plain-text reporter otherwise, including when the window could
+// not start. The order is window, then text; no DE-specific dialog tool is
+// ever used.
+func (c *Command) runProgress(options *Options, reporter *Reporter, title, prompt string, work func(ui.Progress) (int, error)) (int, error) {
+	env := c.environment()
+	forced := options.NoGUI || options.NonInteractive || reporter.AsJSON
+	if ui.ShouldAttemptGUI(env, forced) {
+		var (
+			code    int
+			workErr error
+		)
+		declined := false
+		_, started := c.startWindow(title, func(progress ui.Progress) int {
+			if confirmer, ok := progress.(ui.Confirmer); ok && !confirmer.Confirm(prompt) {
+				declined = true
+				return ExitError
+			}
+			code, workErr = work(progress)
+			return code
+		})
+		if started && declined {
+			reporter.Say("cancelled — nothing was changed")
+			return ExitError, nil
+		}
+		if started {
+			return code, workErr
+		}
+		if note := ui.WindowSkipNote(env); note != "" {
+			reporter.Warn(note)
+		}
 	}
+	return work(c.progress(options, reporter))
 }
 
 func (c *Command) planOptions(options *Options, gameDir string, located *Located) plan.Options {
@@ -536,22 +574,30 @@ func (c *Command) doInstall(options *Options, reporter *Reporter, gameDir, packa
 		return ExitOK, nil
 	}
 
-	c.noteDialogSkip(reporter, options)
-	progress := c.progress(options, reporter)
-	taken, err := plan.ApplyPlan(built, progress)
+	code, err := c.runProgress(options, reporter, "Megabonk Levels installer", "Install Megabonk Levels?", func(progress ui.Progress) (int, error) {
+		taken, err := plan.ApplyPlan(built, progress)
+		if err != nil {
+			return 0, err
+		}
+		if reporter.AsJSON {
+			steps := []any{}
+			for _, action := range taken {
+				steps = append(steps, action.Document())
+			}
+			reporter.json(withPlan(map[string]any{"ok": true, "dry_run": false, "taken": steps}, built))
+			return ExitOK, nil
+		}
+		c.reportInstall(reporter, built, taken, pkg)
+		return ExitOK, nil
+	})
+	if errors.Is(err, plan.ErrCancelled) {
+		reporter.Say("install cancelled — files already placed were rolled back")
+		return ExitError, nil
+	}
 	if err != nil {
 		return 0, err
 	}
-	if reporter.AsJSON {
-		steps := []any{}
-		for _, action := range taken {
-			steps = append(steps, action.Document())
-		}
-		reporter.json(withPlan(map[string]any{"ok": true, "dry_run": false, "taken": steps}, built))
-		return ExitOK, nil
-	}
-	c.reportInstall(reporter, built, taken, pkg)
-	return ExitOK, nil
+	return code, nil
 }
 
 func (c *Command) reportInstall(reporter *Reporter, built *plan.Plan, taken []plan.Action, pkg *manifest.Package) {
@@ -589,24 +635,32 @@ func (c *Command) doUninstall(options *Options, reporter *Reporter, gameDir stri
 		reporter.Say("nothing to uninstall: no installer record in " + gameDir)
 		return ExitOK, nil
 	}
-	c.noteDialogSkip(reporter, options)
-	progress := c.progress(options, reporter)
-	removed, err := plan.Uninstall(gameDir, progress)
+	code, err := c.runProgress(options, reporter, "Megabonk Levels uninstaller", "Uninstall Megabonk Levels?", func(progress ui.Progress) (int, error) {
+		removed, err := plan.Uninstall(gameDir, progress)
+		if err != nil {
+			return 0, err
+		}
+		reporter.Say(fmt.Sprintf("removed %d item(s) from %s", len(removed), gameDir))
+		for _, path := range removed {
+			reporter.Say("  " + path)
+		}
+		if reporter.AsJSON {
+			items := make([]any, 0, len(removed))
+			for _, path := range removed {
+				items = append(items, path)
+			}
+			reporter.json(map[string]any{"ok": true, "removed": items})
+		}
+		return ExitOK, nil
+	})
+	if errors.Is(err, plan.ErrCancelled) {
+		reporter.Say("uninstall stopped — run --uninstall again to finish")
+		return ExitError, nil
+	}
 	if err != nil {
 		return 0, err
 	}
-	reporter.Say(fmt.Sprintf("removed %d item(s) from %s", len(removed), gameDir))
-	for _, path := range removed {
-		reporter.Say("  " + path)
-	}
-	if reporter.AsJSON {
-		items := make([]any, 0, len(removed))
-		for _, path := range removed {
-			items = append(items, path)
-		}
-		reporter.json(map[string]any{"ok": true, "removed": items})
-	}
-	return ExitOK, nil
+	return code, nil
 }
 
 // Main runs one installer invocation and reports its exit code.

@@ -5,17 +5,6 @@ import (
 	"testing"
 )
 
-func found(names ...string) Locate {
-	return func(name string) string {
-		for _, candidate := range names {
-			if candidate == name {
-				return "/usr/bin/" + name
-			}
-		}
-		return ""
-	}
-}
-
 var desktop = map[string]string{"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus"}
 
 type recorder struct{ lines []string }
@@ -66,6 +55,10 @@ func TestNullProgressSwallowsEverything(t *testing.T) {
 }
 
 func TestHasDisplayReadsTheSessionEnvironment(t *testing.T) {
+	restore := GOOS
+	GOOS = "linux"
+	defer func() { GOOS = restore }()
+
 	cases := []struct {
 		env  map[string]string
 		want bool
@@ -78,6 +71,13 @@ func TestHasDisplayReadsTheSessionEnvironment(t *testing.T) {
 	for _, item := range cases {
 		if got := HasDisplay(item.env); got != item.want {
 			t.Errorf("HasDisplay(%v) = %v, want %v", item.env, got, item.want)
+		}
+	}
+
+	for _, platform := range []string{"darwin", "windows"} {
+		GOOS = platform
+		if !HasDisplay(map[string]string{}) {
+			t.Errorf("on %s any session may show a window", platform)
 		}
 	}
 }
@@ -97,70 +97,75 @@ func TestNonInteractiveEnvironmentForcesText(t *testing.T) {
 	}
 }
 
-func TestFindDialogBinaryPrefersTheOrderAndNeedsDBusForKdialog(t *testing.T) {
-	if got := FindDialogBinary(found("zenity", "yad"), desktop); got != "/usr/bin/zenity" {
-		t.Errorf("zenity should win: %q", got)
+func TestShouldAttemptGUINeedsADesktop(t *testing.T) {
+	restoreGOOS := GOOS
+	GOOS = "linux"
+	defer func() { GOOS = restoreGOOS }()
+
+	cases := []struct {
+		env    map[string]string
+		forced bool
+		want   bool
+	}{
+		{desktop, false, true},
+		{map[string]string{"WAYLAND_DISPLAY": "wayland-0"}, false, true},
+		{map[string]string{}, false, false},
+		{map[string]string{"DISPLAY": ":0", "SSH_CONNECTION": "10.0.0.1 5000 10.0.0.2 22"}, false, true},
+		{desktop, true, false},
+		{map[string]string{"DISPLAY": ":0", "MEGABONK_NON_INTERACTIVE": "1"}, false, false},
 	}
-	if got := FindDialogBinary(found("yad"), desktop); got != "/usr/bin/yad" {
-		t.Errorf("yad = %q", got)
+	for _, item := range cases {
+		if got := ShouldAttemptGUI(item.env, item.forced); got != item.want {
+			t.Errorf("ShouldAttemptGUI(%v, forced=%v) = %v, want %v", item.env, item.forced, got, item.want)
+		}
 	}
-	if got := FindDialogBinary(found("kdialog", "qdbus-qt6"), desktop); got != "/usr/bin/kdialog" {
-		t.Errorf("kdialog with a qdbus tool = %q", got)
+
+	for _, platform := range []string{"darwin", "windows"} {
+		GOOS = platform
+		if !ShouldAttemptGUI(map[string]string{}, false) {
+			t.Errorf("on %s a plain session must be offered the window", platform)
+		}
+		if ShouldAttemptGUI(map[string]string{}, true) {
+			t.Errorf("on %s --no-gui must still win", platform)
+		}
 	}
-	if got := FindDialogBinary(found("kdialog", "qdbus-qt6"), map[string]string{"DISPLAY": ":0"}); got != "" {
-		t.Errorf("kdialog without a session bus is unusable: %q", got)
-	}
-	if got := FindDialogBinary(found("kdialog"), desktop); got != "" {
-		t.Errorf("kdialog without a qdbus tool is unusable: %q", got)
-	}
-	if got := FindDialogBinary(found(), desktop); got != "" {
-		t.Errorf("nothing installed = %q", got)
-	}
+
 }
 
-func TestDialogSkipNoteOnlyOnADesktopWithNoBackend(t *testing.T) {
-	restore := HasTTY
-	HasTTY = func() bool { return true }
-	defer func() { HasTTY = restore }()
+func TestWindowSkipNoteOnlyWhenADesktopGotText(t *testing.T) {
+	restoreGOOS := GOOS
+	GOOS = "linux"
+	defer func() { GOOS = restoreGOOS }()
 
-	if note := DialogSkipNote(map[string]string{}, found()); note != "" {
+	if note := WindowSkipNote(map[string]string{}); note != "" {
 		t.Errorf("with no display there is nothing to apologise for: %q", note)
 	}
-	if note := DialogSkipNote(map[string]string{"DISPLAY": ":0"}, found("zenity")); note != "" {
-		t.Errorf("a dialog exists, so no note: %q", note)
-	}
-	if note := DialogSkipNote(map[string]string{"DISPLAY": ":0", "MEGABONK_NON_INTERACTIVE": "1"}, found()); note != "" {
+	if note := WindowSkipNote(map[string]string{"DISPLAY": ":0", "MEGABONK_NON_INTERACTIVE": "1"}); note != "" {
 		t.Errorf("plain text was deliberate: %q", note)
 	}
-	note := DialogSkipNote(map[string]string{"DISPLAY": ":0"}, found())
-	for _, want := range []string{"zenity", "--no-gui", "sudo", "no progress dialog found"} {
+	note := WindowSkipNote(map[string]string{"DISPLAY": ":0"})
+	for _, want := range []string{"GTK 3", "--no-gui", "stdout", "progress window"} {
 		if !strings.Contains(note, want) {
 			t.Errorf("note %q should name %q", note, want)
 		}
 	}
 
-	HasTTY = func() bool { return false }
-	if note := DialogSkipNote(map[string]string{"DISPLAY": ":0"}, found()); note != "" {
-		t.Errorf("without a controlling terminal plain text is not a surprise: %q", note)
+	GOOS = "darwin"
+	note = WindowSkipNote(map[string]string{})
+	if strings.Contains(note, "GTK 3") {
+		t.Errorf("macOS should not be told about GTK: %q", note)
+	}
+	if !strings.Contains(note, "--no-gui") || !strings.Contains(note, "stdout") {
+		t.Errorf("the macOS note still explains the fallback: %q", note)
 	}
 }
 
 func TestPickProgressAlwaysReportsInText(t *testing.T) {
-	restore := HasTTY
-	HasTTY = func() bool { return true }
-	defer func() { HasTTY = restore }()
-
 	for _, env := range []map[string]string{desktop, {"DISPLAY": ":0"}, {}} {
 		progress := PickProgress(env, false, func(string) {})
 		if _, ok := progress.(*TextProgress); !ok {
 			t.Errorf("PickProgress(%v) = %T, want *TextProgress", env, progress)
 		}
-	}
-}
-
-func TestHasTTYDoesNotPanicWithoutATerminal(t *testing.T) {
-	if got := hasTTY(); got {
-		t.Log("/dev/tty is attached in this test run")
 	}
 }
 

@@ -1,24 +1,19 @@
 // Package ui reports progress the same way over ssh and on a desktop session.
 //
-// Everything the installer says goes through plain text, so nothing depends on
-// a dialog being available. The desktop dialog path (zenity, yad, or KDE's
-// kdialog over D-Bus) is the companion task's; here the question is only
-// whether this session could have shown one, so the run can say why it did not.
+// Everything the installer says can go through plain text, so nothing depends
+// on a dialog being available. The desktop path is the MyGo native-UI window
+// in package window, chosen by the cli driver through ShouldAttemptGUI and the
+// StartWindow seam; DE-specific dialog tools (kdialog, zenity, yad) are not
+// part of the Go chain — the native window is the only GUI path.
 package ui
 
 import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+	"runtime"
 	"strings"
 )
-
-// DialogBinaries are the progress dialogs the installer would use, in order.
-var DialogBinaries = []string{"zenity", "yad", "kdialog"}
-
-// QdbusBinaries are the D-Bus tools kdialog needs.
-var QdbusBinaries = []string{"qdbus-qt6", "qdbus"}
 
 // Progress is what the installer reports through. Start opens a run, Step marks
 // one action done, Finish closes it.
@@ -26,6 +21,18 @@ type Progress interface {
 	Start(total int, label string)
 	Step(label string)
 	Finish(message string, ok bool)
+}
+
+// Cancellable is implemented by reporters the user can abort between steps;
+// plan.ApplyPlan polls it and rolls back through the recorded uninstall.
+type Cancellable interface {
+	Cancelled() bool
+}
+
+// Confirmer is implemented by reporters that can ask before anything changes;
+// the window shows Yes and Cancel buttons, text reporters never ask.
+type Confirmer interface {
+	Confirm(prompt string) bool
 }
 
 // NullProgress swallows everything.
@@ -97,26 +104,18 @@ func Environ() map[string]string {
 	return env
 }
 
-// HasDisplay reports whether the session looks like a desktop one.
+// GOOS is the platform the checks below reason about; tests replace it.
+var GOOS = runtime.GOOS
+
+// HasDisplay reports whether this session can show a window: an X11 or
+// Wayland session on Linux, any session on macOS and Windows, where the
+// window attempt itself is a harmless probe that falls back on failure.
 func HasDisplay(env map[string]string) bool {
+	switch GOOS {
+	case "windows", "darwin":
+		return true
+	}
 	return env["DISPLAY"] != "" || env["WAYLAND_DISPLAY"] != ""
-}
-
-// HasTTY probes the controlling terminal without consuming the installer's
-// stdin. Tests replace it.
-var HasTTY = hasTTY
-
-func hasTTY() bool {
-	handle, err := os.OpenFile("/dev/tty", ttyFlags, 0)
-	if err != nil {
-		return false
-	}
-	defer handle.Close()
-	info, err := handle.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
 }
 
 // NonInteractive reports whether the environment forces plain text.
@@ -128,63 +127,31 @@ func NonInteractive(env map[string]string) bool {
 	return false
 }
 
-// Locate is a PATH lookup; tests replace it with their own table.
-type Locate func(name string) string
-
-func defaultLocate(name string) string {
-	if found, err := exec.LookPath(name); err == nil {
-		return found
-	}
-	return ""
+// ShouldAttemptGUI reports whether this session is one where opening the MyGo
+// progress window makes sense: a desktop session, with nothing on the command line forcing plain text.
+func ShouldAttemptGUI(env map[string]string, forced bool) bool {
+	return !forced && !NonInteractive(env) && HasDisplay(env)
 }
 
-// FindDialogBinary is the first usable progress dialog, or "" when there is
-// none. kdialog only counts when D-Bus and a qdbus tool are there to drive it.
-func FindDialogBinary(locate Locate, env map[string]string) string {
-	if locate == nil {
-		locate = defaultLocate
-	}
-	for _, name := range DialogBinaries {
-		found := locate(name)
-		if found == "" {
-			continue
-		}
-		if name == "kdialog" && !kdialogUsable(locate, env) {
-			continue
-		}
-		return found
-	}
-	return ""
-}
-
-func kdialogUsable(locate Locate, env map[string]string) bool {
-	if env["DBUS_SESSION_BUS_ADDRESS"] == "" {
-		return false
-	}
-	for _, tool := range QdbusBinaries {
-		if locate(tool) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-// DialogSkipNote says why no dialog was chosen on what looks like a desktop, or
-// "" when a dialog runs or plain text was deliberate.
-func DialogSkipNote(env map[string]string, locate Locate) string {
-	if NonInteractive(env) || !HasDisplay(env) || !HasTTY() {
+// WindowSkipNote explains why a desktop-looking session still got plain text
+// after the progress window failed to start, or "" when text was deliberate.
+func WindowSkipNote(env map[string]string) string {
+	if NonInteractive(env) || !HasDisplay(env) {
 		return ""
 	}
-	if FindDialogBinary(locate, env) != "" {
-		return ""
+	if GOOS == "linux" {
+		return "the progress window could not start; progress stays on stdout — " +
+			"the window needs GTK 3, e.g. 'sudo dnf install gtk3' or 'sudo apt install libgtk-3-0'; " +
+			"pass --no-gui to silence this note"
 	}
-	return "no progress dialog found (zenity, yad, or kdialog with a qdbus tool); progress stays on stdout — " +
-		"install one, e.g. 'sudo dnf install zenity' or 'sudo apt install zenity', or pass --no-gui to silence this"
+	return "the progress window could not start; progress stays on stdout; " +
+		"pass --no-gui to silence this note"
 }
 
-// PickProgress chooses how to report progress. A dialog is the companion task;
-// until it lands every run reports in plain text, and --no-gui,
-// --non-interactive or MEGABONK_NON_INTERACTIVE make that explicit.
+// PickProgress chooses the plain-text reporter. The window path is the cli
+// driver's; every fallback — including a window that could not start —
+// reports in text, and --no-gui, --non-interactive or MEGABONK_NON_INTERACTIVE
+// make that explicit.
 func PickProgress(env map[string]string, forced bool, writer func(line string)) Progress {
 	return NewTextProgress(writer)
 }

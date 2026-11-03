@@ -210,16 +210,16 @@ Three backends, tried in order: zenity and yad are driven by writing `NN` and `#
 ## The Go port
 
 `go/` holds a port of the same installer in Go: `go/cmd/megabonk-installer` builds one
-static binary per platform with no runtime dependency and no external module — the module
-requires nothing but the standard library, and `task installer:verify-static` fails if that
-stops being true. It is a companion to the Python reference, not a replacement: `install.sh`
+cgo-free binary per platform. The one external module is MyGo (`github.com/egoist/mygo`),
+used only for the progress window below, and `task installer:verify-static` fails if any
+other direct dependency appears or if a Linux binary needs anything at load time beyond glibc. It is a companion to the Python reference, not a replacement: `install.sh`
 still runs `scripts/player_installer`, the player package zip carries no Go binary, and the
 binaries land in gitignored `.tools/installer/`.
 
 ```sh
 task installer:build            # cross-compile into .tools/installer
 task installer:test             # gofmt check, go vet, go test
-task installer:verify-static    # CGO off, no dependencies, not dynamically linked
+task installer:verify-static    # CGO off, MyGo the only module, glibc-only load deps
 task installer:parity           # both installers over the same scenarios
 ```
 
@@ -265,8 +265,15 @@ never asked. Go unit tests cover only what is awkward to reach through a subproc
 arithmetic, the VDF and registry parsers, the flag seam above — rather than mirroring
 `tests/test_player_installer_*.py` one for one.
 
-Dialogs are the exception: the Go `PickProgress` always returns plain numbered text. The
-zenity/yad/kdialog backends stay Python-only until the GUI work is ported.
+### Progress window
+
+The Go binary reports progress in a MyGo native-UI window — title, step label, percentage bar and a Cancel button — drawn with GTK 3 on Linux, Metal on macOS and Direct3D 11 on Windows. It never uses MyGo's webview mode, so WebKitGTK is never loaded. The selection order is the window, then plain numbered text; kdialog, zenity and yad are not used by the Go binary (the Python reference keeps its dialog backends).
+
+On Linux the window needs a display (`DISPLAY` or `WAYLAND_DISPLAY`) and GTK 3, which the desktops players run already carry; GTK is `dlopen`ed at run time, so the binary itself loads only glibc and nothing depends on GTK being installed. `--no-gui`, `--non-interactive`, `MEGABONK_NON_INTERACTIVE=1`, `--json`, no display, or an app that cannot start (missing GTK) all give the unchanged text reporter, with the same `N/M label` lines and exit codes.
+
+The window opens on a prompt — "Install Megabonk Levels?" or "Uninstall Megabonk Levels?" — with Yes and Cancel buttons, and nothing is touched until Yes is pressed. Cancel or closing the window at the prompt exits 1 with "nothing was changed". There is no terminal check: a double-click launch gets the window, and scripted runs opt out with the variable or flags above.
+
+Cancel, or closing the window, once the run has started is only a request: the executor checks it between actions, never mid-copy. A cancelled install writes a partial install record for the actions already done and runs the normal record-driven uninstall, so the game directory returns to its prior state. A cancelled uninstall stops between steps and does not roll back. `MEGABONK_UI_STEP_DELAY` (a Go duration such as `2s`) pauses after each step so a person or a script can press Cancel mid-run; it is unset in normal use. On Windows MyGo logs `drawing without the GPU` lines to stderr when Direct3D 11 cannot create a swap chain (a VM or a service session), so stderr is not empty there even though stdout matches the text reporter. Packaging through `mygo build -platform` and its `.deb`/desktop-entry output was evaluated and not adopted; the binaries still come from plain `go build`.
 
 ## What is verified, and what is not
 

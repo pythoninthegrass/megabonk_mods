@@ -15,8 +15,10 @@ tasks:
     summary: |
       Usage: task installer:build [OUT=.tools/installer] [TARGETS="linux/amd64 ..."]
 
-      Builds one pure-Go binary per target with CGO disabled, so each is a single
-      static file a player can download and run. The binaries land in
+      Builds one pure-Go binary per target with CGO disabled. Each is a single
+      file a player can download and run; on Linux the only load-time dependency
+      is glibc (purego's cgo-free dlopen), and GUI libraries are loaded only at
+      runtime when the progress window opens. The binaries land in
       .tools/installer and are never added to the player package zip: install.sh
       keeps running the Python reference.
 
@@ -53,14 +55,17 @@ tasks:
         go test ./...
 
   verify-static:
-    desc: "Check the built binaries are static and the Go module has no dependencies"
+    desc: "Check the built binaries are cgo-free with glibc-only load deps and MyGo is the only external module"
     depends: [build]
     cmds:
       - |-
         set -eu
         cd go
-        modules="$(go list -m all | wc -l | tr -d ' ')"
-        [ "$modules" = 1 ] || { echo "go.mod has external dependencies:" >&2; go list -m all >&2; exit 1; }
+        # MyGo is the one external dependency the installer allows; anything
+        # else appearing as a direct requirement needs justifying here first.
+        direct="$(go mod edit -json | jq -r '.Require[] | select(.Indirect != true) | .Path' | sort)"
+        allowed="github.com/egoist/mygo"
+        [ "$direct" = "$allowed" ] || { echo "unexpected direct dependencies:" >&2; echo "$direct" >&2; exit 1; }
         cd ..
         for target in {{.TARGETS}}; do
           os="${target%/*}"
@@ -71,12 +76,14 @@ tasks:
           [ -f "$binary" ] || { echo "$binary is missing" >&2; exit 1; }
           go version -m "$binary" | grep -q 'CGO_ENABLED=0' || { echo "$binary was built with cgo" >&2; exit 1; }
           if [ "$os" = linux ]; then
-            if file "$binary" | grep -q 'dynamically linked'; then
-              echo "$binary is dynamically linked" >&2
-              exit 1
-            fi
+            # purego's cgo-free dlopen makes the ELF need glibc (libc/libdl/
+            # libpthread) at load time; anything beyond the glibc set —
+            # libgtk-3 or libwebkit2gtk in DT_NEEDED — would mean the build
+            # linked a GUI library or the webview path, which is not allowed.
+            extra="$(ldd "$binary" | awk '{n=$1; sub(/.*\//,"",n); print n}' | grep -Ev '^$|^(linux-vdso|ld-linux|libc|libdl|libpthread|libm|librt|libresolv|libutil)[^/]*\.so' || true)"
+            [ -z "$extra" ] || { echo "$binary has unexpected dynamic dependencies:" >&2; echo "$extra" >&2; exit 1; }
           fi
-          echo "static: $binary"
+          echo "verified: $binary"
         done
 
   parity:

@@ -7,6 +7,7 @@ package plan
 
 import (
 	"archive/zip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -473,8 +474,20 @@ func Apply(packageDir string, options Options, progress ui.Progress) ([]Action, 
 	return ApplyPlan(built, progress)
 }
 
+// ErrCancelled reports a between-steps cancel. A cancelled install is rolled
+// back through the recorded uninstall before this error surfaces.
+var ErrCancelled = errors.New("cancelled")
+
+// cancelledProgress reports whether the reporter was asked to abort; only the
+// window reporter is ever cancellable.
+func cancelledProgress(progress ui.Progress) bool {
+	cancellable, ok := progress.(ui.Cancellable)
+	return ok && cancellable.Cancelled()
+}
+
 // ApplyPlan carries out a plan the caller has already inspected, then records
-// what was installed.
+// what was installed. A cancellable progress can abort between actions; the
+// completed actions are then rolled back through the recorded uninstall.
 func ApplyPlan(built *Plan, progress ui.Progress) ([]Action, error) {
 	if progress != nil {
 		total := len(built.Actions)
@@ -484,7 +497,11 @@ func ApplyPlan(built *Plan, progress ui.Progress) ([]Action, error) {
 		progress.Start(total, "install "+built.Manifest.Label())
 	}
 	var overrideVia *string
+	done := []Action{}
 	for _, action := range built.Actions {
+		if cancelledProgress(progress) {
+			return nil, rollback(built, done, overrideVia)
+		}
 		result, err := execute(action, built)
 		if err != nil {
 			return nil, err
@@ -492,6 +509,7 @@ func ApplyPlan(built *Plan, progress ui.Progress) ([]Action, error) {
 		if action.Kind == "enable-dll-override" {
 			overrideVia = result
 		}
+		done = append(done, action)
 		if progress != nil {
 			progress.Step(action.Label())
 		}
@@ -509,6 +527,24 @@ func ApplyPlan(built *Plan, progress ui.Progress) ([]Action, error) {
 		progress.Finish(message, true)
 	}
 	return built.Actions, nil
+}
+
+// rollback records what the completed actions placed and removes it through
+// the same uninstall path an explicit --uninstall takes, so a between-steps
+// cancel never leaves a half-installed game directory behind.
+func rollback(built *Plan, done []Action, overrideVia *string) error {
+	if len(done) == 0 && content.LoadRecord(built.GameDir) == nil {
+		return ErrCancelled
+	}
+	if len(done) > 0 {
+		if err := writePartialRecord(built, done, overrideVia); err != nil {
+			return err
+		}
+	}
+	if _, err := Uninstall(built.GameDir, nil); err != nil {
+		return err
+	}
+	return ErrCancelled
 }
 
 func execute(action Action, built *Plan) (*string, error) {
@@ -795,6 +831,101 @@ func writeRecord(built *Plan, overrideVia *string) error {
 	return err
 }
 
+// writePartialRecord is writeRecord for a cancelled run: the lists are derived
+// from the actions that actually completed (merged with any earlier record),
+// so the rollback removes exactly what was placed and nothing that was not.
+func writePartialRecord(built *Plan, done []Action, overrideVia *string) error {
+	game := built.GameDir
+	record := content.LoadRecord(game)
+	if record == nil {
+		record = &content.Record{}
+	}
+	record.Schema = content.RecordSchema
+	record.PackageID = built.Manifest.PackageID
+	record.ModVersion = built.Manifest.ModVersion
+	record.MelonloaderVersion = built.Manifest.MelonloaderVersion
+	record.GameBuildID = built.Manifest.GameBuildID
+	record.InstalledAt = time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	record.GameDir = game
+
+	files := append([]string{}, record.Files...)
+	levels := append([]string{}, record.Levels...)
+	packs := map[string]content.PackEntry{}
+	for name, entry := range record.Packs {
+		packs[name] = entry
+	}
+	dotnet := false
+	packRoot := content.LevelPacksPath(game)
+	for _, action := range done {
+		if action.Kind == "install-runtime" {
+			dotnet = true
+		}
+		if action.Kind != "install-file" {
+			continue
+		}
+		name := relative(game, action.Path)
+		switch {
+		case ppath.Parent(action.Path) == content.LevelsPath(game):
+			if !contains(levels, name) {
+				levels = append(levels, name)
+			}
+		case ppath.Parent(ppath.Parent(action.Path)) == packRoot:
+			packID := ppath.Name(ppath.Parent(action.Path))
+			entry := packs[packID]
+			placed := append([]string{}, entry.Files...)
+			if !contains(placed, name) {
+				placed = append(placed, name)
+			}
+			entry.Files = placed
+			entry.Dir = relative(game, ppath.Parent(action.Path))
+			packs[packID] = entry
+		default:
+			if !contains(files, name) {
+				files = append(files, name)
+			}
+		}
+	}
+	record.Files = files
+	record.Levels = levels
+	record.Packs = packs
+
+	if dotnet {
+		runtime, err := built.Manifest.Vendor(dotnetKind)
+		if err != nil {
+			return err
+		}
+		record.Runtime = &content.Runtime{
+			Mode:         built.RuntimeMode,
+			Path:         built.RuntimeTarget,
+			Version:      runtime.Version,
+			LaunchOption: built.LaunchOption,
+		}
+	}
+
+	prefix := ""
+	if built.RuntimeMode == RuntimeModePrefix {
+		prefix = built.Prefix
+	}
+	applied := false
+	if prefix != "" {
+		value, found := proton.ReadDllOverride(prefix, proton.DLLName, "")
+		applied = found && value == proton.DLLValue
+	}
+	record.DllOverride = &content.DllOverride{Applied: applied, Name: proton.DLLName, Value: proton.DLLValue}
+	if prefix != "" {
+		value := prefix
+		record.DllOverride.Prefix = &value
+	}
+	via := overrideVia
+	if via == nil && applied {
+		already := "already set"
+		via = &already
+	}
+	record.DllOverride.Via = via
+	_, err := content.SaveRecord(game, record)
+	return err
+}
+
 func contains(items []string, wanted string) bool {
 	for _, item := range items {
 		if item == wanted {
@@ -805,7 +936,8 @@ func contains(items []string, wanted string) bool {
 }
 
 // Uninstall removes exactly what the installer recorded placing; a directory
-// with no record is left alone.
+// with no record is left alone. A cancellable progress can stop it between
+// groups, and the record survives so a rerun finishes the job.
 func Uninstall(game string, progress ui.Progress) ([]string, error) {
 	game = ppath.Normalize(game)
 	record := content.LoadRecord(game)
@@ -851,6 +983,9 @@ func Uninstall(game string, progress ui.Progress) ([]string, error) {
 	if progress != nil {
 		progress.Step("MelonLoader")
 	}
+	if cancelledProgress(progress) {
+		return removed, ErrCancelled
+	}
 
 	for _, name := range record.Files {
 		remove(ppath.Join(game, name), false)
@@ -866,6 +1001,9 @@ func Uninstall(game string, progress ui.Progress) ([]string, error) {
 	if progress != nil {
 		progress.Step("mod files")
 	}
+	if cancelledProgress(progress) {
+		return removed, ErrCancelled
+	}
 
 	for _, name := range record.Levels {
 		remove(ppath.Join(game, name), false)
@@ -880,6 +1018,9 @@ func Uninstall(game string, progress ui.Progress) ([]string, error) {
 	if progress != nil {
 		progress.Step("levels and packs")
 	}
+	if cancelledProgress(progress) {
+		return removed, ErrCancelled
+	}
 
 	if record.Runtime != nil && record.Runtime.Path != "" {
 		target := record.Runtime.Path
@@ -889,6 +1030,9 @@ func Uninstall(game string, progress ui.Progress) ([]string, error) {
 	}
 	if progress != nil {
 		progress.Step(".NET runtime")
+	}
+	if cancelledProgress(progress) {
+		return removed, ErrCancelled
 	}
 
 	if record.DllOverride != nil && record.DllOverride.Prefix != nil && *record.DllOverride.Prefix != "" {
@@ -906,6 +1050,9 @@ func Uninstall(game string, progress ui.Progress) ([]string, error) {
 	}
 	if progress != nil {
 		progress.Step("version.dll override")
+	}
+	if cancelledProgress(progress) {
+		return removed, ErrCancelled
 	}
 
 	remove(content.RecordFilePath(game), false)
