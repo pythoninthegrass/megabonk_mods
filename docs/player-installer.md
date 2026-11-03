@@ -70,7 +70,7 @@ megabonk-levels-<mod>-ml<melonloader>-linux/
 | Key | Meaning |
 | --- | --- |
 | `schema` | `megabonk-player-package/1`. An unknown schema is an error, not a warning: an old installer must not half-install a package from a newer build. |
-| `platform` | The OS this package targets. The Linux installer accepts only `linux`. |
+| `platform` | The OS this package targets: `linux` or `windows`. Both installers accept either value; the manifest differs only in this key. |
 | `package_id` | Name in the install record and in `--check` output. |
 | `mod_version`, `melonloader_version`, `game_buildid` | Recorded at install time and echoed back by `--check` and `--uninstall`. `game_buildid` is the depot build id the shipped levels were authored against (`GAME_BUILD_ID` in `scripts/build_thps_level.py`), so a package and a level file agree about which game they expect. |
 | `generated` | UTC timestamp of the build. Set `SOURCE_DATE_EPOCH` for a byte-identical rebuild. |
@@ -139,6 +139,19 @@ Vendor archives are taken from `.tools/vendor-cache/` and only verified there, n
 When a download does happen it goes through `scripts/asset_download.py`, the only code in `scripts/` that touches the network (a test pins that). The rules: https only, TLS 1.2 floor with certificate verification; the status is checked before the body is read, so a 404, a login or captive-portal page, or an empty body reads as a missing asset rather than a checksum mismatch, and nothing poisoned ever lands in the cache; the body is capped, and an archive whose digest does not match the manifest pin is refused before it is cached. Redirects stay on the original host except for an explicit CDN allowance — GitHub release assets hand off to `release-assets.githubusercontent.com` and dotnetcli to azureedge/microsoft hosts — so an off-list redirect is refused as a missing asset. `install_melonloader.py` uses the same fetcher. The `url` in a manifest entry stays provenance for the player side: the installer itself never downloads.
 
 The zip is deterministic — sorted entries, fixed timestamps, modes 0755 for `install.sh` and 0644 elsewhere — so two builds of the same inputs are byte-identical once `SOURCE_DATE_EPOCH` is pinned.
+
+## Windows package
+
+```sh
+task package:windows
+task package:windows LEVELS="example-forest.mblevel.json" PACKS=thps MOD_VERSION=0.4.2
+```
+
+`task package:windows` builds the mod and the `windows/amd64` Go installer, then runs `scripts/build_player_package.py --platform windows --installer-binary <exe>`. The package has the same `vendor/`, `content/` and `manifest.json` layout as the Linux one with `"platform": "windows"`, but `install.exe` replaces `install.sh` and the bundled Python installer. It lands in `.tools/player-package-windows/` (override with `OUTPUT_WINDOWS`), with `megabonk-levels-<mod>-ml<loader>-windows.zip` beside it. Windows players unzip it and double-click `install.exe`: with no `--package`, the Go installer takes the folder it runs from.
+
+On native Windows the installer finds Steam through `HKCU\Software\Valve\Steam` (then `HKLM\...\WOW6432Node\Valve\Steam` and the Program Files default) and reads `libraryfolders.vdf` for libraries on other drives. It has no prefix, no `version.dll` override and no launch option; every write is inside the game directory. MelonLoader's bootstrap otherwise installs .NET 6 machine-wide under Program Files on first launch, so the installer pre-seeds the vendored runtime into `MelonLoader/Dependencies/dotnet`, the path the loader itself uses; it then logs `Using HostFXR Path: <game>\MelonLoader\Dependencies\dotnet\host\fxr\6.0.36\hostfxr.dll` and runs no runtime installer. `--uninstall` also removes the files the loader creates at first launch (`UserData/Loader.cfg`, and `Plugins/`, `UserData/Levels`, `UserData/LevelPacks`, `UserData` when empty), so the game returns to vanilla while a player's own plugins, preferences and levels stay.
+
+The first launch downloads Cpp2IL from GitHub and takes about 35 seconds, so it needs network access. The Windows flow has been verified in a software-rendered Windows 11 guest, not on real hardware.
 
 ## Linux behaviour
 

@@ -109,8 +109,8 @@ class PackageManifest:
         if schema != PACKAGE_SCHEMA:
             raise ManifestError(f"unrecognised package manifest schema {schema!r} (this installer understands {PACKAGE_SCHEMA!r})")
         platform = document["platform"]
-        if platform != "linux":
-            raise ManifestError(f"this package is for {platform!r}; the Linux installer needs a linux package")
+        if platform not in ("linux", "windows"):
+            raise ManifestError(f"unrecognised package platform {platform!r}; expected 'linux' or 'windows'")
         vendors = tuple(_vendor(entry, index) for index, entry in enumerate(document["vendors"] or ()))
         kinds = {vendor.kind for vendor in vendors}
         for required in ("melonloader", "dotnet"):

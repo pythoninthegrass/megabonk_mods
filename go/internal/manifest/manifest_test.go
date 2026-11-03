@@ -157,11 +157,20 @@ func TestFromDocRejectsAForeignSchema(t *testing.T) {
 	}
 }
 
-func TestFromDocRejectsAWrongPlatform(t *testing.T) {
+func TestFromDocAcceptsAWindowsPackage(t *testing.T) {
 	document := manifestDoc()
 	document["platform"] = "windows"
+	manifest, err := FromDoc(decoded(t, document))
+	if err != nil || manifest.Platform != "windows" {
+		t.Errorf("manifest = %+v, err = %v, want a windows package", manifest, err)
+	}
+}
+
+func TestFromDocRejectsAWrongPlatform(t *testing.T) {
+	document := manifestDoc()
+	document["platform"] = "darwin"
 	_, err := FromDoc(decoded(t, document))
-	want := `this package is for "windows"; the Linux installer needs a linux package`
+	want := `unrecognised package platform "darwin"; expected "linux" or "windows"`
 	if err == nil || err.Error() != want {
 		t.Errorf("err = %v, want %q", err, want)
 	}

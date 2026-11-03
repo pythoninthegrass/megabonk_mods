@@ -1,4 +1,4 @@
-"""Build the player-facing Linux package: installer, mod, MelonLoader, .NET, content."""
+"""Build the player-facing package (Linux or Windows): installer, mod, MelonLoader, .NET, content."""
 
 from __future__ import annotations
 
@@ -41,6 +41,9 @@ DOTNET_WINDOWS_URL = (
 )
 DOTNET_WINDOWS_SHA256 = "c077ccc342c5571ceb7a3c06d1dfbc99b989ed5a6e0f3a0b0b450531c1259615"
 MELONLOADER_ASSET = "MelonLoader.x64.zip"
+
+PLATFORMS = ("linux", "windows")
+WINDOWS_INSTALLER_NAME = "install.exe"
 
 MIN_PYTHON = (3, 11)
 _MIN_PYTHON_TEXT = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}"
@@ -266,6 +269,14 @@ def add_packs(staging: Path, bundles_dir: Path, packs_src: Path, platform: str, 
     return entries
 
 
+def add_windows_installer(staging: Path, binary: Path | None) -> None:
+    if binary is None:
+        raise BuildError("A Windows package needs the installer binary: pass --installer-binary.")
+    if not binary.is_file():
+        raise MissingInput(f"No installer binary at {binary}. Run `task installer:build` first.")
+    shutil.copy2(binary, staging / WINDOWS_INSTALLER_NAME)
+
+
 def add_installer(staging: Path) -> None:
     target = staging / "installer/player_installer"
     target.mkdir(parents=True, exist_ok=True)
@@ -293,22 +304,30 @@ def assemble(
     pack_names: list[str],
     allow_download: bool,
     mod_version: str,
+    platform: str = "linux",
+    installer_binary: Path | None = None,
 ) -> manifest_mod.PackageManifest:
     """Fill a staging directory with the package tree and return the manifest it was written from."""
-    for directory in ("vendor", "installer", "content/levels", "content/packs"):
+    directories = ["vendor", "content/levels", "content/packs"]
+    if platform == "linux":
+        directories.append("installer")
+    for directory in directories:
         (staging / directory).mkdir(parents=True, exist_ok=True)
     vendors = add_vendors(staging, cache, allow_download)
     files = []
     files += add_mod(staging, mod_source)
     files += add_levels(staging, levels_root, level_names)
     files += add_packs(staging, bundles_dir, packs_src, pack_platform, pack_names)
-    add_installer(staging)
-    (staging / "install.sh").write_text(install_sh_content(), encoding="utf-8")
-    (staging / "install.sh").chmod(0o755)
+    if platform == "windows":
+        add_windows_installer(staging, installer_binary)
+    else:
+        add_installer(staging)
+        (staging / "install.sh").write_text(install_sh_content(), encoding="utf-8")
+        (staging / "install.sh").chmod(0o755)
     melonloader_version = next(v["version"] for v in vendors if v["kind"] == "melonloader")
     manifest = manifest_mod.PackageManifest(
         schema=manifest_mod.PACKAGE_SCHEMA,
-        platform="linux",
+        platform=platform,
         package_id=PACKAGE_ID,
         mod_version=mod_version,
         melonloader_version=melonloader_version,
@@ -335,8 +354,12 @@ def build_package(
     pack_names: list[str] | None = None,
     allow_download: bool = False,
     mod_version: str = "dev",
+    platform: str = "linux",
+    installer_binary: Path | None = None,
 ) -> manifest_mod.PackageManifest:
     """Assemble the package at output, replacing it. Nothing is changed on failure."""
+    if platform not in PLATFORMS:
+        raise BuildError(f"Unknown package platform {platform!r}; expected one of {', '.join(PLATFORMS)}.")
     mod_source = mod_dir or MOD_OUTPUT_DIR
     check_mod_source(mod_source)
     if ASSET_WINDOWS != MELONLOADER_ASSET:
@@ -359,6 +382,8 @@ def build_package(
             pack_names or [],
             allow_download,
             mod_version,
+            platform,
+            installer_binary,
         )
         if output.exists():
             shutil.rmtree(output)
@@ -388,12 +413,19 @@ def make_zip(package_dir: Path, zip_path: Path) -> Path:
     return zip_path
 
 
-def package_zip_name(mod_version: str, melonloader_version: str) -> str:
-    return f"megabonk-levels-{mod_version}-ml{melonloader_version}-linux.zip"
+def package_zip_name(mod_version: str, melonloader_version: str, platform: str = "linux") -> str:
+    return f"megabonk-levels-{mod_version}-ml{melonloader_version}-{platform}.zip"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build the Megabonk Levels player package for Linux.")
+    parser = argparse.ArgumentParser(description="Build the Megabonk Levels player package.")
+    parser.add_argument("--platform", choices=PLATFORMS, default="linux", help="Which player package to build.")
+    parser.add_argument(
+        "--installer-binary",
+        type=Path,
+        default=None,
+        help="The windows/amd64 installer (task installer:build); required for --platform windows.",
+    )
     parser.add_argument("--output", type=Path, default=REPO_ROOT / ".tools/player-package")
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE, help="Where vendor archives are kept.")
     parser.add_argument("--mod-dir", type=Path, default=None, help="Directory holding the built mod DLL.")
@@ -441,12 +473,14 @@ def main(argv: list[str] | None = None) -> int:
             pack_names=args.packs,
             allow_download=args.allow_download,
             mod_version=args.mod_version,
+            platform=args.platform,
+            installer_binary=args.installer_binary,
         )
         zip_path = None
         if not args.skip_zip:
             zip_path = make_zip(
                 args.output,
-                args.output.parent / package_zip_name(record.mod_version, record.melonloader_version),
+                args.output.parent / package_zip_name(record.mod_version, record.melonloader_version, args.platform),
             )
     except MissingInput as exc:
         warn(str(exc))

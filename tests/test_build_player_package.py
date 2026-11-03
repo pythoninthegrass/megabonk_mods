@@ -430,6 +430,52 @@ class TestPythonFloor:
         assert "usage: player_installer" in result.stdout
 
 
+class TestWindowsPackage:
+    @pytest.fixture
+    def binary(self, tmp_path):
+        path = tmp_path / "megabonk-installer-windows-amd64.exe"
+        path.write_bytes(b"MZ installer")
+        return path
+
+    def test_carries_the_installer_binary_instead_of_the_python_installer(self, workspace, binary):
+        record = build(workspace, platform="windows", installer_binary=binary)
+        out = workspace["output"]
+        assert (out / "install.exe").read_bytes() == b"MZ installer"
+        assert not (out / "install.sh").exists()
+        assert not (out / "installer").exists()
+        assert record.platform == "windows"
+
+    def test_manifest_loads_and_every_hash_verifies(self, workspace, binary):
+        build(workspace, platform="windows", installer_binary=binary)
+        assert load_manifest(workspace["output"] / "manifest.json").platform == "windows"
+        assert verify_package(workspace["output"]) == []
+
+    def test_a_missing_binary_is_a_missing_input(self, workspace, tmp_path):
+        with pytest.raises(module.MissingInput, match="installer:build"):
+            build(workspace, platform="windows", installer_binary=tmp_path / "absent.exe")
+
+    def test_windows_needs_a_binary_argument(self, workspace):
+        with pytest.raises(BuildError, match="installer binary"):
+            build(workspace, platform="windows")
+
+    def test_zip_name_and_cli(self, workspace, binary, capsys):
+        code = module.main(
+            [
+                "--platform", "windows",
+                "--installer-binary", str(binary),
+                "--output", str(workspace["output"]),
+                "--cache", str(workspace["cache"]),
+                "--mod-dir", str(workspace["mod"]),
+                "--mod-version", MOD_VERSION,
+            ]
+        )
+        assert code == 0
+        name = f"megabonk-levels-{MOD_VERSION}-ml{MELONLOADER_VERSION}-windows.zip"
+        assert name in capsys.readouterr().out
+        with zipfile.ZipFile(workspace["output"].parent / name) as archive:
+            assert "install.exe" in archive.namelist()
+
+
 class TestZip:
     def test_zip_is_deterministic(self, workspace, tmp_path):
         build(workspace)

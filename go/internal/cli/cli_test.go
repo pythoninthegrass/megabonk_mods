@@ -289,6 +289,20 @@ func TestUninstallTakesItBack(t *testing.T) {
 	_ = packageDir
 }
 
+func TestWindowsDefaultsThePackageToTheExecutableFolder(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	got := runAs(t, func(c *Command) {
+		c.GOOS = "windows"
+		c.Executable = func() (string, error) { return filepath.Join(packageDir, "install.exe"), nil }
+	}, nil, "--game-dir", game, "--no-gui")
+	if got.exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+	if !ppath.Exists(filepath.Join(game, "Mods", "MegabonkLevels.Mod.dll")) {
+		t.Errorf("the mod was not installed from the executable's folder")
+	}
+}
+
 func TestMissingPackageIsAUsageError(t *testing.T) {
 	got := run(t, "--game-dir", t.TempDir())
 	if got.exit != ExitUsage || !strings.Contains(got.stderr.String(), "no --package") {

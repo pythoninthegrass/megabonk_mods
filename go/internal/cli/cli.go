@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -106,6 +107,25 @@ type Command struct {
 	StartWindow func(title string, work func(ui.Progress) int) (int, bool)
 	// GOOS names the operating system the install targets; empty uses runtime.GOOS.
 	GOOS string
+	// Executable returns the running binary's path; nil uses os.Executable.
+	Executable func() (string, error)
+}
+
+// defaultPackage is the folder holding the installer on Windows, where a
+// double-clicked install.exe is given no arguments; empty elsewhere.
+func (c *Command) defaultPackage() string {
+	if !c.native() {
+		return ""
+	}
+	executable := c.Executable
+	if executable == nil {
+		executable = os.Executable
+	}
+	path, err := executable()
+	if err != nil {
+		return ""
+	}
+	return filepath.Dir(path)
 }
 
 // native reports a Windows install, which has no Proton prefix, Flatpak or
@@ -711,6 +731,9 @@ func (c *Command) Main(argv []string) int {
 		return code
 	}
 
+	if options.Package == "" {
+		options.Package = c.defaultPackage()
+	}
 	if options.Package == "" {
 		return reporter.Fail("no --package: point it at the unzipped MegabonkLevels download (the folder holding manifest.json)", ExitUsage)
 	}

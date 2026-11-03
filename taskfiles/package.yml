@@ -4,6 +4,7 @@ version: "3.0"
 
 vars:
   OUTPUT: '{{.OUTPUT | default ".tools/player-package"}}'
+  OUTPUT_WINDOWS: '{{.OUTPUT_WINDOWS | default ".tools/player-package-windows"}}'
   MOD_VERSION: '{{.MOD_VERSION | default "dev"}}'
   LEVELS: '{{.LEVELS | default "example-forest.mblevel.json"}}'
   PACKS: '{{.PACKS | default ""}}'
@@ -37,6 +38,35 @@ tasks:
         if [ "{{.ALLOW_DOWNLOAD}}" = "true" ]; then args+=(--allow-download); fi
         uv run scripts/build_player_package.py \
           --output "{{.OUTPUT}}" \
+          --mod-dir src/MegabonkLevels.Mod/bin/Release/net6.0 \
+          --mod-version "{{.MOD_VERSION}}" \
+          "${args[@]}"
+
+  windows:
+    desc: "Build the Windows player package and its distributable zip into .tools/player-package-windows"
+    summary: |
+      Usage: task package:windows [LEVELS=...] [PACKS=...] [MOD_VERSION=...] [OUTPUT_WINDOWS=...]
+
+      Assembles the download a Windows player unzips and runs install.exe from: the
+      mod DLL, the vendored MelonLoader and .NET 6 archives, the windows/amd64 Go
+      installer (built by installer:build), and any levels or packs you name.
+      Arguments and vendor caching match package:linux.
+
+        task package:windows
+        task package:windows LEVELS="example-forest.mblevel.json" MOD_VERSION=0.4.2
+    cmds:
+      - task mod:build
+      - task installer:build TARGETS=windows/amd64
+      - |-
+        set -eu
+        args=()
+        for level in {{.LEVELS}}; do args+=(--level "$level"); done
+        for pack in {{.PACKS}}; do args+=(--pack "$pack"); done
+        if [ "{{.ALLOW_DOWNLOAD}}" = "true" ]; then args+=(--allow-download); fi
+        uv run scripts/build_player_package.py \
+          --platform windows \
+          --installer-binary .tools/installer/megabonk-installer-windows-amd64.exe \
+          --output "{{.OUTPUT_WINDOWS}}" \
           --mod-dir src/MegabonkLevels.Mod/bin/Release/net6.0 \
           --mod-version "{{.MOD_VERSION}}" \
           "${args[@]}"

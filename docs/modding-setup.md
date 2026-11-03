@@ -42,6 +42,14 @@ The package format, the manifest contract, and the Linux behaviour are documente
 
 For developing on Linux rather than installing for a player, the mod and its harness work under Proton the same way; the caveats for the native build (no Proton prefix, `LD_PRELOAD` MelonLoader, the .NET 6 runtime Flatpak Steam can actually read) are in [development.md](development.md).
 
+## Installing for players on Windows
+
+```sh
+task package:windows LEVELS="example-forest.mblevel.json" MOD_VERSION=0.4.2
+```
+
+A player unzips the result and runs `install.exe`. It finds the game through Steam's registry key and `libraryfolders.vdf` (including libraries on other drives), installs the pinned MelonLoader, the mod and a user-scope .NET 6 runtime inside the game directory, shows a progress window and needs no administrator rights. Run it again to repair or `install.exe --uninstall` to restore a vanilla game. Details, including why the runtime goes in `MelonLoader/Dependencies/dotnet`, are in [player-installer.md](player-installer.md#windows-package).
+
 ## Running and verifying the mod
 
 ```sh
