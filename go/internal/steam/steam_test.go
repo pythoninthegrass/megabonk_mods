@@ -564,3 +564,20 @@ func TestScanForLibrariesSkipsHiddenAndStopsAtALibrary(t *testing.T) {
 		t.Errorf("a missing mount should scan to nothing: %v", got)
 	}
 }
+
+// TestResolveKeepsSlashSemanticsOnWindows replays the Windows shape of
+// filepath.Abs (backslashes), a working ToSlash, and a failing EvalSymlinks:
+// the shape a path that does not exist yet produces there.
+func TestResolveKeepsSlashSemanticsOnWindows(t *testing.T) {
+	windowsAbs := func(p string) (string, error) { return strings.ReplaceAll(p, "/", `\`), nil }
+	windowsToSlash := func(p string) string { return strings.ReplaceAll(p, `\`, "/") }
+	missing := func(string) (string, error) { return "", os.ErrNotExist }
+	steamDir := "C:/users/lance/.local/share/Steam"
+	if got := resolveWith(steamDir, windowsAbs, windowsToSlash, missing); got != steamDir {
+		t.Errorf("resolveWith = %q, want the slash form", got)
+	}
+	nativeEval := func(p string) (string, error) { return strings.ReplaceAll(p, "/", `\`), nil }
+	if got := resolveWith(steamDir, windowsAbs, windowsToSlash, nativeEval); got != steamDir {
+		t.Errorf("resolveWith through EvalSymlinks = %q, want the slash form", got)
+	}
+}

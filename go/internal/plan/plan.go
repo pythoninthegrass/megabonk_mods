@@ -615,15 +615,21 @@ func isUnder(root, path string) bool {
 }
 
 func resolve(path string) string {
-	absolute, err := filepath.Abs(path)
+	return resolveWith(path, filepath.Abs, filepath.ToSlash, filepath.EvalSymlinks)
+}
+
+// resolveWith answers in slashes on every OS; the seams let tests replay
+// Windows separators (backslash Abs, a slash-ing ToSlash) on any host.
+func resolveWith(path string, abs func(string) (string, error), toSlash func(string) string, eval func(string) (string, error)) string {
+	absolute, err := abs(path)
 	if err != nil {
 		return ppath.Normalize(path)
 	}
-	target, err := filepath.EvalSymlinks(absolute)
+	target, err := eval(toSlash(absolute))
 	if err != nil {
-		return ppath.Normalize(absolute)
+		return ppath.Normalize(toSlash(absolute))
 	}
-	return filepath.ToSlash(target)
+	return toSlash(target)
 }
 
 func extractMember(member *zip.File, game string) error {

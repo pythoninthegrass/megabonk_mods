@@ -639,6 +639,23 @@ func TestRelativeKeepsForeignPathsWhole(t *testing.T) {
 	}
 }
 
+// TestResolveKeepsSlashSemanticsOnWindows replays the Windows shape of
+// filepath.Abs (backslashes), a working ToSlash, and a failing EvalSymlinks:
+// the exact shape a zip member that does not exist yet produces there.
+func TestResolveKeepsSlashSemanticsOnWindows(t *testing.T) {
+	windowsAbs := func(p string) (string, error) { return strings.ReplaceAll(p, "/", `\`), nil }
+	windowsToSlash := func(p string) string { return strings.ReplaceAll(p, `\`, "/") }
+	missing := func(string) (string, error) { return "", os.ErrNotExist }
+	member := "C:/work/game/Megabonk/MelonLoader/net6/MelonLoader.dll"
+	if got := resolveWith(member, windowsAbs, windowsToSlash, missing); got != member {
+		t.Errorf("resolveWith = %q, want the slash form", got)
+	}
+	nativeEval := func(p string) (string, error) { return strings.ReplaceAll(p, "/", `\`), nil }
+	if got := resolveWith(member, windowsAbs, windowsToSlash, nativeEval); got != member {
+		t.Errorf("resolveWith through EvalSymlinks = %q, want the slash form", got)
+	}
+}
+
 func TestDocumentShapeForJSON(t *testing.T) {
 	packageDir, game, prefix := makePackage(t), makeGame(t), makePrefix(t)
 	built, err := BuildPlan(packageDir, Options{Manifest: loadManifest(t, packageDir), Game: game, Prefix: prefix, DllOverride: "auto"})

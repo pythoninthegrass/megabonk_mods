@@ -217,8 +217,14 @@ task installer:parity           # both installers over the same scenarios
 
 Targets are `darwin/arm64`, `linux/amd64` and `windows/amd64`. `linux/arm64` is left out on
 purpose: the game and its Proton prefixes are x86_64, so an arm64 Linux player would run the
-installer and never the mod. The Windows binary is built to prove the port is portable and is
-not executed by any test.
+installer and never the mod. The Windows binary is executed in a Windows 11 Docker guest
+against the Python reference on the same guest (see below).
+
+Windows path handling has one rule: `resolve` answers in slash-separated form on every OS.
+`filepath.Abs` and `filepath.EvalSymlinks` return backslash paths there, and any comparison
+that mixes them with the slash-separated install paths misclassifies safe zip members as
+escaping the game directory. The `plan` and `steam` resolve seams take injectable
+abs/toSlash/eval so tests pin this without a Windows host; a guest run first caught the leak.
 
 ### The parity contract
 
@@ -282,12 +288,27 @@ active prefix's `Player.log`). This is not yet evidence of a wiped player-packag
 install with the mod loaded. Native Linux loader installation is out of scope;
 the AlmaLinux host supplies Flatpak discovery and KDE progress evidence only.
 
+The Go binaries are exercised beyond the parity host. `linux/amd64` runs the full
+lifecycle — install, `--check` no-drift, drift repair with exit 10, uninstall — on
+`ubuntu:24.04`, `fedora:42` and the SteamOS-based `thevakhovske/holoiso` image with
+identical exit codes, streams, installed and final trees, and install record; none of
+those images ships `python3`, `python`, `go`, `pip` or `pip3`, and a `FROM scratch`
+image holding nothing but the binary and the fixture tree — 46 filesystem entries, no
+shell, no interpreter — runs the same lifecycle with the same exits, so the
+no-interpreter claim is measured, not inferred. `windows/amd64` runs the same lifecycle
+in the dockurr/windows Windows 11 guest and matches a `python -m player_installer`
+reference run through the same steps on the same guest — the reference is compared
+per platform, since `windows_path` keeps an existing drive letter and only prefixes
+`Z:` for drive-less paths, so the `DOTNET_ROOT` launch option legitimately differs
+between a Linux host run and a native Windows run. On the AlmaLinux maintainer host's
+real layout (Flatpak Steam with the root relocated to `/media/steam`, the stale
+unmounted `/mnt/games/GameLibrary/Steam` entry still in `libraryfolders.vdf`, and the
+native install present) the Go binary prints byte-identical output to the Python
+reference, including `Flatpak Steam may only read: /media/steam` and the exit-4
+Windows-build refusal.
+
 Still pending:
 
-- the Go binaries beyond the host the parity harness runs on: `linux/amd64` is exercised by
-  `task installer:parity`, the `darwin/arm64` and `windows/amd64` builds are compiled and
-  checked for being static but never executed, and no Go binary has yet installed the mod on
-  a maintainer host;
 - clean-install verification on both CachyOS and Fedora, with fresh mod-load logs;
 - automatic removable-media game selection on CachyOS: library discovery finds the mounted SD-card library, but game discovery incorrectly selects an unrelated home-library game (`1000xRESIST`) because its `GameAssembly.dll` matches first; pass explicit `--game-dir` and the measured `--prefix` until this is fixed;
 - the printed game-directory `DOTNET_ROOT` launch option working when Steam actually applies it (the live proof uses prefix mode);

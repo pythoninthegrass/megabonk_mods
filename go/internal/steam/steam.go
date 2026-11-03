@@ -557,16 +557,22 @@ func plausible(path string) bool {
 // resolve is Path.resolve(non_strict=True): absolute, symlinks followed as far
 // as the filesystem allows.
 func resolve(path string) string {
+	return resolveWith(path, filepath.Abs, filepath.ToSlash, filepath.EvalSymlinks)
+}
+
+// resolveWith answers in slashes on every OS; the seams let tests replay
+// Windows separators (backslash Abs, a slash-ing ToSlash) on any host.
+func resolveWith(path string, abs func(string) (string, error), toSlash func(string) string, eval func(string) (string, error)) string {
 	normalised := ppath.Normalize(path)
-	absolute, err := filepath.Abs(normalised)
+	absolute, err := abs(normalised)
 	if err != nil {
 		return normalised
 	}
-	target, err := filepath.EvalSymlinks(absolute)
+	target, err := eval(toSlash(absolute))
 	if err != nil {
-		return ppath.Normalize(absolute)
+		return ppath.Normalize(toSlash(absolute))
 	}
-	return filepath.ToSlash(target)
+	return toSlash(target)
 }
 
 func runCommand(argv []string, timeout time.Duration) (int, string, error) {

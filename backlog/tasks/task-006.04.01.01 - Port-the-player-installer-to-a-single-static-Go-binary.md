@@ -4,7 +4,7 @@ title: Port the player installer to a single static Go binary
 status: In Progress
 assignee: []
 created_date: '2026-10-31T08:14:00Z'
-updated_date: '2026-11-03 04:38'
+updated_date: '2026-11-03 05:20'
 labels:
   - tooling
 dependencies: []
@@ -37,10 +37,10 @@ The Python installer works but still asks the player for an interpreter: the 3.1
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A clean checkout cross-compiles with CGO_ENABLED=0 to one static binary per target (at least linux/amd64 and linux/arm64); file/ldd confirm no dynamic dependency beyond libc-not-at-all, and the binary runs on a host with no Go and no Python
+- [x] #1 A clean checkout cross-compiles with CGO_ENABLED=0 to one static binary per target (at least linux/amd64 and linux/arm64); file/ldd confirm no dynamic dependency beyond libc-not-at-all, and the binary runs on a host with no Go and no Python
 - [x] #2 The manifest contract is behavior-compatible: load of megabonk-player-package/1, refusal of every malformed manifest the Python loader refuses while naming the same bad key, and vendor kind lookup behave identically. Refusal messages are compared on stable anchors, not bytes.
 - [x] #3 Full lifecycle on the synthetic Windows-layout trees the Python tests use - install, --check no-drift, drift repair naming exactly the missing files with exit 10, uninstall - matches the Python installer's behaviour and exit codes 0/1/2/3/4/10
-- [ ] #4 On the AlmaLinux host's real layout: the relocated Flatpak root is found through its grant, the unmounted library is skipped, and the native-Linux build is refused with exit 4 and the Windows-build steps
+- [x] #4 On the AlmaLinux host's real layout: the relocated Flatpak root is found through its grant, the unmounted library is skipped, and the native-Linux build is refused with exit 4 and the Windows-build steps
 - [x] #5 Headless runs print numbered plain-text progress in the reference's N/M label format; GUI dialogs are out of scope here (TASK-006.04.01.02)
 - [x] #6 Third-party Go dependencies are limited to what is justified in writing: bitfield/script only where pipeline sugar beats stdlib, with the final dependency list recorded in the task
 - [x] #7 Parity tests run the Go binary and the Python installer against identical fixtures and compare exit codes, the install record parsed as JSON, the installed file trees, and stdout/stderr on message anchors; Python remains the reference until the Go binary reproduces the live host checks, and no docs advertise Go as the default before then
@@ -53,13 +53,13 @@ The Python installer works but still asks the player for an interpreter: the 3.1
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 - [ ] #5 task check passes
-- [ ] #6 Tests written first for ported logic
-- [ ] #7 Docs updated
-- [ ] #8 Conventional commit with no attribution
+- [x] #6 Tests written first for ported logic
+- [x] #7 Docs updated
+- [x] #8 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -112,7 +112,7 @@ binary is not dynamically linked (`task installer:verify-static`).
 trees, the same argv through `python -m player_installer` and the host-native binary,
 comparing exit codes, both streams, the game and prefix trees by digest, and the install
 record as parsed JSON. Go unit tests cover only the awkward-to-reach locals (ppath, vdf,
-proton registry, jsonx, manifest, steam, ui, cli flag seam).
+proton registry, jsonx, manifest, content, steam, ui, cli flag seam).
 
 Hermeticity: the harness sets `MEGABONK_MOUNT_ROOTS=` (a new seam in cli.py honoured by both
 implementations, so a maintainer's mounted library cannot turn a not-found scenario into an
@@ -125,7 +125,65 @@ Docs: docs/player-installer.md gained "The Go port" (targets, contract inheritan
 what is exact versus anchored, Go is not the default) and a still-pending entry for the
 un-executed darwin/windows binaries.
 
-Open: AC #1's "runs on a host with no Go and no Python" and AC #4 are the same scheduled
-window on the AlmaLinux (mf) host; AC #11 stays open until something in the installer
-downloads at all (vendor archives are verified from cache, never fetched).
+## Cross-environment evidence for AC #1 and AC #4 (2026-11-03)
+
+Checks on the current tree: `task installer:build` + `installer:verify-static` (three
+targets, ELF statically linked, PE32+ and Mach-O, `go list -m all` one line);
+`task installer:test` (11 packages); `installer:parity` 25/25; the installer pytest suites
+211 passed; `task lint` clean. `task check` still stops at the 8 pre-existing failures above.
+
+AC #1, "runs on a host with no Go and no Python", is measured rather than inferred. One
+throwaway driver (`/tmp/opencode/installer-crosscheck/driver.py`) builds each scenario
+fixture once and runs the full lifecycle - install, `--check` no-drift, drift `--check`
+(exit 10), repair, uninstall - in seven environments: `host-python`, `host-go`,
+`ubuntu:24.04`, `fedora:42`, `thevakhovske/holoiso` (SteamOS-based), and inside the
+dockurr/windows Windows 11 guest both the `windows/amd64` binary and a
+`python -m player_installer` reference. All seven agree on exit codes, on stdout and stderr
+after the harness scrubber, on the install record parsed as JSON, and on the installed and
+final trees; the five platform-independent trees also match across platforms. `command -v`
+in each image reports no `python`, `python3`, `go`, `pip` or `pip3`, and a `FROM scratch` image whose whole filesystem is 46 entries - the binary plus the
+fixture tree, no `/bin/sh`, no interpreter, no libc - runs the same five steps with the
+same exits, because `docker commit` chains the writable layer between them
+(`/tmp/opencode/installer-crosscheck/scratch_probe.py`).
+
+Windows runs are compared per platform against the guest's own Python reference rather than
+the Linux host run: `windows_path` keeps an existing drive letter and only prefixes `Z:` for
+drive-less paths, so the `DOTNET_ROOT` launch option legitimately differs between a Linux
+host run and a native Windows run.
+
+Windows-only port bug found by the guest run and fixed test-first: `filepath.Abs` and
+`filepath.EvalSymlinks` return backslash paths, which were compared against slash-separated
+install paths, so every zip member was refused as escaping the game directory.
+`plan.resolve` and `steam.resolve` are now thin wrappers over `resolveWith(path, abs,
+toSlash, eval)` seams that normalise both `Abs` and `EvalSymlinks` output, and
+`TestResolveKeepsSlashSemanticsOnWindows` in both packages injects a backslash-returning
+`Abs`, a working `ToSlash` and a native-form `EvalSymlinks` - red before the fix, green
+after. Capturing guest output needs `Start-Process -RedirectStandardOutput/-RedirectStandardError`
+(PowerShell `2>` writes UTF-16 NativeCommandError records) and `PYTHONIOENCODING=utf-8` for
+the reference run.
+
+AC #4, maintainer-host checks on the AlmaLinux host's real layout: Flatpak Steam with its
+root relocated to `/media/steam`, the stale unmounted `/mnt/games/GameLibrary/Steam` entry
+still in `libraryfolders.vdf`, and the native install present. Python and Go printed
+byte-identical output with exit 4 (`Flatpak Steam may only read: /media/steam` plus the
+Windows-build steps) for the full discovery run and for the `--library` probe and fake-HOME
+runs. A real mod install on that host cannot go through the Go binary today: the installed
+build is native Linux, which the installer refuses by design with exit 4.
+
+AC #11 stays open deliberately: neither implementation has HTTP download code (`net/http`
+and `urllib.request` are absent from both), vendor archives are verified from cache, so
+there is no download path to test.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+created: 2026-11-03 05:18
+---
+AC #1 and AC #4 are now evidenced, not assumed. The same fixture and the same expected tree go through the full lifecycle (install, `--check` no-drift, drift `--check` with exit 10, repair, uninstall) in seven environments: the host's Python reference, the host Go binary, `ubuntu:24.04`, `fedora:42`, the SteamOS-based `thevakhovske/holoiso`, and in the Windows 11 Docker guest both the `windows/amd64` binary and a `python -m player_installer` reference. All seven agree on exit codes, both streams, the install record as parsed JSON, and the installed and final trees; the images have no `python`, `python3`, `go`, `pip` or `pip3`, and a `FROM scratch` image with nothing but the binary installs with exit 0. On the AlmaLinux maintainer host the Go binary prints byte-identical output to the Python reference (exit 4, relocated Flatpak root, stale unmounted library) on the real layout.
+
+The Windows guest run caught one real port bug: `filepath.Abs` and `filepath.EvalSymlinks` return backslash paths there, and comparing them against slash-separated install paths made every zip member look like it escaped the game directory. `plan.resolve` and `steam.resolve` now normalise both through a `resolveWith` seam, pinned by a new test in each package that injects a backslash-returning `Abs` and a native-form `EvalSymlinks`.
+
+Remaining open: AC #11 has nothing to test until either implementation downloads (neither has HTTP code), and `task check` still trips over the 8 pre-existing THPS/wineserver failures in the tree.
+---
+<!-- COMMENTS:END -->
