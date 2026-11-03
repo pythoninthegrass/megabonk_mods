@@ -64,6 +64,27 @@ public class CatalogRouteTests
         Assert.Equal(2, route.Index);
     }
 
+    [Fact]
+    public void Parse_RandomObjectsOverride_IsMapScopedWithGroupAndPrefab()
+    {
+        var route = CatalogRoute.Parse(CatalogId.Parse("desert/randomObjectsOverride/3/1"));
+
+        Assert.Equal(CatalogRouteKind.RandomObjectOverride, route.Kind);
+        Assert.Equal(EMap.Desert, route.Map);
+        Assert.Equal((3, 1), (route.Index, route.SubIndex));
+    }
+
+    [Theory]
+    [InlineData("interactable/chargeShrine/1", CatalogRouteKind.ChargeShrine, 1)]
+    [InlineData("interactable/greedShrine/0", CatalogRouteKind.GreedShrine, 0)]
+    public void Parse_ChargeAndGreedShrines_ReadIndex(string raw, CatalogRouteKind kind, int index)
+    {
+        var route = CatalogRoute.Parse(CatalogId.Parse(raw));
+
+        Assert.Equal(kind, route.Kind);
+        Assert.Equal(index, route.Index);
+    }
+
     [Theory]
     [InlineData("bundle:my/prefab")]
     [InlineData("forest/stage0/unknownCategory/1")]
@@ -72,6 +93,13 @@ public class CatalogRouteTests
     [InlineData("forest/stage0/randomMapObjects/a/0")]
     [InlineData("forest/stage0/randomMapObjects/0")]
     [InlineData("forest/shrines/-1")]
+    [InlineData("forest/randomObjectsOverride/0")]
+    [InlineData("forest/randomObjectsOverride/0/x")]
+    [InlineData("forest/randomObjectsOverride/-1/0")]
+    [InlineData("interactable/chargeShrine")]
+    [InlineData("interactable/greedShrine/x")]
+    [InlineData("interactable/chargeShrine/-1")]
+    [InlineData("forest/interactable/chargeShrine/0")]
     public void Parse_Unresolvable_ThrowsArgumentException(string raw)
     {
         Assert.Throws<ArgumentException>(() => CatalogRoute.Parse(CatalogId.Parse(raw)));

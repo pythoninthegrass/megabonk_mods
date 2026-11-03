@@ -446,7 +446,7 @@ public static class EditorObjectTools
         var entry = LiveEditPatch.CatalogIdOf(hit.Target) is { } placedId
             ? PalettePick.FindByCatalogId(entries, placedId)
             : PalettePick.PrefabNameOf(hit.Target.GenId) is { } name
-                ? PalettePick.FindByPrefabName(entries, name, LiveEditPatch.CurrentStageIndex())
+                ? PalettePick.FindByPrefabName(entries, name, LiveEditPatch.CurrentStageIndex(), EditorPalette.LoadedMap)
                 : null;
 
         if (entry is not { } found)

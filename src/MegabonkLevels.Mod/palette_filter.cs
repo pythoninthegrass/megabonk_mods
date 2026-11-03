@@ -4,9 +4,9 @@ using System.Linq;
 
 namespace MegabonkLevels;
 
-public readonly record struct PaletteGroup(int Stage, PaletteCategory Category)
+public readonly record struct PaletteGroup(int Stage, PaletteCategory Category, EMap Map = EMap.None)
 {
-    public static PaletteGroup Of(PaletteEntry entry) => new(entry.Stage, entry.Category);
+    public static PaletteGroup Of(PaletteEntry entry) => new(entry.Stage, entry.Category, entry.Map);
 
     public string Label => Category switch
     {
@@ -14,9 +14,14 @@ public readonly record struct PaletteGroup(int Stage, PaletteCategory Category)
         PaletteCategory.FlatTile => $"Stage {Stage} flat tiles",
         PaletteCategory.SpecificTile => $"Stage {Stage} specific tiles",
         PaletteCategory.Shrine => "Shrines",
+        PaletteCategory.Override => "Overrides",
         PaletteCategory.Pack => "Packs",
         _ => "Interactables",
     };
+
+    // Names the map an asset came from when the palette is showing another map's level.
+    public string LabelFor(EMap loadedMap) =>
+        Map is not EMap.None && Map != loadedMap ? $"{Map} · {Label}" : Label;
 }
 
 public static class PaletteFilter
@@ -38,6 +43,7 @@ public static class PaletteCategoryNames
         PaletteCategory.FlatTile => "Flat tiles",
         PaletteCategory.SpecificTile => "Specific tiles",
         PaletteCategory.Shrine => "Shrines",
+        PaletteCategory.Override => "Overrides",
         PaletteCategory.Pack => "Packs",
         _ => "Interactables",
     };
@@ -48,6 +54,7 @@ public static class PaletteCategoryNames
         PaletteCategory.FlatTile => "Flat",
         PaletteCategory.SpecificTile => "Spec",
         PaletteCategory.Shrine => "Shrn",
+        PaletteCategory.Override => "Ovr",
         PaletteCategory.Pack => "Pack",
         _ => "Item",
     };

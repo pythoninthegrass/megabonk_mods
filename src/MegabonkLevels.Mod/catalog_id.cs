@@ -19,10 +19,13 @@ public enum CatalogNamespace
 //   {map}/stage{N}/stageTilePrefabs/flat/{index}
 //   {map}/stage{N}/stageTilePrefabs/specific/{index}
 //   {map}/shrines/{index}
+//   {map}/randomObjectsOverride/{groupIndex}/{prefabIndex}
 //   interactable/chest
 //   interactable/chestFree
 //   interactable/boombox
 //   interactable/rail/{index}
+//   interactable/chargeShrine/{index}
+//   interactable/greedShrine/{index}
 // The game exposes these prefabs only as GameObject[] with no name field, so the final segment is
 // typically a numeric index, not a human-readable name.
 public readonly record struct CatalogId

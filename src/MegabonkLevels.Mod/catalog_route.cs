@@ -8,10 +8,13 @@ public enum CatalogRouteKind
     FlatTilePrefab,
     SpecificTilePrefab,
     Shrine,
+    RandomObjectOverride,
     Chest,
     ChestFree,
     Boombox,
     Rail,
+    ChargeShrine,
+    GreedShrine,
 }
 
 // A game-asset CatalogId broken into the typed path through the game's own prefab catalog. This type
@@ -43,10 +46,25 @@ public readonly record struct CatalogRoute(CatalogRouteKind Kind, EMap Map, int 
             return new CatalogRoute(CatalogRouteKind.Rail, EMap.None, 0, Number(s[2], id), 0);
         }
 
+        if (s.Count == 3 && s[0] == "interactable" && s[1] == "chargeShrine")
+        {
+            return new CatalogRoute(CatalogRouteKind.ChargeShrine, EMap.None, 0, Number(s[2], id), 0);
+        }
+
+        if (s.Count == 3 && s[0] == "interactable" && s[1] == "greedShrine")
+        {
+            return new CatalogRoute(CatalogRouteKind.GreedShrine, EMap.None, 0, Number(s[2], id), 0);
+        }
+
         var map = ParseMap(s[0], id);
         if (s.Count == 3 && s[1] == "shrines")
         {
             return new CatalogRoute(CatalogRouteKind.Shrine, map, 0, Number(s[2], id), 0);
+        }
+
+        if (s.Count == 4 && s[1] == "randomObjectsOverride")
+        {
+            return new CatalogRoute(CatalogRouteKind.RandomObjectOverride, map, 0, Number(s[2], id), Number(s[3], id));
         }
 
         if (s.Count >= 4 && s[1].StartsWith("stage", StringComparison.Ordinal))

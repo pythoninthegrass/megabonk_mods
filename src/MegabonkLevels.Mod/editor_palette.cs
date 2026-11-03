@@ -71,6 +71,15 @@ public static class EditorPalette
     private static TextMeshProUGUI _title;
     private static string _selectedName = "none";
     private static string _mapLabel = "";
+    private static string _mapSummary = "";
+    private static readonly PaletteThumbnailQueue _thumbnails = new();
+    private static readonly System.Diagnostics.Stopwatch _thumbnailWatch = new();
+    private static readonly System.Diagnostics.Stopwatch _buildWatch = new();
+    private static SpawnInteractables _interactables;
+    private static RandomObjectPlacer _placer;
+    private static EMap _loadedMap = EMap.None;
+    private static int _thumbnailBaseCount;
+    private static int _thumbnailRendered;
     private static CursorLockMode _cursorLockBefore;
     private static bool _cursorVisibleBefore;
     private static bool _open;
@@ -83,6 +92,9 @@ public static class EditorPalette
     }
 
     public static bool PointerOverPanel { get; private set; }
+
+    // The map the palette was built for; every entry names the map its asset was walked from.
+    public static EMap LoadedMap => _loadedMap;
 
     public static float Width { get; private set; }
 
@@ -166,6 +178,8 @@ public static class EditorPalette
             PointerOverPanel = false;
             return;
         }
+
+        DrainThumbnails();
 
         var mouse = (Vector2)EditorInput.MousePosition;
         PointerOverPanel = Contains(_panel, mouse) || Contains(_tabColumn, mouse) || Contains(_chevronRect, mouse);
@@ -258,6 +272,7 @@ public static class EditorPalette
 
     private static void Rebuild()
     {
+        _buildWatch.Restart();
         if (_root != null)
         {
             Object.Destroy(_root);
@@ -279,30 +294,79 @@ public static class EditorPalette
             return;
         }
 
-        var interactables = Object.FindObjectOfType<MapGenerationController>()?.interactablesSpawner;
-        var catalog = CatalogPrefabs.Describe(mapData, interactables);
-        var entries = PaletteCatalogBuilder.Build(catalog, id => PrefabName(id, interactables)).Concat(PackPrefabs.ListEntries()).ToList();
+        var controller = Object.FindObjectOfType<MapGenerationController>();
+        _interactables = controller?.interactablesSpawner;
+        _placer = controller?.randomObjectPlacer;
+        _loadedMap = (EMap)(int)mapData.eMap;
+        var catalogs = CatalogPrefabs.DescribeAll(mapData, _interactables, _placer);
+        var entries = PaletteCatalogBuilder.BuildAll(catalogs, PrefabName).Concat(PackPrefabs.ListEntries()).ToList();
         Selection.Replace(entries);
-        _mapLabel = catalog.Map.ToString();
-        RenderThumbnails(entries, interactables);
+        _mapLabel = _loadedMap.ToString();
+        _mapSummary = catalogs.Count > 1 ? $" ({catalogs.Count} maps)" : "";
         BuildCanvas(entries);
-        _logger.Msg($"EditorPalette: built {entries.Count} entries for {_mapLabel}");
+        var buildMs = _buildWatch.ElapsedMilliseconds;
+        StartThumbnails();
+        var byMap = string.Join(", ", entries.GroupBy(entry => entry.Map).Select(group => $"{(group.Key == EMap.None ? "packs" : group.Key.ToString())} {group.Count()}"));
+        _logger.Msg($"EditorPalette: built {entries.Count} entries for {_mapLabel} ({byMap}) in {buildMs} ms");
     }
 
-    private static void RenderThumbnails(IReadOnlyList<PaletteEntry> entries, SpawnInteractables interactables)
+    // Thumbnails are rendered a few per frame by Tick rather than all at once, so opening the palette
+    // costs one layout pass no matter how many maps the catalog spans.
+    private static void StartThumbnails()
     {
-        var cachedBefore = PrefabThumbnails.Cache.Count;
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        foreach (var entry in entries)
+        _thumbnailBaseCount = PrefabThumbnails.Cache.Count;
+        _thumbnailRendered = 0;
+        _thumbnailWatch.Restart();
+        RequestThumbnails();
+    }
+
+    // The page on screen first, then the rest of the filtered set, then the whole catalog.
+    private static void RequestThumbnails()
+    {
+        if (_root == null)
         {
-            PrefabThumbnails.Cache.GetOrRender(entry.Id, id => PrefabFor(id, interactables) is { } prefab ? PrefabThumbnails.Render(prefab) : null);
+            return;
         }
 
-        var rendered = PrefabThumbnails.Cache.Count - cachedBefore;
-        _logger.Msg($"EditorPalette: rendered {rendered} thumbnails in {watch.ElapsedMilliseconds} ms (cached {cachedBefore})");
+        var page = PalettePager.Slice(_filtered, _page, PerPage).Select(entry => entry.Id);
+        _thumbnails.Request(page.Concat(_filtered.Select(entry => entry.Id)).Concat(Selection.Entries.Select(entry => entry.Id)).ToArray());
     }
 
-    private static GameObject PrefabFor(CatalogId id, SpawnInteractables interactables)
+    private static void DrainThumbnails()
+    {
+        if (_thumbnails.IsEmpty)
+        {
+            return;
+        }
+
+        if (_thumbnails.Step(RenderThumbnail) == 0)
+        {
+            return;
+        }
+
+        Rebind();
+        if (_thumbnails.IsEmpty)
+        {
+            _logger.Msg($"EditorPalette: rendered {_thumbnailRendered} thumbnails in {_thumbnailWatch.ElapsedMilliseconds} ms (cached {_thumbnailBaseCount})");
+        }
+    }
+
+    private static bool RenderThumbnail(CatalogId id)
+    {
+        if (PrefabThumbnails.Cache.TryGet(id, out _))
+        {
+            return false;
+        }
+
+        PrefabThumbnails.Cache.GetOrRender(id, key => PrefabFor(key) is { } prefab ? PrefabThumbnails.Render(prefab) : null);
+        _thumbnailRendered++;
+        return true;
+    }
+
+    private static Texture2D TextureFor(CatalogId id) =>
+        PrefabThumbnails.Cache.GetOrRender(id, key => PrefabFor(key) is { } prefab ? PrefabThumbnails.Render(prefab) : null);
+
+    private static GameObject PrefabFor(CatalogId id)
     {
         try
         {
@@ -311,7 +375,7 @@ public static class EditorPalette
                 return PackPrefabs.Resolve(id);
             }
 
-            return CatalogPrefabs.Resolve(CatalogRoute.Parse(id), interactables);
+            return CatalogPrefabs.Resolve(CatalogRoute.Parse(id), _interactables, _placer);
         }
         catch (System.Exception)
         {
@@ -319,7 +383,7 @@ public static class EditorPalette
         }
     }
 
-    private static string PrefabName(CatalogId id, SpawnInteractables interactables) => PrefabFor(id, interactables)?.name;
+    private static string PrefabName(CatalogId id) => PrefabFor(id)?.name;
 
     private static RawImage AddThumb(RectTransform parent)
     {
@@ -480,6 +544,7 @@ public static class EditorPalette
         _page = _layout.SetCompact(compact, _page);
         ApplyLayout();
         RefreshSelection();
+        RequestThumbnails();
     }
 
     private static void BuildTabs(IReadOnlyList<PaletteEntry> entries, TMP_FontAsset font)
@@ -503,7 +568,7 @@ public static class EditorPalette
             seamImage.raycastTarget = false;
             var first = category.HasValue ? entries.First(entry => entry.Category == category.Value) : (PaletteEntry?)null;
             var thumb = AddThumb(parts.Fill.rectTransform);
-            if (first.HasValue && PrefabThumbnails.Cache.TryGet(first.Value.Id, out var texture) && texture != null)
+            if (first.HasValue && TextureFor(first.Value.Id) is { } texture)
             {
                 thumb.texture = texture;
                 thumb.enabled = true;
@@ -562,7 +627,7 @@ public static class EditorPalette
     }
 
     private static string TitleText() =>
-        _layout.Compact ? $"{_mapLabel}\n{_selectedName}" : $"{_mapLabel} palette\nselected: {_selectedName}";
+        _layout.Compact ? $"{_mapLabel}\n{_selectedName}" : $"{_mapLabel}{_mapSummary} palette\nselected: {_selectedName}";
 
     private static bool Contains(RectTransform rect, Vector2 mouse) =>
         rect != null && RectTransformUtility.RectangleContainsScreenPoint(rect, mouse, null);
@@ -579,6 +644,7 @@ public static class EditorPalette
         _emptyLabel.gameObject.SetActive(_filtered.Count == 0);
         RefreshSelection();
         Rebind();
+        RequestThumbnails();
     }
 
     private static void SetPage(int page)
@@ -590,6 +656,7 @@ public static class EditorPalette
 
         _page = page;
         Rebind();
+        RequestThumbnails();
     }
 
     // Shows the page that holds the current selection, when the active filters leave it visible.
@@ -605,6 +672,7 @@ public static class EditorPalette
             if (_filtered[i].Id.Equals(current))
             {
                 _page = PalettePager.PageOf(i, PerPage);
+                RequestThumbnails();
                 return;
             }
         }
@@ -663,7 +731,7 @@ public static class EditorPalette
         int? target = null;
         if (hover is { Entry: { } entry })
         {
-            text = $"{hover.Name.text}\n{entry.Id.Serialize()}\n{PaletteGroup.Of(entry).Label}";
+            text = $"{entry.DisplayName}\n{entry.Id.Serialize()}\n{PaletteGroup.Of(entry).LabelFor(_loadedMap)}";
             target = _slots.IndexOf(hover);
         }
         else if (TabAt(mouse) is { } tab)

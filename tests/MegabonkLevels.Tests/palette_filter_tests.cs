@@ -47,6 +47,38 @@ public class PaletteFilterTests
         Assert.Equal(Entries[0].Id, selection.Current);
         Assert.Equal(3, selection.Entries.Count);
     }
+
+    [Fact]
+    public void Search_MatchesAcrossMapsById()
+    {
+        var entries = Entries.Append(new PaletteEntry(CatalogId.Parse("desert/shrines/0"), "Ancient Shrine", PaletteCategory.Shrine, 0, EMap.Desert)).ToArray();
+
+        Assert.Equal(2, PaletteFilter.Apply(entries, "shrines", PaletteCategory.Shrine).Count);
+        Assert.Single(PaletteFilter.Apply(entries, "desert/shrines", null));
+    }
+}
+
+public class PaletteGroupTests
+{
+    private static PaletteGroup Group(string id, PaletteCategory category, int stage, EMap map) =>
+        PaletteGroup.Of(new PaletteEntry(CatalogId.Parse(id), "Asset", category, stage, map));
+
+    [Theory]
+    [InlineData("forest/shrines/0", PaletteCategory.Shrine, 0, EMap.Forest, "Shrines")]
+    [InlineData("forest/stage1/stageTilePrefabs/flat/0", PaletteCategory.FlatTile, 1, EMap.Forest, "Stage 1 flat tiles")]
+    [InlineData("forest/randomObjectsOverride/0/0", PaletteCategory.Override, 0, EMap.Forest, "Overrides")]
+    public void Label_NamesTheGroupWhenTheAssetIsFromTheLoadedMap(string id, PaletteCategory category, int stage, EMap map, string expected) =>
+        Assert.Equal(expected, Group(id, category, stage, map).LabelFor(EMap.Forest));
+
+    [Theory]
+    [InlineData("desert/shrines/0", PaletteCategory.Shrine, 0, EMap.Desert, "Desert · Shrines")]
+    [InlineData("graveyard/stage1/stageTilePrefabs/flat/0", PaletteCategory.FlatTile, 1, EMap.Graveyard, "Graveyard · Stage 1 flat tiles")]
+    public void Label_NamesTheOriginMapOfACrossMapAsset(string id, PaletteCategory category, int stage, EMap map, string expected) =>
+        Assert.Equal(expected, Group(id, category, stage, map).LabelFor(EMap.Forest));
+
+    [Fact]
+    public void Label_LeavesMaplessEntriesAlone() =>
+        Assert.Equal("Packs", PaletteGroup.Of(new PaletteEntry(CatalogId.Parse("bundle:thps/warehouse-skateable-0"), "Rail", PaletteCategory.Pack, 0)).LabelFor(EMap.Forest));
 }
 
 public class PaletteCategoryNamesTests

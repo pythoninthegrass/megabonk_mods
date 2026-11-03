@@ -1168,7 +1168,7 @@ public static class LiveEditPatch
         private GameObject ResolvePrefab(CatalogId id) =>
             id.Namespace == CatalogNamespace.Bundle
                 ? PackPrefabs.Resolve(id)
-                : CatalogPrefabs.Resolve(CatalogRoute.Parse(id), _controller.interactablesSpawner);
+                : CatalogPrefabs.Resolve(CatalogRoute.Parse(id), _controller.interactablesSpawner, _controller.randomObjectPlacer);
 
         private static Vector3 ToVector(Vector3Data v) => new(v.X, v.Y, v.Z);
 

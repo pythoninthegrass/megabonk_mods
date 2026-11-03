@@ -127,4 +127,79 @@ public class PaletteCatalogBuilderTests
 
         Assert.Equal("Chest", entry.DisplayName);
     }
+
+    [Fact]
+    public void Build_EntryCarriesTheMapsItWasWalkedFrom()
+    {
+        var catalog = new PaletteMapCatalog(EMap.Graveyard, [], 0, true, false, 0);
+
+        var entry = Assert.Single(PaletteCatalogBuilder.Build(catalog, _ => null));
+
+        Assert.Equal(EMap.Graveyard, entry.Map);
+    }
+
+    [Fact]
+    public void BuildAll_ListsEveryMapsAssetsAndTheChannelsBuildOmits()
+    {
+        var forest = Forest(shrines: 1, stages: [new PaletteStageCatalog([1], 0, 0)]) with { RandomObjectOverrideCounts = [2] };
+        var desert = new PaletteMapCatalog(EMap.Desert, [], 0, false, false, 0, ChargeShrineCount: 1, GreedShrineCount: 2);
+
+        var ids = PaletteCatalogBuilder.BuildAll([forest, desert], _ => null).Select(Id).ToArray();
+
+        Assert.Equal(
+            [
+                "forest/stage0/randomMapObjects/0/0",
+                "forest/shrines/0",
+                "forest/randomObjectsOverride/0/0",
+                "forest/randomObjectsOverride/0/1",
+                "interactable/chargeShrine/0",
+                "interactable/greedShrine/0",
+                "interactable/greedShrine/1",
+            ],
+            ids);
+    }
+
+    [Fact]
+    public void BuildAll_OverrideEntriesAreTheirOwnCategory()
+    {
+        var catalog = Forest() with { RandomObjectOverrideCounts = [1] };
+
+        var entry = Assert.Single(PaletteCatalogBuilder.Build(catalog, _ => null));
+
+        Assert.Equal(PaletteCategory.Override, entry.Category);
+        Assert.Equal("Override 0/0", entry.DisplayName);
+    }
+
+    [Fact]
+    public void BuildAll_ChargeAndGreedShrines_AreInteractableEntries()
+    {
+        var catalog = Forest() with { ChargeShrineCount = 1, GreedShrineCount = 1 };
+
+        var entries = PaletteCatalogBuilder.Build(catalog, _ => null);
+
+        Assert.Equal(["interactable/chargeShrine/0", "interactable/greedShrine/0"], entries.Select(Id).ToArray());
+        Assert.All(entries, entry => Assert.Equal(PaletteCategory.Interactable, entry.Category));
+        Assert.Equal(["Charge shrine 0", "Greed shrine 0"], entries.Select(e => e.DisplayName).ToArray());
+    }
+
+    [Fact]
+    public void BuildAll_SceneChannels_BelongToTheMapTheyWereReadFrom()
+    {
+        var forest = Forest();
+        var desert = new PaletteMapCatalog(EMap.Desert, [], 0, true, false, 1);
+
+        var entries = PaletteCatalogBuilder.BuildAll([forest, desert], _ => null);
+
+        Assert.All(entries, entry => Assert.Equal(EMap.Desert, entry.Map));
+    }
+
+    [Fact]
+    public void BuildAll_RoutesDecodeToTheSourceIndices()
+    {
+        var catalog = Forest() with { RandomObjectOverrideCounts = [3] };
+
+        var route = CatalogRoute.Parse(PaletteCatalogBuilder.BuildAll([catalog], _ => null).Last().Id);
+
+        Assert.Equal(new CatalogRoute(CatalogRouteKind.RandomObjectOverride, EMap.Forest, 0, 0, 2), route);
+    }
 }

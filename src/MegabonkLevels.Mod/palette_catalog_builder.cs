@@ -13,21 +13,39 @@ public readonly record struct PaletteMapCatalog(
     bool HasChest,
     bool HasChestFree,
     int RailCount,
-    bool HasBoombox = false);
+    bool HasBoombox = false,
+    int ChargeShrineCount = 0,
+    int GreedShrineCount = 0,
+    IReadOnlyList<int> RandomObjectOverrideCounts = null);
 
 // Builds the catalogId shapes that CatalogRoute decodes, from counts read off the game's catalog.
 public static class PaletteCatalogBuilder
 {
-    public static IReadOnlyList<PaletteEntry> Build(PaletteMapCatalog catalog, Func<CatalogId, string> prefabName)
+    public static IReadOnlyList<PaletteEntry> Build(PaletteMapCatalog catalog, Func<CatalogId, string> prefabName) =>
+        BuildAll(new[] { catalog }, prefabName);
+
+    // One catalog per map, in the order given: the loaded map first, so the scene-wide channels it carries
+    // (chests, rails, boombox, charge and greed shrines) are emitted once, against the map they were read from.
+    public static IReadOnlyList<PaletteEntry> BuildAll(IReadOnlyList<PaletteMapCatalog> catalogs, Func<CatalogId, string> prefabName)
     {
         var entries = new List<PaletteEntry>();
+        foreach (var catalog in catalogs)
+        {
+            AddMap(entries, catalog, prefabName);
+        }
+
+        return entries;
+    }
+
+    private static void AddMap(List<PaletteEntry> entries, PaletteMapCatalog catalog, Func<CatalogId, string> prefabName)
+    {
         var map = catalog.Map.ToString().ToLowerInvariant();
 
         void Add(string id, PaletteCategory category, int stage, string fallbackLabel)
         {
             var catalogId = CatalogId.Parse(id);
             var name = prefabName(catalogId);
-            entries.Add(new PaletteEntry(catalogId, string.IsNullOrWhiteSpace(name) ? fallbackLabel : name, category, stage));
+            entries.Add(new PaletteEntry(catalogId, string.IsNullOrWhiteSpace(name) ? fallbackLabel : name, category, stage, catalog.Map));
         }
 
         for (var stage = 0; stage < catalog.Stages.Count; stage++)
@@ -58,6 +76,15 @@ public static class PaletteCatalogBuilder
             Add($"{map}/shrines/{i}", PaletteCategory.Shrine, 0, $"Shrine {i}");
         }
 
+        var overrides = catalog.RandomObjectOverrideCounts ?? Array.Empty<int>();
+        for (var group = 0; group < overrides.Count; group++)
+        {
+            for (var prefab = 0; prefab < overrides[group]; prefab++)
+            {
+                Add($"{map}/randomObjectsOverride/{group}/{prefab}", PaletteCategory.Override, 0, $"Override {group}/{prefab}");
+            }
+        }
+
         if (catalog.HasChest)
         {
             Add("interactable/chest", PaletteCategory.Interactable, 0, "Chest");
@@ -78,6 +105,14 @@ public static class PaletteCatalogBuilder
             Add($"interactable/rail/{i}", PaletteCategory.Interactable, 0, $"Rail {i}");
         }
 
-        return entries;
+        for (var i = 0; i < catalog.ChargeShrineCount; i++)
+        {
+            Add($"interactable/chargeShrine/{i}", PaletteCategory.Interactable, 0, $"Charge shrine {i}");
+        }
+
+        for (var i = 0; i < catalog.GreedShrineCount; i++)
+        {
+            Add($"interactable/greedShrine/{i}", PaletteCategory.Interactable, 0, $"Greed shrine {i}");
+        }
     }
 }

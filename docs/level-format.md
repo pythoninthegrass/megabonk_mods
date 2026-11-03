@@ -209,7 +209,7 @@ Rules, checked in this order by `CatalogId.TryParse`/`Parse`:
 
 `Bundle` is reserved for custom AssetBundle packs (see "Manifests and pack versions" in [asset-bundles.md](asset-bundles.md)). The grammar accepts `bundle:` ids now, and a pack's assets are validated against its manifest before any bundle is loaded.
 
-**Game-asset segment shapes**, cross-checked against the confirmed runtime catalog organization (`DataManager.Instance.maps[] : MapData` → `stages[] : StageData` → `randomMapObjects[] : RandomMapObject` → `.prefabs[] : GameObject[]`; `StageData.stageTilePrefabs : StageTilePrefabs` with `flatTilePrefabs[]`/`mapSpecificTilesPrefabs[]`; `MapData.shrines[]`, map-scoped not stage-scoped; `SpawnInteractables`'s singular `chest`/`chestFree` fields and `rails[]`) rather than invented independently:
+**Game-asset segment shapes**, cross-checked against the confirmed runtime catalog organization (`DataManager.Instance.maps[] : MapData` → `stages[] : StageData` → `randomMapObjects[] : RandomMapObject` → `.prefabs[] : GameObject[]`; `StageData.stageTilePrefabs : StageTilePrefabs` with `flatTilePrefabs[]`/`mapSpecificTilesPrefabs[]`; `MapData.shrines[]` and `MapData.randomObjectsOverride[]`, both map-scoped not stage-scoped; `SpawnInteractables`'s singular `chest`/`chestFree` fields and `rails[]`; `RandomObjectPlacer`'s singular `chargeShrineSpawns`/`greedShrineSpawns` `RandomMapObject` channels) rather than invented independently:
 
 | shape | example | source |
 | --- | --- | --- |
@@ -217,6 +217,9 @@ Rules, checked in this order by `CatalogId.TryParse`/`Parse`:
 | `{map}/stage{N}/stageTilePrefabs/flat/{index}` | `desert/stage1/stageTilePrefabs/flat/3` | `StageData.stageTilePrefabs.flatTilePrefabs[3]` |
 | `{map}/stage{N}/stageTilePrefabs/specific/{index}` | `graveyard/stage2/stageTilePrefabs/specific/1` | `StageData.stageTilePrefabs.mapSpecificTilesPrefabs[1]` |
 | `{map}/shrines/{index}` | `forest/shrines/5` | `MapData.shrines[5]` |
+| `{map}/randomObjectsOverride/{groupIndex}/{prefabIndex}` | `graveyard/randomObjectsOverride/0/0` | `MapData.randomObjectsOverride[0].prefabs[0]`, the map-wide counterpart to the per-stage `randomObjects` list, map-scoped like `shrines` and grouped under the palette's Overrides tab |
+| `interactable/chargeShrine/{index}` | `interactable/chargeShrine/0` | `RandomObjectPlacer.chargeShrineSpawns.prefabs[index]`; scene-wide, so listed once for the loaded map |
+| `interactable/greedShrine/{index}` | `interactable/greedShrine/0` | `RandomObjectPlacer.greedShrineSpawns.prefabs[index]`; scene-wide, so listed once for the loaded map |
 | `interactable/chest`, `interactable/chestFree` | — | `SpawnInteractables.chest` / `.chestFree` (singular fields) |
 | `interactable/boombox` | — | `EffectManager.boomboxQuest`, the game's only `InteractableBoombox` prefab; in a level with `music` it is the radio (see [music.md](music.md)). No schema change: it is an ordinary `PlaceObject` id |
 | `interactable/rail/{index}` | `interactable/rail/2` | `SpawnInteractables.rails[2]` |
