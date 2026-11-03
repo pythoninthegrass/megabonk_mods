@@ -1,7 +1,7 @@
 ---
 id: TASK-006.04.01.02
 title: Add a MyGo native-UI progress window to the Go installer
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-31T08:14:00Z'
 updated_date: '2026-11-03 21:26'
@@ -43,11 +43,11 @@ The Go installer (TASK-006.04.01.01) ships with headless text progress. Add a pr
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 - [x] #5 task check passes
 - [x] #6 Tests written first for ported logic
 - [x] #7 Docs updated
-- [ ] #8 Conventional commit with no attribution
+- [x] #8 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -92,3 +92,9 @@ mini live check (macOS arm64, after Screen Recording was granted to Terminal): t
 
 Mid-run cancel verified live on mf (headless sway, MEGABONK_UI_STEP_DELAY=2s added as a documented test hook, test written first): running window shows 'install MegabonkLevels dev ...', '3/6 NLayer.dll -> ...', a 50% bar and Cancel; Tab Return on Cancel printed 'install cancelled - files already placed were rolled back', exit 1, and the game tree diffed identical to the pre-install tree.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added a MyGo native-UI progress window to the Go installer (internal/window): a Yes/Cancel confirm prompt, step label, percentage bar and a Cancel button that aborts between steps and rolls back through the recorded uninstall. GTK 3 on Linux (WebKitGTK never loaded), Metal on macOS, Direct3D 11 on Windows. The controlling-tty gate is gone; --no-gui, --non-interactive, MEGABONK_NON_INTERACTIVE, --json or no display keep the unchanged text reporter. MEGABONK_UI_STEP_DELAY slows steps for mid-run cancel testing. verify-static allows MyGo as the only direct module and glibc-only load deps. Verified live: GTK 3 window on mf (headless sway) and Windows (noVNC), Metal window on macOS, each with Yes install, Cancel, and uninstall; mid-run cancel on mf restored the tree exactly. docs/player-installer.md records the selection order, GTK-3 requirement, cancel semantics and the Windows stderr note.
+<!-- SECTION:FINAL_SUMMARY:END -->
