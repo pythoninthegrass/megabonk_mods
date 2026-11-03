@@ -853,7 +853,20 @@ p.write_text(json.dumps(d, indent=2))
 
 **Trigger a capture.** F12 is RenderDoc's default capture hotkey. Via `run.py menu drive` (KEY_F12 is in the uinput whitelist): `uv run scripts/run.py menu drive '[["key","KEY_F12"]]'`. Captures land in `/tmp/RenderDoc/` as `wine64-preloader_<date>_frame<N>.rdc`.
 
-**Headless GPU timing extraction.** The RenderDoc pymodule requires the Qt host to initialise — standalone import segfaults in v1.47 regardless of build flags. `renderdoccmd convert -f capture.rdc -o frame.xml` writes an XML export, but that format does not include GPU timestamps. Extracting per-frame GPU ms requires either the Qt host (qrenderdoc running on fedora with the captures open) or a future RenderDoc version with a standalone replay API. The captures from this task's measurements are stored on fedora at `/tmp/perf-captures-g/captures/` and `/tmp/perf-captures-s/captures/` until that path is available.
+**Headless replay, no Qt host.** `scripts/renderdoc_replay.py` opens a capture and reads GPU frame duration, draw-call counts and the per-enemy submission shapes straight from a plain interpreter — the Qt GUI is not needed, and `renderdoccmd convert -f capture.rdc -o frame.xml` is a dead end because that format carries no GPU timestamps. Three things about v1.47 cost time to find and are the reason an earlier round concluded this was impossible:
+
+- **The pymodule is ABI-pinned to the python it was built against.** Importing `renderdoc.so` under the wrong minor version dies in a way that looks exactly like the "needs the Qt host" failure. `ldd renderdoc.so` names the `libpython3.x` it wants; on the player laptop the module in `~/git/renderdoc-build/renderdoc/build3/lib` is built against `python3.14` while the system `python3` is 3.13, so the tool is run as `python3.14`. Point it at a different build with `MEGABONK_RENDERDOC_LIB`.
+- **`InitialiseReplay`/`ShutdownReplay` bracket every call.** No API call is valid before the first or after the second, and they are what the Qt host normally calls for you — that, not a missing GUI, is why the module is documented as unsuitable for standalone use. Omitting `ShutdownReplay()` dumps core during interpreter teardown, which also reads as an import-time crash.
+- **Only `renderdoc` exists standalone.** The `qrenderdoc` module (UI windows and docks) is not available outside the GUI, so anything the tool needs must come from the replay controller: `GetRootActions`, `EnumerateCounters`, `FetchCounters([GPUCounter.EventGPUDuration])`, `GetVulkanPipelineState`.
+
+```sh
+python3.14 scripts/renderdoc_replay.py --baseline "$G/count_0_0.rdc" --pipelines \
+  --json /tmp/replay.json "$G"/count_0_0.rdc "$G"/count_240_0.rdc
+```
+
+`--baseline` turns the run into a per-enemy split (GPU µs, draw calls, vertices and instances per extra enemy) against an empty-level capture. `--structured` parses only the capture's serialised API log — draw calls, instances and vertices submitted per shape — with no replay device, so it costs no GPU time and is safe to run while something else owns the box. Replaying is a GPU workload: the tool refuses to open a replay device while `Megabonk.exe` is running, which would skew both the game and the capture, and takes `--force` to override.
+
+Captures are written under `/tmp` and do not survive a reboot; regenerate them with the sweep command above before replaying.
 
 ### What ruined a measurement before it was understood
 

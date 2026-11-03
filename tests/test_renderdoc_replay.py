@@ -93,6 +93,35 @@ def test_per_enemy_cost_refuses_a_zero_population() -> None:
         rr.per_enemy_cost({"drawCalls": 1}, {"drawCalls": 2}, enemies=0)
 
 
+def draw(event_id, indices, instances):
+    return rr.Draw(event_id, indices, instances)
+
+
+def test_draw_records_attaches_the_measured_duration_to_each_draw() -> None:
+    draws = [draw(10, 660, 1), draw(11, 6, 2)]
+    records = rr.draw_records(draws, [(10, 0.0001234), (11, 0.0), (99, 0.005)])
+    assert records == [
+        {"eventId": 10, "indices": 660, "instances": 1, "gpuUSec": 123.4},
+        {"eventId": 11, "indices": 6, "instances": 2, "gpuUSec": 0.0},
+    ]
+
+
+def test_shape_totals_report_mean_and_floor_per_shape() -> None:
+    draws = [draw(1, 2304, 1), draw(2, 2304, 1), draw(3, 6, 1)]
+    totals = rr.shape_totals(draws, [(1, 0.000300), (2, 0.000100), (3, 0.000020)])
+    by_shape = {shape["indicesPerDraw"]: shape for shape in totals}
+    assert by_shape[2304]["drawCalls"] == 2
+    assert by_shape[2304]["gpuUSec"] == 400.0
+    assert by_shape[2304]["meanUSec"] == 200.0
+    assert by_shape[2304]["minUSec"] == 100.0
+    assert by_shape[2304]["vertices"] == 4608
+    assert [shape["indicesPerDraw"] for shape in totals] == [2304, 6]
+
+
+def test_shape_totals_of_nothing_is_empty() -> None:
+    assert rr.shape_totals([], []) == []
+
+
 def make_lib(root, *segments: str) -> None:
     directory = root.joinpath(*segments)
     directory.mkdir(parents=True, exist_ok=True)

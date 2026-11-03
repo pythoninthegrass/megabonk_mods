@@ -76,6 +76,29 @@ def gpu_totals(samples: Iterable[tuple[int, float]], top: int = TOP_EVENTS) -> d
     }
 
 
+def draw_records(draws: Sequence[Draw], samples: Iterable[tuple[int, float]]) -> list[dict[str, Any]]:
+    """One row per draw with its measured GPU duration, so attribution can be sliced offline without the GPU again."""
+    measured = dict(samples)
+    return [{"eventId": draw.event_id, "indices": draw.indices, "instances": draw.instances,
+             "gpuUSec": round(measured.get(draw.event_id, 0.0) * 1e6, 2)} for draw in draws]
+
+
+def shape_totals(draws: Sequence[Draw], samples: Iterable[tuple[int, float]]) -> list[dict[str, Any]]:
+    """GPU cost per submission shape; the minimum over a shape's draws is close to what one such draw really costs."""
+    measured = dict(samples)
+    grouped: dict[tuple[int, int], list[float]] = {}
+    for draw in draws:
+        grouped.setdefault((draw.indices, draw.instances), []).append(measured.get(draw.event_id, 0.0) * 1e6)
+    totals = []
+    for (indices, instances), values in grouped.items():
+        total = sum(values)
+        totals.append({"drawCalls": len(values), "indicesPerDraw": indices, "instances": instances,
+                       "vertices": indices * instances * len(values), "gpuUSec": round(total, 2),
+                       "meanUSec": round(total / len(values), 2), "minUSec": round(min(values), 2)})
+    totals.sort(key=lambda shape: -shape["gpuUSec"])
+    return totals
+
+
 def per_enemy_cost(baseline: Mapping[str, Any], capture: Mapping[str, Any], enemies: int) -> dict[str, Any]:
     """What one extra enemy costs, from the delta between an empty-level capture and a populated one."""
     if enemies <= 0:
@@ -175,9 +198,12 @@ def structured_draws(capture) -> tuple[list[Draw], dict[str, int]]:
 
 
 def pipeline_signature(rd: Any, controller, event_id: int) -> dict[str, Any]:
-    """What a draw binds: the shaders and the index and vertex buffers behind it."""
+    """What a draw binds: the shaders and the index and vertex buffers behind it. Reads the current event, so park on it first."""
+    if not event_id:
+        return {}
     try:
-        state = controller.GetVulkanPipelineState(event_id)
+        controller.SetFrameEvent(event_id, False)
+        state = controller.GetVulkanPipelineState()
     except BaseException:
         return {}
     if not state:
@@ -244,7 +270,8 @@ def read_capture(path: str, options: argparse.Namespace, rd: Any) -> dict[str, A
             report["error"] = "OpenCapture returned no controller"
             return report
         report["mode"] = "replay"
-        report["driver"] = controller.GetAPIProperties().graphicsDriver
+        properties = controller.GetAPIProperties()
+        report["device"] = {name: str(getattr(properties, name, "")) for name in ("vendor", "pipelineType", "degraded")}
 
         actions = flatten(controller.GetRootActions())
         draws = [Draw(action.eventId, action.numIndices, max(1, action.numInstances))
@@ -255,9 +282,13 @@ def read_capture(path: str, options: argparse.Namespace, rd: Any) -> dict[str, A
 
         available = list(controller.EnumerateCounters() or [])
         report["countersAvailable"] = sorted(str(counter) for counter in available)[:24]
+        samples: list[tuple[int, float]] = []
         if rd.GPUCounter.EventGPUDuration in available:
             results = controller.FetchCounters([rd.GPUCounter.EventGPUDuration]) or []
-            report.update(gpu_totals([(result.eventId, counter_seconds(result)) for result in results]))
+            samples = [(result.eventId, counter_seconds(result)) for result in results]
+            report.update(gpu_totals(samples))
+            report["drawRecords"] = draw_records(draws, samples)
+            report["shapeGpu"] = shape_totals(draws, samples)
         else:
             report["gpuFrameTotalUSec"] = None
             report["gpuCountersUnavailable"] = True
@@ -317,9 +348,9 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.flush()
 
     baseline = next((report for report in reports if report["capture"] == options.baseline), None)
-    if baseline is not None:
+    if baseline is not None and baseline.get("ok"):
         for report in reports:
-            if report is not baseline:
+            if report is not baseline and report.get("ok"):
                 report["perEnemy"] = per_enemy_cost(baseline, report, options.enemies)
 
     if options.json:
