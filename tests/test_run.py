@@ -1545,6 +1545,25 @@ def test_wait_for_wineserver_to_exit_kills_a_server_that_outlives_the_wait(monke
     assert "force-killed 1 lingering wineserver(s)" in capsys.readouterr().out
 
 
+def test_wait_for_wineserver_to_exit_reports_a_server_it_cannot_kill(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(run, "running_wineserver_pids", lambda: [7])
+    monkeypatch.setattr(run, "running_game_pids", lambda: [])
+    monkeypatch.setattr(run, "wineserver_binary", lambda: run.Path("/wine/bin/wineserver"))
+    monkeypatch.setattr(run, "resolve_wine_prefix", lambda: run.Path("/prefix"))
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0))
+
+    def refuse(pid, sig):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(os, "kill", refuse)
+    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit": 0)
+    monkeypatch.setattr(run.time, "sleep", lambda _: None)
+    assert run.wait_for_wineserver_to_exit() is False
+    out = capsys.readouterr().out
+    assert "could not be killed" in out
+    assert "force-killed" not in out
+
+
 def test_wait_for_wineserver_to_exit_fails_when_a_killed_server_survives(monkeypatch) -> None:
     monkeypatch.setattr(run, "running_wineserver_pids", lambda: [7])
     monkeypatch.setattr(run, "running_game_pids", lambda: [])

@@ -645,13 +645,22 @@ def wait_for_wineserver_to_exit(timeout: float = WINESERVER_EXIT_TIMEOUT_SECONDS
     if not running_wineserver_pids():
         return not running_game_pids()
     leftover_servers = running_wineserver_pids()
+    killed: list[int] = []
+    refused: list[int] = []
     for pid in leftover_servers:
         try:
             os.kill(pid, signal.SIGKILL)
         except ProcessLookupError:
-            pass
-    if leftover_servers:
-        print(f"relaunch: force-killed {len(leftover_servers)} lingering wineserver(s)")
+            continue
+        except PermissionError:
+            refused.append(pid)
+            continue
+        killed.append(pid)
+    if killed:
+        print(f"relaunch: force-killed {len(killed)} lingering wineserver(s)")
+    if refused:
+        listed = ", ".join(str(pid) for pid in refused)
+        print(f"relaunch: {len(refused)} wineserver(s) could not be killed (not ours): {listed}")
     time.sleep(1.0)
     force_kill_wine_leftovers("relaunch")
     return not running_wineserver_pids() and not running_game_pids()
