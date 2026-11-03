@@ -409,8 +409,8 @@ Fedora host that runs vanilla Steam (not a gamescope session):
   does not persist the accepted state here, so the warning appears on every
   launch. Dismiss it with `run.py menu drive` and `KEY_ENTER` (start the menu
   daemon first). A `load-level` sent while the screen is up fails with
-  `LevelLoader: load failed: no MapData found for map=Forest (1); available: `
-  (empty) — retry the load after Enter.
+  `LevelLoader: load failed: no MapData found for map=Forest (1); available:`
+  with an empty list — retry the load after Enter.
 - `run.py interact` targets the **nearest** interactable, not a named one. In
   the Warehouse it opens a chest 31 m away instead of the boombox. Use
   `run.py interact --type Boombox --force` for boombox work.

@@ -1,6 +1,10 @@
 .claude/**
 backlog/**
 
+# Machine-local notes, excluded by a global gitignore; linting them makes
+# task lint depend on what happens to be on the developer's machine
+**/CLAUDE.local.md
+
 # Scraped reference transcripts, kept verbatim rather than reformatted
 docs/reverse_engineering_megabonk_sphaerophoria.md
 docs/i_made_a_random_megabonk_level_generator_alexk.md
