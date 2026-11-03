@@ -5,7 +5,7 @@ public class ThpsLevelTests
     private static string RepoFile(string relative)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Taskfile.yml")))
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "taskfile.yml")))
         {
             dir = dir.Parent;
         }

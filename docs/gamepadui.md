@@ -389,3 +389,33 @@ each of which cost real time to discover.
 - On a headless dev box, disable GNOME's idle suspend or the machine sleeps
   mid-session and SSH times out:
   `gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'`.
+
+### Dev harness on a plain Fedora Steam host (no gamescope)
+
+These apply when using the development harness (not a packaged install) on a
+Fedora host that runs vanilla Steam (not a gamescope session):
+
+- **Offline direct-Proton launch** must export `SteamAppId=3405340 SteamGameId=3405340`.
+  Without them the loader calls `SteamApps.GetAppBuildId()` before Steamworks
+  has initialised and every `load-level` command fails with
+  `System.InvalidOperationException: Steamworks is not initialized`.
+- **Stale harness commands survive a restart.** The launcher script does not
+  clear the harness queue; a queued `quit` written during a previous session
+  executes at the next boot and kills the process immediately. Clear all five
+  subdirectories before launching:
+  `for d in commands processing results done rejected; do rm -f "$H/$d"/*.json; done`
+  (where `$H` is `<game>/harness`). `run.py relaunch` handles this automatically.
+- **Photosensitivity Warning per launch.** `~/.config/unity3d/Ved/Megabonk/prefs`
+  does not persist the accepted state here, so the warning appears on every
+  launch. Dismiss it with `run.py menu drive` and `KEY_ENTER` (start the menu
+  daemon first). A `load-level` sent while the screen is up fails with
+  `LevelLoader: load failed: no MapData found for map=Forest (1); available: `
+  (empty) — retry the load after Enter.
+- `run.py interact` targets the **nearest** interactable, not a named one. In
+  the Warehouse it opens a chest 31 m away instead of the boombox. Use
+  `run.py interact --type Boombox --force` for boombox work.
+- Invoke `~/.local/share/mise/shims/task` directly; `mise exec -- task`
+  mis-resolves the lowercase `taskfile.yml` and reports "no tasks defined".
+- Menu batch JSON does not survive two nested SSH quoting layers. Write the
+  `menu drive` call to a helper script on the target, or use `run.py`'s
+  `--host`/`--remote-repo` flags from the authoring box.

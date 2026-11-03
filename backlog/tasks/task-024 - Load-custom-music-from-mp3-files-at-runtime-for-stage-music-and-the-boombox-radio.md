@@ -3,11 +3,11 @@ id: TASK-024
 title: >-
   Load custom music from mp3 files at runtime for stage music and the boombox
   radio
-status: In Progress
+status: Done
 assignee:
   - Assistant
 created_date: '2026-10-29 08:43'
-updated_date: '2026-10-30T03:00:00Z'
+updated_date: '2026-11-03 03:13'
 labels:
   - music
   - level-editor
@@ -36,22 +36,22 @@ Remaining platform risk: inspect the native Linux binding ABI and confirm audibl
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 mp3 files placed in the custom music folder are discovered at game start without Unity or a pack build
-- [ ] #2 Tracks are ordered by their leading track number, including dotted numbers such as 06.01 and 06.02, and a file without a prefix has a documented, tested position
-- [ ] #3 A level's music field can name a runtime-loaded track and it plays as that level's stage music
-- [ ] #4 The boombox radio on a level plays the runtime tracks in prefix order and wraps after the last one
-- [ ] #5 A missing, unreadable or undecodable file logs a warning and falls back to the stock audio without failing the level load
-- [ ] #6 Existing bundle:<pack>/<clip> music references and pack playlists behave as before
-- [ ] #7 Decoding works in the running game on CrossOver (macOS) and on native Linux, confirmed by playing a track on each
-- [ ] #8 The prefix parsing and ordering logic is unit tested and docs/music.md describes the folder, the naming rule and the level reference
+- [x] #1 mp3 files placed in the custom music folder are discovered at game start without Unity or a pack build
+- [x] #2 Tracks are ordered by their leading track number, including dotted numbers such as 06.01 and 06.02, and a file without a prefix has a documented, tested position
+- [x] #3 A level's music field can name a runtime-loaded track and it plays as that level's stage music
+- [x] #4 The boombox radio on a level plays the runtime tracks in prefix order and wraps after the last one
+- [x] #5 A missing, unreadable or undecodable file logs a warning and falls back to the stock audio without failing the level load
+- [x] #6 Existing bundle:<pack>/<clip> music references and pack playlists behave as before
+- [x] #7 Decoding works in the running game on CrossOver (macOS) and on native Linux, confirmed by playing a track on each
+- [x] #8 The prefix parsing and ordering logic is unit tested and docs/music.md describes the folder, the naming rule and the level reference
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -92,4 +92,14 @@ Backlog reconciliation after spike delivery: TASK-024.01 marked Done with native
 Follow-up danger modulation report: Lance reported no modulation at 26 HP. Read-only live inspection showed Strobe playing at sourcePitch 1, no heldPitch/heldCutoff, and a level-up screen (frozen=true). Screenshot showed 26/77 HP and 0 overheal. Native GameAssembly inspection: PlayerEffects.Update RVA 0x3384B0 compares GetCombinedHp()/GetCombinedMaxHp() against 0.25 and resets dangerTarget above/equal that threshold; under threshold it accumulates damage/maxHP * 4, smooths dangerValue, and decays after sustained low HP. GetDangerRatioMusic RVA 0x337F70 returns clamp01((dangerValue - 0.6)/0.4); MusicController.UpdatePitch RVA 0x359C90 applies the game danger result, gated by the saved effect setting, without inspecting the current clip. GetCombinedHp/MaxHp include current overheal, not shield. At 26/77 (~34%) normal pitch is expected; no custom-music defect established. Retest below 25% (19 HP or less with max77/no overheal) and allow the native damage-driven danger value to rise before changing code. Did not resume the low-HP run, force damage, change settings or add a modulation override.
 
 Human danger-modulation confirmation: Lance tested against a stone golem and reported 'the audio slows down dramatically as expected'. This resolves the earlier suspected 26-HP modulation issue for the current native runtime track on default Wine; do not add a replacement modulation engine or change stock thresholds. Filed TASK-004.06.01 for controlled nonlethal harness damage so future low-health testing is repeatable without relying on enemies. This does not complete stage/radio integration or Linux verification.
+
+All subtasks (024.01–024.05) complete. AC#7 originally said "CrossOver (macOS) and on native Linux"; the Linux target was superseded — Lance chose Windows under Proton for all Linux machines (TASK-024.05). CrossOver/macOS verified in TASK-024.04; Windows/Proton on fedora verified in TASK-024.05. Closing parent with all criteria reconciled.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Runtime custom music fully shipped across all supported platforms. Players drop mp3 files into <game>/UserData/CustomMusic/, reference them in a level's music field with track:<name>, and the mod discovers, orders, decodes and plays them through the existing MusicTrack pipeline. The boombox radio cycles in numeric order and wraps. Missing, unreadable and undecodable files fall back to stock music without failing the level load. All bundle: references and pack playlists are unchanged.
+
+Verified end-to-end on CrossOver/macOS (TASK-024.04) and under Proton Experimental on Fedora Linux (TASK-024.05, Windows depot 3405342). Lance confirmed audible playback on both platforms. Numeric ordering, catalog discovery, fallback, boombox cycling, music controls and bundle regression are all covered by unit tests and automated integration checks.
+<!-- SECTION:FINAL_SUMMARY:END -->

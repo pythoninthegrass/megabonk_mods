@@ -5,7 +5,7 @@ public class ThpsEditableLevelTests
     private static LevelFile Read()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "Taskfile.yml"))) dir = dir.Parent;
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "taskfile.yml"))) dir = dir.Parent;
         return LevelFileSerializer.DeserializeWithMigration(File.ReadAllText(Path.Combine(dir!.FullName, "levels/thps-editable.mblevel.json")));
     }
 
