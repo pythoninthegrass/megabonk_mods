@@ -25,16 +25,22 @@ import (
 )
 
 // RuntimeModePrefix puts .NET inside the Proton prefix; RuntimeModeGameDir puts
-// it beside the game and needs a Steam launch option.
+// it beside the game and needs a Steam launch option; RuntimeModeNative is a
+// Windows install, where MelonLoader finds the runtime under its own directory.
 const (
 	RuntimeModePrefix  = "prefix"
 	RuntimeModeGameDir = "gamedir"
+	RuntimeModeNative  = "native"
 
 	versionMarkerFile = "MelonLoader/net6/MelonLoader.dll"
 	shimName          = "version.dll"
-	fallbackVersion   = "0.7.3"
-	loaderKind        = "melonloader"
-	dotnetKind        = "dotnet"
+
+	// loaderConfigName and pluginsDir are what MelonLoader creates on first launch.
+	loaderConfigName = "Loader.cfg"
+	pluginsDir       = "Plugins"
+	fallbackVersion  = "0.7.3"
+	loaderKind       = "melonloader"
+	dotnetKind       = "dotnet"
 )
 
 // Error means the install cannot be planned: the package, the game, or the
@@ -196,12 +202,16 @@ func BuildPlan(packageDir string, options Options) (*Plan, error) {
 	if mode == "" {
 		mode = RuntimeModePrefix
 	}
-	if mode != RuntimeModePrefix && mode != RuntimeModeGameDir {
-		return nil, fail("unknown runtime mode %s (expected %s, %s)", strconv.Quote(mode), RuntimeModePrefix, RuntimeModeGameDir)
+	if mode != RuntimeModePrefix && mode != RuntimeModeGameDir && mode != RuntimeModeNative {
+		return nil, fail("unknown runtime mode %s (expected %s, %s, %s)", strconv.Quote(mode), RuntimeModePrefix, RuntimeModeGameDir, RuntimeModeNative)
 	}
 
 	prefix := options.Prefix
 	wantOverride := overrideWanted(options.DllOverride)
+	if mode == RuntimeModeNative {
+		prefix = ""
+		wantOverride = false
+	}
 
 	warnings := []string{}
 	if mode == RuntimeModePrefix && !(prefix != "" && proton.UsablePrefix(prefix)) {
@@ -223,12 +233,15 @@ func BuildPlan(packageDir string, options Options) (*Plan, error) {
 		return nil, err
 	}
 	runtimeTarget := content.RuntimePath(game)
-	if mode == RuntimeModePrefix {
+	switch mode {
+	case RuntimeModePrefix:
 		runtimeTarget = proton.RuntimeTarget(prefix)
+	case RuntimeModeNative:
+		runtimeTarget = content.NativeRuntimePath(game)
 	}
 	runtimeMissing := !proton.RuntimeInstalled(runtimeTarget, dotnet.Version)
 	var launchOption *string
-	if mode != RuntimeModePrefix {
+	if mode == RuntimeModeGameDir {
 		text := proton.LaunchOption(runtimeTarget)
 		launchOption = &text
 	}
@@ -980,6 +993,7 @@ func Uninstall(game string, progress ui.Progress) ([]string, error) {
 
 	remove(ppath.Join(game, content.LoaderDir), true)
 	remove(ppath.Join(game, shimName), false)
+	remove(ppath.Join(game, content.UserData, loaderConfigName), false)
 	if progress != nil {
 		progress.Step("MelonLoader")
 	}
@@ -990,13 +1004,16 @@ func Uninstall(game string, progress ui.Progress) ([]string, error) {
 	for _, name := range record.Files {
 		remove(ppath.Join(game, name), false)
 	}
-	for _, directory := range []string{content.ModsDir, content.UserLibsDir} {
+	removeIfEmpty := func(directory string) {
 		candidate := ppath.Join(game, directory)
 		if ppath.IsDir(candidate) {
 			if err := os.Remove(native(candidate)); err == nil {
 				removed = append(removed, candidate)
 			}
 		}
+	}
+	for _, directory := range []string{content.ModsDir, content.UserLibsDir, pluginsDir} {
+		removeIfEmpty(directory)
 	}
 	if progress != nil {
 		progress.Step("mod files")
@@ -1014,6 +1031,9 @@ func Uninstall(game string, progress ui.Progress) ([]string, error) {
 			target = ppath.Join(game, entry.Dir)
 		}
 		remove(target, true)
+	}
+	for _, directory := range []string{ppath.Join(content.UserData, content.LevelPacksDir), ppath.Join(content.UserData, content.LevelsDir), content.UserData} {
+		removeIfEmpty(directory)
 	}
 	if progress != nil {
 		progress.Step("levels and packs")

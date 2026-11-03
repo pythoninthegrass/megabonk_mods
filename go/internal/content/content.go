@@ -112,6 +112,12 @@ func PackDest(gameDir, packID string) string { return ppath.Join(LevelPacksPath(
 // RuntimePath is the private runtime directory.
 func RuntimePath(gameDir string) string { return ppath.Join(gameDir, RuntimeSubdir) }
 
+// NativeRuntimePath is where MelonLoader looks for a .NET runtime on a native
+// Windows install without any environment variable.
+func NativeRuntimePath(gameDir string) string {
+	return ppath.Join(gameDir, LoaderDir, "Dependencies", "dotnet")
+}
+
 // VersionMarkerPath is the file recording the installed MelonLoader version.
 func VersionMarkerPath(gameDir string) string {
 	return ppath.Join(gameDir, LoaderDir, VersionMarkerName)

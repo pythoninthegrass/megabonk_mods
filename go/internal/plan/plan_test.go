@@ -691,3 +691,124 @@ func TestDocumentShapeForJSON(t *testing.T) {
 		t.Errorf("a step with a source should carry one: %v", first)
 	}
 }
+
+func nativeOptions(game string) Options {
+	return Options{Game: game, RuntimeMode: RuntimeModeNative, DllOverride: "auto", WineOverride: "auto"}
+}
+
+func TestNativeModePlacesTheRuntimeUnderTheLoaderWithoutWineSteps(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	opts := nativeOptions(game)
+	opts.Prefix = makePrefix(t)
+	built, err := BuildPlan(packageDir, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.ToSlash(filepath.Join(game, "MelonLoader", "Dependencies", "dotnet"))
+	if built.RuntimeMode != RuntimeModeNative || built.RuntimeTarget != want {
+		t.Errorf("mode = %q, target = %q, want %q", built.RuntimeMode, built.RuntimeTarget, want)
+	}
+	if built.LaunchOption != nil || built.DllOverride || len(built.Warnings) != 0 {
+		t.Errorf("launch = %v, override = %v, warnings = %v", built.LaunchOption, built.DllOverride, built.Warnings)
+	}
+	for _, action := range built.Actions {
+		if action.Kind == "enable-dll-override" {
+			t.Errorf("native mode must not touch a Wine prefix: %+v", action)
+		}
+		if action.Kind == "install-runtime" && strings.Contains(action.Detail, "launch option") {
+			t.Errorf("runtime step mentions a launch option: %q", action.Detail)
+		}
+	}
+}
+
+func TestNativeInstallIsANoopOnRerunAndRepairsOnlyTheRuntime(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	opts := nativeOptions(game)
+	built, err := BuildPlan(packageDir, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ApplyPlan(built, nil); err != nil {
+		t.Fatal(err)
+	}
+	if hostfxr := filepath.Join(game, "MelonLoader", "Dependencies", "dotnet", "host", "fxr", "6.0.36", "hostfxr.dll"); !ppathIsFile(hostfxr) {
+		t.Fatalf("runtime not placed: %s", hostfxr)
+	}
+	again, err := BuildPlan(packageDir, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !again.IsNoop() {
+		t.Fatalf("rerun actions = %v", kinds(again.Actions))
+	}
+	record := content.LoadRecord(ppath.Normalize(game))
+	if record == nil || record.Runtime == nil || record.Runtime.Mode != RuntimeModeNative || record.Runtime.LaunchOption != nil {
+		t.Fatalf("record runtime = %+v", record)
+	}
+	if err := os.RemoveAll(filepath.Join(game, "MelonLoader", "Dependencies", "dotnet")); err != nil {
+		t.Fatal(err)
+	}
+	repair, err := BuildPlan(packageDir, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := kinds(repair.Actions); !reflect.DeepEqual(got, []string{"install-runtime"}) {
+		t.Errorf("repair = %v", got)
+	}
+}
+
+func TestNativeUninstallRestoresAVanillaGame(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	built, err := BuildPlan(packageDir, nativeOptions(game))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ApplyPlan(built, nil); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(game, "UserData", "Loader.cfg"), "[loader]")
+	if err := os.MkdirAll(filepath.Join(game, "Plugins"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Uninstall(game, nil); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(game)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	if want := []string{"Megabonk.exe", "Megabonk_Data"}; !reflect.DeepEqual(names, want) {
+		t.Errorf("game dir after uninstall = %v, want %v", names, want)
+	}
+}
+
+func TestUninstallKeepsWhatAPlayerPutInPluginsAndUserData(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	built, err := BuildPlan(packageDir, nativeOptions(game))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ApplyPlan(built, nil); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(game, "UserData", "Loader.cfg"), "[loader]")
+	write(t, filepath.Join(game, "Plugins", "Other.dll"), "plugin")
+	write(t, filepath.Join(game, "UserData", "MelonPreferences.cfg"), "prefs")
+	if _, err := Uninstall(game, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, kept := range []string{"Plugins/Other.dll", "UserData/MelonPreferences.cfg"} {
+		if !ppathIsFile(filepath.Join(game, filepath.FromSlash(kept))) {
+			t.Errorf("%s was removed", kept)
+		}
+	}
+	if ppathIsFile(filepath.Join(game, "UserData", "Loader.cfg")) {
+		t.Error("the loader's own Loader.cfg survived")
+	}
+}
+
+func ppathIsFile(path string) bool { return ppath.IsFile(ppath.Normalize(filepath.ToSlash(path))) }
