@@ -72,6 +72,15 @@ The Python tests are in `tests/` and run with `task scripts:test` or `uv run pyt
 
 Two conftest rules surprise people: a `FileNotFoundError` on any path in `GENERATED_ARTIFACTS` skips the test rather than failing (so a missing gitignored build product is never a red suite, and a product that exists but is malformed still fails), and an autouse fixture replaces `os.kill` with a stub that raises, so a test that signals a process installs its own recorder.
 
+## Honcho memory
+
+Honcho is the persistent memory here (workspace `lance`, peers `lance` and `Assistant`); Serena's memory and onboarding tools are disabled. The calls that matter, in order: `create_session` (`workspace_id: "lance"`, a unique `session_id`, `metadata` a JSON string naming the repo path), `add_peers_to_session` (`lance` with `observe_me` and `observe_others` true, `Assistant` with `observe_me: false`), then `add_messages_to_session` reusing that one `session_id` for the whole conversation rather than minting one per turn.
+
+- Confirm a write with `get_session_context`, not `search`. Derivation is asynchronous and `search` ranks across the whole workspace, so a message written seconds ago can be missing from the top hits; re-adding it on that evidence produces duplicates.
+- Expect a second session holding the raw transcript, recorded automatically under an `opencode-<repo>` id. Curated durable facts belong in your own session; read both before concluding Honcho knows nothing.
+- Prefer `get_session_context`, `get_peer_context`, `get_representation` and `search`, which return at once. `chat` and `workspace_chat` run live reasoning for seconds; use them when a reasoned answer actually changes what you write.
+- Record decisions, rules and preferences, not command logs, source dumps, or anything from `.env`.
+
 ## Comments in code (all languages)
 
 No section-banner or multi-paragraph comments, in `.cs`, `.py`, `.sh`, or anywhere else. Code should be self-explanatory; put design rationale in `docs/*.md` instead. A comment above a function, method, or field is at most 1-2 lines, and only when naming alone doesn't make intent clear.
