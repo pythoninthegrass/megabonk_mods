@@ -141,27 +141,35 @@ func ClientCandidates(home, xdgDataHome string, grantedPaths []string) []Candida
 	}
 	dataHomes = append(dataHomes, ppath.Join(home, ".local", "share"))
 
-	type placement struct {
-		kind string
-		path string
-	}
-	candidates := []placement{}
+	candidates := []clientPlacement{}
 	for _, dataHome := range dataHomes {
-		candidates = append(candidates, placement{"native", ppath.Join(dataHome, "Steam")})
+		candidates = append(candidates, clientPlacement{"native", ppath.Join(dataHome, "Steam")})
 	}
 	candidates = append(candidates,
-		placement{"native", ppath.Join(home, ".steam", "root")},
-		placement{"native", ppath.Join(home, ".steam", "steam")},
-		placement{"flatpak", ppath.Join(home, ".var", "app", FlatpakID, ".local", "share", "Steam")},
-		placement{"flatpak", ppath.Join(home, ".var", "app", FlatpakID, "data", "Steam")},
+		clientPlacement{"native", ppath.Join(home, ".steam", "root")},
+		clientPlacement{"native", ppath.Join(home, ".steam", "steam")},
+		clientPlacement{"flatpak", ppath.Join(home, ".var", "app", FlatpakID, ".local", "share", "Steam")},
+		clientPlacement{"flatpak", ppath.Join(home, ".var", "app", FlatpakID, "data", "Steam")},
 	)
 	for _, granted := range grantedPaths {
-		candidates = append(candidates, placement{"flatpak", ppath.ExpandUser(granted)})
+		candidates = append(candidates, clientPlacement{"flatpak", ppath.ExpandUser(granted)})
 	}
 
+	return classifyClients(candidates)
+}
+
+// clientPlacement is a location that might hold a Steam client of a kind.
+type clientPlacement struct {
+	kind string
+	path string
+}
+
+// classifyClients accepts the placements that are a Steam root and names why
+// each other one was rejected.
+func classifyClients(placements []clientPlacement) []Candidate {
 	out := []Candidate{}
 	seen := map[string]bool{}
-	for _, item := range candidates {
+	for _, item := range placements {
 		if !ppath.IsDir(item.path) {
 			out = append(out, Candidate{Path: item.path, Kind: item.kind, Reason: ReasonMissing})
 			continue
@@ -290,7 +298,11 @@ func LibraryFolders(client Client) []string {
 	if err != nil {
 		return nil
 	}
-	return vdf.LibraryFolderPaths(data)
+	paths := vdf.LibraryFolderPaths(data)
+	for index, path := range paths {
+		paths[index] = slashDrivePath(path)
+	}
+	return paths
 }
 
 type libraryOptions struct {
