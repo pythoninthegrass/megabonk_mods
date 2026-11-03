@@ -4,7 +4,7 @@ title: Windows player installer
 status: In Progress
 assignee: []
 created_date: '2026-10-31T03:12:00Z'
-updated_date: '2026-11-03 22:51'
+updated_date: '2026-11-03 23:43'
 labels:
   - tooling
 dependencies: []
@@ -34,21 +34,21 @@ This subtask delivers the Windows half of the package contract. A code-signed ex
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 The manual Windows install flow is verified on a real Windows install first, and any difference from the player guide's Windows section is corrected there before the installer is written against it
-- [ ] #2 Running the installer on a Windows machine leaves Megabonk launchable with the mod loaded: MelonLoader at the pinned version (checksum-verified), the mod DLL placed, and the .NET 6 Desktop Runtime present, installed by the installer when missing
-- [ ] #3 The game directory is found from Steam's recorded library folders, including a library that is not on the default location
+- [x] #2 Running the installer on a Windows machine leaves Megabonk launchable with the mod loaded: MelonLoader at the pinned version (checksum-verified), the mod DLL placed, and the .NET 6 Desktop Runtime present, installed by the installer when missing
+- [x] #3 The game directory is found from Steam's recorded library folders, including a library that is not on the default location
 - [ ] #4 Nothing requires administrator elevation: every write is inside the game directory and at user scope
-- [ ] #5 Re-running is a no-op when everything is at the expected version, and repairs only what is missing or stale when it is not; uninstall restores a vanilla game
+- [x] #5 Re-running is a no-op when everything is at the expected version, and repairs only what is missing or stale when it is not; uninstall restores a vanilla game
 - [ ] #6 Optional inputs are honored: a chosen level file lands in UserData/Levels/, a pack bundle and its manifest land in UserData/LevelPacks/<id>/, and UserData/Levels/ is created when absent
 - [ ] #7 Progress shows through a GUI progress dialog, and a failure it cannot resolve exits nonzero with a message that says what to do
-- [ ] #8 The verified command sequence is documented and the player guide's Windows section points at the installer instead of being marked untested
+- [x] #8 The verified command sequence is documented and the player guide's Windows section points at the installer instead of being marked untested
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -86,4 +86,8 @@ End-to-end in the Windows container (software-rendered guest, not real hardware)
 Not done yet: a Windows package target (the Python builder is Linux-only: install.sh, platform 'linux', zip name), the player guide and modding-setup Windows sections, the Go-installer table in docs/player-installer.md, and AC #1 on real hardware. Decision needed: whether uninstall should also remove loader-generated Plugins/ and UserData/Loader.cfg to satisfy 'restores a vanilla game' literally.
 
 Decision: uninstall also clears what the loader generates at first launch, so the game returns to vanilla. It deletes UserData/Loader.cfg and removes Plugins/, UserData/LevelPacks, UserData/Levels and UserData only when each is empty; anything a player put there (other plugins, MelonPreferences.cfg, their own levels) is kept. Covered by plan tests for both cases.
+
+Windows package target done: task package:windows builds the mod and windows/amd64 installer, then build_player_package.py --platform windows --installer-binary packs install.exe, vendor/, content/ and a platform=windows manifest (zip suffix -windows, output .tools/player-package-windows, OUTPUT_WINDOWS). Go and Python manifest loaders accept linux and windows. The Windows binary defaults --package to its own folder (Command.Executable hook) so a double-click works. docs/player-installer.md has a Windows package section and docs/modding-setup.md a players-on-Windows section. task check passes and the built package passes package:check. Remaining: AC #1 on real Windows hardware (all evidence so far is from a software-rendered guest), and running the built package's install.exe end to end in the guest.
+
+Built package tested in the Windows container (software-rendered guest, not real hardware): the zip from task package:windows was unzipped and install.exe --no-gui run with no --package and no --game-dir. It installed 6 steps (exit 0), --check reported nothing to do, and with the system .NET renamed away the game launched from a console-session scheduled task, logged 'Using HostFXR Path: <game>\MelonLoader\Dependencies\dotnet\host\fxr\6.0.36\hostfxr.dll', ran no runtime installer, generated assemblies, and logged '1 Mod loaded.' and 'MegabonkLevels mod initialized.'. install.exe --uninstall then left a vanilla game directory (no MelonLoader, Mods, UserLibs, Plugins, UserData, version.dll or install record). Guest restored afterward (prior manual install moved back, system dotnet back, scheduled task and staged files removed). The GUI progress window was not exercised (SSH session, --no-gui). AC #1 stays open.
 <!-- SECTION:NOTES:END -->
