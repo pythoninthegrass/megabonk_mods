@@ -13,6 +13,7 @@ import player_installer.content as content
 import player_installer.plan as plan
 import player_installer.proton as proton
 import pytest
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -81,6 +82,13 @@ def _install_tree(tmp_path: Path, *, windows_build: bool = True) -> tuple[Path, 
 @pytest.fixture
 def package(tmp_path: Path) -> Path:
     return _package(tmp_path)
+
+
+@pytest.fixture(autouse=True)
+def no_host_steam_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keeps discovery away from the real machine's /media mounts and Flatpak grants."""
+    monkeypatch.setattr(cli, "MOUNT_ROOTS", ())
+    monkeypatch.setattr(cli.steam, "flatpak_probe", lambda home_value: cli.steam.FlatpakProbe((), "file", True))
 
 
 def _run(argv: list[str]):
@@ -171,7 +179,7 @@ def test_a_granted_flatpak_library_is_searched_without_a_client_at_a_default_pat
     (game / "Megabonk.exe").write_bytes(b"MZ")
     (library / "config").mkdir()
     monkeypatch.setattr(cli, "MOUNT_ROOTS", ())
-    monkeypatch.setattr(cli.steam, "flatpak_granted_paths", lambda home_value: [library])
+    monkeypatch.setattr(cli.steam, "flatpak_probe", lambda home_value: cli.steam.FlatpakProbe((library,), "file", True))
     game_dir, prefix, searched = cli.find_install(home, [], cli.Reporter())
     assert game_dir == game
     assert searched == [str(library)]
@@ -335,3 +343,89 @@ def test_non_interactive_environment_covers_install_and_uninstall(tmp_path: Path
     assert "1/" in capsys.readouterr().out
     assert cli.main([*argv, "--uninstall"]) == cli.EXIT_OK
     assert "removed" in capsys.readouterr().out
+
+
+def _install_tree_without_prefix(tmp_path: Path) -> tuple[Path, Path]:
+    home, game = _install_tree(tmp_path)
+    shutil.rmtree(game.parents[1] / "compatdata")
+    return home, game
+
+
+def test_a_missing_install_names_every_candidate_and_the_retry_flag(tmp_path: Path, package: Path, capsys, monkeypatch) -> None:
+    monkeypatch.setattr(cli, "MOUNT_ROOTS", ())
+    home = tmp_path / "home"
+    client = home / ".local" / "share" / "Steam"
+    (client / "steamapps").mkdir(parents=True)
+    (client / "config").mkdir(parents=True)
+    searched = tmp_path / "lib-empty"
+    (searched / "steamapps" / "common").mkdir(parents=True)
+    stale = tmp_path / "mnt" / "games" / "SteamLibrary"
+    body = "".join('\t"%d"\n\t{\n\t\t"path"\t\t"%s"\n\t}\n' % (i, p) for i, p in enumerate([searched, stale]))
+    (client / "steamapps" / "libraryfolders.vdf").write_text('"libraryfolders"\n{\n%s}\n' % body)
+    code = _run(["--home", str(home), "--package", str(package), "--no-gui"])
+    assert code == cli.EXIT_NOT_FOUND
+    err = capsys.readouterr().err
+    assert str(client) in err and "found" in err
+    assert str(home / ".steam" / "root") in err and "does not exist" in err
+    assert "Libraries searched:" in err and str(searched) in err
+    assert "Libraries skipped:" in err and str(stale) in err
+    assert "drive not attached" in err
+    assert f"--library {stale}" in err
+    assert "--game-dir" in err
+
+
+def test_a_missing_prefix_names_the_prefix_flag_and_how_to_create_one(tmp_path: Path, package: Path, capsys) -> None:
+    home, game = _install_tree_without_prefix(tmp_path)
+    code = _run(["--home", str(home), "--package", str(package), "--no-gui", "--wine-override", "off"])
+    assert code == cli.EXIT_OK
+    err = capsys.readouterr().err
+    assert "--prefix" in err
+    assert "launch Megabonk once in Steam under Proton" in err
+    assert (game / content.RUNTIME_SUBDIR / "host" / "fxr" / "6.0.36" / "hostfxr.dll").is_file()
+
+
+def test_a_desktop_without_a_dialog_backend_prints_how_to_get_one(tmp_path: Path, package: Path, monkeypatch, capsys) -> None:
+    home, game = _install_tree(tmp_path)
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setattr(cli.ui, "has_tty", lambda: True)
+    monkeypatch.setattr(cli.ui, "find_dialog_binary", lambda *args, **kwargs: None)
+    code = _run(["--home", str(home), "--package", str(package), "--wine-override", "off"])
+    assert code == cli.EXIT_OK
+    err = capsys.readouterr().err
+    assert "zenity" in err and "--no-gui" in err
+
+
+def test_a_flatpak_client_without_the_flatpak_cli_prints_the_library_hint(tmp_path: Path, package: Path, monkeypatch, capsys) -> None:
+    home = tmp_path / "home"
+    flatpak = home / ".var" / "app" / "com.valvesoftware.Steam" / "data" / "Steam"
+    library = tmp_path / "media" / "steam"
+    game = library / "steamapps" / "common" / "Megabonk"
+    (game / "Megabonk_Data").mkdir(parents=True)
+    (game / "Megabonk.exe").write_bytes(b"MZ")
+    (flatpak / "steamapps").mkdir(parents=True)
+    (flatpak / "config").mkdir(parents=True)
+    body = '\t"0"\n\t{\n\t\t"path"\t\t"%s"\n\t}\n' % library
+    (flatpak / "steamapps" / "libraryfolders.vdf").write_text('"libraryfolders"\n{\n%s}\n' % body)
+    monkeypatch.setattr(cli.steam, "flatpak_probe", lambda home_value: cli.steam.FlatpakProbe((), "none", False))
+    code = _run(["--home", str(home), "--package", str(package), "--no-gui", "--wine-override", "off"])
+    assert code == cli.EXIT_OK
+    err = capsys.readouterr().err
+    assert "flatpak" in err.lower() and "--library" in err
+
+
+def test_a_flatpak_library_the_sandbox_cannot_read_names_the_grant_command(tmp_path: Path, package: Path, monkeypatch, capsys) -> None:
+    home = tmp_path / "home"
+    flatpak = home / ".var" / "app" / "com.valvesoftware.Steam" / "data" / "Steam"
+    library = tmp_path / "media" / "steam"
+    game = library / "steamapps" / "common" / "Megabonk"
+    (game / "Megabonk_Data").mkdir(parents=True)
+    (game / "Megabonk.exe").write_bytes(b"MZ")
+    (flatpak / "steamapps").mkdir(parents=True)
+    (flatpak / "config").mkdir(parents=True)
+    body = '\t"0"\n\t{\n\t\t"path"\t\t"%s"\n\t}\n' % library
+    (flatpak / "steamapps" / "libraryfolders.vdf").write_text('"libraryfolders"\n{\n%s}\n' % body)
+    monkeypatch.setattr(cli.steam, "flatpak_probe", lambda home_value: cli.steam.FlatpakProbe((), "none", True))
+    code = _run(["--home", str(home), "--package", str(package), "--no-gui", "--wine-override", "off"])
+    assert code == cli.EXIT_OK
+    err = capsys.readouterr().err
+    assert f"flatpak override --user --filesystem={library} com.valvesoftware.Steam" in err

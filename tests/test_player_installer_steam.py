@@ -201,3 +201,114 @@ def test_steam_running_false_when_ps_is_unavailable(monkeypatch) -> None:
 
     monkeypatch.setattr(steam.subprocess, "run", boom)
     assert steam.steam_running() is False
+
+
+def test_client_candidates_names_every_default_location(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    candidates = steam.client_candidates(home)
+    paths = [c.path for c in candidates]
+    assert home / ".local" / "share" / "Steam" in paths
+    assert home / ".steam" / "root" in paths
+    assert home / ".steam" / "steam" in paths
+    assert home / ".var" / "app" / "com.valvesoftware.Steam" / ".local" / "share" / "Steam" in paths
+    assert home / ".var" / "app" / "com.valvesoftware.Steam" / "data" / "Steam" in paths
+    assert all(not c.accepted and c.reason == steam.REASON_MISSING for c in candidates)
+
+
+def test_client_candidates_names_why_a_candidate_is_not_a_steam_root(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    (home / ".local" / "share" / "Steam").mkdir(parents=True)
+    candidates = {c.path: c for c in steam.client_candidates(home)}
+    rejected = candidates[home / ".local" / "share" / "Steam"]
+    assert not rejected.accepted
+    assert rejected.reason == steam.REASON_NO_STEAMAPPS
+
+
+def test_client_candidates_accepts_a_granted_root_and_flags_a_repeat(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    granted = _make_client(tmp_path / "media" / "steam", [])
+    candidates = steam.client_candidates(home, granted_paths=[granted, granted])
+    accepted = [c for c in candidates if c.accepted]
+    assert [(c.path, c.kind) for c in accepted] == [(granted, "flatpak")]
+    repeats = [c for c in candidates if c.path == granted and not c.accepted]
+    assert repeats and repeats[0].reason == steam.REASON_DUPLICATE
+
+
+def test_client_roots_and_client_candidates_agree(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _make_client(home / ".local" / "share" / "Steam", [])
+    granted = _make_client(tmp_path / "media" / "steam", [])
+    clients = steam.client_roots(home, granted_paths=[granted])
+    accepted = [c for c in steam.client_candidates(home, granted_paths=[granted]) if c.accepted]
+    assert [(c.kind, c.root) for c in clients] == [(c.kind, c.path) for c in accepted]
+
+
+def test_library_candidates_names_an_unmounted_library_and_the_retry_path(tmp_path: Path) -> None:
+    client = _make_client(tmp_path / "steam", [tmp_path / "mnt" / "games" / "SteamLibrary"])
+    candidates = steam.library_candidates([steam.SteamClient("native", client)])
+    rejected = [c for c in candidates if not c.accepted]
+    assert [c.path for c in rejected] == [tmp_path / "mnt" / "games" / "SteamLibrary"]
+    assert rejected[0].reason == steam.REASON_UNMOUNTED.format(parent=tmp_path / "mnt" / "games")
+
+
+def test_library_candidates_flags_a_flatpak_library_the_sandbox_cannot_read(tmp_path: Path) -> None:
+    library = tmp_path / "media" / "steam"
+    (library / "steamapps").mkdir(parents=True)
+    client = _make_client(tmp_path / "steam", [library])
+    candidates = steam.library_candidates([steam.SteamClient("flatpak", client)])
+    assert [(c.path, c.accepted, c.granted) for c in candidates] == [(library, True, False)]
+
+
+def test_library_candidates_marks_a_granted_library_granted(tmp_path: Path) -> None:
+    library = tmp_path / "media" / "steam"
+    (library / "steamapps").mkdir(parents=True)
+    client = _make_client(tmp_path / "steam", [library])
+    candidates = steam.library_candidates([steam.SteamClient("flatpak", client)], overrides=[library])
+    assert [(c.path, c.accepted, c.granted) for c in candidates if c.accepted] == [(library, True, True)]
+    assert [c.reason for c in candidates if not c.accepted] == [steam.REASON_DUPLICATE]
+
+
+def test_library_candidates_records_duplicates_against_the_first_source(tmp_path: Path) -> None:
+    client = _make_client(tmp_path / "steam", [tmp_path / "lib1"])
+    _make_library(tmp_path / "lib1")
+    candidates = steam.library_candidates([steam.SteamClient("native", client)], overrides=[tmp_path / "lib1"])
+    accepted = [c for c in candidates if c.accepted]
+    assert [(c.path, c.kind) for c in accepted] == [(tmp_path / "lib1", "client")]
+    repeats = [c for c in candidates if not c.accepted]
+    assert [c.reason for c in repeats] == [steam.REASON_DUPLICATE]
+
+
+def test_flatpak_probe_prefers_the_persisted_file_and_reports_the_source(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    granted = tmp_path / "data" / "steam"
+    override = home / ".var" / "app" / "com.valvesoftware.Steam" / "configuration" / "flatpak" / "local-overrides" / "com.valvesoftware.Steam"
+    override.parent.mkdir(parents=True)
+    override.write_text(f"[Context]\nfilesystems={granted};\n")
+    probe = steam.flatpak_probe(home)
+    assert probe.paths == (granted,)
+    assert probe.source == "file"
+
+
+def test_flatpak_probe_reports_a_missing_cli(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+
+    def boom(*args, **kwargs):
+        raise OSError("no flatpak")
+
+    monkeypatch.setattr(steam.subprocess, "run", boom)
+    probe = steam.flatpak_probe(home)
+    assert probe.paths == ()
+    assert probe.source == "none"
+    assert probe.cli_found is False
+
+
+def test_flatpak_granted_paths_still_returns_the_probe_paths(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    granted = tmp_path / "data" / "steam"
+    override = home / ".var" / "app" / "com.valvesoftware.Steam" / "configuration" / "flatpak" / "local-overrides" / "com.valvesoftware.Steam"
+    override.parent.mkdir(parents=True)
+    override.write_text(f"[Context]\nfilesystems={granted};\n")
+    assert steam.flatpak_granted_paths(home) == [granted]

@@ -84,22 +84,42 @@ def resolve_package_dir(raw: str) -> Path | None:
 
 
 def find_install(home: Path, extra_libraries: list[str], reporter: Reporter) -> tuple[Path | None, Path | None, list[str]]:
-    granted = steam.flatpak_granted_paths(home)
+    probe = steam.flatpak_probe(home)
+    granted = list(probe.paths)
     clients = steam.client_roots(home, granted_paths=granted)
     if granted:
         reporter.say("Flatpak Steam may only read: " + ", ".join(str(path) for path in granted))
+    if probe.source == "none" and not probe.cli_found and any(client.kind == "flatpak" for client in clients):
+        reporter.warn(
+            "flatpak CLI not found: Flatpak Steam grants were not read; install flatpak, "
+            "or pass --library <path> for a library the sandbox cannot read"
+        )
     roots = steam.library_roots(
         clients,
         overrides=granted,
         extra_paths=[Path(path).expanduser() for path in extra_libraries],
         mount_roots=[Path(root) for root in MOUNT_ROOTS if Path(root).is_dir()],
     )
+    _warn_ungranted_flatpak_roots(reporter, clients, roots)
     if not roots:
         reporter.say("no Steam library found; pass --game-dir if Megabonk is somewhere unusual")
     game_dir = steam.find_game_dir(roots)
     if game_dir is None:
         return None, None, [str(root.path) for root in roots]
     return game_dir, steam.prefix_for_game_dir(game_dir), [str(root.path) for root in roots]
+
+
+def _warn_ungranted_flatpak_roots(reporter: Reporter, clients: list[steam.SteamClient], roots: list[steam.LibraryRoot]) -> None:
+    flatpak_clients = {client.root for client in clients if client.kind == "flatpak"}
+    for root in roots:
+        if root.source != "client" or root.client is None or root.client.root not in flatpak_clients:
+            continue
+        if root.granted is True:
+            continue
+        reporter.warn(
+            f"library {root.path} is not granted to the Flatpak sandbox: Steam cannot read files installed there; "
+            f"grant it with: flatpak override --user --filesystem={root.path} {steam.FLATPAK_ID}"
+        )
 
 
 def validate_inputs(args: argparse.Namespace, reporter: Reporter) -> list[str]:
@@ -119,6 +139,14 @@ def _launch_option_note(plan_value: plan.Plan) -> str:
         f"    {plan_value.launch_option}\n\n"
         "Steam rewrites its own config while it runs, so the installer cannot set this for you."
     )
+
+
+def _note_dialog_skip(reporter: Reporter, args: argparse.Namespace) -> None:
+    if args.no_gui or args.non_interactive or args.as_json:
+        return
+    note = ui.dialog_skip_note(dict(os.environ))
+    if note:
+        reporter.warn(note)
 
 
 def do_check(args: argparse.Namespace, reporter: Reporter, game_dir: Path, package: Path, manifest: mf.PackageManifest) -> int:
@@ -186,6 +214,7 @@ def do_install(args: argparse.Namespace, reporter: Reporter, game_dir: Path, pac
                 reporter.say(f"  - {action.kind}: {action.label}")
         return EXIT_OK
 
+    _note_dialog_skip(reporter, args)
     progress = ui.pick_progress(
         dict(os.environ),
         force_text=args.no_gui or args.non_interactive or args.as_json,
@@ -226,6 +255,7 @@ def do_uninstall(args: argparse.Namespace, reporter: Reporter, game_dir: Path) -
     if not record:
         reporter.say(f"nothing to uninstall: no installer record in {game_dir}")
         return EXIT_OK
+    _note_dialog_skip(reporter, args)
     progress = ui.pick_progress(
         dict(os.environ),
         force_text=args.no_gui or args.non_interactive or args.as_json,
@@ -301,20 +331,47 @@ def _locate(args: argparse.Namespace, reporter: Reporter) -> tuple[Path | None, 
     home = Path(args.home).expanduser() if args.home else Path.home()
     game_dir, _prefix, searched = find_install(home, args.library, reporter)
     if game_dir is None:
-        reporter.fail(
-            "\n".join(
-                [
-                    "Megabonk was not found in any Steam library.",
-                    "Install it in Steam and start it once, or point the installer straight at it:",
-                    f"  python3 -m player_installer --package <package> --game-dir <path to the folder holding {gamebuild.WINDOWS_EXE}>",
-                    "",
-                    "Libraries searched: " + (", ".join(searched) or "none"),
-                ]
-            ),
-            EXIT_NOT_FOUND,
-        )
+        reporter.fail("\n".join(_not_found_lines(home, args.library)), EXIT_NOT_FOUND)
         return None, searched
     return game_dir, searched
+
+
+def _not_found_lines(home: Path, extra_libraries: list[str]) -> list[str]:
+    """Every candidate discovery considered, why each was rejected, and the flag to retry with."""
+    lines = [
+        "Megabonk was not found in any Steam library.",
+        "Install it in Steam and start it once, or point the installer straight at it:",
+        f"  python3 -m player_installer --package <package> --game-dir <path to the folder holding {gamebuild.WINDOWS_EXE}>",
+        "",
+        "Steam clients considered:",
+    ]
+    candidates = steam.client_candidates(home)
+    for candidate in candidates:
+        lines.append(f"  - {candidate.path} ({candidate.kind}): {'found' if candidate.accepted else candidate.reason}")
+    if not any(candidate.accepted for candidate in candidates):
+        lines.append(f"  none accepted — pass --home <path> if Steam is not under {home}")
+    granted = list(steam.flatpak_probe(home).paths)
+    clients = [steam.SteamClient(candidate.kind, candidate.path) for candidate in candidates if candidate.accepted]
+    considered = steam.library_candidates(
+        clients,
+        overrides=granted,
+        extra_paths=[Path(path).expanduser() for path in extra_libraries],
+        mount_roots=[Path(root) for root in MOUNT_ROOTS if Path(root).is_dir()],
+    )
+    searched = [candidate for candidate in considered if candidate.accepted]
+    skipped = [candidate for candidate in considered if not candidate.accepted and candidate.reason != steam.REASON_DUPLICATE]
+    if searched:
+        lines.append("Libraries searched:")
+        lines += [f"  - {candidate.path} ({candidate.kind})" for candidate in searched]
+    else:
+        lines.append("Libraries searched: none — pass --library <path> to add one")
+    if skipped:
+        lines.append("Libraries skipped:")
+        lines += [
+            f"  - {candidate.path} ({candidate.kind}): {candidate.reason} — retry with --library {candidate.path}"
+            for candidate in skipped
+        ]
+    return lines
 
 
 if __name__ == "__main__":  # pragma: no cover

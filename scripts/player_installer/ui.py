@@ -212,6 +212,10 @@ def find_dialog_binary(find_binary: Callable[[str], str | None] | None = None, e
     return None
 
 
+def _non_interactive(environ: dict) -> bool:
+    return environ.get("MEGABONK_NON_INTERACTIVE", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def pick_progress(
     env: dict | None = None,
     *,
@@ -222,10 +226,22 @@ def pick_progress(
 ) -> Progress:
     """A dialog with a controlling tty and desktop session, plain text otherwise."""
     env = dict(env if env is not None else os.environ)
-    non_interactive = env.get("MEGABONK_NON_INTERACTIVE", "").strip().lower() in {"1", "true", "yes", "on"}
-    if not force_text and not non_interactive and has_display(env) and has_tty():
+    if not force_text and not _non_interactive(env) and has_display(env) and has_tty():
         binary = find_dialog_binary(find_binary, env=env)
         if binary:
             locate = find_binary or shutil.which
             return GuiProgress(binary, title=title, qdbus=locate(QDBUS_BINARIES[0]) or locate(QDBUS_BINARIES[1]))
     return TextProgress(writer=writer)
+
+
+def dialog_skip_note(env: dict | None = None, *, find_binary: Callable[[str], str | None] | None = None) -> str | None:
+    """Why no dialog was chosen on what looks like a desktop, or None when a dialog runs or text was deliberate."""
+    environ = dict(env if env is not None else os.environ)
+    if _non_interactive(environ) or not has_display(environ) or not has_tty():
+        return None
+    if find_dialog_binary(find_binary, env=environ):
+        return None
+    return (
+        "no progress dialog found (zenity, yad, or kdialog with a qdbus tool); progress stays on stdout — "
+        "install one, e.g. 'sudo dnf install zenity' or 'sudo apt install zenity', or pass --no-gui to silence this"
+    )

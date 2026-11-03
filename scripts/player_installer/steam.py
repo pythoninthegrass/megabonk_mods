@@ -22,6 +22,12 @@ STEAM_ROOT_NAMES = ("Steam", "steam")
 FLATPAK_ID = "com.valvesoftware.Steam"
 CLIENT_MARKERS = ("steamapps",)
 SCAN_DEPTH = 2
+FLATPAK_BINARIES = ("flatpak", "/usr/bin/flatpak", "/var/lib/flatpak/exports/bin/flatpak")
+
+REASON_MISSING = "does not exist"
+REASON_NO_STEAMAPPS = "no steamapps/ directory"
+REASON_DUPLICATE = "already searched via an earlier candidate"
+REASON_UNMOUNTED = "drive not attached ({parent} is missing)"
 
 
 @dataclass(frozen=True)
@@ -38,16 +44,50 @@ class LibraryRoot:
     granted: bool | None = None
 
 
-def _is_steam_root(candidate: Path) -> bool:
-    return candidate.is_dir() and all((candidate / marker).exists() for marker in CLIENT_MARKERS)
+@dataclass(frozen=True)
+class Candidate:
+    path: Path
+    kind: str
+    accepted: bool
+    reason: str
+    granted: bool | None = None
+    client: SteamClient | None = None
 
 
-def client_roots(
+@dataclass(frozen=True)
+class FlatpakProbe:
+    paths: tuple[Path, ...]
+    source: str
+    cli_found: bool
+
+
+def _is_dir(path: Path) -> bool:
+    """is_dir without the PermissionError pathlib re-raises for EACCES."""
+    try:
+        return path.is_dir()
+    except OSError:
+        return False
+
+
+def _is_file(path: Path) -> bool:
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
+def _exists(path: Path) -> bool:
+    try:
+        return path.exists()
+    except OSError:
+        return False
+
+
+def _client_candidate_list(
     home: Path | str,
     xdg_data_home: Path | str | None = None,
     granted_paths: list[Path] | None = None,
-) -> list[SteamClient]:
-    """Steam clients for a user: native first, then Flatpak, whose root may sit in a granted path rather than under ~/.var."""
+) -> list[Candidate]:
     home = Path(home).expanduser()
     data_homes: list[Path] = []
     if xdg_data_home:
@@ -67,17 +107,40 @@ def client_roots(
         ("flatpak", home / ".var" / "app" / FLATPAK_ID / "data" / "Steam"),
     ]
     candidates += [("flatpak", Path(path).expanduser()) for path in granted_paths or []]
-    clients: list[SteamClient] = []
+    out: list[Candidate] = []
     seen: set[Path] = set()
     for kind, candidate in candidates:
-        if not _is_steam_root(candidate):
+        if not _is_dir(candidate):
+            out.append(Candidate(candidate, kind, False, REASON_MISSING))
+            continue
+        if not all(_exists(candidate / marker) for marker in CLIENT_MARKERS):
+            out.append(Candidate(candidate, kind, False, REASON_NO_STEAMAPPS))
             continue
         key = _identity(candidate)
         if key in seen:
+            out.append(Candidate(candidate, kind, False, REASON_DUPLICATE))
             continue
         seen.add(key)
-        clients.append(SteamClient(kind, candidate))
-    return clients
+        out.append(Candidate(candidate, kind, True, ""))
+    return out
+
+
+def client_candidates(
+    home: Path | str,
+    xdg_data_home: Path | str | None = None,
+    granted_paths: list[Path] | None = None,
+) -> list[Candidate]:
+    """Every client location considered, each with the reason it was accepted or rejected."""
+    return _client_candidate_list(home, xdg_data_home, granted_paths)
+
+
+def client_roots(
+    home: Path | str,
+    xdg_data_home: Path | str | None = None,
+    granted_paths: list[Path] | None = None,
+) -> list[SteamClient]:
+    """Steam clients for a user: native first, then Flatpak, whose root may sit in a granted path rather than under ~/.var."""
+    return [SteamClient(c.kind, c.path) for c in _client_candidate_list(home, xdg_data_home, granted_paths) if c.accepted]
 
 
 def flatpak_override_paths(text: str, home: Path | str | None = None) -> list[Path]:
@@ -118,19 +181,21 @@ def _expand_flatpak_path(entry: str, home: Path) -> Path | None:
 
 def _flatpak_override_file(home: Path) -> Path | None:
     path = home / ".var" / "app" / FLATPAK_ID / "configuration" / "flatpak" / "local-overrides" / FLATPAK_ID
-    return path if path.is_file() else None
+    return path if _is_file(path) else None
 
 
-def flatpak_granted_paths(home: Path | str) -> list[Path]:
-    """Paths Flatpak Steam may read, from the persisted override file or the flatpak CLI."""
+def flatpak_probe(home: Path | str) -> FlatpakProbe:
+    """How the Flatpak grants were answered: the persisted file, the CLI, or neither."""
     home = Path(home).expanduser()
     stored = _flatpak_override_file(home)
     if stored is not None:
         try:
-            return flatpak_override_paths(stored.read_text(encoding="utf-8", errors="replace"), home=home)
+            paths = flatpak_override_paths(stored.read_text(encoding="utf-8", errors="replace"), home=home)
+            return FlatpakProbe(tuple(paths), "file", True)
         except OSError:
             pass
-    for binary in ("flatpak", "/usr/bin/flatpak", "/var/lib/flatpak/exports/bin/flatpak"):
+    cli_found = False
+    for binary in FLATPAK_BINARIES:
         try:
             proc = subprocess.run(
                 [binary, "override", "--show", FLATPAK_ID],
@@ -141,14 +206,20 @@ def flatpak_granted_paths(home: Path | str) -> list[Path]:
             )
         except (OSError, subprocess.SubprocessError):
             continue
+        cli_found = True
         if proc.returncode == 0 and proc.stdout:
-            return flatpak_override_paths(proc.stdout, home=home)
-    return []
+            return FlatpakProbe(tuple(flatpak_override_paths(proc.stdout, home=home)), "cli", True)
+    return FlatpakProbe((), "none", cli_found)
+
+
+def flatpak_granted_paths(home: Path | str) -> list[Path]:
+    """Paths Flatpak Steam may read, from the persisted override file or the flatpak CLI."""
+    return list(flatpak_probe(home).paths)
 
 
 def libraryfolders(client: SteamClient) -> list[Path]:
     path = client.root / "steamapps" / "libraryfolders.vdf"
-    if not path.is_file():
+    if not _is_file(path):
         return []
     try:
         data = vdf.load_vdf(path)
@@ -157,16 +228,15 @@ def libraryfolders(client: SteamClient) -> list[Path]:
     return [Path(value) for value in vdf.library_folder_paths(data)]
 
 
-def library_roots(
+def _library_candidate_list(
     clients: list[SteamClient],
     *,
     overrides: list[Path] | None = None,
     extra_paths: list[Path] | None = None,
     mount_roots: list[Path] | None = None,
     include_missing: bool = False,
-) -> list[LibraryRoot]:
-    """Libraries to search, in priority order: the client's own list, Flatpak grants, explicit paths, then a media scan."""
-    found: list[LibraryRoot] = []
+) -> list[Candidate]:
+    found: list[Candidate] = []
     seen: set[Path] = set()
     granted_paths = list(overrides or [])
     granted = {granted_path for granted_path in granted_paths}
@@ -174,16 +244,18 @@ def library_roots(
     def add(path: Path, source: str, client: SteamClient | None = None, granted: bool | None = None) -> None:
         path = Path(path)
         if not include_missing and not _plausible(path):
+            found.append(Candidate(path, source, False, REASON_UNMOUNTED.format(parent=path.parent), granted, client))
             return
         key = _identity(path)
         if key in seen:
+            found.append(Candidate(path, source, False, REASON_DUPLICATE, granted, client))
             return
         seen.add(key)
-        found.append(LibraryRoot(path, source, client, granted))
+        found.append(Candidate(path, source, True, "", granted, client))
 
     for client in clients:
         for path in libraryfolders(client):
-            add(path, "client", client, granted=True if path in granted else None)
+            add(path, "client", client, granted=True if path in granted else (False if client.kind == "flatpak" else None))
 
     for path in granted_paths:
         add(path, "flatpak-override", granted=True)
@@ -197,10 +269,50 @@ def library_roots(
     return found
 
 
+def library_candidates(
+    clients: list[SteamClient],
+    *,
+    overrides: list[Path] | None = None,
+    extra_paths: list[Path] | None = None,
+    mount_roots: list[Path] | None = None,
+    include_missing: bool = False,
+) -> list[Candidate]:
+    """Every library considered, each with the reason it was accepted or rejected."""
+    return _library_candidate_list(
+        clients,
+        overrides=overrides,
+        extra_paths=extra_paths,
+        mount_roots=mount_roots,
+        include_missing=include_missing,
+    )
+
+
+def library_roots(
+    clients: list[SteamClient],
+    *,
+    overrides: list[Path] | None = None,
+    extra_paths: list[Path] | None = None,
+    mount_roots: list[Path] | None = None,
+    include_missing: bool = False,
+) -> list[LibraryRoot]:
+    """Libraries to search, in priority order: the client's own list, Flatpak grants, explicit paths, then a media scan."""
+    return [
+        LibraryRoot(candidate.path, candidate.kind, candidate.client, candidate.granted)
+        for candidate in _library_candidate_list(
+            clients,
+            overrides=overrides,
+            extra_paths=extra_paths,
+            mount_roots=mount_roots,
+            include_missing=include_missing,
+        )
+        if candidate.accepted
+    ]
+
+
 def scan_for_libraries(mount_root: Path | str, depth: int = SCAN_DEPTH) -> list[Path]:
     """Directories under a mount point that look like a Steam library (they hold steamapps/common)."""
     mount_root = Path(mount_root)
-    if not mount_root.is_dir():
+    if not _is_dir(mount_root):
         return []
     found: list[Path] = []
     frontier = [mount_root]
@@ -208,13 +320,13 @@ def scan_for_libraries(mount_root: Path | str, depth: int = SCAN_DEPTH) -> list[
         nxt: list[Path] = []
         for directory in frontier:
             try:
-                children = sorted(child for child in directory.iterdir() if child.is_dir())
+                children = sorted(child for child in directory.iterdir() if _is_dir(child))
             except OSError:
                 continue
             for child in children:
                 if child.name.startswith("."):
                     continue
-                if (child / "steamapps" / "common").is_dir():
+                if _is_dir(child / "steamapps" / "common"):
                     found.append(child)
                 else:
                     nxt.append(child)
@@ -223,11 +335,11 @@ def scan_for_libraries(mount_root: Path | str, depth: int = SCAN_DEPTH) -> list[
 
 
 def _looks_like_game(directory: Path) -> bool:
-    return directory.is_dir() and (
-        (directory / GAME_EXE).is_file()
-        or (directory / NATIVE_EXE).is_file()
-        or (directory / "GameAssembly.dll").is_file()
-        or (directory / DATA_DIR).is_dir()
+    return _is_dir(directory) and (
+        _is_file(directory / GAME_EXE)
+        or _is_file(directory / NATIVE_EXE)
+        or _is_file(directory / "GameAssembly.dll")
+        or _is_dir(directory / DATA_DIR)
     )
 
 
@@ -240,18 +352,26 @@ def find_game_dir(roots: list[LibraryRoot], game_name: str = GAME_NAME) -> Path 
             return install_dir
         if _looks_like_game(common / game_name):
             return common / game_name
-        if common.is_dir():
-            for candidate in sorted(common.iterdir()):
-                if candidate.is_dir() and _looks_like_game(candidate):
+        if _is_dir(common):
+            try:
+                children = sorted(common.iterdir())
+            except OSError:
+                continue
+            for candidate in children:
+                if _is_dir(candidate) and _looks_like_game(candidate):
                     return candidate
     return None
 
 
 def _install_dir_from_manifests(library: Path, game_name: str) -> Path | None:
     steamapps = library / "steamapps"
-    if not steamapps.is_dir():
+    if not _is_dir(steamapps):
         return None
-    for manifest in sorted(steamapps.glob(f"appmanifest_{APP_ID}.acf")):
+    try:
+        manifests = sorted(steamapps.glob(f"appmanifest_{APP_ID}.acf"))
+    except OSError:
+        return None
+    for manifest in manifests:
         try:
             data = vdf.load_vdf(manifest)
         except vdf.VdfError:
@@ -273,7 +393,7 @@ def prefix_for_game_dir(game_dir: Path | str, app_id: str = APP_ID) -> Path | No
         if parent.name == "common":
             library = parent.parent.parent
             candidate = prefix_root(library, app_id)
-            if candidate.is_dir():
+            if _is_dir(candidate):
                 return candidate
             return None
     return None
@@ -286,7 +406,7 @@ def compatdata_root(game_dir: Path | str, app_id: str = APP_ID) -> Path | None:
 
 def localconfig(client: SteamClient) -> dict | None:
     path = client.root / "config" / "localconfig.vdf"
-    if not path.is_file():
+    if not _is_file(path):
         return None
     try:
         return vdf.load_vdf(path)
@@ -308,7 +428,7 @@ def steam_running() -> bool:
 
 def _plausible(path: Path) -> bool:
     """A library is worth searching when it exists, or its parent does: a parent that is gone too means the drive is not attached."""
-    return path.is_dir() or path.parent.is_dir()
+    return _is_dir(path) or _is_dir(path.parent)
 
 
 def _identity(path: Path) -> str:

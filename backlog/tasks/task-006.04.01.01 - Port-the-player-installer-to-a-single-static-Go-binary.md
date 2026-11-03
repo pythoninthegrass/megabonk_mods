@@ -1,10 +1,10 @@
 ---
 id: TASK-006.04.01.01
 title: Port the player installer to a single static Go binary
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-31T08:14:00Z'
-updated_date: '2026-11-02T03:08:00Z'
+updated_date: '2026-11-03 03:53'
 labels:
   - tooling
 dependencies: []
@@ -59,5 +59,32 @@ The Python installer works but still asks the player for an interpreter: the 3.1
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-Adopted from the installer-script review recorded on TASK-006.04.01 (setup.atuin.sh, getmic.ro). The tty probe is deliberate: Go has no stdlib isatty, and opening /dev/tty and testing ModeCharDevice is both enough and keeps golang.org/x/term off the dependency list AC #6 counts. The interactive decision and the failure-message wording have to exist in the Python reference first, because AC #7 compares stdout between the two - implement there, then mirror. Cross-compiling linux/arm64 covers the installer binary only; the game is x86_64 under Proton, so the Go section under AC #8 states that outright rather than letting an arm64 build read as arm64 game support.
+## Adopted plan (user-approved 2026-11-02)
+
+Stdlib-only Go port under go/ (module github.com/pythoninthegrass/megabonk_mods/installer); bitfield/script evaluated and rejected - every subprocess call is a single exec with no pipelines, so os/exec covers it. Final third-party dependency list: empty. golang.org/x/term stays out: tty probe is os.OpenFile("/dev/tty", O_RDONLY|O_NONBLOCK|O_NOCTTY) + ModeCharDevice.
+
+Build targets (amends AC #1): darwin/arm64 (dev-box native, runs parity against synthetic trees), linux/amd64 (player fleet + live mf evidence), windows/amd64 (built so TASK-006.04.02 inherits a proven shape; not executed in parity). linux/arm64 dropped per user. installer:verify-static: ldd "not a dynamic executable" on linux, PE32+ check on windows, darwin asserts libSystem is the only dylib. Parity runs the host-native binary only.
+
+Phases:
+1. Python reference gap-fill (parent AC #10/#11 wording, tests first): discovery failures name every candidate, why rejected, and the exact retry flag; environment-skipped steps print the manual command and keep the exit code. Go mirrors these strings byte-for-byte.
+2. Scaffold: go/ module, cmd/megabonk-installer, taskfiles/installer.yml (installer:build CGO_ENABLED=0 cross to .tools/installer/, installer:test, installer:verify-static), task check gains a Go-presence-guarded step.
+3. Module-by-module port, Go tests first mirroring each tests/test_player_installer_*.py, in contract order vdf, gamebuild, manifest, content, steam, proton, plan, ui, cli. Message strings copied verbatim; AC #2/#5/#10 are byte-parity requirements.
+4. Parity harness tests/test_installer_parity.py: session fixture builds the binary (skips without Go), runs Go and Python against identical synthetic fixtures, compares stdout, stderr, install record, exit codes 0/1/2/3/4/10.
+5. Docs: player-installer.md Go section (build targets, contract inheritance, arm64-x86_64 caveats, Go not yet default). Binaries land in .tools/installer/ alongside the zip, never inside it.
+
+Out of scope: GUI dialogs (TASK-006.04.01.02), wm2 discovery-identity fix (parent AC #2, Python first), package zip contents unchanged.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Phase 1 (Python reference gap-fill, parent AC #10/#11 wording) implemented tests-first on this Linux maintainer host.
+
+Added to steam.py: Candidate dataclass with REASON_MISSING/REASON_NO_STEAMAPPS/REASON_DUPLICATE/REASON_UNMOUNTED; client_candidates() and library_candidates() enumerate every probe with its accept/reject reason (client_roots/library_roots now filter the same enumeration, one source of truth); FlatpakProbe + flatpak_probe() report whether the persisted local-overrides file or the flatpak CLI answered, and flatpak_granted_paths delegates to it. cli._not_found_lines prints every client candidate with its reason, libraries searched/skipped with the reason and the exact --library retry flag (duplicates filtered out of the report), and the --game-dir/--home hints. A Flatpak-client library with granted != True now prints the finishing command: flatpak override --user --filesystem=<path> com.valvesoftware.Steam. A flatpak client found without any way to read grants prints the install-flatpak-or-pass---library note. ui.dialog_skip_note() returns the zenity/yad/kdialog install hint only on a desktop (display + controlling tty + no non-interactive force) with no backend; cli warns before progress starts. plan.build_plan names --prefix and the launch-once-to-create recipe when the prefix is unusable (and stops printing "at None" when there is no prefix at all); the wine-mode PlanError names --proton.
+
+Real bug found on this host: Path.is_dir()/is_file()/exists() re-raise PermissionError for EACCES (not in pathlib's _ignore_error set), and an unreadable directory under /media crashed scan_for_libraries during every install. Discovery probes in steam.py now go through _is_dir/_is_file/_exists. The Go port must use os.Stat error-swallowing equivalents.
+
+Test hygiene: test_player_installer_cli.py gains an autouse fixture pinning MOUNT_ROOTS=() and a neutral flatpak_probe; without it the real host's /media/steam grant and Flatpak overrides leaked into synthetic-tree tests and made the not-found test exit 4 against the real native Megabonk.
+
+8 pytest failures (test_thps_attachments, test_build_thps_editable_level, two test_run wineserver cases) reproduce in a clean HEAD worktree without this change; they belong to unrelated in-flight THPS/boss-spawn work in the tree. Ruff clean; 128 installer tests pass.
+<!-- SECTION:NOTES:END -->

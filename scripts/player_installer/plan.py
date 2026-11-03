@@ -147,9 +147,14 @@ def build_plan(
     mode = runtime_mode
     if mode == "prefix" and not (prefix and proton.usable_prefix(prefix)):
         mode = "gamedir"
+        where = f" at {prefix}" if prefix else ""
         warnings.append(
-            f"no usable Proton prefix at {prefix}, so the .NET runtime goes beside the game; "
+            f"no usable Proton prefix{where}, so the .NET runtime goes beside the game; "
             "Steam needs the launch option printed at the end"
+        )
+        warnings.append(
+            "pass --prefix <path to the pfx directory> to install into an existing Proton prefix, "
+            "or launch Megabonk once in Steam under Proton so Steam creates it"
         )
 
     dotnet = manifest.vendor("dotnet")
@@ -267,7 +272,7 @@ def _wine_for(prefix: Path, mode: str, forced_tool: str | None) -> Path | None:
     tool = proton.pick_proton(library, forced=forced_tool) or proton.pick_proton(library)
     wine = proton.proton_wine_bin(tool) if tool else None
     if wine is None and mode == "wine":
-        raise PlanError(f"no wine binary found in the Proton tools under {library}")
+        raise PlanError(f"no wine binary found in the Proton tools under {library}; pass --proton <name> to point at the tool that has one")
     return wine
 
 

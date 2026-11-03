@@ -157,6 +157,25 @@ def test_plain_text_when_no_dialog_binary_exists() -> None:
     assert isinstance(progress, ui.TextProgress)
 
 
+def test_no_skip_note_when_there_is_no_display_session() -> None:
+    assert ui.dialog_skip_note({}, find_binary=_found()) is None
+
+
+def test_no_skip_note_when_the_run_has_no_controlling_tty(monkeypatch) -> None:
+    monkeypatch.setattr(ui, "has_tty", lambda: False)
+    assert ui.dialog_skip_note({"DISPLAY": ":0"}, find_binary=_found()) is None
+
+
+def test_no_skip_note_when_a_backend_exists() -> None:
+    assert ui.dialog_skip_note({"DISPLAY": ":0"}, find_binary=_found("zenity")) is None
+
+
+def test_skip_note_names_a_missing_backend_and_how_to_install_one() -> None:
+    note = ui.dialog_skip_note({"DISPLAY": ":0"}, find_binary=_found())
+    assert note is not None
+    assert "zenity" in note and "--no-gui" in note and "sudo" in note
+
+
 def test_force_text_overrides_a_desktop_session() -> None:
     progress = ui.pick_progress({"DISPLAY": ":0"}, find_binary=_found("zenity"), force_text=True, writer=lambda s: None)
     assert isinstance(progress, ui.TextProgress)
