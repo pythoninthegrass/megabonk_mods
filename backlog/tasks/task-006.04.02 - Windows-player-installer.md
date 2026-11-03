@@ -4,11 +4,14 @@ title: Windows player installer
 status: To Do
 assignee: []
 created_date: '2026-10-31T03:12:00Z'
+updated_date: '2026-11-03 21:52'
 labels:
   - tooling
 dependencies: []
 references:
   - 'https://github.com/LavaGang/MelonLoader/releases'
+  - docs/player-installer.md
+  - go/
 documentation:
   - docs/modding-setup.md
   - docs/development.md
@@ -47,3 +50,9 @@ This subtask delivers the Windows half of the package contract. A code-signed ex
 - [ ] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Context from the Go installer work (TASK-006.04.01.02, done): the Go binary cross-compiles to windows/amd64 and its MyGo native window (Direct3D 11) was seen working in a Windows 11 guest, so the GUI progress surface in AC #7 exists and can be reused. It is not a Windows installer yet. Gaps found: (1) Steam and library discovery in go/internal/steam is Linux-only (Flatpak, libraryfolders.vdf under Linux roots), so a Windows run needs --game-dir by hand; AC #3 needs registry or default-path discovery. (2) The plan assumes Proton: it places a .NET 6 runtime in the game dir or prefix and builds the Steam launch option DOTNET_ROOT=<path> through proton.WindowsPath, which maps a Unix path through Wine's Z: drive, so the launch option is wrong on native Windows; the prefix and version.dll override logic are Wine-only. The guest test only passed with --dotnet-in gamedir --wine-override off. (3) The player package is built by task package:linux; whether its MelonLoader archive suits a native Windows install is unchecked. (4) MyGo prints 'drawing without the GPU' lines to stderr on Windows when Direct3D 11 cannot create a swap chain (VMs, service sessions). (5) AC #1 still stands: the manual flow has not been verified on real Windows hardware, and the guest used so far renders in software.
+<!-- SECTION:NOTES:END -->
