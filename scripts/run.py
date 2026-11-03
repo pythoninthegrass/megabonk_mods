@@ -66,7 +66,11 @@ Usage:
     run.py dismiss-levelup [--choice N]  Pick offer N (default 0) in the open level-up dialog; prints dialogWasOpen and chosen
     run.py dismiss-offers [--choice N] [--skip]  Close the open reward window (level-up, shrine offers, chest, microwave); --choice N picks offer N, --skip skips a level-up without choosing
     run.py interact [--type SUBSTRING] [--max-distance N] [--force]  Activate the nearest interactable through the game's own Interact, bypassing the hover gate
-    run.py quit                    Quit the game, wait for the process to exit, and stop leftover Wine processes (macOS)
+    run.py quit                    Quit the game, wait for the process to exit, and stop leftover Wine processes
+    run.py quit --stop-steam --stop-menu
+                                   The same, plus shutting the Steam client and the menu input service down
+    run.py teardown [--stop-steam] [--stop-menu]
+                                   The quit teardown without the harness marker or a running game
     run.py relaunch [level] [--no-level] [--map N] [--stage N] [--tier N] [--seed N] [--character NAME]
                                    Quit and relaunch the game, load a level (default: the test forest) and enter editor; --no-level stops at the main menu
                                    An offline run (Steam stub, no Steam session) continues once the game reports Steamworks not ready; a game that exits during startup fails fast
@@ -103,6 +107,7 @@ from decouple import Config, RepositoryEmpty, RepositoryEnv
 from game_paths import latest_log_path, resolve_game_dir as _resolve_game_dir, wine_bin, wine_prefix
 from menu_input import request as menu_request, serve as serve_menu, validate_batch
 from pathlib import Path
+from typing import Literal, NamedTuple
 
 MACOS_RUNTIMES = ("wine", "crossover")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -123,16 +128,121 @@ WINESERVER_EXIT_TIMEOUT_SECONDS = 15.0
 WINE_STUB_KILL_GRACE_SECONDS = 1.5
 GAME_COMMAND = re.compile(r"^(?:[A-Za-z]:\\(?:.*\\)?Megabonk\.exe|(?:\S*/)?Megabonk\.x86_64)(?:\s|$)")
 GAME_IMAGE_WINDOWS = "Megabonk.exe"
-WINDOWS_COMMAND = re.compile(r"^[A-Za-z]:\\")
-WINE_SYSTEM_COMMAND = re.compile(
-    r"^[A-Za-z]:\\windows\\system32\\(?:services|plugplay|conhost|explorer|rpcss|svchost|lsass|winedevice)\.exe(?:\s|$)",
-    re.IGNORECASE,
-)
 MEGABONK_ORPHAN_COMMAND = re.compile(r"megabonk[/\\]", re.IGNORECASE)
 WINESERVER_COMMAND = re.compile(r"(?:^|/)wineserver(?:\s|$)")
+STEAM_APP_ID = "3405340"
+WINE_STUB_BASENAMES = frozenset(
+    f"{name}.exe"
+    for name in (
+        "conhost",
+        "explorer",
+        "lsass",
+        "plugplay",
+        "rpcss",
+        "services",
+        "svchost",
+        "tabtip",
+        "winedevice",
+        "winemenubuilder",
+    )
+)
+WINDOWS_DRIVE_ROOT = re.compile(r"^[A-Za-z]:[\\/]")
+WINE_PREFIX_ROOT = re.compile(r"(.*?)(?:^|/)(?:drive_c|pfx)(?:/|$)", re.IGNORECASE)
+# Environment variables naming a prefix, with the path the prefix sits at inside it; Proton sets only the second.
+PREFIX_ENV_KEYS = (("WINEPREFIX", ""), ("STEAM_COMPAT_DATA_PATH", "/pfx"))
+LAUNCHER_CHAIN_COMMANDS = (
+    re.compile(rf"(?:^|/)reaper\s+SteamLaunch\s+AppId={STEAM_APP_ID}(?=\s|$)"),
+    re.compile(rf"(?:^|/)srt-bwrap\b.*(?:\b{STEAM_APP_ID}\b|Megabonk\.exe)", re.IGNORECASE),
+    re.compile(r"(?:^|/)pv-adverb\b.*\bMegabonk\.exe\b", re.IGNORECASE),
+)
+STEAM_CLIENT_BASENAMES = frozenset({"steam", "steam.sh"})
+STEAM_FLATPAK_ID = "com.valvesoftware.Steam"
+STEAM_SHUTDOWN_REQUEST = "steam://shutdownsteam"
+STEAM_EXIT_TIMEOUT_SECONDS = 10.0
 TEST_FOREST_LEVEL = Path(__file__).resolve().parents[1] / "levels" / "example-forest.mblevel.json"
 
 Lookup = Callable[[str], str | None]
+
+
+class ProcessInfo(NamedTuple):
+    """One live process: its pid, its argv, and its environment when the OS let us read it."""
+
+    pid: int
+    argv: tuple[str, ...]
+    environ: Mapping[str, str] | None = None
+
+
+TableProvider = Callable[[], list[ProcessInfo]]
+
+
+def command_text(info: ProcessInfo) -> str:
+    return " ".join(info.argv)
+
+
+def windows_basename(command: str) -> str:
+    """Casefolded basename of a drive-rooted Windows command, or empty when the token is not one."""
+    token = command.strip().strip("\"'")
+    if not WINDOWS_DRIVE_ROOT.match(token):
+        return ""
+    return token.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1].casefold()
+
+
+def normalize_path_root(value: str) -> str:
+    return value.replace("\\", "/").rstrip("/").casefold()
+
+
+def read_process_nul_list(path: Path) -> tuple[str, ...]:
+    """NUL-separated strings from a /proc file; empty when it cannot be read or holds nothing."""
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return ()
+    return tuple(part.decode("utf-8", "replace") for part in raw.split(b"\0") if part)
+
+
+def read_process_table_proc(proc_root: Path = Path("/proc")) -> list[ProcessInfo]:
+    """The Linux process table from /proc, where argv and environ are NUL-separated so backslashes and spaces in a C:\\ path cannot corrupt field splitting."""
+    table: list[ProcessInfo] = []
+    for entry in proc_root.iterdir():
+        if not entry.name.isdigit():
+            continue
+        argv = read_process_nul_list(entry / "cmdline")
+        if not argv:
+            continue
+        environ: dict[str, str] = {}
+        for pair in read_process_nul_list(entry / "environ"):
+            key, separator, value = pair.partition("=")
+            if separator:
+                environ[key] = value
+        table.append(ProcessInfo(int(entry.name), argv, environ or None))
+    return table
+
+
+def read_process_table_ps() -> list[ProcessInfo]:
+    """Process table for hosts without /proc; pid=,args= is the one ps form whose keywords the BSD and GNU families both accept, with the header suppressed and the locale pinned."""
+    output = subprocess.run(
+        ["ps", "-axo", "pid=,args="],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "LC_ALL": "C"},
+    ).stdout
+    table: list[ProcessInfo] = []
+    for line in output.splitlines():
+        pid, _, command = line.strip().partition(" ")
+        if not pid.isdigit():
+            continue
+        argv = tuple(command.split())
+        if argv:
+            table.append(ProcessInfo(int(pid), argv, None))
+    return table
+
+
+def process_table(system: str | None = None, proc_root: Path = Path("/proc")) -> list[ProcessInfo]:
+    """Live processes as pid plus argv, from /proc where the kernel offers it and from ps where it does not."""
+    if (system or platform.system()) == "Linux" and proc_root.is_dir():
+        return read_process_table_proc(proc_root)
+    return read_process_table_ps()
 
 
 def find_env_file(start: Path, stop_at: Path | None = None) -> Path | None:
@@ -241,6 +351,12 @@ def add_load_overrides(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--tier", type=int, help="replace the level's tier")
     parser.add_argument("--seed", type=int, help="replace the level's debug seed")
     parser.add_argument("--character", help="character for the run when MEGABONK_DEV is on: calcium or tonymczoom (default tonymczoom)")
+
+
+def add_client_flags(parser: argparse.ArgumentParser) -> None:
+    """Opt-in teardown of the clients the game depends on, which normally outlive a run on purpose."""
+    parser.add_argument("--stop-steam", action="store_true", help="also shut the Steam client down afterwards")
+    parser.add_argument("--stop-menu", action="store_true", help="also stop the OS-level menu input service")
 
 
 def load_overrides(args: argparse.Namespace) -> dict[str, int | str]:
@@ -581,14 +697,9 @@ def wait_for_steamworks_ready(
         sleep(STEAM_READY_POLL_SECONDS)
 
 
-def find_game_pids(ps_listing: str) -> list[int]:
-    """Pids whose command is the game executable, from `ps -axo pid=,command=` output."""
-    pids = []
-    for line in ps_listing.splitlines():
-        pid, _, command = line.strip().partition(" ")
-        if pid.isdigit() and GAME_COMMAND.match(command.strip()):
-            pids.append(int(pid))
-    return pids
+def find_game_pids(table: list[ProcessInfo]) -> list[int]:
+    """Pids whose command line is the game executable, Windows or native."""
+    return [info.pid for info in table if GAME_COMMAND.match(command_text(info))]
 
 
 def find_game_pids_tasklist(tasklist_csv: str) -> list[int]:
@@ -600,13 +711,12 @@ def find_game_pids_tasklist(tasklist_csv: str) -> list[int]:
     ]
 
 
-def running_game_pids(system: str | None = None) -> list[int]:
+def running_game_pids(system: str | None = None, table: TableProvider | None = None) -> list[int]:
     system = system or platform.system()
     if system == "Windows":
         cmd = ["tasklist", "/FI", f"IMAGENAME eq {GAME_IMAGE_WINDOWS}", "/NH", "/FO", "CSV"]
         return find_game_pids_tasklist(subprocess.run(cmd, capture_output=True, text=True, check=True).stdout)
-    cmd = ["ps", "-axo", "pid=,command="]
-    return find_game_pids(subprocess.run(cmd, capture_output=True, text=True, check=True).stdout)
+    return find_game_pids(table() if table else process_table(system))
 
 
 def game_is_running() -> bool:
@@ -627,10 +737,13 @@ def wineserver_binary() -> Path:
     return candidate if candidate.parent.is_dir() else Path("wineserver")
 
 
-def running_wineserver_pids() -> list[int]:
-    cmd = ["pgrep", "-f", "/wineserver"]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    return [int(line) for line in proc.stdout.split() if line.isdigit()]
+def find_wineserver_pids(table: list[ProcessInfo]) -> list[int]:
+    """Pids running wineserver for any prefix; a native binary, so argv is the only place its name appears."""
+    return [info.pid for info in table if WINESERVER_COMMAND.search(command_text(info))]
+
+
+def running_wineserver_pids(table: TableProvider | None = None) -> list[int]:
+    return find_wineserver_pids(table() if table else process_table())
 
 
 def wait_for_wineserver_to_exit(timeout: float = WINESERVER_EXIT_TIMEOUT_SECONDS) -> bool:
@@ -680,89 +793,226 @@ def wait_for_exit(
     return True
 
 
-def find_wine_leftovers(ps_listing: str) -> tuple[list[int], list[int], list[int]]:
-    """Pids of Wine's idle system processes, of any other live Windows process (such as Steam), and of orphaned game helpers, from `ps -axo pid=,command=` output."""
-    stubs, others, orphans = [], [], []
-    for line in ps_listing.splitlines():
-        pid, _, command = line.strip().partition(" ")
-        command = command.strip()
-        if not pid.isdigit() or not WINDOWS_COMMAND.match(command):
+class WineLeftovers(NamedTuple):
+    """Pids the reaper may kill, split by role, plus the Windows processes it must spare and the candidates it withheld."""
+
+    stubs: list[int]
+    orphans: list[int]
+    others: list[int]
+    withheld: list[int]
+
+
+def is_wine_stub(info: ProcessInfo) -> bool:
+    """Wine's own session processes, by exact basename, so a lookalike under another path is not one."""
+    return windows_basename(info.argv[0]) in WINE_STUB_BASENAMES
+
+
+def is_megabonk_helper(info: ProcessInfo) -> bool:
+    """A Windows process from the game's own directory, such as Unity's crash handler."""
+    return bool(windows_basename(info.argv[0])) and bool(MEGABONK_ORPHAN_COMMAND.search(command_text(info)))
+
+
+def is_launcher_chain(info: ProcessInfo) -> bool:
+    """Steam's own wrappers for this app id, which hold a Proton prefix open after the game dies."""
+    text = command_text(info)
+    return any(pattern.search(text) for pattern in LAUNCHER_CHAIN_COMMANDS)
+
+
+def is_steam_client(info: ProcessInfo) -> bool:
+    """The Steam client, native or under Flatpak; a steam.exe running inside a prefix is not it."""
+    argv0 = info.argv[0]
+    if WINDOWS_DRIVE_ROOT.match(argv0):
+        return False
+    if argv0.replace("\\", "/").rsplit("/", 1)[-1].casefold() in STEAM_CLIENT_BASENAMES:
+        return True
+    return any(part.casefold() == STEAM_FLATPAK_ID.casefold() for part in info.argv)
+
+
+def wine_prefix_root(info: ProcessInfo) -> str | None:
+    """The prefix a process belongs to, from WINEPREFIX, Proton's STEAM_COMPAT_DATA_PATH, or a drive_c/pfx path in argv."""
+    environ = info.environ or {}
+    for key, suffix in PREFIX_ENV_KEYS:
+        value = environ.get(key)
+        if value:
+            return normalize_path_root(f"{value.rstrip('/')}{suffix}")
+    for argument in info.argv:
+        match = WINE_PREFIX_ROOT.match(normalize_path_root(argument))
+        if match:
+            return normalize_path_root(match.group(1))
+    return None
+
+
+def current_wine_prefix() -> str | None:
+    """The prefix the configured game directory lives in, or None when it cannot be resolved."""
+    try:
+        return str(resolve_wine_prefix())
+    except SystemExit:
+        return None
+
+
+def find_wine_leftovers(table: list[ProcessInfo], prefix: str | None = None) -> WineLeftovers:
+    """Pids to clean and pids to spare: a candidate attributed elsewhere is never killed, one attributed to us is killed only while no live Windows process shares that prefix, and one nothing attributes only while no Windows process is live at all."""
+    classified: list[tuple[int, bool, str]] = []
+    others: list[int] = []
+    ours_busy: list[int] = []
+    for info in table:
+        if is_steam_client(info):
             continue
-        if WINE_SYSTEM_COMMAND.match(command):
-            stubs.append(int(pid))
-        elif MEGABONK_ORPHAN_COMMAND.search(command):
-            orphans.append(int(pid))
+        stub = is_wine_stub(info)
+        candidate = stub or is_megabonk_helper(info) or is_launcher_chain(info)
+        if not candidate and not windows_basename(info.argv[0]):
+            continue
+        owner = wine_prefix_root(info)
+        if owner is None or prefix is None:
+            attribution = "unknown"
         else:
-            others.append(int(pid))
-    return stubs, others, orphans
+            attribution = "ours" if owner == normalize_path_root(prefix) else "foreign"
+        if candidate and attribution != "foreign":
+            classified.append((info.pid, stub, attribution))
+        else:
+            others.append(info.pid)
+            if attribution == "ours":
+                ours_busy.append(info.pid)
+
+    def claimed(attribution: str) -> bool:
+        return not (ours_busy if attribution == "ours" else others)
+
+    return WineLeftovers(
+        [pid for pid, stub, attribution in classified if stub and claimed(attribution)],
+        [pid for pid, stub, attribution in classified if not stub and claimed(attribution)],
+        others,
+        [pid for pid, _, attribution in classified if not claimed(attribution)],
+    )
 
 
-def reap_wine_leftovers(ps_listing: str, kill: Callable[[int], None]) -> int:
-    """Kill the Wine system processes (and their console windows) and orphaned game helpers such as the crash handler that outlive a game, unless a real Windows process such as Steam is running."""
-    stubs, others, orphans = find_wine_leftovers(ps_listing)
-    if others:
-        print(f"quit: Windows processes still running (pids {others}), skipping Wine cleanup")
+def signal_process(pid: int, sig: int, killer: Callable[[int, int], None] | None = None) -> None:
+    """Send a signal, tolerating a process that exited first."""
+    try:
+        (killer or os.kill)(pid, sig)
+    except ProcessLookupError:
+        pass
+
+
+def reap_wine_leftovers(table: list[ProcessInfo], kill: Callable[[int], None], prefix: str | None = None) -> int:
+    """SIGTERM the Wine stubs and orphaned game helpers that belong to us, including the console windows a dead game leaves behind."""
+    leftovers = find_wine_leftovers(table, prefix)
+    if leftovers.withheld:
+        print(f"quit: leaving Wine leftovers alone while other Windows processes run (pids {leftovers.others})")
+    pids = leftovers.stubs + leftovers.orphans
+    if not pids:
         return 0
-    for pid in stubs + orphans:
-        kill(pid)
-    if stubs or orphans:
-        print(f"quit: stopped {len(stubs) + len(orphans)} leftover Wine processes")
-    return len(stubs) + len(orphans)
-
-
-def force_kill_wine_leftovers(context: str = "quit") -> int:
-    """SIGKILL the Wine stubs and game helpers that survived SIGTERM, which is what a stub does once its wineserver is gone; skipped while a real Windows process such as Steam runs."""
-    listing = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True, check=True).stdout
-    stubs, others, orphans = find_wine_leftovers(listing)
-    if others:
-        return 0
-    pids = stubs + orphans
     for pid in pids:
-        try:
-            os.kill(pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        kill(pid)
+    print(f"quit: stopped {len(pids)} leftover Wine processes")
+    return len(pids)
+
+
+def force_kill_wine_leftovers(
+    context: str = "quit",
+    prefix: str | None | Literal["auto"] = "auto",
+    table: TableProvider | None = None,
+) -> int:
+    """SIGKILL the Wine stubs and game helpers that survived SIGTERM, which is what a stub does once its wineserver is gone."""
+    entries = table() if table else process_table()
+    resolved = current_wine_prefix() if prefix == "auto" else prefix
+    leftovers = find_wine_leftovers(entries, resolved)
+    pids = leftovers.stubs + leftovers.orphans
+    for pid in pids:
+        signal_process(pid, signal.SIGKILL)
     if pids:
         print(f"{context}: force-killed {len(pids)} stubborn Wine processes")
     return len(pids)
 
 
-def reap_wine_leftovers_on_host(system: str | None = None, sleep: Callable[[float], None] = time.sleep) -> None:
-    if (system or platform.system()) != "Darwin":
-        return
-
-    def kill(pid: int) -> None:
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-
-    listing = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True, check=True).stdout
-    if not reap_wine_leftovers(listing, kill):
+def reap_wine_leftovers_on_host(
+    system: str | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+    table: TableProvider | None = None,
+    prefix: str | None | Literal["auto"] = "auto",
+) -> None:
+    """Clear the Wine processes a dead game leaves behind on this host, escalating to SIGKILL after a grace."""
+    entries = table() if table else process_table(system)
+    resolved = current_wine_prefix() if prefix == "auto" else prefix
+    if not reap_wine_leftovers(entries, lambda pid: signal_process(pid, signal.SIGTERM), resolved):
         return
     sleep(WINE_STUB_KILL_GRACE_SECONDS)
-    force_kill_wine_leftovers("quit")
+    force_kill_wine_leftovers("quit", prefix=resolved, table=table)
 
 
-def find_harness_pids(ps_listing: str) -> list[int]:
-    """Pids of any process running out of the game directory, from `ps -axo pid=,command=` output; the game plus helpers such as its crash handler."""
-    pids = []
-    for line in ps_listing.splitlines():
-        pid, _, command = line.strip().partition(" ")
-        if pid.isdigit() and WINDOWS_COMMAND.match(command.strip()) and MEGABONK_ORPHAN_COMMAND.search(command):
-            pids.append(int(pid))
-    return pids
+def steam_client_pids(table: list[ProcessInfo]) -> list[int]:
+    return [info.pid for info in table if is_steam_client(info)]
 
 
-def force_kill_games(context: str = "quit") -> int:
-    """SIGKILL every process running out of the game directory; the escalation for a game whose main thread stopped polling the harness."""
-    listing = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True, check=True).stdout
-    pids = find_harness_pids(listing)
-    for pid in pids:
+def steam_shutdown_launcher(lookup: Callable[[str], str | None] = shutil.which) -> list[str] | None:
+    """How to ask this host's Steam client down, native binary first and Flatpak second; None when neither is installed."""
+    if lookup("steam"):
+        return ["steam", STEAM_SHUTDOWN_REQUEST]
+    if lookup("flatpak"):
+        return ["flatpak", "run", STEAM_FLATPAK_ID, STEAM_SHUTDOWN_REQUEST]
+    return None
+
+
+def request_steam_shutdown(launcher: list[str]) -> None:
+    subprocess.run(launcher, capture_output=True, text=True, timeout=10, check=False)
+
+
+def stop_steam_client(
+    timeout: float = STEAM_EXIT_TIMEOUT_SECONDS,
+    table: TableProvider | None = None,
+    request: Callable[[list[str]], None] = request_steam_shutdown,
+    launcher: list[str] | None | Literal["auto"] = "auto",
+    sleep: Callable[[float], None] = time.sleep,
+    now: Callable[[], float] = time.monotonic,
+    killer: Callable[[int, int], None] | None = None,
+) -> bool:
+    """Shut the Steam client down: ask it first, then signal only the pids this call listed. Opt-in, because a live client is usually wanted."""
+    read = table or process_table
+    listed = steam_client_pids(read())
+    if not listed:
+        print("stop-steam: Steam is not running")
+        return True
+    command = steam_shutdown_launcher() if launcher == "auto" else launcher
+    if command:
         try:
-            os.kill(pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+            request(command)
+        except (OSError, subprocess.SubprocessError):
+            print("stop-steam: the shutdown request did not run; escalating to signals", file=sys.stderr)
+
+    def live() -> list[int]:
+        return [pid for pid in steam_client_pids(read()) if pid in listed]
+
+    def settle(deadline: float) -> list[int]:
+        while live() and now() < deadline:
+            sleep(POLL_SECONDS)
+        return live()
+
+    if not settle(now() + timeout):
+        print(f"stop-steam: stopped {len(listed)} Steam process(es)")
+        return True
+    for pid in live():
+        signal_process(pid, signal.SIGTERM, killer)
+    if not settle(now() + min(timeout, STEAM_EXIT_TIMEOUT_SECONDS)):
+        print(f"stop-steam: stopped {len(listed)} Steam process(es) after SIGTERM")
+        return True
+    stubborn = live()
+    for pid in stubborn:
+        signal_process(pid, signal.SIGKILL, killer)
+    settle(now() + WINE_STUB_KILL_GRACE_SECONDS)
+    print(f"stop-steam: force-killed {len(stubborn)} stubborn Steam process(es)")
+    return not live()
+
+
+def find_harness_pids(table: list[ProcessInfo]) -> list[int]:
+    """Pids of any Windows process running out of the game directory; the game plus helpers such as its crash handler."""
+    return [info.pid for info in table if is_megabonk_helper(info)]
+
+
+def force_kill_games(context: str = "quit", table: TableProvider | None = None) -> int:
+    """SIGKILL every process running out of the game directory; the escalation for a game whose main thread stopped polling the harness."""
+    entries = table() if table else process_table()
+    pids = find_harness_pids(entries)
+    for pid in pids:
+        signal_process(pid, signal.SIGKILL)
     if pids:
         print(f"{context}: force-killed {len(pids)} game processes")
     return len(pids)
@@ -775,15 +1025,28 @@ def clear_harness_queue(harness: Path) -> None:
             entry.unlink(missing_ok=True)
 
 
-def quit_game(harness: Path, timeout: float, force_kill: Callable[[], int] = force_kill_games) -> bool:
-    """Ask the game to quit and block until its process is gone; a game that is not running counts as quit. A game whose main thread stopped polling (an editor left idle can have its window suspended) never answers, so it is force-killed."""
+def quit_game(
+    harness: Path,
+    timeout: float,
+    force_kill: Callable[[], int] = force_kill_games,
+    stop_steam: bool = False,
+    stop_menu: bool = False,
+) -> bool:
+    """Ask the game to quit and block until its process is gone; a game that is not running counts as quit. A game whose main thread stopped polling (an editor left idle can have its window suspended) never answers, so it is force-killed. The Steam client and the menu input service outlive the game by design, so they are only torn down when asked for."""
+    def finish() -> bool:
+        reap_wine_leftovers_on_host()
+        if stop_menu:
+            stop_menu_service(timeout)
+        if stop_steam:
+            stop_steam_client(timeout)
+        return True
+
     if not running_game_pids():
         print("quit: game not running")
     elif not send(harness, build_command("quit"), timeout):
         if wait_for_exit(timeout=timeout):
             print("quit: game exited")
-            reap_wine_leftovers_on_host()
-            return True
+            return finish()
         force_kill()
         if not wait_for_exit(timeout=timeout):
             print(f"quit: game still running after force kill (pids {running_game_pids()})", file=sys.stderr)
@@ -791,8 +1054,7 @@ def quit_game(harness: Path, timeout: float, force_kill: Callable[[], int] = for
         print("quit: game exited")
     else:
         print("quit: game exited")
-    reap_wine_leftovers_on_host()
-    return True
+    return finish()
 
 
 def request_result(harness: Path, payload: dict[str, object], timeout: float) -> tuple[str, dict | None]:
@@ -853,11 +1115,31 @@ def send_screenshot(harness: Path, out: Path, timeout: float) -> bool:
     return True
 
 
+def default_menu_socket() -> Path:
+    root = Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home() / ".cache")
+    return root / "megabonk-menu" / "input.sock"
+
+
 def menu_socket(args: argparse.Namespace) -> Path:
     if args.socket is not None:
         return args.socket.expanduser()
-    root = Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home() / ".cache")
-    return root / "megabonk-menu" / "input.sock"
+    return default_menu_socket()
+
+
+def stop_menu_service(timeout: float, path: Path | None = None) -> bool:
+    """Stop the OS-level input service and wait for its socket to go; a service that was never started counts as stopped."""
+    socket_path = path or default_menu_socket()
+    if not socket_path.exists():
+        print("menu: input service not running")
+        return True
+    print(json.dumps(menu_request(socket_path, {"command": "stop"}, timeout)))
+    deadline = time.monotonic() + timeout
+    while socket_path.exists() and time.monotonic() < deadline:
+        time.sleep(POLL_SECONDS)
+    if socket_path.exists():
+        print(f"menu: stop was acknowledged but {socket_path} still exists", file=sys.stderr)
+        return False
+    return True
 
 
 def read_menu_batch(source: str) -> list:
@@ -989,15 +1271,11 @@ def run_menu(args: argparse.Namespace) -> int:
         finally:
             signal.signal(signal.SIGTERM, previous)
         return 0
-    if args.menu_action in ("status", "stop"):
-        print(json.dumps(menu_request(path, {"command": args.menu_action}, args.timeout)))
-        if args.menu_action == "stop":
-            deadline = time.monotonic() + args.timeout
-            while path.exists() and time.monotonic() < deadline:
-                time.sleep(POLL_SECONDS)
-            if path.exists():
-                raise RuntimeError(f"menu: stop was acknowledged but {path} still exists")
+    if args.menu_action == "status":
+        print(json.dumps(menu_request(path, {"command": "status"}, args.timeout)))
         return 0
+    if args.menu_action == "stop":
+        return 0 if stop_menu_service(args.timeout, path) else 1
     game_dir = args.game_dir.expanduser() if args.game_dir else resolve_game_dir(load_lookup())
     harness = game_dir / "harness"
     if (args.out or any(isinstance(command, dict) for command in commands)) and not (harness / "enabled").is_file():
@@ -1044,7 +1322,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             command.add_argument("--out", type=Path, help="screenshot path on this machine, downloaded when --host is used")
     sub.add_parser("enable")
     sub.add_parser("disable")
-    sub.add_parser("quit")
+    quit_parser = sub.add_parser("quit")
+    add_client_flags(quit_parser)
+    teardown_parser = sub.add_parser("teardown", help="quit the game, reap the Wine leftovers, and stop the clients a run leaves behind")
+    add_client_flags(teardown_parser)
     sub.add_parser("freeze")
     sub.add_parser("resume")
     sub.add_parser("invulnerable")
@@ -1181,6 +1462,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     relaunch.add_argument("level", type=Path, nargs="?", default=TEST_FOREST_LEVEL)
     relaunch.add_argument("--no-level", action="store_true", help="stop at the main menu without loading a level")
     add_load_overrides(relaunch)
+    add_client_flags(relaunch)
     return parser.parse_args(argv)
 
 
@@ -1415,14 +1697,16 @@ def relaunch(
     invulnerable: bool = False,
     feathers: int = 2,
     diag: bool = False,
+    stop_steam: bool = False,
+    stop_menu: bool = False,
     is_alive: Callable[[], bool] = game_is_running,
 ) -> bool:
-    """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable if asked, set the Feathers amount unless it is 0, stop enemy spawns unless spawns is set, and enter editor. A level of None stops at the main menu once Steamworks is ready. A game that stays not-ready but keeps answering (an offline run with the Steam stub) continues after a grace period; one that stops answering or exits fails. diag hides Unity's crash handler and traces Wine exceptions so a native fault reports itself."""
+    """Quit, relaunch, wait for the harness and Steamworks, then load the level, go invulnerable if asked, set the Feathers amount unless it is 0, stop enemy spawns unless spawns is set, and enter editor. A level of None stops at the main menu once Steamworks is ready. A game that stays not-ready but keeps answering (an offline run with the Steam stub) continues after a grace period; one that stops answering or exits fails. diag hides Unity's crash handler and traces Wine exceptions so a native fault reports itself. Steam and the menu input service are stopped after the quit only when stop_steam or stop_menu is set."""
     started = time.time()
 
     def prepare_harness() -> str | None:
         """Quit, clear the stale harness queue, relaunch, and wait for the new session's harness to enable; the previous session's log must not satisfy the wait."""
-        if not quit_game(harness, timeout):
+        if not quit_game(harness, timeout, stop_steam=stop_steam, stop_menu=stop_menu):
             return "relaunch: harness did not become ready"
         if not wait_for_wineserver_to_exit():
             return "relaunch: wineserver did not exit before launch"
@@ -1516,6 +1800,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"harness {args.action}d at {harness}")
         return 0
 
+    if args.action == "teardown":
+        ok = quit_game(harness, args.timeout, stop_steam=args.stop_steam, stop_menu=args.stop_menu)
+        return 0 if ok else 1
+
     if not (harness / "enabled").is_file():
         print(f"harness not enabled at {harness}; run 'run.py enable' and relaunch the game", file=sys.stderr)
         return 2
@@ -1529,7 +1817,7 @@ def main(argv: list[str] | None = None) -> int:
         case "screenshot":
             ok = send_screenshot(harness, args.out, args.timeout)
         case "quit":
-            ok = quit_game(harness, args.timeout)
+            ok = quit_game(harness, args.timeout, stop_steam=args.stop_steam, stop_menu=args.stop_menu)
         case "steam-ready":
             ok = send_steam_ready(harness, args.timeout)
         case "freeze" | "resume" | "invulnerable" | "vulnerable" | "kill" | "restart-run":
@@ -1611,6 +1899,8 @@ def main(argv: list[str] | None = None) -> int:
                 invulnerable=resolve_relaunch_invulnerable(load_lookup()),
                 feathers=resolve_relaunch_feathers(load_lookup()),
                 diag=resolve_relaunch_diag(load_lookup()),
+                stop_steam=args.stop_steam,
+                stop_menu=args.stop_menu,
             )
     return 0 if ok else 1
 

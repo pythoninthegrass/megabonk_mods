@@ -6,6 +6,7 @@ import json
 import os
 import pytest
 import run
+import signal
 import subprocess
 import tempfile
 import threading
@@ -678,28 +679,32 @@ def test_parse_args_cycle_accepts_freeze_and_camera_flags() -> None:
     assert plain.freeze is False and plain.camera is None
 
 
-PS_LISTING = """\
- 6308 C:\\windows\\system32\\winemenubuilder.exe -w -u C:\\users\\crossover\\Start Menu\\Programs\\Steam\\Megabonk.url
-87328 /Applications/CrossOver.app/lib/wine/winewrapper.exe --run -- /Users/lance/Steam/common/Megabonk/Megabonk.exe
-87663 C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\Megabonk.exe
-87667 C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\UnityCrashHandler64.exe --attach 1580
-90001 bash -c cd /x && wine --cx-app Megabonk.exe
-"""
+def proc(pid: int, *argv: str, environ: dict[str, str] | None = None) -> run.ProcessInfo:
+    """One row of a fake process table; argv is given as separate strings, the way /proc reports it."""
+    return run.ProcessInfo(pid, argv, environ)
 
 
 def test_find_game_pids_matches_only_the_game_executable() -> None:
-    assert run.find_game_pids(PS_LISTING) == [87663]
+    table = [
+        proc(6308, "C:\\windows\\system32\\winemenubuilder.exe", "-w", "-u", "C:\\users\\crossover\\Start Menu\\Programs\\Steam\\Megabonk.url"),
+        proc(87328, "/Applications/CrossOver.app/lib/wine/winewrapper.exe", "--run", "--", "/home/<user>/Steam/common/Megabonk/Megabonk.exe"),
+        proc(87663, "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\Megabonk.exe"),
+        proc(87667, "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\UnityCrashHandler64.exe", "--attach", "1580"),
+        proc(90001, "bash", "-c", "cd /x && wine --cx-app Megabonk.exe"),
+    ]
+    assert run.find_game_pids(table) == [87663]
 
 
 def test_find_game_pids_matches_native_linux_build() -> None:
-    listing = (
-        "  500 /media/steam/steamapps/common/Megabonk/Megabonk.x86_64 -screen-fullscreen 0\n  501 bash -c pkill Megabonk.x86_64\n"
-    )
-    assert run.find_game_pids(listing) == [500]
+    table = [
+        proc(500, "/media/steam/steamapps/common/Megabonk/Megabonk.x86_64", "-screen-fullscreen", "0"),
+        proc(501, "bash", "-c", "pkill Megabonk.x86_64"),
+    ]
+    assert run.find_game_pids(table) == [500]
 
 
 def test_find_game_pids_empty_when_not_running() -> None:
-    assert run.find_game_pids("  1 /sbin/launchd\n") == []
+    assert run.find_game_pids([proc(1, "/sbin/launchd")]) == []
 
 
 def test_find_game_pids_tasklist_reads_csv_rows() -> None:
@@ -759,7 +764,7 @@ def test_request_result_prints_nothing(capsys) -> None:
 
 def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_verdict="ready", kill_floor=True, unsupported=False, load_failed=False):
     calls = []
-    monkeypatch.setattr(run, "quit_game", lambda h, t: calls.append("quit") or True)
+    monkeypatch.setattr(run, "quit_game", lambda h, t, **kwargs: calls.append("quit") or True)
     monkeypatch.setattr(run, "launch_game", lambda task: calls.append(("launch", task)) or True)
     monkeypatch.setattr(run, "force_kill_games", lambda context="quit": calls.append("force_kill") or 0)
     monkeypatch.setattr(run, "wait_for_wineserver_to_exit", lambda timeout=15.0: calls.append("wineserver") or True)
@@ -1306,128 +1311,502 @@ def test_key_mouse_and_type_send_their_payloads() -> None:
             assert len(sent) == 1
 
 
-WINE_IDLE_LISTING = (
-    "  10 C:\\windows\\system32\\services.exe \n"
-    "  11 C:\\windows\\system32\\conhost.exe --server 0x94 \n"
-    "  12 C:\\windows\\system32\\explorer.exe /desktop \n"
-    "  13 C:\\windows\\system32\\svchost.exe -k LocalServiceNetworkRestricted \n"
-    "  14 C:\\windows\\system32\\lsass.exe \n"
-    "  99 /sbin/launchd\n"
-)
+WINE_PREFIX = "/steam/steamapps/compatdata/3405340/pfx"
+STEAM_EXE = "C:\\Program Files (x86)\\Steam\\steam.exe"
+CRASH_HANDLER = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\UnityCrashHandler64.exe"
+
+
+def wine_stub(pid: int, name: str, *args: str, prefix: str | None = WINE_PREFIX) -> run.ProcessInfo:
+    """A Wine system process; prefix is the WINEPREFIX it inherited, or None when nothing attributes it."""
+    environ = {"WINEPREFIX": prefix} if prefix else None
+    return run.ProcessInfo(pid, (f"C:\\windows\\system32\\{name}.exe", *args), environ)
+
+
+def windows_process(pid: int, path: str, *args: str, environ: dict[str, str] | None = None) -> run.ProcessInfo:
+    return run.ProcessInfo(pid, (path, *args), environ)
+
+
+WINE_IDLE_TABLE = [
+    wine_stub(10, "services"),
+    wine_stub(11, "conhost", "--server", "0x94"),
+    wine_stub(12, "explorer", "/desktop"),
+    wine_stub(13, "svchost", "-k", "LocalServiceNetworkRestricted"),
+    wine_stub(14, "lsass"),
+    wine_stub(15, "tabtip"),
+    proc(99, "/sbin/launchd"),
+]
 
 
 def test_find_wine_leftovers_splits_system_stubs_from_other_windows_processes() -> None:
-    listing = WINE_IDLE_LISTING + '  20 C:\\Program Files (x86)\\Steam\\steam.exe -silent\n'
-    stubs, others, orphans = run.find_wine_leftovers(listing)
-    assert stubs == [10, 11, 12, 13, 14]
-    assert others == [20]
-    assert orphans == []
+    table = WINE_IDLE_TABLE + [windows_process(20, STEAM_EXE, "-silent")]
+    leftovers = run.find_wine_leftovers(table, WINE_PREFIX)
+    assert leftovers.stubs == [10, 11, 12, 13, 14, 15]
+    assert leftovers.orphans == []
+    assert leftovers.others == [20]
 
 
 def test_find_wine_leftovers_splits_orphaned_game_helpers_from_steam() -> None:
-    listing = '  21 C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\UnityCrashHandler64.exe 32 28839936\n'
-    listing += '  20 C:\\Program Files (x86)\\Steam\\steam.exe -silent\n'
-    stubs, others, orphans = run.find_wine_leftovers(listing)
-    assert stubs == []
-    assert others == [20]
-    assert orphans == [21]
+    table = [
+        windows_process(21, CRASH_HANDLER, "32", "28839936", environ={"WINEPREFIX": WINE_PREFIX}),
+        windows_process(20, STEAM_EXE, "-silent"),
+    ]
+    leftovers = run.find_wine_leftovers(table, WINE_PREFIX)
+    assert leftovers.stubs == []
+    assert leftovers.others == [20]
+    assert leftovers.orphans == [21]
 
 
 def test_find_wine_leftovers_ignores_native_processes() -> None:
-    assert run.find_wine_leftovers("  1 /sbin/launchd\n") == ([], [], [])
+    assert run.find_wine_leftovers([proc(1, "/sbin/launchd")], WINE_PREFIX) == run.WineLeftovers([], [], [], [])
+
+
+def test_find_wine_leftovers_covers_tabtip_that_used_to_veto_the_whole_cleanup() -> None:
+    """tabtip starts with nearly every prefix boot; while it was missing from the stub set it landed in others and blocked everything else."""
+    table = [wine_stub(1, "tabtip"), wine_stub(2, "winedevice"), wine_stub(3, "plugplay"), wine_stub(4, "rpcss")]
+    assert run.find_wine_leftovers(table, WINE_PREFIX).stubs == [1, 2, 3, 4]
+
+
+def test_find_wine_leftovers_is_case_insensitive_about_the_windows_path() -> None:
+    table = [run.ProcessInfo(7, ("C:\\WINDOWS\\SYSTEM32\\TABTIP.EXE",), {"WINEPREFIX": WINE_PREFIX})]
+    assert run.find_wine_leftovers(table, WINE_PREFIX).stubs == [7]
+
+
+def test_find_wine_leftovers_does_not_treat_a_lookalike_path_as_a_stub() -> None:
+    table = [windows_process(8, "C:\\games\\svchost_my.exe", environ={"WINEPREFIX": WINE_PREFIX})]
+    leftovers = run.find_wine_leftovers(table, WINE_PREFIX)
+    assert leftovers.stubs == []
+    assert leftovers.others == [8]
+
+
+def test_find_wine_leftovers_reaps_the_steam_launcher_chain_for_our_app_id() -> None:
+    table = [
+        proc(30, "/usr/lib/steam/ubuntu12_32/reaper", "SteamLaunch", "AppId=3405340", "18"),
+        proc(31, "/usr/lib/steam/ubuntu12_64/srt-bwrap", "--set-subreaper", "--", "/game/Megabonk.exe"),
+        proc(32, "/proton/files/dist/pv-adverb", "/pfx/drive_c/Program Files/Megabonk/Megabonk.exe"),
+    ]
+    assert run.find_wine_leftovers(table, None).orphans == [30, 31, 32]
+
+
+def test_find_wine_leftovers_spares_another_app_id_launcher_chain() -> None:
+    table = [proc(30, "/usr/lib/steam/ubuntu12_32/reaper", "SteamLaunch", "AppId=424242", "18")]
+    assert run.find_wine_leftovers(table, WINE_PREFIX) == run.WineLeftovers([], [], [], [])
+
+
+def test_find_wine_leftovers_spares_a_stub_from_another_prefix_while_reaping_ours() -> None:
+    table = [wine_stub(1, "winedevice"), wine_stub(2, "winedevice", prefix="/steam/steamapps/compatdata/999999/pfx")]
+    killed: list[int] = []
+    assert run.reap_wine_leftovers(table, killed.append, WINE_PREFIX) == 1
+    assert killed == [1]
+
+
+def test_find_wine_leftovers_attributes_a_prefix_from_argv_in_either_separator_style() -> None:
+    """The ps fallback reads no environment, so a drive_c or pfx path in argv is the only thing that can attribute a stub."""
+    bottle = "C:\\bottles\\steam"
+    table = [
+        run.ProcessInfo(1, ("C:\\windows\\system32\\winedevice.exe", "C:\\bottles\\steam\\drive_c\\windows\\winedevice.exe")),
+        run.ProcessInfo(2, ("C:\\windows\\system32\\winedevice.exe", "/other/pfx/drive_c")),
+        run.ProcessInfo(3, ("C:\\windows\\system32\\plugplay.exe",)),
+    ]
+    leftovers = run.find_wine_leftovers(table, bottle)
+    assert leftovers.stubs == [1]
+    assert leftovers.others == [2]
+    assert leftovers.withheld == [3]
+
+
+def test_find_wine_leftovers_attributes_a_proton_stub_by_its_compat_data_path() -> None:
+    """Proton exports no WINEPREFIX for the processes it spawns; STEAM_COMPAT_DATA_PATH names the directory holding pfx."""
+    ours = proc(1, "C:\\windows\\system32\\winedevice.exe", environ={"STEAM_COMPAT_DATA_PATH": "/steam/steamapps/compatdata/3405340"})
+    foreign = proc(2, "C:\\windows\\system32\\regedit.exe", environ={"STEAM_COMPAT_DATA_PATH": "/steam/steamapps/compatdata/999999/"})
+    leftovers = run.find_wine_leftovers([ours, foreign], WINE_PREFIX)
+    assert leftovers.stubs == [1]
+    assert leftovers.others == [2]
+    assert leftovers.withheld == []
+
+
+def test_find_wine_leftovers_prefers_wineprefix_when_the_two_prefix_vars_disagree() -> None:
+    table = [
+        proc(
+            1,
+            "C:\\windows\\system32\\winedevice.exe",
+            environ={"WINEPREFIX": WINE_PREFIX, "STEAM_COMPAT_DATA_PATH": "/steam/steamapps/compatdata/999999"},
+        )
+    ]
+    assert run.find_wine_leftovers(table, WINE_PREFIX).stubs == [1]
+
+
+def test_find_wine_leftovers_withholds_unattributed_stubs_while_another_windows_process_runs() -> None:
+    table = [wine_stub(1, "winedevice", prefix=None), windows_process(2, STEAM_EXE, "-silent")]
+    leftovers = run.find_wine_leftovers(table, WINE_PREFIX)
+    assert leftovers.stubs == []
+    assert leftovers.withheld == [1]
+
+
+def test_find_wine_leftovers_spares_our_stubs_while_a_windows_process_shares_the_prefix() -> None:
+    """Wine under CrossOver runs Steam's own steam.exe inside the same prefix, so its services have to survive the quit."""
+    table = [wine_stub(1, "winedevice"), windows_process(2, STEAM_EXE, "-silent", environ={"WINEPREFIX": WINE_PREFIX})]
+    leftovers = run.find_wine_leftovers(table, WINE_PREFIX)
+    assert leftovers.stubs == []
+    assert leftovers.others == [2]
+    assert leftovers.withheld == [1]
 
 
 def test_reap_wine_leftovers_kills_idle_stubs() -> None:
     killed: list[int] = []
-    assert run.reap_wine_leftovers(WINE_IDLE_LISTING, killed.append) == 5
-    assert killed == [10, 11, 12, 13, 14]
+    assert run.reap_wine_leftovers(WINE_IDLE_TABLE, killed.append, WINE_PREFIX) == 6
+    assert killed == [10, 11, 12, 13, 14, 15]
 
 
 def test_reap_wine_leftovers_kills_orphaned_game_helpers_with_the_stubs() -> None:
     killed: list[int] = []
-    listing = WINE_IDLE_LISTING + "  21 C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\UnityCrashHandler64.exe 32 28839936\n"
-    assert run.reap_wine_leftovers(listing, killed.append) == 6
-    assert killed == [10, 11, 12, 13, 14, 21]
+    table = WINE_IDLE_TABLE + [windows_process(21, CRASH_HANDLER, "32", "28839936", environ={"WINEPREFIX": WINE_PREFIX})]
+    assert run.reap_wine_leftovers(table, killed.append, WINE_PREFIX) == 7
+    assert killed == [10, 11, 12, 13, 14, 15, 21]
+
+
+def test_reap_wine_leftovers_clears_our_stubs_while_the_steam_client_runs() -> None:
+    """Steam is normally up on a Linux player box; it must not hold the prefix's stubs back."""
+    killed: list[int] = []
+    table = WINE_IDLE_TABLE + [proc(20, "/usr/bin/steam", "-silent"), proc(21, "/usr/bin/steamwebhelper", "--type=broker")]
+    assert run.reap_wine_leftovers(table, killed.append, WINE_PREFIX) == 6
+    assert killed == [10, 11, 12, 13, 14, 15]
 
 
 def test_reap_wine_leftovers_leaves_everything_when_a_real_windows_process_runs(capsys) -> None:
     killed: list[int] = []
-    listing = WINE_IDLE_LISTING + "  20 C:\\Program Files (x86)\\Steam\\steam.exe -silent\n"
-    assert run.reap_wine_leftovers(listing, killed.append) == 0
+    table = [wine_stub(10, "services", prefix=None), windows_process(20, STEAM_EXE, "-silent")]
+    assert run.reap_wine_leftovers(table, killed.append, WINE_PREFIX) == 0
     assert killed == []
-    assert "skipping" in capsys.readouterr().out
+    assert "leaving Wine leftovers alone" in capsys.readouterr().out
 
 
 def test_reap_wine_leftovers_leaves_orphans_when_steam_runs(capsys) -> None:
     killed: list[int] = []
-    listing = WINE_IDLE_LISTING + "  20 C:\\Program Files (x86)\\Steam\\steam.exe -silent\n"
-    listing += "  21 C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\UnityCrashHandler64.exe 32 28839936\n"
-    assert run.reap_wine_leftovers(listing, killed.append) == 0
+    table = [
+        wine_stub(10, "services", prefix=None),
+        windows_process(21, CRASH_HANDLER, "32", "28839936"),
+        windows_process(20, STEAM_EXE, "-silent"),
+    ]
+    assert run.reap_wine_leftovers(table, killed.append, WINE_PREFIX) == 0
     assert killed == []
-    assert "skipping" in capsys.readouterr().out
+    assert "leaving Wine leftovers alone" in capsys.readouterr().out
 
 
 def test_force_kill_wine_leftovers_sigkills_stubs_and_orphans(monkeypatch, capsys) -> None:
-    listing = WINE_IDLE_LISTING + "  21 " + CRASH_HANDLER_PS_LINE + "\n"
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, stdout=listing))
     killed: list[tuple[int, int]] = []
     monkeypatch.setattr(os, "kill", lambda pid, sig: killed.append((pid, sig)))
-    assert run.force_kill_wine_leftovers() == 6
-    assert killed == [(10, 9), (11, 9), (12, 9), (13, 9), (14, 9), (21, 9)]
-    assert "force-killed 6 stubborn Wine processes" in capsys.readouterr().out
+    table = WINE_IDLE_TABLE + [windows_process(21, CRASH_HANDLER, "32", "28839936", environ={"WINEPREFIX": WINE_PREFIX})]
+    assert run.force_kill_wine_leftovers(table=lambda: table, prefix=WINE_PREFIX) == 7
+    assert killed == [(10, 9), (11, 9), (12, 9), (13, 9), (14, 9), (15, 9), (21, 9)]
+    assert "force-killed 7 stubborn Wine processes" in capsys.readouterr().out
 
 
 def test_force_kill_wine_leftovers_skips_while_steam_runs(monkeypatch) -> None:
-    listing = WINE_IDLE_LISTING + "  20 C:\\Program Files (x86)\\Steam\\steam.exe -silent\n"
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, stdout=listing))
     killed: list[tuple[int, int]] = []
     monkeypatch.setattr(os, "kill", lambda pid, sig: killed.append((pid, sig)))
-    assert run.force_kill_wine_leftovers() == 0
+    table = [wine_stub(10, "services", prefix=None), windows_process(20, STEAM_EXE, "-silent")]
+    assert run.force_kill_wine_leftovers(table=lambda: table, prefix=WINE_PREFIX) == 0
     assert killed == []
 
 
 def test_reap_wine_leftovers_on_host_escalates_survivors_after_the_grace(monkeypatch) -> None:
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, stdout=WINE_IDLE_LISTING))
     signaled: list[tuple[int, int]] = []
     monkeypatch.setattr(os, "kill", lambda pid, sig: signaled.append((pid, sig)))
     forced: list[str] = []
-    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit": forced.append(context) or 0)
-    run.reap_wine_leftovers_on_host("Darwin", sleep=lambda _: None)
-    assert [sig for _, sig in signaled] == [15] * 5
+    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit", prefix="auto", table=None: forced.append(context) or 0)
+    run.reap_wine_leftovers_on_host("Darwin", sleep=lambda _: None, table=lambda: WINE_IDLE_TABLE, prefix=WINE_PREFIX)
+    assert [sig for _, sig in signaled] == [15] * 6
     assert forced == ["quit"]
 
 
+def test_reap_wine_leftovers_on_host_reaps_on_linux(monkeypatch) -> None:
+    """The reaper used to return at once off macOS, which is why a Linux quit left a prefix's stubs and their windows behind."""
+    signaled: list[tuple[int, int]] = []
+    monkeypatch.setattr(os, "kill", lambda pid, sig: signaled.append((pid, sig)))
+    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit", prefix="auto", table=None: 0)
+    table = [wine_stub(10, "winedevice"), wine_stub(11, "tabtip")]
+    run.reap_wine_leftovers_on_host("Linux", sleep=lambda _: None, table=lambda: table, prefix=WINE_PREFIX)
+    assert [sig for _, sig in signaled] == [15, 15]
+
+
 def test_reap_wine_leftovers_on_host_skips_the_grace_when_nothing_runs(monkeypatch) -> None:
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, stdout="  99 /sbin/launchd\n"))
     slept: list[float] = []
     forced: list[str] = []
-    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit": forced.append(context) or 0)
-    run.reap_wine_leftovers_on_host("Darwin", sleep=slept.append)
+    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit", prefix="auto", table=None: forced.append(context) or 0)
+    run.reap_wine_leftovers_on_host("Darwin", sleep=slept.append, table=lambda: [], prefix=WINE_PREFIX)
     assert slept == []
     assert forced == []
 
 
-GAME_DIR_PS_LINE = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\Megabonk.exe"
-CRASH_HANDLER_PS_LINE = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\UnityCrashHandler64.exe 32 28839936"
+
+def fake_proc(root: Path, entries: dict[int, tuple[list[str], dict[str, str] | None]]) -> Path:
+    """A /proc-shaped tree: one numeric folder per pid holding cmdline and environ as NUL-separated files."""
+    root.mkdir(parents=True, exist_ok=True)
+    for pid, (argv, environ) in entries.items():
+        folder = root / str(pid)
+        folder.mkdir()
+        (folder / "cmdline").write_bytes(b"\0".join(part.encode() for part in argv) + b"\0")
+        if environ is not None:
+            (folder / "environ").write_bytes(b"\0".join(f"{key}={value}".encode() for key, value in environ.items()) + b"\0")
+    return root
+
+
+def test_read_process_table_proc_reads_argv_and_environ_verbatim(tmp_path) -> None:
+    root = fake_proc(tmp_path / "proc", {
+        7: (["C:\\windows\\system32\\conhost.exe", "--server", "0x84"], {"WINEPREFIX": "/a b/pfx"}),
+        8: (["/usr/bin/steam", "-silent"], {}),
+    })
+    (root / "9").mkdir()
+    (root / "kthreadd").mkdir()
+    assert sorted(run.read_process_table_proc(root)) == [
+        run.ProcessInfo(7, ("C:\\windows\\system32\\conhost.exe", "--server", "0x84"), {"WINEPREFIX": "/a b/pfx"}),
+        run.ProcessInfo(8, ("/usr/bin/steam", "-silent"), None),
+    ]
+
+
+def test_read_process_table_ps_uses_flags_both_coreutils_families_accept(monkeypatch) -> None:
+    calls: list[list[str]] = []
+    environments: list[dict[str, str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        environments.append(kwargs["env"])
+        return subprocess.CompletedProcess(cmd, 0, stdout="  10 C:\\windows\\system32\\services.exe\n  11 /sbin/launchd\n")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert run.read_process_table_ps() == [
+        run.ProcessInfo(10, ("C:\\windows\\system32\\services.exe",), None),
+        run.ProcessInfo(11, ("/sbin/launchd",), None),
+    ]
+    assert calls == [["ps", "-axo", "pid=,args="]]
+    assert environments[0]["LC_ALL"] == "C"
+
+
+def test_process_table_prefers_proc_on_linux_and_falls_back_to_ps(tmp_path, monkeypatch) -> None:
+    root = fake_proc(tmp_path / "proc", {7: (["/bin/sh"], None)})
+    assert run.process_table("Linux", proc_root=root) == [run.ProcessInfo(7, ("/bin/sh",), None)]
+    fallbacks: list[bool] = []
+    monkeypatch.setattr(run, "read_process_table_ps", lambda: fallbacks.append(True) or [])
+    assert run.process_table("Darwin", proc_root=root) == []
+    assert run.process_table("Linux", proc_root=tmp_path / "missing") == []
+    assert fallbacks == [True, True]
+
+
+def test_process_enumeration_shells_out_for_nothing_on_linux(monkeypatch) -> None:
+    """The reaper must not depend on which coreutils family the host has: no ps, no pgrep, no pkill."""
+    def forbidden(*args, **kwargs):
+        raise AssertionError(f"unexpected subprocess call: {args}")
+
+    monkeypatch.setattr(subprocess, "run", forbidden)
+    monkeypatch.setattr(os, "kill", lambda pid, sig: None)
+    table = [wine_stub(1, "winedevice")]
+    assert run.running_game_pids("Linux", table=lambda: table) == []
+    assert run.running_wineserver_pids(table=lambda: table) == []
+    assert run.force_kill_wine_leftovers(table=lambda: table, prefix=WINE_PREFIX) == 1
+
+
+def test_find_wineserver_pids_matches_only_the_native_wineserver() -> None:
+    table = [proc(3, "/proton/files/bin/wineserver", "-w"), proc(4, "bash", "-c", "echo wineserver"), proc(5, "/bin/sh")]
+    assert run.find_wineserver_pids(table) == [3]
+
+
+def test_windows_basename_normalizes_separators_and_case() -> None:
+    assert run.windows_basename("C:\\WINDOWS\\System32\\WineDevice.exe") == "winedevice.exe"
+    assert run.windows_basename("C:/Program Files/Megabonk/Megabonk.exe") == "megabonk.exe"
+    assert run.windows_basename('"C:\\windows\\system32\\services.exe"') == "services.exe"
+    assert run.windows_basename("/usr/bin/steam") == ""
+
+
+def steam_table(*pids: int) -> list[run.ProcessInfo]:
+    return [proc(pid, "/usr/bin/steam", "-silent") for pid in pids]
+
+
+def test_steam_shutdown_launcher_prefers_the_native_binary_then_flatpak() -> None:
+    native = run.steam_shutdown_launcher(lambda name: "/usr/bin/steam" if name == "steam" else None)
+    flatpak = run.steam_shutdown_launcher(lambda name: "/usr/bin/flatpak" if name == "flatpak" else None)
+    assert native == ["steam", "steam://shutdownsteam"]
+    assert flatpak == ["flatpak", "run", "com.valvesoftware.Steam", "steam://shutdownsteam"]
+    assert run.steam_shutdown_launcher(lambda name: None) is None
+
+
+def test_stop_steam_client_says_so_when_nothing_is_running(capsys) -> None:
+    assert run.stop_steam_client(table=lambda: [proc(1, "/bin/sh")]) is True
+    assert "Steam is not running" in capsys.readouterr().out
+
+
+def test_stop_steam_client_asks_the_client_and_waits_for_it_to_exit() -> None:
+    requested: list[list[str]] = []
+    live = [20, 21]
+
+    def request(launcher: list[str]) -> None:
+        requested.append(launcher)
+        live.clear()
+
+    ok = run.stop_steam_client(
+        table=lambda: steam_table(*live),
+        request=request,
+        launcher=["steam", "steam://shutdownsteam"],
+        sleep=lambda _: None,
+    )
+    assert ok is True
+    assert requested == [["steam", "steam://shutdownsteam"]]
+
+
+def test_stop_steam_client_escalates_to_signals_on_the_pids_it_listed(monkeypatch) -> None:
+    signaled: list[tuple[int, int]] = []
+    monkeypatch.setattr(os, "kill", lambda pid, sig: signaled.append((pid, sig)))
+    clock = {"now": 0.0}
+    ok = run.stop_steam_client(
+        timeout=0.0,
+        table=lambda: steam_table(20, 21),
+        request=lambda launcher: None,
+        launcher=["steam", "steam://shutdownsteam"],
+        sleep=lambda _: clock.update(now=clock["now"] + 1),
+        now=lambda: clock["now"],
+    )
+    assert ok is False
+    assert [pair for pair in signaled] == [(20, 15), (21, 15), (20, 9), (21, 9)]
+
+
+def test_stop_steam_client_stops_after_sigterm_without_reaching_sigkill(monkeypatch) -> None:
+    signaled: list[tuple[int, int]] = []
+    live = [20]
+
+    def kill(pid: int, sig: int) -> None:
+        signaled.append((pid, sig))
+        if sig == signal.SIGTERM:
+            live.remove(pid)
+
+    monkeypatch.setattr(os, "kill", kill)
+    clock = {"now": 0.0}
+    ok = run.stop_steam_client(
+        timeout=0.0,
+        table=lambda: steam_table(*live),
+        request=lambda launcher: None,
+        launcher=["steam", "steam://shutdownsteam"],
+        sleep=lambda _: clock.update(now=clock["now"] + 1),
+        now=lambda: clock["now"],
+    )
+    assert ok is True
+    assert {sig for _, sig in signaled} == {signal.SIGTERM}
+
+
+def test_stop_steam_client_gives_a_slow_client_the_full_steam_grace(monkeypatch, capsys) -> None:
+    """Steam takes seconds to come down after SIGTERM; reusing the 1.5-second Wine stub grace SIGKILLed it outright."""
+    signaled: list[tuple[int, int]] = []
+    sleeps_after_term: list[float] = []
+    live = [20]
+    clock = {"now": 0.0}
+
+    monkeypatch.setattr(os, "kill", lambda pid, sig: signaled.append((pid, sig)))
+
+    def tick(seconds: float) -> None:
+        clock["now"] += 1
+        if any(sig == signal.SIGTERM for _, sig in signaled):
+            sleeps_after_term.append(seconds)
+            if len(sleeps_after_term) >= 5:
+                live.clear()
+
+    ok = run.stop_steam_client(
+        timeout=30.0,
+        table=lambda: steam_table(*live),
+        request=lambda launcher: None,
+        launcher=None,
+        sleep=tick,
+        now=lambda: clock["now"],
+    )
+    assert ok is True
+    assert {sig for _, sig in signaled} == {signal.SIGTERM}
+    assert len(sleeps_after_term) == 5
+    assert "after SIGTERM" in capsys.readouterr().out
+
+
+def test_stop_menu_service_reports_a_service_that_was_never_running(tmp_path, capsys) -> None:
+    assert run.stop_menu_service(1, tmp_path / "input.sock") is True
+    assert "input service not running" in capsys.readouterr().out
+
+
+def test_stop_menu_service_waits_for_the_socket_to_disappear(tmp_path, monkeypatch) -> None:
+    socket_path = tmp_path / "input.sock"
+    socket_path.touch()
+
+    def stop(path: Path, payload: dict[str, str], timeout: float) -> dict[str, int]:
+        socket_path.unlink()
+        return {"pid": 5}
+
+    monkeypatch.setattr(run, "menu_request", stop)
+    assert run.stop_menu_service(1, socket_path) is True
+
+
+def test_stop_menu_service_reports_a_socket_that_outlives_the_stop(tmp_path, monkeypatch, capsys) -> None:
+    socket_path = tmp_path / "input.sock"
+    socket_path.touch()
+    monkeypatch.setattr(run, "menu_request", lambda path, payload, timeout: {"pid": 5})
+    assert run.stop_menu_service(0, socket_path) is False
+    assert "still exists" in capsys.readouterr().err
+
+
+def test_teardown_verb_forwards_the_client_flags(monkeypatch) -> None:
+    seen: dict[str, bool] = {}
+
+    def fake_quit(harness: Path, timeout: float, **kwargs: bool) -> bool:
+        seen.update(kwargs)
+        return True
+
+    monkeypatch.setattr(run, "quit_game", fake_quit)
+    with tempfile.TemporaryDirectory() as tmp:
+        assert run_main(Path(tmp), "teardown", "--stop-steam", "--stop-menu") == 0
+    assert seen == {"stop_steam": True, "stop_menu": True}
+
+
+def test_teardown_runs_without_the_harness_marker(monkeypatch) -> None:
+    monkeypatch.setattr(run, "quit_game", lambda *args, **kwargs: True)
+    with tempfile.TemporaryDirectory() as tmp:
+        assert run_main(Path(tmp), "teardown") == 0
+
+
+def test_relaunch_forwards_the_client_flags_to_the_quit(monkeypatch) -> None:
+    relaunch_stubs(monkeypatch)
+    seen: dict[str, bool] = {}
+    monkeypatch.setattr(run, "quit_game", lambda h, t, **kwargs: seen.update(kwargs) or True)
+    ok = run.relaunch(
+        Path("/h"),
+        Path("/g"),
+        None,
+        5,
+        "game:run",
+        on_step=lambda m: None,
+        on_error=lambda m: None,
+        stop_steam=True,
+        stop_menu=True,
+    )
+    assert ok is True
+    assert seen == {"stop_steam": True, "stop_menu": True}
+
+
+GAME_DIR_PATH = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\Megabonk.exe"
+
 
 
 def test_find_harness_pids_matches_game_dir_processes() -> None:
-    listing = (
-        f"  5 {GAME_DIR_PS_LINE} \n"
-        f"  6 {CRASH_HANDLER_PS_LINE} \n"
-        "  7 C:\\windows\\system32\\services.exe \n"
-        "  8 C:\\Program Files (x86)\\Steam\\steam.exe -silent\n"
-        "  9 /sbin/launchd\n"
-    )
-    assert run.find_harness_pids(listing) == [5, 6]
+    table = [
+        windows_process(5, GAME_DIR_PATH),
+        windows_process(6, CRASH_HANDLER, "32", "28839936"),
+        wine_stub(7, "services"),
+        windows_process(8, STEAM_EXE, "-silent"),
+        proc(9, "/sbin/launchd"),
+    ]
+    assert run.find_harness_pids(table) == [5, 6]
 
 
 def test_force_kill_games_kills_only_game_dir_processes(monkeypatch) -> None:
-    listing = f"  5 {GAME_DIR_PS_LINE} \n  6 {CRASH_HANDLER_PS_LINE} \n  8 C:\\Program Files (x86)\\Steam\\steam.exe -silent\n"
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, stdout=listing))
+    table = [
+        windows_process(5, GAME_DIR_PATH),
+        windows_process(6, CRASH_HANDLER, "32", "28839936"),
+        windows_process(8, STEAM_EXE, "-silent"),
+    ]
     killed: list[tuple[int, int]] = []
     monkeypatch.setattr(os, "kill", lambda pid, sig: killed.append((pid, sig)))
-    assert run.force_kill_games() == 2
+    assert run.force_kill_games(table=lambda: table) == 2
     assert killed == [(5, 9), (6, 9)]
 
 

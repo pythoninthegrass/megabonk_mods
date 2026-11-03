@@ -62,6 +62,20 @@ tasks:
       - cmd: steam steam://rungameid/3405340
         platforms: [windows]
 
+  stop:
+    desc: "Quit the game, reap the Wine processes it leaves behind, and optionally stop Steam and the menu input service"
+    summary: |
+      Usage: task game:stop -- [--stop-steam] [--stop-menu]
+
+      Wraps scripts/run.py teardown: quits any running game (force-killing one
+      whose main thread stopped polling), then SIGTERMs and SIGKILLs the Wine
+      stubs, console windows, launcher wrappers and game helpers left behind in
+      the resolved prefix. The Steam client and the OS-level menu input service
+      outlive a run on purpose, so they are only torn down with --stop-steam and
+      --stop-menu. Works without the harness marker and with nothing running.
+    cmds:
+      - uv run scripts/run.py teardown {{.CLI_ARGS}}
+
   steam:
     desc: "Start the Steam client under Wine (macOS)"
     summary: |
