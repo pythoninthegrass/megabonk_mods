@@ -93,17 +93,39 @@ def test_per_enemy_cost_refuses_a_zero_population() -> None:
         rr.per_enemy_cost({"drawCalls": 1}, {"drawCalls": 2}, enemies=0)
 
 
-def draw(event_id, indices, instances):
-    return rr.Draw(event_id, indices, instances)
+def draw(event_id, indices, instances, name="vkCmdDrawIndexed"):
+    return rr.Draw(event_id, indices, instances, name)
 
 
 def test_draw_records_attaches_the_measured_duration_to_each_draw() -> None:
     draws = [draw(10, 660, 1), draw(11, 6, 2)]
     records = rr.draw_records(draws, [(10, 0.0001234), (11, 0.0), (99, 0.005)])
     assert records == [
-        {"eventId": 10, "indices": 660, "instances": 1, "gpuUSec": 123.4},
-        {"eventId": 11, "indices": 6, "instances": 2, "gpuUSec": 0.0},
+        {"eventId": 10, "name": "vkCmdDrawIndexed", "indices": 660, "instances": 1, "gpuUSec": 123.4},
+        {"eventId": 11, "name": "vkCmdDrawIndexed", "indices": 6, "instances": 2, "gpuUSec": 0.0},
     ]
+
+
+def test_render_targets_lists_the_largest_colour_targets_first() -> None:
+    class Resource:
+        def __init__(self, width, height, name):
+            self.width, self.height, self.depth, self.arraysize, self.type, self.name = width, height, 1, 1, "ShaderResource", name
+
+    class Replay:
+        def GetResources(self):
+            return [Resource(1920, 1080, "swapchain"), Resource(640, 360, "ssao"), Resource(32, 32, "shadow"), None]
+
+    targets = rr.render_targets(Replay())
+    assert [target["width"] for target in targets] == [1920, 640]
+    assert targets[0]["name"] == "swapchain"
+
+
+def test_render_targets_survives_a_missing_resource_list() -> None:
+    class Replay:
+        def GetResources(self):
+            raise RuntimeError("no device")
+
+    assert rr.render_targets(Replay()) == []
 
 
 def test_shape_totals_report_mean_and_floor_per_shape() -> None:

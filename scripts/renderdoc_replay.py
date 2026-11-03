@@ -23,7 +23,7 @@ from collections import namedtuple
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-Draw = namedtuple("Draw", "event_id indices instances")
+Draw = namedtuple("Draw", "event_id indices instances name", defaults=("",))
 
 GAME_PROCESS = re.compile(r"^[A-Za-z]:\\.*\\Megabonk\.exe(?:\s|$)")
 DRAW_CHUNKS = {
@@ -79,7 +79,7 @@ def gpu_totals(samples: Iterable[tuple[int, float]], top: int = TOP_EVENTS) -> d
 def draw_records(draws: Sequence[Draw], samples: Iterable[tuple[int, float]]) -> list[dict[str, Any]]:
     """One row per draw with its measured GPU duration, so attribution can be sliced offline without the GPU again."""
     measured = dict(samples)
-    return [{"eventId": draw.event_id, "indices": draw.indices, "instances": draw.instances,
+    return [{"eventId": draw.event_id, "name": draw.name, "indices": draw.indices, "instances": draw.instances,
              "gpuUSec": round(measured.get(draw.event_id, 0.0) * 1e6, 2)} for draw in draws]
 
 
@@ -193,7 +193,7 @@ def structured_draws(capture) -> tuple[list[Draw], dict[str, int]]:
             child = node.FindChild(count_field)
             instances = node.FindChild("instanceCount")
             indices = child.AsInt() if child is not None else 0
-            draws.append(Draw(len(draws) + 1, int(indices or 0), max(1, int(instances.AsInt()) if instances is not None else 1)))
+            draws.append(Draw(len(draws) + 1, int(indices or 0), max(1, int(instances.AsInt()) if instances is not None else 1), name))
     return draws, api
 
 
@@ -222,6 +222,24 @@ def pipeline_signature(rd: Any, controller, event_id: int) -> dict[str, Any]:
         "indexBuffer": str(getattr(bound, "resource", "null")),
         "vertexBuffers": [str(v.resource) for v in (vertex_inputs or []) if getattr(v, "resource", None)],
     }
+
+
+def render_targets(replay: Any, limit: int = 6) -> list[dict[str, Any]]:
+    """Largest colour targets in the frame: the resolution every GPU-microsecond figure has to be read against."""
+    try:
+        resources = replay.GetResources()
+    except BaseException:
+        return []
+    targets = []
+    for resource in resources or []:
+        width = int(getattr(resource, "width", 0) or 0)
+        height = int(getattr(resource, "height", 0) or 0)
+        if width * height >= 200000:
+            targets.append({"width": width, "height": height, "depth": int(getattr(resource, "depth", 0) or 0),
+                            "arraySize": int(getattr(resource, "arraysize", 1) or 1),
+                            "type": str(resource.type), "name": str(resource.name)[:40]})
+    targets.sort(key=lambda target: -(target["width"] * target["height"]))
+    return targets[:limit]
 
 
 def summary_fields(draws: Sequence[Draw]) -> dict[str, Any]:
@@ -274,10 +292,13 @@ def read_capture(path: str, options: argparse.Namespace, rd: Any) -> dict[str, A
         report["device"] = {name: str(getattr(properties, name, "")) for name in ("vendor", "pipelineType", "degraded")}
 
         actions = flatten(controller.GetRootActions())
-        draws = [Draw(action.eventId, action.numIndices, max(1, action.numInstances))
+        indexed = getattr(rd.ActionFlags, "Indexed", None)
+        draws = [Draw(action.eventId, action.numIndices, max(1, action.numInstances),
+                      "vkCmdDrawIndexed" if indexed and action.flags & indexed else "vkCmdDraw")
                  for action in actions if is_draw(rd, action)]
         report["actions"] = len(actions)
         report["markers"] = sorted({str(action.customName) for action in actions if getattr(action, "customName", "")})[:40]
+        report["renderTargets"] = render_targets(controller)
         report.update(summary_fields(draws))
 
         available = list(controller.EnumerateCounters() or [])
