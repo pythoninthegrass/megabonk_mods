@@ -146,9 +146,19 @@ type session struct {
 // subprocesses, no removable-media scan.
 func run(t *testing.T, argv ...string) session {
 	t.Helper()
+	return runAs(t, nil, nil, argv...)
+}
+
+// runAs is run with the command's settings adjusted and the stubbed
+// subprocess runner replaced, for a Windows-shaped invocation.
+func runAs(t *testing.T, configure func(*Command), runner func([]string, time.Duration) (int, string, error), argv ...string) session {
+	t.Helper()
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
 	command := NewCommand(stdout, stderr)
 	command.Env = map[string]string{"HOME": t.TempDir(), "MEGABONK_NON_INTERACTIVE": "1"}
+	if configure != nil {
+		configure(command)
+	}
 	command.PickProgress = func(env map[string]string, forceText bool, writer func(string)) ui.Progress {
 		return ui.NewTextProgress(writer)
 	}
@@ -157,6 +167,9 @@ func run(t *testing.T, argv ...string) session {
 	restoreRunner := steam.CommandRunner
 	steam.CommandRunner = func(argv []string, timeout time.Duration) (int, string, error) {
 		return 1, "", errors.New("stubbed")
+	}
+	if runner != nil {
+		steam.CommandRunner = runner
 	}
 	t.Cleanup(func() {
 		MountRoots = restoreRoots
@@ -1020,5 +1033,89 @@ func TestAcceptingTheWindowConfirmationInstalls(t *testing.T) {
 	}
 	if len(fake.prompts) != 1 || content.LoadRecord(game) == nil {
 		t.Errorf("prompts = %v, record = %v", fake.prompts, content.LoadRecord(game))
+	}
+}
+
+func windowsCommand(env map[string]string) func(*Command) {
+	return func(command *Command) {
+		command.GOOS = "windows"
+		for key, value := range env {
+			command.Env[key] = value
+		}
+	}
+}
+
+func registryRunner(steamPath string) func([]string, time.Duration) (int, string, error) {
+	return func(argv []string, timeout time.Duration) (int, string, error) {
+		if len(argv) >= 5 && argv[0] == "reg" && argv[2] == `HKCU\Software\Valve\Steam` && argv[4] == "SteamPath" && steamPath != "" {
+			return 0, "\r\nHKEY_CURRENT_USER\\Software\\Valve\\Steam\r\n    SteamPath    REG_SZ    " + steamPath + "\r\n\r\n", nil
+		}
+		return 1, "", nil
+	}
+}
+
+func TestWindowsDiscoversTheGameAndInstallsNatively(t *testing.T) {
+	packageDir := makePackage(t)
+	base := t.TempDir()
+	library := filepath.Join(base, "D", "SteamLibrary")
+	game := filepath.Join(library, "steamapps", "common", steam.GameName)
+	if err := os.MkdirAll(filepath.Join(game, steam.DataDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(game, steam.GameExe), "MZ")
+	client := filepath.Join(base, "C", "Steam")
+	if err := os.MkdirAll(filepath.Join(client, "steamapps"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(client, "steamapps", "libraryfolders.vdf"),
+		"\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\""+filepath.ToSlash(library)+"\"\n\t}\n}\n")
+
+	got := runAs(t, windowsCommand(nil), registryRunner(filepath.ToSlash(client)), "--package", packageDir, "--no-gui")
+	if got.exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+	if !ppath.IsFile(filepath.Join(game, "MelonLoader", "Dependencies", "dotnet", "host", "fxr", "6.0.36", "hostfxr.dll")) {
+		t.Errorf("the runtime did not land under MelonLoader/Dependencies/dotnet:\n%s", got.stdout)
+	}
+	if ppath.Exists(filepath.Join(game, content.RuntimeSubdir)) {
+		t.Error("a native install must not create the Proton-style dotnet6-win folder")
+	}
+	for _, unwanted := range []string{"%command%", "DOTNET_ROOT", "Launch Options", "Proton"} {
+		if strings.Contains(got.stdout.String()+got.stderr.String(), unwanted) {
+			t.Errorf("a native Windows run should not mention %q:\n%s\n%s", unwanted, got.stdout, got.stderr)
+		}
+	}
+}
+
+func TestWindowsGameDirFlagIsNativeWithoutAPrefix(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	got := runAs(t, windowsCommand(nil), nil, "--package", packageDir, "--game-dir", game, "--no-gui")
+	if got.exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+	if !ppath.IsFile(filepath.Join(game, "MelonLoader", "Dependencies", "dotnet", proton.RuntimeMarkerName)) {
+		t.Error("the runtime did not land under MelonLoader/Dependencies/dotnet")
+	}
+	if got.stderr.String() != "" {
+		t.Errorf("nothing should be warned on native Windows:\n%s", got.stderr)
+	}
+}
+
+func TestWindowsNotFoundSaysWhereItLookedAndWhatToDo(t *testing.T) {
+	packageDir := makePackage(t)
+	got := runAs(t, windowsCommand(map[string]string{"ProgramFiles(x86)": t.TempDir()}), registryRunner(""), "--package", packageDir, "--no-gui")
+	if got.exit != ExitNotFound {
+		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
+	}
+	stderr := got.stderr.String()
+	for _, want := range []string{"--game-dir", "HKCU", "Program Files"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr should contain %q:\n%s", want, stderr)
+		}
+	}
+	for _, unwanted := range []string{"flatpak", ".var", ".local/share"} {
+		if strings.Contains(strings.ToLower(stderr), unwanted) {
+			t.Errorf("a Windows message should not mention %q:\n%s", unwanted, stderr)
+		}
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -103,6 +104,17 @@ type Command struct {
 	// window.Run. It reports (code, started): started is false when the app
 	// could not launch and the caller must fall back to plain text.
 	StartWindow func(title string, work func(ui.Progress) int) (int, bool)
+	// GOOS names the operating system the install targets; empty uses runtime.GOOS.
+	GOOS string
+}
+
+// native reports a Windows install, which has no Proton prefix, Flatpak or
+// launch option to deal with.
+func (c *Command) native() bool {
+	if c.GOOS != "" {
+		return c.GOOS == "windows"
+	}
+	return runtime.GOOS == "windows"
 }
 
 // NewCommand returns a Command wired to the given streams.
@@ -278,6 +290,9 @@ func ResolvePackageDir(raw string) (string, bool) {
 // searched and the prefix that belongs to the install. A prefix chosen with
 // --prefix needs no reporting: the player already picked it.
 func (c *Command) FindInstall(home string, extraLibraries []string, reporter *Reporter, prefixChosen bool) (gameDir string, prefix string, searched []string) {
+	if c.native() {
+		return c.findWindowsInstall(extraLibraries, reporter)
+	}
 	probe := steam.ProbeFlatpak(home)
 	granted := append([]string{}, probe.Paths...)
 	clients := steam.ClientRoots(home, "", granted)
@@ -300,6 +315,16 @@ func (c *Command) FindInstall(home string, extraLibraries []string, reporter *Re
 	prefix, prefixes := steam.FindPrefix(found, rootPaths(roots), "")
 	reportPrefix(reporter, found, prefix, prefixes, prefixChosen)
 	return found, prefix, rootPaths(roots)
+}
+
+// findWindowsInstall searches the libraries Steam records for a Windows client.
+func (c *Command) findWindowsInstall(extraLibraries []string, reporter *Reporter) (gameDir string, prefix string, searched []string) {
+	clients := steam.WindowsClientRoots(steam.ProgramFilesDirs(func(key string) string { return c.environment()[key] }))
+	roots := steam.LibraryRoots(clients, nil, expandAll(extraLibraries), nil, false)
+	if len(roots) == 0 {
+		reporter.Say("no Steam library found; pass --game-dir if Megabonk is somewhere unusual")
+	}
+	return steam.FindGameDir(roots, ""), "", rootPaths(roots)
 }
 
 // reportPrefix tells the player when the prefix written to is not the one beside
@@ -458,10 +483,14 @@ func (c *Command) runProgress(options *Options, reporter *Reporter, title, promp
 }
 
 func (c *Command) planOptions(options *Options, gameDir string, located *Located) plan.Options {
+	runtimeMode := options.DotnetIn
+	if c.native() {
+		runtimeMode = plan.RuntimeModeNative
+	}
 	return plan.Options{
 		Game:         gameDir,
 		Prefix:       c.prefix(options, gameDir, located),
-		RuntimeMode:  options.DotnetIn,
+		RuntimeMode:  runtimeMode,
 		DllOverride:  options.WineOverride,
 		WineOverride: options.WineOverride,
 		ForcedTool:   options.Proton,
@@ -479,6 +508,9 @@ func lastOf(values []string) string {
 }
 
 func (c *Command) prefix(options *Options, gameDir string, located *Located) string {
+	if c.native() {
+		return ""
+	}
 	if options.Prefix != "" {
 		return ppath.ExpandUser(options.Prefix)
 	}
@@ -538,18 +570,9 @@ func withPlan(payload map[string]any, built *plan.Plan) map[string]any {
 }
 
 func (c *Command) doInstall(options *Options, reporter *Reporter, gameDir, packageDir string, pkg *manifest.Package, located *Located) (int, error) {
-	built, err := plan.BuildPlan(packageDir, plan.Options{
-		Manifest:     pkg,
-		Game:         gameDir,
-		Prefix:       c.prefix(options, gameDir, located),
-		RuntimeMode:  options.DotnetIn,
-		DllOverride:  options.WineOverride,
-		WineOverride: options.WineOverride,
-		ForcedTool:   options.Proton,
-		Level:        lastOf(options.Levels),
-		Pack:         lastOf(options.Packs),
-		Verify:       false,
-	})
+	opts := c.planOptions(options, gameDir, located)
+	opts.Manifest = pkg
+	built, err := plan.BuildPlan(packageDir, opts)
 	if err != nil {
 		return 0, err
 	}
@@ -775,9 +798,11 @@ func (c *Command) notFoundLines(home string, extraLibraries []string) []string {
 		"Megabonk was not found in any Steam library.",
 		"Install it in Steam and start it once, or point the installer straight at it:",
 		"  " + Prog + " --package <package> --game-dir <path to the folder holding " + gamebuild.WindowsExe + ">",
-		"",
-		"Steam clients considered:",
 	}
+	if c.native() {
+		return c.windowsNotFoundLines(extraLibraries, lines)
+	}
+	lines = append(lines, "", "Steam clients considered:")
 	candidates := steam.ClientCandidates(home, "", nil)
 	accepted := []steam.Client{}
 	for _, candidate := range candidates {
@@ -832,6 +857,29 @@ func (c *Command) notFoundLines(home string, extraLibraries []string) []string {
 		for _, candidate := range rejected {
 			lines = append(lines, fmt.Sprintf("  - %s: %s", candidate.Path, candidate.Reason))
 		}
+	}
+	return lines
+}
+
+// windowsNotFoundLines says where a Windows run looked: the registry path Steam
+// records, Steam under Program Files, and the libraries those name.
+func (c *Command) windowsNotFoundLines(extraLibraries, header []string) []string {
+	lines := append([]string{}, header...)
+	lines = append(lines, "", "Steam is found through HKCU\\Software\\Valve\\Steam (SteamPath) and Steam under Program Files, then its libraryfolders.vdf.")
+	clients := steam.WindowsClientRoots(steam.ProgramFilesDirs(func(key string) string { return c.environment()[key] }))
+	if len(clients) == 0 {
+		return append(lines, "No Steam client was found there — pass --game-dir, or --library <path> for a Steam library folder.")
+	}
+	for _, client := range clients {
+		lines = append(lines, "  - Steam client: "+client.Root)
+	}
+	roots := steam.LibraryRoots(clients, nil, expandAll(extraLibraries), nil, false)
+	if len(roots) == 0 {
+		return append(lines, "Libraries searched: none — pass --library <path> to add one")
+	}
+	lines = append(lines, "Libraries searched:")
+	for _, root := range roots {
+		lines = append(lines, "  - "+root.Path)
 	}
 	return lines
 }
