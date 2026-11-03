@@ -1509,6 +1509,7 @@ def test_wait_for_wineserver_to_exit_fails_when_the_server_survives(monkeypatch)
     monkeypatch.setattr(run, "wineserver_binary", lambda: run.Path("/wine/bin/wineserver"))
     monkeypatch.setattr(run, "resolve_wine_prefix", lambda: run.Path("/prefix"))
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(os, "kill", lambda pid, sig: None)
     monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit": 0)
     assert run.wait_for_wineserver_to_exit() is False
 
@@ -1522,6 +1523,7 @@ def test_wait_for_wineserver_to_exit_fails_when_the_timeout_expires(monkeypatch)
         raise subprocess.TimeoutExpired(cmd, 1)
 
     monkeypatch.setattr(subprocess, "run", expire)
+    monkeypatch.setattr(os, "kill", lambda pid, sig: None)
     monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit": 0)
     monkeypatch.setattr(run.time, "sleep", lambda _: None)
     assert run.wait_for_wineserver_to_exit() is False
