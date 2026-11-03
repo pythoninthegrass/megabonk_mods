@@ -41,6 +41,9 @@ const (
 	ReasonMissing     = "does not exist"
 	ReasonNoSteamapps = "no steamapps/ directory"
 	ReasonDuplicate   = "already searched via an earlier candidate"
+	ReasonNotMegabonk = "an Il2Cpp install (GameAssembly.dll) but no Megabonk.exe, Megabonk.x86_64 or Megabonk_Data/"
+	ReasonNoPrefix    = "no steamapps/compatdata prefix in this library"
+	ReasonNoDriveC    = "the prefix has no drive_c/: the game has never been launched under Proton in this library"
 )
 
 func reasonUnmounted(parent string) string {
@@ -88,6 +91,25 @@ type Candidate struct {
 	Reason   string
 	Granted  *bool
 	Client   *Client
+}
+
+// GameCandidate is a directory discovery thought might hold Megabonk, and what
+// it decided.
+type GameCandidate struct {
+	Path     string
+	Library  string
+	How      string
+	Accepted bool
+	Reason   string
+}
+
+// PrefixCandidate is one library's compatdata prefix for this app, and whether
+// Steam has created it.
+type PrefixCandidate struct {
+	Path     string
+	Library  string
+	Accepted bool
+	Reason   string
 }
 
 // Probe is how the Flatpak grants were answered: the persisted file, the CLI, or
@@ -385,50 +407,92 @@ func ScanForLibraries(mountRoot string, depth int) []string {
 	return found
 }
 
-func looksLikeGame(directory string) bool {
+// isMegabonk recognises an install only by the names Megabonk itself writes.
+func isMegabonk(directory string) bool {
 	if !ppath.IsDir(directory) {
 		return false
 	}
-	for _, name := range []string{GameExe, NativeExe, gameAssembly} {
-		if ppath.IsFile(ppath.Join(directory, name)) {
+	for _, marker := range []string{GameExe, NativeExe} {
+		if ppath.IsFile(ppath.Join(directory, marker)) {
 			return true
 		}
 	}
 	return ppath.IsDir(ppath.Join(directory, DataDir))
 }
 
-// FindGameDir is the first library holding a Megabonk install, using Steam's own
-// appmanifest when it has one. "" means none of them does.
-func FindGameDir(roots []Library, gameName string) string {
+// isIl2Cpp says a folder is a Unity/Il2Cpp game: proof of a game, not of which.
+func isIl2Cpp(directory string) bool {
+	return ppath.IsDir(directory) && ppath.IsFile(ppath.Join(directory, gameAssembly))
+}
+
+func commonChildren(library string) []string {
+	common := ppath.Join(library, "steamapps", "common")
+	entries, err := os.ReadDir(common)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		child := ppath.Join(common, entry.Name())
+		if ppath.IsDir(child) {
+			out = append(out, child)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// GameCandidates lists every directory discovery offered as Megabonk, in the
+// order it should be trusted: Steam's own appmanifest, the folder name Steam
+// creates, then any other Il2Cpp install in the library.
+func GameCandidates(roots []Library, gameName string) []GameCandidate {
 	if gameName == "" {
 		gameName = GameName
 	}
+	out := make([]GameCandidate, 0, len(roots))
+	seen := map[string]bool{}
+	take := func(directory, library, how string) {
+		key := resolve(directory)
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		switch {
+		case !ppath.Exists(directory):
+			out = append(out, GameCandidate{directory, library, how, false, ReasonMissing})
+		case isMegabonk(directory):
+			out = append(out, GameCandidate{directory, library, how, true, ""})
+		default:
+			out = append(out, GameCandidate{directory, library, how, false, ReasonNotMegabonk})
+		}
+	}
 	for _, root := range roots {
-		common := ppath.Join(root.Path, "steamapps", "common")
-		if installDir := installDirFromManifests(root.Path); installDir != "" && looksLikeGame(installDir) {
-			return installDir
+		if installDir := installDirFromManifests(root.Path); installDir != "" {
+			take(installDir, root.Path, "manifest")
 		}
-		named := ppath.Join(common, gameName)
-		if looksLikeGame(named) {
-			return named
+	}
+	for _, root := range roots {
+		named := ppath.Join(root.Path, "steamapps", "common", gameName)
+		if ppath.IsDir(named) {
+			take(named, root.Path, "name")
 		}
-		if !ppath.IsDir(common) {
-			continue
-		}
-		entries, err := os.ReadDir(common)
-		if err != nil {
-			continue
-		}
-		children := make([]string, 0, len(entries))
-		for _, entry := range entries {
-			children = append(children, entry.Name())
-		}
-		sort.Strings(children)
-		for _, name := range children {
-			candidate := ppath.Join(common, name)
-			if ppath.IsDir(candidate) && looksLikeGame(candidate) {
-				return candidate
+	}
+	for _, root := range roots {
+		for _, child := range commonChildren(root.Path) {
+			if isMegabonk(child) || isIl2Cpp(child) {
+				take(child, root.Path, "scan")
 			}
+		}
+	}
+	return out
+}
+
+// FindGameDir is the first library holding a Megabonk install, by its own files
+// rather than its shape. "" means none of them does.
+func FindGameDir(roots []Library, gameName string) string {
+	for _, candidate := range GameCandidates(roots, gameName) {
+		if candidate.Accepted {
+			return candidate.Path
 		}
 	}
 	return ""
@@ -453,9 +517,21 @@ func installDirFromManifests(library string) string {
 		if err != nil {
 			continue
 		}
-		install := stringValue(vdf.Find(data, []string{"appid", "installdir"}))
-		if install == "" {
-			install = stringValue(vdf.Find(data, []string{AppID, "installdir"}))
+		appIDs := make([]string, 0, 1)
+		for _, value := range vdf.FindAll(data, []string{"*", "appid"}) {
+			if text := stringValue(value); text != "" {
+				appIDs = append(appIDs, text)
+			}
+		}
+		if len(appIDs) > 0 && !containsString(appIDs, AppID) {
+			continue
+		}
+		install := ""
+		for _, value := range vdf.FindAll(data, []string{"*", "installdir"}) {
+			if text := strings.TrimSpace(stringValue(value)); text != "" {
+				install = text
+				break
+			}
 		}
 		if install != "" {
 			return ppath.Join(steamapps, "common", install)
@@ -467,6 +543,92 @@ func installDirFromManifests(library string) string {
 func stringValue(value any) string {
 	if text, ok := value.(string); ok {
 		return text
+	}
+	return ""
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+// PrefixCandidates lists each library's compatdata prefix for this app, and
+// whether Steam has filled it in.
+func PrefixCandidates(libraries []string, appID string) []PrefixCandidate {
+	if appID == "" {
+		appID = AppID
+	}
+	out := make([]PrefixCandidate, 0, len(libraries))
+	seen := map[string]bool{}
+	for _, library := range libraries {
+		key := resolve(library)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		prefix := PrefixRoot(library, appID)
+		switch {
+		case !ppath.IsDir(prefix):
+			out = append(out, PrefixCandidate{prefix, library, false, ReasonNoPrefix})
+		case !ppath.IsDir(ppath.Join(prefix, "drive_c")):
+			out = append(out, PrefixCandidate{prefix, library, false, ReasonNoDriveC})
+		default:
+			out = append(out, PrefixCandidate{prefix, library, true, ""})
+		}
+	}
+	return out
+}
+
+// FindPrefix is the prefix to install into, plus every prefix considered.
+//
+// Steam keeps the prefix in the library the game was installed to, which is not
+// always the one holding the game files today. When the game's own library has
+// no usable prefix, the only other usable one is taken; two of them is a guess,
+// so nothing is chosen.
+func FindPrefix(gameDir string, libraries []string, appID string) (string, []PrefixCandidate) {
+	if appID == "" {
+		appID = AppID
+	}
+	own := PrefixForGameDir(gameDir, appID)
+	ownLibrary := libraryOfGameDir(gameDir)
+	ordered := make([]string, 0, len(libraries))
+	if ownLibrary != "" {
+		ordered = append(ordered, ownLibrary)
+	}
+	for _, library := range libraries {
+		if ownLibrary != "" && resolve(library) == resolve(ownLibrary) {
+			continue
+		}
+		ordered = append(ordered, library)
+	}
+	considered := PrefixCandidates(ordered, appID)
+	if own != "" && ppath.IsDir(ppath.Join(own, "drive_c")) {
+		return own, considered
+	}
+	var others []PrefixCandidate
+	for _, candidate := range considered {
+		if candidate.Accepted && candidate.Path != own {
+			others = append(others, candidate)
+		}
+	}
+	if len(others) == 1 {
+		return others[0].Path, considered
+	}
+	if len(others) > 1 {
+		return "", considered
+	}
+	return own, considered
+}
+
+func libraryOfGameDir(gameDir string) string {
+	for _, parent := range ppath.Parents(ppath.Normalize(gameDir)) {
+		if ppath.Name(parent) == "common" {
+			return ppath.Parent(ppath.Parent(parent))
+		}
 	}
 	return ""
 }

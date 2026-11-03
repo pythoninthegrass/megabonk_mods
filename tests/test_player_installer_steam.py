@@ -312,3 +312,207 @@ def test_flatpak_granted_paths_still_returns_the_probe_paths(tmp_path: Path) -> 
     override.parent.mkdir(parents=True)
     override.write_text(f"[Context]\nfilesystems={granted};\n")
     assert steam.flatpak_granted_paths(home) == [granted]
+
+
+# ---------------------------------------------------------------- game identity
+
+
+def _make_decoy(library: Path, name: str = "1000xRESIST") -> Path:
+    """An unrelated Il2Cpp game: the same layout as Megabonk, nothing that names it."""
+    decoy = library / "steamapps" / "common" / name
+    (decoy / f"{name}_Data").mkdir(parents=True)
+    (decoy / "GameAssembly.dll").write_bytes(b"MZ")
+    (decoy / "UnityPlayer.dll").write_bytes(b"MZ")
+    (decoy / f"{name}.exe").write_bytes(b"MZ")
+    return decoy
+
+
+def _make_install(library: Path, name: str, *files: str) -> Path:
+    install = library / "steamapps" / "common" / name
+    install.mkdir(parents=True)
+    for relative in files:
+        (install / relative).write_bytes(b"MZ")
+    return install
+
+
+def _write_manifest(library: Path, install_dir: str, app_id: str = steam.APP_ID) -> Path:
+    steamapps = library / "steamapps"
+    steamapps.mkdir(parents=True, exist_ok=True)
+    path = steamapps / f"appmanifest_{app_id}.acf"
+    path.write_text(f'"AppState"\n{{\n\t"appid"\t\t"{app_id}"\n\t"installdir"\t\t"{install_dir}"\n}}\n')
+    return path
+
+
+def test_find_game_dir_skips_an_unrelated_il2cpp_game_in_an_earlier_library(tmp_path: Path) -> None:
+    first = _make_library(tmp_path / "lib1", with_game=False)
+    _make_decoy(first)
+    second = _make_library(tmp_path / "lib2")
+    roots = [steam.LibraryRoot(first, "client"), steam.LibraryRoot(second, "scan")]
+    assert steam.find_game_dir(roots) == second / "steamapps" / "common" / "Megabonk"
+
+
+def test_find_game_dir_skips_a_decoy_sorted_before_megabonk(tmp_path: Path) -> None:
+    library = _make_library(tmp_path / "lib")
+    _make_decoy(library, "Heroes of Might and Magic Olden Era")
+    roots = [steam.LibraryRoot(library, "client")]
+    assert steam.find_game_dir(roots) == library / "steamapps" / "common" / "Megabonk"
+
+
+def test_find_game_dir_none_when_the_only_il2cpp_install_is_not_megabonk(tmp_path: Path) -> None:
+    library = _make_library(tmp_path / "lib", with_game=False)
+    _make_decoy(library)
+    assert steam.find_game_dir([steam.LibraryRoot(library, "client")]) is None
+
+
+def test_find_game_dir_uses_the_app_manifest_even_with_a_decoy_ahead(tmp_path: Path) -> None:
+    library = _make_library(tmp_path / "lib", with_game=False)
+    _make_decoy(library, "A Decoy First")
+    game = _make_install(library, "Megabonk Renamed", "Megabonk.exe")
+    _write_manifest(library, "Megabonk Renamed")
+    assert steam.find_game_dir([steam.LibraryRoot(library, "client")]) == game
+
+
+def test_find_game_dir_refuses_an_app_manifest_whose_install_dir_is_not_megabonk(tmp_path: Path) -> None:
+    library = _make_library(tmp_path / "lib", with_game=False)
+    _make_decoy(library)
+    _write_manifest(library, "1000xRESIST")
+    assert steam.find_game_dir([steam.LibraryRoot(library, "client")]) is None
+
+
+def test_find_game_dir_finds_a_renamed_install_by_its_executable(tmp_path: Path) -> None:
+    library = _make_library(tmp_path / "lib", with_game=False)
+    game = _make_install(library, "Megabonk (2)", "Megabonk.exe")
+    assert steam.find_game_dir([steam.LibraryRoot(library, "client")]) == game
+
+
+def test_find_game_dir_still_finds_the_native_build_so_it_can_be_refused(tmp_path: Path) -> None:
+    library = _make_library(tmp_path / "lib", with_game=False)
+    game = _make_install(library, "Megabonk", "Megabonk.x86_64")
+    assert steam.find_game_dir([steam.LibraryRoot(library, "client")]) == game
+
+
+def test_game_candidates_prefers_the_manifest_and_names_the_order(tmp_path: Path) -> None:
+    library = _make_library(tmp_path / "lib")
+    _make_decoy(library)
+    candidates = steam.game_candidates([steam.LibraryRoot(library, "client")])
+    assert [(c.how, c.path.name, c.accepted) for c in candidates][:2] == [
+        ("name", "Megabonk", True),
+        ("scan", "1000xRESIST", False),
+    ]
+
+
+def test_game_candidates_rejection_names_the_il2cpp_markers(tmp_path: Path) -> None:
+    library = _make_library(tmp_path / "lib", with_game=False)
+    _make_decoy(library)
+    rejected = [c for c in steam.game_candidates([steam.LibraryRoot(library, "client")]) if not c.accepted]
+    assert [c.path.name for c in rejected] == ["1000xRESIST"]
+    assert rejected[0].reason == steam.REASON_NOT_MEGABONK
+    assert "GameAssembly.dll" in rejected[0].reason
+    assert "Megabonk_Data" in rejected[0].reason
+
+
+def test_game_candidates_reports_a_manifest_candidate_and_why_it_was_refused(tmp_path: Path) -> None:
+    library = _make_library(tmp_path / "lib", with_game=False)
+    _write_manifest(library, "Megabonk")
+    candidates = steam.game_candidates([steam.LibraryRoot(library, "client")])
+    manifest_candidates = [c for c in candidates if c.how == "manifest"]
+    assert [c.path.name for c in manifest_candidates] == ["Megabonk"]
+    assert not manifest_candidates[0].accepted
+    assert manifest_candidates[0].reason == steam.REASON_MISSING
+
+    named = library / "steamapps" / "common" / "Megabonk"
+    (named / "Megabonk_Data").mkdir(parents=True)
+    candidates = [c for c in steam.game_candidates([steam.LibraryRoot(library, "client")]) if c.how == "manifest"]
+    assert candidates[0].accepted
+
+
+def test_game_candidates_ignores_libraries_without_a_common_directory(tmp_path: Path) -> None:
+    library = tmp_path / "lib" / "steamapps"
+    library.mkdir(parents=True)
+    assert steam.game_candidates([steam.LibraryRoot(library.parent, "client")]) == []
+
+
+# ---------------------------------------------------------------- prefix selection
+
+
+def _prefix_in(library: Path, *, with_drive_c: bool = True, app_id: str = steam.APP_ID) -> Path:
+    prefix = library / "steamapps" / "compatdata" / app_id / "pfx"
+    if with_drive_c:
+        (prefix / "drive_c").mkdir(parents=True)
+    else:
+        prefix.mkdir(parents=True)
+    return prefix
+
+
+def test_find_prefix_uses_the_prefix_beside_the_game(tmp_path: Path) -> None:
+    home_library = _make_library(tmp_path / "lib1", with_game=False)
+    _prefix_in(home_library)
+    game_library = _make_library(tmp_path / "lib2")
+    game_prefix = _prefix_in(game_library)
+    game = game_library / "steamapps" / "common" / "Megabonk"
+    prefix, considered = steam.find_prefix(game, [home_library, game_library])
+    assert prefix == game_prefix
+    assert [(c.library, c.accepted) for c in considered] == [(game_library, True), (home_library, True)]
+
+
+def test_find_prefix_takes_the_only_usable_prefix_from_another_library(tmp_path: Path) -> None:
+    """The SD-card layout: the game is on removable media, the active prefix is in the home library."""
+    home_library = _make_library(tmp_path / "lib1", with_game=False)
+    active = _prefix_in(home_library)
+    game_library = _make_library(tmp_path / "lib2")
+    game = game_library / "steamapps" / "common" / "Megabonk"
+    prefix, considered = steam.find_prefix(game, [home_library, game_library])
+    assert prefix == active
+    chosen = [c for c in considered if c.accepted]
+    assert [(c.path, c.library) for c in chosen] == [(active, home_library)]
+
+
+def test_find_prefix_refuses_to_choose_between_two_usable_prefixes(tmp_path: Path) -> None:
+    first = _make_library(tmp_path / "lib1", with_game=False)
+    first_prefix = _prefix_in(first)
+    second = _make_library(tmp_path / "lib2", with_game=False)
+    second_prefix = _prefix_in(second)
+    game = _make_library(tmp_path / "lib3") / "steamapps" / "common" / "Megabonk"
+    prefix, considered = steam.find_prefix(game, [first, second])
+    assert prefix is None
+    assert [(c.path, c.accepted) for c in considered] == [
+        (first_prefix, True),
+        (second_prefix, True),
+    ]
+
+
+def test_find_prefix_ignores_a_prefix_without_drive_c(tmp_path: Path) -> None:
+    skeleton = _make_library(tmp_path / "lib1", with_game=False)
+    skeleton_prefix = _prefix_in(skeleton, with_drive_c=False)
+    active = _make_library(tmp_path / "lib2", with_game=False)
+    prefix = _prefix_in(active)
+    game = _make_library(tmp_path / "lib3") / "steamapps" / "common" / "Megabonk"
+    assert steam.find_prefix(game, [skeleton, active])[0] == prefix
+    by_path = {c.path: c for c in steam.find_prefix(game, [skeleton, active])[1]}
+    assert by_path[skeleton_prefix].accepted is False
+    assert by_path[skeleton_prefix].reason == steam.REASON_NO_DRIVE_C
+
+
+def test_find_prefix_keeps_the_games_own_unusable_prefix_so_the_warning_names_it(tmp_path: Path) -> None:
+    game_library = _make_library(tmp_path / "lib")
+    game = game_library / "steamapps" / "common" / "Megabonk"
+    skeleton = _prefix_in(game_library, with_drive_c=False)
+    assert steam.find_prefix(game, [game_library])[0] == skeleton
+
+
+def test_find_prefix_none_when_no_library_has_a_prefix(tmp_path: Path) -> None:
+    game_library = _make_library(tmp_path / "lib")
+    game = game_library / "steamapps" / "common" / "Megabonk"
+    other = _make_library(tmp_path / "lib2", with_game=False)
+    prefix, considered = steam.find_prefix(game, [game_library, other])
+    assert prefix is None
+    assert [(c.library, c.reason) for c in considered] == [
+        (game_library, steam.REASON_NO_PREFIX),
+        (other, steam.REASON_NO_PREFIX),
+    ]
+
+
+def test_prefix_candidates_dedupes_a_library_listed_twice(tmp_path: Path) -> None:
+    library = _make_library(tmp_path / "lib", with_game=False)
+    prefix = _prefix_in(library)
+    assert [(c.path, c.library) for c in steam.prefix_candidates([library, library])] == [(prefix, library)]

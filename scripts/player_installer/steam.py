@@ -28,6 +28,13 @@ REASON_MISSING = "does not exist"
 REASON_NO_STEAMAPPS = "no steamapps/ directory"
 REASON_DUPLICATE = "already searched via an earlier candidate"
 REASON_UNMOUNTED = "drive not attached ({parent} is missing)"
+REASON_NOT_MEGABONK = "an Il2Cpp install (GameAssembly.dll) but no Megabonk.exe, Megabonk.x86_64 or Megabonk_Data/"
+REASON_NO_PREFIX = "no steamapps/compatdata prefix in this library"
+REASON_NO_DRIVE_C = "the prefix has no drive_c/: the game has never been launched under Proton in this library"
+
+GAME_ASSEMBLY = "GameAssembly.dll"
+UNITY_PLAYER = "UnityPlayer.dll"
+IDENTITY_MARKERS = (GAME_EXE, NATIVE_EXE, DATA_DIR)
 
 
 @dataclass(frozen=True)
@@ -52,6 +59,27 @@ class Candidate:
     reason: str
     granted: bool | None = None
     client: SteamClient | None = None
+
+
+@dataclass(frozen=True)
+class GameCandidate:
+    """A directory discovery thought might hold Megabonk, and what it decided."""
+
+    path: Path
+    library: Path
+    how: str
+    accepted: bool
+    reason: str
+
+
+@dataclass(frozen=True)
+class PrefixCandidate:
+    """A per-library compatdata prefix, and whether Steam has created it."""
+
+    path: Path
+    library: Path
+    accepted: bool
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -334,36 +362,77 @@ def scan_for_libraries(mount_root: Path | str, depth: int = SCAN_DEPTH) -> list[
     return found
 
 
-def _looks_like_game(directory: Path) -> bool:
-    return _is_dir(directory) and (
-        _is_file(directory / GAME_EXE)
-        or _is_file(directory / NATIVE_EXE)
-        or _is_file(directory / "GameAssembly.dll")
-        or _is_dir(directory / DATA_DIR)
-    )
+def _is_megabonk(directory: Path) -> bool:
+    """Only Megabonk names itself: its executables and data directory are game-specific."""
+    if not _is_dir(directory):
+        return False
+    if any(_is_file(directory / marker) for marker in (GAME_EXE, NATIVE_EXE)):
+        return True
+    return _is_dir(directory / DATA_DIR)
+
+
+def _is_il2cpp(directory: Path) -> bool:
+    """Any Unity/Il2Cpp install: proof a folder is a game, but not proof of which one."""
+    return _is_dir(directory) and _is_file(directory / GAME_ASSEMBLY)
+
+
+def _common_children(library: Path) -> list[Path]:
+    common = library / "steamapps" / "common"
+    if not _is_dir(common):
+        return []
+    try:
+        return sorted(child for child in common.iterdir() if _is_dir(child))
+    except OSError:
+        return []
+
+
+def game_candidates(roots: list[LibraryRoot], game_name: str = GAME_NAME) -> list[GameCandidate]:
+    """Every directory discovery offered as Megabonk, in the order it should be trusted.
+
+    Steam's own app manifest first, then the folder name Steam creates, then any other
+    Il2Cpp install in the library. Nothing is accepted on layout alone: an unrelated
+    Il2Cpp game shares the shape of a Megabonk install and must never be installed into.
+    """
+    out: list[GameCandidate] = []
+    seen: set[str] = set()
+
+    def take(directory: Path, library: Path, how: str) -> None:
+        key = _identity(directory)
+        if key in seen:
+            return
+        seen.add(key)
+        if not _exists(directory):
+            out.append(GameCandidate(directory, library, how, False, REASON_MISSING))
+        elif _is_megabonk(directory):
+            out.append(GameCandidate(directory, library, how, True, ""))
+        else:
+            out.append(GameCandidate(directory, library, how, False, REASON_NOT_MEGABONK))
+
+    for root in roots:
+        install_dir = _install_dir_from_manifests(root.path, game_name)
+        if install_dir is not None:
+            take(install_dir, root.path, "manifest")
+    for root in roots:
+        named = root.path / "steamapps" / "common" / game_name
+        if _is_dir(named):
+            take(named, root.path, "name")
+    for root in roots:
+        for child in _common_children(root.path):
+            if _is_megabonk(child) or _is_il2cpp(child):
+                take(child, root.path, "scan")
+    return out
 
 
 def find_game_dir(roots: list[LibraryRoot], game_name: str = GAME_NAME) -> Path | None:
-    """The first library holding a Megabonk install, using Steam's own appmanifest when it has one."""
-    for root in roots:
-        common = root.path / "steamapps" / "common"
-        install_dir = _install_dir_from_manifests(root.path, game_name)
-        if install_dir is not None and _looks_like_game(install_dir):
-            return install_dir
-        if _looks_like_game(common / game_name):
-            return common / game_name
-        if _is_dir(common):
-            try:
-                children = sorted(common.iterdir())
-            except OSError:
-                continue
-            for candidate in children:
-                if _is_dir(candidate) and _looks_like_game(candidate):
-                    return candidate
+    """The first library holding a Megabonk install, by its own files rather than its shape."""
+    for candidate in game_candidates(roots, game_name):
+        if candidate.accepted:
+            return candidate.path
     return None
 
 
 def _install_dir_from_manifests(library: Path, game_name: str) -> Path | None:
+    """The folder Steam's own appmanifest says holds this app, when the manifest says so."""
     steamapps = library / "steamapps"
     if not _is_dir(steamapps):
         return None
@@ -376,7 +445,13 @@ def _install_dir_from_manifests(library: Path, game_name: str) -> Path | None:
             data = vdf.load_vdf(manifest)
         except vdf.VdfError:
             continue
-        install = vdf.find(data, ("appid", "installdir")) or vdf.find(data, (str(APP_ID), "installdir"))
+        app_ids = [str(value) for value in vdf.find_all(data, ("*", "appid"))]
+        if app_ids and APP_ID not in app_ids:
+            continue
+        install = next(
+            (value for value in vdf.find_all(data, ("*", "installdir")) if isinstance(value, str) and value.strip()),
+            None,
+        )
         if install:
             return steamapps / "common" / str(install)
     return None
@@ -384,6 +459,61 @@ def _install_dir_from_manifests(library: Path, game_name: str) -> Path | None:
 
 def prefix_root(library: Path | str, app_id: str = APP_ID) -> Path:
     return Path(library) / "steamapps" / "compatdata" / app_id / "pfx"
+
+
+def _library_of_game_dir(game_dir: Path) -> Path | None:
+    for parent in game_dir.parents:
+        if parent.name == "common":
+            return parent.parent.parent
+    return None
+
+
+def prefix_candidates(libraries: list[Path | str], app_id: str = APP_ID) -> list[PrefixCandidate]:
+    """Each library's compatdata prefix for this app, and whether Steam has filled it in."""
+    out: list[PrefixCandidate] = []
+    seen: set[str] = set()
+    for library in libraries:
+        library = Path(library)
+        key = _identity(library)
+        if key in seen:
+            continue
+        seen.add(key)
+        prefix = prefix_root(library, app_id)
+        if not _is_dir(prefix):
+            out.append(PrefixCandidate(prefix, library, False, REASON_NO_PREFIX))
+        elif not _is_dir(prefix / "drive_c"):
+            out.append(PrefixCandidate(prefix, library, False, REASON_NO_DRIVE_C))
+        else:
+            out.append(PrefixCandidate(prefix, library, True, ""))
+    return out
+
+
+def find_prefix(
+    game_dir: Path | str,
+    libraries: list[Path | str],
+    app_id: str = APP_ID,
+) -> tuple[Path | None, list[PrefixCandidate]]:
+    """The prefix to install into, plus every prefix considered.
+
+    Steam keeps the prefix in the library the game was installed to, which is not always the
+    one holding the game files today. When the game's own library has no usable prefix, the
+    only other usable one is taken; two of them is a guess, so nothing is chosen.
+    """
+    game_dir = Path(game_dir)
+    own = prefix_for_game_dir(game_dir, app_id)
+    own_library = _library_of_game_dir(game_dir)
+    libraries = [Path(library) for library in libraries]
+    if own_library is not None and any(_identity(path) == _identity(own_library) for path in libraries):
+        libraries = [own_library] + [path for path in libraries if _identity(path) != _identity(own_library)]
+    considered = prefix_candidates(libraries, app_id)
+    if own is not None and _is_dir(own / "drive_c"):
+        return own, considered
+    others = [candidate for candidate in considered if candidate.accepted and candidate.path != own]
+    if len(others) == 1:
+        return others[0].path, considered
+    if len(others) > 1:
+        return None, considered
+    return own, considered
 
 
 def prefix_for_game_dir(game_dir: Path | str, app_id: str = APP_ID) -> Path | None:

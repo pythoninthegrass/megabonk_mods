@@ -271,8 +271,9 @@ func ResolvePackageDir(raw string) (string, bool) {
 }
 
 // FindInstall locates Megabonk through Steam, reporting the libraries it
-// searched and the prefix that belongs to the install.
-func (c *Command) FindInstall(home string, extraLibraries []string, reporter *Reporter) (gameDir string, prefix string, searched []string) {
+// searched and the prefix that belongs to the install. A prefix chosen with
+// --prefix needs no reporting: the player already picked it.
+func (c *Command) FindInstall(home string, extraLibraries []string, reporter *Reporter, prefixChosen bool) (gameDir string, prefix string, searched []string) {
 	probe := steam.ProbeFlatpak(home)
 	granted := append([]string{}, probe.Paths...)
 	clients := steam.ClientRoots(home, "", granted)
@@ -292,7 +293,36 @@ func (c *Command) FindInstall(home string, extraLibraries []string, reporter *Re
 	if found == "" {
 		return "", "", rootPaths(roots)
 	}
-	return found, steam.PrefixForGameDir(found, ""), rootPaths(roots)
+	prefix, prefixes := steam.FindPrefix(found, rootPaths(roots), "")
+	reportPrefix(reporter, found, prefix, prefixes, prefixChosen)
+	return found, prefix, rootPaths(roots)
+}
+
+// reportPrefix tells the player when the prefix written to is not the one beside
+// the game, and which two prefixes were competing when none could be picked.
+func reportPrefix(reporter *Reporter, gameDir, prefix string, prefixes []steam.PrefixCandidate, prefixChosen bool) {
+	if prefixChosen {
+		return
+	}
+	own := steam.PrefixForGameDir(gameDir, "")
+	if prefix != "" {
+		if prefix != own {
+			reporter.Say("Proton prefix: " + prefix + " (Steam keeps it in that library, not beside the game)")
+		}
+		return
+	}
+	usable := []steam.PrefixCandidate{}
+	for _, candidate := range prefixes {
+		if candidate.Accepted {
+			usable = append(usable, candidate)
+		}
+	}
+	if len(usable) > 1 {
+		reporter.Warn("more than one usable Proton prefix exists — pass --prefix <path to the pfx directory> to pick one")
+		for _, candidate := range usable {
+			reporter.Warn("  - " + candidate.Path + " (library " + candidate.Library + ")")
+		}
+	}
 }
 
 func anyFlatpak(clients []steam.Client) bool {
@@ -389,10 +419,10 @@ func (c *Command) noteDialogSkip(reporter *Reporter, options *Options) {
 	}
 }
 
-func (c *Command) planOptions(options *Options, gameDir string) plan.Options {
+func (c *Command) planOptions(options *Options, gameDir string, located *Located) plan.Options {
 	return plan.Options{
 		Game:         gameDir,
-		Prefix:       c.prefix(options, gameDir),
+		Prefix:       c.prefix(options, gameDir, located),
 		RuntimeMode:  options.DotnetIn,
 		DllOverride:  options.WineOverride,
 		WineOverride: options.WineOverride,
@@ -410,15 +440,27 @@ func lastOf(values []string) string {
 	return ppath.ExpandUser(values[len(values)-1])
 }
 
-func (c *Command) prefix(options *Options, gameDir string) string {
+func (c *Command) prefix(options *Options, gameDir string, located *Located) string {
 	if options.Prefix != "" {
 		return ppath.ExpandUser(options.Prefix)
+	}
+	if located != nil && located.PrefixDiscovered {
+		return located.Prefix
 	}
 	return steam.PrefixForGameDir(gameDir, "")
 }
 
-func (c *Command) doCheck(options *Options, reporter *Reporter, gameDir, packageDir string, pkg *manifest.Package) (int, error) {
-	built, err := plan.BuildPlan(packageDir, c.planOptions(options, gameDir))
+// Located is what discovery settled on: the game, the prefix to write into, and
+// the libraries it looked in.
+type Located struct {
+	GameDir          string
+	Prefix           string
+	Searched         []string
+	PrefixDiscovered bool
+}
+
+func (c *Command) doCheck(options *Options, reporter *Reporter, gameDir, packageDir string, pkg *manifest.Package, located *Located) (int, error) {
+	built, err := plan.BuildPlan(packageDir, c.planOptions(options, gameDir, located))
 	if err != nil {
 		return 0, err
 	}
@@ -457,11 +499,11 @@ func withPlan(payload map[string]any, built *plan.Plan) map[string]any {
 	return payload
 }
 
-func (c *Command) doInstall(options *Options, reporter *Reporter, gameDir, packageDir string, pkg *manifest.Package) (int, error) {
+func (c *Command) doInstall(options *Options, reporter *Reporter, gameDir, packageDir string, pkg *manifest.Package, located *Located) (int, error) {
 	built, err := plan.BuildPlan(packageDir, plan.Options{
 		Manifest:     pkg,
 		Game:         gameDir,
-		Prefix:       c.prefix(options, gameDir),
+		Prefix:       c.prefix(options, gameDir, located),
 		RuntimeMode:  options.DotnetIn,
 		DllOverride:  options.WineOverride,
 		WineOverride: options.WineOverride,
@@ -581,11 +623,11 @@ func (c *Command) Main(argv []string) int {
 	reporter := &Reporter{AsJSON: options.AsJSON, Stdout: c.Stdout, Stderr: c.Stderr}
 
 	if options.Uninstall {
-		gameDir := c.locate(options, reporter)
-		if gameDir == "" {
+		located := c.locate(options, reporter)
+		if located == nil || located.GameDir == "" {
 			return ExitNotFound
 		}
-		code, err := c.doUninstall(options, reporter, gameDir)
+		code, err := c.doUninstall(options, reporter, located.GameDir)
 		if err != nil {
 			return reporter.Fail(err.Error(), ExitError)
 		}
@@ -614,10 +656,11 @@ func (c *Command) Main(argv []string) int {
 		return reporter.Fail("the package does not match its manifest:\n  "+strings.Join(drift, "\n  "), ExitError)
 	}
 
-	gameDir := c.locate(options, reporter)
-	if gameDir == "" {
+	located := c.locate(options, reporter)
+	if located == nil || located.GameDir == "" {
 		return ExitNotFound
 	}
+	gameDir := located.GameDir
 	build := gamebuild.Classify(gameDir)
 	if !build.Supported() {
 		return reporter.Fail(gamebuild.UnsupportedBuildMessage(gameDir, build.Kind, pkg.MelonloaderVersion), ExitUnsupportedBuild)
@@ -627,13 +670,13 @@ func (c *Command) Main(argv []string) int {
 	}
 
 	if options.Check {
-		code, err := c.doCheck(options, reporter, gameDir, packageDir, pkg)
+		code, err := c.doCheck(options, reporter, gameDir, packageDir, pkg, located)
 		if err != nil {
 			return reporter.Fail(err.Error(), ExitError)
 		}
 		return code
 	}
-	code, err := c.doInstall(options, reporter, gameDir, packageDir, pkg)
+	code, err := c.doInstall(options, reporter, gameDir, packageDir, pkg, located)
 	if err != nil {
 		return reporter.Fail(err.Error(), ExitError)
 	}
@@ -641,14 +684,14 @@ func (c *Command) Main(argv []string) int {
 }
 
 // locate resolves the game directory from --game-dir or Steam discovery.
-func (c *Command) locate(options *Options, reporter *Reporter) string {
+func (c *Command) locate(options *Options, reporter *Reporter) *Located {
 	if options.GameDir != "" {
 		gameDir := ppath.ExpandUser(options.GameDir)
 		if !ppath.IsDir(gameDir) {
 			reporter.Fail(gamebuild.UnknownBuildMessage(gameDir), ExitNotFound)
-			return ""
+			return nil
 		}
-		return gameDir
+		return &Located{GameDir: gameDir}
 	}
 	home := ""
 	if options.Home != "" {
@@ -658,12 +701,12 @@ func (c *Command) locate(options *Options, reporter *Reporter) string {
 	} else if value, err := os.UserHomeDir(); err == nil {
 		home = value
 	}
-	gameDir, _, _ := c.FindInstall(home, options.Libraries, reporter)
+	gameDir, prefix, searched := c.FindInstall(home, options.Libraries, reporter, options.Prefix != "")
 	if gameDir == "" {
 		reporter.Fail(strings.Join(c.notFoundLines(home, options.Libraries), "\n"), ExitNotFound)
-		return ""
+		return &Located{Searched: searched}
 	}
-	return gameDir
+	return &Located{GameDir: gameDir, Prefix: prefix, Searched: searched, PrefixDiscovered: true}
 }
 
 func lookupHome(env map[string]string) (string, bool) {
@@ -718,6 +761,22 @@ func (c *Command) notFoundLines(home string, extraLibraries []string) []string {
 		for _, candidate := range skipped {
 			lines = append(lines, fmt.Sprintf("  - %s (%s): %s — retry with --library %s",
 				candidate.Path, candidate.Kind, candidate.Reason, candidate.Path))
+		}
+	}
+	roots := make([]steam.Library, 0, len(searched))
+	for _, candidate := range searched {
+		roots = append(roots, steam.Library{Path: candidate.Path, Source: candidate.Kind, Client: candidate.Client, Granted: candidate.Granted})
+	}
+	rejected := []steam.GameCandidate{}
+	for _, candidate := range steam.GameCandidates(roots, "") {
+		if !candidate.Accepted {
+			rejected = append(rejected, candidate)
+		}
+	}
+	if len(rejected) > 0 {
+		lines = append(lines, "Il2Cpp installs that were not Megabonk:")
+		for _, candidate := range rejected {
+			lines = append(lines, fmt.Sprintf("  - %s: %s", candidate.Path, candidate.Reason))
 		}
 	}
 	return lines

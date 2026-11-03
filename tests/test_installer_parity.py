@@ -196,6 +196,47 @@ def make_library(root: Path, *, with_game: bool = True, wine: bool = False) -> P
     return library
 
 
+def make_multi_library_home(
+    root: Path,
+    *,
+    megabonk: bool = True,
+    prefix_libraries: tuple[int, ...] = (),
+    libraries: int = 2,
+) -> tuple[Path, Path]:
+    """A client whose first library holds only an unrelated Il2Cpp game, the next Megabonk.
+
+    This is the layout that catches a shape-only search: 1000xRESIST and other Il2Cpp
+    titles have GameAssembly.dll and a <Name>_Data/ folder, exactly like Megabonk.
+    """
+    home = root / "multihome"
+    client = home / ".local" / "share" / "Steam"
+    (client / "steamapps").mkdir(parents=True, exist_ok=True)
+    (client / "config").mkdir(parents=True, exist_ok=True)
+    roots = [root / f"library-{index}" for index in range(libraries)]
+    for library in roots:
+        (library / "steamapps" / "common").mkdir(parents=True, exist_ok=True)
+    decoy = roots[0] / "steamapps" / "common" / "1000xRESIST"
+    (decoy / "1000xRESIST_Data").mkdir(parents=True, exist_ok=True)
+    _write(decoy, "GameAssembly.dll", b"MZ")
+    _write(decoy, "UnityPlayer.dll", b"MZ")
+    game = roots[-1] / "steamapps" / "common" / "Megabonk"
+    if megabonk:
+        (game / "Megabonk_Data").mkdir(parents=True, exist_ok=True)
+        _write(game, "Megabonk.exe", b"MZ")
+    else:
+        other = roots[-1] / "steamapps" / "common" / "SuperTune"
+        (other / "SuperTune_Data").mkdir(parents=True, exist_ok=True)
+        _write(other, "GameAssembly.dll", b"MZ")
+        _write(other, "SuperTune.exe", b"MZ")
+    body = "".join('\t"%d"\n\t{\n\t\t"path"\t\t"%s"\n\t}\n' % (index, library) for index, library in enumerate(roots))
+    (client / "steamapps" / "libraryfolders.vdf").write_text('"libraryfolders"\n{\n%s}\n' % body, encoding="utf-8")
+    for index in prefix_libraries:
+        prefix = roots[index] / "steamapps" / "compatdata" / "3405340" / "pfx"
+        (prefix / "drive_c").mkdir(parents=True, exist_ok=True)
+    stub_flatpak(home)
+    return home, game
+
+
 # --------------------------------------------------------------------------- comparison
 
 
@@ -294,6 +335,10 @@ def _shape_roots(shape: str) -> dict[str, bool]:
         "discovery-wine": {"package": True, "library_wine": True},
         "prefix": {"package": True, "game": True, "prefix": True},
         "prefix-wine": {"package": True, "game": True, "library_prefix_wine": True},
+        "discovery-decoy": {"package": True, "decoy_home": True},
+        "discovery-decoy-only": {"package": True, "decoy_home_only": True},
+        "discovery-remote-prefix": {"package": True, "decoy_home_prefix": True},
+        "discovery-two-prefixes": {"package": True, "decoy_home_two_prefixes": True},
     }[shape]
 
 
@@ -330,6 +375,14 @@ def build_shape(root: Path, shape: str) -> dict[str, Path]:
         paths["game"] = make_game(root)
         paths["prefix"] = make_prefix(root, library=make_library(root, with_game=False, wine=True))
         paths["library"] = paths["prefix"].parents[2]
+    if wanted.get("decoy_home"):
+        paths["home"], paths["game"] = make_multi_library_home(root)
+    if wanted.get("decoy_home_only"):
+        paths["home"], paths["game"] = make_multi_library_home(root, megabonk=False)
+    if wanted.get("decoy_home_prefix"):
+        paths["home"], paths["game"] = make_multi_library_home(root, prefix_libraries=(0,))
+    if wanted.get("decoy_home_two_prefixes"):
+        paths["home"], paths["game"] = make_multi_library_home(root, libraries=3, prefix_libraries=(0, 1))
     (root / "bare").mkdir(parents=True, exist_ok=True)
     paths["bare"] = root / "bare"
     paths["level"] = make_level(root)
@@ -643,6 +696,37 @@ def compare(scenario: Scenario, python_run, go_run, python_paths, go_paths) -> N
                 "Steam clients considered:",
                 "Libraries searched: none — pass --library <path> to add one",
                 "--game-dir <path to the folder holding Megabonk.exe>",
+            ],
+        ),
+        Scenario(
+            name="discovery-decoy",
+            shape="discovery-decoy",
+            steps=[["--package", "{package}", "--home", "{home}", "--wine-override", "off", "--no-gui"]],
+            anchors=["installed MegabonkLevels 0.0.1 (MelonLoader 0.7.3)"],
+        ),
+        Scenario(
+            name="discovery-decoy-only",
+            shape="discovery-decoy-only",
+            steps=[["--package", "{package}", "--home", "{home}", "--no-gui"]],
+            anchors=[
+                "Il2Cpp installs that were not Megabonk:",
+                "an Il2Cpp install (GameAssembly.dll) but no Megabonk.exe, Megabonk.x86_64 or Megabonk_Data/",
+                "--game-dir <path to the folder holding Megabonk.exe>",
+            ],
+        ),
+        Scenario(
+            name="discovery-remote-prefix",
+            shape="discovery-remote-prefix",
+            steps=[["--package", "{package}", "--home", "{home}", "--dry-run", "--wine-override", "off", "--no-gui"]],
+            anchors=["Proton prefix:", "not beside the game"],
+        ),
+        Scenario(
+            name="discovery-two-prefixes",
+            shape="discovery-two-prefixes",
+            steps=[["--package", "{package}", "--home", "{home}", "--dry-run", "--wine-override", "off", "--no-gui"]],
+            anchors=[
+                "more than one usable Proton prefix exists",
+                "pass --prefix <path to the pfx directory> to pick one",
             ],
         ),
     ],

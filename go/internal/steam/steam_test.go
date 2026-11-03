@@ -478,6 +478,166 @@ func TestFindGameDirUsesTheAppManifest(t *testing.T) {
 	}
 }
 
+func makeIl2CppDecoy(t *testing.T, root, name string) string {
+	t.Helper()
+	game := filepath.Join(root, "steamapps", "common", name)
+	mustMkdirAll(t, filepath.Join(game, name+"_Data"))
+	mustWrite(t, filepath.Join(game, gameAssembly), "MZ")
+	mustWrite(t, filepath.Join(game, "UnityPlayer.dll"), "MZ")
+	return game
+}
+
+func TestGameCandidatesRejectsAnUnrelatedIl2CppInstall(t *testing.T) {
+	root := t.TempDir()
+	library := makeLibrary(t, filepath.Join(root, "lib"), false)
+	decoy := makeIl2CppDecoy(t, library, "1000xRESIST")
+	candidates := GameCandidates([]Library{{Path: slash(library), Source: "client"}}, "")
+	if len(candidates) != 1 {
+		t.Fatalf("candidates = %#v", candidates)
+	}
+	if candidates[0].Accepted || candidates[0].Path != slash(decoy) {
+		t.Errorf("candidate = %#v", candidates[0])
+	}
+	if candidates[0].Reason != ReasonNotMegabonk {
+		t.Errorf("reason = %q, want %q", candidates[0].Reason, ReasonNotMegabonk)
+	}
+	if got := FindGameDir([]Library{{Path: slash(library)}}, ""); got != "" {
+		t.Errorf("an unrelated Il2Cpp game is not Megabonk, got %q", got)
+	}
+}
+
+func TestGameCandidatesReportsWhyAManifestCandidateWasRefused(t *testing.T) {
+	root := t.TempDir()
+	library := makeLibrary(t, filepath.Join(root, "lib"), false)
+	mustWrite(t, filepath.Join(library, "steamapps", "appmanifest_"+AppID+".acf"),
+		"\"appmanifest_"+AppID+"\"\n{\n\t\"appid\"\t\t\"3405340\"\n\t\"installdir\"\t\t\"Megabonk\"\n}\n")
+	candidates := GameCandidates([]Library{{Path: slash(library), Source: "client"}}, "")
+	if len(candidates) != 1 || candidates[0].How != "manifest" {
+		t.Fatalf("candidates = %#v", candidates)
+	}
+	if candidates[0].Reason != ReasonMissing {
+		t.Errorf("reason = %q, want %q", candidates[0].Reason, ReasonMissing)
+	}
+	mustMkdirAll(t, filepath.Join(library, "steamapps", "common", GameName, DataDir))
+	candidates = GameCandidates([]Library{{Path: slash(library), Source: "client"}}, "")
+	if !candidates[0].Accepted || candidates[0].How != "manifest" {
+		t.Errorf("the manifest should name the directory first: %#v", candidates[0])
+	}
+}
+
+func TestGameCandidatesPrefersTheManifestOverAFolderNamedAfterAGame(t *testing.T) {
+	root := t.TempDir()
+	library := makeLibrary(t, filepath.Join(root, "lib"), false)
+	mustWrite(t, filepath.Join(library, "steamapps", "appmanifest_"+AppID+".acf"),
+		"\"appmanifest_"+AppID+"\"\n{\n\t\"appid\"\t\t\"3405340\"\n\t\"installdir\"\t\t\"Megabonk-Real\"\n}\n")
+	makeIl2CppDecoy(t, library, "Megabonk")
+	game := filepath.Join(library, "steamapps", "common", "Megabonk-Real")
+	mustWrite(t, filepath.Join(game, GameExe), "MZ")
+	mustMkdirAll(t, filepath.Join(game, DataDir))
+	got := FindGameDir([]Library{{Path: slash(library)}}, "")
+	if got != ppath.Join(slash(library), "steamapps", "common", "Megabonk-Real") {
+		t.Errorf("game dir = %q", got)
+	}
+}
+
+func TestFindGameDirSkipsADecoyInAnEarlierLibrary(t *testing.T) {
+	root := t.TempDir()
+	first := makeLibrary(t, filepath.Join(root, "library-0"), false)
+	second := makeLibrary(t, filepath.Join(root, "library-1"), true)
+	makeIl2CppDecoy(t, first, "1000xRESIST")
+	got := FindGameDir([]Library{{Path: slash(first)}, {Path: slash(second)}}, "")
+	if want := ppath.Join(slash(second), "steamapps", "common", GameName); got != want {
+		t.Errorf("game dir = %q, want %q", got, want)
+	}
+}
+
+func TestFindGameDirAcceptsTheNativeBuildWithoutAnExecutableSuffix(t *testing.T) {
+	root := t.TempDir()
+	library := makeLibrary(t, filepath.Join(root, "lib"), false)
+	game := filepath.Join(library, "steamapps", "common", "Megabonk")
+	mustWrite(t, filepath.Join(game, NativeExe), "ELF")
+	if got := FindGameDir([]Library{{Path: slash(library)}}, ""); got != slash(game) {
+		t.Errorf("game dir = %q", got)
+	}
+}
+
+func TestFindPrefixUsesTheGamesOwnLibrary(t *testing.T) {
+	root := t.TempDir()
+	home := makeLibrary(t, filepath.Join(root, "library-0"), false)
+	sd := makeLibrary(t, filepath.Join(root, "library-1"), true)
+	own := filepath.Join(sd, "steamapps", "compatdata", AppID, "pfx")
+	mustMkdirAll(t, filepath.Join(own, "drive_c"))
+	mustMkdirAll(t, filepath.Join(home, "steamapps", "compatdata", AppID, "pfx", "drive_c"))
+	game := ppath.Join(slash(sd), "steamapps", "common", GameName)
+	got, considered := FindPrefix(game, []string{slash(home), slash(sd)}, "")
+	if got != slash(own) {
+		t.Errorf("prefix = %q, want the game's own %q", got, slash(own))
+	}
+	if len(considered) != 2 || considered[0].Path != slash(own) {
+		t.Errorf("the game's own library should be considered first: %#v", considered)
+	}
+}
+
+func TestFindPrefixTakesTheOnlyOtherUsablePrefix(t *testing.T) {
+	root := t.TempDir()
+	home := makeLibrary(t, filepath.Join(root, "library-0"), false)
+	sd := makeLibrary(t, filepath.Join(root, "library-1"), true)
+	active := filepath.Join(home, "steamapps", "compatdata", AppID, "pfx")
+	mustMkdirAll(t, filepath.Join(active, "drive_c"))
+	game := ppath.Join(slash(sd), "steamapps", "common", GameName)
+	got, considered := FindPrefix(game, []string{slash(home), slash(sd)}, "")
+	if got != slash(active) {
+		t.Errorf("prefix = %q, want the active %q", got, slash(active))
+	}
+	for _, candidate := range considered {
+		if candidate.Library == slash(sd) && candidate.Accepted {
+			t.Errorf("the SD library has no prefix: %#v", candidate)
+		}
+		if candidate.Library == slash(sd) && candidate.Reason != ReasonNoPrefix {
+			t.Errorf("reason = %q, want %q", candidate.Reason, ReasonNoPrefix)
+		}
+	}
+}
+
+func TestFindPrefixRefusesToGuessBetweenTwoOtherPrefixes(t *testing.T) {
+	root := t.TempDir()
+	first := makeLibrary(t, filepath.Join(root, "library-0"), false)
+	second := makeLibrary(t, filepath.Join(root, "library-1"), false)
+	sd := makeLibrary(t, filepath.Join(root, "library-2"), true)
+	for _, library := range []string{first, second} {
+		mustMkdirAll(t, filepath.Join(library, "steamapps", "compatdata", AppID, "pfx", "drive_c"))
+	}
+	game := ppath.Join(slash(sd), "steamapps", "common", GameName)
+	got, considered := FindPrefix(game, []string{slash(first), slash(second), slash(sd)}, "")
+	if got != "" {
+		t.Errorf("two usable prefixes is a guess, got %q", got)
+	}
+	usable := 0
+	for _, candidate := range considered {
+		if candidate.Accepted {
+			usable++
+		}
+	}
+	if usable != 2 {
+		t.Errorf("both prefixes should be reported so the player can pass --prefix: %#v", considered)
+	}
+}
+
+func TestPrefixCandidatesReportsAPrefixWithoutDriveC(t *testing.T) {
+	root := t.TempDir()
+	library := makeLibrary(t, filepath.Join(root, "lib"), false)
+	mustMkdirAll(t, filepath.Join(library, "steamapps", "compatdata", AppID))
+	considered := PrefixCandidates([]string{slash(library)}, "")
+	if len(considered) != 1 || considered[0].Accepted || considered[0].Reason != ReasonNoPrefix {
+		t.Errorf("candidates = %#v", considered)
+	}
+	mustMkdirAll(t, filepath.Join(library, "steamapps", "compatdata", AppID, "pfx"))
+	considered = PrefixCandidates([]string{slash(library)}, "")
+	if considered[0].Accepted || considered[0].Reason != ReasonNoDriveC {
+		t.Errorf("candidates = %#v", considered)
+	}
+}
+
 func TestPrefixRootFollowsTheCompatdataLayout(t *testing.T) {
 	library := filepath.Join(t.TempDir(), "lib")
 	got := PrefixRoot(library, AppID)

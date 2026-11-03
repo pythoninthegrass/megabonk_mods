@@ -146,12 +146,18 @@ The installer classifies the game directory before touching it (`scripts/player_
 
 ### Finding Steam and the game
 
-`scripts/player_installer/steam.py` looks for a Steam install under `$XDG_DATA_HOME/Steam`, `~/.local/share/Steam`, `~/.steam/root`, `~/.steam/steam`, the two Flatpak locations (`~/.var/app/com.valvesoftware.Steam/...`), and any Flatpak-granted path. A directory counts as a client when it has `steamapps/`. Library folders are read out of `config/libraryfolders.vdf` (`vdf.py`, a read-only parser — the installer never writes VDF) and scanned for `steamapps/common/Megabonk`.
+`scripts/player_installer/steam.py` looks for a Steam install under `$XDG_DATA_HOME/Steam`, `~/.local/share/Steam`, `~/.steam/root`, `~/.steam/steam`, the two Flatpak locations (`~/.var/app/com.valvesoftware.Steam/...`), and any Flatpak-granted path. A directory counts as a client when it has `steamapps/`. Library folders are read out of `config/libraryfolders.vdf` (`vdf.py`, a read-only parser — the installer never writes VDF).
 
-Two things make this sturdier than it looks:
+Game identity comes from `game_candidates`, which offers every directory three searches thought might be Megabonk, in the order it should be trusted: the `installdir` in the library's own `appmanifest_3405340.acf`, then `steamapps/common/Megabonk` by name, then any other Il2Cpp install in `common`. The third tier exists because a copy moved out of its library keeps `GameAssembly.dll` and its data folder but loses the name. Acceptance never rests on that shape: a candidate is Megabonk only when it holds `Megabonk.exe`, `Megabonk.x86_64` or `Megabonk_Data/`, all three named by this game alone. `find_game_dir` takes the first accepted candidate; `--check` and the not-found report name what was rejected and why (`an Il2Cpp install (GameAssembly.dll) but no Megabonk.exe, Megabonk.x86_64 or Megabonk_Data/`), so a machine with another Unity/Il2Cpp title installed says so instead of installing into it.
+
+Two more things make this sturdier than it looks:
 
 - **A library on a detached drive** shows up as a configured root whose `steamapps` is gone. Those roots are skipped rather than reported as a missing game, and only when even the parent directory is missing.
 - **Flatpak Steam can only read paths granted to it**, so granted paths from `flatpak override --show` (or the persisted `local-overrides` file) are read on every run and added as extra search roots. They also count as the Flatpak client itself when one of them holds `steamapps/`: a maintainer machine exists where the entire Steam root — `config/`, `userdata/` and `steamapps/` — was moved to a data disk, so no client is left at any default location, and the grants are the only way back to it. Without this, a game on a second disk is simply invisible to a Flatpak install.
+
+### Which Proton prefix
+
+Steam keeps the prefix at `<library>/steamapps/compatdata/<appid>/pfx` **in the library the game was installed to**, which is not always the one holding the game files after a move — the SD-card layout has the files on removable media and the live prefix in the home library. `find_prefix` prefers the game's own library, and when that prefix has no `drive_c/` it takes the only other usable prefix among the libraries searched and prints `Proton prefix: <path> (Steam keeps it in that library, not beside the game)`. Two usable prefixes elsewhere is a guess, so nothing is chosen: both are printed with the `--prefix` hint, and the plan falls back to `gamedir` mode. A prefix passed with `--prefix` silences all of that reporting. `--check` names the prefixes it considered and why each was rejected (`no steamapps/compatdata prefix in this library`, `the prefix has no drive_c/: the game has never been launched under Proton in this library`).
 
 ### .NET placement and the launch option
 
@@ -281,6 +287,20 @@ launch logging the mod-initialized marker. The live prefix also exposed Wine's
 timestamped registry section headers, now covered by regression tests. See
 [gamepadui.md](gamepadui.md) for the measured workflow.
 
+The four library layouts the discovery code has to survive are run through both
+implementations in containers as well as fixtures: a single library holding Megabonk
+beside an unrelated Il2Cpp title that sorts first, the same library with no Megabonk
+at all, the game on removable media with the live prefix in the home library, and two
+other libraries each with a usable prefix. Each case runs the full
+install → `--check` → drift → repair sequence as a non-root user in `fedora:42` and
+`ubuntu:24.04` (no network, `HOME` and the Steam root inside the mounted tree), and is
+compared to the Python reference on the host for exit codes, stdout, stderr and the
+installed tree. The decoy keeps its own digest through every install, the report names
+the Il2Cpp install it refused with its reason, the SD-card install writes the .NET
+runtime into the home library's prefix and says so, and the two-prefix case prints both
+candidates with the `--prefix` hint and falls back to `gamedir` mode until `--prefix`
+picks one.
+
 The fleet also includes Fedora 42 with GNOME Wayland, Intel Arc graphics and a
 gamescope + Steam gamepadui launcher. Its verified setup includes switching to
 Windows depot `3405342` through Steam's GUI and selecting DX11 (confirmed in the
@@ -309,8 +329,7 @@ Windows-build refusal.
 
 Still pending:
 
-- clean-install verification on both CachyOS and Fedora, with fresh mod-load logs;
-- automatic removable-media game selection on CachyOS: library discovery finds the mounted SD-card library, but game discovery incorrectly selects an unrelated home-library game (`1000xRESIST`) because its `GameAssembly.dll` matches first; pass explicit `--game-dir` and the measured `--prefix` until this is fixed;
+- clean-install verification on both CachyOS and Fedora, with fresh mod-load logs; the two machines are also the only place the removable-media and decoy-title layouts exist as real Steam installs — the container matrix above reproduces those layouts, not the machines;
 - the printed game-directory `DOTNET_ROOT` launch option working when Steam actually applies it (the live proof uses prefix mode);
 - the persisted `local-overrides` file as the source of the Flatpak grants — the real host went through `flatpak override --show`, which is the other of the two paths in `flatpak_granted_paths`;
 - the zenity and yad dialog paths — the verified host has neither installed, so those branches run only in tests (the kdialog-over-D-Bus path above is the one with desktop evidence);

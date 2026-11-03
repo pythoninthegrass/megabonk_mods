@@ -12,6 +12,7 @@ import json
 import os
 import sys
 from . import content, gamebuild, manifest as mf, plan, proton, steam, ui
+from dataclasses import dataclass, field
 from pathlib import Path
 
 EXIT_OK = 0
@@ -73,6 +74,16 @@ class Reporter:
         return code
 
 
+@dataclass
+class Located:
+    """What discovery settled on: the game, the prefix to write into, and the libraries it looked in."""
+
+    game_dir: Path | None
+    prefix: Path | None = None
+    searched: list[str] = field(default_factory=list)
+    prefix_discovered: bool = False
+
+
 def resolve_package_dir(raw: str) -> Path | None:
     """The folder holding manifest.json, tolerating the extra directory a zip usually extracts to."""
     candidate = Path(raw).expanduser()
@@ -85,7 +96,12 @@ def resolve_package_dir(raw: str) -> Path | None:
     return None
 
 
-def find_install(home: Path, extra_libraries: list[str], reporter: Reporter) -> tuple[Path | None, Path | None, list[str]]:
+def find_install(
+    home: Path,
+    extra_libraries: list[str],
+    reporter: Reporter,
+    prefix_chosen: bool = False,
+) -> tuple[Path | None, Path | None, list[str]]:
     probe = steam.flatpak_probe(home)
     granted = list(probe.paths)
     clients = steam.client_roots(home, granted_paths=granted)
@@ -108,7 +124,31 @@ def find_install(home: Path, extra_libraries: list[str], reporter: Reporter) -> 
     game_dir = steam.find_game_dir(roots)
     if game_dir is None:
         return None, None, [str(root.path) for root in roots]
-    return game_dir, steam.prefix_for_game_dir(game_dir), [str(root.path) for root in roots]
+    prefix, prefixes = steam.find_prefix(game_dir, [root.path for root in roots])
+    _report_prefix(reporter, game_dir, prefix, prefixes, prefix_chosen)
+    return game_dir, prefix, [str(root.path) for root in roots]
+
+
+def _report_prefix(
+    reporter: Reporter,
+    game_dir: Path,
+    prefix: Path | None,
+    prefixes: list[steam.PrefixCandidate],
+    prefix_chosen: bool = False,
+) -> None:
+    """Say which prefix will be written to, and name the rivals when none could be picked."""
+    if prefix_chosen:
+        return
+    own = steam.prefix_for_game_dir(game_dir)
+    if prefix is not None and prefix != own:
+        reporter.say(f"Proton prefix: {prefix} (Steam keeps it in that library, not beside the game)")
+    if prefix is not None:
+        return
+    usable = [candidate for candidate in prefixes if candidate.accepted]
+    if len(usable) > 1:
+        reporter.warn("more than one usable Proton prefix exists — pass --prefix <path to the pfx directory> to pick one")
+        for candidate in usable:
+            reporter.warn(f"  - {candidate.path} (library {candidate.library})")
 
 
 def _warn_ungranted_flatpak_roots(reporter: Reporter, clients: list[steam.SteamClient], roots: list[steam.LibraryRoot]) -> None:
@@ -151,12 +191,12 @@ def _note_dialog_skip(reporter: Reporter, args: argparse.Namespace) -> None:
         reporter.warn(note)
 
 
-def do_check(args: argparse.Namespace, reporter: Reporter, game_dir: Path, package: Path, manifest: mf.PackageManifest) -> int:
+def do_check(args: argparse.Namespace, reporter: Reporter, game_dir: Path, package: Path, manifest: mf.PackageManifest, located: "Located | None" = None) -> int:
     result = plan.build_plan(
         package,
         manifest,
         game_dir,
-        prefix=_prefix(args, game_dir),
+        prefix=_prefix(args, game_dir, located),
         runtime_mode=DOTNET_IN_MODES[args.dotnet_in],
         dll_override=args.wine_override,
         wine_override=args.wine_override,
@@ -182,15 +222,17 @@ def _single(values: list[str]) -> Path | None:
     return Path(values[-1]).expanduser() if values else None
 
 
-def _prefix(args: argparse.Namespace, game_dir: Path) -> Path | None:
+def _prefix(args: argparse.Namespace, game_dir: Path, located: "Located | None" = None) -> Path | None:
     if args.prefix:
         return Path(args.prefix).expanduser()
+    if located is not None and located.prefix_discovered:
+        return located.prefix
     return steam.prefix_for_game_dir(game_dir)
 
 
-def do_install(args: argparse.Namespace, reporter: Reporter, game_dir: Path, package: Path, manifest: mf.PackageManifest) -> int:
+def do_install(args: argparse.Namespace, reporter: Reporter, game_dir: Path, package: Path, manifest: mf.PackageManifest, located: "Located | None" = None) -> int:
     options = {
-        "prefix": _prefix(args, game_dir),
+        "prefix": _prefix(args, game_dir, located),
         "runtime_mode": DOTNET_IN_MODES[args.dotnet_in],
         "dll_override": args.wine_override,
         "wine_override": args.wine_override,
@@ -277,10 +319,10 @@ def main(argv: list[str] | None = None) -> int:
     reporter = Reporter(as_json=args.as_json)
 
     if args.uninstall:
-        game_dir, _ = _locate(args, reporter)
-        if game_dir is None:
+        located = _locate(args, reporter)
+        if located.game_dir is None:
             return EXIT_NOT_FOUND
-        return do_uninstall(args, reporter, game_dir)
+        return do_uninstall(args, reporter, located.game_dir)
 
     if not args.package:
         return reporter.fail("no --package: point it at the unzipped MegabonkLevels download (the folder holding manifest.json)", EXIT_USAGE)
@@ -302,9 +344,10 @@ def main(argv: list[str] | None = None) -> int:
     if drift:
         return reporter.fail("the package does not match its manifest:\n  " + "\n  ".join(drift), EXIT_ERROR)
 
-    game_dir, _searched = _locate(args, reporter)
-    if game_dir is None:
+    located = _locate(args, reporter)
+    if located.game_dir is None:
         return EXIT_NOT_FOUND
+    game_dir = located.game_dir
 
     build = gamebuild.classify_game_dir(game_dir)
     if not build.supported:
@@ -315,27 +358,27 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.check:
-            return do_check(args, reporter, game_dir, package, manifest)
-        return do_install(args, reporter, game_dir, package, manifest)
+            return do_check(args, reporter, game_dir, package, manifest, located)
+        return do_install(args, reporter, game_dir, package, manifest, located)
     except (plan.PlanError, mf.ManifestError, proton.ProtonError) as exc:
         return reporter.fail(str(exc), EXIT_ERROR)
     except OSError as exc:
         return reporter.fail(f"{exc}", EXIT_ERROR)
 
 
-def _locate(args: argparse.Namespace, reporter: Reporter) -> tuple[Path | None, list[str]]:
+def _locate(args: argparse.Namespace, reporter: Reporter) -> Located:
     if args.game_dir:
         game_dir = Path(args.game_dir).expanduser()
         if not game_dir.is_dir():
             reporter.fail(gamebuild.unknown_build_message(game_dir), EXIT_NOT_FOUND)
-            return None, []
-        return game_dir, []
+            return Located(None)
+        return Located(game_dir)
     home = Path(args.home).expanduser() if args.home else Path.home()
-    game_dir, _prefix, searched = find_install(home, args.library, reporter)
+    game_dir, prefix, searched = find_install(home, args.library, reporter, prefix_chosen=bool(args.prefix))
     if game_dir is None:
         reporter.fail("\n".join(_not_found_lines(home, args.library)), EXIT_NOT_FOUND)
-        return None, searched
-    return game_dir, searched
+        return Located(None, searched=searched)
+    return Located(game_dir, prefix=prefix, searched=searched, prefix_discovered=True)
 
 
 def _not_found_lines(home: Path, extra_libraries: list[str]) -> list[str]:
@@ -373,6 +416,14 @@ def _not_found_lines(home: Path, extra_libraries: list[str]) -> list[str]:
             f"  - {candidate.path} ({candidate.kind}): {candidate.reason} — retry with --library {candidate.path}"
             for candidate in skipped
         ]
+    roots = [
+        steam.LibraryRoot(candidate.path, candidate.kind, candidate.client, candidate.granted)
+        for candidate in searched
+    ]
+    rejected = [candidate for candidate in steam.game_candidates(roots) if not candidate.accepted]
+    if rejected:
+        lines.append("Il2Cpp installs that were not Megabonk:")
+        lines += [f"  - {candidate.path}: {candidate.reason}" for candidate in rejected]
     return lines
 
 

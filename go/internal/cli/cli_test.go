@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -402,6 +403,175 @@ func TestDiscoveryFindsAGameInALibrary(t *testing.T) {
 	}
 }
 
+func makeSteamHome(t *testing.T, libraries []string, decoy, megabonkIn string) string {
+	t.Helper()
+	home := t.TempDir()
+	client := filepath.Join(home, ".local", "share", "Steam")
+	if err := os.MkdirAll(filepath.Join(client, "steamapps"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(client, "config"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var body strings.Builder
+	for index, library := range libraries {
+		body.WriteString("\t\"" + strconv.Itoa(index) + "\"\n\t{\n\t\t\"path\"\t\t\"" + filepath.ToSlash(library) + "\"\n\t}\n")
+	}
+	write(t, filepath.Join(client, "steamapps", "libraryfolders.vdf"), "\"libraryfolders\"\n{\n"+body.String()+"}\n")
+	for _, library := range libraries {
+		if err := os.MkdirAll(filepath.Join(library, "steamapps", "common"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if decoy != "" {
+		game := filepath.Join(libraries[0], "steamapps", "common", decoy)
+		if err := os.MkdirAll(filepath.Join(game, decoy+"_Data"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		write(t, filepath.Join(game, "GameAssembly.dll"), "MZ")
+		write(t, filepath.Join(game, "UnityPlayer.dll"), "MZ")
+	}
+	if megabonkIn != "" {
+		game := filepath.Join(megabonkIn, "steamapps", "common", steam.GameName)
+		if err := os.MkdirAll(filepath.Join(game, steam.DataDir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		write(t, filepath.Join(game, steam.GameExe), "MZ")
+	}
+	return home
+}
+
+func makePrefix(t *testing.T, library string) string {
+	t.Helper()
+	prefix := filepath.Join(library, "steamapps", "compatdata", steam.AppID, "pfx")
+	if err := os.MkdirAll(filepath.Join(prefix, "drive_c"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.ToSlash(prefix)
+}
+
+// findInstall drives discovery alone, without the flatpak probe or a media scan.
+func findInstall(t *testing.T, home string, prefixChosen bool) (string, string, *bytes.Buffer, *bytes.Buffer) {
+	t.Helper()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	restoreRoots := MountRoots
+	MountRoots = nil
+	restoreRunner := steam.CommandRunner
+	steam.CommandRunner = func(argv []string, timeout time.Duration) (int, string, error) {
+		return 1, "", errors.New("stubbed")
+	}
+	t.Cleanup(func() {
+		MountRoots = restoreRoots
+		steam.CommandRunner = restoreRunner
+	})
+	command := NewCommand(stdout, stderr)
+	gameDir, prefix, _ := command.FindInstall(home, nil, &Reporter{Stdout: stdout, Stderr: stderr}, prefixChosen)
+	return gameDir, prefix, stdout, stderr
+}
+
+func TestDiscoveryIgnoresAnUnrelatedIl2CppGameInAnEarlierLibrary(t *testing.T) {
+	packageDir := makePackage(t)
+	root := t.TempDir()
+	first := filepath.Join(root, "library-0")
+	second := filepath.Join(root, "library-1")
+	home := makeSteamHome(t, []string{first, second}, "1000xRESIST", second)
+
+	got := run(t, "--package", packageDir, "--home", home, "--no-gui", "--wine-override", "off")
+	if got.exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+	wanted := filepath.Join(second, "steamapps", "common", steam.GameName, "Mods", "MegabonkLevels.Mod.dll")
+	if !ppath.IsFile(wanted) {
+		t.Errorf("the mod was not installed into the real game:\n%s", got.stdout)
+	}
+	if ppath.IsDir(filepath.Join(first, "steamapps", "common", "1000xRESIST", "Mods")) {
+		t.Errorf("the installer wrote into an unrelated Il2Cpp game")
+	}
+}
+
+func TestNotFoundNamesTheIl2CppInstallItRejected(t *testing.T) {
+	packageDir := makePackage(t)
+	root := t.TempDir()
+	first := filepath.Join(root, "library-0")
+	second := filepath.Join(root, "library-1")
+	home := makeSteamHome(t, []string{first, second}, "1000xRESIST", "")
+
+	got := run(t, "--package", packageDir, "--home", home, "--no-gui")
+	if got.exit != ExitNotFound {
+		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
+	}
+	stderr := got.stderr.String()
+	decoy := filepath.ToSlash(filepath.Join(first, "steamapps", "common", "1000xRESIST"))
+	for _, want := range []string{decoy, "GameAssembly.dll", "Megabonk_Data", "--game-dir"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr should name the rejected install %q:\n%s", want, stderr)
+		}
+	}
+}
+
+func TestPrefixFromAnotherLibraryIsReported(t *testing.T) {
+	root := t.TempDir()
+	first := filepath.Join(root, "library-0")
+	second := filepath.Join(root, "media", "sdcard", "SteamLibrary")
+	home := makeSteamHome(t, []string{first, second}, "", second)
+	active := makePrefix(t, first)
+
+	gameDir, prefix, stdout, _ := findInstall(t, home, false)
+	if want := ppath.Join(filepath.ToSlash(second), "steamapps", "common", steam.GameName); gameDir != want {
+		t.Errorf("game dir = %q, want %q", gameDir, want)
+	}
+	if prefix != active {
+		t.Errorf("prefix = %q, want the active %q", prefix, active)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "Proton prefix: "+active) || !strings.Contains(out, "not beside the game") {
+		t.Errorf("the cross-library prefix should be reported:\n%s", out)
+	}
+}
+
+func TestTwoUsablePrefixesAreListedRatherThanGuessed(t *testing.T) {
+	root := t.TempDir()
+	first := filepath.Join(root, "library-0")
+	second := filepath.Join(root, "library-1")
+	third := filepath.Join(root, "media", "sdcard", "SteamLibrary")
+	home := makeSteamHome(t, []string{first, second, third}, "", third)
+	active := makePrefix(t, first)
+	other := makePrefix(t, second)
+
+	_, prefix, _, stderr := findInstall(t, home, false)
+	if prefix != "" {
+		t.Fatalf("two usable prefixes is a guess, got %q", prefix)
+	}
+	text := stderr.String()
+	for _, want := range []string{"pass --prefix", active, other} {
+		if !strings.Contains(text, want) {
+			t.Errorf("stderr should list both prefixes %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestAnExplicitPrefixSilencesTheAmbiguityWarning(t *testing.T) {
+	root := t.TempDir()
+	first := filepath.Join(root, "library-0")
+	second := filepath.Join(root, "library-1")
+	third := filepath.Join(root, "media", "sdcard", "SteamLibrary")
+	home := makeSteamHome(t, []string{first, second, third}, "", third)
+	makePrefix(t, first)
+	chosen := makePrefix(t, second)
+
+	packageDir := makePackage(t)
+	got := run(t, "--package", packageDir, "--home", home, "--prefix", chosen, "--dry-run", "--no-gui")
+	if got.exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+	if strings.Contains(got.stderr.String(), "more than one usable Proton prefix") {
+		t.Errorf("--prefix was given, so the nag should be gone:\n%s", got.stderr)
+	}
+	if strings.Contains(got.stdout.String(), "not beside the game") {
+		t.Errorf("the chosen prefix needs no commentary:\n%s", got.stdout)
+	}
+}
+
 func TestJSONModeIsMachineReadable(t *testing.T) {
 	packageDir, game := makePackage(t), makeGame(t)
 	got := run(t, "--package", packageDir, "--game-dir", game, "--json")
@@ -615,7 +785,7 @@ func TestPlanOptionsTakeTheCommandLine(t *testing.T) {
 	if options.Libraries != nil || len(options.Levels) != 2 || options.Levels[1] != "b.mblevel.json" {
 		t.Errorf("repeatable flags = %+v", options)
 	}
-	built := command.planOptions(options, "/game")
+	built := command.planOptions(options, "/game", nil)
 	if built.Game != "/game" || built.RuntimeMode != "gamedir" || built.DllOverride != "registry" ||
 		built.WineOverride != "registry" || built.ForcedTool != "proton_ge" ||
 		built.Level != "b.mblevel.json" || built.Pack != "packs/thps" || built.Verify {

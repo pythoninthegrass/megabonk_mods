@@ -16,6 +16,7 @@ import pytest
 import shutil
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 APP_ID = "3405340"
 
@@ -168,6 +169,101 @@ def test_a_missing_install_exits_with_a_tell_what_to_do(tmp_path: Path, package:
     code = _run(["--home", str(home), "--package", str(package), "--no-gui"])
     assert code == cli.EXIT_NOT_FOUND
     assert "--game-dir" in capsys.readouterr().err
+
+
+def _library_home(
+    tmp_path: Path,
+    *,
+    libraries: int = 2,
+    decoy: str | None = "1000xRESIST",
+    megabonk: bool = True,
+) -> SimpleNamespace:
+    """A native client whose first library holds only an unrelated Il2Cpp game, the next one Megabonk.
+
+    The last library is removable media: the layout where Steam's active prefix lives in a
+    different library from the game files.
+    """
+    home = tmp_path / "home"
+    client = home / ".local" / "share" / "Steam"
+    (client / "steamapps").mkdir(parents=True)
+    (client / "config").mkdir(parents=True)
+    roots = [tmp_path / f"library-{index}" for index in range(libraries)]
+    roots[-1] = tmp_path / "media" / "sdcard" / "SteamLibrary"
+    for library in roots:
+        (library / "steamapps" / "common").mkdir(parents=True)
+    for name in filter(None, [decoy, None if megabonk else "SuperTune"]):
+        other = roots[0] / "steamapps" / "common" / name
+        (other / f"{name}_Data").mkdir(parents=True)
+        (other / "GameAssembly.dll").write_bytes(b"MZ")
+        (other / "UnityPlayer.dll").write_bytes(b"MZ")
+    game = roots[-1] / "steamapps" / "common" / "Megabonk"
+    if megabonk:
+        (game / "Megabonk_Data").mkdir(parents=True)
+        (game / "Megabonk.exe").write_bytes(b"MZ")
+    body = "".join('\t"%d"\n\t{\n\t\t"path"\t\t"%s"\n\t}\n' % (i, path) for i, path in enumerate(roots))
+    (client / "steamapps" / "libraryfolders.vdf").write_text('"libraryfolders"\n{\n%s}\n' % body)
+    return SimpleNamespace(home=home, game=game, decoy_library=roots[0], libraries=roots)
+
+
+def _prefix_in(library: Path) -> Path:
+    prefix = library / "steamapps" / "compatdata" / APP_ID / "pfx"
+    (prefix / "drive_c").mkdir(parents=True)
+    return prefix
+
+
+def test_discovery_ignores_an_unrelated_il2cpp_game_in_an_earlier_library(tmp_path: Path, package: Path) -> None:
+    found = _library_home(tmp_path)
+    code = _run(["--home", str(found.home), "--package", str(package), "--no-gui", "--wine-override", "off"])
+    assert code == cli.EXIT_OK
+    assert (found.game / "Mods" / "MegabonkLevels.Mod.dll").read_bytes() == b"dll"
+    assert not (found.decoy_library / "steamapps" / "common" / "1000xRESIST" / "Mods").exists()
+
+
+def test_a_library_with_only_another_il2cpp_game_names_the_decoy_it_rejected(tmp_path: Path, package: Path, capsys) -> None:
+    found = _library_home(tmp_path, megabonk=False)
+    code = _run(["--home", str(found.home), "--package", str(package), "--no-gui"])
+    assert code == cli.EXIT_NOT_FOUND
+    err = capsys.readouterr().err
+    decoy = found.decoy_library / "steamapps" / "common" / "1000xRESIST"
+    assert str(decoy) in err
+    assert "GameAssembly.dll" in err and "Megabonk_Data" in err
+    assert "--game-dir" in err
+
+
+def test_the_prefix_from_another_library_is_reported(tmp_path: Path, capsys) -> None:
+    """The SD-card layout: the game is on removable media, Steam's active prefix is in the home library."""
+    found = _library_home(tmp_path)
+    active = _prefix_in(found.libraries[0])
+    game_dir, prefix, _searched = cli.find_install(found.home, [], cli.Reporter())
+    assert game_dir == found.game
+    assert prefix == active
+    out = capsys.readouterr().out
+    assert f"Proton prefix: {active}" in out
+    assert "not beside the game" in out
+
+
+def test_two_usable_prefixes_in_other_libraries_are_listed_rather_than_guessed(tmp_path: Path, capsys) -> None:
+    found = _library_home(tmp_path, libraries=3)
+    first = _prefix_in(found.libraries[0])
+    third = _prefix_in(found.libraries[1])
+    _game_dir, prefix, _searched = cli.find_install(found.home, [], cli.Reporter())
+    assert prefix is None
+    err = capsys.readouterr().err
+    assert "pass --prefix" in err
+    assert str(first) in err and str(third) in err
+
+
+def test_an_explicit_prefix_makes_the_ambiguity_warning_go_away(tmp_path: Path, package: Path, capsys) -> None:
+    found = _library_home(tmp_path, libraries=3)
+    _prefix_in(found.libraries[0])
+    chosen = _prefix_in(found.libraries[1])
+    code = _run(
+        ["--home", str(found.home), "--package", str(package), "--prefix", str(chosen), "--dry-run", "--no-gui"]
+    )
+    assert code == cli.EXIT_OK
+    err = capsys.readouterr().err
+    assert "more than one usable Proton prefix" not in err
+    assert "not beside the game" not in capsys.readouterr().out
 
 
 def test_a_granted_flatpak_library_is_searched_without_a_client_at_a_default_path(tmp_path: Path, monkeypatch, capsys) -> None:
