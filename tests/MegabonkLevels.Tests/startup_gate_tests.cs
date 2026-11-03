@@ -493,5 +493,210 @@ public class StartupGateTests
         Assert.Equal(StartupGatePhase.Idle, gate.Phase);
     }
 
+    [Fact]
+    public void PortalOpening_AfterThePlacement_OwesExactlyOneMorePlacement()
+    {
+        var gate = New();
+        gate.RunStarted(true, 0f, waitForPortal: true);
+        gate.GameSpawnedPlayer(1f);
+        gate.ContentReady(2f);
+        gate.PortalClosed(3f);
+        gate.PlacementCompleted(3.1f);
+        gate.Drain();
+        Assert.Equal(StartupGatePhase.Open, gate.Phase);
+
+        gate.PortalOpened(4f);
+        Assert.True(gate.ShouldHoldPlayer);
+        Assert.False(gate.ShouldAttemptPlace);
+        Assert.Contains(StartupGateCommandKind.ShowCover, Kinds(gate));
+
+        gate.Tick(11.5f);
+        Assert.True(gate.ShouldHoldPlayer);
+
+        gate.PortalClosed(12f);
+        Assert.True(gate.ShouldAttemptPlace);
+        gate.PlacementCompleted(12.1f);
+        Assert.Equal(StartupGatePhase.Open, gate.Phase);
+        Assert.False(gate.ShouldAttemptPlace);
+        Assert.Single(Kinds(gate), k => k == StartupGateCommandKind.PlacePlayer);
+
+        gate.Tick(13f);
+        Assert.False(gate.ShouldAttemptPlace);
+        Assert.Empty(gate.Drain());
+    }
+
+    [Fact]
+    public void PortalOpening_WhileStillCovering_OnlyExtendsTheWait()
+    {
+        var gate = New();
+        gate.RunStarted(true, 0f, waitForPortal: true);
+        gate.GameSpawnedPlayer(1f);
+        gate.ContentReady(2f);
+        gate.Drain();
+
+        gate.PortalOpened(2.5f);
+        gate.Tick(2.6f);
+        Assert.True(gate.ShouldHoldPlayer);
+        Assert.False(gate.ShouldAttemptPlace);
+
+        gate.PortalClosed(3f);
+        Assert.True(gate.ShouldAttemptPlace);
+        gate.PlacementCompleted(3.1f);
+        Assert.Equal(StartupGatePhase.Open, gate.Phase);
+    }
+
+    [Fact]
+    public void PortalOpening_BeforeTheFirstPlacement_LeavesHoldingToTheGameSpawn()
+    {
+        var gate = New();
+        gate.RunStarted(true, 0f, waitForPortal: true);
+        gate.Drain();
+
+        gate.PortalOpened(1f);
+        gate.Tick(1.1f);
+        Assert.False(gate.ShouldHoldPlayer);
+        Assert.False(gate.ShouldAttemptPlace);
+        Assert.Empty(gate.Drain());
+
+        gate.GameSpawnedPlayer(1.5f);
+        Assert.True(gate.ShouldHoldPlayer);
+    }
+
+    [Fact]
+    public void PortalOpening_InAVanillaRun_IsIgnored()
+    {
+        var gate = New();
+        gate.RunStarted(false, 0f);
+
+        gate.PortalOpened(1f);
+        gate.Tick(2f);
+
+        Assert.Equal(StartupGatePhase.Idle, gate.Phase);
+        Assert.False(gate.ShouldHoldPlayer);
+        Assert.False(gate.ShouldAttemptPlace);
+        Assert.Empty(gate.Drain());
+    }
+
+    [Fact]
+    public void HarnessTeleport_AfterTheRunIsOpen_ReleasesEverythingAtOnce()
+    {
+        var gate = New();
+        gate.RunStarted(true, 0f, waitForPortal: true);
+        gate.GameSpawnedPlayer(1f);
+        gate.ContentReady(2f);
+        gate.PortalClosed(3f);
+        gate.PlacementCompleted(3.1f);
+        gate.Drain();
+
+        gate.HarnessTeleported(4f);
+
+        Assert.Equal(StartupGatePhase.Open, gate.Phase);
+        Assert.False(gate.ShouldHoldPlayer);
+        Assert.False(gate.ShouldAttemptPlace);
+        Assert.DoesNotContain(StartupGateCommandKind.ShowCover, Kinds(gate));
+
+        gate.PortalClosed(5f);
+        gate.Tick(30f);
+        Assert.False(gate.ShouldAttemptPlace);
+        Assert.Empty(gate.Drain());
+    }
+
+    [Fact]
+    public void HarnessTeleport_WhileThePortalIsStillToCome_PinsThePlayerUntilItCloses()
+    {
+        var gate = New();
+        gate.RunStarted(true, 0f, waitForPortal: true);
+        gate.GameSpawnedPlayer(1f);
+        gate.ContentReady(2f);
+        gate.Drain();
+
+        gate.HarnessTeleported(2.5f);
+        gate.Tick(2.6f);
+        Assert.True(gate.ShouldHoldPlayer);
+        Assert.False(gate.ShouldAttemptPlace);
+        Assert.Empty(gate.Drain());
+
+        gate.PortalClosed(3f);
+        Assert.False(gate.ShouldHoldPlayer);
+        Assert.False(gate.ShouldAttemptPlace);
+        Assert.Contains(StartupGateCommandKind.HideCover, Kinds(gate));
+
+        gate.Tick(30f);
+        Assert.Empty(gate.Drain());
+    }
+
+    [Fact]
+    public void HarnessTeleport_BeforeTheContentLands_KeepsTheHarnessPoint()
+    {
+        var gate = New();
+        gate.RunStarted(true, 0f, waitForPortal: true);
+        gate.GameSpawnedPlayer(1f);
+        gate.Drain();
+
+        gate.HarnessTeleported(1.5f);
+        gate.ContentReady(2f);
+        gate.Tick(2.1f);
+        Assert.True(gate.ShouldHoldPlayer);
+        Assert.False(gate.ShouldAttemptPlace);
+
+        gate.PortalClosed(2.5f);
+        Assert.False(gate.ShouldHoldPlayer);
+        Assert.False(gate.ShouldAttemptPlace);
+        gate.Drain();
+        gate.Tick(30f);
+        Assert.Empty(gate.Drain());
+    }
+
+    [Fact]
+    public void HarnessTeleport_ThenAGameSpawn_PlacesTheNewPlayer()
+    {
+        var gate = New();
+        gate.RunStarted(true, 0f, waitForPortal: true);
+        gate.GameSpawnedPlayer(1f);
+        gate.ContentReady(2f);
+        gate.HarnessTeleported(2.5f);
+        gate.PortalClosed(3f);
+        Assert.False(gate.ShouldAttemptPlace);
+
+        gate.GameSpawnedPlayer(4f);
+        Assert.True(gate.ShouldAttemptPlace);
+    }
+
+    [Fact]
+    public void HarnessTeleport_InAVanillaRun_IsIgnored()
+    {
+        var gate = New();
+        gate.RunStarted(false, 0f);
+
+        gate.HarnessTeleported(1f);
+
+        Assert.Equal(StartupGatePhase.Idle, gate.Phase);
+        Assert.False(gate.ShouldHoldPlayer);
+        Assert.False(gate.ShouldAttemptPlace);
+        Assert.Empty(gate.Drain());
+    }
+
+    [Fact]
+    public void PortalThatNeverCloses_GivesUpTheWaitSoALaterSpawnStillPlaces()
+    {
+        var gate = New();
+        gate.RunStarted(true, 0f, waitForPortal: true);
+        gate.GameSpawnedPlayer(1f);
+        gate.ContentReady(2f);
+        gate.PortalClosed(3f);
+        gate.PlacementCompleted(3.1f);
+        gate.Drain();
+
+        gate.PortalOpened(4f);
+        Assert.True(gate.ShouldHoldPlayer);
+
+        gate.Tick(12.1f);
+        Assert.False(gate.ShouldHoldPlayer);
+        Assert.False(gate.ShouldAttemptPlace);
+
+        gate.GameSpawnedPlayer(13f);
+        Assert.True(gate.ShouldAttemptPlace);
+    }
+
     private static List<StartupGateCommandKind> Kinds(StartupGate gate) => gate.Drain().Select(c => c.Kind).ToList();
 }

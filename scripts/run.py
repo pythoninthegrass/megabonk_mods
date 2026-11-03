@@ -27,6 +27,7 @@ Usage:
     run.py invulnerable            Make the player survive enemy damage
     run.py vulnerable              Restore normal player damage
     run.py kill                    End the run at once by killing the player, even when invulnerable
+    run.py restart-run             Run the game's own restart, the death screen's Retry button
     run.py damage <1-99>           Apply integer damage bypassing shield; preserves 1 HP unless --no-nonlethal
     run.py steam-ready             Check whether the in-game Steamworks client is ready
     run.py state                   Print the game's current state as JSON (level, editor, player, tool, selection)
@@ -1040,6 +1041,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("invulnerable")
     sub.add_parser("vulnerable")
     sub.add_parser("kill")
+    sub.add_parser("restart-run", help="run the game's own restart, the death screen's Retry button")
     damage = sub.add_parser("damage", help="apply 1–99 damage through the game, bypassing shield; nonlethal by default")
     damage.add_argument("amount", type=damage_amount)
     damage.add_argument("--nonlethal", action=argparse.BooleanOptionalAction, default=True, help="preserve at least 1 HP; --no-nonlethal can end the run")
@@ -1521,7 +1523,7 @@ def main(argv: list[str] | None = None) -> int:
             ok = quit_game(harness, args.timeout)
         case "steam-ready":
             ok = send_steam_ready(harness, args.timeout)
-        case "freeze" | "resume" | "invulnerable" | "vulnerable" | "kill":
+        case "freeze" | "resume" | "invulnerable" | "vulnerable" | "kill" | "restart-run":
             ok = send(harness, build_command(args.action), args.timeout)
         case "state":
             ok = send_printing_result(harness, build_command("state"), args.timeout)

@@ -41,6 +41,16 @@ public static class StartupCover
 
     public static void OnPortalClosed() => Gate.PortalClosed(Time.realtimeSinceStartup);
 
+    public static void OnPortalOpened() => Gate.PortalOpened(Time.realtimeSinceStartup);
+
+    // The harness moved the player on purpose, so the cover must stop owing a placement that would undo it. The cached
+    // hold point is dropped too: the hold that keeps following must follow the harness point, not the old one.
+    public static void OnHarnessTeleported()
+    {
+        _holdPoint = null;
+        Gate.HarnessTeleported(Time.realtimeSinceStartup);
+    }
+
     public static void OnGenerationStarting()
     {
         if (Gate.Phase != StartupGatePhase.Covering)

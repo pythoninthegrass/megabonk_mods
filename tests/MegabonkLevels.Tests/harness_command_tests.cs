@@ -111,6 +111,7 @@ public class HarnessCommandTests
     [InlineData("invulnerable", HarnessCommandKind.Invulnerable)]
     [InlineData("vulnerable", HarnessCommandKind.Vulnerable)]
     [InlineData("kill", HarnessCommandKind.Kill)]
+    [InlineData("restart-run", HarnessCommandKind.RestartRun)]
     [InlineData("steam-ready", HarnessCommandKind.SteamReady)]
     [InlineData("state", HarnessCommandKind.State)]
     public void TryParse_ArglessCommands_NeedNoPath(string name, HarnessCommandKind expected)

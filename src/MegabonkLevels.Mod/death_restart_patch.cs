@@ -41,6 +41,9 @@ public static class DeathRestartPatch
             }
 
             LiveEditPatch.RearmLevelEdits();
+            // The game's own restart never reaches StartNewMap, so the cover has to be armed here or the
+            // baseline map's spawn portal gets the last word on where the player ends up.
+            StartupCover.OnRunStarting(true);
             _logger?.Msg("DeathRestart: restarting the custom run, level edits queued again");
         }
     }

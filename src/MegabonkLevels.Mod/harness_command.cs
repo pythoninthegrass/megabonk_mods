@@ -22,6 +22,7 @@ public enum HarnessCommandKind
     Invulnerable,
     Vulnerable,
     Kill,
+    RestartRun,
     Damage,
     Spawns,
     CharacterScreen,
@@ -205,6 +206,10 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return true;
             case "kill":
                 command = new HarnessCommand(HarnessCommandKind.Kill, null);
+                error = null;
+                return true;
+            case "restart-run":
+                command = new HarnessCommand(HarnessCommandKind.RestartRun, null);
                 error = null;
                 return true;
             case "steam-ready":

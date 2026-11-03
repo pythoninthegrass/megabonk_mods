@@ -329,6 +329,14 @@ def test_parse_args_kill_subcommand() -> None:
     assert run.parse_args(["kill"]).action == "kill"
 
 
+def test_build_command_restart_run_has_no_payload() -> None:
+    assert run.build_command("restart-run") == {"command": "restart-run"}
+
+
+def test_parse_args_restart_run_subcommand() -> None:
+    assert run.parse_args(["restart-run"]).action == "restart-run"
+
+
 def test_parse_args_invulnerable_and_vulnerable_subcommands() -> None:
     assert run.parse_args(["invulnerable"]).action == "invulnerable"
     assert run.parse_args(["vulnerable"]).action == "vulnerable"

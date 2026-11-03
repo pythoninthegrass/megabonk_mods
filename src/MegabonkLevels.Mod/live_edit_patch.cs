@@ -131,6 +131,7 @@ public static class LiveEditPatch
     {
         MapGenerationController.A_PreGeneration += (Il2CppSystem.Action)StartupCover.OnGenerationStarting;
         SpawnPlayerPortal.A_PortalClosed += (Il2CppSystem.Action)StartupCover.OnPortalClosed;
+        SpawnPlayerPortal.A_PortalOpen += (Il2CppSystem.Action)StartupCover.OnPortalOpened;
         MapGenerationController.A_GenerationComplete += (Il2CppSystem.Action)(() => OnGenerationComplete(logger));
     }
 

@@ -337,6 +337,7 @@ INPUT_TOOL_CASES = [
     ("save_level", {"level": "my"}, {"command": "save-level", "level": "my"}),
     ("list_levels", {}, {"command": "list-levels"}),
     ("kill", {}, {"command": "kill"}),
+    ("restart_run", {}, {"command": "restart-run"}),
     ("click_widget", {"name": "Save"}, {"command": "click-widget", "name": "Save"}),
     ("ui_tree", {}, {"command": "ui-tree"}),
     ("ui_tree", {"x": 120, "y": 35}, {"command": "ui-tree", "x": 120, "y": 35}),

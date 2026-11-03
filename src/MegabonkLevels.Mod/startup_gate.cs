@@ -45,8 +45,10 @@ public sealed class StartupGate
     private bool _holdIssued;
     private bool _pendingPlacement;
     private bool _waitingForPortal;
+    private bool _ignoringPortal;
     private bool _placed;
     private float _deadline;
+    private float? _portalDeadline;
     private float _nextAttemptAt;
     private float _now;
     private int _attempts;
@@ -118,6 +120,7 @@ public sealed class StartupGate
         }
 
         _lastSpawnAt = now;
+        _ignoringPortal = false;
 
         // Once the content is in the world the spawn is simply corrected once; before that the player is held where the
         // game put it, so it cannot fall through a map that is still being torn down and rebuilt.
@@ -150,7 +153,10 @@ public sealed class StartupGate
         }
 
         Progress(now);
-        RequestPlacement("level content ready");
+        if (!_ignoringPortal)
+        {
+            RequestPlacement("level content ready");
+        }
     }
 
     // Only real generation/edit progress renews the deadline; ticking or retrying placement does not.
@@ -162,7 +168,8 @@ public sealed class StartupGate
         }
     }
 
-    // The portal's cached baseline-position animation must finish before the authored placement can stick.
+    // The portal's cached baseline-position animation must finish before the authored placement can stick. A portal that
+    // runs after the start was already applied is the last writer, so it re-owes exactly one placement.
     public void PortalClosed(float now)
     {
         if (Phase == StartupGatePhase.Idle || !_waitingForPortal)
@@ -172,7 +179,78 @@ public sealed class StartupGate
 
         _now = now;
         _waitingForPortal = false;
+        _portalDeadline = null;
         Progress(now);
+        if (_ignoringPortal)
+        {
+            Release("harness teleport kept");
+            Phase = StartupGatePhase.Open;
+            return;
+        }
+
+        if (_placed && !_pendingPlacement)
+        {
+            RequestPlacement("the spawn portal moved the player");
+        }
+    }
+
+    // A spawn portal owns the player's position while it animates. Only a portal that runs after the authored start
+    // landed takes it back: before that the game's own spawn still decides when the player is held.
+    public void PortalOpened(float now)
+    {
+        _now = now;
+        if (!_custom || Phase == StartupGatePhase.Idle || _ignoringPortal)
+        {
+            return;
+        }
+
+        _waitingForPortal = true;
+        _deadline = now + _timeoutSeconds;
+        _portalDeadline = now + _timeoutSeconds;
+        if (Phase == StartupGatePhase.Open)
+        {
+            Phase = StartupGatePhase.Placing;
+        }
+
+        if (!_placed)
+        {
+            return;
+        }
+
+        if (!_coverVisible)
+        {
+            _coverVisible = true;
+            _commands.Add(new StartupGateCommand(StartupGateCommandKind.ShowCover, "a spawn portal owns the player"));
+        }
+
+        if (!_holding)
+        {
+            _holding = true;
+            _commands.Add(new StartupGateCommand(StartupGateCommandKind.HoldPlayer, "held while the spawn portal runs"));
+        }
+    }
+
+    // A harness teleport is deliberate. Nothing the cover owes may move the player afterwards; if a portal still has an
+    // animation to run, the player stays pinned on the harness point until it finishes.
+    public void HarnessTeleported(float now)
+    {
+        _now = now;
+        if (!_custom || Phase == StartupGatePhase.Idle)
+        {
+            return;
+        }
+
+        _pendingPlacement = false;
+        _attempts = 0;
+        _ignoringPortal = true;
+        _portalDeadline = null;
+        if (_waitingForPortal)
+        {
+            return;
+        }
+
+        Release("harness teleport kept");
+        Phase = StartupGatePhase.Open;
     }
 
     // The adapter reports this only after the authored-start teleport actually landed on a live player.
@@ -215,6 +293,14 @@ public sealed class StartupGate
 
         Release("startup cover released after the timeout");
         Phase = StartupGatePhase.Open;
+
+        // A portal that opened and never reported back must not strand the run: an unopened portal keeps the wait
+        // (the load may simply be slow), an opened one does not.
+        if (_portalDeadline is float portalDeadline && now > portalDeadline)
+        {
+            _waitingForPortal = false;
+            _portalDeadline = null;
+        }
     }
 
     // Called by the adapter when an attempt was allowed and no player existed to be placed.
@@ -287,6 +373,8 @@ public sealed class StartupGate
         _holdIssued = false;
         _pendingPlacement = false;
         _waitingForPortal = false;
+        _ignoringPortal = false;
+        _portalDeadline = null;
         _placed = false;
         _attempts = 0;
         _nextAttemptAt = 0f;

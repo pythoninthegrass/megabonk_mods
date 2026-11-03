@@ -159,6 +159,9 @@ public static class DevHarness
             case HarnessCommandKind.Kill:
                 KillPlayer();
                 break;
+            case HarnessCommandKind.RestartRun:
+                RestartRun();
+                break;
             case HarnessCommandKind.Damage:
                 return PlayerDamage.Apply(command.Damage);
             case HarnessCommandKind.Invulnerable:
@@ -418,6 +421,7 @@ public static class DevHarness
         }
 
         var facing = player.transform.forward;
+        StartupCover.OnHarnessTeleported();
         player.TeleportPlayerImmediate(target, facing, facing, TeleportCameraPitch);
         _logger.Msg($"DevHarness: teleport to {target}.");
 
@@ -776,6 +780,13 @@ public static class DevHarness
 
         health.KillPlayer();
         _logger.Msg("DevHarness: player killed.");
+    }
+
+    // Runs the game's own restart, the death screen's Retry button, without OS-level input on the Rewired menu.
+    private static void RestartRun()
+    {
+        Il2CppAssets.Scripts.Managers.MapController.RestartRun();
+        _logger.Msg("DevHarness: restart-run requested.");
     }
 
     private static void QueueKey(InputArgs input)
