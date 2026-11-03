@@ -4,7 +4,7 @@ title: Port the player installer to a single static Go binary
 status: In Progress
 assignee: []
 created_date: '2026-10-31T08:14:00Z'
-updated_date: '2026-11-03 05:20'
+updated_date: '2026-11-03 05:29'
 labels:
   - tooling
 dependencies: []
@@ -52,11 +52,11 @@ The Python installer works but still asks the player for an interpreter: the 3.1
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
+- [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
 - [x] #4 Conventional commit with no attribution
-- [ ] #5 task check passes
+- [x] #5 task check passes
 - [x] #6 Tests written first for ported logic
 - [x] #7 Docs updated
 - [x] #8 Conventional commit with no attribution
@@ -130,7 +130,8 @@ un-executed darwin/windows binaries.
 Checks on the current tree: `task installer:build` + `installer:verify-static` (three
 targets, ELF statically linked, PE32+ and Mach-O, `go list -m all` one line);
 `task installer:test` (11 packages); `installer:parity` 25/25; the installer pytest suites
-211 passed; `task lint` clean. `task check` still stops at the 8 pre-existing failures above.
+211 passed; `task lint` clean, and `task check` is green end to end (1007 passed, 56 skipped) once the
+8 failures were fixed separately in `800dfa1` and `ba05d15`.
 
 AC #1, "runs on a host with no Go and no Python", is measured rather than inferred. One
 throwaway driver (`/tmp/opencode/installer-crosscheck/driver.py`) builds each scenario
@@ -173,6 +174,29 @@ build is native Linux, which the installer refuses by design with exit 4.
 AC #11 stays open deliberately: neither implementation has HTTP download code (`net/http`
 and `urllib.request` are absent from both), vendor archives are verified from cache, so
 there is no download path to test.
+
+## Unblocking task check (2026-11-03)
+
+The 8 failures were not all "someone else's in-flight work": the repo's own rule is that a
+missing gitignored build product skips with a reason and failures are not expected, so the 6
+in `test_thps_attachments.py` and `test_build_thps_editable_level.py` were a real gap - both
+files read `.tools/thps1/warehouse/warehouse.obj` with no guard, while four sibling THPS
+files carry `needs_extract` skipifs. Fixed centrally rather than file by file:
+`tests/conftest.py` now declares `GENERATED_ARTIFACTS` (each product as `module.ATTRIBUTE` or
+a repo-relative path) and a `pytest_runtest_makereport` wrapper turns a `FileNotFoundError`
+whose `filename` resolves to an absent entry into a skip, so a test that forgets a local
+guard still skips. It keys on the filename, so a product that exists but is malformed still
+fails, and an unrelated missing file still fails - checked with a throwaway probe.
+
+The 2 `test_run.py` wineserver failures were a different pair of problems: both inject a
+fake server pid (`running_wineserver_pids -> [7]`) and never stub `os.kill`, unlike the
+sibling test that records kills, and `wait_for_wineserver_to_exit` only caught
+`ProcessLookupError` around the SIGKILL. On this host pid 7 is a root kworker, so the real
+`os.kill` raised `PermissionError` and the "force-killed N" line claimed servers never
+signalled. run.py now counts killed and refused pids separately and treats `EPERM` as a
+server it cannot kill (pinned by a new test), and an autouse conftest fixture stubs `os.kill`
+to raise, so a test that reaches a real kill fails with instructions instead of signalling a
+live process. That tripwire flagged exactly those two tests across 1005 others.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
