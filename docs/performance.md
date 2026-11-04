@@ -79,7 +79,7 @@ Three findings about the measurement, each of which produced a wrong number befo
 
 **A dead player ends a run mid-window.** `perf health` raises `PlayerHealth.hp` and grants Mirror stacks, which stops damage, but the kill floor kills a knocked-off-the-map player through `PlayerHealth.KillPlayer`, which bypasses both. The driver teleports the player back before every window; the health grant alone is not enough.
 
-**Windows read high in the order they were taken.** The capture sweep that filled `/tmp/perf-captures-g` measured the same 240-enemy population three times in a row — mod on, mod off, mod on again — and got 7.482 ms, 7.784 ms, 9.501 ms mean. A second session (`/tmp/perf-captures-s`) repeated it at 8.258 ms, 8.658 ms, 9.376 ms. Cost walks upward through a session regardless of which condition is being measured, and two sessions of the same condition differ by ~0.8 ms, which is the same order as the per-enemy residual attributed in the next section. An A/B whose arms are in a fixed order is measuring the drift as well as the toggle; at this resolution the arms have to be interleaved or taken in separate sessions, and a delta smaller than the session offset is not a result. The same sweep also shows the mod's own toggle is not where the time is: with the mod switched off the frames got ~0.3 ms *slower* while the mod's self-measured cost fell by only 0.056 ms/frame.
+**Windows read high in the order they were taken.** A capture sweep — one that takes RenderDoc frames as well as timed windows — measured the same 240-enemy population three times in a row, mod on, mod off, mod on again, and got 7.482 ms, 7.784 ms, 9.501 ms mean. A second session repeated it at 8.258 ms, 8.658 ms, 9.376 ms. Cost walks upward through a session regardless of which condition is being measured, and two sessions of the same condition differ by ~0.8 ms, which is the same order as the per-enemy residual attributed in the next section. An A/B whose arms are in a fixed order is measuring the drift as well as the toggle; at this resolution the arms have to be interleaved or taken in separate sessions, and a delta smaller than the session offset is not a result. The same sweep also shows the mod's own toggle is not where the time is: with the mod switched off the frames got ~0.3 ms *slower* while the mod's self-measured cost fell by only 0.056 ms/frame.
 
 ## Attributing the per-enemy cost
 
@@ -96,7 +96,7 @@ Density effect: +0.18 ms (gathered vs strung at 240). This is small — the per-
 
 **GC: mod's CLR GC is zero by design.** The `gcPauseMsPerFrame` field on every window read 0.000 ms with 0 collections: the mod's managed (.NET CLR) GC allocates nothing during steady-state frames. The game's own il2cpp Boehm GC has no managed events and is not visible to this sampler — it shows up only as frame-time outliers in the p99/max columns.
 
-**GPU render time: the enemies are about half the frame's GPU work, and the frame is not waiting for them.** `scripts/renderdoc_replay.py` replays the `.rdc` files at `/tmp/perf-captures-g/captures/` and `/tmp/perf-captures-s/captures/` headlessly (no Qt host; see [RenderDoc on a direct-Proton Linux host](development.md#renderdoc-on-a-direct-proton-linux-host)). What that replay supports, and what it does not:
+**GPU render time: the enemies are about half the frame's GPU work, and the frame is not waiting for them.** The figures below come from `.rdc` captures of the 0-enemy and 240-enemy states, taken with the sweep's `--captures N` (it sends RenderDoc's F12 hotkey and files the frames under `<out>/captures/`; see [Frame-time profiling](development.md#frame-time-profiling) and [RenderDoc on a direct-Proton Linux host](development.md#renderdoc-on-a-direct-proton-linux-host)) and replayed headlessly by `scripts/renderdoc_replay.py`, which needs no Qt host. Captures are scratch, not kept in the repository, so these numbers are reproducible rather than re-readable: take a fresh empty-level capture and a fresh 240-enemy capture and replay the pair against each other with `--baseline`. What that replay supports, and what it does not:
 
 *Per-event GPU duration is not a frame clock.* Summing `EventGPUDuration` over the 0-enemy frame reports 22.8 ms, while the same condition measured 4.88 ms mean / 4.16 ms p50 in the harness — so the replayed figure overstates the real GPU frame by at least 4.7×, and it does not track submitted work either: the two latest captures of a sweep report 101 ms and 74 ms on 0.7–0.9 M submitted vertices while a 2.5 M-vertex frame reports 44.5 ms. This driver offers no whole-frame `Duration` counter to cross-check against (`EnumerateCounters` starts at 1). Read the numbers as a consistent-but-inflated clock, useful only for ratios within one session.
 
@@ -177,11 +177,19 @@ Nothing here is fixed. Each is listed with the number that would have to move.
 
 The sweep that produced these tables lives in `scripts/perf_sweep.py`; it relaunches the game, loads the level, and takes one gated window per enemy count, writing one JSON per window plus its own rejection reasons. See [Frame-time profiling](development.md#frame-time-profiling) for the verbs it drives and the gates it enforces.
 
-The arm legs above ran on the fedora host as:
+The arm legs above ran on the fedora host, with `--out` naming a scratch directory per leg (the window JSONs are evidence, not artifacts — nothing here keeps them):
 
 ```sh
 uv run scripts/perf_sweep.py --out /tmp/perf-physics   --count 0 --count 240 --physics-arms 3 --tier 4 --seed 20261102 --seconds 20
 uv run scripts/perf_sweep.py --out /tmp/perf-animation --count 0 --count 240 --anim-arms 3    --tier 4 --seed 20261102 --seconds 20
 ```
 
-add `--launch-cmd "sh <the host's launcher>"` on a direct-Proton host where `task game:run` is unavailable. Read a leg out of its window JSONs, not its log: `_controlState` is the harness's account of what the arm held, `_controlMsPerFrame` is the arm's own cost to be added back before a saving is quoted, and `_probesMsPerFrame` is what says the arm touched only what it targets. A pair whose delta is smaller than the ~0.8 ms session-to-session offset is inconclusive, not small.
+The GPU figures come from a capture run instead, and `--captures` perturbs frame times, so it never goes in a timing leg:
+
+```sh
+uv run scripts/perf_sweep.py --out /tmp/perf-captures --count 0 --count 240 --captures 2 --tier 4 --seed 20261102
+```
+
+On a direct-Proton host where `task game:run` is unavailable, add `--launch-cmd "sh <the host's launcher>"` to any of these. The capture run files its frames under `<out>/captures/` as `<window>_<index>.rdc` (`count_0_0.rdc`, `count_240_0.rdc`); replay the empty-level one as `--baseline` against a populated one with `scripts/renderdoc_replay.py`.
+
+Read a leg out of its window JSONs, not its log: `_controlState` is the harness's account of what the arm held, `_controlMsPerFrame` is the arm's own cost to be added back before a saving is quoted, and `_probesMsPerFrame` is what says the arm touched only what it targets. A pair whose delta is smaller than the ~0.8 ms session-to-session offset is inconclusive, not small.
