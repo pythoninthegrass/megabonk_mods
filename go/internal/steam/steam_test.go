@@ -741,3 +741,31 @@ func TestResolveKeepsSlashSemanticsOnWindows(t *testing.T) {
 		t.Errorf("resolveWith through EvalSymlinks = %q, want the slash form", got)
 	}
 }
+
+func TestInstalledBuildIDReadsTheAppManifest(t *testing.T) {
+	library := t.TempDir()
+	game := filepath.Join(library, "steamapps", "common", "Megabonk")
+	mustMkdirAll(t, game)
+	mustWrite(t, filepath.Join(library, "steamapps", "appmanifest_"+AppID+".acf"),
+		"\"AppState\"\n{\n\t\"appid\"\t\t\""+AppID+"\"\n\t\"installdir\"\t\t\"Megabonk\"\n\t\"buildid\"\t\t\"99999999\"\n}\n")
+	if got := InstalledBuildID(game); got != "99999999" {
+		t.Errorf("InstalledBuildID = %q, want 99999999", got)
+	}
+}
+
+func TestInstalledBuildIDIsEmptyWithoutAnAppManifestOrBuildID(t *testing.T) {
+	library := t.TempDir()
+	game := filepath.Join(library, "steamapps", "common", "Megabonk")
+	mustMkdirAll(t, game)
+	if got := InstalledBuildID(game); got != "" {
+		t.Errorf("no manifest: InstalledBuildID = %q, want empty", got)
+	}
+	mustWrite(t, filepath.Join(library, "steamapps", "appmanifest_"+AppID+".acf"),
+		"\"AppState\"\n{\n\t\"appid\"\t\t\""+AppID+"\"\n}\n")
+	if got := InstalledBuildID(game); got != "" {
+		t.Errorf("no buildid key: InstalledBuildID = %q, want empty", got)
+	}
+	if got := InstalledBuildID(t.TempDir()); got != "" {
+		t.Errorf("game outside a library: InstalledBuildID = %q, want empty", got)
+	}
+}

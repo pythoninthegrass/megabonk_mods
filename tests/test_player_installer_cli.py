@@ -90,6 +90,7 @@ def no_host_steam_state(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keeps discovery away from the real machine's /media mounts and Flatpak grants."""
     monkeypatch.setattr(cli, "MOUNT_ROOTS", ())
     monkeypatch.setattr(cli.steam, "flatpak_probe", lambda home_value: cli.steam.FlatpakProbe((), "file", True))
+    monkeypatch.setattr(cli.steam, "steam_running", lambda: False)
 
 
 def _run(argv: list[str]):
@@ -525,3 +526,67 @@ def test_a_flatpak_library_the_sandbox_cannot_read_names_the_grant_command(tmp_p
     assert code == cli.EXIT_OK
     err = capsys.readouterr().err
     assert f"flatpak override --user --filesystem={library} com.valvesoftware.Steam" in err
+
+
+def _write_appmanifest(game: Path, buildid: str | None) -> None:
+    body = '\t"appid"\t\t"%s"\n\t"installdir"\t\t"Megabonk"\n' % APP_ID
+    if buildid is not None:
+        body += '\t"buildid"\t\t"%s"\n' % buildid
+    steamapps = game.parent.parent
+    (steamapps / f"appmanifest_{APP_ID}.acf").write_text('"AppState"\n{\n%s}\n' % body)
+
+
+def _install_argv(home: Path, package: Path) -> list[str]:
+    return ["--home", str(home), "--package", str(package), "--no-gui", "--wine-override", "off"]
+
+
+def test_a_matching_game_build_is_reported_without_a_warning(tmp_path: Path, package: Path, capsys) -> None:
+    home, game = _install_tree(tmp_path)
+    _write_appmanifest(game, "21750826")
+    assert _run(_install_argv(home, package)) == cli.EXIT_OK
+    captured = capsys.readouterr()
+    assert "game build 21750826 matches the package" in captured.out
+    assert "warning" not in captured.err.lower()
+
+
+def test_a_different_game_build_warns_and_still_installs(tmp_path: Path, package: Path, capsys) -> None:
+    home, game = _install_tree(tmp_path)
+    _write_appmanifest(game, "99999999")
+    assert _run(_install_argv(home, package)) == cli.EXIT_OK
+    err = capsys.readouterr().err
+    assert "warning" in err and "99999999" in err and "21750826" in err
+    assert (game / "Mods" / "MegabonkLevels.Mod.dll").is_file()
+
+
+def test_check_warns_about_a_different_game_build_without_changing_the_exit_code(tmp_path: Path, package: Path, capsys) -> None:
+    home, game = _install_tree(tmp_path)
+    assert _run(_install_argv(home, package)) == cli.EXIT_OK
+    _write_appmanifest(game, "99999999")
+    capsys.readouterr()
+    assert _run([*_install_argv(home, package), "--check"]) == cli.EXIT_OK
+    assert "99999999" in capsys.readouterr().err
+
+
+def test_a_missing_appmanifest_reports_the_build_as_unknown(tmp_path: Path, package: Path, capsys) -> None:
+    home, game = _install_tree(tmp_path)
+    assert _run(_install_argv(home, package)) == cli.EXIT_OK
+    captured = capsys.readouterr()
+    assert "installed game build is unknown" in captured.out
+    assert "warning" not in captured.err.lower()
+
+
+def test_the_install_record_keeps_the_installed_game_build(tmp_path: Path, package: Path) -> None:
+    home, game = _install_tree(tmp_path)
+    _write_appmanifest(game, "99999999")
+    assert _run(_install_argv(home, package)) == cli.EXIT_OK
+    record = json.loads((game / "MegabonkLevels.installer.json").read_text())
+    assert record["schema"] == "megabonk-levels-install/1"
+    assert record["game_buildid"] == "21750826"
+    assert record["installed_game_buildid"] == "99999999"
+
+
+def test_json_output_has_no_extra_lines_before_the_document(tmp_path: Path, package: Path, capsys) -> None:
+    home, game = _install_tree(tmp_path)
+    _write_appmanifest(game, "21750826")
+    assert _run([*_install_argv(home, package), "--json", "--dry-run"]) == cli.EXIT_OK
+    json.loads(capsys.readouterr().out)

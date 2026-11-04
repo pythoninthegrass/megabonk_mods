@@ -1341,3 +1341,95 @@ func TestMacNotFoundNamesThePrefixesItTriedAndTheFlag(t *testing.T) {
 		}
 	}
 }
+
+// makeLibraryGame is makeGame inside a Steam library layout, with the app
+// manifest recording buildID ("" leaves the manifest out).
+func makeLibraryGame(t *testing.T, buildID string) string {
+	t.Helper()
+	library := t.TempDir()
+	game := filepath.Join(library, "steamapps", "common", "Megabonk")
+	if err := os.MkdirAll(filepath.Join(game, "Megabonk_Data"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(game, "Megabonk.exe"), "MZ")
+	if buildID != "" {
+		write(t, filepath.Join(library, "steamapps", "appmanifest_"+steam.AppID+".acf"),
+			"\"AppState\"\n{\n\t\"appid\"\t\t\""+steam.AppID+"\"\n\t\"installdir\"\t\t\"Megabonk\"\n\t\"buildid\"\t\t\""+buildID+"\"\n}\n")
+	}
+	return game
+}
+
+func TestMatchingGameBuildIsReportedWithoutAWarning(t *testing.T) {
+	packageDir, game := makePackage(t), makeLibraryGame(t, "21750826")
+	got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui")
+	if got.exit != ExitOK {
+		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
+	}
+	if !strings.Contains(got.stdout.String(), "game build 21750826 matches the package") {
+		t.Errorf("stdout = %s", got.stdout)
+	}
+	if strings.Contains(got.stderr.String(), "game build") {
+		t.Errorf("stderr = %s", got.stderr)
+	}
+}
+
+func TestDifferentGameBuildWarnsAndStillInstalls(t *testing.T) {
+	packageDir, game := makePackage(t), makeLibraryGame(t, "99999999")
+	got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui")
+	if got.exit != ExitOK {
+		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
+	}
+	stderr := got.stderr.String()
+	for _, want := range []string{"warning", "99999999", "21750826"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr should contain %q:\n%s", want, stderr)
+		}
+	}
+	if !ppath.IsFile(filepath.Join(game, "Mods", "MegabonkLevels.Mod.dll")) {
+		t.Error("the mod was not installed")
+	}
+}
+
+func TestCheckWarnsAboutADifferentGameBuildWithoutChangingTheExit(t *testing.T) {
+	packageDir, game := makePackage(t), makeLibraryGame(t, "21750826")
+	if got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui"); got.exit != ExitOK {
+		t.Fatalf("install exit = %d\n%s", got.exit, got.stderr)
+	}
+	write(t, filepath.Join(filepath.Dir(filepath.Dir(game)), "appmanifest_"+steam.AppID+".acf"),
+		"\"AppState\"\n{\n\t\"appid\"\t\t\""+steam.AppID+"\"\n\t\"buildid\"\t\t\"99999999\"\n}\n")
+	got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui", "--check")
+	if got.exit != ExitOK {
+		t.Fatalf("check exit = %d\n%s", got.exit, got.stderr)
+	}
+	if !strings.Contains(got.stderr.String(), "99999999") {
+		t.Errorf("stderr = %s", got.stderr)
+	}
+}
+
+func TestMissingAppManifestReportsTheBuildAsUnknown(t *testing.T) {
+	packageDir, game := makePackage(t), makeLibraryGame(t, "")
+	got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui")
+	if got.exit != ExitOK {
+		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
+	}
+	if !strings.Contains(got.stdout.String(), "installed game build is unknown") {
+		t.Errorf("stdout = %s", got.stdout)
+	}
+	if strings.Contains(got.stderr.String(), "game build") {
+		t.Errorf("stderr = %s", got.stderr)
+	}
+}
+
+func TestInstallRecordKeepsTheInstalledGameBuild(t *testing.T) {
+	packageDir, game := makePackage(t), makeLibraryGame(t, "99999999")
+	if got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui"); got.exit != ExitOK {
+		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
+	}
+	record := content.LoadRecord(game)
+	if record == nil || record.InstalledGameBuildID == nil || *record.InstalledGameBuildID != "99999999" {
+		t.Fatalf("record = %+v", record)
+	}
+	if record.GameBuildID != "21750826" {
+		t.Errorf("game_buildid = %q", record.GameBuildID)
+	}
+}

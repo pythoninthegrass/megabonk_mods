@@ -83,18 +83,19 @@ type PackEntry struct {
 // Record is MegabonkLevels.installer.json: exactly what this installer placed,
 // so uninstall can remove it and nothing else.
 type Record struct {
-	Schema             string               `json:"schema"`
-	PackageID          string               `json:"package_id"`
-	ModVersion         string               `json:"mod_version"`
-	MelonloaderVersion string               `json:"melonloader_version"`
-	GameBuildID        string               `json:"game_buildid"`
-	InstalledAt        string               `json:"installed_at"`
-	GameDir            string               `json:"game_dir"`
-	Files              []string             `json:"files"`
-	Levels             []string             `json:"levels"`
-	Packs              map[string]PackEntry `json:"packs"`
-	Runtime            *Runtime             `json:"runtime"`
-	DllOverride        *DllOverride         `json:"dll_override"`
+	Schema               string               `json:"schema"`
+	PackageID            string               `json:"package_id"`
+	ModVersion           string               `json:"mod_version"`
+	MelonloaderVersion   string               `json:"melonloader_version"`
+	GameBuildID          string               `json:"game_buildid"`
+	InstalledGameBuildID *string              `json:"installed_game_buildid"`
+	InstalledAt          string               `json:"installed_at"`
+	GameDir              string               `json:"game_dir"`
+	Files                []string             `json:"files"`
+	Levels               []string             `json:"levels"`
+	Packs                map[string]PackEntry `json:"packs"`
+	Runtime              *Runtime             `json:"runtime"`
+	DllOverride          *DllOverride         `json:"dll_override"`
 }
 
 // UserDataDir is the game's UserData directory.
@@ -156,6 +157,10 @@ func LoadRecord(gameDir string) *Record {
 		GameDir:            stringField(fields, "game_dir"),
 		Files:              stringListField(fields, "files"),
 		Levels:             stringListField(fields, "levels"),
+	}
+	if value, found := fields["installed_game_buildid"]; found && value != nil {
+		installed := jsonx.Text(value)
+		record.InstalledGameBuildID = &installed
 	}
 	if entries, ok := jsonx.AsMap(fields["packs"]); ok {
 		record.Packs = map[string]PackEntry{}

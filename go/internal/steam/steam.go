@@ -557,6 +557,25 @@ func installDirFromManifests(library string) string {
 	return ""
 }
 
+// InstalledBuildID is the depot build id Steam's app manifest records for the
+// install. "" means the manifest is missing or records none.
+func InstalledBuildID(gameDir string) string {
+	library := libraryOfGameDir(gameDir)
+	if library == "" {
+		return ""
+	}
+	data, err := vdf.Load(ppath.Join(library, "steamapps", "appmanifest_"+AppID+".acf"))
+	if err != nil {
+		return ""
+	}
+	for _, value := range vdf.FindAll(data, []string{"*", "buildid"}) {
+		if text := strings.TrimSpace(stringValue(value)); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
 func stringValue(value any) string {
 	if text, ok := value.(string); ok {
 		return text

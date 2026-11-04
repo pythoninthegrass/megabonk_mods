@@ -457,6 +457,22 @@ def _install_dir_from_manifests(library: Path, game_name: str) -> Path | None:
     return None
 
 
+def installed_build_id(game_dir: Path | str) -> str | None:
+    """The depot build id Steam's appmanifest records for the install, or None when it records none."""
+    library = _library_of_game_dir(Path(game_dir))
+    if library is None:
+        return None
+    manifest = library / "steamapps" / f"appmanifest_{APP_ID}.acf"
+    try:
+        data = vdf.load_vdf(manifest)
+    except (OSError, vdf.VdfError):
+        return None
+    return next(
+        (str(value).strip() for value in vdf.find_all(data, ("*", "buildid")) if str(value).strip()),
+        None,
+    )
+
+
 def prefix_root(library: Path | str, app_id: str = APP_ID) -> Path:
     return Path(library) / "steamapps" / "compatdata" / app_id / "pfx"
 

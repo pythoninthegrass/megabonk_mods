@@ -21,6 +21,7 @@ import (
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/manifest"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/ppath"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/proton"
+	"github.com/pythoninthegrass/megabonk_mods/installer/internal/steam"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/ui"
 )
 
@@ -793,6 +794,13 @@ func relative(game, path string) string {
 	return clean
 }
 
+func installedBuildID(game string) *string {
+	if build := steam.InstalledBuildID(game); build != "" {
+		return &build
+	}
+	return nil
+}
+
 func writeRecord(built *Plan, overrideVia *string) error {
 	game := built.GameDir
 	record := content.LoadRecord(game)
@@ -804,6 +812,7 @@ func writeRecord(built *Plan, overrideVia *string) error {
 	record.ModVersion = built.Manifest.ModVersion
 	record.MelonloaderVersion = built.Manifest.MelonloaderVersion
 	record.GameBuildID = built.Manifest.GameBuildID
+	record.InstalledGameBuildID = installedBuildID(game)
 	record.InstalledAt = time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	record.GameDir = game
 
@@ -899,6 +908,7 @@ func writePartialRecord(built *Plan, done []Action, overrideVia *string) error {
 	record.ModVersion = built.Manifest.ModVersion
 	record.MelonloaderVersion = built.Manifest.MelonloaderVersion
 	record.GameBuildID = built.Manifest.GameBuildID
+	record.InstalledGameBuildID = installedBuildID(game)
 	record.InstalledAt = time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	record.GameDir = game
 

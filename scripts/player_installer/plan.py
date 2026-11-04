@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import shutil
 import zipfile
-from . import content, gamebuild, manifest as mf, proton
+from . import content, gamebuild, manifest as mf, proton, steam
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -346,6 +346,7 @@ def _write_record(plan: Plan, override_via: str | None = None) -> None:
             "mod_version": plan.manifest.mod_version,
             "melonloader_version": plan.manifest.melonloader_version,
             "game_buildid": plan.manifest.game_buildid,
+            "installed_game_buildid": steam.installed_build_id(game),
             "installed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "game_dir": str(game),
         }

@@ -881,6 +881,8 @@ func (c *Command) Main(argv []string) int {
 		reporter.Warn("Steam is running — quit it first if a step looks like it did not stick")
 	}
 
+	reportGameBuild(reporter, steam.InstalledBuildID(gameDir), pkg.GameBuildID)
+
 	if options.Check {
 		code, err := c.doCheck(options, reporter, gameDir, packageDir, pkg, located)
 		if err != nil {
@@ -893,6 +895,20 @@ func (c *Command) Main(argv []string) int {
 		return reporter.Fail(err.Error(), ExitError)
 	}
 	return code
+}
+
+// reportGameBuild says whether the installed game is the build the package was
+// verified against; a difference only warns.
+func reportGameBuild(reporter *Reporter, installed, verified string) {
+	switch installed {
+	case "":
+		reporter.Say("installed game build is unknown (no Steam appmanifest found); the package was verified against build " + verified)
+	case verified:
+		reporter.Say("game build " + installed + " matches the package")
+	default:
+		reporter.Warn("installed game build " + installed + " differs from build " + verified +
+			" this package was verified against; the mod may not work until a matching package is released")
+	}
 }
 
 // locate resolves the game directory from --game-dir or Steam discovery.

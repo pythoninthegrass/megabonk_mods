@@ -356,6 +356,8 @@ def main(argv: list[str] | None = None) -> int:
     if steam.steam_running():
         reporter.warn("Steam is running — quit it first if a step looks like it did not stick")
 
+    report_game_build(reporter, steam.installed_build_id(game_dir), manifest.game_buildid)
+
     try:
         if args.check:
             return do_check(args, reporter, game_dir, package, manifest, located)
@@ -364,6 +366,19 @@ def main(argv: list[str] | None = None) -> int:
         return reporter.fail(str(exc), EXIT_ERROR)
     except OSError as exc:
         return reporter.fail(f"{exc}", EXIT_ERROR)
+
+
+def report_game_build(reporter: Reporter, installed: str | None, verified: str) -> None:
+    """Says whether the installed game is the build the package was verified against; a difference only warns."""
+    if installed is None:
+        reporter.say(f"installed game build is unknown (no Steam appmanifest found); the package was verified against build {verified}")
+    elif installed == verified:
+        reporter.say(f"game build {installed} matches the package")
+    else:
+        reporter.warn(
+            f"installed game build {installed} differs from build {verified} this package was verified against; "
+            "the mod may not work until a matching package is released"
+        )
 
 
 def _locate(args: argparse.Namespace, reporter: Reporter) -> Located:
