@@ -133,8 +133,8 @@ func FromDoc(document any) (*Package, error) {
 			strconv.Quote(jsonx.Text(root["schema"])), strconv.Quote(PackageSchema))
 	}
 	platform, ok := root["platform"].(string)
-	if !ok || (platform != "linux" && platform != "windows") {
-		return nil, fail("unrecognised package platform %s; expected \"linux\" or \"windows\"",
+	if !ok || (platform != "linux" && platform != "windows" && platform != "macos") {
+		return nil, fail("unrecognised package platform %s; expected \"linux\", \"windows\" or \"macos\"",
 			strconv.Quote(jsonx.Text(root["platform"])))
 	}
 	vendors, err := vendorsFrom(root)

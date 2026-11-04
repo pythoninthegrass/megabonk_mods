@@ -21,6 +21,7 @@ import (
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/manifest"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/plan"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/ppath"
+	"github.com/pythoninthegrass/megabonk_mods/installer/internal/proton"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/steam"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/ui"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/window"
@@ -111,10 +112,10 @@ type Command struct {
 	Executable func() (string, error)
 }
 
-// defaultPackage is the folder holding the installer on Windows, where a
-// double-clicked install.exe is given no arguments; empty elsewhere.
+// defaultPackage is the folder holding the installer on Windows and macOS, where
+// the unzipped binary is run with no arguments; empty elsewhere.
 func (c *Command) defaultPackage() string {
-	if !c.native() {
+	if !c.native() && !c.wine() {
 		return ""
 	}
 	executable := c.Executable
@@ -135,6 +136,14 @@ func (c *Command) native() bool {
 		return c.GOOS == "windows"
 	}
 	return runtime.GOOS == "windows"
+}
+
+// wine reports a Mac install, which runs the Windows build in a Wine prefix.
+func (c *Command) wine() bool {
+	if c.GOOS != "" {
+		return c.GOOS == "darwin"
+	}
+	return runtime.GOOS == "darwin"
 }
 
 // NewCommand returns a Command wired to the given streams.
@@ -209,7 +218,7 @@ func newFlagSet(options *Options) (*flag.FlagSet, *stringList, *stringList, *str
 	fs.StringVar(&options.Package, "package", "", "the unzipped MegabonkLevels player package directory")
 	fs.StringVar(&options.Home, "home", "", "home directory to search for Steam (default: $HOME)")
 	fs.StringVar(&options.GameDir, "game-dir", "", "install straight into this Megabonk folder, skipping Steam discovery")
-	fs.StringVar(&options.Prefix, "prefix", "", "Proton prefix to write the .NET runtime and version.dll override into")
+	fs.StringVar(&options.Prefix, "prefix", "", "Proton or Wine prefix (the folder holding drive_c) to write the .NET runtime and version.dll override into")
 	fs.Var(&libraries, "library", "extra Steam library folder to search (repeatable)")
 	fs.Var(&levels, "level", "a .mblevel.json file to add to UserData/Levels (repeatable)")
 	fs.Var(&packs, "pack", "a level-pack directory to install (repeatable)")
@@ -313,6 +322,9 @@ func (c *Command) FindInstall(home string, extraLibraries []string, reporter *Re
 	if c.native() {
 		return c.findWindowsInstall(extraLibraries, reporter)
 	}
+	if c.wine() {
+		return c.findWineInstall(home, extraLibraries, "", reporter)
+	}
 	probe := steam.ProbeFlatpak(home)
 	granted := append([]string{}, probe.Paths...)
 	clients := steam.ClientRoots(home, "", granted)
@@ -345,6 +357,27 @@ func (c *Command) findWindowsInstall(extraLibraries []string, reporter *Reporter
 		reporter.Say("no Steam library found; pass --game-dir if Megabonk is somewhere unusual")
 	}
 	return steam.FindGameDir(roots, ""), "", rootPaths(roots)
+}
+
+// findWineInstall searches the Steam clients inside Wine prefixes, plain Wine
+// before CrossOver, or only the one prefix the player named.
+func (c *Command) findWineInstall(home string, extraLibraries []string, prefix string, reporter *Reporter) (gameDir string, winePrefix string, searched []string) {
+	clients := steam.WineClientRoots(home)
+	if prefix != "" {
+		clients = nil
+		if client, found := steam.WineClientIn(ppath.ExpandUser(prefix), "wine"); found {
+			clients = append(clients, client)
+		}
+	}
+	roots := steam.LibraryRoots(clients, nil, expandAll(extraLibraries), nil, false)
+	if len(roots) == 0 {
+		reporter.Say("no Steam library found; pass --game-dir if Megabonk is somewhere unusual")
+	}
+	found := steam.FindGameDir(roots, "")
+	if found == "" {
+		return "", "", rootPaths(roots)
+	}
+	return found, steam.PrefixOfGameDir(found), rootPaths(roots)
 }
 
 // reportPrefix tells the player when the prefix written to is not the one beside
@@ -507,12 +540,18 @@ func (c *Command) planOptions(options *Options, gameDir string, located *Located
 	if c.native() {
 		runtimeMode = plan.RuntimeModeNative
 	}
+	wineBin := ""
+	if c.wine() {
+		runtimeMode = plan.RuntimeModeWine
+		wineBin = c.wineBinary()
+	}
 	return plan.Options{
 		Game:         gameDir,
 		Prefix:       c.prefix(options, gameDir, located),
 		RuntimeMode:  runtimeMode,
 		DllOverride:  options.WineOverride,
 		WineOverride: options.WineOverride,
+		WineBin:      wineBin,
 		ForcedTool:   options.Proton,
 		Level:        lastOf(options.Levels),
 		Pack:         lastOf(options.Packs),
@@ -527,9 +566,27 @@ func lastOf(values []string) string {
 	return ppath.ExpandUser(values[len(values)-1])
 }
 
+// wineBinary is the wine that edits a prefix's registry: MEGABONK_WINE, then
+// the search path, then a Wine.app under the user's or the system's Applications.
+func (c *Command) wineBinary() string {
+	env := c.environment()
+	home, _ := lookupHome(env)
+	return proton.FindWineBinary(env["MEGABONK_WINE"], filepath.SplitList(env["PATH"]),
+		[]string{ppath.Join(home, "Applications"), "/Applications"})
+}
+
 func (c *Command) prefix(options *Options, gameDir string, located *Located) string {
 	if c.native() {
 		return ""
+	}
+	if c.wine() {
+		if options.Prefix != "" {
+			return ppath.ExpandUser(options.Prefix)
+		}
+		if located != nil && located.Prefix != "" {
+			return located.Prefix
+		}
+		return steam.PrefixOfGameDir(gameDir)
 	}
 	if options.Prefix != "" {
 		return ppath.ExpandUser(options.Prefix)
@@ -801,7 +858,13 @@ func (c *Command) locate(options *Options, reporter *Reporter) *Located {
 	} else if value, err := os.UserHomeDir(); err == nil {
 		home = value
 	}
-	gameDir, prefix, searched := c.FindInstall(home, options.Libraries, reporter, options.Prefix != "")
+	var gameDir, prefix string
+	var searched []string
+	if c.wine() {
+		gameDir, prefix, searched = c.findWineInstall(home, options.Libraries, options.Prefix, reporter)
+	} else {
+		gameDir, prefix, searched = c.FindInstall(home, options.Libraries, reporter, options.Prefix != "")
+	}
 	if gameDir == "" {
 		reporter.Fail(strings.Join(c.notFoundLines(home, options.Libraries), "\n"), ExitNotFound)
 		return &Located{Searched: searched}
@@ -824,6 +887,9 @@ func (c *Command) notFoundLines(home string, extraLibraries []string) []string {
 	}
 	if c.native() {
 		return c.windowsNotFoundLines(extraLibraries, lines)
+	}
+	if c.wine() {
+		return c.wineNotFoundLines(home, extraLibraries, lines)
 	}
 	lines = append(lines, "", "Steam clients considered:")
 	candidates := steam.ClientCandidates(home, "", nil)
@@ -880,6 +946,29 @@ func (c *Command) notFoundLines(home string, extraLibraries []string) []string {
 		for _, candidate := range rejected {
 			lines = append(lines, fmt.Sprintf("  - %s: %s", candidate.Path, candidate.Reason))
 		}
+	}
+	return lines
+}
+
+// wineNotFoundLines says where a Mac run looked: Steam inside a Wine prefix,
+// plain Wine before CrossOver, and the libraries those name.
+func (c *Command) wineNotFoundLines(home string, extraLibraries, header []string) []string {
+	lines := append([]string{}, header...)
+	lines = append(lines, "", "Megabonk runs as the Windows build under Wine. Steam is looked for inside a Wine prefix, under ~/.local/share/megabonk/wine, ~/.wine and any CrossOver bottle.")
+	clients := steam.WineClientRoots(home)
+	if len(clients) == 0 {
+		return append(lines, "No Steam client was found in a Wine prefix — pass --prefix <the Wine prefix folder that holds drive_c>, or --game-dir.")
+	}
+	for _, client := range clients {
+		lines = append(lines, "  - Steam client: "+client.Root)
+	}
+	roots := steam.LibraryRoots(clients, nil, expandAll(extraLibraries), nil, false)
+	if len(roots) == 0 {
+		return append(lines, "Libraries searched: none — pass --library <path> to add one")
+	}
+	lines = append(lines, "Libraries searched:")
+	for _, root := range roots {
+		lines = append(lines, "  - "+root.Path)
 	}
 	return lines
 }

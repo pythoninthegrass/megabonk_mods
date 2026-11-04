@@ -72,6 +72,8 @@ var CommandRunner = runCommand
 type Client struct {
 	Kind string
 	Root string
+	// Prefix is the Wine prefix a wine or crossover client lives in; empty otherwise.
+	Prefix string
 }
 
 // Library is a Steam library and how the installer came to consider it.
@@ -301,6 +303,9 @@ func LibraryFolders(client Client) []string {
 	paths := vdf.LibraryFolderPaths(data)
 	for index, path := range paths {
 		paths[index] = slashDrivePath(path)
+		if client.Prefix != "" {
+			paths[index] = winePath(client.Prefix, paths[index])
+		}
 	}
 	return paths
 }

@@ -155,6 +155,7 @@ func runAs(t *testing.T, configure func(*Command), runner func([]string, time.Du
 	t.Helper()
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
 	command := NewCommand(stdout, stderr)
+	command.GOOS = "linux"
 	command.Env = map[string]string{"HOME": t.TempDir(), "MEGABONK_NON_INTERACTIVE": "1"}
 	if configure != nil {
 		configure(command)
@@ -295,6 +296,21 @@ func TestWindowsDefaultsThePackageToTheExecutableFolder(t *testing.T) {
 		c.GOOS = "windows"
 		c.Executable = func() (string, error) { return filepath.Join(packageDir, "install.exe"), nil }
 	}, nil, "--game-dir", game, "--no-gui")
+	if got.exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+	if !ppath.Exists(filepath.Join(game, "Mods", "MegabonkLevels.Mod.dll")) {
+		t.Errorf("the mod was not installed from the executable's folder")
+	}
+}
+
+func TestMacDefaultsThePackageToTheExecutableFolder(t *testing.T) {
+	packageDir, home := makePackage(t), t.TempDir()
+	_, game := makeWineGame(t, filepath.Join(home, ".local", "share", "megabonk", "wine"))
+	got := runAs(t, func(c *Command) {
+		macCommand(home, nil)(c)
+		c.Executable = func() (string, error) { return filepath.Join(packageDir, "megabonk-installer"), nil }
+	}, nil, "--no-gui")
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
@@ -491,6 +507,7 @@ func findInstall(t *testing.T, home string, prefixChosen bool) (string, string, 
 		steam.CommandRunner = restoreRunner
 	})
 	command := NewCommand(stdout, stderr)
+	command.GOOS = "linux"
 	gameDir, prefix, _ := command.FindInstall(home, nil, &Reporter{Stdout: stdout, Stderr: stderr}, prefixChosen)
 	return gameDir, prefix, stdout, stderr
 }
@@ -788,6 +805,7 @@ func windowed(t *testing.T, driver func(title string, work func(ui.Progress) int
 	t.Helper()
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
 	command := NewCommand(stdout, stderr)
+	command.GOOS = "linux"
 	command.Env = map[string]string{"HOME": t.TempDir(), "DISPLAY": ":0"}
 	command.StartWindow = driver
 	restoreRoots := MountRoots
@@ -918,6 +936,7 @@ func TestCancelledInstallThroughTheWindowReportsRollback(t *testing.T) {
 
 func TestPlanOptionsTakeTheCommandLine(t *testing.T) {
 	command := NewCommand(&bytes.Buffer{}, &bytes.Buffer{})
+	command.GOOS = "linux"
 	command.Env = map[string]string{"HOME": "/home/user"}
 	options, err := ParseFlags([]string{
 		"--package", "p", "--game-dir", "g", "--dotnet-in", "gamedir",
@@ -1130,6 +1149,147 @@ func TestWindowsNotFoundSaysWhereItLookedAndWhatToDo(t *testing.T) {
 	for _, unwanted := range []string{"flatpak", ".var", ".local/share"} {
 		if strings.Contains(strings.ToLower(stderr), unwanted) {
 			t.Errorf("a Windows message should not mention %q:\n%s", unwanted, stderr)
+		}
+	}
+}
+
+func macCommand(home string, env map[string]string) func(*Command) {
+	return func(command *Command) {
+		command.GOOS = "darwin"
+		command.Env["HOME"] = home
+		command.Env["PATH"] = ""
+		for key, value := range env {
+			command.Env[key] = value
+		}
+	}
+}
+
+// makeWineGame builds a Steam client holding Megabonk inside a Wine prefix and
+// returns the prefix and the game directory.
+func makeWineGame(t *testing.T, prefix string) (string, string) {
+	t.Helper()
+	client := filepath.Join(prefix, "drive_c", "Program Files (x86)", "Steam")
+	game := filepath.Join(client, "steamapps", "common", steam.GameName)
+	if err := os.MkdirAll(filepath.Join(game, steam.DataDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(game, steam.GameExe), "MZ")
+	write(t, filepath.Join(client, "steamapps", "libraryfolders.vdf"),
+		"\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"C:\\\\Program Files (x86)\\\\Steam\"\n\t}\n}\n")
+	return prefix, game
+}
+
+func TestMacDiscoversTheWinePrefixAndInstalls(t *testing.T) {
+	packageDir, home := makePackage(t), t.TempDir()
+	prefix, game := makeWineGame(t, filepath.Join(home, ".local", "share", "megabonk", "wine"))
+	got := runAs(t, macCommand(home, nil), nil, "--package", packageDir, "--no-gui")
+	if got.exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+	if !ppath.IsFile(filepath.Join(game, "MelonLoader", "Dependencies", "dotnet", proton.RuntimeMarkerName)) {
+		t.Errorf("the runtime did not land under MelonLoader/Dependencies/dotnet:\n%s", got.stdout)
+	}
+	if value, found := proton.ReadDllOverride(filepath.ToSlash(prefix), proton.DLLName, ""); !found || value != proton.DLLValue {
+		t.Errorf("version.dll override = %q, found = %v", value, found)
+	}
+	for _, unwanted := range []string{"%command%", "DOTNET_ROOT", "Launch Options", "Proton"} {
+		if strings.Contains(got.stdout.String()+got.stderr.String(), unwanted) {
+			t.Errorf("a Wine run should not mention %q:\n%s\n%s", unwanted, got.stdout, got.stderr)
+		}
+	}
+	again := runAs(t, macCommand(home, nil), nil, "--package", packageDir, "--no-gui")
+	if again.exit != ExitOK || !strings.Contains(again.stdout.String(), "nothing to do") {
+		t.Errorf("rerun exit = %d\n%s\n%s", again.exit, again.stdout, again.stderr)
+	}
+}
+
+func TestMacPrefersPlainWineOverCrossOver(t *testing.T) {
+	packageDir, home := makePackage(t), t.TempDir()
+	_, plainGame := makeWineGame(t, filepath.Join(home, ".local", "share", "megabonk", "wine"))
+	_, bottleGame := makeWineGame(t, filepath.Join(home, "Library", "Application Support", "CrossOver", "Bottles", "Steam"))
+	got := runAs(t, macCommand(home, nil), nil, "--package", packageDir, "--no-gui")
+	if got.exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+	if content.LoadRecord(filepath.ToSlash(plainGame)) == nil || content.LoadRecord(filepath.ToSlash(bottleGame)) != nil {
+		t.Errorf("the install should have gone to the plain Wine prefix only")
+	}
+}
+
+func TestMacCrossOverBottleIsUsedWhenThereIsNoPlainWine(t *testing.T) {
+	packageDir, home := makePackage(t), t.TempDir()
+	_, game := makeWineGame(t, filepath.Join(home, "Library", "Application Support", "CrossOver", "Bottles", "Steam"))
+	got := runAs(t, macCommand(home, nil), nil, "--package", packageDir, "--no-gui")
+	if got.exit != ExitOK || content.LoadRecord(filepath.ToSlash(game)) == nil {
+		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+}
+
+func TestMacGameDirInsideAPrefixDerivesThePrefix(t *testing.T) {
+	packageDir, base := makePackage(t), t.TempDir()
+	prefix, game := makeWineGame(t, filepath.Join(base, "elsewhere", "wine"))
+	got := runAs(t, macCommand(t.TempDir(), nil), nil, "--package", packageDir, "--game-dir", game, "--no-gui")
+	if got.exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+	if value, found := proton.ReadDllOverride(filepath.ToSlash(prefix), proton.DLLName, ""); !found || value != proton.DLLValue {
+		t.Errorf("version.dll override = %q, found = %v", value, found)
+	}
+}
+
+func TestMacPrefixFlagFindsTheGameInAnUnusualPrefix(t *testing.T) {
+	packageDir, base := makePackage(t), t.TempDir()
+	prefix, game := makeWineGame(t, filepath.Join(base, "my-prefix"))
+	got := runAs(t, macCommand(t.TempDir(), nil), nil, "--package", packageDir, "--prefix", prefix, "--no-gui")
+	if got.exit != ExitOK || content.LoadRecord(filepath.ToSlash(game)) == nil {
+		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+}
+
+func TestMacGameDirOutsideAPrefixAsksForOne(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	got := runAs(t, macCommand(t.TempDir(), nil), nil, "--package", packageDir, "--game-dir", game, "--no-gui")
+	if got.exit != ExitError || !strings.Contains(got.stderr.String(), "--prefix") {
+		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+	if content.LoadRecord(filepath.ToSlash(game)) != nil {
+		t.Error("nothing should be installed without a prefix")
+	}
+}
+
+func TestMacUninstallRestoresAVanillaGameAndClearsTheOverride(t *testing.T) {
+	packageDir, home := makePackage(t), t.TempDir()
+	prefix, game := makeWineGame(t, filepath.Join(home, ".local", "share", "megabonk", "wine"))
+	if got := runAs(t, macCommand(home, nil), nil, "--package", packageDir, "--no-gui"); got.exit != ExitOK {
+		t.Fatalf("install exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+	got := runAs(t, macCommand(home, nil), nil, "--uninstall", "--no-gui")
+	if got.exit != ExitOK {
+		t.Fatalf("uninstall exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
+	}
+	if _, found := proton.ReadDllOverride(filepath.ToSlash(prefix), proton.DLLName, ""); found {
+		t.Error("the version.dll override survived uninstall")
+	}
+	if ppath.Exists(filepath.Join(game, "MelonLoader")) {
+		t.Error("MelonLoader survived uninstall")
+	}
+}
+
+func TestMacNotFoundNamesThePrefixesItTriedAndTheFlag(t *testing.T) {
+	packageDir := makePackage(t)
+	got := runAs(t, macCommand(t.TempDir(), nil), nil, "--package", packageDir, "--no-gui")
+	if got.exit != ExitNotFound {
+		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
+	}
+	stderr := got.stderr.String()
+	for _, want := range []string{"--game-dir", "--prefix", "Wine"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr should contain %q:\n%s", want, stderr)
+		}
+	}
+	for _, unwanted := range []string{"flatpak", "Proton"} {
+		if strings.Contains(strings.ToLower(stderr), strings.ToLower(unwanted)) {
+			t.Errorf("a Mac message should not mention %q:\n%s", unwanted, stderr)
 		}
 	}
 }

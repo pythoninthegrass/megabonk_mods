@@ -812,3 +812,97 @@ func TestUninstallKeepsWhatAPlayerPutInPluginsAndUserData(t *testing.T) {
 }
 
 func ppathIsFile(path string) bool { return ppath.IsFile(ppath.Normalize(filepath.ToSlash(path))) }
+
+func wineOptions(game, prefix string) Options {
+	return Options{Game: game, Prefix: prefix, RuntimeMode: RuntimeModeWine, DllOverride: "auto", WineOverride: "auto"}
+}
+
+func TestWineModePlacesTheRuntimeUnderTheLoaderAndOverridesTheShim(t *testing.T) {
+	packageDir, game, prefix := makePackage(t), makeGame(t), makePrefix(t)
+	built, err := BuildPlan(packageDir, wineOptions(game, prefix))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.ToSlash(filepath.Join(game, "MelonLoader", "Dependencies", "dotnet"))
+	if built.RuntimeMode != RuntimeModeWine || built.RuntimeTarget != want {
+		t.Errorf("mode = %q, target = %q, want %q", built.RuntimeMode, built.RuntimeTarget, want)
+	}
+	if built.LaunchOption != nil || !built.DllOverride || len(built.Warnings) != 0 {
+		t.Errorf("launch = %v, override = %v, warnings = %v", built.LaunchOption, built.DllOverride, built.Warnings)
+	}
+	if countKind(built.Actions, "enable-dll-override") != 1 {
+		t.Errorf("actions = %v", kinds(built.Actions))
+	}
+}
+
+func TestWineModeNeedsAPrefix(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	if _, err := BuildPlan(packageDir, wineOptions(game, "")); err == nil || !strings.Contains(err.Error(), "--prefix") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestWineInstallIsANoopOnRerunAndUninstallClearsTheOverride(t *testing.T) {
+	packageDir, game, prefix := makePackage(t), makeGame(t), makePrefix(t)
+	opts := wineOptions(game, prefix)
+	built, err := BuildPlan(packageDir, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ApplyPlan(built, nil); err != nil {
+		t.Fatal(err)
+	}
+	if value, found := proton.ReadDllOverride(ppath.Normalize(prefix), proton.DLLName, ""); !found || value != proton.DLLValue {
+		t.Fatalf("override = %q, found = %v", value, found)
+	}
+	again, err := BuildPlan(packageDir, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !again.IsNoop() {
+		t.Fatalf("rerun actions = %v", kinds(again.Actions))
+	}
+	record := content.LoadRecord(ppath.Normalize(game))
+	if record == nil || record.Runtime == nil || record.Runtime.Mode != RuntimeModeWine || record.DllOverride == nil || record.DllOverride.Prefix == nil {
+		t.Fatalf("record = %+v", record)
+	}
+	if _, err := Uninstall(game, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, found := proton.ReadDllOverride(ppath.Normalize(prefix), proton.DLLName, ""); found {
+		t.Error("the version.dll override survived uninstall")
+	}
+	entries, err := os.ReadDir(game)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	if want := []string{"Megabonk.exe", "Megabonk_Data"}; !reflect.DeepEqual(names, want) {
+		t.Errorf("game dir after uninstall = %v, want %v", names, want)
+	}
+}
+
+func TestWineModeRepairsAWipedRuntimeAndItsOverrideTogether(t *testing.T) {
+	packageDir, game, prefix := makePackage(t), makeGame(t), makePrefix(t)
+	opts := wineOptions(game, prefix)
+	built, err := BuildPlan(packageDir, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ApplyPlan(built, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(game, "MelonLoader", "Dependencies", "dotnet")); err != nil {
+		t.Fatal(err)
+	}
+	repair, err := BuildPlan(packageDir, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := kinds(repair.Actions); !reflect.DeepEqual(got, []string{"install-runtime", "enable-dll-override"}) {
+		t.Errorf("repair = %v", got)
+	}
+}

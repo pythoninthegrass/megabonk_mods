@@ -26,11 +26,14 @@ import (
 
 // RuntimeModePrefix puts .NET inside the Proton prefix; RuntimeModeGameDir puts
 // it beside the game and needs a Steam launch option; RuntimeModeNative is a
-// Windows install, where MelonLoader finds the runtime under its own directory.
+// Windows install, where MelonLoader finds the runtime under its own directory;
+// RuntimeModeWine is that same placement inside a Wine prefix, which also needs
+// the version.dll override.
 const (
 	RuntimeModePrefix  = "prefix"
 	RuntimeModeGameDir = "gamedir"
 	RuntimeModeNative  = "native"
+	RuntimeModeWine    = "wine"
 
 	versionMarkerFile = "MelonLoader/net6/MelonLoader.dll"
 	shimName          = "version.dll"
@@ -120,6 +123,7 @@ type Plan struct {
 	LaunchOption     *string
 	Warnings         []string
 	WineOverrideMode string
+	WineBin          string
 	ForcedTool       string
 }
 
@@ -168,9 +172,12 @@ type Options struct {
 	DllOverride  string
 	WineOverride string
 	ForcedTool   string
-	Level        string
-	Pack         string
-	Verify       bool
+	// WineBin is the wine binary that edits a Wine-mode prefix's registry; empty
+	// falls back to editing user.reg.
+	WineBin string
+	Level   string
+	Pack    string
+	Verify  bool
 }
 
 // BuildPlan compares the package against the game and returns the steps still
@@ -202,8 +209,11 @@ func BuildPlan(packageDir string, options Options) (*Plan, error) {
 	if mode == "" {
 		mode = RuntimeModePrefix
 	}
-	if mode != RuntimeModePrefix && mode != RuntimeModeGameDir && mode != RuntimeModeNative {
-		return nil, fail("unknown runtime mode %s (expected %s, %s, %s)", strconv.Quote(mode), RuntimeModePrefix, RuntimeModeGameDir, RuntimeModeNative)
+	if mode != RuntimeModePrefix && mode != RuntimeModeGameDir && mode != RuntimeModeNative && mode != RuntimeModeWine {
+		return nil, fail("unknown runtime mode %s (expected %s, %s, %s, %s)", strconv.Quote(mode), RuntimeModePrefix, RuntimeModeGameDir, RuntimeModeNative, RuntimeModeWine)
+	}
+	if mode == RuntimeModeWine && options.Prefix == "" {
+		return nil, fail("no Wine prefix found: pass --prefix <path to the directory that holds drive_c>")
 	}
 
 	prefix := options.Prefix
@@ -236,7 +246,7 @@ func BuildPlan(packageDir string, options Options) (*Plan, error) {
 	switch mode {
 	case RuntimeModePrefix:
 		runtimeTarget = proton.RuntimeTarget(prefix)
-	case RuntimeModeNative:
+	case RuntimeModeNative, RuntimeModeWine:
 		runtimeTarget = content.NativeRuntimePath(game)
 	}
 	runtimeMissing := !proton.RuntimeInstalled(runtimeTarget, dotnet.Version)
@@ -268,7 +278,7 @@ func BuildPlan(packageDir string, options Options) (*Plan, error) {
 		})
 	}
 
-	if wantOverride && prefix != "" && mode == RuntimeModePrefix {
+	if wantOverride && prefix != "" && usesPrefix(mode) {
 		current, found := proton.ReadDllOverride(prefix, proton.DLLName, "")
 		if !found || current != proton.DLLValue || runtimeMissing {
 			actions = append(actions, Action{
@@ -307,13 +317,19 @@ func BuildPlan(packageDir string, options Options) (*Plan, error) {
 		Prefix:           prefix,
 		RuntimeMode:      mode,
 		RuntimeTarget:    runtimeTarget,
-		DllOverride:      wantOverride && mode == RuntimeModePrefix,
+		DllOverride:      wantOverride && usesPrefix(mode),
 		Actions:          actions,
 		LaunchOption:     launchOption,
 		Warnings:         warnings,
 		WineOverrideMode: options.WineOverride,
+		WineBin:          options.WineBin,
 		ForcedTool:       options.ForcedTool,
 	}, nil
+}
+
+// usesPrefix reports the modes that write the version.dll override into a prefix.
+func usesPrefix(mode string) bool {
+	return mode == RuntimeModePrefix || mode == RuntimeModeWine
 }
 
 // overrideWanted mirrors Python's `dll_override not in (False, 0, "off",
@@ -585,7 +601,7 @@ func execute(action Action, built *Plan) (*string, error) {
 			return nil, err
 		}
 	case "enable-dll-override":
-		wine, err := wineFor(action.Path, built.WineOverrideMode, built.ForcedTool)
+		wine, err := built.wineBinary(action.Path)
 		if err != nil {
 			return nil, err
 		}
@@ -676,9 +692,19 @@ func resolveWith(path string, abs func(string) (string, error), toSlash func(str
 	}
 	target, err := eval(toSlash(absolute))
 	if err != nil {
-		return ppath.Normalize(toSlash(absolute))
+		return resolveMissing(ppath.Normalize(toSlash(absolute)), abs, toSlash, eval)
 	}
 	return toSlash(target)
+}
+
+// resolveMissing resolves symlinks in the part of a path that exists, then
+// appends the rest, so a file not yet written compares equal to its directory.
+func resolveMissing(path string, abs func(string) (string, error), toSlash func(string) string, eval func(string) (string, error)) string {
+	parent := ppath.Parent(path)
+	if parent == path || parent == "" || parent == "." {
+		return path
+	}
+	return ppath.Join(resolveWith(parent, abs, toSlash, eval), ppath.Name(path))
 }
 
 func extractMember(member *zip.File, game string) error {
@@ -707,6 +733,21 @@ func extractMember(member *zip.File, game string) error {
 		return err
 	}
 	return os.Chmod(native, member.Mode().Perm())
+}
+
+// wineBinary is the wine binary that edits the prefix's registry: the one the
+// caller named in Wine mode, otherwise the one found inside a Proton tool.
+func (p *Plan) wineBinary(prefix string) (string, error) {
+	if p.RuntimeMode != RuntimeModeWine {
+		return wineFor(prefix, p.WineOverrideMode, p.ForcedTool)
+	}
+	if p.WineOverrideMode == "off" {
+		return "", nil
+	}
+	if p.WineBin == "" && p.WineOverrideMode == "wine" {
+		return "", fail("no wine binary found; install Wine or set MEGABONK_WINE to its path")
+	}
+	return p.WineBin, nil
 }
 
 // wineFor finds the wine binary that can edit a prefix's registry. An empty
@@ -821,7 +862,7 @@ func writeRecord(built *Plan, overrideVia *string) error {
 	}
 
 	prefix := ""
-	if built.RuntimeMode == RuntimeModePrefix {
+	if usesPrefix(built.RuntimeMode) {
 		prefix = built.Prefix
 	}
 	applied := false
@@ -916,7 +957,7 @@ func writePartialRecord(built *Plan, done []Action, overrideVia *string) error {
 	}
 
 	prefix := ""
-	if built.RuntimeMode == RuntimeModePrefix {
+	if usesPrefix(built.RuntimeMode) {
 		prefix = built.Prefix
 	}
 	applied := false
