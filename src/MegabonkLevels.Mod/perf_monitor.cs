@@ -144,6 +144,8 @@ public static class PerfMonitor
                 $"state: window={_windowId} frames={_frames.Count} paused={_frames.PausedFrames} " +
                 $"enemies={LiveEnemyCount()} timeScale={Number(MyTime.timeScale)} held={_timeScaleHeld}");
         }
+
+        EnemyRenderCull.Apply();
     }
 
     // Wraps one mod tick so its own cost is attributable. The guard keeps a session without the harness free of timing calls.
@@ -217,6 +219,8 @@ public static class PerfMonitor
             ["paused"] = MyTime.paused,
             ["vSyncCount"] = QualitySettings.vSyncCount,
             ["targetFrameRate"] = Application.targetFrameRate,
+            ["renderCull"] = RenderCullNode(),
+            ["enemyPositionSum"] = Number(EnemyRenderCull.EnemyPositionSum()),
             ["ticks"] = TicksNode(),
             ["probes"] = ProbesNode(),
             ["probeAttach"] = PerfProbes.AttachNode(),
@@ -246,6 +250,8 @@ public static class PerfMonitor
             ["paused"] = MyTime.paused,
             ["heldTimeScale"] = _timeScaleHeld ? Number(_heldTimeScale) : null,
             ["defaultTimeScale"] = Number(DefaultTimeScale()),
+            ["renderCull"] = RenderCullNode(),
+            ["enemyPositionSum"] = Number(EnemyRenderCull.EnemyPositionSum()),
             ["ticks"] = TicksNode(),
             ["probes"] = ProbesNode(),
             ["probeAttach"] = PerfProbes.AttachNode(),
@@ -267,6 +273,12 @@ public static class PerfMonitor
             slot.Enabled = true;
         }
 
+        var restoredRenderers = EnemyRenderCull.Armed;
+        if (restoredRenderers)
+        {
+            EnemyRenderCull.Set(false, _logger);
+        }
+
         StartWindow();
         var restoredPlayer = _playerOverridden;
         if (_playerOverridden)
@@ -275,12 +287,13 @@ public static class PerfMonitor
             PlayerInvulnerability.Set(false, _logger);
         }
 
-        Log($"reset: timers cleared, timeScale={Number(MyTime.timeScale)}, all ticks and probes enabled, player grant restored={restoredPlayer}");
+        Log($"reset: timers cleared, timeScale={Number(MyTime.timeScale)}, all ticks and probes enabled, player grant restored={restoredPlayer}, render cull restored={restoredRenderers}");
         return new JsonObject
         {
             ["reset"] = true,
             ["timeScale"] = Number(MyTime.timeScale),
             ["playerGrantRestored"] = restoredPlayer,
+            ["renderCullRestored"] = restoredRenderers,
         };
     }
 
@@ -400,6 +413,10 @@ public static class PerfMonitor
             ["targetFrameRate"] = Application.targetFrameRate,
         };
     }
+
+    // The render-only control: enabled=false hides every enemy renderer (submission side) with AI, physics and animation running;
+    // enabled=true restores them. It is the A/B against count_240, so it lives beside the vsync and health controls.
+    public static JsonObject SetEnemyRenderers(bool enabled) => EnemyRenderCull.Set(enabled, _logger);
 
     public static JsonObject Toggle(string target, bool enabled)
     {
@@ -556,6 +573,12 @@ public static class PerfMonitor
 
         return Enum.TryParse(target, out tick);
     }
+
+    private static JsonObject RenderCullNode() => new()
+    {
+        ["armed"] = EnemyRenderCull.Armed,
+        ["renderersOff"] = EnemyRenderCull.DisabledCount,
+    };
 
     private static JsonArray TicksNode()
     {

@@ -68,29 +68,29 @@ def test_windows_are_one_per_count_plus_the_mod_controls_at_the_top_count() -> N
     plan = perf_sweep.plan([0, 40, 240])
 
     assert plan == [
-        ("count_0", 0),
-        ("count_40", 40),
-        ("count_240", 240),
-        ("count_240_modoff", 240),
-        ("count_240_reenabled", 240),
+        ("count_0", 0, None),
+        ("count_40", 40, None),
+        ("count_240", 240, None),
+        ("count_240_modoff", 240, None),
+        ("count_240_reenabled", 240, None),
     ]
 
 
 def test_the_controls_follow_the_largest_count_whatever_order_the_counts_came_in() -> None:
     plan = perf_sweep.plan([240, 40, 120])
 
-    assert [name for name, _ in plan] == [
+    assert [name for name, _, _ in plan] == [
         "count_240",
         "count_40",
         "count_120",
         "count_240_modoff",
         "count_240_reenabled",
     ]
-    assert [target for _, target in plan[-2:]] == [240, 240]
+    assert [target for _, target, _ in plan[-2:]] == [240, 240]
 
 
 def test_a_single_count_still_gets_its_own_controls() -> None:
-    assert [name for name, _ in perf_sweep.plan([80])] == [
+    assert [name for name, _, _ in perf_sweep.plan([80])] == [
         "count_80",
         "count_80_modoff",
         "count_80_reenabled",
@@ -186,3 +186,79 @@ def test_pair_captures_ignores_preexisting_files() -> None:
 
 def test_pair_captures_ignores_files_that_are_not_captures() -> None:
     assert perf_sweep.pair_captures({}, {"log.txt": 9.0, "frame1.rdc.tmp": 3.0}) == []
+
+
+# --- Render-only A/B: interleaved on/off arms per count, gated like every other window ---
+
+
+def test_render_arms_alternate_the_arms_within_every_repeat() -> None:
+    windows = perf_sweep.render_plan([0, 240], 3)
+
+    assert [name for name, _, _ in windows] == [
+        "count_0_rendon_r1",
+        "count_0_rendoff_r1",
+        "count_0_rendon_r2",
+        "count_0_rendoff_r2",
+        "count_0_rendon_r3",
+        "count_0_rendoff_r3",
+        "count_240_rendon_r1",
+        "count_240_rendoff_r1",
+        "count_240_rendon_r2",
+        "count_240_rendoff_r2",
+        "count_240_rendon_r3",
+        "count_240_rendoff_r3",
+    ]
+
+
+def test_render_arms_pair_every_count_with_both_arms() -> None:
+    windows = perf_sweep.render_plan([0, 120, 240], 2)
+
+    assert {(target, render_on) for _, target, render_on in windows} == {
+        (0, True),
+        (0, False),
+        (120, True),
+        (120, False),
+        (240, True),
+        (240, False),
+    }
+
+
+def test_render_arms_keep_the_toggles_untouched_outside_the_mode() -> None:
+    windows = perf_sweep.plan([0, 240])
+
+    assert all(render_on is None for _, _, render_on in windows)
+
+
+def test_a_cull_that_disabled_no_renderers_at_a_population_is_suspect() -> None:
+    reason = perf_sweep.render_suspect_reason({"_renderArm": "off", "_renderersOff": 0}, target=240)
+
+    assert reason == "the render cull disabled no renderers at 240 enemies"
+
+
+def test_a_cull_that_disabled_renderers_with_no_enemies_is_suspect() -> None:
+    reason = perf_sweep.render_suspect_reason({"_renderArm": "off", "_renderersOff": 5}, target=0)
+
+    assert reason == "the render cull disabled 5 renderers with no enemies alive"
+
+
+def test_healthy_render_arms_are_not_suspect() -> None:
+    assert perf_sweep.render_suspect_reason({"_renderArm": "off", "_renderersOff": 480}, target=240) is None
+    assert perf_sweep.render_suspect_reason({"_renderArm": "on", "_renderersOff": 0}, target=240) is None
+    assert perf_sweep.render_suspect_reason({"_renderArm": "off", "_renderersOff": 0}, target=0) is None
+
+
+def test_render_arms_needs_a_positive_repeat_count() -> None:
+    with pytest.raises(SystemExit):
+        perf_sweep.parse_args(["--render-arms", "0"])
+    with pytest.raises(SystemExit):
+        perf_sweep.parse_args(["--render-arms", "-1"])
+
+    assert perf_sweep.parse_args(["--render-arms", "3"]).render_arms == 3
+
+
+def test_render_arms_default_to_off_and_take_the_count_ladder() -> None:
+    assert perf_sweep.parse_args([]).render_arms is None
+
+
+def test_the_startup_warning_dismissal_is_an_enter_keypress_for_the_menu_driver() -> None:
+    assert perf_sweep.startup_dismiss_batch() == [["key", "KEY_ENTER"]]

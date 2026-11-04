@@ -13,6 +13,7 @@ public class PerfCommandTests
     [InlineData("vsync")]
     [InlineData("health")]
     [InlineData("census")]
+    [InlineData("render")]
     public void TryParse_Perf_AcceptsTheDocumentedActions(string action)
     {
         var json = $$"""{"command":"perf","action":"{{action}}","count":40,"value":2,"target":"killFloor","enabled":false}""";
@@ -67,6 +68,19 @@ public class PerfCommandTests
     }
 
     [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public void TryParse_Perf_RenderPreservesEnabled(string raw, bool expected)
+    {
+        var json = $$"""{"command":"perf","action":"render","enabled":{{raw}}}""";
+
+        Assert.True(HarnessCommand.TryParse(json, out var command, out _));
+
+        Assert.Equal("render", command.Perf.Action);
+        Assert.Equal(expected, command.Perf.Enabled);
+    }
+
+    [Theory]
     [InlineData("""{"command":"perf"}""")]
     [InlineData("""{"command":"perf","action":"profile"}""")]
     [InlineData("""{"command":"perf","action":"spawn"}""")]
@@ -80,6 +94,8 @@ public class PerfCommandTests
     [InlineData("""{"command":"perf","action":"toggle","target":"","enabled":true}""")]
     [InlineData("""{"command":"perf","action":"vsync"}""")]
     [InlineData("""{"command":"perf","action":"vsync","enabled":"off"}""")]
+    [InlineData("""{"command":"perf","action":"render"}""")]
+    [InlineData("""{"command":"perf","action":"render","enabled":"off"}""")]
     public void TryParse_Perf_RejectsInvalidArguments(string json)
     {
         Assert.False(HarnessCommand.TryParse(json, out _, out var error));

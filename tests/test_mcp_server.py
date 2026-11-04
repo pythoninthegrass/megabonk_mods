@@ -966,6 +966,25 @@ async def test_perf_tool_sends_toggle_target_and_enabled(tmp_path, monkeypatch) 
     assert seen == [{"command": "perf", "action": "toggle", "target": "EnemyManager.Update", "enabled": False}]
 
 
+async def test_perf_tool_sends_render_with_its_enabled_state(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def responder(payload):
+        seen.append(payload)
+        return ok_result(payload, {"renderersOff": 240, "enemies": 240})
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("perf", {"verb": "render", "enabled": False})
+    finally:
+        stop.set()
+    assert not result.is_error
+    assert seen == [{"command": "perf", "action": "render", "enabled": False}]
+    assert json.loads(result.content[0].text)["result"]["renderersOff"] == 240
+
+
 async def test_perf_tool_omits_arguments_a_verb_does_not_use(tmp_path, monkeypatch) -> None:
     harness = setup_harness(tmp_path, monkeypatch)
     seen = []
@@ -997,6 +1016,7 @@ async def test_perf_tool_omits_arguments_a_verb_does_not_use(tmp_path, monkeypat
         ({"verb": "timescale", "value": 25}, "value"),
         ({"verb": "toggle", "target": "KillFloor"}, "enabled"),
         ({"verb": "toggle", "enabled": False}, "target"),
+        ({"verb": "render"}, "enabled"),
         ({"verb": "health", "hp": 0}, "hp"),
         ({"verb": "health", "hp": 100000001}, "hp"),
     ],
