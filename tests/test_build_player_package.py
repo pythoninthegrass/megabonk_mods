@@ -476,6 +476,54 @@ class TestWindowsPackage:
             assert "install.exe" in archive.namelist()
 
 
+class TestMacosPackage:
+    @pytest.fixture
+    def binary(self, tmp_path):
+        path = tmp_path / "megabonk-installer-darwin-arm64"
+        path.write_bytes(b"Mach-O installer")
+        return path
+
+    def test_carries_the_installer_binary_with_no_extension(self, workspace, binary):
+        record = build(workspace, platform="macos", installer_binary=binary)
+        out = workspace["output"]
+        assert (out / "megabonk-installer").read_bytes() == b"Mach-O installer"
+        assert not (out / "install.sh").exists()
+        assert not (out / "install.exe").exists()
+        assert not (out / "installer").exists()
+        assert record.platform == "macos"
+
+    def test_manifest_loads_and_every_hash_verifies(self, workspace, binary):
+        build(workspace, platform="macos", installer_binary=binary)
+        assert load_manifest(workspace["output"] / "manifest.json").platform == "macos"
+        assert verify_package(workspace["output"]) == []
+
+    def test_a_missing_binary_is_a_missing_input(self, workspace, tmp_path):
+        with pytest.raises(module.MissingInput, match="installer:build"):
+            build(workspace, platform="macos", installer_binary=tmp_path / "absent")
+
+    def test_macos_needs_a_binary_argument(self, workspace):
+        with pytest.raises(BuildError, match="installer binary"):
+            build(workspace, platform="macos")
+
+    def test_zip_keeps_the_installer_executable(self, workspace, binary, capsys):
+        code = module.main(
+            [
+                "--platform", "macos",
+                "--installer-binary", str(binary),
+                "--output", str(workspace["output"]),
+                "--cache", str(workspace["cache"]),
+                "--mod-dir", str(workspace["mod"]),
+                "--mod-version", MOD_VERSION,
+            ]
+        )
+        assert code == 0
+        name = f"megabonk-levels-{MOD_VERSION}-ml{MELONLOADER_VERSION}-macos.zip"
+        assert name in capsys.readouterr().out
+        with zipfile.ZipFile(workspace["output"].parent / name) as archive:
+            info = archive.getinfo("megabonk-installer")
+            assert (info.external_attr >> 16) & 0o111 == 0o111
+
+
 class TestZip:
     def test_zip_is_deterministic(self, workspace, tmp_path):
         build(workspace)

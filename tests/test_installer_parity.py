@@ -43,10 +43,16 @@ def go_binary() -> Path:
     return INSTALLER_DIR / f"megabonk-installer-{system}-{machine}{suffix}"
 
 
-pytestmark = pytest.mark.skipif(
-    not go_binary().exists(),
-    reason=f"build the Go installer first: task installer:build (looking for {go_binary()})",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        not go_binary().exists(),
+        reason=f"build the Go installer first: task installer:build (looking for {go_binary()})",
+    ),
+    pytest.mark.skipif(
+        platform.system() == "Darwin",
+        reason="the scenarios are Linux-shaped (Steam and Proton); the Go binary takes its Wine path on macOS",
+    ),
+]
 
 
 # --------------------------------------------------------------------------- fixtures

@@ -1,4 +1,4 @@
-"""Build the player-facing package (Linux or Windows): installer, mod, MelonLoader, .NET, content."""
+"""Build the player-facing package (Linux, Windows or macOS): installer, mod, MelonLoader, .NET, content."""
 
 from __future__ import annotations
 
@@ -42,8 +42,9 @@ DOTNET_WINDOWS_URL = (
 DOTNET_WINDOWS_SHA256 = "c077ccc342c5571ceb7a3c06d1dfbc99b989ed5a6e0f3a0b0b450531c1259615"
 MELONLOADER_ASSET = "MelonLoader.x64.zip"
 
-PLATFORMS = ("linux", "windows")
-WINDOWS_INSTALLER_NAME = "install.exe"
+PLATFORMS = ("linux", "windows", "macos")
+INSTALLER_BINARY_NAMES = {"windows": "install.exe", "macos": "megabonk-installer"}
+EXECUTABLE_NAMES = {"install.sh", *INSTALLER_BINARY_NAMES.values()}
 
 MIN_PYTHON = (3, 11)
 _MIN_PYTHON_TEXT = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}"
@@ -269,12 +270,14 @@ def add_packs(staging: Path, bundles_dir: Path, packs_src: Path, platform: str, 
     return entries
 
 
-def add_windows_installer(staging: Path, binary: Path | None) -> None:
+def add_installer_binary(staging: Path, binary: Path | None, platform: str) -> None:
     if binary is None:
-        raise BuildError("A Windows package needs the installer binary: pass --installer-binary.")
+        raise BuildError(f"A {platform} package needs the installer binary: pass --installer-binary.")
     if not binary.is_file():
         raise MissingInput(f"No installer binary at {binary}. Run `task installer:build` first.")
-    shutil.copy2(binary, staging / WINDOWS_INSTALLER_NAME)
+    target = staging / INSTALLER_BINARY_NAMES[platform]
+    shutil.copy2(binary, target)
+    target.chmod(0o755)
 
 
 def add_installer(staging: Path) -> None:
@@ -318,8 +321,8 @@ def assemble(
     files += add_mod(staging, mod_source)
     files += add_levels(staging, levels_root, level_names)
     files += add_packs(staging, bundles_dir, packs_src, pack_platform, pack_names)
-    if platform == "windows":
-        add_windows_installer(staging, installer_binary)
+    if platform in INSTALLER_BINARY_NAMES:
+        add_installer_binary(staging, installer_binary, platform)
     else:
         add_installer(staging)
         (staging / "install.sh").write_text(install_sh_content(), encoding="utf-8")
@@ -406,7 +409,7 @@ def make_zip(package_dir: Path, zip_path: Path) -> Path:
     with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for member in members:
             info = zipfile.ZipInfo(member.relative_to(package_dir).as_posix(), date_time=(1980, 1, 1, 0, 0, 0))
-            info.external_attr = (0o755 if member.name == "install.sh" else 0o644) << 16
+            info.external_attr = (0o755 if member.name in EXECUTABLE_NAMES else 0o644) << 16
             info.compress_type = zipfile.ZIP_DEFLATED
             archive.writestr(info, member.read_bytes())
     temporary.rename(zip_path)
@@ -424,7 +427,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--installer-binary",
         type=Path,
         default=None,
-        help="The windows/amd64 installer (task installer:build); required for --platform windows.",
+        help="The windows/amd64 or darwin/arm64 installer (task installer:build); required for --platform windows and macos.",
     )
     parser.add_argument("--output", type=Path, default=REPO_ROOT / ".tools/player-package")
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE, help="Where vendor archives are kept.")
