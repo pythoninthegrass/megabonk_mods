@@ -19,11 +19,16 @@ public static class EnemyAnimationCull
     private static MelonLogger.Instance _logger;
     private static bool _armed;
     private static int _lastSeenEnemies = -1;
+    private static int _componentsFound;
     private static float _lastScanAt = float.NegativeInfinity;
 
     public static bool Armed => _armed;
 
     public static int StoppedCount => Tracked.Count;
+
+    // Distinct animation components seen under the live enemies at the last sweep: the denominator that says whether a
+    // cull that stopped nothing found nothing, or found components the game had already disabled.
+    public static int ComponentsFound => _componentsFound;
 
     // What the cull is holding off, by component type, so a reader can see whether an enemy carries an Animator at all.
     public static Dictionary<string, int> StoppedByType()
@@ -64,13 +69,14 @@ public static class EnemyAnimationCull
         }
 
         _lastSeenEnemies = -1;
-        _logger?.Msg($"Perf: animation: {(_armed ? "off, cull armed" : "on, cull disarmed")} enemies={enemies.Count} stopped={Tracked.Count}");
+        _logger?.Msg($"Perf: animation: {(_armed ? "off, cull armed" : "on, cull disarmed")} enemies={enemies.Count} stopped={Tracked.Count} found={_componentsFound}");
         return new JsonObject
         {
             ["enabled"] = animationEnabled,
             ["armed"] = _armed,
             ["enemies"] = enemies.Count,
             ["behavioursOff"] = Tracked.Count,
+            ["componentsFound"] = _componentsFound,
             ["byType"] = StoppedByTypeNode(),
         };
     }
@@ -134,6 +140,7 @@ public static class EnemyAnimationCull
         }
 
         PruneDestroyed();
+        _componentsFound = byId.Count;
         var manager = EnemyManager.Instance;
         _lastSeenEnemies = manager == null ? 0 : manager.numEnemies;
         _lastScanAt = Time.unscaledTime;

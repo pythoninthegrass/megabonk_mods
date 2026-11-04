@@ -625,6 +625,7 @@ public static class PerfMonitor
     {
         ["armed"] = EnemyPhysicsFreeze.Armed,
         ["rigidbodiesKinematic"] = EnemyPhysicsFreeze.FrozenCount,
+        ["rigidbodiesFound"] = EnemyPhysicsFreeze.BodiesFound,
         ["enemies"] = LiveEnemyCount(),
         ["suppresses"] = SuppressesNode(EnemyPhysicsFreezePlan.Suppresses),
         ["fidelity"] = EnemyPhysicsFreezePlan.FidelityNote(),
@@ -634,6 +635,7 @@ public static class PerfMonitor
     {
         ["armed"] = EnemyAnimationCull.Armed,
         ["behavioursOff"] = EnemyAnimationCull.StoppedCount,
+        ["componentsFound"] = EnemyAnimationCull.ComponentsFound,
         ["byType"] = EnemyAnimationCull.StoppedByTypeNode(),
         ["enemies"] = LiveEnemyCount(),
         ["suppresses"] = SuppressesNode(EnemyAnimationCullPlan.Suppresses),

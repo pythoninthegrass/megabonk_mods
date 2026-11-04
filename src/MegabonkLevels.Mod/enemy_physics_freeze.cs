@@ -16,11 +16,16 @@ public static class EnemyPhysicsFreeze
     private static MelonLogger.Instance _logger;
     private static bool _armed;
     private static int _lastSeenEnemies = -1;
+    private static int _bodiesFound;
     private static float _lastScanAt = float.NegativeInfinity;
 
     public static bool Armed => _armed;
 
     public static int FrozenCount => Tracked.Count;
+
+    // Distinct Rigidbodies seen under the live enemies at the last sweep: the denominator that says whether a freeze
+    // that took 137 bodies found 137 or found 240 and left half of them alone.
+    public static int BodiesFound => _bodiesFound;
 
     // The perf `physics` verb: enabled=false means the enemy's physics is not wanted, so the freeze arms and sweeps now;
     // enabled=true restores every body it froze and disarms.
@@ -39,13 +44,14 @@ public static class EnemyPhysicsFreeze
         }
 
         _lastSeenEnemies = -1;
-        _logger?.Msg($"Perf: physics: {(_armed ? "off, freeze armed" : "on, freeze disarmed")} enemies={enemies.Count} kinematic={Tracked.Count}");
+        _logger?.Msg($"Perf: physics: {(_armed ? "off, freeze armed" : "on, freeze disarmed")} enemies={enemies.Count} kinematic={Tracked.Count} found={_bodiesFound}");
         return new JsonObject
         {
             ["enabled"] = physicsEnabled,
             ["armed"] = _armed,
             ["enemies"] = enemies.Count,
             ["rigidbodiesKinematic"] = Tracked.Count,
+            ["rigidbodiesFound"] = _bodiesFound,
         };
     }
 
@@ -107,6 +113,7 @@ public static class EnemyPhysicsFreeze
         }
 
         PruneDestroyed();
+        _bodiesFound = byId.Count;
         var manager = EnemyManager.Instance;
         _lastSeenEnemies = manager == null ? 0 : manager.numEnemies;
         _lastScanAt = Time.unscaledTime;
@@ -134,6 +141,7 @@ public static class EnemyPhysicsFreeze
 
         _logger?.Msg($"Perf: physics: restored {restored} rigidbodies");
         Tracked.Clear();
+        _bodiesFound = 0;
     }
 
     private static void PruneDestroyed()
