@@ -2,6 +2,10 @@
 
 This file provides guidance to AI agents when working with code in this repository.
 
+## Quickstart
+
+- Launch the Warehouse level as Tony McZoom in editor mode: `task game:editor -- levels/thps.mblevel.json`. It needs `MEGABONK_DEV=true` in `.env` and the `thps` pack installed in the game; run `task mod:build` first after a code change. `levels/thps-editable.mblevel.json` is the piece-assembled editable variant. See [Loading the THPS level](#loading-the-thps-level).
+
 ## Linux and Flatpak Steam caveats
 
 Megabonk ships a native Linux build (`Megabonk.x86_64`); when running that build there is no Proton or Wine prefix and the CrossOver `version.dll` override does not apply. `compatdata/3405340` can stay empty. The caveats below concern that native-build setup, not the Windows build under Proton.
