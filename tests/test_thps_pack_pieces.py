@@ -110,7 +110,21 @@ def test_placements_record_finite_rotations_and_positive_scales() -> None:
 
 
 PREFAB_DIR = ROOT / "unity/pack-authoring/Assets/Thps"
-needs_prefabs = pytest.mark.skipif(not PREFAB_DIR.is_dir(), reason="piece prefabs are emitted by the Unity pack build")
+
+
+def has_piece_prefabs(directory: Path) -> bool:
+    return any(directory.glob("piece-*.prefab"))
+
+
+needs_prefabs = pytest.mark.skipif(not has_piece_prefabs(PREFAB_DIR), reason="piece prefabs are emitted by the Unity pack build")
+
+
+def test_stale_prefab_directory_with_only_the_warehouse_is_not_treated_as_built(tmp_path: Path) -> None:
+    assert not has_piece_prefabs(tmp_path)
+    (tmp_path / "Warehouse.prefab").write_text("")
+    assert not has_piece_prefabs(tmp_path)
+    (tmp_path / "piece-crane-hook.prefab").write_text("")
+    assert has_piece_prefabs(tmp_path)
 
 
 @needs_sidecar
