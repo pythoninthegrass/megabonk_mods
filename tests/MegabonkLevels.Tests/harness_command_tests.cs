@@ -774,6 +774,32 @@ public class HarnessCommandTests
     [Theory]
     [InlineData("true", true)]
     [InlineData("false", false)]
+    public void TryParse_Hud_ReadsTheEnabledFlag(string enabled, bool expected)
+    {
+        var ok = HarnessCommand.TryParse($$"""{"command":"hud","enabled":{{enabled}}}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.Hud, command.Kind);
+        Assert.Equal(expected, command.Enabled);
+        Assert.Null(command.Path);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"hud"}""")]
+    [InlineData("""{"command":"hud","enabled":"yes"}""")]
+    [InlineData("""{"command":"hud","enabled":null}""")]
+    public void TryParse_Hud_MissingOrNonBooleanEnabled_IsRejected(string json)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains("enabled", error);
+    }
+
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
     public void TryParse_CharacterScreen_ReadsTheEnabledFlag(string enabled, bool expected)
     {
         var ok = HarnessCommand.TryParse($$"""{"command":"character-screen","enabled":{{enabled}}}""", out var command, out var error);

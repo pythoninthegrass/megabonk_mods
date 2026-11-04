@@ -205,6 +205,9 @@ public static class DevHarness
             case HarnessCommandKind.Cells:
                 PositionLabel.SetCellLog(command.Enabled, _logger);
                 break;
+            case HarnessCommandKind.Hud:
+                HudControl.Set(command.Enabled, _logger);
+                break;
             case HarnessCommandKind.Editor:
                 if (command.Enabled && EditorMode.CurrentMapSupport() is { Supported: false } unsupported)
                 {

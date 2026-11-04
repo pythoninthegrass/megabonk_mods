@@ -284,6 +284,12 @@ async def resume() -> CallToolResult:
 
 
 @mcp.tool()
+async def hud(on: bool) -> CallToolResult:
+    """Show (on) or hide (off) the stock HUD and the position readout, so a screenshot is a clean photo-mode frame. World-space labels stay. Restores the alpha seen when it was hidden."""
+    return await _command(_harness(), run.build_hud_command(on), TIMEOUT)
+
+
+@mcp.tool()
 async def invulnerable(on: bool) -> CallToolResult:
     """Make the player survive enemy damage (on) or restore normal damage (off)."""
     return await _command(_harness(), run.build_command("invulnerable" if on else "vulnerable"), TIMEOUT)

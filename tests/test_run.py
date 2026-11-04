@@ -388,6 +388,22 @@ def test_heartbeat_payload_maps_the_state_to_the_wire_command() -> None:
     assert run.heartbeat_payload(run.parse_args(["heartbeat", "off"])) == {"command": "heartbeat", "enabled": False}
 
 
+def test_build_hud_command_carries_the_enabled_flag() -> None:
+    assert run.build_hud_command(True) == {"command": "hud", "enabled": True}
+    assert run.build_hud_command(False) == {"command": "hud", "enabled": False}
+
+
+def test_hud_payload_maps_the_state_to_the_wire_command() -> None:
+    assert run.hud_payload(run.parse_args(["hud", "on"])) == {"command": "hud", "enabled": True}
+    assert run.hud_payload(run.parse_args(["hud", "off"])) == {"command": "hud", "enabled": False}
+
+
+def test_parse_args_hud_rejects_other_states_and_a_missing_state() -> None:
+    for argv in (["hud"], ["hud", "maybe"]):
+        with pytest.raises(SystemExit):
+            run.parse_args(argv)
+
+
 def test_build_cells_command_carries_the_enabled_flag() -> None:
     assert run.build_cells_command(True) == {"command": "cells", "enabled": True}
     assert run.build_cells_command(False) == {"command": "cells", "enabled": False}

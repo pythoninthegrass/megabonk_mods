@@ -33,6 +33,7 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Apply 1–99 integer damage, preserving 1 HP by default | `{"command":"damage","amount":37,"nonlethal":true}` | `run.py damage 37` |
 | End the run at once by killing the player (ignores invulnerability) | `{"command":"kill"}` | `run.py kill` |
 | Run the game's own restart, the death screen's Retry button | `{"command":"restart-run"}` | `run.py restart-run` |
+| Show or hide the stock HUD and position readout | `{"command":"hud","enabled":false}` | `run.py hud <on\|off>` |
 | Allow or stop new enemy spawns | `{"command":"spawns","enabled":false}` | `run.py spawns <on\|off>` |
 | Check in-game Steamworks readiness | `{"command":"steam-ready"}` | `run.py steam-ready` |
 | Read the game's current state | `{"command":"state"}` | `run.py state` |
@@ -714,6 +715,12 @@ The lowest figure is the collider bottom where one was read and the pivot otherw
 It is off by default, because it adds a line every 5 seconds. Turn it on with `run.py heartbeat on` and off with `run.py heartbeat off`; both log `KillFloor: heartbeat on` or `off` and apply at once, including to a level that is already running. To start with it on, set `MEGABONK_KILL_FLOOR_HEARTBEAT` to `1` or `true` in the environment of the game process, for example in the `.env` that the taskfile reads or in front of the launch command. The variable is read once when the mod loads, and a later command overrides it. Verified in the game that the variable reaches the process under CrossOver.
 
 The kill line itself always carries the actor's id, world position and `lowest` point, with `(still present, attempt N)` appended when an actor stays in the game after a kill.
+
+## Clean screenshots
+
+`hud` with `enabled:false` (`run.py hud off`, MCP `hud(on=false)`) sets `UiManager.Instance.hudGroup.alpha` to 0, which hides the stock HUD (stage clock, XP and HP bars, minimap, quest box, weapon icons, the map title card) and the position readout, since that label is parented under the minimap. `enabled:true` puts back the alpha that was there when the HUD was first hidden, so a HUD that was already faded stays faded and a second `hud off` does not overwrite the saved value. Combine it with `camera`, `freeze` and `screenshot` for a photo-mode frame: `freeze`, `camera` to the pose, `hud off`, `screenshot`, then `hud on`, `camera --clear` and `resume`.
+
+World-space elements are not part of the HUD group and stay in the frame: the player's health bar under the character, enemy name labels, price tags, damage numbers and elite crown icons. The level-up, pause and death screens are separate UI and are not hidden either. An editor on/off round trip leaves the HUD hidden. A level load or new run builds a new HUD, so the HUD is visible again after a `load`; send `hud off` again after each.
 
 ## Position readout
 

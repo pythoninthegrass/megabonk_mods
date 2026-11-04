@@ -28,6 +28,7 @@ public enum HarnessCommandKind
     CharacterScreen,
     Heartbeat,
     Cells,
+    Hud,
     Editor,
     SteamReady,
     State,
@@ -232,6 +233,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseEnabledFlag(root, HarnessCommandKind.Heartbeat, out command, out error);
             case "cells":
                 return TryParseEnabledFlag(root, HarnessCommandKind.Cells, out command, out error);
+            case "hud":
+                return TryParseEnabledFlag(root, HarnessCommandKind.Hud, out command, out error);
             case "editor":
                 return TryParseEnabledFlag(root, HarnessCommandKind.Editor, out command, out error);
             case "key":
