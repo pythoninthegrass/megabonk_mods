@@ -4,7 +4,7 @@ title: macOS player installer
 status: In Progress
 assignee: []
 created_date: '2026-10-31T03:12:00Z'
-updated_date: '2026-11-04 00:48'
+updated_date: '2026-11-04 01:20'
 labels:
   - tooling
 dependencies: []
@@ -36,7 +36,7 @@ Until this lands, the player guide covers macOS only by pointing at the contribu
 - [x] #4 The prefix and game directory are discovered without asking the player to install the repo's toolchain, with an explicit override for a non-default location
 - [x] #5 Re-running is a no-op when everything is at the expected version, and repairs only what is missing or stale when it is not; uninstall restores a vanilla game
 - [x] #6 Optional inputs are honored: a chosen level file lands in UserData/Levels/, a pack bundle and its manifest land in UserData/LevelPacks/<id>/, and UserData/Levels/ is created when absent
-- [ ] #7 Progress shows through a GUI progress dialog in a desktop session and as plain text when run headless; a failure it cannot resolve exits nonzero with a message that says what to do
+- [x] #7 Progress shows through a GUI progress dialog in a desktop session and as plain text when run headless; a failure it cannot resolve exits nonzero with a message that says what to do
 - [x] #8 Verified end to end on the macOS machine, documented, and the player guide's macOS section becomes a real install route pointing at the installer rather than the contributor doc
 <!-- AC:END -->
 
@@ -65,6 +65,8 @@ Progress (uncommitted, all Go and Python tests green on the Mac): steam.WineClie
 Verified on mbp (Apple silicon, plain Wine 11, a copy of the working prefix with MelonLoader, the mod, UserData, UserLibs, version.dll and the override stripped): the Developer ID signed darwin/arm64 package installed 7 steps with --prefix (exit 0), re-run and --check reported nothing to do, uninstall returned the game directory to vanilla and removed the override, and a launch without --melonloader.agfoffline logged the vendored HostFXR path under MelonLoader/Dependencies/dotnet, Assembly Generation Successful, '1 Mod loaded.' and 'MegabonkLevels mod initialized.'. An earlier launch through scripts/launch_game.py showed a black screen: that launcher passes --melonloader.agfoffline, which refuses the Unity dependency download, so a fresh install fails with 'UnityDependencies_2023.2.22.zip does not Exist!'; recorded in docs/player-installer.md. A GUI run (Terminal in the desktop session, no --no-gui) opened the window, waited for the Install confirmation, and finished with exit 0. Default discovery of the plain-Wine prefix was checked with --dry-run on mbp, and the CrossOver bottle with --dry-run on mini.
 
 Still open: AC #2 (CrossOver's Wine was not run end to end, the licence is expired; the bottle path is covered by unit tests and a dry run), AC #7 (waiting on what the person at the screen saw of the progress bar and step labels), DoD #1 (task check still fails on this Mac with 2 failures in tests/test_thps_pack_pieces.py, unrelated to the installer and failing before this work too), and the notarization run (needs a notarytool keychain profile name). Pack bundles on macOS are covered by the shared plan tests, not a Mac run.
+
+Notarization: task package:macos now reads APPLE_SIGNING_IDENTITY and submits the zip through scripts/notarize_macos.py with either NOTARY_PROFILE or the APPLE_API_KEY / APPLE_API_ISSUER / APPLE_API_KEY_B64 variables the mt repo uses (the key is decoded to a 0600 temp file removed afterwards; tests cover both modes, cleanup on failure and the missing-credentials message). A real run with the Developer ID Application identity signed the installer (hardened runtime, verified) and Apple returned status Accepted for the macOS package zip. A ticket cannot be stapled to a bare binary or zip, so Gatekeeper checks online. Remaining open: AC #2 (CrossOver's Wine not run end to end) and DoD #1 (2 unrelated failures in tests/test_thps_pack_pieces.py).
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
