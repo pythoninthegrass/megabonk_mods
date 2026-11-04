@@ -50,6 +50,14 @@ task package:windows LEVELS="example-forest.mblevel.json" MOD_VERSION=0.4.2
 
 A player unzips the result and runs `install.exe`. It finds the game through Steam's registry key and `libraryfolders.vdf` (including libraries on other drives), installs the pinned MelonLoader, the mod and a user-scope .NET 6 runtime inside the game directory, shows a progress window and needs no administrator rights. Run it again to repair or `install.exe --uninstall` to restore a vanilla game. Details, including why the runtime goes in `MelonLoader/Dependencies/dotnet`, are in [player-installer.md](player-installer.md#windows-package).
 
+## Installing for players on macOS
+
+```sh
+task package:macos LEVELS="example-forest.mblevel.json" MOD_VERSION=0.4.2
+```
+
+Megabonk has no macOS build, so a Mac player runs the Windows build under Wine with Steam installed in the same prefix. A player unzips the result and runs `./megabonk-installer` from that folder; it needs no repo, no uv and no .NET SDK. It finds the game in a plain-Wine prefix first (`~/.local/share/megabonk/wine`, `~/.wine`) and in a CrossOver bottle only when no plain-Wine prefix holds it, and `--prefix <folder holding drive_c>` points it anywhere else. It installs the pinned MelonLoader, the mod, a .NET 6 runtime under `MelonLoader/Dependencies/dotnet` and the `version.dll` override in the prefix, shows a progress window, and `--uninstall` restores a vanilla game. The first launch downloads the Il2Cpp assembly generator's tools and takes a while under Wine; see [player-installer.md](player-installer.md#macos-package).
+
 ## Running and verifying the mod
 
 ```sh

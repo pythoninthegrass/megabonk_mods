@@ -153,6 +153,48 @@ On native Windows the installer finds Steam through `HKCU\Software\Valve\Steam` 
 
 The first launch downloads Cpp2IL from GitHub and takes about 35 seconds, so it needs network access. The Windows flow has been verified in a software-rendered Windows 11 guest, not on real hardware.
 
+## macOS package
+
+```sh
+task package:macos
+task package:macos LEVELS="example-forest.mblevel.json" PACKS=thps MOD_VERSION=0.4.2
+MACOS_SIGN_IDENTITY="<Developer ID Application identity>" NOTARY_PROFILE=<notarytool keychain profile> task package:macos
+```
+
+`task package:macos` builds the mod in Release and the `darwin/arm64` Go installer, then runs `scripts/build_player_package.py --platform macos --installer-binary <binary>`. The package has the same `vendor/`, `content/` and `manifest.json` layout as the others with `"platform": "macos"`, and carries a bare `megabonk-installer` binary with no extension and no wrapper script, mode 0755 in the zip. It lands in `.tools/player-package-macos/` (override with `OUTPUT_MACOS`), with `megabonk-levels-<mod>-ml<loader>-macos.zip` beside it. Only Apple silicon is built: no Intel Mac was available to test an `amd64` binary.
+
+Megabonk has no macOS build, so the player runs the **Windows build under Wine** and the installer works inside that prefix. It does not install Wine, create a prefix or log into Steam: Steam and Megabonk must already be installed in a Wine prefix, and the game started once. The player runs `./megabonk-installer` from the unzipped folder, which is the default `--package`.
+
+### Finding the game and the prefix
+
+Prefixes are searched in this order, and the first Steam library that holds Megabonk wins:
+
+1. `--prefix <folder holding drive_c>`, which limits the search to that prefix.
+2. Plain Wine: `~/.local/share/megabonk/wine`, then `~/.wine`.
+3. CrossOver bottles under `~/Library/Application Support/CrossOver/Bottles/`, in name order. CrossOver is commercial and is never required, so a bottle is only used when no plain-Wine prefix holds the game.
+
+In each prefix the installer reads Steam's `libraryfolders.vdf` from `drive_c/Program Files (x86)/Steam` and maps the Windows paths in it back to the Mac filesystem: `C:` is the prefix's `drive_c`, `Z:` is the filesystem root, and any other letter follows the prefix's `dosdevices/<letter>:` link. `--game-dir` skips discovery, and the prefix is then the folder above the `drive_c` in that path; a game directory outside any prefix needs `--prefix` as well, and the installer says so rather than guessing.
+
+### What it writes
+
+- MelonLoader and the mod files inside the game directory, as on every platform.
+- The vendored .NET 6 runtime in `MelonLoader/Dependencies/dotnet`, the path the loader itself uses, the same placement as native Windows. The launch then logs `Using HostFXR Path: C:\Program Files (x86)\Steam\steamapps\common\Megabonk\MelonLoader\Dependencies\dotnet\host\fxr\6.0.36\hostfxr.dll` and runs no runtime installer. No launch option and no `DOTNET_ROOT` are needed.
+- The `version.dll` = `native,builtin` override in the prefix. It goes in through a `wine` binary when one is found (`MEGABONK_WINE`, then `wine64` or `wine` on `PATH`, then a `Wine*.app` under `~/Applications` or `/Applications`), and otherwise by merging into the prefix's `user.reg`, which is also how CrossOver bottles are handled. The method used is recorded as `via` in the install record, and `--wine-override off` skips it.
+
+Re-running is a no-op at the expected version, a wiped runtime is repaired together with its override, and `--uninstall` removes the loader, the mod, the runtime, the override and what the loader generated at first launch, leaving a player's own plugins, preferences and levels.
+
+### First launch
+
+The first launch downloads Cpp2IL and the Unity dependencies and generates the Il2Cpp assemblies, so it needs network access and takes noticeably longer under Wine than elsewhere: about half a minute after the loader starts, during which the window stays black. The mod logs `MegabonkLevels mod initialized.` when it is done. The repo's own `scripts/launch_game.py` passes `--melonloader.agfoffline`, which forbids those downloads, so a fresh install launched that way fails with `UnityDependencies_<version>.zip does not Exist!` and a black screen for ever; start the first launch from Steam, or without the flag.
+
+### Signing
+
+`MACOS_SIGN_IDENTITY` names a Developer ID Application identity (`security find-identity -v -p codesigning`); the task then signs the installer with the hardened runtime before it is packed, and `codesign --verify --strict` checks it. `NOTARY_PROFILE` names a `notarytool` keychain profile; the task then submits the finished zip and waits for the verdict. Both come from the environment, never from the repo. A download through curl carries no quarantine attribute, so Gatekeeper does not assess it; a browser download does, and an unnotarized binary then needs a right-click Open. A notarization ticket cannot be stapled to a bare binary or a zip, so Gatekeeper checks Apple's service when it assesses one.
+
+### What is verified
+
+On an Apple silicon Mac with plain Wine 11 (Wine Devel), against a copy of a working prefix with MelonLoader, the mod, the override and every loader-generated folder removed: the signed package installed 7 steps (exit 0) with `--prefix`, a re-run and `--check` reported nothing to do, the game launched without `--melonloader.agfoffline` and logged `Using HostFXR Path:` under `MelonLoader/Dependencies/dotnet`, `Assembly Generation Successful!`, `1 Mod loaded.` and `MegabonkLevels mod initialized.`, and `--uninstall` returned the game directory to its vanilla contents and removed the override. Default discovery of the plain-Wine prefix was checked with `--dry-run`. CrossOver is covered by unit tests and a `--dry-run` against a real bottle only, since the licence on the test machines has expired. The same install started from Terminal in the desktop session, with no `--no-gui`, opened the progress window, waited for its Install confirmation, and completed with exit 0.
+
 ## Linux behaviour
 
 ### The Windows build only
