@@ -929,6 +929,8 @@ To check it, run `task thps` to install the level and pack, then run `relaunch(n
 
 The tooling scripts under `scripts/` are covered by pytest tests in `tests/` (the C# tests live in `tests/MegabonkLevels.Tests`). `task scripts:test` runs them, and `task test` runs them after the C# tests. `[tool.pytest.ini_options]` in `pyproject.toml` is the only pytest configuration: it sets `testpaths = tests`, puts `scripts/` on the import path with `pythonpath` so a test does `import game_paths` directly, and runs the suite in parallel across CPU cores through pytest-xdist (`addopts = -n auto`, ~24s serial becomes ~7s). Pass `-n 0` for a serial run, which keeps `--durations` and failures in file order; `-p no:xdist` does not work because `addopts` still passes `-n`. Async tests are marked `pytest.mark.anyio` and select the asyncio backend in `tests/conftest.py`.
 
+`task check` ends with `task lint`, which runs `markdownlint -c .markdownlint.jsonc .` and needs a `markdownlint` binary on `PATH`; a machine without one runs every test and then fails the check with `executable file not found`, so read the output above the final error before assuming a test broke. One of the two Apple silicon authoring machines is in that state, because it has only `markdownlint-cli2` installed through mise, which is a different command (no `-c` flag, and it ignores `.markdownlintignore`). On such a machine, run the lint step on one that has `markdownlint`.
+
 `pyproject.toml` declares runtime dependencies under `[project.dependencies]`
 and test and lint tooling under `[dependency-groups] dev`; `uv.lock` records
 their resolved versions. uv installs the `dev` group by default, so a test run
