@@ -76,32 +76,34 @@ tasks:
     desc: "Build the macOS player package and its distributable zip into .tools/player-package-macos"
     summary: |
       Usage: task package:macos [LEVELS=...] [PACKS=...] [MOD_VERSION=...] [OUTPUT_MACOS=...]
-             [MACOS_SIGN_IDENTITY=...] [NOTARY_PROFILE=...]
+             [APPLE_SIGNING_IDENTITY=...] [NOTARY_PROFILE=... | APPLE_API_KEY=... APPLE_API_ISSUER=... APPLE_API_KEY_B64=...]
 
       Assembles the download a Mac player unzips and runs megabonk-installer from: the
       mod DLL, the vendored MelonLoader and .NET 6 archives (the game is the Windows
       build under Wine), the darwin/arm64 Go installer (built by installer:build), and
       any levels or packs you name. Arguments and vendor caching match package:linux.
 
-      Set MACOS_SIGN_IDENTITY to a Developer ID Application identity name (see
+      Set APPLE_SIGNING_IDENTITY to a Developer ID Application identity name (see
       `security find-identity -v -p codesigning`) to codesign the installer with the
       hardened runtime before it is packed. Set NOTARY_PROFILE to a notarytool keychain
-      profile (`xcrun notarytool store-credentials`) to also submit the zip to Apple
-      and wait for the verdict. Both are read from the environment, never from the repo.
+      profile (`xcrun notarytool store-credentials`), or APPLE_API_KEY, APPLE_API_ISSUER
+      and APPLE_API_KEY_B64 (an App Store Connect API key, base64 of the .p8), to also
+      submit the zip to Apple and wait for the verdict. All are read from the
+      environment, never from the repo.
 
         task package:macos
-        MACOS_SIGN_IDENTITY="Developer ID Application: ..." NOTARY_PROFILE=megabonk task package:macos
+        APPLE_SIGNING_IDENTITY="Developer ID Application: ..." NOTARY_PROFILE=<profile> task package:macos
     cmds:
       - dotnet build src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj -c Release
       - task installer:build TARGETS=darwin/arm64
       - |-
         set -eu
-        if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
-          codesign --force --timestamp --options runtime --sign "$MACOS_SIGN_IDENTITY" \
+        if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+          codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" \
             .tools/installer/megabonk-installer-darwin-arm64
           codesign --verify --strict --verbose=2 .tools/installer/megabonk-installer-darwin-arm64
         else
-          echo "MACOS_SIGN_IDENTITY is not set: the installer is only ad-hoc signed" >&2
+          echo "APPLE_SIGNING_IDENTITY is not set: the installer is only ad-hoc signed" >&2
         fi
       - |-
         set -eu
@@ -118,9 +120,9 @@ tasks:
           "${args[@]}"
       - |-
         set -eu
-        if [ -n "${NOTARY_PROFILE:-}" ]; then
+        if [ -n "${NOTARY_PROFILE:-}" ] || [ -n "${APPLE_API_KEY:-}" ]; then
           zip="$(ls -t "$(dirname "{{.OUTPUT_MACOS}}")"/megabonk-levels-*-macos.zip | head -1)"
-          xcrun notarytool submit "$zip" --keychain-profile "$NOTARY_PROFILE" --wait
+          uv run scripts/notarize_macos.py "$zip"
         fi
 
   check:

@@ -158,7 +158,7 @@ The first launch downloads Cpp2IL from GitHub and takes about 35 seconds, so it 
 ```sh
 task package:macos
 task package:macos LEVELS="example-forest.mblevel.json" PACKS=thps MOD_VERSION=0.4.2
-MACOS_SIGN_IDENTITY="<Developer ID Application identity>" NOTARY_PROFILE=<notarytool keychain profile> task package:macos
+APPLE_SIGNING_IDENTITY="<Developer ID Application identity>" NOTARY_PROFILE=<notarytool keychain profile> task package:macos
 ```
 
 `task package:macos` builds the mod in Release and the `darwin/arm64` Go installer, then runs `scripts/build_player_package.py --platform macos --installer-binary <binary>`. The package has the same `vendor/`, `content/` and `manifest.json` layout as the others with `"platform": "macos"`, and carries a bare `megabonk-installer` binary with no extension and no wrapper script, mode 0755 in the zip. It lands in `.tools/player-package-macos/` (override with `OUTPUT_MACOS`), with `megabonk-levels-<mod>-ml<loader>-macos.zip` beside it. Only Apple silicon is built: no Intel Mac was available to test an `amd64` binary.
@@ -189,7 +189,7 @@ The first launch downloads Cpp2IL and the Unity dependencies and generates the I
 
 ### Signing
 
-`MACOS_SIGN_IDENTITY` names a Developer ID Application identity (`security find-identity -v -p codesigning`); the task then signs the installer with the hardened runtime before it is packed, and `codesign --verify --strict` checks it. `NOTARY_PROFILE` names a `notarytool` keychain profile; the task then submits the finished zip and waits for the verdict. Both come from the environment, never from the repo. A download through curl carries no quarantine attribute, so Gatekeeper does not assess it; a browser download does, and an unnotarized binary then needs a right-click Open. A notarization ticket cannot be stapled to a bare binary or a zip, so Gatekeeper checks Apple's service when it assesses one.
+`APPLE_SIGNING_IDENTITY` names a Developer ID Application identity (`security find-identity -v -p codesigning`); the task then signs the installer with the hardened runtime before it is packed, and `codesign --verify --strict` checks it. The finished zip is submitted through `scripts/notarize_macos.py`, which waits for the verdict, when `NOTARY_PROFILE` names a `notarytool` keychain profile or when `APPLE_API_KEY` (key id), `APPLE_API_ISSUER` and `APPLE_API_KEY_B64` (the base64 `.p8`) hold an App Store Connect API key; a profile wins over a key. The key is decoded to a mode 0600 temporary file that is deleted when the submission ends, so the same three variables serve a local run and a CI job. All of them come from the environment, never from the repo. A download through curl carries no quarantine attribute, so Gatekeeper does not assess it; a browser download does, and an unnotarized binary then needs a right-click Open. A notarization ticket cannot be stapled to a bare binary or a zip, so Gatekeeper checks Apple's service when it assesses one.
 
 ### What is verified
 
