@@ -3,9 +3,10 @@ id: TASK-037.01
 title: >-
   Split the per-enemy engine cost into AI, physics and animation with harness
   controls
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-04 06:31'
+updated_date: '2026-11-04 18:13'
 labels: []
 dependencies:
   - TASK-037
@@ -39,18 +40,24 @@ Measurement rules that apply, all of them already paid for: run legs with --tier
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A harness control makes the live enemies' Rigidbodies kinematic and another stops their animator/animated-mesh updates; each restores exactly what it changed, status and report carry their state, and perf reset restores both
-- [ ] #2 Decision logic lives in pure plan classes with unit tests, following EnemyRenderCullPlan (no Unity APIs in the decision layer); the sweep gains arms for each control alongside --render-arms
-- [ ] #3 Each control reports its fidelity in-game: enemy count with it armed against unarmed, position-sum drift, and a written statement of what else it suppresses (contacts and broadphase for kinematic, AI reach for animation)
-- [ ] #4 A gated-window A/B per control at 0 and 240 enemies, arms interleaved with the leading arm flipped each repeat, at least 3 repeats per arm, tier 4, seed 20261102, every window pausedFrames == 0 and the player within 8 units of the fixed point at window start
-- [ ] #5 Each arm reported as a range with pair deltas and the ~0.8 ms session offset stated, any delta below it labelled inconclusive, and each control's own ms/frame reported
-- [ ] #6 docs/performance.md's open item is replaced by the measured AI-versus-physics-versus-animation split, or by the bounded result plus why it is bounded; no new Harmony patches beyond the existing probe set
+- [x] #1 A harness control makes the live enemies' Rigidbodies kinematic and another stops their animator/animated-mesh updates; each restores exactly what it changed, status and report carry their state, and perf reset restores both
+- [x] #2 Decision logic lives in pure plan classes with unit tests, following EnemyRenderCullPlan (no Unity APIs in the decision layer); the sweep gains arms for each control alongside --render-arms
+- [x] #3 Each control reports its fidelity in-game: enemy count with it armed against unarmed, position-sum drift, and a written statement of what else it suppresses (contacts and broadphase for kinematic, AI reach for animation)
+- [x] #4 A gated-window A/B per control at 0 and 240 enemies, arms interleaved with the leading arm flipped each repeat, at least 3 repeats per arm, tier 4, seed 20261102, every window pausedFrames == 0 and the player within 8 units of the fixed point at window start
+- [x] #5 Each arm reported as a range with pair deltas and the ~0.8 ms session offset stated, any delta below it labelled inconclusive, and each control's own ms/frame reported
+- [x] #6 docs/performance.md's open item is replaced by the measured AI-versus-physics-versus-animation split, or by the bounded result plus why it is bounded; no new Harmony patches beyond the existing probe set
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added `perf physics` (Rigidbody.isKinematic) and `perf animation` (AnimatedMesh behaviour disable) controls beside `perf render`, each with a pure plan class and unit tests, its own ungated tick, status/report fields and restore on `perf reset`, swept by `--physics-arms` and `--anim-arms`. Measured at tier 4, seed 20261102, 0 and 240 enemies, 3 interleaved repeats per arm: taking the swarm out of the solver is worth 0.88-1.32 ms/frame at 240 enemies (0.90-1.34 with the arm's own rescan added back), the only engine figure that clears the ~0.8 ms session offset; animation is bounded at ~0.06 ms/frame by its own probe (the A/B is inconclusive because the rescan costs the same); render submission stays <=0.7 ms. Fidelity confounds are recorded in docs/performance.md (kinematic bodies also lose contacts, broadphase and velocity-driven movement; position-sum drift mean +980 vs +217). No new Harmony patches. task check passes.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
