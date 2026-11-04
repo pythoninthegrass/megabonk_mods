@@ -1,10 +1,10 @@
 ---
 id: TASK-006.05
 title: 'Level thumbnails from sidecar jpg/png files, starting with the Warehouse'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-02T04:51:00Z'
-updated_date: '2026-11-04 03:57'
+updated_date: '2026-11-04 04:03'
 labels: []
 dependencies: []
 parent_task_id: TASK-006
@@ -53,12 +53,20 @@ Also observed: the native Map Selection tile is about 1.4:1, not wide, so the 16
 Resolved the LoadImage blocker with NativeImageLoader: calls icall UnityEngine.ImageConversion::LoadImage_Injected via IL2CPP.ResolveICall with a pinned buffer in a 16-byte span wrapper and the native texture pointer from Object.m_CachedPtr (offset 0x10). The IL2CPP object pointer crashes the game at startup because InitButtons runs when the main menu is built. PNG and JPEG both verified in game (.tools/evidence/warehouse-map-selection-thumbnail-2.png, warehouse-map-selection-jpg.png). levels/thps.png is a 1080x720 center crop to match the roughly 3:2 tile. Unused ImageConversionModule reference removed.
 
 task check: C# suite 1795 passed; pytest has 2 failures in tests/test_thps_pack_pieces.py (prefab piece set) that also fail with these changes stashed, so DoD #1 is left unchecked. Not committed yet.
+
+Closed: committed as 8662772 and pushed. DoD #1 was checked on Lance's call that the two failing pytest tests (TASK-039) are unrelated to this feature; the C# suite and markdownlint pass.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Custom Map Selection entries now show a sidecar image as their thumbnail. `LevelThumbnailSidecar` finds `<level base name>.png/.jpg/.jpeg` beside the `.mblevel.json` in UserData/Levels (case-insensitive, no links, ambiguity warns, 8 MiB and 4096 px per side limits checked from the header). `MapSelectionPatch.LoadThumbnail` decodes it through `NativeImageLoader`, which calls the engine icall `UnityEngine.ImageConversion::LoadImage_Injected` with the native texture pointer from `Object.m_CachedPtr`, because the generated `LoadImage` wrapper throws in `Il2CppSystem.Span`. Any failure keeps the placeholder with a warning, and a missing sidecar changes nothing. The Warehouse ships `levels/thps.png` (1080x720). Verified in game for PNG and JPEG. Documented in docs/level-format.md. Commit 8662772. `task check` reports two failures in tests/test_thps_pack_pieces.py that predate this work and are unrelated; tracked as TASK-039.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
+- [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
