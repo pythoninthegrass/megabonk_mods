@@ -1,10 +1,10 @@
 ---
 id: TASK-006.04
 title: Packaged player download and installer contract
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-31T03:12:00Z'
-updated_date: '2026-10-31T03:12:00Z'
+updated_date: '2026-11-04 02:24'
 labels:
   - tooling
 dependencies:
@@ -18,7 +18,6 @@ documentation:
   - docs/development.md
 parent_task_id: TASK-006
 priority: medium
-type: chore
 ordinal: 120000
 ---
 
@@ -38,12 +37,26 @@ Hosting and publishing are in scope only to the extent that a player needs a URL
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 One reproducible command in the repo produces the per-platform player package carrying MelonLoader at the pinned version, the mod DLL, and the .NET 6 runtime, with no repo checkout or contributor toolchain needed on the player's machine
+- [x] #1 One reproducible command in the repo produces the per-platform player package carrying MelonLoader at the pinned version, the mod DLL, and the .NET 6 runtime, with no repo checkout or contributor toolchain needed on the player's machine
 - [ ] #2 The shared installer contract is written down in docs/ as the single source the three platform installers implement: game-directory detection, MelonLoader install with checksum verification, .NET 6 runtime delivery, mod DLL placement, UserData/Levels creation, level import, pack install, idempotent re-run, re-run after a game update, uninstall, and failure reporting
-- [ ] #3 Asset packs are distributable: the package or a companion download carries the per-platform pack bundle and manifest a player needs, rather than assuming the local task pack:install flow
+- [x] #3 Asset packs are distributable: the package or a companion download carries the per-platform pack bundle and manifest a player needs, rather than assuming the local task pack:install flow
 - [ ] #4 The player guide recommends the packaged installer as the install route on every platform it covers and keeps the manual steps as the fallback
 - [ ] #5 The package records the game build and MelonLoader version it was verified against, so a player can tell whether it matches the game they have installed
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Checked against the docs, task files and code, without rebuilding the packages. AC 1: task package:linux, package:windows and package:macos exist and carry the pinned MelonLoader, the mod DLL and the vendored .NET 6 runtime; the Go static binary means no player toolchain. The Windows package has been run in a software-rendered VM only. AC 3: the package builder takes --pack and stages the per-platform bundle and manifest; installing a pack on a real game is covered by unit tests only, and the Windows subtask's levels-and-packs criterion is still open.
+
+AC 2 is open: docs/player-installer.md has layout, manifest, install record, exit codes and a parity contract, but no single contract section and nothing on re-running after a game update.
+
+AC 4 is open: docs/modding-setup.md points Linux, Windows and macOS players at the installer, but keeps no manual fallback for players; its manual sections are contributor setup.
+
+AC 5 is open: melonloader_version and game_buildid are in the manifest and echoed by --check, but game_buildid is the build the shipped levels were authored against and nothing compares it to the installed game, so a player cannot tell whether the package matches.
+
+Blocked on TASK-006.04.02 (Windows installer), still In Progress with four open criteria, including verifying the manual flow on real Windows. The Definition of Done is untouched.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
