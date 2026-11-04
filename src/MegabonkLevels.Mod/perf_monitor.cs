@@ -29,6 +29,8 @@ public enum PerfTick
     PositionLabel,
     EditorMode,
     RenderCull,
+    PhysicsFreeze,
+    AnimationCull,
 }
 
 // Harness-driven frame profiler: frame times, per-tick and per-patch timers, forced enemy counts and a held time scale.
@@ -146,8 +148,10 @@ public static class PerfMonitor
                 $"enemies={LiveEnemyCount()} timeScale={Number(MyTime.timeScale)} held={_timeScaleHeld}");
         }
 
-        // Timed like the other ticks: the cull's own rescan is part of what the off arm costs, so it has to be visible.
+        // Timed like the other ticks: each control's own rescan is part of what its arm costs, so it has to be visible.
         Timed(PerfTick.RenderCull, EnemyRenderCull.Apply);
+        Timed(PerfTick.PhysicsFreeze, EnemyPhysicsFreeze.Apply);
+        Timed(PerfTick.AnimationCull, EnemyAnimationCull.Apply);
     }
 
     // Wraps one mod tick so its own cost is attributable. The guard keeps a session without the harness free of timing calls.
@@ -224,6 +228,8 @@ public static class PerfMonitor
             ["vSyncCount"] = QualitySettings.vSyncCount,
             ["targetFrameRate"] = Application.targetFrameRate,
             ["renderCull"] = RenderCullNode(),
+            ["physicsFreeze"] = PhysicsFreezeNode(),
+            ["animationCull"] = AnimationCullNode(),
             ["enemyPositionSum"] = Number(EnemyRenderCull.EnemyPositionSum()),
             ["ticks"] = TicksNode(),
             ["probes"] = ProbesNode(),
@@ -255,6 +261,8 @@ public static class PerfMonitor
             ["heldTimeScale"] = _timeScaleHeld ? Number(_heldTimeScale) : null,
             ["defaultTimeScale"] = Number(DefaultTimeScale()),
             ["renderCull"] = RenderCullNode(),
+            ["physicsFreeze"] = PhysicsFreezeNode(),
+            ["animationCull"] = AnimationCullNode(),
             ["enemyPositionSum"] = Number(EnemyRenderCull.EnemyPositionSum()),
             ["ticks"] = TicksNode(),
             ["probes"] = ProbesNode(),
@@ -283,6 +291,18 @@ public static class PerfMonitor
             EnemyRenderCull.Set(true, _logger);
         }
 
+        var wasFrozen = EnemyPhysicsFreeze.Armed;
+        if (wasFrozen)
+        {
+            EnemyPhysicsFreeze.Set(true, _logger);
+        }
+
+        var wasAnimationCulled = EnemyAnimationCull.Armed;
+        if (wasAnimationCulled)
+        {
+            EnemyAnimationCull.Set(true, _logger);
+        }
+
         StartWindow();
         var restoredPlayer = _playerOverridden;
         if (_playerOverridden)
@@ -291,13 +311,17 @@ public static class PerfMonitor
             PlayerInvulnerability.Set(false, _logger);
         }
 
-        Log($"reset: timers cleared, timeScale={Number(MyTime.timeScale)}, all ticks and probes enabled, player grant restored={restoredPlayer}, render cull restored={wasCulled}");
+        Log(
+            $"reset: timers cleared, timeScale={Number(MyTime.timeScale)}, all ticks and probes enabled, player grant restored={restoredPlayer}, " +
+            $"render cull restored={wasCulled}, physics freeze restored={wasFrozen}, animation cull restored={wasAnimationCulled}");
         return new JsonObject
         {
             ["reset"] = true,
             ["timeScale"] = Number(MyTime.timeScale),
             ["playerGrantRestored"] = restoredPlayer,
             ["renderCullRestored"] = wasCulled,
+            ["physicsFreezeRestored"] = wasFrozen,
+            ["animationCullRestored"] = wasAnimationCulled,
         };
     }
 
@@ -421,6 +445,14 @@ public static class PerfMonitor
     // The render-only control: enabled=false hides every enemy renderer (submission side) with AI, physics and animation running;
     // enabled=true restores them. It is the A/B against count_240, so it lives beside the vsync and health controls.
     public static JsonObject SetEnemyRenderers(bool enabled) => EnemyRenderCull.Set(enabled, _logger);
+
+    // The physics-side control: enabled=false makes every Rigidbody under the live enemies kinematic, taking them out of the
+    // solver with AI, renderers and animation running; enabled=true puts each body back on the value it had.
+    public static JsonObject SetEnemyPhysics(bool enabled) => EnemyPhysicsFreeze.Set(enabled, _logger);
+
+    // The animation-side control: enabled=false stops the enemies' AnimatedMesh/Animator updates with renderers and physics
+    // running; enabled=true re-enables exactly the components it stopped.
+    public static JsonObject SetEnemyAnimation(bool enabled) => EnemyAnimationCull.Set(enabled, _logger);
 
     public static JsonObject Toggle(string target, bool enabled)
     {
@@ -556,9 +588,9 @@ public static class PerfMonitor
 
     private static bool IsTickOff(PerfTick tick) => _tickEnabled.TryGetValue(tick, out var enabled) && !enabled;
 
-    // Harness controls rather than mod work: the command channel and the render-only control keep running whatever a
-    // toggle asks for, so a mod-off control cannot strand an armed render A/B with enemies hidden and nothing applying.
-    private static bool IsUngated(PerfTick tick) => tick is PerfTick.DevHarnessPoll or PerfTick.RenderCull;
+    // Harness controls rather than mod work: the command channel and the three live-enemy controls keep running whatever a
+    // toggle asks for, so a mod-off control cannot strand an armed A/B with enemies hidden, frozen or unanimated.
+    private static bool IsUngated(PerfTick tick) => tick is PerfTick.DevHarnessPoll or PerfTick.RenderCull or PerfTick.PhysicsFreeze or PerfTick.AnimationCull;
 
     private static ProbeSlot SlotFor(string name)
     {
@@ -586,7 +618,38 @@ public static class PerfMonitor
     {
         ["armed"] = EnemyRenderCull.Armed,
         ["renderersOff"] = EnemyRenderCull.DisabledCount,
+        ["suppresses"] = new JsonArray { "enemy draw submission", "those renderers' culling and shadow-pass work" },
     };
+
+    private static JsonObject PhysicsFreezeNode() => new()
+    {
+        ["armed"] = EnemyPhysicsFreeze.Armed,
+        ["rigidbodiesKinematic"] = EnemyPhysicsFreeze.FrozenCount,
+        ["enemies"] = LiveEnemyCount(),
+        ["suppresses"] = SuppressesNode(EnemyPhysicsFreezePlan.Suppresses),
+        ["fidelity"] = EnemyPhysicsFreezePlan.FidelityNote(),
+    };
+
+    private static JsonObject AnimationCullNode() => new()
+    {
+        ["armed"] = EnemyAnimationCull.Armed,
+        ["behavioursOff"] = EnemyAnimationCull.StoppedCount,
+        ["byType"] = EnemyAnimationCull.StoppedByTypeNode(),
+        ["enemies"] = LiveEnemyCount(),
+        ["suppresses"] = SuppressesNode(EnemyAnimationCullPlan.Suppresses),
+        ["fidelity"] = EnemyAnimationCullPlan.FidelityNote(),
+    };
+
+    private static JsonArray SuppressesNode(IReadOnlyList<string> lines)
+    {
+        var node = new JsonArray();
+        foreach (var line in lines)
+        {
+            node.Add(line);
+        }
+
+        return node;
+    }
 
     private static JsonArray TicksNode()
     {

@@ -286,6 +286,8 @@ public static class DevHarness
             "toggle" => PerfMonitor.Toggle(args.Target, args.Enabled),
             "vsync" => PerfMonitor.SetVSync(args.Enabled),
             "render" => PerfMonitor.SetEnemyRenderers(args.Enabled),
+            "physics" => PerfMonitor.SetEnemyPhysics(args.Enabled),
+            "animation" => PerfMonitor.SetEnemyAnimation(args.Enabled),
             "health" => PerfMonitor.SetPlayerHealth(args.Hp ?? PerfLimits.DefaultPlayerHp),
             "census" => PerfMonitor.Census(),
             _ => throw new InvalidOperationException($"unknown perf action '{args.Action}'"),

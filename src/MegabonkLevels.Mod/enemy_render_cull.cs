@@ -13,8 +13,6 @@ namespace MegabonkLevels;
 // the game disabled itself (dissolve, effects) stay the game's. Decisions live in EnemyRenderCullPlan.
 public static class EnemyRenderCull
 {
-    private const double RescanIntervalSeconds = 0.5;
-
     private static readonly Dictionary<int, Renderer> Tracked = new();
     private static MelonLogger.Instance _logger;
     private static bool _armed;
@@ -63,7 +61,7 @@ public static class EnemyRenderCull
         var manager = EnemyManager.Instance;
         var liveCount = manager == null ? 0 : manager.numEnemies;
         var now = Time.unscaledTime;
-        if (!EnemyRenderCullPlan.ShouldRescan(liveCount, _lastSeenEnemies, now, _lastScanAt, RescanIntervalSeconds))
+        if (!EnemyRenderCullPlan.ShouldRescan(liveCount, _lastSeenEnemies, now, _lastScanAt, EnemyControlPlan.RescanIntervalSeconds))
         {
             return;
         }

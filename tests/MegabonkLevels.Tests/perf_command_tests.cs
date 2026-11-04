@@ -14,6 +14,8 @@ public class PerfCommandTests
     [InlineData("health")]
     [InlineData("census")]
     [InlineData("render")]
+    [InlineData("physics")]
+    [InlineData("animation")]
     public void TryParse_Perf_AcceptsTheDocumentedActions(string action)
     {
         var json = $$"""{"command":"perf","action":"{{action}}","count":40,"value":2,"target":"killFloor","enabled":false}""";

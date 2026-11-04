@@ -71,6 +71,9 @@
     <Compile Include="../../src/MegabonkLevels.Mod/perf_gc_plan.cs" Link="perf_gc_plan.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/perf_probe_plan.cs" Link="perf_probe_plan.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/enemy_render_cull_plan.cs" Link="enemy_render_cull_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/enemy_control_plan.cs" Link="enemy_control_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/enemy_physics_freeze_plan.cs" Link="enemy_physics_freeze_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/enemy_animation_cull_plan.cs" Link="enemy_animation_cull_plan.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/player_damage_policy.cs" Link="player_damage_policy.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/fall_damage_policy.cs" Link="fall_damage_policy.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/load_overrides.cs" Link="load_overrides.cs" />

@@ -443,11 +443,11 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
 
         if (!TryGetString(root, "action", out var action) || action.Length == 0)
         {
-            error = "missing string field 'action' (report, status, start, reset, spawn, timescale, toggle, vsync, render, health, census)";
+            error = "missing string field 'action' (report, status, start, reset, spawn, timescale, toggle, vsync, render, physics, animation, health, census)";
             return false;
         }
 
-        var allowed = new[] { "report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "render", "health", "census" };
+        var allowed = new[] { "report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "render", "physics", "animation", "health", "census" };
         if (Array.IndexOf(allowed, action) < 0)
         {
             error = $"unknown action '{action}'; expected {string.Join(", ", allowed)}";
@@ -499,7 +499,7 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
 
         TryGetString(root, "target", out var target);
         var enabled = true;
-        if (action is "toggle" or "vsync" or "render")
+        if (action is "toggle" or "vsync" or "render" or "physics" or "animation")
         {
             if (action == "toggle" && string.IsNullOrEmpty(target))
             {

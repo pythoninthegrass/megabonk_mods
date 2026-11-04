@@ -60,6 +60,8 @@ tmbootpicker.efi
 # dotnet build output
 bin/
 obj/
+# local ModInstanceFolder override, so a build here never touches the game's Mods folder
+.build-deploy/
 
 # per-machine overrides
 Directory.Build.local.props
