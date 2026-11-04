@@ -20,6 +20,8 @@ public static class FromScratchGenerationPatch
     // Set by LevelLoaderPatch for every custom load so a generated-baseline load clears an earlier from-scratch level.
     public static void Arm(LevelFile level) => _level = level.IsFromScratch ? level : null;
 
+    public static LevelFile? ActiveLevel => _level;
+
     // Stays set across a death-screen restart, which regenerates the same level; CustomLevelState ends it with the run.
     private static bool Building => _level != null && CustomLevelState.IsActive;
 

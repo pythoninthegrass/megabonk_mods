@@ -137,4 +137,32 @@ public class KillFloorTests
         Assert.True(KillFloor.ShouldProbeCollider(-80f + KillFloor.ColliderProbeMargin, -80f));
         Assert.False(KillFloor.ShouldProbeCollider(-80f + KillFloor.ColliderProbeMargin + 0.01f, -80f));
     }
+
+    [Fact]
+    public void FloorY_FromAnAuthoredGridUsesItsLowestCell()
+    {
+        var grid = new LevelGrid(2, 1, new[] { new AuthoredCell(0, 0, 2), new AuthoredCell(1, 0, -1) });
+
+        var floor = KillFloor.FloorY(grid.ToLevelState().Tiles.Values.Select(tile => tile.Height), tileHeight: 20f, margin: 40f, catchFloorY: float.NegativeInfinity);
+
+        Assert.Equal(-60f, floor);
+    }
+
+    [Fact]
+    public void FloorY_FromAnAuthoredGridStaysAboveTheCatchFloor()
+    {
+        var grid = new LevelGrid(1, 1, new[] { new AuthoredCell(0, 0, -5) });
+
+        var floor = KillFloor.FloorY(grid.ToLevelState().Tiles.Values.Select(tile => tile.Height), tileHeight: 20f, margin: 40f, catchFloorY: -80f);
+
+        Assert.True(floor > -80f);
+    }
+
+    [Fact]
+    public void FloorY_FromAnEmptyAuthoredGridNeverKills()
+    {
+        var floor = KillFloor.FloorY(new LevelGrid(1, 1, Array.Empty<AuthoredCell>()).ToLevelState().Tiles.Values.Select(tile => tile.Height), 20f, 40f, -80f);
+
+        Assert.Equal(float.NegativeInfinity, floor);
+    }
 }

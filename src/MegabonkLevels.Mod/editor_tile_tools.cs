@@ -690,10 +690,14 @@ public static class EditorTileTools
             return;
         }
 
-        var spawn = SpawnCell(grid);
+        var targets = FromScratchGenerationPatch.ActiveLevel is { } level
+            ? ValidationTargetSelector.Select(level, state, grid.Width, grid.Depth, grid.Spacing)
+            : new ValidationTargets(ValidationTargetSource.NameSearch, null, null, null);
+        var fromName = targets.Source == ValidationTargetSource.NameSearch;
+        var spawn = fromName ? SpawnCell(grid) : targets.Start;
         if (spawn == null)
         {
-            Fail("validate: no spawn portal found");
+            Fail(fromName ? "validate: no spawn portal found" : "validate: authored spawn is not on the grid");
             _reachability = null;
             ClearUnreachable();
             return;
@@ -712,11 +716,16 @@ public static class EditorTileTools
         }
 
         RenderUnreachable(_reachability.Unreachable, grid, state);
-        var portal = LiveEditPatch.BossPortalCell();
+        var portal = fromName ? LiveEditPatch.BossPortalCell() : targets.Boss;
         var portalText = portal is { } target
             ? (_reachability.IsReachable(target) ? "reachable" : "unreachable")
             : "not found";
-        _validateSummary = $"validate: {_reachability.Unreachable.Count} unreachable, boss portal {portalText}";
+        var bossLabel = fromName ? "boss portal" : "boss spawner";
+        _validateSummary = $"validate: {_reachability.Unreachable.Count} unreachable, {bossLabel} {portalText}";
+        if (targets.Warning != null)
+        {
+            _validateSummary += $"; {targets.Warning}";
+        }
     }
 
     private static (int X, int Z)? SpawnCell(LiveGrid grid)
