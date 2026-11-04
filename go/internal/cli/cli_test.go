@@ -9,6 +9,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -824,6 +825,9 @@ func windowed(t *testing.T, driver func(title string, work func(ui.Progress) int
 	return command
 }
 
+// numberedProgressLine matches the text reporter's "1/7 step" lines, not a "1/" inside a temp path.
+var numberedProgressLine = regexp.MustCompile(`(?m)^\d+/\d+ `)
+
 func TestInstallThroughTheWindowDriver(t *testing.T) {
 	packageDir, game := makePackage(t), makeGame(t)
 	var titles []string
@@ -839,7 +843,7 @@ func TestInstallThroughTheWindowDriver(t *testing.T) {
 		t.Errorf("titles = %v", titles)
 	}
 	out := command.Stdout.(*bytes.Buffer).String()
-	if strings.Contains(out, "1/") {
+	if numberedProgressLine.MatchString(out) {
 		t.Errorf("the window path must not print numbered text lines:\n%s", out)
 	}
 	if content.LoadRecord(game) == nil {
@@ -884,7 +888,7 @@ func TestWindowUnavailableFallsBackToText(t *testing.T) {
 		t.Errorf("the window should be attempted once, got %d", attempted)
 	}
 	out := command.Stdout.(*bytes.Buffer).String()
-	if !strings.Contains(out, "1/") {
+	if !numberedProgressLine.MatchString(out) {
 		t.Errorf("the failed window must fall back to the unchanged text reporter:\n%s", out)
 	}
 	note := command.Stderr.(*bytes.Buffer).String()
