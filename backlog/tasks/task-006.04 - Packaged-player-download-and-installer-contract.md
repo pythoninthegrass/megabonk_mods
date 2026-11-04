@@ -4,7 +4,7 @@ title: Packaged player download and installer contract
 status: In Progress
 assignee: []
 created_date: '2026-10-31T03:12:00Z'
-updated_date: '2026-11-04 02:24'
+updated_date: '2026-11-04 20:07'
 labels:
   - tooling
 dependencies:
@@ -38,11 +38,23 @@ Hosting and publishing are in scope only to the extent that a player needs a URL
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 One reproducible command in the repo produces the per-platform player package carrying MelonLoader at the pinned version, the mod DLL, and the .NET 6 runtime, with no repo checkout or contributor toolchain needed on the player's machine
-- [ ] #2 The shared installer contract is written down in docs/ as the single source the three platform installers implement: game-directory detection, MelonLoader install with checksum verification, .NET 6 runtime delivery, mod DLL placement, UserData/Levels creation, level import, pack install, idempotent re-run, re-run after a game update, uninstall, and failure reporting
+- [x] #2 The shared installer contract is written down in docs/ as the single source the three platform installers implement: game-directory detection, MelonLoader install with checksum verification, .NET 6 runtime delivery, mod DLL placement, UserData/Levels creation, level import, pack install, idempotent re-run, re-run after a game update, uninstall, and failure reporting
 - [x] #3 Asset packs are distributable: the package or a companion download carries the per-platform pack bundle and manifest a player needs, rather than assuming the local task pack:install flow
-- [ ] #4 The player guide recommends the packaged installer as the install route on every platform it covers and keeps the manual steps as the fallback
-- [ ] #5 The package records the game build and MelonLoader version it was verified against, so a player can tell whether it matches the game they have installed
+- [x] #4 The player guide recommends the packaged installer as the install route on every platform it covers and keeps the manual steps as the fallback
+- [x] #5 The package records the game build and MelonLoader version it was verified against, so a player can tell whether it matches the game they have installed
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Approved approach (AC #2, #4, #5; #1 and #3 already met).
+
+A. Docs: add an "Installer contract" section to docs/player-installer.md as the single source the Python, Go and platform installers implement (game-directory detection, build classification, MelonLoader plus checksum, .NET 6 delivery, mod DLL, UserData/Levels, level import, pack install, idempotent re-run, re-run after a game update, uninstall, failure reporting); platform sections point at it. Add a manual-install fallback section for players to docs/modding-setup.md (AC #4), linking the player guide from TASK-006.02.
+
+B. Build-match check (AC #5), tests first in both implementations (scripts/player_installer and go/internal) plus a parity scenario: read buildid from appmanifest_3405340.acf during discovery; on install and --check print installed build against the build the package was verified against; a mismatch is a warning only (no exit-code change); record the installed build in the install record as an optional key, schema stays megabonk-levels-install/1; a missing appmanifest reports unknown.
+
+C. task check, docs, conventional commit with no attribution.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
@@ -56,12 +68,16 @@ AC 4 is open: docs/modding-setup.md points Linux, Windows and macOS players at t
 AC 5 is open: melonloader_version and game_buildid are in the manifest and echoed by --check, but game_buildid is the build the shipped levels were authored against and nothing compares it to the installed game, so a player cannot tell whether the package matches.
 
 Blocked on TASK-006.04.02 (Windows installer), still In Progress with four open criteria, including verifying the manual flow on real Windows. The Definition of Done is untouched.
+
+AC 2: docs/player-installer.md gained an Installer contract section (eleven ordered steps, re-running, re-run after a game update, uninstall) that the platform sections and tests/test_installer_parity.py point at. AC 4: docs/player-guide.md recommends the installer on Windows, Linux and macOS and links the manual fallback in docs/modding-setup.md. AC 5: both installers now read buildid from appmanifest_3405340.acf, print whether it matches the build the package was verified against (warning only, unknown when there is no appmanifest) and record it as the optional installed_game_buildid key under the unchanged megabonk-levels-install/1 schema. Python and Go tests added first; task check and go test pass.
+
+Not established: what a Steam update or file verification does to the loader files, listed under Still pending in docs/player-installer.md. tests/test_installer_parity.py was already failing on Linux before this change: the Go closing message is capitalised since the progress-window commit, and the Go uninstall also clears loader leftovers (d78ac31) that the Python reference does not. With capitalisation ignored, only the three uninstall scenarios fail, and the new build-match line matches between the two implementations.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->

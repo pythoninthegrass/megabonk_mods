@@ -105,7 +105,7 @@ Bundled content is ordinary `files[]` entries, so nothing in the schema is speci
 
 ## Install record
 
-After a successful install the installer writes `MegabonkLevels.installer.json` into the game directory, schema `megabonk-levels-install/1`: package id and versions, `installed_at`, the relative paths of every mod file, level and pack it placed, where the .NET runtime went and with what launch option, and how the `version.dll` override was applied.
+After a successful install the installer writes `MegabonkLevels.installer.json` into the game directory, schema `megabonk-levels-install/1`: package id and versions, `installed_at`, the relative paths of every mod file, level and pack it placed, where the .NET runtime went and with what launch option, and how the `version.dll` override was applied. `game_buildid` is the build the package was verified against; `installed_game_buildid` is the build Steam's appmanifest reported when the installer ran, or `null` when it reported none. The second key is optional, so records written before it existed still load under the same schema.
 
 That one file drives both `--check` and `--uninstall`. Uninstall is deliberately record-driven rather than a glob: it removes what it recorded placing and leaves anything it did not put there alone, so a player's own `Mods/` entries, saves, and `UserData` survive.
 
@@ -119,6 +119,32 @@ That one file drives both `--check` and `--uninstall`. Uninstall is deliberately
 | 3 | Nothing found to work on: no Steam install, no game directory, no package. |
 | 4 | The game directory is a build this installer will not touch, i.e. the native Linux build. |
 | 10 | `--check` found drift between the record and the package. A script can treat 10 as "reinstall" and 0 as "already installed". |
+
+## Installer contract
+
+Every installer — the Python reference behind `install.sh` and the Go binary behind `install.exe` and `megabonk-installer` — implements the steps below in this order, and a player's experience differs between platforms only in how the installer is launched. The sections after this one describe the platform specifics; this one is the single list they must agree with, and `tests/test_installer_parity.py` holds the two implementations to it.
+
+1. **Check the package.** Load `manifest.json` and verify every `vendor/` archive and `files[]` entry against its digest before touching the game. A bad or tampered package exits 1 with the list of mismatches and changes nothing.
+2. **Find the game directory.** Use `--game-dir` when given. Otherwise read Steam's recorded libraries and accept a directory only when it holds `Megabonk.exe`, `Megabonk.x86_64` or `Megabonk_Data/`. A game that cannot be found exits 3 and names every Steam client and library considered, each with why it was rejected, plus the flag to retry with.
+3. **Classify the build.** Only the Windows build is supported, on every platform. The native Linux build is refused with exit 4 and the steps for switching to the Windows build.
+4. **Compare the game build.** Read the installed build id from the library's `appmanifest_3405340.acf` and print whether it matches the build the package was verified against. A difference prints a warning and the run continues, because a game update must not lock a player out; an absent appmanifest prints that the installed build is unknown. The installed id goes into the install record.
+5. **Install MelonLoader at the pinned version** from `vendor/`, verified against the manifest checksum. The installer never goes to the network.
+6. **Provide the .NET 6 runtime** from `vendor/` at user scope, inside the game directory or the Wine prefix, never machine-wide. Where it goes depends on the platform: [Windows package](#windows-package), [macOS package](#macos-package) and [.NET placement](#net-placement-and-the-launch-option) on Linux.
+7. **Apply the `version.dll` override** where a Wine or Proton prefix needs it. Native Windows has none.
+8. **Place the mod files** from `files[]`: the mod DLL and its managed dependencies.
+9. **Create `UserData/Levels/`**, then **import levels** and **install packs** the package carries or that `--level` and `--pack` name. Inputs are validated first, so a bad level or pack is listed and nothing is half-installed.
+10. **Write the install record**, which drives `--check` and `--uninstall`.
+11. **Report** what was done and what was not, as numbered `N/M label` lines or a progress window. A failure exits nonzero with a message that says what to do.
+
+### Re-running
+
+A second run with nothing changed does nothing and says so. A run after something has gone missing or stale repairs only that: `--check` compares the install against the package by file digest and loader version marker, exits 10 when anything differs, and the next install run fixes just those entries. A wiped runtime is reinstalled together with its `version.dll` override, because losing one without the other leaves a game that starts and never loads a mod.
+
+After a game update the answer is the same run again. The game build comparison in step 4 tells the player whether the package still matches the game and the repair covers any loader file that went missing; if the build differs and the mod stops loading, the fix is a newer package, which the warning says. Whether Steam's own update or file verification removes the loader files it did not install is not established here; see [what is not verified](#what-is-verified-and-what-is-not).
+
+### Uninstall
+
+`--uninstall` is record-driven: it removes what the record says the installer placed, plus what the loader generates on first launch where the platform notes say so, and leaves a player's own plugins, preferences, levels and saves alone. With no record it removes nothing.
 
 ## Building a package
 
@@ -423,6 +449,7 @@ Windows-build refusal.
 
 Still pending:
 
+- what a Steam update or "verify integrity of game files" does to the loader files in the game directory, which decides whether re-running after an update is ever needed beyond the build warning;
 - the printed game-directory `DOTNET_ROOT` launch option working when Steam actually applies it (both live proofs use prefix mode);
 - the persisted `local-overrides` file as the source of the Flatpak grants — the real host went through `flatpak override --show`, which is the other of the two paths in `flatpak_granted_paths`;
 - the zenity and yad dialog paths — the verified host has neither installed, so those branches run only in tests (the kdialog-over-D-Bus path above is the one with desktop evidence);

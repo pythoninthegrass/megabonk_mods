@@ -1,6 +1,6 @@
 # Modding setup
 
-Megabonk mods in this repo are built on [MelonLoader](https://melonwiki.xyz/), since Megabonk is a Unity IL2CPP game with no bundled mod loader. This doc covers installing MelonLoader, pointing a local build at your own Megabonk install, and verifying the mod loaded.
+Megabonk mods in this repo are built on [MelonLoader](https://melonwiki.xyz/), since Megabonk is a Unity IL2CPP game with no bundled mod loader. If you only want to play levels, read the [player guide](player-guide.md) instead. This doc covers installing MelonLoader, pointing a local build at your own Megabonk install, and verifying the mod loaded.
 
 ## File naming convention
 
@@ -57,6 +57,19 @@ task package:macos LEVELS="example-forest.mblevel.json" MOD_VERSION=0.4.2
 ```
 
 Megabonk has no macOS build, so a Mac player runs the Windows build under Wine with Steam installed in the same prefix. A player unzips the result and runs `./megabonk-installer` from that folder; it needs no repo, no uv and no .NET SDK. It finds the game in a plain-Wine prefix first (`~/.local/share/megabonk/wine`, `~/.wine`) and in a CrossOver bottle only when no plain-Wine prefix holds it, and `--prefix <folder holding drive_c>` points it anywhere else. It installs the pinned MelonLoader, the mod, a .NET 6 runtime under `MelonLoader/Dependencies/dotnet` and the `version.dll` override in the prefix, shows a progress window, and `--uninstall` restores a vanilla game. The first launch downloads the Il2Cpp assembly generator's tools and takes a while under Wine; see [player-installer.md](player-installer.md#macos-package).
+
+## Installing by hand (for players)
+
+This is the fallback for when the player installer cannot run; the installers in the sections above do exactly these steps and are the recommended route. Use the Windows build of the game on every platform.
+
+1. Download the MelonLoader archive at the version the package names, from the [MelonLoader releases](https://github.com/LavaGang/MelonLoader/releases) (`MelonLoader.x64.zip`, currently 0.7.3), and extract it into the game folder, the one holding `Megabonk.exe`. A package carries the exact archive in its `vendor/` folder with its checksum in `manifest.json`.
+2. Copy the mod files from the package into the game folder: `MegabonkLevels.Mod.dll` into `Mods/` and `NLayer.dll` into `UserLibs/`.
+3. Create `UserData/Levels/` in the game folder, and copy any `.mblevel.json` files into it.
+4. On Linux (Proton) or macOS (Wine), the game folder's `version.dll` must be loaded in preference to the system one: set the DLL override `version` = `native,builtin` in the Wine or Proton prefix, for example with `winecfg` (Libraries tab). Native Windows needs no override.
+5. Start the game from Steam. On native Windows MelonLoader installs the .NET 6 runtime itself on first launch, machine-wide under Program Files; on Linux and macOS install a Windows .NET 6 runtime into the prefix first. The first launch downloads tools and takes about half a minute.
+6. Open `MelonLoader/Latest.log` in the game folder and look for `1 Mod loaded.` and `MegabonkLevels mod initialized.`.
+
+To undo it, delete `MelonLoader/`, `Mods/MegabonkLevels.Mod.dll` and `UserLibs/NLayer.dll` from the game folder, plus `version.dll` (MelonLoader's loader stub).
 
 ## Running and verifying the mod
 

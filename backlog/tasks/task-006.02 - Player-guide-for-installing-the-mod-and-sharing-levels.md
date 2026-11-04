@@ -1,16 +1,15 @@
 ---
 id: TASK-006.02
 title: Player guide for installing the mod and sharing levels
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-06 21:44'
-updated_date: '2026-10-31T03:12:00Z'
+updated_date: '2026-11-04 20:07'
 labels:
   - level-editor
 dependencies: []
 parent_task_id: TASK-006
 priority: medium
-type: docs
 ordinal: 32000
 ---
 
@@ -30,31 +29,29 @@ Link this guide from `docs/modding-setup.md` (TASK-001.04) and from the Map Sele
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A player-facing guide (distinct from the contributor-facing docs/modding-setup.md) explains installing MelonLoader and the mod as an end user, not a developer building from source
-- [ ] #2 The guide explains how to locate UserData/Levels/, share a level file, and install a level someone else shared
-- [ ] #3 The guide clearly states this is unofficial, non-Workshop, fan-made content
-- [ ] #4 The guide is linked from docs/modding-setup.md
-- [ ] #5 If no release/packaging mechanism exists yet for distributing the built mod to non-technical users, that gap is explicitly flagged rather than glossed over
+- [x] #1 A player-facing guide (distinct from the contributor-facing docs/modding-setup.md) explains installing MelonLoader and the mod as an end user, not a developer building from source
+- [x] #2 The guide explains how to locate UserData/Levels/, share a level file, and install a level someone else shared
+- [x] #3 The guide clearly states this is unofficial, non-Workshop, fan-made content
+- [x] #4 The guide is linked from docs/modding-setup.md
+- [x] #5 If no release/packaging mechanism exists yet for distributing the built mod to non-technical users, that gap is explicitly flagged rather than glossed over
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Approved approach. Write docs/player-guide.md in plain language: install with the packaged installer per platform (manual steps as fallback), find UserData/Levels, share a .mblevel.json (Discord or forum attachment), install a shared level, and state that this is unofficial fan-made content with no Steam Workshop integration. Flag that no published download URL exists yet. Link the guide from docs/modding-setup.md and README.md.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added docs/player-guide.md in plain language: install through the packaged installer per platform with a pointer to the manual fallback, finding UserData/Levels, playing and sharing a level, missing asset packs, and a statement that the mod is unofficial, fan-made and not Steam Workshop. The guide flags that no public download URL exists yet and that the Windows installer has only been tested in a VM. Linked from README.md and docs/modding-setup.md, which gained an "Installing by hand (for players)" section.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
-
-## Comments
-
-<!-- COMMENTS:BEGIN -->
-created: 2026-10-31T03:12:00Z
-
----
-
-The packaging gap this task must flag (AC #5) is now tracked rather than open-ended: TASK-006.04 defines the packaged player download and the shared installer contract, with TASK-006.04.01 (Linux), TASK-006.04.02 (Windows) and TASK-006.04.03 (macOS) implementing it per platform. Nothing exists yet, so the guide still documents the manual steps as the working route and links those tasks as the gap rather than glossing over it.
-
-The guide's verification run also feeds those installer tasks: it settles how the .NET 6 runtime reaches MelonLoader under Proton (a runtime directory inside the game folder versus installing into the Proton prefix) and whether a DLL-override launch option is needed. Record both findings in the guide, because the installer tasks depend on them.
-
----
-<!-- COMMENTS:END -->
