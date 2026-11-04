@@ -1,29 +1,87 @@
 package window
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	native "github.com/egoist/mygo/ui"
 )
 
-func TestViewShowsStepAndPercentage(t *testing.T) {
+func TestViewListsEveryPlannedStepWithProgress(t *testing.T) {
 	p := New("Megabonk Levels installer")
-	tt := native.NewTester(p.view, 460, 220)
+	tt := native.NewTester(p.view, 520, 420)
+	p.Plan([]string{"MelonLoader", "mod DLL", ".NET runtime", "levels folder"})
 	p.Start(4, "install megabonk-levels")
 	p.Step("MelonLoader")
 	p.Step("mod DLL")
 	tt.Frame()
-	for _, want := range []string{"install megabonk-levels", "2/4 mod DLL", "50%"} {
+	for _, want := range []string{"MelonLoader", "mod DLL", ".NET runtime", "levels folder", "2 of 4"} {
 		if !tt.HasText(want) {
 			t.Errorf("view is missing %q; texts = %v", want, tt.Texts())
 		}
+	}
+	if tt.HasText("%") {
+		t.Errorf("the percentage bar is gone; texts = %v", tt.Texts())
+	}
+}
+
+// hasTextFold reports whether any text contains want, ignoring case, for tests
+// about what is shown rather than how it is cased.
+func hasTextFold(tt *native.Tester, want string) bool {
+	want = strings.ToLower(want)
+	for _, text := range tt.Texts() {
+		if strings.Contains(strings.ToLower(text), want) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestStatusMessageStartsWithACapital(t *testing.T) {
+	for _, item := range []struct {
+		message string
+		ok      bool
+		want    string
+	}{
+		{"installed", true, "Installed"},
+		{"could not write the mod DLL", false, "Could not write the mod DLL"},
+	} {
+		p := New("Megabonk Levels installer")
+		tt := native.NewTester(p.view, 520, 420)
+		p.Start(1, "install megabonk-levels")
+		p.Finish(item.message, item.ok)
+		tt.Frame()
+		if !tt.HasText(item.want) || tt.HasText(item.message) {
+			t.Errorf("Finish(%q) should show %q; texts = %v", item.message, item.want, tt.Texts())
+		}
+	}
+}
+
+func TestHeaderStartsWithACapital(t *testing.T) {
+	p := New("Megabonk Levels installer")
+	tt := native.NewTester(p.view, 520, 420)
+	p.Start(2, "install megabonk-levels")
+	tt.Frame()
+	if !tt.HasText("Install megabonk-levels") || tt.HasText("install megabonk-levels") {
+		t.Errorf("texts = %v", tt.Texts())
+	}
+}
+
+func TestViewListsCompletedStepsWhenNoPlanWasGiven(t *testing.T) {
+	p := New("Megabonk Levels uninstaller")
+	tt := native.NewTester(p.view, 520, 420)
+	p.Start(2, "uninstall megabonk-levels")
+	p.Step("MelonLoader")
+	tt.Frame()
+	if !tt.HasText("MelonLoader") {
+		t.Errorf("texts = %v", tt.Texts())
 	}
 }
 
 func TestCancelButtonRequestsCancel(t *testing.T) {
 	p := New("Megabonk Levels installer")
-	tt := native.NewTester(p.view, 460, 220)
+	tt := native.NewTester(p.view, 520, 420)
 	p.Start(4, "install megabonk-levels")
 	tt.Frame()
 	if p.Cancelled() {
@@ -43,28 +101,107 @@ func TestCancelButtonRequestsCancel(t *testing.T) {
 
 func TestFinishShowsTheMessageAndDisablesCancel(t *testing.T) {
 	p := New("Megabonk Levels installer")
-	tt := native.NewTester(p.view, 460, 220)
+	tt := native.NewTester(p.view, 520, 420)
 	p.Start(1, "install megabonk-levels")
 	p.Step("MelonLoader")
 	p.Finish("installed", true)
 	tt.Frame()
-	if !tt.HasText("installed") {
+	if !hasTextFold(tt, "installed") {
 		t.Errorf("the finish message should replace the step line; texts = %v", tt.Texts())
 	}
-	_ = tt.Click("Cancel")
-	if p.Cancelled() {
-		t.Error("a finished window must not take a cancel")
+	if tt.HasText("Cancel") {
+		t.Errorf("a finished window has no Cancel; texts = %v", tt.Texts())
+	}
+	if !tt.HasText("Done") {
+		t.Errorf("a finished window offers Done; texts = %v", tt.Texts())
 	}
 }
 
 func TestFailureFinishIsStillReadable(t *testing.T) {
 	p := New("Megabonk Levels installer")
-	tt := native.NewTester(p.view, 460, 220)
+	tt := native.NewTester(p.view, 520, 420)
 	p.Start(2, "install megabonk-levels")
 	p.Finish("the package does not match its manifest", false)
 	tt.Frame()
-	if !tt.HasText("the package does not match its manifest") {
+	if !hasTextFold(tt, "the package does not match its manifest") {
 		t.Errorf("texts = %v", tt.Texts())
+	}
+}
+
+func TestFailureShowsTheMessageAndDone(t *testing.T) {
+	p := New("Megabonk Levels installer")
+	tt := native.NewTester(p.view, 520, 420)
+	p.Plan([]string{"MelonLoader", "mod DLL"})
+	p.Start(2, "install megabonk-levels")
+	p.Step("MelonLoader")
+	p.Finish("could not write the mod DLL", false)
+	tt.Frame()
+	for _, want := range []string{"could not write the mod DLL", "done"} {
+		if !hasTextFold(tt, want) {
+			t.Errorf("missing %q; texts = %v", want, tt.Texts())
+		}
+	}
+}
+
+func TestDoneDismissesAFinishedWindow(t *testing.T) {
+	p := New("Megabonk Levels installer")
+	tt := native.NewTester(p.view, 520, 420)
+	p.Start(1, "install megabonk-levels")
+	p.Finish("installed", true)
+	tt.Frame()
+	if err := tt.Click("Done"); err != nil {
+		t.Fatalf("clicking Done: %v", err)
+	}
+	if !p.dismissedNow() {
+		t.Error("Done did not dismiss the window")
+	}
+}
+
+func TestFinishShowsTheLaunchOptionAndCopyPutsItOnTheClipboard(t *testing.T) {
+	p := New("Megabonk Levels installer")
+	tt := native.NewTester(p.view, 520, 420)
+	p.Start(1, "install megabonk-levels")
+	p.ShowLaunchOption(`WINEDLLOVERRIDES="version=n,b" %command%`)
+	p.Finish("installed", true)
+	tt.Frame()
+	if !tt.HasText(`WINEDLLOVERRIDES="version=n,b" %command%`) {
+		t.Fatalf("the launch option is missing; texts = %v", tt.Texts())
+	}
+	if err := tt.Click("Copy"); err != nil {
+		t.Fatalf("clicking Copy: %v", err)
+	}
+	if got := tt.Clipboard(); got != `WINEDLLOVERRIDES="version=n,b" %command%` {
+		t.Errorf("clipboard = %q", got)
+	}
+}
+
+func TestDetailsRevealsTheLog(t *testing.T) {
+	p := New("Megabonk Levels installer")
+	tt := native.NewTester(p.view, 520, 420)
+	p.Start(1, "install megabonk-levels")
+	p.Log("install-file: Mods/MegabonkLevels.Mod.dll")
+	tt.Frame()
+	if tt.HasText("install-file: Mods/MegabonkLevels.Mod.dll") {
+		t.Fatal("the log should start collapsed")
+	}
+	if err := tt.Click("Details"); err != nil {
+		t.Fatalf("clicking Details: %v", err)
+	}
+	tt.Frame()
+	if !tt.HasText("install-file: Mods/MegabonkLevels.Mod.dll") {
+		t.Errorf("texts = %v", tt.Texts())
+	}
+}
+
+func TestFailureOpensTheDetails(t *testing.T) {
+	p := New("Megabonk Levels installer")
+	tt := native.NewTester(p.view, 520, 420)
+	p.Start(1, "install megabonk-levels")
+	p.Log("copying mod DLL")
+	p.Finish("boom", false)
+	tt.Frame()
+	if !tt.HasText("copying mod DLL") {
+		t.Errorf("a failure should show the log; texts = %v", tt.Texts())
 	}
 }
 
@@ -86,9 +223,9 @@ func waitForText(t *testing.T, tt *native.Tester, want string) {
 	t.Fatalf("view never showed %q; texts = %v", want, tt.Texts())
 }
 
-func TestConfirmWaitsForYesClick(t *testing.T) {
+func TestConfirmWaitsForInstallClick(t *testing.T) {
 	p := New("Megabonk Levels installer")
-	tt := native.NewTester(p.view, 460, 220)
+	tt := native.NewTester(p.view, 520, 420)
 	answer := confirmInBackground(p, "Install Megabonk Levels?")
 	waitForText(t, tt, "Install Megabonk Levels?")
 	select {
@@ -96,11 +233,11 @@ func TestConfirmWaitsForYesClick(t *testing.T) {
 		t.Fatal("Confirm returned before any click")
 	default:
 	}
-	if err := tt.Click("Yes"); err != nil {
-		t.Fatalf("clicking Yes: %v", err)
+	if err := tt.Click("Install"); err != nil {
+		t.Fatalf("clicking Install: %v", err)
 	}
 	if got := <-answer; !got {
-		t.Error("Yes should confirm")
+		t.Error("Install should confirm")
 	}
 	if p.Cancelled() {
 		t.Error("confirming is not a cancel")
@@ -109,7 +246,7 @@ func TestConfirmWaitsForYesClick(t *testing.T) {
 
 func TestConfirmDeclinedByCancel(t *testing.T) {
 	p := New("Megabonk Levels installer")
-	tt := native.NewTester(p.view, 460, 220)
+	tt := native.NewTester(p.view, 520, 420)
 	answer := confirmInBackground(p, "Install Megabonk Levels?")
 	waitForText(t, tt, "Install Megabonk Levels?")
 	if err := tt.Click("Cancel"); err != nil {

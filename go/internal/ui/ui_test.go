@@ -21,8 +21,22 @@ func TestTextProgressNumbersTheSteps(t *testing.T) {
 	if len(rec.lines) != 3 {
 		t.Fatalf("lines = %v", rec.lines)
 	}
-	if rec.lines[0] != "1/3 MelonLoader" || rec.lines[1] != "2/3 mod DLL" || rec.lines[2] != "done" {
+	if rec.lines[0] != "1/3 MelonLoader" || rec.lines[1] != "2/3 mod DLL" || rec.lines[2] != "Done" {
 		t.Errorf("lines = %v", rec.lines)
+	}
+}
+
+func TestCapitalizeUppercasesTheFirstLetterOnly(t *testing.T) {
+	for in, want := range map[string]string{
+		"installed":     "Installed",
+		"already there": "Already there",
+		"Already":       "Already",
+		"émigré":        "Émigré",
+		"":              "",
+	} {
+		if got := Capitalize(in); got != want {
+			t.Errorf("Capitalize(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

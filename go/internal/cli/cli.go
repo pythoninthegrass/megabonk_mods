@@ -175,6 +175,14 @@ type Reporter struct {
 	AsJSON bool
 	Stdout io.Writer
 	Stderr io.Writer
+	// Tee receives every non-empty human line as well; the window's details log.
+	Tee func(line string)
+}
+
+func (r *Reporter) tee(line string) {
+	if r.Tee != nil && line != "" {
+		r.Tee(line)
+	}
 }
 
 // Say prints a human-readable line on stdout.
@@ -183,11 +191,13 @@ func (r *Reporter) Say(message string) {
 		return
 	}
 	fmt.Fprintln(r.Stdout, message)
+	r.tee(message)
 }
 
 // Warn prints a warning on stderr.
 func (r *Reporter) Warn(message string) {
 	fmt.Fprintf(r.Stderr, "warning: %s\n", message)
+	r.tee("warning: " + message)
 }
 
 // Problem lists one validation failure on stderr.
@@ -504,7 +514,7 @@ func (c *Command) startWindow(title string, work func(ui.Progress) int) (int, bo
 // unchanged plain-text reporter otherwise, including when the window could
 // not start. The order is window, then text; no DE-specific dialog tool is
 // ever used.
-func (c *Command) runProgress(options *Options, reporter *Reporter, title, prompt string, work func(ui.Progress) (int, error)) (int, error) {
+func (c *Command) runProgress(options *Options, reporter *Reporter, run windowRun, work func(ui.Progress) (int, error)) (int, error) {
 	env := c.environment()
 	forced := options.NoGUI || options.NonInteractive || reporter.AsJSON
 	if ui.ShouldAttemptGUI(env, forced) {
@@ -513,12 +523,22 @@ func (c *Command) runProgress(options *Options, reporter *Reporter, title, promp
 			workErr error
 		)
 		declined := false
-		_, started := c.startWindow(title, func(progress ui.Progress) int {
-			if confirmer, ok := progress.(ui.Confirmer); ok && !confirmer.Confirm(prompt) {
+		_, started := c.startWindow(run.Title, func(progress ui.Progress) int {
+			if planner, ok := progress.(ui.Planner); ok {
+				planner.Plan(run.Steps)
+			}
+			if confirmer, ok := progress.(ui.Confirmer); ok && !confirmer.Confirm(run.Prompt) {
 				declined = true
 				return ExitError
 			}
+			if logger, ok := progress.(ui.Logger); ok {
+				reporter.Tee = logger.Log
+				defer func() { reporter.Tee = nil }()
+			}
 			code, workErr = work(progress)
+			if workErr != nil {
+				progress.Finish(run.failure(workErr), false)
+			}
 			return code
 		})
 		if started && declined {
@@ -533,6 +553,23 @@ func (c *Command) runProgress(options *Options, reporter *Reporter, title, promp
 		}
 	}
 	return work(c.progress(options, reporter))
+}
+
+// windowRun describes a long run to the progress window.
+type windowRun struct {
+	Title  string
+	Prompt string
+	// Steps are the labels the run will report, in order; nil lists them as they finish.
+	Steps []string
+	// Cancelled is what the window says when the person aborts mid-run.
+	Cancelled string
+}
+
+func (r windowRun) failure(err error) string {
+	if errors.Is(err, plan.ErrCancelled) {
+		return r.Cancelled
+	}
+	return err.Error()
 }
 
 func (c *Command) planOptions(options *Options, gameDir string, located *Located) plan.Options {
@@ -674,7 +711,17 @@ func (c *Command) doInstall(options *Options, reporter *Reporter, gameDir, packa
 		return ExitOK, nil
 	}
 
-	code, err := c.runProgress(options, reporter, "Megabonk Levels installer", "Install Megabonk Levels?", func(progress ui.Progress) (int, error) {
+	steps := make([]string, 0, len(built.Actions))
+	for _, action := range built.Actions {
+		steps = append(steps, action.Label())
+	}
+	installRun := windowRun{
+		Title:     "Megabonk Levels installer",
+		Prompt:    "Install Megabonk Levels",
+		Steps:     steps,
+		Cancelled: "Cancelled; files already placed were rolled back.",
+	}
+	code, err := c.runProgress(options, reporter, installRun, func(progress ui.Progress) (int, error) {
 		taken, err := plan.ApplyPlan(built, progress)
 		if err != nil {
 			return 0, err
@@ -688,6 +735,9 @@ func (c *Command) doInstall(options *Options, reporter *Reporter, gameDir, packa
 			return ExitOK, nil
 		}
 		c.reportInstall(reporter, built, taken, pkg)
+		if shower, ok := progress.(ui.LaunchOptionShower); ok && built.LaunchOption != nil {
+			shower.ShowLaunchOption(*built.LaunchOption)
+		}
 		return ExitOK, nil
 	})
 	if errors.Is(err, plan.ErrCancelled) {
@@ -735,7 +785,12 @@ func (c *Command) doUninstall(options *Options, reporter *Reporter, gameDir stri
 		reporter.Say("nothing to uninstall: no installer record in " + gameDir)
 		return ExitOK, nil
 	}
-	code, err := c.runProgress(options, reporter, "Megabonk Levels uninstaller", "Uninstall Megabonk Levels?", func(progress ui.Progress) (int, error) {
+	uninstallRun := windowRun{
+		Title:     "Megabonk Levels uninstaller",
+		Prompt:    "Uninstall Megabonk Levels",
+		Cancelled: "Stopped; run the uninstaller again to finish.",
+	}
+	code, err := c.runProgress(options, reporter, uninstallRun, func(progress ui.Progress) (int, error) {
 		removed, err := plan.Uninstall(gameDir, progress)
 		if err != nil {
 			return 0, err

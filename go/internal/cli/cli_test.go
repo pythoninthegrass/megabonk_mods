@@ -7,9 +7,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -786,21 +788,31 @@ func TestHelpExitsZero(t *testing.T) {
 
 // fakeWindowProgress stands in for window.Progress in the cli tests.
 type fakeWindowProgress struct {
-	steps       int
-	cancelAfter int
-	decline     bool
-	prompts     []string
+	steps        int
+	cancelAfter  int
+	decline      bool
+	prompts      []string
+	planned      []string
+	logged       []string
+	finishes     []string
+	launchOption string
 }
+
+func (f *fakeWindowProgress) Plan(labels []string)        { f.planned = labels }
+func (f *fakeWindowProgress) Log(line string)             { f.logged = append(f.logged, line) }
+func (f *fakeWindowProgress) ShowLaunchOption(opt string) { f.launchOption = opt }
 
 func (f *fakeWindowProgress) Confirm(prompt string) bool {
 	f.prompts = append(f.prompts, prompt)
 	return !f.decline
 }
 
-func (f *fakeWindowProgress) Start(int, string)   {}
-func (f *fakeWindowProgress) Step(string)         { f.steps++ }
-func (f *fakeWindowProgress) Finish(string, bool) {}
-func (f *fakeWindowProgress) Cancelled() bool     { return f.cancelAfter >= 0 && f.steps >= f.cancelAfter }
+func (f *fakeWindowProgress) Start(int, string) {}
+func (f *fakeWindowProgress) Step(string)       { f.steps++ }
+func (f *fakeWindowProgress) Finish(message string, ok bool) {
+	f.finishes = append(f.finishes, fmt.Sprintf("%v:%s", ok, message))
+}
+func (f *fakeWindowProgress) Cancelled() bool { return f.cancelAfter >= 0 && f.steps >= f.cancelAfter }
 
 func windowed(t *testing.T, driver func(title string, work func(ui.Progress) int) (int, bool)) *Command {
 	t.Helper()
@@ -848,6 +860,38 @@ func TestInstallThroughTheWindowDriver(t *testing.T) {
 	}
 	if content.LoadRecord(game) == nil {
 		t.Error("the install did not happen through the window driver")
+	}
+}
+
+func TestWindowReceivesThePlanAndTheSummary(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	fake := &fakeWindowProgress{cancelAfter: -1}
+	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
+		return work(fake), true
+	})
+	if exit := command.Main([]string{"--package", packageDir, "--game-dir", game}); exit != ExitOK {
+		t.Fatalf("exit = %d\n%s\n%s", exit, command.Stdout, command.Stderr)
+	}
+	if len(fake.planned) == 0 {
+		t.Error("the window was never given the planned steps")
+	}
+	if len(fake.prompts) != 1 || fake.prompts[0] != "Install Megabonk Levels" {
+		t.Errorf("prompts = %v", fake.prompts)
+	}
+	if !slices.ContainsFunc(fake.logged, func(line string) bool { return strings.HasPrefix(line, "installed ") }) {
+		t.Errorf("the summary never reached the details log: %v", fake.logged)
+	}
+}
+
+func TestWindowIsToldWhenAnInstallIsCancelled(t *testing.T) {
+	packageDir, game := makePackage(t), makeGame(t)
+	fake := &fakeWindowProgress{cancelAfter: 1}
+	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
+		return work(fake), true
+	})
+	command.Main([]string{"--package", packageDir, "--game-dir", game})
+	if len(fake.finishes) != 1 || !strings.HasPrefix(fake.finishes[0], "false:") || !strings.Contains(fake.finishes[0], "rolled back") {
+		t.Errorf("finishes = %v", fake.finishes)
 	}
 }
 
@@ -1033,7 +1077,7 @@ func TestApplyPlanThroughTheCommandUsesTheProgressReporter(t *testing.T) {
 	if !strings.HasSuffix(lines[0], "MelonLoader") && !strings.Contains(lines[0], "/") {
 		t.Errorf("first progress line = %q", lines[0])
 	}
-	if lines[len(lines)-1] != "installed" {
+	if lines[len(lines)-1] != "Installed" {
 		t.Errorf("last progress line = %q", lines[len(lines)-1])
 	}
 }

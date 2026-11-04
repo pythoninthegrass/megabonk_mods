@@ -13,6 +13,8 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Progress is what the installer reports through. Start opens a run, Step marks
@@ -30,9 +32,25 @@ type Cancellable interface {
 }
 
 // Confirmer is implemented by reporters that can ask before anything changes;
-// the window shows Yes and Cancel buttons, text reporters never ask.
+// the window shows Cancel and Install buttons, text reporters never ask.
 type Confirmer interface {
 	Confirm(prompt string) bool
+}
+
+// Planner is implemented by reporters that list the steps of a run up front.
+type Planner interface {
+	Plan(labels []string)
+}
+
+// Logger is implemented by reporters that keep a details log.
+type Logger interface {
+	Log(line string)
+}
+
+// LaunchOptionShower is implemented by reporters that can show the Steam launch
+// option the player has to paste.
+type LaunchOptionShower interface {
+	ShowLaunchOption(option string)
 }
 
 // NullProgress swallows everything.
@@ -90,7 +108,16 @@ func (p *TextProgress) Step(label string) {
 
 // Finish prints the closing message.
 func (p *TextProgress) Finish(message string, ok bool) {
-	p.emit(message)
+	p.emit(Capitalize(message))
+}
+
+// Capitalize uppercases the first letter of s, leaving the rest as it is.
+func Capitalize(s string) string {
+	first, size := utf8.DecodeRuneInString(s)
+	if size == 0 {
+		return s
+	}
+	return string(unicode.ToUpper(first)) + s[size:]
 }
 
 // Environ is the process environment as a map, for the checks below.
