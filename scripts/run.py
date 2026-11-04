@@ -397,7 +397,7 @@ def build_heartbeat_command(enabled: bool) -> dict[str, object]:
     return {"command": "heartbeat", "enabled": enabled}
 
 
-PERF_ACTIONS = ("report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health", "census")
+PERF_ACTIONS = ("report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health", "census", "render")
 PERF_MAX_ENEMIES = 300
 PERF_MIN_TIME_SCALE = 0.05
 PERF_MAX_TIME_SCALE = 20.0
@@ -1358,8 +1358,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     perf.add_argument("--count", type=perf_count, help=f"enemies to spawn around the player (1-{PERF_MAX_ENEMIES}), for 'spawn'")
     perf.add_argument("--value", type=perf_time_scale, help=f"time scale to hold ({PERF_MIN_TIME_SCALE}-{PERF_MAX_TIME_SCALE}) for 'timescale'; omit to release it")
     perf.add_argument("--target", help="for 'toggle': a tick name (KillFloor), a patch probe (EnemyManager.Update), or all")
-    perf.add_argument("--enable", action="store_true", help="with 'toggle', turn the target on")
-    perf.add_argument("--disable", action="store_true", help="with 'toggle', turn the target off")
+    perf.add_argument("--enable", action="store_true", help="with 'toggle', 'vsync' or 'render', turn the target on")
+    perf.add_argument("--disable", action="store_true", help="with 'toggle', 'vsync' or 'render', turn the target off")
     perf.add_argument("--hp", type=perf_hp, help=f"player hit points to park the player at (1-{PERF_MAX_PLAYER_HP}), for 'health'")
     editor = sub.add_parser("editor")
     editor.add_argument("state", choices=["on", "off"])
@@ -1583,7 +1583,7 @@ def perf_payload(args: argparse.Namespace) -> dict[str, object]:
     if verb == "spawn" and args.count is None:
         raise SystemExit(f"perf spawn: give --count N (1-{PERF_MAX_ENEMIES})")
     enabled = None
-    if verb in ("toggle", "vsync"):
+    if verb in ("toggle", "vsync", "render"):
         if args.enable == args.disable:
             raise SystemExit(f"perf {verb}: give exactly one of --enable or --disable")
         enabled = args.enable

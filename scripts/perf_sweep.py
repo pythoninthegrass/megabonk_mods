@@ -59,12 +59,75 @@ def suspect_reason(report: dict, *, target: int) -> str | None:
     return None
 
 
-def plan(counts: list[int] | tuple[int, ...]) -> list[tuple[str, int]]:
+def render_suspect_reason(report: dict, *, target: int) -> str | None:
+    """Why a render-arm window is not a clean A/B, or None. Kept but flagged, like suspect_reason."""
+    renderers_off = report.get("_renderersOff")
+    if report.get("_renderArm") == "on":
+        if renderers_off:
+            return f"the render cull still disabled {renderers_off} renderers with rendering asked for"
+        return None
+    if report.get("_renderArm") != "off":
+        return None
+    if target and not renderers_off:
+        return f"the render cull disabled no renderers at {target} enemies"
+    if not target and renderers_off:
+        return f"the render cull disabled {renderers_off} renderers with no enemies alive"
+    return None
+
+
+def render_arm_payload(render_on: bool) -> dict:
+    """The perf payload for one arm: `enabled` says whether enemy rendering is wanted, so the off arm sends false."""
+    return {"action": "render", "enabled": bool(render_on)}
+
+
+def cull_ms_per_frame(report: dict) -> float | None:
+    """Per-frame cost of the harness's own cull tick, or None when it never ran. The off arm pays it, so the split needs it."""
+    frames = report.get("frames") or 0
+    tick = next((entry for entry in report.get("ticks") or [] if entry.get("name") == "RenderCull"), None)
+    if not frames or tick is None:
+        return None
+    return round((tick.get("ms") or 0) / frames, 4)
+
+
+def player_start_suspect_reason(
+    position: list[float] | None, origin: tuple[float, float, float] | None, tolerance: float = 8.0
+) -> str | None:
+    """Why a window did not start where it was told to, or None.
+
+    The gate catches a teleport that did not land, which leaves the player hundreds of units from the swarm. It is
+    not a gate on crowd shoving: 240 enemies piled on the standing point push the player a few units during the
+    settle, and windows measured there have offsets of 2-5 units.
+    """
+    if not position or not origin:
+        return None
+    distance = sum((position[i] - origin[i]) ** 2 for i in range(3)) ** 0.5
+    if distance <= tolerance:
+        return None
+    return f"the player was {distance:.1f} units from the fixed point at window start"
+
+
+def plan(counts: list[int] | tuple[int, ...]) -> list[tuple[str, int, bool | None]]:
     """One window per count, then the two controls at the largest: every mod tick off, then back on."""
-    windows = [(f"count_{count}", count) for count in counts]
+    windows = [(f"count_{count}", count, None) for count in counts]
     top = max(counts) if counts else 0
-    windows.append((f"count_{top}_modoff", top))
-    windows.append((f"count_{top}_reenabled", top))
+    windows.append((f"count_{top}_modoff", top, None))
+    windows.append((f"count_{top}_reenabled", top, None))
+    return windows
+
+
+def render_plan(counts: list[int] | tuple[int, ...], repeats: int) -> list[tuple[str, int, bool]]:
+    """Two windows per count per repeat, arms strictly alternating and the leading arm flipped every repeat.
+
+    rendon is the ordinary run, rendoff hides only the enemy renderers with AI, physics and animation still
+    running. The window names carry the repeat so the two arms are never confused across sessions. Cost walks
+    upward through a session, so an arm that is always measured second would absorb that drift alone.
+    """
+    windows: list[tuple[str, int, bool]] = []
+    for count in counts:
+        for repeat in range(1, repeats + 1):
+            for render_on in ((True, False) if repeat % 2 else (False, True)):
+                arm = "rendon" if render_on else "rendoff"
+                windows.append((f"count_{count}_{arm}_r{repeat}", count, render_on))
     return windows
 
 
@@ -88,6 +151,15 @@ def capture_trigger_batch() -> list:
     return [["key", "KEY_F12"]]
 
 
+def startup_dismiss_batch() -> list:
+    """The menu-driver input that clears the Photosensitivity Warning a Proton launch shows on every boot.
+
+    A load-level sent while it is up returns no MapData, so the sweep drives Enter once after launch
+    instead of burning load retries on it.
+    """
+    return [["key", "KEY_ENTER"]]
+
+
 def pair_captures(before: dict[str, float], after: dict[str, float]) -> list[str]:
     """The capture files that appeared during a window, oldest first, so capture i maps to trigger i."""
     return sorted((name for name in after if name not in before and name.endswith(".rdc")), key=after.__getitem__)
@@ -108,6 +180,7 @@ class Sweeper:
         self.game = hb.resolve_game_dir(hb.load_lookup())
         self.harness = self.game / "harness"
         self.log = self.game / "MelonLoader" / "Latest.log"
+        self.menu_service_started = False
 
     def log_line(self, message: str) -> None:
         print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
@@ -189,7 +262,11 @@ class Sweeper:
         self.log_line(f"harness up, Steamworks {verdict}")
 
     def load_with_retries(self) -> None:
-        """Send the load until the kill floor arms: a load the game drops leaves no trace but a missing run."""
+        """Send the load until the kill floor arms: a load the game drops leaves no trace but a missing run.
+
+        A Proton launch parks the Photosensitivity Warning over the main menu, and a load sent while it is up is
+        refused with no MapData, so that refusal earns an Enter through the menu driver before the retry.
+        """
         command = hb.build_load_level_command(
             hb.to_game_path(Path(self.args.level).resolve()), map=self.args.map, tier=self.args.tier, seed=self.args.seed
         )
@@ -199,6 +276,8 @@ class Sweeper:
                 self.send(command, timeout=120.0)
             except SystemExit as rejected:
                 self.log_line(f"load attempt {attempt} rejected: {rejected}")
+                if "no MapData" in str(rejected):
+                    self.dismiss_startup_warning()
             if self.wait_for_log("KillFloor: armed", 75, offset):
                 self.log_line(f"run started on load attempt {attempt}")
                 return
@@ -260,6 +339,38 @@ class Sweeper:
         )
         if proc.returncode != 0 and "already running" not in proc.stdout + proc.stderr:
             self.require(False, f"menu service start failed: {proc.stdout} {proc.stderr}")
+        self.menu_service_started = True
+
+    def dismiss_startup_warning(self) -> None:
+        """Best-effort Enter for the Photosensitivity Warning; a host without the menu driver only logs and moves on.
+
+        The load retries remain the backstop, so nothing here is fatal.
+        """
+        try:
+            start = subprocess.run(
+                [sys.executable, str(REPO / "scripts" / "run.py"), "menu", "start"],
+                cwd=REPO,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if start.returncode != 0 and "already running" not in start.stdout + start.stderr:
+                self.log_line(f"startup Enter skipped: menu start failed: {start.stdout} {start.stderr}")
+                return
+            self.menu_service_started = True
+            drive = subprocess.run(
+                [sys.executable, str(REPO / "scripts" / "run.py"), "menu", "drive", json.dumps(startup_dismiss_batch())],
+                cwd=REPO,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if drive.returncode != 0:
+                self.log_line(f"startup Enter failed: {drive.stdout} {drive.stderr}")
+            else:
+                self.log_line("drove Enter for the Photosensitivity Warning")
+        except subprocess.TimeoutExpired:
+            self.log_line("startup Enter timed out, the load retries will cover it")
 
     def collect_captures(self, name: str, attempt: int, before: dict[str, float]) -> list[str]:
         """Move the window's new capture files under the sweep's out directory and name them in the window JSON."""
@@ -277,7 +388,7 @@ class Sweeper:
             paths.append(moved.name)
         return paths
 
-    def measure(self, name: str, target: int, attempt: int, origin: tuple[float, float, float]) -> dict | None:
+    def measure(self, name: str, target: int, attempt: int, origin: tuple[float, float, float], render_on: bool | None = None) -> dict | None:
         """One window, or None when the gates say to take it again.
 
         The spawn stays outside the window. The teleport before it keeps the run alive and the swarm's shape
@@ -288,6 +399,7 @@ class Sweeper:
         self.live(f"before {name}")
         self.send(hb.build_teleport_command(position=origin))
         time.sleep(0.5)
+        player_start = (self.verb("state").get("player") or {}).get("position")
         self.perf("health", hp=self.args.hp)
         current = self.perf("status")["enemiesLast"]
         if target - current > 0:
@@ -296,6 +408,10 @@ class Sweeper:
         if self.args.density == "strung":
             self.send(hb.build_teleport_command(position=list(strung_position(origin, self.args.strung_offset))))
             time.sleep(0.5)
+        render_info = None
+        if render_on is not None:
+            render_info = self.perf(**render_arm_payload(render_on))
+        position_before = self.perf("status").get("enemyPositionSum")
         before = snapshot_captures(self.args.capture_dir) if self.args.captures else {}
         self.perf("start")
         dismissed = 0
@@ -312,6 +428,7 @@ class Sweeper:
                 dismissed += 1
                 self.log_line(f"  skipped a reward window inside {name}")
         report = self.perf("report")
+        status_after = self.perf("status")
         tag = name if attempt == 1 else f"{name}#{attempt}"
         reasons = discard_reasons(report, window_seconds=self.args.seconds, min_fps=self.args.min_fps)
         if reasons:
@@ -327,23 +444,47 @@ class Sweeper:
         report["_density"] = self.args.density
         if self.args.density == "strung":
             report["_strungOffset"] = self.args.strung_offset
+        if render_on is not None:
+            report["_renderArm"] = "on" if render_on else "off"
+            report["_renderersOff"] = (render_info or {}).get("renderersOff")
+            report["_cullMsPerFrame"] = cull_ms_per_frame(report)
+        report["_positionSumBefore"] = position_before
+        report["_positionSumAfter"] = status_after.get("enemyPositionSum")
+        report["_playerAtOrigin"] = player_start
+        report["_origin"] = list(origin)
         if self.args.captures:
             report["_captures"] = self.collect_captures(name, attempt, before)
-        report["_suspect"] = suspect_reason(report, target=target)
+        suspects = [
+            reason
+            for reason in (
+                suspect_reason(report, target=target),
+                render_suspect_reason(report, target=target),
+                player_start_suspect_reason(player_start, origin),
+            )
+            if reason
+        ]
+        report["_suspect"] = "; ".join(suspects) if suspects else None
         (self.args.out / f"{name}.json").write_text(json.dumps(report, indent=1))
+        render_suffix = ""
+        if "_renderArm" in report:
+            cull = report["_cullMsPerFrame"]
+            render_suffix = f" render={report['_renderArm']} renderersOff={report['_renderersOff']}" + (
+                f" cull={cull:.3f}ms/f" if cull is not None else ""
+            )
         self.log_line(
             f"{tag:>23} target={target:3d} alive={report['enemiesMin']:3d}..{report['enemiesMax']:3d} "
             f"frames={report['frames']:5d} mean={report['meanMs']:6.2f} p50={report['p50Ms']:6.2f} "
             f"p90={report['p90Ms']:6.2f} p99={report['p99Ms']:7.2f} max={report['maxMs']:7.2f} "
             f"mod={report['modMsPerFrame']:6.3f} gc={report['gcPauseMsPerFrame']:6.3f}"
             + (f" density={self.args.density}" if self.args.density != "gathered" else "")
+            + render_suffix
             + (f"  SUSPECT: {report['_suspect']}" if report["_suspect"] else "")
         )
         return report
 
-    def window(self, name: str, target: int, origin: tuple[float, float, float]) -> dict:
+    def window(self, name: str, target: int, origin: tuple[float, float, float], render_on: bool | None = None) -> dict:
         for attempt in range(1, self.args.attempts + 1):
-            report = self.measure(name, target, attempt, origin)
+            report = self.measure(name, target, attempt, origin, render_on=render_on)
             if report is not None:
                 return report
         raise SystemExit(f"ABORT: {name} was unusable on all {self.args.attempts} attempts")
@@ -376,16 +517,26 @@ class Sweeper:
                 "so timing tables come from capture-free runs"
             )
 
+        windows = (
+            render_plan(self.args.counts, self.args.render_arms)
+            if self.args.render_arms
+            else plan(self.args.counts)
+        )
         try:
-            for name, target in plan(self.args.counts):
+            for name, target, render_on in windows:
                 if name.endswith("_modoff"):
                     self.perf("toggle", target="all", enabled=False)
                 elif name.endswith("_reenabled"):
                     self.perf("toggle", target="all", enabled=True)
-                self.window(name, target, origin)
+                self.window(name, target, origin, render_on)
                 self.log_line(f"  player at {(self.verb('state').get('player') or {}).get('position')} after {name}")
         finally:
-            if self.args.captures:
+            if self.args.render_arms:
+                try:
+                    self.perf("render", enabled=True)
+                except SystemExit as failure:
+                    self.log_line(f"render restore failed: {failure}")
+            if self.args.captures or self.menu_service_started:
                 subprocess.run([sys.executable, str(REPO / "scripts" / "run.py"), "menu", "stop"], cwd=REPO, capture_output=True)
 
         (self.args.out / "status.json").write_text(json.dumps(self.perf("status"), indent=1))
@@ -430,6 +581,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--tier", type=int, default=None, help="tier to load")
     parser.add_argument("--seed", type=int, default=None, help="seed to load, so a sweep is reproducible")
     parser.add_argument("--no-relaunch", dest="relaunch", action="store_false", help="measure the run already loaded")
+    parser.add_argument(
+        "--render-arms",
+        type=int,
+        default=None,
+        metavar="N",
+        help="replace the count ladder with the render-only A/B: per count, N alternating rendon/rendoff window pairs "
+        "with the enemy renderers culled in the off arm",
+    )
     parser.set_defaults(counts=None, relaunch=True)
     args = parser.parse_args(argv)
     if args.counts is None:
@@ -440,6 +599,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--seconds must be positive")
     if args.strung_offset < 0:
         parser.error("--strung-offset must be 0 or greater")
+    if args.render_arms is not None and args.render_arms < 1:
+        parser.error("--render-arms must be 1 or more")
     if not 0 <= args.captures <= 8:
         parser.error("--captures must be between 0 and 8")
     return args

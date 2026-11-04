@@ -2061,7 +2061,7 @@ def test_relaunch_forwards_the_overrides_to_the_load(monkeypatch) -> None:
 
 @pytest.mark.parametrize(
     "verb",
-    ["report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health", "census"],
+    ["report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health", "census", "render"],
 )
 def test_perf_verb_is_a_subcommand_argument(verb: str) -> None:
     args = run.parse_args(["perf", verb])
@@ -2142,6 +2142,20 @@ def test_perf_health_rejects_hp_outside_the_range(hp: str) -> None:
 @pytest.mark.parametrize("flags", [[], ["--enable", "--disable"]])
 def test_perf_toggle_needs_exactly_one_state_flag(flags: list[str]) -> None:
     args = run.parse_args(["perf", "toggle", "--target", "KillFloor", *flags])
+    with pytest.raises(SystemExit, match="enable"):
+        run.perf_payload(args)
+
+
+def test_perf_render_payload_carries_the_state() -> None:
+    args = run.parse_args(["perf", "render", "--disable"])
+    assert run.perf_payload(args) == {"command": "perf", "action": "render", "enabled": False}
+    args = run.parse_args(["perf", "render", "--enable"])
+    assert run.perf_payload(args) == {"command": "perf", "action": "render", "enabled": True}
+
+
+@pytest.mark.parametrize("flags", [[], ["--enable", "--disable"]])
+def test_perf_render_needs_exactly_one_state_flag(flags: list[str]) -> None:
+    args = run.parse_args(["perf", "render", *flags])
     with pytest.raises(SystemExit, match="enable"):
         run.perf_payload(args)
 

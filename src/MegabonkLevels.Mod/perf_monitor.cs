@@ -28,6 +28,7 @@ public enum PerfTick
     MenuNotice,
     PositionLabel,
     EditorMode,
+    RenderCull,
 }
 
 // Harness-driven frame profiler: frame times, per-tick and per-patch timers, forced enemy counts and a held time scale.
@@ -144,6 +145,9 @@ public static class PerfMonitor
                 $"state: window={_windowId} frames={_frames.Count} paused={_frames.PausedFrames} " +
                 $"enemies={LiveEnemyCount()} timeScale={Number(MyTime.timeScale)} held={_timeScaleHeld}");
         }
+
+        // Timed like the other ticks: the cull's own rescan is part of what the off arm costs, so it has to be visible.
+        Timed(PerfTick.RenderCull, EnemyRenderCull.Apply);
     }
 
     // Wraps one mod tick so its own cost is attributable. The guard keeps a session without the harness free of timing calls.
@@ -155,7 +159,9 @@ public static class PerfMonitor
             return;
         }
 
-        if (tick != PerfTick.DevHarnessPoll && IsTickOff(tick))
+        // The harness's own control ticks stay on whatever a toggle asks for, like the command channel: switching the
+        // mod's work off must not silently strand an armed render A/B with enemies hidden and nothing rescanning them.
+        if (!IsUngated(tick) && IsTickOff(tick))
         {
             return;
         }
@@ -217,6 +223,8 @@ public static class PerfMonitor
             ["paused"] = MyTime.paused,
             ["vSyncCount"] = QualitySettings.vSyncCount,
             ["targetFrameRate"] = Application.targetFrameRate,
+            ["renderCull"] = RenderCullNode(),
+            ["enemyPositionSum"] = Number(EnemyRenderCull.EnemyPositionSum()),
             ["ticks"] = TicksNode(),
             ["probes"] = ProbesNode(),
             ["probeAttach"] = PerfProbes.AttachNode(),
@@ -246,6 +254,8 @@ public static class PerfMonitor
             ["paused"] = MyTime.paused,
             ["heldTimeScale"] = _timeScaleHeld ? Number(_heldTimeScale) : null,
             ["defaultTimeScale"] = Number(DefaultTimeScale()),
+            ["renderCull"] = RenderCullNode(),
+            ["enemyPositionSum"] = Number(EnemyRenderCull.EnemyPositionSum()),
             ["ticks"] = TicksNode(),
             ["probes"] = ProbesNode(),
             ["probeAttach"] = PerfProbes.AttachNode(),
@@ -267,6 +277,12 @@ public static class PerfMonitor
             slot.Enabled = true;
         }
 
+        var wasCulled = EnemyRenderCull.Armed;
+        if (wasCulled)
+        {
+            EnemyRenderCull.Set(true, _logger);
+        }
+
         StartWindow();
         var restoredPlayer = _playerOverridden;
         if (_playerOverridden)
@@ -275,12 +291,13 @@ public static class PerfMonitor
             PlayerInvulnerability.Set(false, _logger);
         }
 
-        Log($"reset: timers cleared, timeScale={Number(MyTime.timeScale)}, all ticks and probes enabled, player grant restored={restoredPlayer}");
+        Log($"reset: timers cleared, timeScale={Number(MyTime.timeScale)}, all ticks and probes enabled, player grant restored={restoredPlayer}, render cull restored={wasCulled}");
         return new JsonObject
         {
             ["reset"] = true,
             ["timeScale"] = Number(MyTime.timeScale),
             ["playerGrantRestored"] = restoredPlayer,
+            ["renderCullRestored"] = wasCulled,
         };
     }
 
@@ -401,13 +418,17 @@ public static class PerfMonitor
         };
     }
 
+    // The render-only control: enabled=false hides every enemy renderer (submission side) with AI, physics and animation running;
+    // enabled=true restores them. It is the A/B against count_240, so it lives beside the vsync and health controls.
+    public static JsonObject SetEnemyRenderers(bool enabled) => EnemyRenderCull.Set(enabled, _logger);
+
     public static JsonObject Toggle(string target, bool enabled)
     {
         if (string.Equals(target, "all", StringComparison.OrdinalIgnoreCase))
         {
             foreach (PerfTick entry in Enum.GetValues(typeof(PerfTick)))
             {
-                if (entry == PerfTick.DevHarnessPoll && !enabled)
+                if (IsUngated(entry) && !enabled)
                 {
                     continue;
                 }
@@ -426,9 +447,9 @@ public static class PerfMonitor
 
         if (TryParseTick(target, out var tick))
         {
-            if (tick == PerfTick.DevHarnessPoll && !enabled)
+            if (IsUngated(tick) && !enabled)
             {
-                Log("toggle: DevHarnessPoll stays on, it is the command channel");
+                Log($"toggle: {tick} stays on, it is a harness control rather than mod work");
                 return new JsonObject { ["target"] = target, ["enabled"] = true, ["ignored"] = true };
             }
 
@@ -535,6 +556,10 @@ public static class PerfMonitor
 
     private static bool IsTickOff(PerfTick tick) => _tickEnabled.TryGetValue(tick, out var enabled) && !enabled;
 
+    // Harness controls rather than mod work: the command channel and the render-only control keep running whatever a
+    // toggle asks for, so a mod-off control cannot strand an armed render A/B with enemies hidden and nothing applying.
+    private static bool IsUngated(PerfTick tick) => tick is PerfTick.DevHarnessPoll or PerfTick.RenderCull;
+
     private static ProbeSlot SlotFor(string name)
     {
         if (!_probes.TryGetValue(name, out var slot))
@@ -556,6 +581,12 @@ public static class PerfMonitor
 
         return Enum.TryParse(target, out tick);
     }
+
+    private static JsonObject RenderCullNode() => new()
+    {
+        ["armed"] = EnemyRenderCull.Armed,
+        ["renderersOff"] = EnemyRenderCull.DisabledCount,
+    };
 
     private static JsonArray TicksNode()
     {

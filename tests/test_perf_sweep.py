@@ -68,29 +68,29 @@ def test_windows_are_one_per_count_plus_the_mod_controls_at_the_top_count() -> N
     plan = perf_sweep.plan([0, 40, 240])
 
     assert plan == [
-        ("count_0", 0),
-        ("count_40", 40),
-        ("count_240", 240),
-        ("count_240_modoff", 240),
-        ("count_240_reenabled", 240),
+        ("count_0", 0, None),
+        ("count_40", 40, None),
+        ("count_240", 240, None),
+        ("count_240_modoff", 240, None),
+        ("count_240_reenabled", 240, None),
     ]
 
 
 def test_the_controls_follow_the_largest_count_whatever_order_the_counts_came_in() -> None:
     plan = perf_sweep.plan([240, 40, 120])
 
-    assert [name for name, _ in plan] == [
+    assert [name for name, _, _ in plan] == [
         "count_240",
         "count_40",
         "count_120",
         "count_240_modoff",
         "count_240_reenabled",
     ]
-    assert [target for _, target in plan[-2:]] == [240, 240]
+    assert [target for _, target, _ in plan[-2:]] == [240, 240]
 
 
 def test_a_single_count_still_gets_its_own_controls() -> None:
-    assert [name for name, _ in perf_sweep.plan([80])] == [
+    assert [name for name, _, _ in perf_sweep.plan([80])] == [
         "count_80",
         "count_80_modoff",
         "count_80_reenabled",
@@ -186,3 +186,124 @@ def test_pair_captures_ignores_preexisting_files() -> None:
 
 def test_pair_captures_ignores_files_that_are_not_captures() -> None:
     assert perf_sweep.pair_captures({}, {"log.txt": 9.0, "frame1.rdc.tmp": 3.0}) == []
+
+
+# --- Render-only A/B: interleaved on/off arms per count, gated like every other window ---
+
+
+def test_render_arms_alternate_the_arms_within_every_repeat() -> None:
+    windows = perf_sweep.render_plan([0, 240], 3)
+
+    assert [name for name, _, _ in windows] == [
+        "count_0_rendon_r1",
+        "count_0_rendoff_r1",
+        "count_0_rendoff_r2",
+        "count_0_rendon_r2",
+        "count_0_rendon_r3",
+        "count_0_rendoff_r3",
+        "count_240_rendon_r1",
+        "count_240_rendoff_r1",
+        "count_240_rendoff_r2",
+        "count_240_rendon_r2",
+        "count_240_rendon_r3",
+        "count_240_rendoff_r3",
+    ]
+
+
+def test_render_arms_hand_the_leading_arm_over_each_repeat() -> None:
+    """A fixed arm order makes the always-second arm absorb the within-session drift the doc records."""
+    arms = [render_on for _, _, render_on in perf_sweep.render_plan([240], 4)]
+
+    assert arms == [True, False, False, True, True, False, False, True]
+
+
+def test_render_arms_pair_every_count_with_both_arms() -> None:
+    windows = perf_sweep.render_plan([0, 120, 240], 2)
+
+    assert {(target, render_on) for _, target, render_on in windows} == {
+        (0, True),
+        (0, False),
+        (120, True),
+        (120, False),
+        (240, True),
+        (240, False),
+    }
+
+
+def test_render_arms_keep_the_toggles_untouched_outside_the_mode() -> None:
+    windows = perf_sweep.plan([0, 240])
+
+    assert all(render_on is None for _, _, render_on in windows)
+
+
+def test_a_cull_that_disabled_no_renderers_at_a_population_is_suspect() -> None:
+    reason = perf_sweep.render_suspect_reason({"_renderArm": "off", "_renderersOff": 0}, target=240)
+
+    assert reason == "the render cull disabled no renderers at 240 enemies"
+
+
+def test_a_cull_that_disabled_renderers_with_no_enemies_is_suspect() -> None:
+    reason = perf_sweep.render_suspect_reason({"_renderArm": "off", "_renderersOff": 5}, target=0)
+
+    assert reason == "the render cull disabled 5 renderers with no enemies alive"
+
+
+def test_healthy_render_arms_are_not_suspect() -> None:
+    assert perf_sweep.render_suspect_reason({"_renderArm": "off", "_renderersOff": 480}, target=240) is None
+    assert perf_sweep.render_suspect_reason({"_renderArm": "on", "_renderersOff": 0}, target=240) is None
+    assert perf_sweep.render_suspect_reason({"_renderArm": "off", "_renderersOff": 0}, target=0) is None
+
+
+def test_a_window_asked_for_rendering_that_still_hid_renderers_is_suspect() -> None:
+    reason = perf_sweep.render_suspect_reason({"_renderArm": "on", "_renderersOff": 240}, target=240)
+
+    assert reason == "the render cull still disabled 240 renderers with rendering asked for"
+
+
+def test_the_off_arm_asks_for_rendering_to_stop_and_the_on_arm_for_it_to_continue() -> None:
+    assert perf_sweep.render_arm_payload(True) == {"action": "render", "enabled": True}
+    assert perf_sweep.render_arm_payload(False) == {"action": "render", "enabled": False}
+
+
+def test_a_player_at_the_fixed_point_at_window_start_is_not_suspect() -> None:
+    assert perf_sweep.player_start_suspect_reason([0.0, 1.92, 0.0], (0.0, 1.92, 0.0)) is None
+    assert perf_sweep.player_start_suspect_reason([0.4, 1.92, -0.4], (0.0, 1.92, 0.0)) is None
+    # A swarm piled on the standing point shoves the player a few units during the settle; that is not a failed teleport.
+    assert perf_sweep.player_start_suspect_reason([3.1, 1.92, -3.1], (0.0, 1.92, 0.0)) is None
+
+
+def test_a_player_elsewhere_at_window_start_is_suspect() -> None:
+    reason = perf_sweep.player_start_suspect_reason([24.0, 1.92, 0.0], (0.0, 1.92, 0.0))
+
+    assert reason is not None
+    assert "fixed point" in reason and "24.0" in reason
+
+
+def test_a_missing_player_position_is_left_to_the_other_gates() -> None:
+    assert perf_sweep.player_start_suspect_reason(None, (0.0, 1.92, 0.0)) is None
+    assert perf_sweep.player_start_suspect_reason([0.0, 1.92, 0.0], None) is None
+
+
+def test_the_cull_reports_its_own_cost_per_frame_from_the_window_ticks() -> None:
+    report = {"frames": 2000, "ticks": [{"name": "KillFloor", "ms": 4.0}, {"name": "RenderCull", "ms": 12.0}]}
+
+    assert perf_sweep.cull_ms_per_frame(report) == 0.006
+    assert perf_sweep.cull_ms_per_frame({"frames": 2000, "ticks": []}) is None
+    assert perf_sweep.cull_ms_per_frame({"frames": 0, "ticks": [{"name": "RenderCull", "ms": 1.0}]}) is None
+
+
+def test_render_arms_needs_a_positive_repeat_count() -> None:
+    with pytest.raises(SystemExit):
+        perf_sweep.parse_args(["--render-arms", "0"])
+    with pytest.raises(SystemExit):
+        perf_sweep.parse_args(["--render-arms", "-1"])
+
+    assert perf_sweep.parse_args(["--render-arms", "3"]).render_arms == 3
+
+
+def test_render_arms_default_to_off_and_take_the_count_ladder() -> None:
+    assert perf_sweep.parse_args([]).render_arms is None
+
+
+def test_the_startup_warning_dismissal_is_an_enter_keypress_for_the_menu_driver() -> None:
+    assert perf_sweep.startup_dismiss_batch() == [["key", "KEY_ENTER"]]
