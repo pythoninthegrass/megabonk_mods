@@ -985,6 +985,31 @@ async def test_perf_tool_sends_render_with_its_enabled_state(tmp_path, monkeypat
     assert json.loads(result.content[0].text)["result"]["renderersOff"] == 240
 
 
+async def test_perf_tool_sends_the_engine_side_controls_with_their_enabled_state(tmp_path, monkeypatch) -> None:
+    """physics off kinematicises the enemy bodies, animation off stops their updates: both are the verb plus enabled."""
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def responder(payload):
+        seen.append(payload)
+        return ok_result(payload, {"armed": True})
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            physics = await client.call_tool("perf", {"verb": "physics", "enabled": False})
+            animation = await client.call_tool("perf", {"verb": "animation", "enabled": False})
+            restore = await client.call_tool("perf", {"verb": "physics", "enabled": True})
+    finally:
+        stop.set()
+    assert not physics.is_error and not animation.is_error and not restore.is_error
+    assert seen == [
+        {"command": "perf", "action": "physics", "enabled": False},
+        {"command": "perf", "action": "animation", "enabled": False},
+        {"command": "perf", "action": "physics", "enabled": True},
+    ]
+
+
 async def test_perf_tool_omits_arguments_a_verb_does_not_use(tmp_path, monkeypatch) -> None:
     harness = setup_harness(tmp_path, monkeypatch)
     seen = []
@@ -1017,6 +1042,8 @@ async def test_perf_tool_omits_arguments_a_verb_does_not_use(tmp_path, monkeypat
         ({"verb": "toggle", "target": "KillFloor"}, "enabled"),
         ({"verb": "toggle", "enabled": False}, "target"),
         ({"verb": "render"}, "enabled"),
+        ({"verb": "physics"}, "enabled"),
+        ({"verb": "animation"}, "enabled"),
         ({"verb": "health", "hp": 0}, "hp"),
         ({"verb": "health", "hp": 100000001}, "hp"),
     ],

@@ -8,6 +8,8 @@ Run on the machine hosting the game:
 
     uv run scripts/perf_sweep.py --out /tmp/perf
     uv run scripts/perf_sweep.py --count 0 --count 120 --count 240 --seconds 30
+    uv run scripts/perf_sweep.py --count 0 --count 240 --physics-arms 3    # the kinematic-rigidbody A/B
+    uv run scripts/perf_sweep.py --count 0 --count 240 --anim-arms 3       # the animation-stop A/B
 """
 
 from __future__ import annotations
@@ -61,32 +63,122 @@ def suspect_reason(report: dict, *, target: int) -> str | None:
 
 def render_suspect_reason(report: dict, *, target: int) -> str | None:
     """Why a render-arm window is not a clean A/B, or None. Kept but flagged, like suspect_reason."""
-    renderers_off = report.get("_renderersOff")
-    if report.get("_renderArm") == "on":
-        if renderers_off:
-            return f"the render cull still disabled {renderers_off} renderers with rendering asked for"
+    arm = report.get("_renderArm")
+    window = dict(report)
+    window["_controlArm"] = {"on": "rendon", "off": "rendoff"}.get(arm, arm)
+    window.setdefault("_controlState", {"renderersOff": report.get("_renderersOff")})
+    return control_suspect_reason(window, control="render", target=target)
+
+
+CONTROLS = ("render", "physics", "animation")
+CONTROL_ARMS = {
+    "render": ("rendon", "rendoff"),
+    "physics": ("physbase", "physkin"),
+    "animation": ("animbase", "animoff"),
+}
+CONTROL_TICKS = {"render": "RenderCull", "physics": "PhysicsFreeze", "animation": "AnimationCull"}
+CONTROL_STATUS_KEYS = {"render": "renderCull", "physics": "physicsFreeze", "animation": "animationCull"}
+CONTROL_COUNTERS = {"render": "renderersOff", "physics": "rigidbodiesKinematic", "animation": "behavioursOff"}
+CONTROL_WORDS = {
+    "render": ("render cull", "disabled", "renderers", "with rendering asked for"),
+    "physics": ("physics freeze", "kinematicised", "rigidbodies", "with the solver asked for"),
+    "animation": ("animation cull", "stopped", "animation components", "with animation asked for"),
+}
+FIDELITY_PROBES = (
+    "Enemy.MyFixedUpdate",
+    "EnemyMovementRb.MyFixedUpdate",
+    "AnimatedMesh.Update",
+    "EnemyManager.FixedUpdate",
+)
+
+
+def control_plan(counts: list[int] | tuple[int, ...], repeats: int, control: str) -> list[tuple[str, int, bool]]:
+    """Two windows per count per repeat for one control, arms strictly alternating and the leading arm flipped every repeat.
+
+    The first arm is the ordinary run; the second takes that control's work out with everything else still running. The
+    window names carry the repeat so the two arms are never confused across sessions. Cost walks upward through a
+    session, so an arm that is always measured second would absorb that drift alone.
+    """
+    if control not in CONTROLS:
+        raise SystemExit(f"ABORT: unknown control '{control}'; expected one of {', '.join(CONTROLS)}")
+    base, armed = CONTROL_ARMS[control]
+    windows: list[tuple[str, int, bool]] = []
+    for count in counts:
+        for repeat in range(1, repeats + 1):
+            for is_armed in ((False, True) if repeat % 2 else (True, False)):
+                windows.append((f"count_{count}_{armed if is_armed else base}_r{repeat}", count, is_armed))
+    return windows
+
+
+def control_arm_payload(control: str, armed: bool) -> dict:
+    """The perf payload for one arm: the verb is the control's name and `enabled` says whether its work is wanted."""
+    if control not in CONTROLS:
+        raise SystemExit(f"ABORT: unknown control '{control}'; expected one of {', '.join(CONTROLS)}")
+    return {"action": control, "enabled": not armed}
+
+
+def tick_ms_per_frame(report: dict, tick_name: str) -> float | None:
+    """Per-frame cost of one harness tick, or None when the window never ran or the tick never did."""
+    frames = report.get("frames") or 0
+    tick = next((entry for entry in report.get("ticks") or [] if entry.get("name") == tick_name), None)
+    if not frames or tick is None:
         return None
-    if report.get("_renderArm") != "off":
+    return round((tick.get("ms") or 0) / frames, 6)
+
+
+def probes_ms_per_frame(report: dict) -> dict[str, float]:
+    """ms/frame for the stock probes that show whether an arm changed work it was not meant to touch."""
+    frames = report.get("frames") or 0
+    if not frames:
+        return {}
+    by_name = {entry.get("name"): entry for entry in report.get("probes") or []}
+    return {name: round((by_name[name].get("ms") or 0) / frames, 6) if name in by_name else 0.0 for name in FIDELITY_PROBES}
+
+
+def control_suspect_reason(window: dict, *, control: str, target: int) -> str | None:
+    """Why one control's window is not a clean A/B, or None. Kept but flagged, like suspect_reason."""
+    if control not in CONTROL_ARMS:
         return None
-    if target and not renderers_off:
-        return f"the render cull disabled no renderers at {target} enemies"
-    if not target and renderers_off:
-        return f"the render cull disabled {renderers_off} renderers with no enemies alive"
+    label, past, noun, baseline_words = CONTROL_WORDS[control]
+    base, armed = CONTROL_ARMS[control]
+    arm = window.get("_controlArm")
+    if arm not in (base, armed):
+        return None
+    held = (window.get("_controlState") or {}).get(CONTROL_COUNTERS[control]) or 0
+    if arm == base:
+        return f"the {label} still {past} {held} {noun} {baseline_words}" if held else None
+    if target and not held:
+        return f"the {label} {past} no {noun} at {target} enemies"
+    if not target and held:
+        return f"the {label} {past} {held} {noun} with no enemies alive"
     return None
+
+
+def other_control_suspect_reason(status: dict, control: str) -> str | None:
+    """Why a window that should hold one control armed holds too many, or None.
+
+    Two armed controls measure neither of them: the window is the A/B of both at once and neither figure can be
+    attributed. This reads the harness's own account of what is armed rather than the sweep's intent.
+    """
+    strangers = [name for name in CONTROLS if name != control and (status.get(CONTROL_STATUS_KEYS[name]) or {}).get("armed")]
+    if not strangers:
+        return None
+    return f"{', '.join(strangers)} armed as well as {control}"
+
+
+def render_plan(counts: list[int] | tuple[int, ...], repeats: int) -> list[tuple[str, int, bool]]:
+    """The render-only A/B: the render control of the same machinery, with its third element read as render-on."""
+    return [(name, target, not armed) for name, target, armed in control_plan(counts, repeats, "render")]
 
 
 def render_arm_payload(render_on: bool) -> dict:
     """The perf payload for one arm: `enabled` says whether enemy rendering is wanted, so the off arm sends false."""
-    return {"action": "render", "enabled": bool(render_on)}
+    return control_arm_payload("render", not render_on)
 
 
 def cull_ms_per_frame(report: dict) -> float | None:
     """Per-frame cost of the harness's own cull tick, or None when it never ran. The off arm pays it, so the split needs it."""
-    frames = report.get("frames") or 0
-    tick = next((entry for entry in report.get("ticks") or [] if entry.get("name") == "RenderCull"), None)
-    if not frames or tick is None:
-        return None
-    return round((tick.get("ms") or 0) / frames, 4)
+    return tick_ms_per_frame(report, CONTROL_TICKS["render"])
 
 
 def player_start_suspect_reason(
@@ -388,7 +480,16 @@ class Sweeper:
             paths.append(moved.name)
         return paths
 
-    def measure(self, name: str, target: int, attempt: int, origin: tuple[float, float, float], render_on: bool | None = None) -> dict | None:
+    def measure(
+        self,
+        name: str,
+        target: int,
+        attempt: int,
+        origin: tuple[float, float, float],
+        render_on: bool | None = None,
+        control: str | None = None,
+        armed: bool | None = None,
+    ) -> dict | None:
         """One window, or None when the gates say to take it again.
 
         The spawn stays outside the window. The teleport before it keeps the run alive and the swarm's shape
@@ -396,6 +497,9 @@ class Sweeper:
         Mirror stacks and the hit points the health verb sets, and a swarm left to spread out across the map is a
         different benchmark than one gathered at a point.
         """
+        control = control or ("render" if render_on is not None else None)
+        if control is not None and armed is None:
+            armed = not render_on
         self.live(f"before {name}")
         self.send(hb.build_teleport_command(position=origin))
         time.sleep(0.5)
@@ -408,9 +512,9 @@ class Sweeper:
         if self.args.density == "strung":
             self.send(hb.build_teleport_command(position=list(strung_position(origin, self.args.strung_offset))))
             time.sleep(0.5)
-        render_info = None
-        if render_on is not None:
-            render_info = self.perf(**render_arm_payload(render_on))
+        control_info = None
+        if control is not None:
+            control_info = self.perf(**control_arm_payload(control, bool(armed)))
         position_before = self.perf("status").get("enemyPositionSum")
         before = snapshot_captures(self.args.capture_dir) if self.args.captures else {}
         self.perf("start")
@@ -444,10 +548,16 @@ class Sweeper:
         report["_density"] = self.args.density
         if self.args.density == "strung":
             report["_strungOffset"] = self.args.strung_offset
-        if render_on is not None:
-            report["_renderArm"] = "on" if render_on else "off"
-            report["_renderersOff"] = (render_info or {}).get("renderersOff")
-            report["_cullMsPerFrame"] = cull_ms_per_frame(report)
+        if control is not None:
+            report["_control"] = control
+            report["_controlArm"] = CONTROL_ARMS[control][1] if armed else CONTROL_ARMS[control][0]
+            report["_controlState"] = {k: v for k, v in (control_info or {}).items() if k != "enabled"}
+            report["_controlMsPerFrame"] = tick_ms_per_frame(report, CONTROL_TICKS[control])
+            report["_probesMsPerFrame"] = probes_ms_per_frame(report)
+            if control == "render":
+                report["_renderArm"] = "off" if armed else "on"
+                report["_renderersOff"] = (control_info or {}).get("renderersOff")
+                report["_cullMsPerFrame"] = cull_ms_per_frame(report)
         report["_positionSumBefore"] = position_before
         report["_positionSumAfter"] = status_after.get("enemyPositionSum")
         report["_playerAtOrigin"] = player_start
@@ -458,7 +568,8 @@ class Sweeper:
             reason
             for reason in (
                 suspect_reason(report, target=target),
-                render_suspect_reason(report, target=target),
+                control_suspect_reason(report, control=control, target=target) if control else None,
+                other_control_suspect_reason(status_after, control) if control else None,
                 player_start_suspect_reason(player_start, origin),
             )
             if reason
@@ -471,6 +582,12 @@ class Sweeper:
             render_suffix = f" render={report['_renderArm']} renderersOff={report['_renderersOff']}" + (
                 f" cull={cull:.3f}ms/f" if cull is not None else ""
             )
+        elif "_controlArm" in report:
+            cost = report["_controlMsPerFrame"]
+            counters = " ".join(f"{k}={v}" for k, v in sorted((report["_controlState"] or {}).items()) if isinstance(v, int))
+            render_suffix = f" {report['_control']}={report['_controlArm']} {counters}" + (
+                f" control={cost:.3f}ms/f" if cost is not None else ""
+            )
         self.log_line(
             f"{tag:>23} target={target:3d} alive={report['enemiesMin']:3d}..{report['enemiesMax']:3d} "
             f"frames={report['frames']:5d} mean={report['meanMs']:6.2f} p50={report['p50Ms']:6.2f} "
@@ -482,9 +599,17 @@ class Sweeper:
         )
         return report
 
-    def window(self, name: str, target: int, origin: tuple[float, float, float], render_on: bool | None = None) -> dict:
+    def window(
+        self,
+        name: str,
+        target: int,
+        origin: tuple[float, float, float],
+        render_on: bool | None = None,
+        control: str | None = None,
+        armed: bool | None = None,
+    ) -> dict:
         for attempt in range(1, self.args.attempts + 1):
-            report = self.measure(name, target, attempt, origin, render_on=render_on)
+            report = self.measure(name, target, attempt, origin, render_on=render_on, control=control, armed=armed)
             if report is not None:
                 return report
         raise SystemExit(f"ABORT: {name} was unusable on all {self.args.attempts} attempts")
@@ -517,25 +642,37 @@ class Sweeper:
                 "so timing tables come from capture-free runs"
             )
 
+        repeats = self.args.render_arms or self.args.physics_arms or self.args.anim_arms
         windows = (
-            render_plan(self.args.counts, self.args.render_arms)
-            if self.args.render_arms
+            control_plan(self.args.counts, repeats, self.args.control)
+            if self.args.control
             else plan(self.args.counts)
         )
+        if self.args.control:
+            for other in CONTROLS:
+                if other != self.args.control:
+                    self.perf(**control_arm_payload(other, False))
+            self.log_line(f"control A/B: {self.args.control}, {repeats} repeats per arm, other controls left disarmed")
         try:
-            for name, target, render_on in windows:
+            for name, target, is_armed in windows:
                 if name.endswith("_modoff"):
                     self.perf("toggle", target="all", enabled=False)
                 elif name.endswith("_reenabled"):
                     self.perf("toggle", target="all", enabled=True)
-                self.window(name, target, origin, render_on)
+                self.window(
+                    name,
+                    target,
+                    origin,
+                    control=self.args.control,
+                    armed=is_armed if self.args.control else None,
+                )
                 self.log_line(f"  player at {(self.verb('state').get('player') or {}).get('position')} after {name}")
         finally:
-            if self.args.render_arms:
+            for control in CONTROLS:
                 try:
-                    self.perf("render", enabled=True)
+                    self.perf(**control_arm_payload(control, False))
                 except SystemExit as failure:
-                    self.log_line(f"render restore failed: {failure}")
+                    self.log_line(f"{control} restore failed: {failure}")
             if self.args.captures or self.menu_service_started:
                 subprocess.run([sys.executable, str(REPO / "scripts" / "run.py"), "menu", "stop"], cwd=REPO, capture_output=True)
 
@@ -589,6 +726,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="replace the count ladder with the render-only A/B: per count, N alternating rendon/rendoff window pairs "
         "with the enemy renderers culled in the off arm",
     )
+    parser.add_argument(
+        "--physics-arms",
+        type=int,
+        default=None,
+        metavar="N",
+        help="replace the count ladder with the physics A/B: per count, N alternating physbase/physkin window pairs "
+        "with the live enemies' rigidbodies made kinematic in the kinematic arm",
+    )
+    parser.add_argument(
+        "--anim-arms",
+        type=int,
+        default=None,
+        metavar="N",
+        help="replace the count ladder with the animation A/B: per count, N alternating animbase/animoff window pairs "
+        "with the live enemies' animation components stopped in the off arm",
+    )
     parser.set_defaults(counts=None, relaunch=True)
     args = parser.parse_args(argv)
     if args.counts is None:
@@ -599,8 +752,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--seconds must be positive")
     if args.strung_offset < 0:
         parser.error("--strung-offset must be 0 or greater")
-    if args.render_arms is not None and args.render_arms < 1:
-        parser.error("--render-arms must be 1 or more")
+    arm_flags = (("--render-arms", "render", args.render_arms), ("--physics-arms", "physics", args.physics_arms), ("--anim-arms", "animation", args.anim_arms))
+    for flag, _, value in arm_flags:
+        if value is not None and value < 1:
+            parser.error(f"{flag} must be 1 or more")
+    args.control = next((name for _, name, value in arm_flags if value), None)
+    if sum(1 for _, _, value in arm_flags if value) > 1:
+        parser.error("--render-arms, --physics-arms and --anim-arms are mutually exclusive: two armed controls measure neither")
     if not 0 <= args.captures <= 8:
         parser.error("--captures must be between 0 and 8")
     return args

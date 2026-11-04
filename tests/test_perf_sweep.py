@@ -307,3 +307,221 @@ def test_render_arms_default_to_off_and_take_the_count_ladder() -> None:
 
 def test_the_startup_warning_dismissal_is_an_enter_keypress_for_the_menu_driver() -> None:
     assert perf_sweep.startup_dismiss_batch() == [["key", "KEY_ENTER"]]
+
+
+# --- Engine-side A/B: the same interleaved arms for the kinematic-rigidbody and animation controls ---
+
+
+def test_physics_arms_alternate_the_arms_within_every_repeat() -> None:
+    windows = perf_sweep.control_plan([240], 3, "physics")
+
+    assert [name for name, _, _ in windows] == [
+        "count_240_physbase_r1",
+        "count_240_physkin_r1",
+        "count_240_physkin_r2",
+        "count_240_physbase_r2",
+        "count_240_physbase_r3",
+        "count_240_physkin_r3",
+    ]
+
+
+def test_animation_arms_alternate_the_arms_within_every_repeat() -> None:
+    windows = perf_sweep.control_plan([240], 2, "animation")
+
+    assert [name for name, _, _ in windows] == [
+        "count_240_animbase_r1",
+        "count_240_animoff_r1",
+        "count_240_animoff_r2",
+        "count_240_animbase_r2",
+    ]
+
+
+def test_every_control_hands_the_leading_arm_over_each_repeat() -> None:
+    """A fixed arm order makes the always-second arm absorb the within-session drift the doc records."""
+    for control in ("render", "physics", "animation"):
+        armed = [is_armed for _, _, is_armed in perf_sweep.control_plan([240], 4, control)]
+
+        assert armed == [False, True, True, False, False, True, True, False]
+
+
+def test_every_control_pairs_each_count_with_both_arms() -> None:
+    for control in ("physics", "animation"):
+        windows = perf_sweep.control_plan([0, 240], 2, control)
+
+        assert {(target, is_armed) for _, target, is_armed in windows} == {(0, False), (0, True), (240, False), (240, True)}
+
+
+def test_the_render_plan_is_the_render_control_of_the_same_machinery() -> None:
+    """render_plan keeps its render-on convention; the general one names the arm that is armed, the inverse."""
+    general = perf_sweep.control_plan([0, 240], 3, "render")
+    legacy = perf_sweep.render_plan([0, 240], 3)
+
+    assert [name for name, _, _ in general] == [name for name, _, _ in legacy]
+    assert [(target, not render_on) for _, target, render_on in legacy] == [(target, armed) for _, target, armed in general]
+
+
+def test_a_control_plan_that_arms_nothing_is_still_a_plan() -> None:
+    """A sweep is free to measure the ordinary run alone, and the names must say which arm that is."""
+    assert [name for name, _, armed in perf_sweep.control_plan([120], 2, "physics") if not armed] == [
+        "count_120_physbase_r1",
+        "count_120_physbase_r2",
+    ]
+
+
+def test_an_unknown_control_is_refused_rather_than_silently_measured() -> None:
+    with pytest.raises(SystemExit, match="unknown control"):
+        perf_sweep.control_plan([240], 1, "solver")
+
+
+def test_the_physics_arms_leave_the_solver_or_take_the_bodies_out_of_it() -> None:
+    assert perf_sweep.control_arm_payload("physics", False) == {"action": "physics", "enabled": True}
+    assert perf_sweep.control_arm_payload("physics", True) == {"action": "physics", "enabled": False}
+
+
+def test_the_animation_arms_keep_or_stop_the_animation_updates() -> None:
+    assert perf_sweep.control_arm_payload("animation", False) == {"action": "animation", "enabled": True}
+    assert perf_sweep.control_arm_payload("animation", True) == {"action": "animation", "enabled": False}
+
+
+def test_the_render_arms_read_the_same_way_through_the_general_payload() -> None:
+    """The general payload asks whether the control is armed; the render one asks whether rendering is wanted."""
+    assert perf_sweep.control_arm_payload("render", armed=True) == perf_sweep.render_arm_payload(render_on=False)
+    assert perf_sweep.control_arm_payload("render", armed=False) == perf_sweep.render_arm_payload(render_on=True)
+
+
+def test_a_freeze_that_kinematicised_nothing_at_a_population_is_suspect() -> None:
+    reason = perf_sweep.control_suspect_reason({"_controlArm": "physkin", "_controlState": {"rigidbodiesKinematic": 0}}, control="physics", target=240)
+
+    assert reason == "the physics freeze kinematicised no rigidbodies at 240 enemies"
+
+
+def test_a_freeze_that_kinematicised_bodies_with_no_enemies_is_suspect() -> None:
+    reason = perf_sweep.control_suspect_reason({"_controlArm": "physkin", "_controlState": {"rigidbodiesKinematic": 6}}, control="physics", target=0)
+
+    assert reason == "the physics freeze kinematicised 6 rigidbodies with no enemies alive"
+
+
+def test_a_baseline_physics_window_still_holding_kinematic_bodies_is_suspect() -> None:
+    reason = perf_sweep.control_suspect_reason({"_controlArm": "physbase", "_controlState": {"rigidbodiesKinematic": 240}}, control="physics", target=240)
+
+    assert reason == "the physics freeze still kinematicised 240 rigidbodies with the solver asked for"
+
+
+def test_a_healthy_physics_ab_is_not_suspect() -> None:
+    assert (
+        perf_sweep.control_suspect_reason({"_controlArm": "physkin", "_controlState": {"rigidbodiesKinematic": 240}}, control="physics", target=240)
+        is None
+    )
+    assert (
+        perf_sweep.control_suspect_reason({"_controlArm": "physbase", "_controlState": {"rigidbodiesKinematic": 0}}, control="physics", target=240)
+        is None
+    )
+    assert perf_sweep.control_suspect_reason({"_controlArm": "physbase", "_controlState": {"rigidbodiesKinematic": 0}}, control="physics", target=0) is None
+
+
+def test_an_animation_cull_that_stopped_nothing_at_a_population_is_suspect() -> None:
+    reason = perf_sweep.control_suspect_reason(
+        {"_controlArm": "animoff", "_controlState": {"behavioursOff": 0}}, control="animation", target=240
+    )
+
+    assert reason == "the animation cull stopped no animation components at 240 enemies"
+
+
+def test_an_animation_cull_that_stopped_components_with_no_enemies_is_suspect() -> None:
+    reason = perf_sweep.control_suspect_reason(
+        {"_controlArm": "animoff", "_controlState": {"behavioursOff": 3}}, control="animation", target=0
+    )
+
+    assert reason == "the animation cull stopped 3 animation components with no enemies alive"
+
+
+def test_a_baseline_animation_window_still_holding_a_cull_is_suspect() -> None:
+    reason = perf_sweep.control_suspect_reason(
+        {"_controlArm": "animbase", "_controlState": {"behavioursOff": 240}}, control="animation", target=240
+    )
+
+    assert reason == "the animation cull still stopped 240 animation components with animation asked for"
+
+
+def test_a_window_with_a_second_control_armed_is_suspect() -> None:
+    """Two armed controls measure neither of them: the window is the A/B of both at once."""
+    reason = perf_sweep.other_control_suspect_reason(
+        {"physicsFreeze": {"armed": True}, "animationCull": {"armed": True}, "renderCull": {"armed": False}}, "physics"
+    )
+
+    assert reason is not None
+    assert "animation" in reason and "render" not in reason
+
+
+def test_one_armed_control_in_a_window_is_not_suspect() -> None:
+    only_mine = {"physicsFreeze": {"armed": True}, "animationCull": {"armed": False}, "renderCull": {"armed": False}}
+
+    assert perf_sweep.other_control_suspect_reason(only_mine, "physics") is None
+    assert perf_sweep.other_control_suspect_reason({"renderCull": {"armed": True}, "physicsFreeze": {"armed": False}}, "render") is None
+    assert perf_sweep.other_control_suspect_reason({"physicsFreeze": {"armed": True}, "renderCull": {"armed": False}}, "render") is not None
+
+
+def test_the_freeze_and_the_animation_cull_report_their_own_cost_per_frame() -> None:
+    report = {"frames": 2000, "ticks": [{"name": "PhysicsFreeze", "ms": 8.0}, {"name": "AnimationCull", "ms": 2.0}]}
+
+    assert perf_sweep.tick_ms_per_frame(report, "PhysicsFreeze") == 0.004
+    assert perf_sweep.tick_ms_per_frame(report, "AnimationCull") == 0.001
+    assert perf_sweep.tick_ms_per_frame(report, "KillFloor") is None
+    assert perf_sweep.cull_ms_per_frame({"frames": 2000, "ticks": [{"name": "RenderCull", "ms": 12.0}]}) == 0.006
+
+
+def test_the_fidelity_probes_are_read_per_frame_so_a_drop_in_ai_work_is_visible() -> None:
+    report = {
+        "frames": 1000,
+        "probes": [
+            {"name": "Enemy.MyFixedUpdate", "ms": 250.0},
+            {"name": "EnemyMovementRb.MyFixedUpdate", "ms": 80.0},
+            {"name": "AnimatedMesh.Update", "ms": 40.0},
+            {"name": "EnemyManager.FixedUpdate", "ms": 280.0},
+            {"name": "MinimapUi.Update", "ms": 5.0},
+        ],
+    }
+
+    assert perf_sweep.probes_ms_per_frame(report) == {
+        "Enemy.MyFixedUpdate": 0.25,
+        "EnemyMovementRb.MyFixedUpdate": 0.08,
+        "AnimatedMesh.Update": 0.04,
+        "EnemyManager.FixedUpdate": 0.28,
+    }
+
+
+def test_a_probe_that_never_ran_is_reported_as_nothing_rather_than_missing() -> None:
+    assert perf_sweep.probes_ms_per_frame({"frames": 1000, "probes": []}) == {name: 0.0 for name in perf_sweep.FIDELITY_PROBES}
+    assert perf_sweep.probes_ms_per_frame({"frames": 0, "probes": []}) == {}
+
+
+def test_the_control_arm_flags_need_a_positive_repeat_count() -> None:
+    for flag in ("--physics-arms", "--anim-arms"):
+        with pytest.raises(SystemExit):
+            perf_sweep.parse_args([flag, "0"])
+        with pytest.raises(SystemExit):
+            perf_sweep.parse_args([flag, "-1"])
+
+    assert perf_sweep.parse_args(["--physics-arms", "3"]).physics_arms == 3
+    assert perf_sweep.parse_args(["--anim-arms", "3"]).anim_arms == 3
+
+
+def test_each_control_arm_flag_names_its_own_control() -> None:
+    assert perf_sweep.parse_args(["--physics-arms", "3"]).control == "physics"
+    assert perf_sweep.parse_args(["--anim-arms", "3"]).control == "animation"
+    assert perf_sweep.parse_args(["--render-arms", "3"]).control == "render"
+
+
+def test_only_one_control_can_be_abaed_in_a_sweep() -> None:
+    """Two armed controls in one window measure neither, so the flags are mutually exclusive."""
+    with pytest.raises(SystemExit):
+        perf_sweep.parse_args(["--render-arms", "3", "--physics-arms", "3"])
+    with pytest.raises(SystemExit):
+        perf_sweep.parse_args(["--physics-arms", "3", "--anim-arms", "3"])
+
+
+def test_no_control_arms_means_no_control_and_the_count_ladder() -> None:
+    args = perf_sweep.parse_args([])
+
+    assert args.control is None
+    assert args.render_arms is None and args.physics_arms is None and args.anim_arms is None

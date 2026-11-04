@@ -2061,7 +2061,7 @@ def test_relaunch_forwards_the_overrides_to_the_load(monkeypatch) -> None:
 
 @pytest.mark.parametrize(
     "verb",
-    ["report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health", "census", "render"],
+    ["report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health", "census", "render", "physics", "animation"],
 )
 def test_perf_verb_is_a_subcommand_argument(verb: str) -> None:
     args = run.parse_args(["perf", verb])
@@ -2156,6 +2156,23 @@ def test_perf_render_payload_carries_the_state() -> None:
 @pytest.mark.parametrize("flags", [[], ["--enable", "--disable"]])
 def test_perf_render_needs_exactly_one_state_flag(flags: list[str]) -> None:
     args = run.parse_args(["perf", "render", *flags])
+    with pytest.raises(SystemExit, match="enable"):
+        run.perf_payload(args)
+
+
+@pytest.mark.parametrize("verb", ["physics", "animation"])
+def test_the_engine_side_control_payloads_carry_the_state(verb: str) -> None:
+    """physics and animation are the render verb's shape: the verb plus whether that work is wanted."""
+    args = run.parse_args(["perf", verb, "--disable"])
+    assert run.perf_payload(args) == {"command": "perf", "action": verb, "enabled": False}
+    args = run.parse_args(["perf", verb, "--enable"])
+    assert run.perf_payload(args) == {"command": "perf", "action": verb, "enabled": True}
+
+
+@pytest.mark.parametrize("verb", ["physics", "animation"])
+@pytest.mark.parametrize("flags", [[], ["--enable", "--disable"]])
+def test_the_engine_side_controls_need_exactly_one_state_flag(verb: str, flags: list[str]) -> None:
+    args = run.parse_args(["perf", verb, *flags])
     with pytest.raises(SystemExit, match="enable"):
         run.perf_payload(args)
 
