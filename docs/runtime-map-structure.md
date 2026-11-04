@@ -161,3 +161,49 @@ A text label for the player's world position and grid cell on the minimap is via
 Cost: about 50 to 70 lines (find the minimap, clone and place the label once per level, update the text a few times a second), plus the `UnityEngine.UI`, `UnityEngine.UIModule` and `Unity.TextMeshPro` assembly references. The world-to-cell conversion and the text formatting are pure logic and can be unit tested.
 
 Risk of breaking on a game update: low to moderate. It depends on `MinimapUi` and its public `directionLetters` field, which would have to be renamed or removed to break it, and on the HUD staying a canvas with TextMeshPro labels. A failure should be contained by a null check that logs once and draws nothing. The `GameUI/GameUI/HUD/Minimap` path was only used to confirm the hierarchy and should not be relied on. This verdict is from reading the hierarchy; whether the cloned label renders legibly at the minimap's size is confirmed when it is built.
+
+## Replacing generation for from-scratch levels
+
+Findings from Ghidra on `GameAssembly.dll` (game build 1.0.69): `MapGenerationController.<GenerateMap>d__39.MoveNext` (RVA 0x4A26F0), `ProceduralTileGeneration.Generate` (0x5208A0), `GetWorldSize` (0x521320), `GetWorldCenter` (0x5210B0), `ClearTiles` (0x51DBA0) and `GenerateTileObjects.Generate` (0x495870). Field offsets come from `dump.cs`. A throwaway patch confirmed the result in the running game (see "Dynamic proof").
+
+### What `Generate` sets
+
+Besides `proceduralTiles` (0xB8) it sets `currentStage` (0x88) and `currentMapParameters` (0x90) from its arguments, and allocates the `tiles` (0x68) and `flatTiles` (0x70) lists. It calls `ClearTiles` first, which destroys every object in `tiles`. It writes the seed into `debugSeed` (0x20), runs the generator, then `FillHoles`, then one of `FillEdgesIsland`, `FillEdgesWalls` or `FillEdgesTrees` chosen by `StageData.mapEdgeFillType` (0x28); `None` (3) runs none of them. It destroys and rebuilds `collider` (0x80) from the combined tile and fill meshes, creates a new `tilesParent` (0xB0), re-parents every tile and fill tile under it and static-batches it. It returns the start tile's world position (x/z of the start cell scaled by `scaledTileWidth`, y 0) and writes the start tile's direction to the `out firstTileDirection`.
+
+`GenerateMap` stores the returned position and direction into the static `tileSpawnPosition` (backing field 0x14) and `tileSpawnDir` (0x20), keeps both locally for the spawn portal, and reads `collider`'s mesh as the world mesh handed to the minimap builder. If `collider` is null `GenerateMap` throws, so a replacement must leave a `collider` object with a mesh.
+
+### Skipping the object phases
+
+`GenerateMap` calls `GenerateTileObjects.Generate(RandomTileObjects, flatTiles, stageData)` and later `interactablesSpawner` `SetArea`, `SpawnRails` (0x49D840), `SpawnChests` (0x49CF60), `SpawnShrines` (0x49E180) and `SpawnOther` (0x49D4F0), in that order, and `randomObjectPlacer`'s private `RandomObjectSpawner` (0x49C2A0) for each `StageData.randomMapObjects` entry, the shrine entries and the `MapData` overrides. None of the return values are read, so a prefix that returns false on each is a localized patch and `GenerateMap` still runs on to `A_GenerationComplete`. `RandomObjectPlacer.GenerateInteractables` (0x49C020) is not called from `GenerateMap`. `GenerateTileObjects.Generate` is the one phase with side effects `GenerateMap` depends on: it creates the boss spawner (below), so skipping it means the mod must place the boss spawner itself.
+
+### Spawn portal, platform, boss spawner and boss portal
+
+For `EMapType.Tiles` the spawn portal (`spawnPortal`, 0x58) is instantiated in the first `MoveNext` state, right after `Generate` returns, at the returned spawn position with the rotation `LookRotation(-spawnDirection)`. `spawnPlatform` (0x68), `bossPortal` (0x60), `bossPortalFinal` (0x70) are instantiated only in the `EMapType.ProceduralMesh` branch (a raycast down from above the world, up to 50 attempts); a Tiles map never uses those three fields. The boss spawner is instantiated by `GenerateTileObjects.Generate` from `bossSpawner` (0x28), or `bossSpawnerFinal` (0x30) on the final stage, on a random flat tile popped from the `flatTiles` copy, with that tile's position and rotation.
+
+The boss portal on a Tiles map is part of the boss spawner prefab, not a separate placement: `GenerateMap` has no code that positions it. A from-scratch level therefore authors one position, the boss spawner's, and the portal follows it. This agrees with the Warehouse's boss portal being fixed inside its glass box until the spawn redirect moves the boss itself.
+
+### What sizes the catch floor, minimap, edges and grass
+
+World size comes from map parameters and tile heights, not from the grid array: `GetWorldSize` returns `(size * scaledTileWidth, maxY - minY, size * scaledTileWidth)`, where `size` and `scaledTileWidth` are read from `currentMapParameters` and `maxY`/`minY` are the tile `transform.position.y` extremes across the `tiles` list. `GetWorldCenter` returns `(0, minY + (maxY - minY) / 2, 0)` from the same heights. An empty `tiles` list does not throw but gives a nonsensical height range.
+
+- Catch floor (`colliderBox`, 0x50): scaled to `worldSize * 1.55` on every axis with `worldSize.y + 200` as the height input, centred `20 + worldSize.y / 2` below `worldCenter`.
+- Minimap: the static bounds are set from `worldCenter` and `worldSize` (minimum `center - size / 2`, maximum `center + size / 2`), and `minimapMesh` is built from the `collider` mesh.
+- Map edges: `MapEdges.Set` (0x499B80) runs only when `mapEdgeFillType` is `None`, with `worldCenter` and `worldSize`.
+- Grass: `grassRenderer` is given the stage grass material and `grassPerChunk` only; its placement is not derived from these values in `GenerateMap`, so how it samples the world is unconfirmed.
+
+A from-scratch level with a small grid must therefore hand `Generate` a cloned `MapParameters` whose `size` matches the authored grid, or the catch floor and minimap stay sized for the stock map.
+
+### Dynamic proof
+
+A throwaway patch replaced `Generate` with a prefix that builds a 5x5 flat grid from a cloned `MapParameters` (`size` 5), reuses `CollisionRebuild` for the collider and returns the centre tile as the spawn position. Further prefixes skipped `GenerateTileObjects.Generate` (placing only the `bossSpawner` prefab on a corner tile), `SpawnChests`, `SpawnShrines`, `SpawnRails`, `SpawnOther` and `RandomObjectSpawner`. Loaded through `relaunch` with the Forest example level, `Latest.log` showed:
+
+- `CollisionRebuild: combined 75 pieces`, then `A_GenerationComplete: ... tiles=25 flatTiles=50 fillTiles=0 ... objects=0`, so `GenerateMap` ran to the end with no generated props.
+- `GridShape: proceduralTiles.Length=5 rowLengths=[5] occupiedCells=25` and `MapParameters size=5 ... scaledTileWidth=40`.
+- `KillFloor: armed at y=-12 (derived from tiles, catch floor y=-20)`.
+- The harness state put the player at cell [2,2], the returned spawn cell, and `query_objects` found one `PlayerSpawnPortal`, the cloned `BossSpawner`, and the same count of `InteractablePortal` (`PortalBlue`) objects as `InteractableBossSpawner` objects (3 each: the clone and the two spawner prefabs), consistent with the boss portal being part of the spawner prefab.
+
+`flatTiles=50` against `tiles=25` shows `ProceduralTileGeneration.InstantiateTile` already appends to `flatTiles`; the patch added each tile a second time. Not checked: grass placement, and the minimap content (the minimap rendered but was not inspected). The view shows a teal tint and tall translucent walls around the grid that were not investigated.
+
+### Verdict
+
+Go. Replacing generation needs only localized patches: one prefix on `Generate` that builds the authored grid, the `collider`, the cloned `MapParameters` and the returned spawn position and direction, plus a one-line skipping prefix on each object phase. The mod must place the boss spawner itself because it skips `GenerateTileObjects.Generate`. If a later change needs more than that, the fallback is to generate the stock map and clear it in one step.
