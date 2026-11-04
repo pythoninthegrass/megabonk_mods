@@ -90,9 +90,14 @@ def cull_ms_per_frame(report: dict) -> float | None:
 
 
 def player_start_suspect_reason(
-    position: list[float] | None, origin: tuple[float, float, float] | None, tolerance: float = 2.0
+    position: list[float] | None, origin: tuple[float, float, float] | None, tolerance: float = 8.0
 ) -> str | None:
-    """Why a window did not start where it was told to, or None. Knockback during a window is normal; before it is not."""
+    """Why a window did not start where it was told to, or None.
+
+    The gate catches a teleport that did not land, which leaves the player hundreds of units from the swarm. It is
+    not a gate on crowd shoving: 240 enemies piled on the standing point push the player a few units during the
+    settle, and windows measured there have offsets of 2-5 units.
+    """
     if not position or not origin:
         return None
     distance = sum((position[i] - origin[i]) ** 2 for i in range(3)) ** 0.5

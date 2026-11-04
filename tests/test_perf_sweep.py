@@ -268,6 +268,8 @@ def test_the_off_arm_asks_for_rendering_to_stop_and_the_on_arm_for_it_to_continu
 def test_a_player_at_the_fixed_point_at_window_start_is_not_suspect() -> None:
     assert perf_sweep.player_start_suspect_reason([0.0, 1.92, 0.0], (0.0, 1.92, 0.0)) is None
     assert perf_sweep.player_start_suspect_reason([0.4, 1.92, -0.4], (0.0, 1.92, 0.0)) is None
+    # A swarm piled on the standing point shoves the player a few units during the settle; that is not a failed teleport.
+    assert perf_sweep.player_start_suspect_reason([3.1, 1.92, -3.1], (0.0, 1.92, 0.0)) is None
 
 
 def test_a_player_elsewhere_at_window_start_is_suspect() -> None:
