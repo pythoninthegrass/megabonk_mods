@@ -269,12 +269,6 @@ public class LevelFileTests
     }
 
     [Fact]
-    public void CurrentSchemaVersion_IsThree()
-    {
-        Assert.Equal(3, LevelFile.CurrentSchemaVersion);
-    }
-
-    [Fact]
     public void RoundTrip_Music_Survives()
     {
         var level = SampleLevel() with { Music = "bundle:thps/Superman" };
@@ -294,13 +288,13 @@ public class LevelFileTests
     }
 
     [Fact]
-    public void DeserializeWithMigration_V2WithoutMusic_MigratesToV3()
+    public void DeserializeWithMigration_V2WithoutMusic_MigratesToCurrentVersion()
     {
         var json = """{"schemaVersion":2,"gameBuildId":"1","map":1,"stageIndex":0,"tier":0,"seed":1,"packs":{},"edits":[]}""";
 
         var level = LevelFileSerializer.DeserializeWithMigration(json);
 
-        Assert.Equal(3, level.SchemaVersion);
+        Assert.Equal(LevelFile.CurrentSchemaVersion, level.SchemaVersion);
         Assert.Null(level.Music);
     }
 

@@ -8,7 +8,7 @@ The Unity-free level-format core lives in `src/MegabonkLevels.Mod` alongside the
 
 Reasoning: the Unity-free boundary is enforced by what a file references, not by which project it physically sits in — these files simply don't reference `UnityEngine`/`Il2Cpp*` types, and the compile-link into the net10.0 xunit project (which has no access to those assemblies at all) is itself the proof that the boundary holds. A dedicated Core project would duplicate MSBuild plumbing (the `Directory.Build.props` Mods-folder deploy target, the MelonLoader/Il2Cpp `HintPath` references) for no additional isolation, since the Mod project's `csproj` already only references those assemblies for the files that need them.
 
-One consequence of staying in the same project: the Mod project compiles against `net6.0` with `<Nullable>disable</Nullable>` (required because the Il2Cpp-generated assemblies ship a broken `NullableAttribute` constructor — see that csproj's comment). Level-format types must avoid `T?` reference-type annotations and avoid record **classes** (whose compiler-synthesized `Equals(T? other)` requires nullable-attribute metadata even under `disable`); `record struct` does not have this problem, since struct equality members take the type non-nullably. `LevelFile` is therefore a `readonly record struct`, not a `record class`.
+One consequence of staying in the same project: the Mod project compiles against `net6.0` with `<Nullable>disable</Nullable>` (required because the Il2Cpp-generated assemblies ship a broken `NullableAttribute` constructor — see that csproj's comment). Level-format types must avoid `T?` reference-type annotations and avoid record **classes** (whose compiler-synthesized `Equals(T? other)` requires nullable-attribute metadata even under `disable`); `record struct` does not have this problem, since struct equality members take the type non-nullably. `LevelFile` is therefore a `readonly record struct`, not a `record class`; `LevelGrid`, `AuthoredCell` and `SpawnPoint` are record structs for the same reason, and the Mod project's C# 10 language level rules out collection expressions and primary constructors in level-format code.
 
 ## Schema
 
@@ -16,13 +16,17 @@ One consequence of staying in the same project: the Mod project compiles against
 
 | field | type | meaning |
 | --- | --- | --- |
-| `schemaVersion` | `int` | Current value: `LevelFile.CurrentSchemaVersion` (`3`). |
+| `schemaVersion` | `int` | Current value: `LevelFile.CurrentSchemaVersion` (`4`). Files at versions 1 to 3 migrate on load and behave as before. |
 | `gameBuildId` | `string` | Game build the level was authored against (e.g. `"1.0.69"`). Compared against the running game's build for staleness warnings during runtime playback; not interpreted here. |
 | `map` | `EMap` | Mirrors the `eMap` values of the game's `MapData` assets (`None=0, Forest=1, Desert=2, Graveyard=8, Dungeon=16, Hell=64`), read from the running game. The Il2Cpp `EMap` enum in `.tools/il2cpp_dump/dump.cs` lists Hell as `4` and has no Dungeon, but the `MapHell` asset holds `64` and `MapDungeon` `16` — a value-level mirror, not a reference to the real Il2Cpp type, since this library must stay Unity/Il2Cpp-free. |
 | `stageIndex` | `int` | Which stage within the map. |
 | `tier` | `int` | Difficulty tier. |
 | `seed` | `int` | **The Tiles-map `debugSeed`** (see [map-generation-determinism.md](map-generation-determinism.md)) — the only field confirmed to control reproducible generation. **Never** `MapGenerationController.mapSeed`: that field varies freely per run and has no effect on layout. `ProceduralMesh` maps (Desert) don't yet have a confirmed-controllable seed field at all; storing a `seed` for those maps is "reproducible in practice so far" per that doc, not guaranteed. |
 | `packs` | `IReadOnlyDictionary<string, string>` | Optional map from a referenced pack id to the manifest `version` recorded at save time, used by the pack-version compatibility check (see "Pack versions" below). A level with no `bundle:` edits has an empty map. |
+| `baseline` | `string` | Optional. Absent or `"generated"` keeps the level an edit stack over the game's generated map. `"none"` makes it a from-scratch level (see "From-scratch levels" below). Any other value is rejected. Additive, so a version 3 file is a valid generated-baseline file. |
+| `grid` | `LevelGrid` | From-scratch levels only; required there, rejected under a generated baseline. See "From-scratch levels". |
+| `spawn` | `SpawnPoint` | From-scratch levels only; required there. Replaces `playerStart`. |
+| `bossSpawner` | `SpawnPoint` | From-scratch levels only; required there. Replaces the generated boss spawner. |
 | `noGrass` | `bool` | Optional, default `false`. When `true` the mod disables the game's `GrassChunkManager` (`MapGenerationController.grassRenderer`) for the run. The manager raycasts onto the ground layer, so grass otherwise grows through a placed floor mesh such as the THPS Warehouse. Additive, so `schemaVersion` stays `2`. |
 | `playerStart` | `float[3]` | Optional. World position `[x, y, z]` the player is moved to once generation has completed, with `y` the value the on-screen position readout shows (the body height, 1.925 above the feet). The game places the player at the generated spawn around generation and moving the spawn portal does not move it, so the mod re-applies the start for 5 seconds. Additive, so `schemaVersion` stays `2`. |
 | `maxSlopeAngle` | `float` | Optional. Degrees. While the custom level runs the mod sets `PlayerMovement.maxSlopeAngle` to this value (the game's own is 45) and puts the game's value back for any later vanilla run. Without it movement is unchanged. A face steeper than the limit cannot be run up and does not count as ground, so the player cannot jump from it. |
@@ -41,6 +45,47 @@ One consequence of staying in the same project: the Mod project compiles against
 | `mapDescription` | `string` | Optional. The description on the level's entry on the game's Map Selection screen. Without it the entry shows `description`. The run-start banner always uses `description`, so the two can differ as they do for the native maps. Additive, so `schemaVersion` stays `3`. |
 | `allowedCharacters` | `string[]` | Optional. Names of the characters that may play the level: `calcium`, `tony` or `tonymczoom` (case-insensitive). Absent, empty, or with no recognised name means any character may play it. The Map Selection entry refuses Confirm for any other character, and a held load restricts the game's Character Selection screen to these characters. `CharacterPolicy` (`character_policy.cs`) applies it and the editor save writes it back. Additive, so `schemaVersion` stays `3`. |
 | `edits` | `EditOp[]` | Ordered list of edit operations applied on top of the generated map. `EditOp(OpType, Target, Payload)` is a minimal shape (string opcode + string target id + a JSON-string payload) that round-trips and migrates correctly independent of any particular operation's payload shape — see "Edit operation types" below. |
+
+## From-scratch levels
+
+`baseline: "none"` marks a level whose tile grid is authored in the file instead of generated and then edited. `map`, `stageIndex` and `tier` still choose the kit (tile prefabs, stage data, enemies, music), and `seed` is optional because nothing is generated from it. `edits` carries object placements only.
+
+```json
+{
+  "schemaVersion": 4,
+  "baseline": "none",
+  "map": 1,
+  "stageIndex": 0,
+  "tier": 0,
+  "packs": {},
+  "grid": {
+    "width": 4,
+    "depth": 3,
+    "cells": [
+      { "x": 0, "z": 0, "height": 0 },
+      { "x": 1, "z": 1, "height": 0, "slope": "north" }
+    ]
+  },
+  "spawn": { "position": [0.5, 2, 0.5], "rotation": [0, 90, 0] },
+  "bossSpawner": { "position": [2.5, 3, 1.5], "rotation": [0, 180, 0] },
+  "edits": []
+}
+```
+
+| key | meaning |
+| --- | --- |
+| `grid.width`, `grid.depth` | Grid size in cells, both at least 1. The mod caps them at the kit's stock generator size when the level loads (Forest is 15 by 15). The file format does not know the kit, so the cap is a runtime check, not a validation error here. |
+| `grid.cells` | Sparse list of `{x, z, height, slope}`. A cell missing from the list is empty. `slope` is `north`, `south`, `east` or `west` and is omitted when there is none. A cell must satisfy `0 <= x < width` and `0 <= z < depth` and no `(x, z)` may appear twice. |
+| `spawn`, `bossSpawner` | `position` is world `[x, y, z]` and `rotation` is Euler degrees `[x, y, z]`. |
+
+Validation (`LevelFileValidator`, `level_file_validation.cs`) runs in both `Deserialize` and `DeserializeWithMigration` and throws `ArgumentException` naming the problem:
+
+- A from-scratch file requires `grid`, `spawn` and `bossSpawner`.
+- A generated-baseline file (absent or `"generated"`) cannot carry a `grid`.
+- A from-scratch file cannot contain a tile edit op (`tile.setHeight`, `tile.setSlope`, `tile.add`, `tile.remove`) or an object edit whose target starts with `gen:`, because the grid is the single source of truth and nothing is generated to target.
+- Cells outside the grid or repeated are rejected.
+
+`LevelGrid.ToLevelState()` (`level_grid.cs`) converts the grid to the `LevelState` that `ReachabilityValidator` and `LiveEditPlan` already consume. `grid`, `spawn` and `bossSpawner` are omitted from the written file when absent, so a generated-baseline file serializes as it did at version 3.
 
 ## Level thumbnail
 
@@ -145,9 +190,9 @@ shrine's position, nearest-shrine and nearest-route distance.
 
 `SchemaMigrator.Migrate` (`level_file_migration.cs`) takes a parsed `JsonObject`, a target version, and a `IReadOnlyDictionary<int, MigrationStep>` keyed by *from*-version. It loops: look up the step registered for the document's current `schemaVersion`, apply it (the step returns a new `JsonObject` with its own, incremented `schemaVersion`), repeat until the target version is reached. Reaching a version with no registered step throws.
 
-`LevelFileSerializer.DeserializeWithMigration` (`level_file_serialization.cs`) calls this with `LevelFile.CurrentSchemaVersion` and a `ProductionSteps` dictionary. The real steps are `1 -> 2`, which carries an existing `packs` object over (or writes an empty one) while bumping `schemaVersion` to 2, and `2 -> 3`, which only bumps `schemaVersion` because `music` is optional and absent from older files. `SchemaMigrator` reuses the same loop and public API for any future version: adding one `[from] = step` entry to `ProductionSteps` is the whole change.
+`LevelFileSerializer.DeserializeWithMigration` (`level_file_serialization.cs`) calls this with `LevelFile.CurrentSchemaVersion` and a `ProductionSteps` dictionary. The real steps are `1 -> 2`, which carries an existing `packs` object over (or writes an empty one) while bumping `schemaVersion` to 2, and `2 -> 3`, which only bumps `schemaVersion` because `music` is optional and absent from older files, and `3 -> 4`, which only bumps `schemaVersion` because `baseline`, `grid`, `spawn` and `bossSpawner` are optional and a file without them is a generated-baseline level. `SchemaMigrator` reuses the same loop and public API for any future version: adding one `[from] = step` entry to `ProductionSteps` is the whole change.
 
-`SchemaMigrator_AppliesRegisteredStepUntilTargetVersionReached` in `tests/MegabonkLevels.Tests/level_file_tests.cs` still exercises the mechanism with a synthetic, test-local step (renaming a field and bumping to a made-up version `2`), and `SchemaMigrator_MissingStepForOlderVersion_Throws` covers the "no step registered" failure path. The real migrations are covered by `DeserializeWithMigration_V1WithoutPacks_MigratesToEmptyPacks`, `DeserializeWithMigration_V2WithPacks_PreservesPacks` and `DeserializeWithMigration_V2WithoutMusic_MigratesToV3`.
+`SchemaMigrator_AppliesRegisteredStepUntilTargetVersionReached` in `tests/MegabonkLevels.Tests/level_file_tests.cs` still exercises the mechanism with a synthetic, test-local step (renaming a field and bumping to a made-up version `2`), and `SchemaMigrator_MissingStepForOlderVersion_Throws` covers the "no step registered" failure path. The real migrations are covered by `DeserializeWithMigration_V1WithoutPacks_MigratesToEmptyPacks`, `DeserializeWithMigration_V2WithPacks_PreservesPacks` and `DeserializeWithMigration_V2WithoutMusic_MigratesToCurrentVersion` and `Migration_FromVersionThree_BumpsVersionAndLeavesGeneratedBaseline`.
 
 ## Round-trip
 
@@ -186,7 +231,7 @@ defaults change; do not refresh the preservation baseline to advertise additions
 
 Tile ops identify the tile by grid coordinates carried in the payload, so they have no need of `EditOp.Target`; object ops that mutate an *existing* object carry their target there instead, so an op can be filtered/routed by `EditOp.Target` alone without deserializing the payload.
 
-Tile ops apply on top of the generated grid, not an empty one. At generation the mod snapshots every live tile's height and slope into a baseline `LevelState`, and `LiveEditPlan.Build(edits, baseline)` replays the edits on a copy of it. `SetTileHeight` therefore keeps a cell's generated slope, and `SetTileSlope` keeps its generated height. Generation is deterministic for a seed, so the same file produces the same baseline, and a level loads exactly as it looked when it was edited. `AddTile` always places a flat tile. An `EditStack` built on an empty `LevelState` still falls back to height 0 and no slope for a cell it has no record of.
+In a generated-baseline file, tile ops apply on top of the generated grid, not an empty one. (A from-scratch file has no tile ops: its grid is authored directly, see "From-scratch levels".) At generation the mod snapshots every live tile's height and slope into a baseline `LevelState`, and `LiveEditPlan.Build(edits, baseline)` replays the edits on a copy of it. `SetTileHeight` therefore keeps a cell's generated slope, and `SetTileSlope` keeps its generated height. Generation is deterministic for a seed, so the same file produces the same baseline, and a level loads exactly as it looked when it was edited. `AddTile` always places a flat tile. An `EditStack` built on an empty `LevelState` still falls back to height 0 and no slope for a cell it has no record of.
 
 ### `ObjectTarget`: genId vs. placement id
 

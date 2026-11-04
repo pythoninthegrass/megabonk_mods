@@ -21,19 +21,31 @@ public static class LevelFileSerializer
                 document["schemaVersion"] = 3;
                 return document;
             },
+            [3] = document =>
+            {
+                document["schemaVersion"] = 4;
+                return document;
+            },
         };
 
     private static readonly JsonSerializerOptions Options = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     public static string Serialize(LevelFile level) => JsonSerializer.Serialize(level, Options);
 
-    public static LevelFile Deserialize(string json) => WithPacks(JsonSerializer.Deserialize<LevelFile>(json, Options)!);
+    public static LevelFile Deserialize(string json) => Finish(JsonSerializer.Deserialize<LevelFile>(json, Options)!);
 
     public static LevelFile DeserializeWithMigration(string json)
     {
         var document = JsonNode.Parse(json)!.AsObject();
         var current = SchemaMigrator.Migrate(document, LevelFile.CurrentSchemaVersion, ProductionSteps);
-        return WithPacks(current.Deserialize<LevelFile>(Options)!);
+        return Finish(current.Deserialize<LevelFile>(Options)!);
+    }
+
+    private static LevelFile Finish(LevelFile level)
+    {
+        var withPacks = WithPacks(level);
+        LevelFileValidator.Validate(withPacks);
+        return withPacks;
     }
 
     // A file without a packs key deserializes it as null; an empty map is the documented default.

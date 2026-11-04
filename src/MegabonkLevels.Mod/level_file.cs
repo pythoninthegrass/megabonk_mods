@@ -47,9 +47,18 @@ public readonly record struct LevelFile(
     bool RandomizeChests = false,
     bool RandomizeMoai = false,
     int ExtraShrines = 0,
-    IReadOnlyList<string> ExtraShrineKinds = null)
+    IReadOnlyList<string> ExtraShrineKinds = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string Baseline = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LevelGrid? Grid = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SpawnPoint? Spawn = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SpawnPoint? BossSpawner = null)
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
+
+    public const string GeneratedBaseline = "generated";
+    public const string NoBaseline = "none";
+
+    public bool IsFromScratch => Baseline == NoBaseline;
 
     public bool Equals(LevelFile other) =>
         SchemaVersion == other.SchemaVersion
@@ -77,6 +86,10 @@ public readonly record struct LevelFile(
         && Description == other.Description
         && MapDescription == other.MapDescription
         && ListEquals(AllowedCharacters, other.AllowedCharacters)
+        && Baseline == other.Baseline
+        && Equals(Grid, other.Grid)
+        && Equals(Spawn, other.Spawn)
+        && Equals(BossSpawner, other.BossSpawner)
         && Edits.SequenceEqual(other.Edits);
 
     public override int GetHashCode() =>
