@@ -25,29 +25,27 @@ public static class EnemyRenderCull
 
     public static int DisabledCount => Tracked.Count;
 
-    // The perf `render` verb. On arms the cull and sweeps the current swarm immediately; off restores everything it hid.
-    public static JsonObject Set(bool enabled, MelonLogger.Instance logger)
+    // The perf `render` verb: enabled=false is "stop rendering enemies", so it arms the cull and sweeps the swarm now;
+    // enabled=true restores what it hid and disarms. The response reports what the cull does, not the caller's wording.
+    public static JsonObject Set(bool renderEnabled, MelonLogger.Instance logger)
     {
         _logger = logger;
         var enemies = LiveEnemies();
-        if (enabled)
+        _armed = EnemyRenderCullPlan.ArmsCull(renderEnabled);
+        if (_armed)
         {
-            _armed = true;
-            _lastSeenEnemies = -1;
             Sweep(enemies, log: true);
         }
         else
         {
             Restore();
-            _armed = false;
-            _lastSeenEnemies = -1;
         }
 
-        var line = $"render: {(enabled ? "off (cull armed)" : "on (cull disarmed)")} enemies={enemies.Count} renderersOff={Tracked.Count}";
-        _logger?.Msg($"Perf: {line}");
+        _lastSeenEnemies = -1;
+        _logger?.Msg($"Perf: render: {(_armed ? "off, cull armed" : "on, cull disarmed")} enemies={enemies.Count} renderersOff={Tracked.Count}");
         return new JsonObject
         {
-            ["enabled"] = enabled,
+            ["enabled"] = renderEnabled,
             ["armed"] = _armed,
             ["enemies"] = enemies.Count,
             ["renderersOff"] = Tracked.Count,

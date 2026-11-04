@@ -3,6 +3,18 @@ namespace MegabonkLevels.Tests;
 public class EnemyRenderCullPlanTests
 {
     [Fact]
+    public void ArmsCull_ArmsWhenEnemyRenderingIsTurnedOff()
+    {
+        Assert.True(EnemyRenderCullPlan.ArmsCull(renderEnabled: false));
+    }
+
+    [Fact]
+    public void ArmsCull_StaysDisarmedWhenEnemyRenderingIsWanted()
+    {
+        Assert.False(EnemyRenderCullPlan.ArmsCull(renderEnabled: true));
+    }
+
+    [Fact]
     public void ShouldRescan_KeepsTheLastSweepWhilePopulationAndIntervalAreUnchanged()
     {
         Assert.False(EnemyRenderCullPlan.ShouldRescan(liveEnemies: 240, lastSeenEnemies: 240, nowSeconds: 10.0, lastScanSeconds: 9.5, intervalSeconds: 1.0));

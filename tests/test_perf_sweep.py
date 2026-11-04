@@ -247,6 +247,25 @@ def test_healthy_render_arms_are_not_suspect() -> None:
     assert perf_sweep.render_suspect_reason({"_renderArm": "off", "_renderersOff": 0}, target=0) is None
 
 
+def test_a_window_asked_for_rendering_that_still_hid_renderers_is_suspect() -> None:
+    reason = perf_sweep.render_suspect_reason({"_renderArm": "on", "_renderersOff": 240}, target=240)
+
+    assert reason == "the render cull still disabled 240 renderers with rendering asked for"
+
+
+def test_the_off_arm_asks_for_rendering_to_stop_and_the_on_arm_for_it_to_continue() -> None:
+    assert perf_sweep.render_arm_payload(True) == {"action": "render", "enabled": True}
+    assert perf_sweep.render_arm_payload(False) == {"action": "render", "enabled": False}
+
+
+def test_the_cull_reports_its_own_cost_per_frame_from_the_window_ticks() -> None:
+    report = {"frames": 2000, "ticks": [{"name": "KillFloor", "ms": 4.0}, {"name": "RenderCull", "ms": 12.0}]}
+
+    assert perf_sweep.cull_ms_per_frame(report) == 0.006
+    assert perf_sweep.cull_ms_per_frame({"frames": 2000, "ticks": []}) is None
+    assert perf_sweep.cull_ms_per_frame({"frames": 0, "ticks": [{"name": "RenderCull", "ms": 1.0}]}) is None
+
+
 def test_render_arms_needs_a_positive_repeat_count() -> None:
     with pytest.raises(SystemExit):
         perf_sweep.parse_args(["--render-arms", "0"])

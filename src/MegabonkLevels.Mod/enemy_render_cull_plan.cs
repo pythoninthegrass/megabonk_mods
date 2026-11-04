@@ -5,6 +5,10 @@ namespace MegabonkLevels;
 // Pure decisions for the enemy render cull; the Unity-side enumeration and Renderer writes live in enemy_render_cull.cs.
 public static class EnemyRenderCullPlan
 {
+    // The verb's bool says whether enemy rendering is wanted; the cull arms on the opposite sense. One place, so the
+    // harness arms and the arms a sweep labels cannot drift apart.
+    public static bool ArmsCull(bool renderEnabled) => !renderEnabled;
+
     // Rescan only when the population moved or the interval elapsed, so an armed cull costs near nothing per frame.
     public static bool ShouldRescan(int liveEnemies, int lastSeenEnemies, double nowSeconds, double lastScanSeconds, double intervalSeconds)
         => liveEnemies != lastSeenEnemies || nowSeconds - lastScanSeconds >= intervalSeconds;

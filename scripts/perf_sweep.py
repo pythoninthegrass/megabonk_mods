@@ -61,14 +61,32 @@ def suspect_reason(report: dict, *, target: int) -> str | None:
 
 def render_suspect_reason(report: dict, *, target: int) -> str | None:
     """Why a render-arm window is not a clean A/B, or None. Kept but flagged, like suspect_reason."""
+    renderers_off = report.get("_renderersOff")
+    if report.get("_renderArm") == "on":
+        if renderers_off:
+            return f"the render cull still disabled {renderers_off} renderers with rendering asked for"
+        return None
     if report.get("_renderArm") != "off":
         return None
-    renderers_off = report.get("_renderersOff")
     if target and not renderers_off:
         return f"the render cull disabled no renderers at {target} enemies"
     if not target and renderers_off:
         return f"the render cull disabled {renderers_off} renderers with no enemies alive"
     return None
+
+
+def render_arm_payload(render_on: bool) -> dict:
+    """The perf payload for one arm: `enabled` says whether enemy rendering is wanted, so the off arm sends false."""
+    return {"action": "render", "enabled": bool(render_on)}
+
+
+def cull_ms_per_frame(report: dict) -> float | None:
+    """Per-frame cost of the harness's own cull tick, or None when it never ran. The off arm pays it, so the split needs it."""
+    frames = report.get("frames") or 0
+    tick = next((entry for entry in report.get("ticks") or [] if entry.get("name") == "RenderCull"), None)
+    if not frames or tick is None:
+        return None
+    return round((tick.get("ms") or 0) / frames, 4)
 
 
 def plan(counts: list[int] | tuple[int, ...]) -> list[tuple[str, int, bool | None]]:
@@ -373,7 +391,7 @@ class Sweeper:
             time.sleep(0.5)
         render_info = None
         if render_on is not None:
-            render_info = self.perf("render", enabled=render_on)
+            render_info = self.perf(**render_arm_payload(render_on))
         position_before = self.perf("status").get("enemyPositionSum")
         before = snapshot_captures(self.args.capture_dir) if self.args.captures else {}
         self.perf("start")
@@ -410,6 +428,7 @@ class Sweeper:
         if render_on is not None:
             report["_renderArm"] = "on" if render_on else "off"
             report["_renderersOff"] = (render_info or {}).get("renderersOff")
+            report["_cullMsPerFrame"] = cull_ms_per_frame(report)
         report["_positionSumBefore"] = position_before
         report["_positionSumAfter"] = status_after.get("enemyPositionSum")
         if self.args.captures:
@@ -421,13 +440,19 @@ class Sweeper:
         ]
         report["_suspect"] = "; ".join(suspects) if suspects else None
         (self.args.out / f"{name}.json").write_text(json.dumps(report, indent=1))
+        render_suffix = ""
+        if "_renderArm" in report:
+            cull = report["_cullMsPerFrame"]
+            render_suffix = f" render={report['_renderArm']} renderersOff={report['_renderersOff']}" + (
+                f" cull={cull:.3f}ms/f" if cull is not None else ""
+            )
         self.log_line(
             f"{tag:>23} target={target:3d} alive={report['enemiesMin']:3d}..{report['enemiesMax']:3d} "
             f"frames={report['frames']:5d} mean={report['meanMs']:6.2f} p50={report['p50Ms']:6.2f} "
             f"p90={report['p90Ms']:6.2f} p99={report['p99Ms']:7.2f} max={report['maxMs']:7.2f} "
             f"mod={report['modMsPerFrame']:6.3f} gc={report['gcPauseMsPerFrame']:6.3f}"
             + (f" density={self.args.density}" if self.args.density != "gathered" else "")
-            + (f" render={report['_renderArm']} renderersOff={report['_renderersOff']}" if "_renderArm" in report else "")
+            + render_suffix
             + (f"  SUSPECT: {report['_suspect']}" if report["_suspect"] else "")
         )
         return report

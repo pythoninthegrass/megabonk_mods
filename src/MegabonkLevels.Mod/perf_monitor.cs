@@ -28,6 +28,7 @@ public enum PerfTick
     MenuNotice,
     PositionLabel,
     EditorMode,
+    RenderCull,
 }
 
 // Harness-driven frame profiler: frame times, per-tick and per-patch timers, forced enemy counts and a held time scale.
@@ -145,7 +146,8 @@ public static class PerfMonitor
                 $"enemies={LiveEnemyCount()} timeScale={Number(MyTime.timeScale)} held={_timeScaleHeld}");
         }
 
-        EnemyRenderCull.Apply();
+        // Timed like the other ticks: the cull's own rescan is part of what the off arm costs, so it has to be visible.
+        Timed(PerfTick.RenderCull, EnemyRenderCull.Apply);
     }
 
     // Wraps one mod tick so its own cost is attributable. The guard keeps a session without the harness free of timing calls.
@@ -273,10 +275,10 @@ public static class PerfMonitor
             slot.Enabled = true;
         }
 
-        var restoredRenderers = EnemyRenderCull.Armed;
-        if (restoredRenderers)
+        var wasCulled = EnemyRenderCull.Armed;
+        if (wasCulled)
         {
-            EnemyRenderCull.Set(false, _logger);
+            EnemyRenderCull.Set(true, _logger);
         }
 
         StartWindow();
@@ -287,13 +289,13 @@ public static class PerfMonitor
             PlayerInvulnerability.Set(false, _logger);
         }
 
-        Log($"reset: timers cleared, timeScale={Number(MyTime.timeScale)}, all ticks and probes enabled, player grant restored={restoredPlayer}, render cull restored={restoredRenderers}");
+        Log($"reset: timers cleared, timeScale={Number(MyTime.timeScale)}, all ticks and probes enabled, player grant restored={restoredPlayer}, render cull restored={wasCulled}");
         return new JsonObject
         {
             ["reset"] = true,
             ["timeScale"] = Number(MyTime.timeScale),
             ["playerGrantRestored"] = restoredPlayer,
-            ["renderCullRestored"] = restoredRenderers,
+            ["renderCullRestored"] = wasCulled,
         };
     }
 
