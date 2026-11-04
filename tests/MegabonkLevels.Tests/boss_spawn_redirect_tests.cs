@@ -24,8 +24,14 @@ public class BossSpawnRedirectTests
     [Fact]
     public void ShouldArm_NeedsAnActiveCustomLevel()
     {
-        Assert.True(BossSpawnRedirect.ShouldArm(true));
-        Assert.False(BossSpawnRedirect.ShouldArm(false));
+        Assert.True(BossSpawnRedirect.ShouldArm(true, fromScratch: false));
+        Assert.False(BossSpawnRedirect.ShouldArm(false, fromScratch: false));
+    }
+
+    [Fact]
+    public void ShouldArm_NeverOnAFromScratchLevel()
+    {
+        Assert.False(BossSpawnRedirect.ShouldArm(true, fromScratch: true));
     }
 
     [Fact]

@@ -56,7 +56,7 @@ public static class BossSpawnRedirectPatch
     {
         private static void Prefix(InteractableBossSpawner __instance)
         {
-            if (!BossSpawnRedirect.ShouldArm(CustomLevelState.IsActive) || __instance == null)
+            if (!BossSpawnRedirect.ShouldArm(CustomLevelState.IsActive, FromScratchGenerationPatch.ActiveLevel != null) || __instance == null)
             {
                 return;
             }

@@ -23,7 +23,8 @@ public static class BossSpawnRedirect
     // A surface this close above the kill floor is where the level kills things; bosses must not stand there.
     public const float KillFloorMargin = 5f;
 
-    public static bool ShouldArm(bool customLevelActive) => customLevelActive;
+    // A from-scratch level places its own boss spawner, so there is no glass box to keep the boss out of.
+    public static bool ShouldArm(bool customLevelActive, bool fromScratch) => customLevelActive && !fromScratch;
 
     public static int ExpectedMoves(int bossCurses) => Math.Max(1, 1 + bossCurses);
 
