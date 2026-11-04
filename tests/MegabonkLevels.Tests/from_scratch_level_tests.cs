@@ -244,7 +244,9 @@ public class FromScratchLevelTests
     }
 
     public static IEnumerable<object[]> ShippedLevelFiles() =>
-        Directory.GetFiles(RepoFile("levels"), "*.mblevel.json").Select(path => new object[] { Path.GetFileName(path) });
+        Directory.GetFiles(RepoFile("levels"), "*.mblevel.json")
+            .Where(path => (string?)JsonNode.Parse(File.ReadAllText(path))!["baseline"] != "none")
+            .Select(path => new object[] { Path.GetFileName(path) });
 
     [Theory]
     [MemberData(nameof(ShippedLevelFiles))]

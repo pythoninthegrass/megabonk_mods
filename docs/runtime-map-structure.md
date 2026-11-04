@@ -207,3 +207,7 @@ A throwaway patch replaced `Generate` with a prefix that builds a 5x5 flat grid 
 ### Verdict
 
 Go. Replacing generation needs only localized patches: one prefix on `Generate` that builds the authored grid, the `collider`, the cloned `MapParameters` and the returned spawn position and direction, plus a one-line skipping prefix on each object phase. The mod must place the boss spawner itself because it skips `GenerateTileObjects.Generate`. If a later change needs more than that, the fallback is to generate the stock map and clear it in one step.
+
+### Shipped load path
+
+The "go" verdict is implemented in `from_scratch_generation_patch.cs`; [development.md](development.md#from-scratch-level-load-path) describes the load path and its log lines. Confirmed in the running game with `levels/from-scratch-fixture.mblevel.json`: `tiles=49 flatTiles=48 fillTiles=0 objects=0` for 49 authored cells (so `InstantiateTile` appends to both lists itself and the patch must not), `MapParameters size=7`, one `TileSlope(Clone)` and 48 `TileGround(Clone)` objects, no `(Clone)` chests, and the player at the authored spawn after the first load and after a death-screen restart. A boss summoned from the authored spawner walks across the grid. The teal tint and tall translucent walls around the grid and the grass placement are still not investigated.

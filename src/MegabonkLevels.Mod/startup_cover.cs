@@ -104,6 +104,8 @@ public static class StartupCover
         }
     }
 
+    private const float InPlaceTolerance = 0.5f;
+
     private static void AttemptPlace(MelonLogger.Instance logger, float now)
     {
         var start = LiveEditPatch.PlayerStart;
@@ -117,6 +119,16 @@ public static class StartupCover
 
         var target = new Vector3(start[0], start[1] - TeleportTarget.PlayerBodyOffsetY, start[2]);
         var facing = player.transform.forward;
+
+        // The from-scratch spawn portal already put the player on the start, so there is nothing to move.
+        var at = body.position;
+        if (FromScratchLayout.IsInPlace(new[] { at.x, at.y, at.z }, new[] { target.x, target.y, target.z }, InPlaceTolerance))
+        {
+            _holdPoint = null;
+            Gate.PlacementCompleted(now);
+            logger.Msg("StartupCover: player already at the level start");
+            return;
+        }
 
         // Drop the hold before the teleport so a later hold write cannot pull the player back off the start.
         _holdPoint = null;

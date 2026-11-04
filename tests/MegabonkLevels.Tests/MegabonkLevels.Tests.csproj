@@ -31,6 +31,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/level_file_serialization.cs" Link="level_file_serialization.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_file_validation.cs" Link="level_file_validation.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_grid.cs" Link="level_grid.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/from_scratch_layout.cs" Link="from_scratch_layout.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_music_reference.cs" Link="level_music_reference.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/radio_playlist.cs" Link="radio_playlist.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/track_file_name.cs" Link="track_file_name.cs" />

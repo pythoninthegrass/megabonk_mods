@@ -62,6 +62,27 @@ public class StartupGateTests
     }
 
     [Fact]
+    public void SpawnAlreadyInPlace_CompletesWithoutAnotherPlacementOrPortalWait()
+    {
+        var gate = New();
+        gate.RunStarted(true, 0f);
+        gate.GameSpawnedPlayer(1f);
+        gate.ContentReady(5f);
+        gate.Drain();
+
+        Assert.True(gate.ShouldAttemptPlace);
+        gate.PlacementCompleted(5f);
+
+        Assert.Equal(StartupGatePhase.Open, gate.Phase);
+        Assert.False(gate.ShouldAttemptPlace);
+        Assert.Equal(new[] { StartupGateCommandKind.ReleaseHold, StartupGateCommandKind.HideCover }, Kinds(gate));
+
+        gate.PortalClosed(6f);
+        Assert.False(gate.ShouldAttemptPlace);
+        Assert.Empty(gate.Drain());
+    }
+
+    [Fact]
     public void Placement_IsNotOwedBeforeTheContentIsReady()
     {
         var gate = New();

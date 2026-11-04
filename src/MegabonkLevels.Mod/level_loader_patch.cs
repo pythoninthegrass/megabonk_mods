@@ -175,6 +175,11 @@ public static class LevelLoaderPatch
             }
         }
 
+        if (RefuseOversizedGrid(level, mapData, logger))
+        {
+            return true;
+        }
+
         var runConfig = PrepareRun(level, logger, mapData);
         try
         {
@@ -189,11 +194,31 @@ public static class LevelLoaderPatch
         return true;
     }
 
+    // A from-scratch grid larger than the stage's stock generator size cannot be built; the refusal is logged and no run starts.
+    private static bool RefuseOversizedGrid(LevelFile level, MapData mapData, MelonLogger.Instance logger)
+    {
+        if (level.Grid is not { } grid)
+        {
+            return false;
+        }
+
+        var reason = FromScratchLayout.SizeRefusal(grid, mapData.stages[level.StageIndex].mapParameters.size);
+        if (reason == null)
+        {
+            return false;
+        }
+
+        StartupCover.OnCancelled("load refused");
+        logger.Error($"LevelLoader: load refused: {reason}");
+        return true;
+    }
+
     // Seed, edits, music, title and custom-run marking for a run about to start; returns the config the run starts with.
     private static RunConfig PrepareRun(LevelFile level, MelonLogger.Instance logger, MapData mapData)
     {
         SeedForcePatch.ForceLevelSeed(level.Seed);
-        LiveEditPatch.SetPendingEdits(level.Edits, level.NoGrass, level.PlayerStart, level.MaxSlopeAngle, level.KillFloorY, level.BossSpawnPosition, level.GrindRequiresSlide, level.PackKitVersions, fallDamageCharacter: level.FallDamageCharacter, randomizationSettings: level);
+        FromScratchGenerationPatch.Arm(level);
+        LiveEditPatch.SetPendingEdits(level.Edits, level.NoGrass, level.PlayerStart ?? level.Spawn?.Position, level.MaxSlopeAngle, level.KillFloorY, level.BossSpawnPosition, level.GrindRequiresSlide, level.PackKitVersions, fallDamageCharacter: level.FallDamageCharacter, randomizationSettings: level);
         LevelMusic.Prepare(level.Music, logger);
         LevelTitle.Prepare(level.Title, level.Description, logger);
         AllowedCharacters = level.AllowedCharacters;
@@ -259,8 +284,18 @@ public static class LevelLoaderPatch
                 return;
             }
 
-            newRunConfig = PrepareRun(level, logger, mapData);
             _awaitingCharacter = null;
+            if (RefuseOversizedGrid(level, mapData, logger))
+            {
+                if (restrictsScreen)
+                {
+                    CharacterScreenPatch.SetRestricted(false);
+                }
+
+                return;
+            }
+
+            newRunConfig = PrepareRun(level, logger, mapData);
             if (restrictsScreen)
             {
                 CharacterScreenPatch.SetRestricted(false);
