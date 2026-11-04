@@ -4,7 +4,7 @@ title: macOS player installer
 status: In Progress
 assignee: []
 created_date: '2026-10-31T03:12:00Z'
-updated_date: '2026-11-04 00:14'
+updated_date: '2026-11-04 00:48'
 labels:
   - tooling
 dependencies: []
@@ -30,14 +30,14 @@ Until this lands, the player guide covers macOS only by pointing at the contribu
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Running the installer on a Mac with Megabonk installed leaves the game launchable with the mod loaded: MelonLoader at the pinned version (checksum-verified), the mod DLL placed, and the game's Windows build running under the prefix
+- [x] #1 Running the installer on a Mac with Megabonk installed leaves the game launchable with the mod loaded: MelonLoader at the pinned version (checksum-verified), the mod DLL placed, and the game's Windows build running under the prefix
 - [ ] #2 It works with both plain Wine and CrossOver's Wine, and does not require the commercial product to be installed
-- [ ] #3 It applies the DLL override the loader needs and installs the .NET 6 runtime into the prefix when absent
-- [ ] #4 The prefix and game directory are discovered without asking the player to install the repo's toolchain, with an explicit override for a non-default location
-- [ ] #5 Re-running is a no-op when everything is at the expected version, and repairs only what is missing or stale when it is not; uninstall restores a vanilla game
-- [ ] #6 Optional inputs are honored: a chosen level file lands in UserData/Levels/, a pack bundle and its manifest land in UserData/LevelPacks/<id>/, and UserData/Levels/ is created when absent
+- [x] #3 It applies the DLL override the loader needs and installs the .NET 6 runtime into the prefix when absent
+- [x] #4 The prefix and game directory are discovered without asking the player to install the repo's toolchain, with an explicit override for a non-default location
+- [x] #5 Re-running is a no-op when everything is at the expected version, and repairs only what is missing or stale when it is not; uninstall restores a vanilla game
+- [x] #6 Optional inputs are honored: a chosen level file lands in UserData/Levels/, a pack bundle and its manifest land in UserData/LevelPacks/<id>/, and UserData/Levels/ is created when absent
 - [ ] #7 Progress shows through a GUI progress dialog in a desktop session and as plain text when run headless; a failure it cannot resolve exits nonzero with a message that says what to do
-- [ ] #8 Verified end to end on the macOS machine, documented, and the player guide's macOS section becomes a real install route pointing at the installer rather than the contributor doc
+- [x] #8 Verified end to end on the macOS machine, documented, and the player guide's macOS section becomes a real install route pointing at the installer rather than the contributor doc
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -61,12 +61,16 @@ Risks: first launch under Wine downloads Cpp2IL (~35 s, needs network); unsigned
 Decisions: CrossOver licence is expired here, so plain Wine is the development and verification runtime and the preferred discovery target; CrossOver bottles stay a fallback that is unit-tested but not run end to end on this box. Packaging: no .command or .sh on macOS or Linux; the package carries a bare installer binary meant to be fetched by a curl-to-sh bootstrap (a curl download is not quarantined, so Gatekeeper does not gate it). Developer ID certificates are in the keychain, so the darwin/arm64 binary is codesigned and notarized for browser downloads. A published download URL and the bootstrap script are not part of this task unless scoped in. Windows keeps install.exe (a .ps1 bootstrap could scaffold it later).
 
 Progress (uncommitted, all Go and Python tests green on the Mac): steam.WineClientRoots (plain Wine ~/.local/share/megabonk/wine and ~/.wine before CrossOver bottles), winePath drive-letter mapping (C: drive_c, Z: root, others via dosdevices), PrefixOfGameDir; plan.RuntimeModeWine (runtime under MelonLoader/Dependencies/dotnet plus the version.dll override in the prefix); proton.FindWineBinary (MEGABONK_WINE, PATH, Wine*.app under ~/Applications or /Applications, else the user.reg fallback); cli darwin mode (discovery, --prefix, --game-dir derives the prefix, not-found message, default --package to the executable's folder); package:macos task and build_player_package.py --platform macos (bare megabonk-installer, mode 0755 in the zip), both manifest loaders accept macos. Also fixed plan.resolve so a path whose tail does not exist yet compares equal under a symlinked parent (/var vs /private/var made every plan test fail on macOS, so this was a real darwin bug); the cli tests now pin GOOS=linux so the Linux-shaped cases do not take the Wine path on a Mac host. Built the darwin/arm64 package and ran a --dry-run against this Mac's CrossOver bottle: discovery, plan and no writes behave as expected. Not done: real end-to-end install with plain Wine and a game launch (AC #1, #2, #8), docs, signing and notarization run. Found, not fixed: package:linux/windows/macos read mod output from bin/Release/net6.0 but task mod:build builds Debug, so on this box Release is a stale build without NLayer.dll.
+
+Verified on mbp (Apple silicon, plain Wine 11, a copy of the working prefix with MelonLoader, the mod, UserData, UserLibs, version.dll and the override stripped): the Developer ID signed darwin/arm64 package installed 7 steps with --prefix (exit 0), re-run and --check reported nothing to do, uninstall returned the game directory to vanilla and removed the override, and a launch without --melonloader.agfoffline logged the vendored HostFXR path under MelonLoader/Dependencies/dotnet, Assembly Generation Successful, '1 Mod loaded.' and 'MegabonkLevels mod initialized.'. An earlier launch through scripts/launch_game.py showed a black screen: that launcher passes --melonloader.agfoffline, which refuses the Unity dependency download, so a fresh install fails with 'UnityDependencies_2023.2.22.zip does not Exist!'; recorded in docs/player-installer.md. A GUI run (Terminal in the desktop session, no --no-gui) opened the window, waited for the Install confirmation, and finished with exit 0. Default discovery of the plain-Wine prefix was checked with --dry-run on mbp, and the CrossOver bottle with --dry-run on mini.
+
+Still open: AC #2 (CrossOver's Wine was not run end to end, the licence is expired; the bottle path is covered by unit tests and a dry run), AC #7 (waiting on what the person at the screen saw of the progress bar and step labels), DoD #1 (task check still fails on this Mac with 2 failures in tests/test_thps_pack_pieces.py, unrelated to the installer and failing before this work too), and the notarization run (needs a notarytool keychain profile name). Pack bundles on macOS are covered by the shared plan tests, not a Mac run.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
