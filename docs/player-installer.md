@@ -140,7 +140,7 @@ Every installer — the Python reference behind `install.sh` and the Go binary b
 
 A second run with nothing changed does nothing and says so. A run after something has gone missing or stale repairs only that: `--check` compares the install against the package by file digest and loader version marker, exits 10 when anything differs, and the next install run fixes just those entries. A wiped runtime is reinstalled together with its `version.dll` override, because losing one without the other leaves a game that starts and never loads a mod.
 
-After a game update the answer is the same run again. The game build comparison in step 4 tells the player whether the package still matches the game and the repair covers any loader file that went missing; if the build differs and the mod stops loading, the fix is a newer package, which the warning says. Whether Steam's own update or file verification removes the loader files it did not install is not established here; see [what is not verified](#what-is-verified-and-what-is-not).
+After a game update the answer is the same run again. The game build comparison in step 4 tells the player whether the package still matches the game and the repair covers any loader file that went missing; if the build differs and the mod stops loading, the fix is a newer package, which the warning says. Whether Steam's own update or file verification removes the loader files it did not install is not established here, and the game has not updated since February 2026, so no update has been observed; see [what is not verified](#what-is-verified-and-what-is-not).
 
 ### Uninstall
 
@@ -316,6 +316,8 @@ escaping the game directory. The `plan` and `steam` resolve seams take injectabl
 abs/toSlash/eval so tests pin this without a Windows host; a guest run first caught the leak.
 
 ### The parity contract
+
+The Go installer is the source of truth. The Python installer is the reference it was ported from and will eventually be removed, so it is allowed to drift: `tests/test_installer_parity.py` already fails on the Go closing message being capitalised and on the loader leftovers the Go uninstall clears, and neither is being fixed on the Python side. The build-match line from the installer contract is the same in both.
 
 The two implementations agree **semantically**, not byte for byte:
 

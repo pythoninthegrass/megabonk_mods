@@ -17,7 +17,7 @@ You can remove it any time with the installer's uninstall option below.
 
 ## Installing
 
-There is no public download link yet. Packages are built from the project's source with `task package:windows`, `task package:linux` or `task package:macos`, so you get yours from whoever shared this mod or a level with you. When a download URL exists it will be linked here.
+Downloads will be published on GitHub Releases: `<GitHub Releases link: to be added>`. That link does not exist yet because the project is still a development setup. Until it does, packages are built from the project's source with `task package:windows`, `task package:linux` or `task package:macos`, so you get yours from whoever shared this mod or a level with you.
 
 Unzip the package, then:
 
