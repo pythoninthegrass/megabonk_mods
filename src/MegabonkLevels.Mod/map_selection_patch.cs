@@ -18,6 +18,7 @@ public static class MapSelectionPatch
     private static MelonLogger.Instance _logger;
     private static Texture2D _placeholder;
     private static readonly List<GameObject> _spawned = new();
+    private static readonly List<Texture2D> _thumbnails = new();
     private static readonly Dictionary<int, CustomMapEntry> _entryByButton = new();
     private static CustomMapEntry? _selectedEntry;
     private static readonly Dictionary<int, (Selectable Button, Navigation Navigation)> _navigation = new();
@@ -64,6 +65,47 @@ public static class MapSelectionPatch
         return _placeholder;
     }
 
+    private static Texture2D LoadThumbnail(string levelPath)
+    {
+        var sidecar = LevelThumbnailSidecar.Find(levelPath);
+        if (sidecar.Warning != null)
+        {
+            _logger?.Warning($"MapSelection: {sidecar.Warning}; using the placeholder.");
+        }
+
+        if (sidecar.Path == null)
+        {
+            return null;
+        }
+
+        var name = Path.GetFileName(sidecar.Path);
+        try
+        {
+            var bytes = File.ReadAllBytes(sidecar.Path);
+            if (!LevelThumbnailSidecar.TryReadDimensions(bytes, out var width, out var height) || !LevelThumbnailSidecar.DimensionsWithinLimit(width, height))
+            {
+                _logger?.Warning($"MapSelection: thumbnail '{name}' is not a png/jpg within {LevelThumbnailSidecar.MaxDimension}px per side; using the placeholder.");
+                return null;
+            }
+
+            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            if (!NativeImageLoader.LoadImage(texture, bytes))
+            {
+                UnityEngine.Object.Destroy(texture);
+                _logger?.Warning($"MapSelection: could not decode thumbnail '{name}'; using the placeholder.");
+                return null;
+            }
+
+            _thumbnails.Add(texture);
+            return texture;
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warning($"MapSelection: could not load thumbnail '{name}': {ex.Message}; using the placeholder.");
+            return null;
+        }
+    }
+
     private static void DestroySpawned()
     {
         RestoreNavigation();
@@ -76,6 +118,15 @@ public static class MapSelectionPatch
         }
 
         _spawned.Clear();
+        foreach (var thumbnail in _thumbnails)
+        {
+            if (thumbnail != null)
+            {
+                UnityEngine.Object.Destroy(thumbnail);
+            }
+        }
+
+        _thumbnails.Clear();
         _entryByButton.Clear();
         _selectedEntry = null;
     }
@@ -130,7 +181,7 @@ public static class MapSelectionPatch
         mapEntry.Set(mapData);
         mapEntry.t_name.text = entry.Title;
         mapEntry.t_description.text = entry.Description;
-        mapEntry.mapIcon.texture = PlaceholderTexture();
+        mapEntry.mapIcon.texture = LoadThumbnail(entry.Path) ?? PlaceholderTexture();
 
         _spawned.Add(clone);
         _entryByButton[mapEntry.buttonScript.GetInstanceID()] = entry;

@@ -42,6 +42,18 @@ One consequence of staying in the same project: the Mod project compiles against
 | `allowedCharacters` | `string[]` | Optional. Names of the characters that may play the level: `calcium`, `tony` or `tonymczoom` (case-insensitive). Absent, empty, or with no recognised name means any character may play it. The Map Selection entry refuses Confirm for any other character, and a held load restricts the game's Character Selection screen to these characters. `CharacterPolicy` (`character_policy.cs`) applies it and the editor save writes it back. Additive, so `schemaVersion` stays `3`. |
 | `edits` | `EditOp[]` | Ordered list of edit operations applied on top of the generated map. `EditOp(OpType, Target, Payload)` is a minimal shape (string opcode + string target id + a JSON-string payload) that round-trips and migrates correctly independent of any particular operation's payload shape — see "Edit operation types" below. |
 
+## Level thumbnail
+
+A level's Map Selection entry shows a cover image when a sidecar file sits beside the level in `<game>/UserData/Levels/`: the level's base name (the file name without `.mblevel.json`) plus `.png`, `.jpg` or `.jpeg`, so `thps.mblevel.json` takes `thps.png`. The extension and the base name match case-insensitively. Nothing in the level file references it, and the image is not part of the schema or the `packs` version check.
+
+`LevelThumbnailSidecar` (`level_thumbnail_sidecar.cs`, Unity-free and unit-tested) does the lookup and the checks, and `MapSelectionPatch.LoadThumbnail` decodes the result and puts it on the entry's `mapIcon`. The file must be nonempty and at most 8 MiB (`LevelThumbnailSidecar.MaxBytes`), and its header must report at most 4096 px per side (`MaxDimension`), read from the PNG `IHDR` or the JPEG start-of-frame before any decoding. Only the same folder is searched, and a linked (symlink) image is skipped. The decoded texture is freed with the entry when the selection screen is rebuilt.
+
+The generated `ImageConversion.LoadImage` wrapper cannot be used: it builds an `Il2CppSystem.Span<byte>` that throws `ObjectCollectedException`. `NativeImageLoader` (`native_image_loader.cs`) instead calls the engine icall `UnityEngine.ImageConversion::LoadImage_Injected` through `IL2CPP.ResolveICall`, passing a pinned buffer in a 16-byte span wrapper (pointer, then length) and the texture's native pointer read from `Object.m_CachedPtr` at offset `0x10`. Passing the IL2CPP object pointer instead of the native one crashes the game with an access violation, and because `InitButtons` runs when the main menu is built, that crash happens at startup.
+
+A missing sidecar changes nothing: the entry keeps the flat purple placeholder with no warning. Two candidates for one level (`thps.png` and `thps.jpg`), an invalid level name, an empty, oversized or linked file, an unreadable header, oversized dimensions and a decode failure each log `MapSelection: ...; using the placeholder.` and leave the entry intact.
+
+The image is stretched to the tile, which is about 3:2, so a 3:2 image around 1080x720 looks right and stays far under the size limit. The Warehouse ships `levels/thps.png`; bundle it by naming it next to the level, for example `task package:linux LEVELS="thps.mblevel.json thps.png" PACKS=thps`.
+
 ## Interactable randomization
 
 The three `randomize*` flags are additive schema-3 settings, editable as `true`
