@@ -89,6 +89,18 @@ def cull_ms_per_frame(report: dict) -> float | None:
     return round((tick.get("ms") or 0) / frames, 4)
 
 
+def player_start_suspect_reason(
+    position: list[float] | None, origin: tuple[float, float, float] | None, tolerance: float = 2.0
+) -> str | None:
+    """Why a window did not start where it was told to, or None. Knockback during a window is normal; before it is not."""
+    if not position or not origin:
+        return None
+    distance = sum((position[i] - origin[i]) ** 2 for i in range(3)) ** 0.5
+    if distance <= tolerance:
+        return None
+    return f"the player was {distance:.1f} units from the fixed point at window start"
+
+
 def plan(counts: list[int] | tuple[int, ...]) -> list[tuple[str, int, bool | None]]:
     """One window per count, then the two controls at the largest: every mod tick off, then back on."""
     windows = [(f"count_{count}", count, None) for count in counts]
@@ -99,17 +111,18 @@ def plan(counts: list[int] | tuple[int, ...]) -> list[tuple[str, int, bool | Non
 
 
 def render_plan(counts: list[int] | tuple[int, ...], repeats: int) -> list[tuple[str, int, bool]]:
-    """Two windows per count per repeat, arms strictly alternating so within-session drift falls on both equally.
+    """Two windows per count per repeat, arms strictly alternating and the leading arm flipped every repeat.
 
-    The render-only A/B of TASK-037: rendon is the ordinary run, rendoff hides only the enemy renderers with AI,
-    physics and animation still running. The window names carry the repeat so the two arms are never confused
-    across sessions.
+    rendon is the ordinary run, rendoff hides only the enemy renderers with AI, physics and animation still
+    running. The window names carry the repeat so the two arms are never confused across sessions. Cost walks
+    upward through a session, so an arm that is always measured second would absorb that drift alone.
     """
     windows: list[tuple[str, int, bool]] = []
     for count in counts:
         for repeat in range(1, repeats + 1):
-            windows.append((f"count_{count}_rendon_r{repeat}", count, True))
-            windows.append((f"count_{count}_rendoff_r{repeat}", count, False))
+            for render_on in ((True, False) if repeat % 2 else (False, True)):
+                arm = "rendon" if render_on else "rendoff"
+                windows.append((f"count_{count}_{arm}_r{repeat}", count, render_on))
     return windows
 
 
@@ -381,6 +394,7 @@ class Sweeper:
         self.live(f"before {name}")
         self.send(hb.build_teleport_command(position=origin))
         time.sleep(0.5)
+        player_start = (self.verb("state").get("player") or {}).get("position")
         self.perf("health", hp=self.args.hp)
         current = self.perf("status")["enemiesLast"]
         if target - current > 0:
@@ -431,11 +445,17 @@ class Sweeper:
             report["_cullMsPerFrame"] = cull_ms_per_frame(report)
         report["_positionSumBefore"] = position_before
         report["_positionSumAfter"] = status_after.get("enemyPositionSum")
+        report["_playerAtOrigin"] = player_start
+        report["_origin"] = list(origin)
         if self.args.captures:
             report["_captures"] = self.collect_captures(name, attempt, before)
         suspects = [
             reason
-            for reason in (suspect_reason(report, target=target), render_suspect_reason(report, target=target))
+            for reason in (
+                suspect_reason(report, target=target),
+                render_suspect_reason(report, target=target),
+                player_start_suspect_reason(player_start, origin),
+            )
             if reason
         ]
         report["_suspect"] = "; ".join(suspects) if suspects else None

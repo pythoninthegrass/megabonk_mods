@@ -197,17 +197,24 @@ def test_render_arms_alternate_the_arms_within_every_repeat() -> None:
     assert [name for name, _, _ in windows] == [
         "count_0_rendon_r1",
         "count_0_rendoff_r1",
-        "count_0_rendon_r2",
         "count_0_rendoff_r2",
+        "count_0_rendon_r2",
         "count_0_rendon_r3",
         "count_0_rendoff_r3",
         "count_240_rendon_r1",
         "count_240_rendoff_r1",
-        "count_240_rendon_r2",
         "count_240_rendoff_r2",
+        "count_240_rendon_r2",
         "count_240_rendon_r3",
         "count_240_rendoff_r3",
     ]
+
+
+def test_render_arms_hand_the_leading_arm_over_each_repeat() -> None:
+    """A fixed arm order makes the always-second arm absorb the within-session drift the doc records."""
+    arms = [render_on for _, _, render_on in perf_sweep.render_plan([240], 4)]
+
+    assert arms == [True, False, False, True, True, False, False, True]
 
 
 def test_render_arms_pair_every_count_with_both_arms() -> None:
@@ -256,6 +263,23 @@ def test_a_window_asked_for_rendering_that_still_hid_renderers_is_suspect() -> N
 def test_the_off_arm_asks_for_rendering_to_stop_and_the_on_arm_for_it_to_continue() -> None:
     assert perf_sweep.render_arm_payload(True) == {"action": "render", "enabled": True}
     assert perf_sweep.render_arm_payload(False) == {"action": "render", "enabled": False}
+
+
+def test_a_player_at_the_fixed_point_at_window_start_is_not_suspect() -> None:
+    assert perf_sweep.player_start_suspect_reason([0.0, 1.92, 0.0], (0.0, 1.92, 0.0)) is None
+    assert perf_sweep.player_start_suspect_reason([0.4, 1.92, -0.4], (0.0, 1.92, 0.0)) is None
+
+
+def test_a_player_elsewhere_at_window_start_is_suspect() -> None:
+    reason = perf_sweep.player_start_suspect_reason([24.0, 1.92, 0.0], (0.0, 1.92, 0.0))
+
+    assert reason is not None
+    assert "fixed point" in reason and "24.0" in reason
+
+
+def test_a_missing_player_position_is_left_to_the_other_gates() -> None:
+    assert perf_sweep.player_start_suspect_reason(None, (0.0, 1.92, 0.0)) is None
+    assert perf_sweep.player_start_suspect_reason([0.0, 1.92, 0.0], None) is None
 
 
 def test_the_cull_reports_its_own_cost_per_frame_from_the_window_ticks() -> None:
