@@ -4,7 +4,7 @@ title: Verify from-scratch levels end to end in the running game
 status: In Progress
 assignee: []
 created_date: '2026-11-04 20:37'
-updated_date: '2026-11-05T20:40:00Z'
+updated_date: '2026-11-05T20:43:00Z'
 labels: []
 dependencies:
   - TASK-032.05
@@ -51,3 +51,21 @@ Create the minimal level with the editor's new-level command and commit it as le
 6. relaunch levels/thps.mblevel.json and levels/example-forest.mblevel.json; confirm they load and play as before.
 7. Save screenshots under .tools/evidence, summarize results and log excerpts in the task, check AC, check parent TASK-032 AC, run task check, commit the level (conventional, no attribution).
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Results (relaunch via MCP, MEGABONK_DEV=true, CrossOver build). Screenshots in the gitignored .tools/evidence: scratch-minimal-gameplay-spawn.png, scratch-minimal-boss-summoned.png, scratch-minimal-boss-defeated.png, scratch-minimal-after-restart.png, thps-gameplay.png, example-forest-gameplay-3.png.
+
+AC1: new_level wrote scratch-minimal (7x7, 49 cells, spawn [0,2,0], boss spawner [80,0,0], no edits). Log: `FromScratch: built 49 authored tiles in a 7x7 generator grid, spawn 0,2,0`, `FromScratch: boss spawner placed at (80.00, 0.00, 0.00)`, `KillFloor: armed at y=-12 (derived from tiles, catch floor y=-20)`. Gameplay screenshot shows flat tiles only, no trees, rocks or chests.
+
+AC2: state after leaving the editor: player [0,1.925,0], cell [3,3]. interact(type=InteractableBossSpawner) logged `BossEvents: A_BossSpawned`; kill-enemies bosses logged `A_StageBossDied`. Tier 1 opens no boss portal after the boss dies (endless ghost swarm), so InteractablePortal never became interactable; criterion reworded accordingly. Three untyped interact calls re-summoned the boss; tracked as TASK-032.09.
+
+AC3: Validate was clicked twice in the editor with no error in Latest.log. The result text is on the clipped second status line, so the summary was not read in game; accepted as a log-only result, the same limit recorded in TASK-032.04.
+
+AC4: the harness restart-run (MapController.RestartRun) and a manual Confirm then Restart click in the game both rebuilt the level: `DeathRestart: restarting the custom run, level edits queued again`, `FromScratch: built 49 authored tiles...`, `StartupCover: player already at the level start`; player back at [0,1.925,0], no portal or spawn-reset interference. The harness cannot press Confirm or Restart; tracked as TASK-032.08, which also covers the B_Retry versus Restart wording in docs.
+
+AC5: thps.mblevel.json (now a from-scratch level): pack 'thps' loaded, `FromScratch: built 1 authored tiles in a 15x15 generator grid, spawn 109,38,-116`, `KillFloor: armed at y=-35 (authored...)`, player placed at the start and standing on the Warehouse floor. example-forest.mblevel.json: `A_GenerationComplete: ... tiles=225 flatTiles=160 fillTiles=203 nodes=428 hash=0F5D88E2...` matching docs/map-generation-determinism.md, full stock forest with enemies and a chest, player at the stock spawn cell [10,7]. A `StartupCover: released after the timeout` and `no player to place: no player body or no authored start` warning appears because example-forest has no playerStart; that code path predates the from-scratch work (e2b8028).
+
+task check passes (1235 Python tests passed, 29 skipped, lint clean).
+<!-- SECTION:NOTES:END -->
