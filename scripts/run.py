@@ -158,6 +158,9 @@ WINDOWS_DRIVE_ROOT = re.compile(r"^[A-Za-z]:[\\/]")
 WINE_PREFIX_ROOT = re.compile(r"(.*?)(?:^|/)(?:drive_c|pfx)(?:/|$)", re.IGNORECASE)
 # Environment variables naming a prefix, with the path the prefix sits at inside it; Proton sets only the second.
 PREFIX_ENV_KEYS = (("WINEPREFIX", ""), ("STEAM_COMPAT_DATA_PATH", "/pfx"))
+# Each Wine bottle's wineserver keeps its sockets in one directory that every process of that bottle has open.
+WINESERVER_DIR = re.compile(r"^(/private/tmp/\.wine-\d+/server-[^/]+)(?:/|$)")
+LSOF_TIMEOUT_SECONDS = 10
 LAUNCHER_CHAIN_COMMANDS = (
     re.compile(rf"(?:^|/)reaper\s+SteamLaunch\s+AppId={STEAM_APP_ID}(?=\s|$)"),
     re.compile(rf"(?:^|/)srt-bwrap\b.*(?:\b{STEAM_APP_ID}\b|Megabonk\.exe)", re.IGNORECASE),
@@ -178,6 +181,7 @@ class ProcessInfo(NamedTuple):
     pid: int
     argv: tuple[str, ...]
     environ: Mapping[str, str] | None = None
+    open_paths: tuple[str, ...] | None = None
 
 
 TableProvider = Callable[[], list[ProcessInfo]]
@@ -193,6 +197,11 @@ def windows_basename(command: str) -> str:
     if not WINDOWS_DRIVE_ROOT.match(token):
         return ""
     return token.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1].casefold()
+
+
+def looks_like_windows_process(info: ProcessInfo) -> bool:
+    """A drive-rooted Windows command, or any .exe, which is what a Wine process shows as argv[0]."""
+    return bool(windows_basename(info.argv[0])) or info.argv[0].casefold().endswith(".exe")
 
 
 def normalize_path_root(value: str) -> str:
@@ -226,8 +235,39 @@ def read_process_table_proc(proc_root: Path = Path("/proc")) -> list[ProcessInfo
     return table
 
 
+def parse_lsof_names(output: str) -> dict[int, tuple[str, ...]]:
+    """Open file names per pid from `lsof -F pn` output, where a p line starts a process and each n line names one of its files."""
+    names: dict[int, list[str]] = {}
+    pid: int | None = None
+    for line in output.splitlines():
+        if line.startswith("p") and line[1:].isdigit():
+            pid = int(line[1:])
+            names.setdefault(pid, [])
+        elif line.startswith("n") and pid is not None:
+            names[pid].append(line[1:])
+    return {pid: tuple(paths) for pid, paths in names.items()}
+
+
+def read_open_paths(pids: list[int]) -> dict[int, tuple[str, ...]]:
+    """Open files of the given pids; empty when lsof is missing or refuses, since it exits non-zero when any pid is unreadable yet still prints the rest."""
+    if not pids:
+        return {}
+    try:
+        result = subprocess.run(
+            ["lsof", "-n", "-P", "-F", "pn", "-p", ",".join(str(pid) for pid in pids)],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=LSOF_TIMEOUT_SECONDS,
+            env={**os.environ, "LC_ALL": "C"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    return parse_lsof_names(result.stdout)
+
+
 def read_process_table_ps() -> list[ProcessInfo]:
-    """Process table for hosts without /proc; pid=,args= is the one ps form whose keywords the BSD and GNU families both accept, with the header suppressed and the locale pinned."""
+    """Process table for hosts without /proc; pid=,args= is the one ps form whose keywords the BSD and GNU families both accept, with the header suppressed and the locale pinned. ps carries no environment, so the open files of Windows processes come from one lsof call."""
     output = subprocess.run(
         ["ps", "-axo", "pid=,args="],
         capture_output=True,
@@ -243,7 +283,8 @@ def read_process_table_ps() -> list[ProcessInfo]:
         argv = tuple(command.split())
         if argv:
             table.append(ProcessInfo(int(pid), argv, None))
-    return table
+    open_paths = read_open_paths([info.pid for info in table if looks_like_windows_process(info)])
+    return [info._replace(open_paths=open_paths.get(info.pid)) for info in table]
 
 
 def process_table(system: str | None = None, proc_root: Path = Path("/proc")) -> list[ProcessInfo]:
@@ -828,13 +869,30 @@ def wait_for_exit(
     return True
 
 
+class SparedProcess(NamedTuple):
+    """A process the reaper left alone, with the bottle it was attributed to (None when unknown) and why."""
+
+    pid: int
+    executable: str
+    bottle: str | None
+    reason: str
+
+
 class WineLeftovers(NamedTuple):
-    """Pids the reaper may kill, split by role, plus the Windows processes it must spare and the candidates it withheld."""
+    """Pids the reaper may kill, split by role, plus the Windows processes it must spare, the candidates it withheld and a description of each spared process."""
 
     stubs: list[int]
     orphans: list[int]
     others: list[int]
     withheld: list[int]
+    spared: list[SparedProcess] = []
+
+
+SPARE_REASONS = {
+    "ours": "live Windows process in this bottle",
+    "foreign": "foreign bottle, never touched",
+    "unknown": "no bottle signal while Windows processes run",
+}
 
 
 def is_wine_stub(info: ProcessInfo) -> bool:
@@ -870,11 +928,40 @@ def wine_prefix_root(info: ProcessInfo) -> str | None:
         value = environ.get(key)
         if value:
             return normalize_path_root(f"{value.rstrip('/')}{suffix}")
-    for argument in info.argv:
+    for argument in (*info.argv, *(info.open_paths or ())):
         match = WINE_PREFIX_ROOT.match(normalize_path_root(argument))
         if match:
             return normalize_path_root(match.group(1))
     return None
+
+
+def wineserver_dirs(info: ProcessInfo) -> set[str]:
+    return {match.group(1) for path in info.open_paths or () if (match := WINESERVER_DIR.match(path))}
+
+
+def process_prefixes(table: list[ProcessInfo]) -> dict[int, str | None]:
+    """Prefix per pid; a process with no prefix signal of its own takes the one prefix every attributed process sharing its wineserver directory agrees on."""
+    own = {info.pid: wine_prefix_root(info) for info in table}
+    server_owners: dict[str, set[str]] = {}
+    for info in table:
+        if own[info.pid]:
+            for directory in wineserver_dirs(info):
+                server_owners.setdefault(directory, set()).add(own[info.pid])
+    resolved = dict(own)
+    for info in table:
+        if own[info.pid]:
+            continue
+        shared = set().union(*(server_owners.get(directory, set()) for directory in wineserver_dirs(info)))
+        if len(shared) == 1:
+            resolved[info.pid] = next(iter(shared))
+    return resolved
+
+
+def bottle_name(root: str | None) -> str | None:
+    if not root:
+        return None
+    parts = root.rstrip("/").split("/")
+    return parts[-2] if parts[-1] == "pfx" and len(parts) > 1 else parts[-1]
 
 
 def current_wine_prefix() -> str | None:
@@ -887,8 +974,9 @@ def current_wine_prefix() -> str | None:
 
 def find_wine_leftovers(table: list[ProcessInfo], prefix: str | None = None) -> WineLeftovers:
     """Pids to clean and pids to spare: a candidate attributed elsewhere is never killed, one attributed to us is killed only while no live Windows process shares that prefix, and one nothing attributes only while no Windows process is live at all."""
-    classified: list[tuple[int, bool, str]] = []
-    others: list[int] = []
+    prefixes = process_prefixes(table)
+    classified: list[tuple[ProcessInfo, bool, str]] = []
+    others: list[tuple[ProcessInfo, str]] = []
     ours_busy: list[int] = []
     for info in table:
         if is_steam_client(info):
@@ -897,26 +985,32 @@ def find_wine_leftovers(table: list[ProcessInfo], prefix: str | None = None) -> 
         candidate = stub or is_megabonk_helper(info) or is_launcher_chain(info)
         if not candidate and not windows_basename(info.argv[0]):
             continue
-        owner = wine_prefix_root(info)
+        owner = prefixes[info.pid]
         if owner is None or prefix is None:
             attribution = "unknown"
         else:
             attribution = "ours" if owner == normalize_path_root(prefix) else "foreign"
         if candidate and attribution != "foreign":
-            classified.append((info.pid, stub, attribution))
+            classified.append((info, stub, attribution))
         else:
-            others.append(info.pid)
+            others.append((info, attribution))
             if attribution == "ours":
                 ours_busy.append(info.pid)
 
     def claimed(attribution: str) -> bool:
         return not (ours_busy if attribution == "ours" else others)
 
+    spared = [(info, attribution, SPARE_REASONS[attribution]) for info, attribution in others]
+    spared += [(info, attribution, SPARE_REASONS[attribution]) for info, _, attribution in classified if not claimed(attribution)]
     return WineLeftovers(
-        [pid for pid, stub, attribution in classified if stub and claimed(attribution)],
-        [pid for pid, stub, attribution in classified if not stub and claimed(attribution)],
-        others,
-        [pid for pid, _, attribution in classified if not claimed(attribution)],
+        [info.pid for info, stub, attribution in classified if stub and claimed(attribution)],
+        [info.pid for info, stub, attribution in classified if not stub and claimed(attribution)],
+        [info.pid for info, _ in others],
+        [info.pid for info, _, attribution in classified if not claimed(attribution)],
+        [
+            SparedProcess(info.pid, info.argv[0].replace("\\", "/").rsplit("/", 1)[-1], bottle_name(prefixes[info.pid]), reason)
+            for info, _, reason in sorted(spared, key=lambda entry: entry[0].pid)
+        ],
     )
 
 
@@ -932,7 +1026,9 @@ def reap_wine_leftovers(table: list[ProcessInfo], kill: Callable[[int], None], p
     """SIGTERM the Wine stubs and orphaned game helpers that belong to us, including the console windows a dead game leaves behind."""
     leftovers = find_wine_leftovers(table, prefix)
     if leftovers.withheld:
-        print(f"quit: leaving Wine leftovers alone while other Windows processes run (pids {leftovers.others})")
+        print("quit: leaving Wine leftovers alone while other Windows processes run")
+        for spared in leftovers.spared:
+            print(f"quit:   pid {spared.pid} {spared.executable} bottle={spared.bottle or 'unknown'}: {spared.reason}")
     pids = leftovers.stubs + leftovers.orphans
     if not pids:
         return 0

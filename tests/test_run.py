@@ -1614,6 +1614,96 @@ def test_reap_wine_leftovers_leaves_orphans_when_steam_runs(capsys) -> None:
     assert "leaving Wine leftovers alone" in capsys.readouterr().out
 
 
+BOTTLES = "/users/dev/library/application support/crossover/bottles"
+OUR_BOTTLE = f"{BOTTLES}/megabonk"
+OUR_BOTTLE_FILE = "/Users/dev/Library/Application Support/CrossOver/Bottles/Megabonk/drive_c/windows/system32/ntdll.dll"
+OTHER_BOTTLE_FILE = "/Users/dev/Library/Application Support/CrossOver/Bottles/Other Game/drive_c/windows/system32/ntdll.dll"
+SERVER_A = "/private/tmp/.wine-501/server-1-a/socket"
+SERVER_B = "/private/tmp/.wine-501/server-2-b/socket"
+
+
+def mac_stub(pid: int, name: str, *open_paths: str) -> run.ProcessInfo:
+    """A CrossOver stub as macOS reports it: no environment, no bottle in argv, only open files."""
+    return run.ProcessInfo(pid, (f"C:\\windows\\system32\\{name}.exe",), None, open_paths or None)
+
+
+def test_wine_prefix_root_attributes_a_stub_by_the_bottle_of_its_open_files() -> None:
+    assert run.wine_prefix_root(mac_stub(1, "services", OUR_BOTTLE_FILE)) == OUR_BOTTLE
+    assert run.wine_prefix_root(mac_stub(2, "services", OTHER_BOTTLE_FILE)) == f"{BOTTLES}/other game"
+    assert run.wine_prefix_root(mac_stub(3, "services", "/usr/lib/libSystem.B.dylib")) is None
+    assert run.wine_prefix_root(mac_stub(4, "services")) is None
+
+
+def test_find_wine_leftovers_reaps_our_bottle_and_spares_a_foreign_one_on_macos() -> None:
+    table = [
+        mac_stub(1, "services", OUR_BOTTLE_FILE),
+        mac_stub(2, "winedevice", OUR_BOTTLE_FILE),
+        mac_stub(3, "services", OTHER_BOTTLE_FILE),
+        run.ProcessInfo(4, ("C:\\game\\game.exe",), None, (OTHER_BOTTLE_FILE,)),
+    ]
+    leftovers = run.find_wine_leftovers(table, OUR_BOTTLE)
+    assert leftovers.stubs == [1, 2]
+    assert leftovers.withheld == []
+    assert leftovers.others == [3, 4]
+
+
+def test_find_wine_leftovers_attributes_a_process_through_its_wineserver_directory() -> None:
+    wrapper = run.ProcessInfo(5, ("C:\\game\\winewrapper.exe",), None, (SERVER_B,))
+    table = [
+        mac_stub(1, "services", OUR_BOTTLE_FILE, SERVER_A),
+        run.ProcessInfo(2, ("C:\\windows\\system32\\winedevice.exe",), None, (SERVER_A,)),
+        mac_stub(3, "services", OTHER_BOTTLE_FILE, SERVER_B),
+        wrapper,
+    ]
+    leftovers = run.find_wine_leftovers(table, OUR_BOTTLE)
+    assert leftovers.stubs == [1, 2]
+    assert leftovers.others == [3, 5]
+
+
+def test_find_wine_leftovers_keeps_a_process_unknown_when_its_server_directory_has_two_bottles() -> None:
+    table = [
+        mac_stub(1, "services", OUR_BOTTLE_FILE, SERVER_A),
+        mac_stub(2, "services", OTHER_BOTTLE_FILE, SERVER_A),
+        run.ProcessInfo(3, ("C:\\windows\\system32\\winedevice.exe",), None, (SERVER_A,)),
+    ]
+    leftovers = run.find_wine_leftovers(table, OUR_BOTTLE)
+    assert leftovers.stubs == [1]
+    assert leftovers.withheld == [3]
+
+
+def test_find_wine_leftovers_falls_back_to_the_blanket_rule_when_lsof_gave_nothing() -> None:
+    table = [mac_stub(1, "services"), run.ProcessInfo(2, ("C:\\game\\game.exe",), None, (OTHER_BOTTLE_FILE,))]
+    leftovers = run.find_wine_leftovers(table, OUR_BOTTLE)
+    assert leftovers.stubs == []
+    assert leftovers.withheld == [1]
+    assert run.find_wine_leftovers([mac_stub(1, "services")], OUR_BOTTLE).stubs == [1]
+
+
+def test_reap_wine_leftovers_names_each_spared_process_with_bottle_and_reason(capsys) -> None:
+    table = [
+        mac_stub(1, "services"),
+        mac_stub(2, "services", OUR_BOTTLE_FILE),
+        run.ProcessInfo(3, ("C:\\game\\game.exe",), None, (OTHER_BOTTLE_FILE,)),
+        run.ProcessInfo(4, ("C:\\mystery\\thing.exe",), None, None),
+    ]
+    killed: list[int] = []
+    assert run.reap_wine_leftovers(table, killed.append, OUR_BOTTLE) == 1
+    assert killed == [2]
+    out = capsys.readouterr().out
+    assert "leaving Wine leftovers alone" in out
+    assert "pid 1 services.exe bottle=unknown: " in out
+    assert "pid 3 game.exe bottle=other game: foreign bottle" in out
+    assert "pid 4 thing.exe bottle=unknown: " in out
+
+
+def test_reap_wine_leftovers_message_says_why_our_own_stub_waits(capsys) -> None:
+    table = [mac_stub(1, "services", OUR_BOTTLE_FILE), run.ProcessInfo(2, ("C:\\Steam\\steam.exe",), None, (OUR_BOTTLE_FILE,))]
+    assert run.reap_wine_leftovers(table, lambda pid: None, OUR_BOTTLE) == 0
+    out = capsys.readouterr().out
+    assert "pid 1 services.exe bottle=megabonk: live Windows process in this bottle" in out
+    assert "pid 2 steam.exe bottle=megabonk: live Windows process in this bottle" in out
+
+
 def test_force_kill_wine_leftovers_sigkills_stubs_and_orphans(monkeypatch, capsys) -> None:
     killed: list[tuple[int, int]] = []
     monkeypatch.setattr(os, "kill", lambda pid, sig: killed.append((pid, sig)))
@@ -1693,15 +1783,52 @@ def test_read_process_table_ps_uses_flags_both_coreutils_families_accept(monkeyp
     def fake_run(cmd, **kwargs):
         calls.append(cmd)
         environments.append(kwargs["env"])
-        return subprocess.CompletedProcess(cmd, 0, stdout="  10 C:\\windows\\system32\\services.exe\n  11 /sbin/launchd\n")
+        return subprocess.CompletedProcess(cmd, 0, stdout="  10 /bin/sh -c true\n  11 /sbin/launchd\n")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     assert run.read_process_table_ps() == [
-        run.ProcessInfo(10, ("C:\\windows\\system32\\services.exe",), None),
+        run.ProcessInfo(10, ("/bin/sh", "-c", "true"), None),
         run.ProcessInfo(11, ("/sbin/launchd",), None),
     ]
     assert calls == [["ps", "-axo", "pid=,args="]]
     assert environments[0]["LC_ALL"] == "C"
+
+
+def test_read_process_table_ps_reads_open_files_of_windows_processes_only(monkeypatch) -> None:
+    calls: list[list[str]] = []
+    lsof_out = f"p10\nn{OUR_BOTTLE_FILE}\nn{SERVER_A}\np12\nn/dev/null\n"
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[0] == "lsof":
+            return subprocess.CompletedProcess(cmd, 1, stdout=lsof_out)
+        return subprocess.CompletedProcess(cmd, 0, stdout="  10 C:\\windows\\system32\\services.exe\n  11 /sbin/launchd\n  12 C:\\game\\a.exe\n")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    table = run.read_process_table_ps()
+    assert calls[1] == ["lsof", "-n", "-P", "-F", "pn", "-p", "10,12"]
+    assert table[0].open_paths == (OUR_BOTTLE_FILE, SERVER_A)
+    assert table[1].open_paths is None
+    assert table[2].open_paths == ("/dev/null",)
+
+
+def test_read_process_table_ps_survives_a_missing_lsof(monkeypatch) -> None:
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "lsof":
+            raise FileNotFoundError("lsof")
+        return subprocess.CompletedProcess(cmd, 0, stdout="  10 C:\\windows\\system32\\services.exe\n")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert run.read_process_table_ps() == [run.ProcessInfo(10, ("C:\\windows\\system32\\services.exe",), None, None)]
+
+
+def test_read_process_table_proc_execs_no_command(tmp_path, monkeypatch) -> None:
+    def forbidden(*args, **kwargs):
+        raise AssertionError(f"unexpected subprocess call: {args}")
+
+    monkeypatch.setattr(subprocess, "run", forbidden)
+    root = fake_proc(tmp_path / "proc", {7: (["C:\\windows\\system32\\services.exe"], None)})
+    assert run.process_table("Linux", proc_root=root)[0].open_paths is None
 
 
 def test_process_table_prefers_proc_on_linux_and_falls_back_to_ps(tmp_path, monkeypatch) -> None:
