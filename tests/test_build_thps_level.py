@@ -442,37 +442,6 @@ def test_boss_portal_rests_on_the_box_floor_under_the_roof() -> None:
     assert hit.y == pytest.approx(b.BOSS_PORTAL_INTERIOR_FLOOR_Y, abs=0.1)
 
 
-@needs_extract
-def test_boss_drops_on_the_pipe_floor_outside_the_box() -> None:
-    x, y, z = b.boss_spawn_position()
-    assert (x, z) == b.local_to_world(*b.BOSS_GROUND_LOCAL)
-    assert y < b.BOSS_PORTAL_FLOOR_UNDERSIDE_Y, "the boss must not spawn inside the hanging box"
-    assert y > b.KILL_FLOOR_Y
-    # Below the box's floor slab there is nothing left to catch the drop but the room's floor.
-    under_box = ws.drop(b.warehouse_triangles(), x, b.BOSS_PORTAL_FLOOR_UNDERSIDE_Y - 0.5, z)
-    assert under_box is not None and y == under_box.y
-
-
-@needs_extract
-def test_boss_spawn_sits_on_the_mesh_surface_it_drops_to() -> None:
-    x, y, z = b.boss_spawn_position()
-    hit = ws.drop(b.warehouse_triangles(), x, b.BOSS_GROUND_DROP_FROM, z)
-    assert hit is not None
-    assert y == hit.y
-
-
-def test_the_boss_spawn_drop_starts_under_the_box_so_the_box_cannot_catch_it() -> None:
-    assert b.BOSS_GROUND_DROP_FROM < b.BOSS_PORTAL_FLOOR_UNDERSIDE_Y
-
-
-@needs_extract
-def test_the_boss_shares_the_portals_column_so_it_comes_out_at_its_foot() -> None:
-    portal = dict(zip("xyz", boss_spawner()["position"], strict=True))
-    boss_x, _, boss_z = b.boss_spawn_position()
-    assert boss_x == portal["x"]
-    assert boss_z < portal["z"], "the boss comes out on the near side of the box, by the quarter pipe"
-
-
 def test_boss_spawner_is_scaled_down_to_fit_the_room() -> None:
     assert boss_spawner()["scale"] == [0.4, 0.4, 0.4]
 

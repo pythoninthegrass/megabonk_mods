@@ -38,18 +38,12 @@ KILL_FLOOR_Y = -35.0
 # the reference map has its secret room (docs/thps-warehouse.md, "Glass corridor and secret room": the skater reaches it
 # by launching off the quarter pipe in front). Its own collider and BaseInteractable are hidden, so it cannot block a
 # grind or be triggered from the floor below. A spawner summons its boss at its own position and a boss inside a closed
-# box could never get out, so the level also authors where the boss appears: BossSpawnRedirectPatch moves it to
-# BOSS_GROUND_LOCAL.
+# box could never get out, so the level sets bossRedirect and BossSpawnRedirectPatch moves the boss out of it.
 BOSS_PORTAL_FOOTPRINT = (149.4, 178.9, 20.9, 31.4)
 BOSS_PORTAL_INTERIOR_FLOOR_Y = 15.64
-BOSS_PORTAL_FLOOR_UNDERSIDE_Y = 15.31
 BOSS_PORTAL_UNDERSIDE_Y = 25.42
 BOSS_SPAWN_LOCAL = (150, 167)
 BOSS_SPAWN_Y = 15.6
-# The main half pipe's floor, outside the box's south wall, in the same x column as the portal.
-BOSS_GROUND_LOCAL = (150, 160)
-# Below the box's floor slab (15.31), so the box itself can never catch the drop.
-BOSS_GROUND_DROP_FROM = 12.0
 BOSS_SPAWN_SCALE = 0.4
 BOSS_SPAWN_YAW = 90.0
 BOSS_HIDDEN_CHILDREN = ["BottomPiece", "Collider"]
@@ -381,19 +375,6 @@ def cell_of_local(x: float, z: float) -> tuple[int, int]:
 
 def edit(op_type: str, payload: dict, target: str = "") -> dict:
     return {"opType": op_type, "target": target, "payload": json.dumps(payload, separators=(",", ":"))}
-
-
-def boss_spawn_position() -> tuple[float, float, float]:
-    """Where the boss appears when the portal is activated: the main half pipe's floor, by the box.
-
-    A spawner summons at its own position and the physics-chase boss cannot climb out of a closed box, so the
-    level authors this instead and BossSpawnRedirectPatch moves the boss here. The drop starts below the box's
-    floor slab, or the box catches the ray — the mistake that left the boss unreachable the first time."""
-    bx, bz = local_to_world(*BOSS_GROUND_LOCAL)
-    hit = ws.drop(warehouse_triangles(), bx, BOSS_GROUND_DROP_FROM, bz)
-    if hit is None:
-        raise ValueError(f"no Warehouse surface under the boss spawn at ({bx}, {bz})")
-    return (bx, hit.y, bz)
 
 
 def boss_spawner() -> dict:

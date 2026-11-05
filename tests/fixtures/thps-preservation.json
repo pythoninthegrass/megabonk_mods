@@ -15,11 +15,6 @@
       "lift": 0.5,
       "world_z": 0.0
     },
-    "bossSpawnPosition": [
-      170,
-      -4.9334368,
-      20
-    ],
     "grid": {
       "width": 15,
       "depth": 15,

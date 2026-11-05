@@ -58,7 +58,6 @@ def snapshot(paths: list[str]) -> dict:
         "derived": {
             "footprint": b.warehouse_footprint(),
             "placement": b.warehouse_placement()._asdict(),
-            "bossSpawnPosition": b.boss_spawn_position(),
             "grid": b.authored_grid(),
             "copingRails": b.COPING_RAILS,
             "collectibles": [item._asdict() for item in b.collectibles()],
