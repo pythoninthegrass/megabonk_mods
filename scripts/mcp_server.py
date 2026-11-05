@@ -331,7 +331,7 @@ async def press_summary_restart() -> CallToolResult:
 
 @mcp.tool()
 async def kill_enemies(target: str) -> CallToolResult:
-    """Kill the nearest enemy (nearest), every live enemy (all) or every boss (bosses) by submitting lethal damage through the game's own enemy damage path, so the death events a real kill raises fire. Returns the target, how many were found and killed, and how many were bosses; read the boss events with log_wait."""
+    """Kill the nearest enemy (nearest), every live enemy (all) or every boss (bosses) by submitting lethal damage through the game's own enemy damage path, so the death events a real kill raises fire. Returns the target, how many were found and killed, and how many were bosses; read the boss events with log_wait. A freshly spawned boss took no damage (hpAfter equal to hpBefore, killed 0) while the editor froze the run, and for a short time after it was left; retry once the run has been unfrozen for a few seconds."""
     try:
         payload = run.build_kill_enemies_command(target)
     except ValueError as error:
