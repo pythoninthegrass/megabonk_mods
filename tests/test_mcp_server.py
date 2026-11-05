@@ -364,11 +364,29 @@ INPUT_TOOL_CASES = [
     ("dismiss_offers", {}, {"command": "dismiss-offers"}),
     ("dismiss_offers", {"choice": 2}, {"command": "dismiss-offers", "choice": 2}),
     ("dismiss_offers", {"skip": True}, {"command": "dismiss-offers", "skip": True}),
-    ("interact", {}, {"command": "interact"}),
     ("interact", {"type": "Magnet"}, {"command": "interact", "type": "Magnet"}),
-    ("interact", {"max_distance": 4.5}, {"command": "interact", "maxDistance": 4.5}),
-    ("interact", {"force": True}, {"command": "interact", "force": True}),
+    ("interact", {"type": "Magnet", "max_distance": 4.5}, {"command": "interact", "type": "Magnet", "maxDistance": 4.5}),
+    ("interact", {"type": "Magnet", "force": True}, {"command": "interact", "type": "Magnet", "force": True}),
 ]
+
+
+@pytest.mark.parametrize("args", [{}, {"type": ""}, {"type": "   "}])
+async def test_interact_without_a_type_is_a_tool_error_and_sends_nothing(tmp_path, monkeypatch, args) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def responder(payload):
+        seen.append(payload)
+        return ok_result(payload, {})
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("interact", args)
+    finally:
+        stop.set()
+    assert result.is_error
+    assert seen == []
 
 
 @pytest.mark.parametrize(("tool", "args", "expected"), INPUT_TOOL_CASES)

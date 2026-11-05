@@ -548,8 +548,10 @@ async def dismiss_offers(choice: int | None = None, skip: bool = False) -> CallT
 
 
 @mcp.tool()
-async def interact(type: str | None = None, max_distance: float | None = None, force: bool = False) -> CallToolResult:
-    """Activate the nearest interactable through the game's own CanInteract/Interact, bypassing the hover gate in DetectInteractables. type filters by substring of the class or object name (e.g. Magnet); max_distance limits candidates to that many units from the player; force calls Interact even when CanInteract returns false. Returns interacted, name, type, distance, prompt, canInteract, result and candidates."""
+async def interact(type: str, max_distance: float | None = None, force: bool = False) -> CallToolResult:
+    """Activate the nearest interactable of a given type through the game's own CanInteract/Interact, bypassing the hover gate in DetectInteractables. type is required and filters by substring of the class or object name (e.g. Magnet, InteractableBossSpawner); an untyped call could hit any nearby interactable, such as the boss spawner. max_distance limits candidates to that many units from the player; force calls Interact even when CanInteract returns false. Returns interacted, name, type, distance, prompt, canInteract, result and candidates."""
+    if not type or not type.strip():
+        raise ToolError("interact: type is required, for example Magnet or InteractableBossSpawner")
     return await _command(_harness(), run.build_interact_command(type, max_distance, force), TIMEOUT)
 
 
