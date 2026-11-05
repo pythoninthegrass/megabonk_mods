@@ -23,6 +23,8 @@ public enum HarnessCommandKind
     Vulnerable,
     Kill,
     RestartRun,
+    PressDeathConfirm,
+    PressSummaryRestart,
     Damage,
     Spawns,
     CharacterScreen,
@@ -218,6 +220,14 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return true;
             case "restart-run":
                 command = new HarnessCommand(HarnessCommandKind.RestartRun, null);
+                error = null;
+                return true;
+            case "press-death-confirm":
+                command = new HarnessCommand(HarnessCommandKind.PressDeathConfirm, null);
+                error = null;
+                return true;
+            case "press-summary-restart":
+                command = new HarnessCommand(HarnessCommandKind.PressSummaryRestart, null);
                 error = null;
                 return true;
             case "steam-ready":

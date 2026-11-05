@@ -53,6 +53,7 @@ public class MegabonkLevelsMod : MelonMod
         SceneTransitionProbe.Install(LoggerInstance);
         CustomLevelStatePatch.Install(LoggerInstance);
         DeathRestartPatch.Install(LoggerInstance);
+        DeathScreenPress.Install(LoggerInstance);
         CharacterScreenPatch.Install(LoggerInstance);
         MapSelectionPatch.Install(LoggerInstance);
         SteamWriteGuard.Install(LoggerInstance);

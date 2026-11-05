@@ -318,6 +318,18 @@ async def damage(amount: Annotated[int, Field(strict=True, ge=1, le=99)], nonlet
 
 
 @mcp.tool()
+async def press_death_confirm() -> CallToolResult:
+    """Press Confirm on the death screen ("you ded"), opening the run summary, through the button's own handler. Returns {screenWasOpen, button}. Errors, with no side effects, when the death screen is not showing or its Confirm button is not interactable."""
+    return await _command(_harness(), run.build_command("press-death-confirm"), TIMEOUT)
+
+
+@mcp.tool()
+async def press_summary_restart() -> CallToolResult:
+    """Press the run summary screen's Restart button, the player-facing path that ends in MapController.RestartRun, unlike restart_run which skips both screens. Returns {screenWasOpen, button}. Errors, with no side effects, when the summary is not showing or the button is not interactable."""
+    return await _command(_harness(), run.build_command("press-summary-restart"), TIMEOUT)
+
+
+@mcp.tool()
 async def kill_enemies(target: str) -> CallToolResult:
     """Kill the nearest enemy (nearest), every live enemy (all) or every boss (bosses) by submitting lethal damage through the game's own enemy damage path, so the death events a real kill raises fire. Returns the target, how many were found and killed, and how many were bosses; read the boss events with log_wait."""
     try:

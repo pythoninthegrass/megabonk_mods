@@ -601,7 +601,7 @@ Verified on the Warehouse with the field set to `tonymczoom` and Calcium playing
 
 ## Death screen restart
 
-The death screen's summary window (shown after Confirm on "you ded") has a retry button, `DeathScreen.restartBtn` (the object named `B_Retry`, in `StatsWindows/W_Stats/.../Buttons`). The game ships it inactive and nothing in `Awake`, `StartDeathScreen`, `DoTransition` or `Update` turns it on, so a normal run's death screen shows Confirm alone. A second object named `B_Restart` exists in the scene and is a different button; do not read it as the death screen's.
+The death screen's summary window (shown after Confirm on "you ded") has a retry button, `DeathScreen.restartBtn` (the object named `B_Retry`, in `StatsWindows/W_Stats/.../Buttons`), whose on-screen label is "Restart". The game ships it inactive and nothing in `Awake`, `StartDeathScreen`, `DoTransition` or `Update` turns it on, so a normal run's death screen shows Confirm alone. A second object named `B_Restart` exists in the scene outside the death screen and is a different button; do not read it as the summary's Restart. Confirm is the `DeathScreen`'s own child `B_Continue`; the summary window has its own `B_Continue` (label for leaving the run) beside `B_Retry`.
 
 `DeathRestartPatch` postfixes `DeathScreen.StartDeathScreen` and calls `restartBtn.SetActive(true)` when `CustomLevelState.IsActive`, so only mod-loaded runs get the button. Pressing it runs `DeathScreen.Restart`, which calls `MapController.RestartRun`. `RestartRun` keeps the stored `RunConfig` and does not call `MapController.StartNewMap`, so `LevelLoaderPatch.StartOnce` and the `CustomLevelState` start hook do not run again. Three things carry the custom level across the restart:
 
@@ -611,7 +611,12 @@ The death screen's summary window (shown after Confirm on "you ded") has a retry
 
 Edits made in the editor during the run are not kept; a restart reloads the edits the level file had when it was loaded.
 
-Reach the screen with the `kill` command (`run.py kill` or the MCP `kill` tool), which calls `PlayerHealth.KillPlayer` and so ignores `invulnerable`, then click Confirm in the game. The harness injects input for the editor only, so Confirm and the retry button need a real click. To drive the restart itself without any OS-level input, `run.py restart-run` (MCP `restart_run()`) calls `MapController.RestartRun` directly, which is what `DeathScreen.Restart` calls; it skips Confirm, so the death screen and its summary window are what a click-driven check still has to do by hand. The log shows `DeathRestart: retry button shown for the custom run`, then after the click or the command `DeathRestart: restarting the custom run, level edits queued again` and `DevHarness: restart-run requested.`.
+Reach the screen with the `kill` command (`run.py kill` or the MCP `kill` tool), which calls `PlayerHealth.KillPlayer` and so ignores `invulnerable`. Editor mode draws over the death screen, so send `editor off` first when a screenshot of it is wanted. Two verbs press the screens' buttons through each button's own `onClick`, without OS-level input:
+
+- `press-death-confirm` (`run.py press-death-confirm`, MCP `press_death_confirm`) presses Confirm on the "you ded" screen and opens the summary window. It returns `{screenWasOpen, button, label}`.
+- `press-summary-restart` (`run.py press-summary-restart`, MCP `press_summary_restart`) presses the summary's Restart (`B_Retry`) and returns the same shape. This is the player-facing path to `MapController.RestartRun`.
+
+Each refuses with a clear error and no side effect when its screen is not showing or its button is not active or not interactable, for example `the run summary is not showing` before Confirm has been pressed. `run.py restart-run` (MCP `restart_run()`) calls `MapController.RestartRun` directly and skips both screens, so it does not prove the buttons work. The log shows `DeathRestart: retry button shown for the custom run`, then `DeathScreenPress: confirm pressed 'B_Continue'`, `DeathScreenPress: summary-restart pressed 'B_Retry'` and `DeathRestart: restarting the custom run, level edits queued again`; after a restart on a from-scratch level `StartupCover: player placed at the level start` follows.
 
 The `RestartRun` prefix is also where the startup cover is armed, because `RestartRun` never reaches `StartNewMap` — see "Custom-level startup cover".
 

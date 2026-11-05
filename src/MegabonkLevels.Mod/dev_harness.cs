@@ -162,6 +162,10 @@ public static class DevHarness
             case HarnessCommandKind.RestartRun:
                 RestartRun();
                 break;
+            case HarnessCommandKind.PressDeathConfirm:
+                return DeathScreenPress.PressConfirm();
+            case HarnessCommandKind.PressSummaryRestart:
+                return DeathScreenPress.PressSummaryRestart();
             case HarnessCommandKind.Damage:
                 return PlayerDamage.Apply(command.Damage);
             case HarnessCommandKind.KillEnemies:

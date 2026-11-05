@@ -344,6 +344,8 @@ INPUT_TOOL_CASES = [
     ("list_levels", {}, {"command": "list-levels"}),
     ("kill", {}, {"command": "kill"}),
     ("restart_run", {}, {"command": "restart-run"}),
+    ("press_death_confirm", {}, {"command": "press-death-confirm"}),
+    ("press_summary_restart", {}, {"command": "press-summary-restart"}),
     ("click_widget", {"name": "Save"}, {"command": "click-widget", "name": "Save"}),
     ("ui_tree", {}, {"command": "ui-tree"}),
     ("ui_tree", {"x": 120, "y": 35}, {"command": "ui-tree", "x": 120, "y": 35}),

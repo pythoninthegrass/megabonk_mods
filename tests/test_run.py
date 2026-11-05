@@ -338,6 +338,12 @@ def test_parse_args_restart_run_subcommand() -> None:
     assert run.parse_args(["restart-run"]).action == "restart-run"
 
 
+@pytest.mark.parametrize("name", ["press-death-confirm", "press-summary-restart"])
+def test_death_screen_press_commands_have_no_payload(name) -> None:
+    assert run.build_command(name) == {"command": name}
+    assert run.parse_args([name]).action == name
+
+
 def test_parse_args_invulnerable_and_vulnerable_subcommands() -> None:
     assert run.parse_args(["invulnerable"]).action == "invulnerable"
     assert run.parse_args(["vulnerable"]).action == "vulnerable"
