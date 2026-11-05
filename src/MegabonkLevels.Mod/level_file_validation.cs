@@ -45,6 +45,7 @@ public static class LevelFileValidator
         }
 
         ValidateGrid(level.Grid.Value);
+        ValidateScale(level.BossSpawner.Value.Scale);
 
         foreach (var op in level.Edits)
         {
@@ -57,6 +58,14 @@ public static class LevelFileValidator
             {
                 throw new ArgumentException($"A from-scratch level cannot target the generated object '{op.Target}': nothing is generated.");
             }
+        }
+    }
+
+    private static void ValidateScale(IReadOnlyList<float> scale)
+    {
+        if (scale is not null && (scale.Count != 3 || scale.Any(value => !float.IsFinite(value) || value <= 0f)))
+        {
+            throw new ArgumentException("bossSpawner scale needs three positive finite values.");
         }
     }
 

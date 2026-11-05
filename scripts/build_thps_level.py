@@ -19,23 +19,19 @@ TILE = 40
 HEIGHT_STEP = 20
 GRID_ORIGIN = -280
 
-# The Warehouse footprint: 4 tiles east by 7 tiles north. The tile grid keeps only the generated
-# spawn cell (the player is placed there before the edits apply); everything else is removed, so the
-# Warehouse mesh floats like a native island and its own walls enclose the arena.
+# The Warehouse footprint: 4 tiles east by 7 tiles north. The level is a from-scratch file with no floor tiles,
+# so the Warehouse mesh floats like a native island and its own walls enclose the arena.
 INNER_ORIGIN = (8, 4)
 INNER_X = 4
 INNER_Z = 7
-# The kept tile sits below the Warehouse's sunken floor areas so it cannot show through.
-INNER_LEVEL = -1
 
-SLOPE_NONE = 0
-
-# The player is placed at the generated spawn before edits apply, so that cell has to stay floor.
-GENERATED_SPAWN_CELL = (10, 7)
-# Authored rather than derived: with one hidden tile left, the mod's tile-derived floor would sit 40 under
-# it, deep enough for a body to rest on the mesh's outer skirt above it and stay unkillable.
-KILL_FLOOR_MARGIN_BELOW_KEPT_TILE = 15.0
-KILL_FLOOR_Y = INNER_LEVEL * HEIGHT_STEP - KILL_FLOOR_MARGIN_BELOW_KEPT_TILE
+# The game derives its catch floor from the tiles and arms nothing sane without one, so the grid keeps one tile
+# under the mesh, below its sunken floor areas so it cannot show through. It sits where the generated spawn cell was.
+FLOOR_CELL = (10, 7)
+INNER_LEVEL = -2
+# Authored rather than derived: the tile-derived floor would sit 40 under the tile, deep enough for a body to rest
+# on the mesh's outer skirt above it and stay unkillable.
+KILL_FLOOR_Y = -35.0
 # The glass box that hangs above the main half pipe is a closed room: an interior floor at 15.64 (its slab's underside
 # at 15.31), a roof whose underside sits at 25.42, and walls on all four sides between them, over this footprint
 # (x0, x1, z0, z1). The boss portal stands on that interior floor at the authored spot, hidden in plain sight the way
@@ -58,6 +54,7 @@ BOSS_SPAWN_SCALE = 0.4
 BOSS_SPAWN_YAW = 90.0
 BOSS_HIDDEN_CHILDREN = ["BottomPiece", "Collider"]
 PLAYER_START = [109, 38, -116]
+PLAYER_START_ROTATION = [0.0, 0.0, 0.0]
 
 PLAYER_SPAWN_LOCAL = (100, 137)
 SPAWN_CLEARANCE = 10
@@ -164,57 +161,8 @@ WAREHOUSE_SCALE = UNITS_PER_METRE * METRES_PER_OBJ_UNIT
 WAREHOUSE_OBJ_WIDTH = 2.518555 - 0.519531
 WAREHOUSE_OBJ_DEPTH = 3.533447 - 0.398926
 
-SEED = 20261007
 GAME_BUILD_ID = "21750826"
-SCHEMA_VERSION = 3
-
-# Object categories and counts the generator spawns on Forest stage 0 at the seed above.
-SEED_OBJECT_COUNTS = {
-    "BossSpawner": 1,
-    "PlayerSpawnPortal": 1,
-    "Tree0": 300,
-    "Log0": 40,
-    "Bush0": 100,
-    "rock_small_01": 25,
-    "rock_small_05": 24,
-    "rock_medium_01": 27,
-    "rock_medium_02": 26,
-    "rock_medium_03": 28,
-    "rock_small_02": 20,
-    "Bush1": 100,
-    "Boulder": 8,
-    "ChargeShrine": 15,
-    "GreedShrine": 8,
-    "Microwave": 2,
-    "PotSmall": 40,
-    "PotBig": 15,
-    "PotSmallSilver": 6,
-    "PotBigSilver": 1,
-    "Chest": 46,
-    "ShrineMaoi": 4,
-    "CursedShrine": 4,
-    "MagnetShrine": 3,
-    "ChallengeShrine": 3,
-    "ForestParticles": 1,
-}
-SEED_TILE_OBJECTS = 39
-# Uncloned decoration roots (ruined towers, crates, pillars, dead trees) the tile prefabs spawn at the seed above, indexed as gen:scenery:<name>:<n>.
-SEED_SCENERY_COUNTS = {
-    "Castle": 14,
-    "Castle (1)": 6,
-    "CastleLying": 3,
-    "Crate (1)": 12,
-    "Crate (2)": 10,
-    "Cube": 2,
-    "Cube (1)": 4,
-    "Cube (3)": 9,
-    "Pillar": 4,
-    "Pillar (1)": 4,
-    "Ruins (1)": 8,
-    "Tree": 6,
-}
-KEPT_OBJECT_CATEGORIES = ("BossSpawner", "PlayerSpawnPortal", "ForestParticles")
-
+SCHEMA_VERSION = 4
 
 # Items the level author moved by hand in the editor, as saved by scripts/extract_thps_item_overrides.py.
 OVERRIDES_PATH = Path(__file__).resolve().parent / "thps_item_overrides.json"
@@ -431,49 +379,8 @@ def cell_of_local(x: float, z: float) -> tuple[int, int]:
     return int(x // TILE), int(z // TILE)
 
 
-def inner_cells() -> list[tuple[int, int]]:
-    x0, z0 = INNER_ORIGIN
-    return [(x0 + dx, z0 + dz) for dz in range(INNER_Z) for dx in range(INNER_X)]
-
-
-def kept_cells() -> list[tuple[int, int]]:
-    return [GENERATED_SPAWN_CELL]
-
-
 def edit(op_type: str, payload: dict, target: str = "") -> dict:
     return {"opType": op_type, "target": target, "payload": json.dumps(payload, separators=(",", ":"))}
-
-
-def tile_edits() -> list[dict]:
-    kept = set(kept_cells())
-    edits = []
-    for z in range(GRID_SIZE):
-        for x in range(GRID_SIZE):
-            if (x, z) not in kept:
-                edits.append(edit("tile.remove", {"x": x, "z": z}))
-                continue
-            edits.append(edit("tile.setHeight", {"x": x, "z": z, "height": INNER_LEVEL}))
-            edits.append(edit("tile.setSlope", {"x": x, "z": z, "direction": SLOPE_NONE}))
-    return edits
-
-
-def clutter_removals() -> list[dict]:
-    ids = [f"gen:tileObject:{i:04d}" for i in range(SEED_TILE_OBJECTS)]
-    for name, count in SEED_OBJECT_COUNTS.items():
-        if name in KEPT_OBJECT_CATEGORIES:
-            continue
-        ids.extend(f"gen:object:{name}:{i:04d}" for i in range(count))
-    for name, count in SEED_SCENERY_COUNTS.items():
-        ids.extend(f"gen:scenery:{name}:{i:04d}" for i in range(count))
-    return [edit("object.remove", {}, target) for target in ids]
-
-
-def transform(x: float, y: float, z: float, scale: float = 1.0, yaw: float = 0.0) -> dict:
-    return {
-        "position": {"x": x, "y": y, "z": z},
-        "rotation": {"x": 0.0, "y": yaw, "z": 0.0},
-        "scale": {"x": scale, "y": scale, "z": scale},
-    }
 
 
 def boss_spawn_position() -> tuple[float, float, float]:
@@ -489,13 +396,19 @@ def boss_spawn_position() -> tuple[float, float, float]:
     return (bx, hit.y, bz)
 
 
-def spawn_moves() -> list[dict]:
+def boss_spawner() -> dict:
     bx, bz = local_to_world(*BOSS_SPAWN_LOCAL)
-    payload = {
-        "newTransform": transform(bx, BOSS_SPAWN_Y, bz, BOSS_SPAWN_SCALE, BOSS_SPAWN_YAW),
+    return {
+        "position": [bx, BOSS_SPAWN_Y, bz],
+        "rotation": [0.0, BOSS_SPAWN_YAW, 0.0],
+        "scale": [BOSS_SPAWN_SCALE] * 3,
         "hiddenChildren": BOSS_HIDDEN_CHILDREN,
     }
-    return [edit("object.move", payload, "gen:object:BossSpawner:0000")]
+
+
+def authored_grid() -> dict:
+    x, z = FLOOR_CELL
+    return {"width": GRID_SIZE, "depth": GRID_SIZE, "cells": [{"x": x, "z": z, "height": INNER_LEVEL}]}
 
 
 def hidden_rail_edit(position: tuple[float, float, float], yaw: float, scale: float, pitch: float = 0.0) -> dict:
@@ -572,13 +485,17 @@ def build_level() -> dict:
     return {
         "schemaVersion": SCHEMA_VERSION,
         "gameBuildId": GAME_BUILD_ID,
+        "baseline": "none",
         "map": 1,
         "stageIndex": 0,
         "tier": 0,
-        "seed": SEED,
         "packs": {PACK_ID: PACK_VERSION},
+        "grid": authored_grid(),
+        "spawn": {"position": PLAYER_START, "rotation": PLAYER_START_ROTATION},
+        "bossSpawner": boss_spawner(),
+        # The portal stands in a closed room, so the boss is moved out of it when summoned.
+        "bossRedirect": True,
         "noGrass": True,
-        "playerStart": PLAYER_START,
         "maxSlopeAngle": MAX_SLOPE_ANGLE,
         "killFloorY": KILL_FLOOR_Y,
         # The coping lips are rails, so without this the game catches one the moment a skater rides over it and
@@ -586,13 +503,12 @@ def build_level() -> dict:
         "grindRequiresSlide": True,
         # Big airs are the point of the level, and without this the landing off a half pipe takes Calcium's whole health bar.
         "fallDamageCharacter": FALL_DAMAGE_CHARACTER,
-        "bossSpawnPosition": list(boss_spawn_position()),
         "music": MUSIC,
         "title": TITLE,
         "description": DESCRIPTION,
         "mapDescription": MAP_DESCRIPTION,
         "allowedCharacters": ALLOWED_CHARACTERS,
-        "edits": tile_edits() + clutter_removals() + spawn_moves() + rail_edits() + warehouse_edits() + radio_edits() + collectible_edits(),
+        "edits": rail_edits() + warehouse_edits() + radio_edits() + collectible_edits(),
     }
 
 

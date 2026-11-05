@@ -26,6 +26,61 @@ def payload(edit: dict) -> dict:
     return json.loads(edit["payload"])
 
 
+@needs_extract
+def test_build_level_is_a_from_scratch_file_with_a_spawn_and_a_boss_spawner() -> None:
+    level = b.build_level()
+    assert level["schemaVersion"] == 4
+    assert level["baseline"] == "none"
+    assert level["packs"] == {b.PACK_ID: b.PACK_VERSION}
+    assert (level["map"], level["stageIndex"], level["tier"]) == (1, 0, 0)
+    assert level["spawn"] == {"position": b.PLAYER_START, "rotation": [0.0, 0.0, 0.0]}
+    assert level["bossSpawner"] == b.boss_spawner()
+    assert "playerStart" not in level
+    assert "seed" not in level
+
+
+@needs_extract
+def test_build_level_keeps_the_boss_redirect_on_because_the_portal_stands_in_a_closed_room() -> None:
+    assert b.build_level()["bossRedirect"] is True
+
+
+@needs_extract
+def test_build_level_has_no_tile_ops_and_no_generated_targets() -> None:
+    edits = b.build_level()["edits"]
+    assert not [e for e in edits if e["opType"].startswith("tile.")]
+    assert not [e for e in edits if e["target"].startswith("gen:")]
+    assert {e["opType"] for e in edits} == {"object.place"}
+
+
+def test_the_game_keeps_the_authored_kill_floor_because_the_floor_tile_puts_its_catch_floor_far_enough_below() -> None:
+    # The game derives the catch floor one level under the lowest tile and raises the kill floor to at least 8 above it.
+    catch_floor = (b.INNER_LEVEL - 1) * b.HEIGHT_STEP
+    assert catch_floor + 8 <= b.KILL_FLOOR_Y
+
+
+def test_the_authored_grid_is_one_hidden_floor_tile_under_the_mesh_on_the_stock_size_grid() -> None:
+    # The game derives its catch floor from the tiles, so a level with none arms its kill floor at int.MaxValue and
+    # kills the player on spawn. The grid keeps the stock size so the tile lands where the old kept tile did.
+    grid = b.authored_grid()
+    assert (grid["width"], grid["depth"]) == (b.GRID_SIZE, b.GRID_SIZE)
+    [cell] = grid["cells"]
+    x0, z0 = b.INNER_ORIGIN
+    assert x0 <= cell["x"] < x0 + b.INNER_X and z0 <= cell["z"] < z0 + b.INNER_Z
+    assert cell["height"] == b.INNER_LEVEL < 0
+    assert "slope" not in cell
+
+
+@needs_extract
+def test_the_level_authors_the_kill_floor_it_always_had() -> None:
+    assert b.build_level()["killFloorY"] == b.KILL_FLOOR_Y == -35.0
+
+
+@needs_extract
+def test_the_level_keeps_the_mesh_object_and_the_radio_ahead_of_the_collectibles() -> None:
+    places = [payload(e)["catalogId"] for e in b.build_level()["edits"]]
+    assert places.index(f"bundle:{b.PACK_ID}/{b.WAREHOUSE_ASSET}") < places.index("interactable/boombox") < places.index("interactable/chest")
+
+
 def test_local_to_world_maps_block_corner_to_cell_corner() -> None:
     assert b.local_to_world(0, 0) == (20, -140)
     assert b.local_to_world(120, 160) == (140, 20)
@@ -36,89 +91,37 @@ def test_cell_of_local_returns_block_cell_index() -> None:
     assert b.cell_of_local(98, 67) == (2, 1)
 
 
-def test_tile_edits_remove_every_cell_but_the_kept_one() -> None:
-    edits = b.tile_edits()
-    removed = {(payload(e)["x"], payload(e)["z"]) for e in ops_of(edits, "tile.remove")}
-    keep = set(b.kept_cells())
-    assert len(removed) == b.GRID_SIZE**2 - len(keep)
-    assert removed.isdisjoint(keep)
 
 
-def test_only_the_generated_spawn_cell_tile_survives() -> None:
-    assert set(b.kept_cells()) == {b.GENERATED_SPAWN_CELL}
-    assert b.GENERATED_SPAWN_CELL in set(b.inner_cells())
 
 
-def test_the_kept_cell_is_flat_below_the_warehouse_floor() -> None:
-    edits = b.tile_edits()
-    heights = {(payload(e)["x"], payload(e)["z"]): payload(e)["height"] for e in ops_of(edits, "tile.setHeight")}
-    slopes = {(payload(e)["x"], payload(e)["z"]): payload(e)["direction"] for e in ops_of(edits, "tile.setSlope")}
-    assert set(heights) == set(b.kept_cells())
-    for cell in b.kept_cells():
-        assert heights[cell] == b.INNER_LEVEL
-        assert slopes[cell] == b.SLOPE_NONE
 
 
-def test_every_kept_cell_is_made_flat_before_slopes_are_applied() -> None:
-    edits = b.tile_edits()
-    slopes = {(payload(e)["x"], payload(e)["z"]): payload(e)["direction"] for e in ops_of(edits, "tile.setSlope")}
-    for cell in b.kept_cells():
-        assert cell in slopes
 
 
-def test_clutter_removals_skip_spawn_portal_boss_spawner_and_particles() -> None:
-    ids = [e["target"] for e in b.clutter_removals()]
-    for kept in b.KEPT_OBJECT_CATEGORIES:
-        assert not any(i.startswith(f"gen:object:{kept}:") for i in ids)
-    assert "gen:object:Tree0:0299" in ids
-    assert "gen:object:Tree0:0300" not in ids
-    assert "gen:tileObject:0038" in ids
-    assert len(ids) == len(set(ids))
 
 
-def test_clutter_removal_count_matches_the_seed_index() -> None:
-    kept = sum(b.SEED_OBJECT_COUNTS[c] for c in b.KEPT_OBJECT_CATEGORIES)
-    expected = sum(b.SEED_OBJECT_COUNTS.values()) - kept + b.SEED_TILE_OBJECTS + sum(b.SEED_SCENERY_COUNTS.values())
-    assert len(b.clutter_removals()) == expected
 
 
-def test_clutter_removals_include_every_uncloned_scenery_root_but_not_the_fog_of_war_sphere() -> None:
-    ids = {e["target"] for e in b.clutter_removals()}
-    assert sum(b.SEED_SCENERY_COUNTS.values()) == 82
-    assert "gen:scenery:Castle:0013" in ids
-    assert "gen:scenery:Castle:0014" not in ids
-    assert "gen:scenery:Crate (2):0009" in ids
-    assert not any("FogOfWarSphere" in i for i in ids)
 
 
-def test_spawn_moves_only_relocate_the_boss_spawner_with_a_full_transform() -> None:
-    moves = b.spawn_moves()
-    assert [m["target"] for m in moves] == ["gen:object:BossSpawner:0000"]
-    p = payload(moves[0])["newTransform"]
-    assert set(p) == {"position", "rotation", "scale"}
 
 
-def test_generated_player_spawn_cell_is_an_inner_cell() -> None:
-    assert b.GENERATED_SPAWN_CELL in b.inner_cells()
 
 
-@needs_extract
-def test_build_level_has_the_forest_stage_zero_header() -> None:
-    level = b.build_level()
-    assert level["map"] == 1
-    assert level["stageIndex"] == 0
-    assert level["tier"] == 0
-    assert level["seed"] == 20261007
-    assert level["schemaVersion"] == 3
-    assert level["packs"] == {b.PACK_ID: b.PACK_VERSION}
 
 
-@needs_extract
-def test_build_level_orders_tiles_before_object_edits() -> None:
-    kinds = [e["opType"] for e in b.build_level()["edits"]]
-    last_tile = max(i for i, k in enumerate(kinds) if k.startswith("tile."))
-    first_object = min(i for i, k in enumerate(kinds) if k.startswith("object."))
-    assert last_tile < first_object
+
+
+
+
+
+
+
+
+
+
+
 
 
 @needs_extract
@@ -146,12 +149,7 @@ def test_rails_sit_inside_the_inner_arena() -> None:
         assert 0 <= cz < b.INNER_Z
 
 
-@needs_extract
-def test_build_level_includes_the_rails_after_the_clutter_removals() -> None:
-    kinds = [(e["opType"], e["target"]) for e in b.build_level()["edits"]]
-    first_place = min(i for i, k in enumerate(kinds) if k[0] == "object.place")
-    last_remove = max(i for i, k in enumerate(kinds) if k[0] == "object.remove")
-    assert last_remove < first_place
+
 
 
 @needs_extract
@@ -352,13 +350,7 @@ def test_collectibles_stay_inside_the_arena_and_clear_of_the_player_spawn() -> N
         assert max(abs(c.x - sx), abs(c.z - sz)) >= b.SPAWN_CLEARANCE, c.code
 
 
-@needs_extract
-def test_build_level_includes_collectibles_after_the_clutter_removals() -> None:
-    edits = b.build_level()["edits"]
-    ids = {c.catalog_id for c in b.collectibles()}
-    placed = [i for i, e in enumerate(edits) if e["opType"] == "object.place" and payload(e)["catalogId"] in ids]
-    assert len(placed) == len(b.collectibles())
-    assert max(i for i, e in enumerate(edits) if e["opType"] == "object.remove") < min(placed)
+
 
 
 def warehouse_place() -> dict:
@@ -381,8 +373,7 @@ def test_warehouse_is_one_uniformly_scaled_thps_pack_placement() -> None:
     assert place["position"]["y"] == b.WAREHOUSE_LIFT
 
 
-def test_inner_tiles_sit_below_the_warehouse_pit() -> None:
-    assert b.INNER_LEVEL < 0
+
 
 
 def test_warehouse_is_lifted_above_the_ground_level_tiles_but_below_the_player_spawn() -> None:
@@ -407,32 +398,21 @@ def test_inner_arena_is_no_larger_than_the_warehouse_needs_by_a_tile() -> None:
     assert depth > (b.INNER_Z - 1) * b.TILE
 
 
-def test_the_arena_fits_the_grid_with_the_kept_cell_inside_it() -> None:
-    x0, z0 = b.INNER_ORIGIN
-    assert x0 >= 0 and x0 + b.INNER_X <= b.GRID_SIZE
-    assert z0 >= 0 and z0 + b.INNER_Z <= b.GRID_SIZE
-    assert b.GENERATED_SPAWN_CELL in set(b.inner_cells())
 
 
-@needs_extract
-def test_build_level_places_the_warehouse_after_the_clutter_removals() -> None:
-    kinds = [(e["opType"], json.loads(e["payload"]).get("catalogId", "")) for e in b.build_level()["edits"]]
-    warehouse = next(i for i, k in enumerate(kinds) if k[1] == f"bundle:{b.PACK_ID}/{b.WAREHOUSE_ASSET}")
-    last_remove = max(i for i, k in enumerate(kinds) if k[0] == "object.remove")
-    assert last_remove < warehouse
+
+
 
 
 def test_pack_version_is_the_warehouse_release() -> None:
     assert b.PACK_VERSION == "2.0.21"
 
 
-@needs_extract
-def test_player_starts_at_tonys_chosen_position() -> None:
-    assert b.build_level()["playerStart"] == [109, 38, -116]
 
 
-def boss_move() -> dict:
-    return next(e for e in b.spawn_moves() if e["target"] == "gen:object:BossSpawner:0000")
+
+def boss_spawner() -> dict:
+    return b.boss_spawner()
 
 
 # Between the box's interior floor (15.64) and the underside of its roof (25.42), so a drop from here finds the floor
@@ -441,7 +421,7 @@ PORTAL_ROOF_PROBE_Y = 24.0
 
 
 def test_boss_portal_stands_on_the_floor_inside_the_glass_box() -> None:
-    position = payload(boss_move())["newTransform"]["position"]
+    position = dict(zip("xyz", boss_spawner()["position"], strict=True))
     x0, x1, z0, z1 = b.BOSS_PORTAL_FOOTPRINT
     assert (position["x"], position["z"]) == b.local_to_world(*b.BOSS_SPAWN_LOCAL)
     assert b.BOSS_PORTAL_INTERIOR_FLOOR_Y - 0.1 <= position["y"] < b.BOSS_PORTAL_UNDERSIDE_Y, (
@@ -453,7 +433,7 @@ def test_boss_portal_stands_on_the_floor_inside_the_glass_box() -> None:
 
 @needs_extract
 def test_boss_portal_rests_on_the_box_floor_under_the_roof() -> None:
-    position = payload(boss_move())["newTransform"]["position"]
+    position = dict(zip("xyz", boss_spawner()["position"], strict=True))
     # Dropped from between the interior floor and the roof underside: 25.75 would be the top of the box, which is where
     # the portal must not sit.
     hit = ws.drop(b.warehouse_triangles(), position["x"], PORTAL_ROOF_PROBE_Y, position["z"])
@@ -464,7 +444,7 @@ def test_boss_portal_rests_on_the_box_floor_under_the_roof() -> None:
 
 @needs_extract
 def test_boss_drops_on_the_pipe_floor_outside_the_box() -> None:
-    x, y, z = b.build_level()["bossSpawnPosition"]
+    x, y, z = b.boss_spawn_position()
     assert (x, z) == b.local_to_world(*b.BOSS_GROUND_LOCAL)
     assert y < b.BOSS_PORTAL_FLOOR_UNDERSIDE_Y, "the boss must not spawn inside the hanging box"
     assert y > b.KILL_FLOOR_Y
@@ -487,30 +467,25 @@ def test_the_boss_spawn_drop_starts_under_the_box_so_the_box_cannot_catch_it() -
 
 @needs_extract
 def test_the_boss_shares_the_portals_column_so_it_comes_out_at_its_foot() -> None:
-    portal = payload(boss_move())["newTransform"]["position"]
+    portal = dict(zip("xyz", boss_spawner()["position"], strict=True))
     boss_x, _, boss_z = b.boss_spawn_position()
     assert boss_x == portal["x"]
     assert boss_z < portal["z"], "the boss comes out on the near side of the box, by the quarter pipe"
 
 
 def test_boss_spawner_is_scaled_down_to_fit_the_room() -> None:
-    scale = payload(boss_move())["newTransform"]["scale"]
-    assert scale == {"x": 0.4, "y": 0.4, "z": 0.4}
+    assert boss_spawner()["scale"] == [0.4, 0.4, 0.4]
 
 
 def test_boss_spawner_arch_faces_across_the_floor() -> None:
-    assert payload(boss_move())["newTransform"]["rotation"] == {"x": 0.0, "y": 90.0, "z": 0.0}
+    assert boss_spawner()["rotation"] == [0.0, 90.0, 0.0]
 
 
 def test_boss_spawner_hides_the_pillar_mesh_and_its_collider() -> None:
-    assert payload(boss_move())["hiddenChildren"] == ["BottomPiece", "Collider"]
+    assert boss_spawner()["hiddenChildren"] == ["BottomPiece", "Collider"]
 
 
-@needs_extract
-def test_the_level_authors_a_kill_floor_below_the_kept_tile() -> None:
-    level = b.build_level()
-    assert level["killFloorY"] == b.KILL_FLOOR_Y
-    assert b.KILL_FLOOR_Y == b.INNER_LEVEL * b.HEIGHT_STEP - b.KILL_FLOOR_MARGIN_BELOW_KEPT_TILE
+
 
 
 @needs_extract
@@ -528,12 +503,11 @@ def test_the_level_scores_fall_damage_with_the_reference_character() -> None:
 
 
 @needs_extract
-def test_the_kill_floor_is_below_the_only_kept_tile_and_above_the_meshs_lowest_point() -> None:
-    # Below the kept tile so standing on it is safe, above the Warehouse's lowest geometry so anything that
-    # ends up under the mesh dies instead of resting there out of reach of the game's own catch floor.
+def test_the_kill_floor_is_above_the_meshs_lowest_point() -> None:
+    # Above the Warehouse's lowest geometry so anything that ends up under the mesh dies instead of resting there
+    # out of reach of the game's own catch floor.
     triangles = b.warehouse_triangles()
     lowest = min(min(p[1] for p in t) for t in triangles)
-    assert b.KILL_FLOOR_Y < b.INNER_LEVEL * b.HEIGHT_STEP
     assert lowest < b.KILL_FLOOR_Y
 
 

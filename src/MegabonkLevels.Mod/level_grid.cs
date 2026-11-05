@@ -35,12 +35,18 @@ public readonly record struct LevelGrid(int Width, int Depth, IReadOnlyList<Auth
             KeyValuePair.Create((X: cell.X, Z: cell.Z), new TileState(cell.Height, cell.Slope))));
 }
 
-// Position is world [x, y, z]; Rotation is Euler degrees [x, y, z].
-public readonly record struct SpawnPoint(IReadOnlyList<float> Position, IReadOnlyList<float> Rotation)
+// Position is world [x, y, z]; Rotation is Euler degrees [x, y, z]. Scale and HiddenChildren apply to the boss spawner only.
+public readonly record struct SpawnPoint(
+    IReadOnlyList<float> Position,
+    IReadOnlyList<float> Rotation,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<float> Scale = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string> HiddenChildren = null)
 {
     public bool Equals(SpawnPoint other) =>
         (Position ?? Array.Empty<float>()).SequenceEqual(other.Position ?? Array.Empty<float>())
-        && (Rotation ?? Array.Empty<float>()).SequenceEqual(other.Rotation ?? Array.Empty<float>());
+        && (Rotation ?? Array.Empty<float>()).SequenceEqual(other.Rotation ?? Array.Empty<float>())
+        && (Scale ?? Array.Empty<float>()).SequenceEqual(other.Scale ?? Array.Empty<float>())
+        && (HiddenChildren ?? Array.Empty<string>()).SequenceEqual(other.HiddenChildren ?? Array.Empty<string>());
 
     public override int GetHashCode() => HashCode.Combine(Position?.Count, Rotation?.Count);
 }

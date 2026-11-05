@@ -207,6 +207,54 @@ public class FromScratchLevelTests
     }
 
     [Fact]
+    public void BossSpawner_ScaleAndHiddenChildren_RoundTrip()
+    {
+        var document = FromScratchDocument();
+        document["bossSpawner"]!["scale"] = new JsonArray(0.4, 0.4, 0.4);
+        document["bossSpawner"]!["hiddenChildren"] = new JsonArray("BottomPiece", "Collider");
+
+        var level = LevelFileSerializer.Deserialize(document.ToJsonString());
+        var restored = LevelFileSerializer.Deserialize(LevelFileSerializer.Serialize(level));
+
+        Assert.Equal(new[] { 0.4f, 0.4f, 0.4f }, restored.BossSpawner!.Value.Scale);
+        Assert.Equal(new[] { "BottomPiece", "Collider" }, restored.BossSpawner!.Value.HiddenChildren);
+        Assert.Equal(level, restored);
+    }
+
+    [Fact]
+    public void BossSpawner_WithoutScaleOrHiddenChildren_WritesNeitherKey()
+    {
+        var json = LevelFileSerializer.Serialize(LevelFileSerializer.Deserialize(FromScratchDocument().ToJsonString()));
+
+        var spawner = JsonNode.Parse(json)!["bossSpawner"]!.AsObject();
+        Assert.False(spawner.ContainsKey("scale"));
+        Assert.False(spawner.ContainsKey("hiddenChildren"));
+    }
+
+    [Fact]
+    public void BossSpawners_DifferingOnlyInScaleOrHiddenChildren_AreNotEqual()
+    {
+        var plain = new SpawnPoint(new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f });
+
+        Assert.NotEqual(plain, plain with { Scale = new[] { 0.4f, 0.4f, 0.4f } });
+        Assert.NotEqual(plain, plain with { HiddenChildren = new[] { "Collider" } });
+    }
+
+    [Theory]
+    [InlineData("[1, 1]")]
+    [InlineData("[0.4, 0, 0.4]")]
+    [InlineData("[0.4, -1, 0.4]")]
+    public void BossSpawner_WithABadScale_IsRejected(string scale)
+    {
+        var document = FromScratchDocument();
+        document["bossSpawner"]!["scale"] = JsonNode.Parse(scale);
+
+        var ex = Assert.Throws<ArgumentException>(() => LevelFileSerializer.Deserialize(document.ToJsonString()));
+
+        Assert.Contains("scale", ex.Message);
+    }
+
+    [Fact]
     public void FromScratchFile_WithNonPositiveGridSize_IsRejected()
     {
         var document = FromScratchDocument();

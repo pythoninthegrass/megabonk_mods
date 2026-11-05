@@ -612,7 +612,7 @@ Not checked: `PauseUi.Restart` and the hold-to-reset `ResetRunUi` may also reach
 
 ## Custom-level startup cover
 
-A custom level is not playable when the run starts. The game generates its own baseline map, spawns the player inside it, and only then does the mod tear that baseline down and apply the level's edits, which for the Warehouse is 1241 edits including every rail and pack mesh. Measured from the stock menu (Confirm to sound), the order is fixed:
+A custom level is not playable when the run starts. The game generates its own baseline map, spawns the player inside it, and only then does the mod tear that baseline down and apply the level's edits. A from-scratch level, which the Warehouse now is, skips the baseline (see "From-scratch level load path") and applies only its object placements, 48 for the shipped Warehouse including every rail and the pack mesh; the timeline below is the generated-baseline order, measured with the old 1241-edit Warehouse from the stock menu (Confirm to sound), and the order is fixed:
 
 ```text
 t=0.000 MapController.StartNewMap, then TransitionUI.A_transitionStart, A_MapTransitionStart, MapController.A_NewRunStarted
@@ -657,7 +657,7 @@ The death screen's Retry runs `MapController.RestartRun`, which never calls `Map
 ```text
 DeathRestart: restarting the custom run, level edits queued again
 StartupCover: held where the game put the player
-LiveEdit: applied 1241 edit(s)
+LiveEdit: applied 48 edit(s)
 KillFloor: armed at y=-35 (authored, catch floor y=-80)
 StartupCover: player placed at the level start (109.00, 36.08, -116.00)
 ```
@@ -709,7 +709,7 @@ Limits:
 
 ## Boss spawn redirect
 
-The Warehouse's boss portal is a game `InteractableBossSpawner` stood inside the hanging glass box, and the game always summons its boss at the spawner's own position: the boss materialises in or on the box, climbs its walls, and "Defeat the Boss" cannot complete. `BossSpawnRedirectPatch` (`boss_spawn_redirect_patch.cs`) patches `InteractableBossSpawner.Interact` with a prefix that arms the redirect, and postfixes on `EnemyManager.SpawnBoss` and the positional `EnemyManager.SpawnEnemy(EnemyData, Vector3, int, bool, EEnemyFlag, bool, float)`; only spawns carrying the game's Boss flag (`Enemy.IsBoss()`) are moved, and only while a mod-loaded level runs. A from-scratch level is excluded: its author places the boss spawner, so the boss summons at the spawner's own position. The decision logic is Unity-free in `BossSpawnRedirect` (`boss_spawn_redirect.cs`).
+The Warehouse's boss portal is a game `InteractableBossSpawner` stood inside the hanging glass box, and the game always summons its boss at the spawner's own position: the boss materialises in or on the box, climbs its walls, and "Defeat the Boss" cannot complete. `BossSpawnRedirectPatch` (`boss_spawn_redirect_patch.cs`) patches `InteractableBossSpawner.Interact` with a prefix that arms the redirect, and postfixes on `EnemyManager.SpawnBoss` and the positional `EnemyManager.SpawnEnemy(EnemyData, Vector3, int, bool, EEnemyFlag, bool, float)`; only spawns carrying the game's Boss flag (`Enemy.IsBoss()`) are moved, and only while a mod-loaded level runs. A from-scratch level is excluded unless its file sets `bossRedirect` (see [level-format.md](level-format.md)): its author places the boss spawner, so without the flag the boss summons at the spawner's own position. The Warehouse sets it because its portal stands in a closed room. `FromScratchGenerationPatch.ActiveLevel` supplies the flag and `LiveEditPatch.FoldFromScratch` keeps it on save. The decision logic is Unity-free in `BossSpawnRedirect` (`boss_spawn_redirect.cs`).
 
 The Boss Curse shrine (`InteractableShrineCursed`) increments `GameManager.bossCurses`, and the same `Interact()` then summons `1 + bossCurses` bosses through the same path, so the arming expects that many moves. It closes when the count is met or the `ArmWindowFrames` (2) window passes, and logs the shortfall once when it expires early. `SpawnBoss` calls the positional `SpawnEnemy` internally, so both postfixes see one spawn; a pointer set moves each enemy at most once. The arming resets on every `Interact` and on `Disarm` (level edits applied).
 

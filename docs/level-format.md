@@ -26,7 +26,8 @@ One consequence of staying in the same project: the Mod project compiles against
 | `baseline` | `string` | Optional. Absent or `"generated"` keeps the level an edit stack over the game's generated map. `"none"` makes it a from-scratch level (see "From-scratch levels" below). Any other value is rejected. Additive, so a version 3 file is a valid generated-baseline file. |
 | `grid` | `LevelGrid` | From-scratch levels only; required there, rejected under a generated baseline. See "From-scratch levels". |
 | `spawn` | `SpawnPoint` | From-scratch levels only; required there. Replaces `playerStart`. |
-| `bossSpawner` | `SpawnPoint` | From-scratch levels only; required there. Replaces the generated boss spawner. |
+| `bossSpawner` | `SpawnPoint` | From-scratch levels only; required there. Replaces the generated boss spawner. May also carry `scale` and `hiddenChildren`, see "From-scratch levels". |
+| `bossRedirect` | `bool` | Optional, default `false`, omitted when false. From-scratch levels only: turns the boss spawn redirect on, which a from-scratch level otherwise skips because its author places the spawner. Set it when the spawner stands somewhere a boss cannot leave, such as the Warehouse's closed glass box. See "Boss spawn redirect" in [development.md](development.md). Additive, so `schemaVersion` stays `4`. |
 | `noGrass` | `bool` | Optional, default `false`. When `true` the mod disables the game's `GrassChunkManager` (`MapGenerationController.grassRenderer`) for the run. The manager raycasts onto the ground layer, so grass otherwise grows through a placed floor mesh such as the THPS Warehouse. Additive, so `schemaVersion` stays `2`. |
 | `playerStart` | `float[3]` | Optional. World position `[x, y, z]` the player is moved to once generation has completed, with `y` the value the on-screen position readout shows (the body height, 1.925 above the feet). The game places the player at the generated spawn around generation and moving the spawn portal does not move it, so the mod re-applies the start for 5 seconds. Additive, so `schemaVersion` stays `2`. |
 | `maxSlopeAngle` | `float` | Optional. Degrees. While the custom level runs the mod sets `PlayerMovement.maxSlopeAngle` to this value (the game's own is 45) and puts the game's value back for any later vanilla run. Without it movement is unchanged. A face steeper than the limit cannot be run up and does not count as ground, so the player cannot jump from it. |
@@ -77,6 +78,8 @@ One consequence of staying in the same project: the Mod project compiles against
 | `grid.width`, `grid.depth` | Grid size in cells, both at least 1. The mod caps them at the kit's stock generator size when the level loads (Forest is 15 by 15). The file format does not know the kit, so the cap is a runtime check, not a validation error here. |
 | `grid.cells` | Sparse list of `{x, z, height, slope}`. A cell missing from the list is empty. `slope` is `north`, `south`, `east` or `west` and is omitted when there is none. A cell must satisfy `0 <= x < width` and `0 <= z < depth` and no `(x, z)` may appear twice. |
 | `spawn`, `bossSpawner` | `position` is world `[x, y, z]` and `rotation` is Euler degrees `[x, y, z]`. |
+| `bossSpawner.scale` | Optional `[x, y, z]`, each positive and finite, applied to the spawner's local scale when it is instantiated. Omitted when absent. |
+| `bossSpawner.hiddenChildren` | Optional list of child names whose renderers and colliders are switched off on the instantiated spawner. Omitted when absent. |
 
 Validation (`LevelFileValidator`, `level_file_validation.cs`) runs in both `Deserialize` and `DeserializeWithMigration` and throws `ArgumentException` naming the problem:
 

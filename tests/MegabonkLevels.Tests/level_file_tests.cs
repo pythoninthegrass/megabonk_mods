@@ -238,6 +238,26 @@ public class LevelFileTests
     }
 
     [Fact]
+    public void RoundTrip_BossRedirect_Survives()
+    {
+        var restored = LevelFileSerializer.DeserializeWithMigration(LevelFileSerializer.Serialize(SampleLevel() with { BossRedirect = true }));
+
+        Assert.True(restored.BossRedirect);
+    }
+
+    [Fact]
+    public void Serialize_OmitsBossRedirectWhenFalse()
+    {
+        Assert.DoesNotContain("bossRedirect", LevelFileSerializer.Serialize(SampleLevel()));
+    }
+
+    [Fact]
+    public void Equals_LevelsDifferingOnlyInBossRedirect_AreNotEqual()
+    {
+        Assert.NotEqual(SampleLevel(), SampleLevel() with { BossRedirect = true });
+    }
+
+    [Fact]
     public void Equals_LevelsDifferingOnlyInGrindRequiresSlide_AreNotEqual()
     {
         Assert.NotEqual(SampleLevel(), SampleLevel() with { GrindRequiresSlide = true });

@@ -38,6 +38,14 @@ public class FromScratchSnapshotTests
     }
 
     [Fact]
+    public void Build_KeepsTheTemplatesBossRedirect()
+    {
+        var level = FromScratchSnapshot.Build(Template() with { BossRedirect = true }, Tiles((0, 0, 0)), Array.Empty<EditOp>(), null, null);
+
+        Assert.True(level.BossRedirect);
+    }
+
+    [Fact]
     public void Build_LeavesARemovedTileAsAnEmptyCell()
     {
         var level = FromScratchSnapshot.Build(Template(), Tiles((0, 0, 0)), Array.Empty<EditOp>(), null, null);

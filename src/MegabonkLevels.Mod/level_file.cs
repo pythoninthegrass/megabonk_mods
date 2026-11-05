@@ -51,7 +51,9 @@ public readonly record struct LevelFile(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string Baseline = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LevelGrid? Grid = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SpawnPoint? Spawn = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SpawnPoint? BossSpawner = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SpawnPoint? BossSpawner = null,
+    // From-scratch only: keeps the boss spawn redirect on for a level whose boss spawner stands in a closed room.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool BossRedirect = false)
 {
     public const int CurrentSchemaVersion = 4;
 
@@ -90,6 +92,7 @@ public readonly record struct LevelFile(
         && Equals(Grid, other.Grid)
         && Equals(Spawn, other.Spawn)
         && Equals(BossSpawner, other.BossSpawner)
+        && BossRedirect == other.BossRedirect
         && Edits.SequenceEqual(other.Edits);
 
     public override int GetHashCode() =>

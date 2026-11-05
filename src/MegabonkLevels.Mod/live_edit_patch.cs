@@ -301,7 +301,7 @@ public static class LiveEditPatch
     // A from-scratch session saves its final tile state and placements instead of an edit log over a generated map.
     public static LevelFile FoldFromScratch(LevelFile level, LevelFile active)
     {
-        var template = level with { Baseline = LevelFile.NoBaseline, Grid = active.Grid, Spawn = active.Spawn, BossSpawner = active.BossSpawner };
+        var template = level with { Baseline = LevelFile.NoBaseline, Grid = active.Grid, Spawn = active.Spawn, BossSpawner = active.BossSpawner, BossRedirect = active.BossRedirect };
         var folded = FromScratchSnapshot.Build(template, _session.Planner.State, level.Edits, level.PlayerStart, level.BossSpawnPosition);
         return folded with { Packs = BuildPacks(folded.Edits), PackKitVersions = BuildKitVersions(folded.Edits) };
     }
@@ -1120,33 +1120,7 @@ public static class LiveEditPatch
             _logger.Msg($"LiveEdit: moved {action.Target.Serialize()} '{go.name}' to {go.transform.position}");
         }
 
-        private void HideChildren(GameObject go, IReadOnlyList<string> names)
-        {
-            if (names == null || names.Count == 0)
-            {
-                return;
-            }
-
-            foreach (var child in go.GetComponentsInChildren<Transform>(true))
-            {
-                if (!names.Contains(child.name))
-                {
-                    continue;
-                }
-
-                foreach (var renderer in child.GetComponents<Renderer>())
-                {
-                    renderer.enabled = false;
-                }
-
-                foreach (var collider in child.GetComponents<Collider>())
-                {
-                    collider.enabled = false;
-                }
-
-                _logger.Msg($"LiveEdit: hid child '{child.name}' of '{go.name}'");
-            }
-        }
+        private void HideChildren(GameObject go, IReadOnlyList<string> names) => ChildHider.Hide(go, names, _logger);
 
         private void RemoveObject(LiveAction action)
         {

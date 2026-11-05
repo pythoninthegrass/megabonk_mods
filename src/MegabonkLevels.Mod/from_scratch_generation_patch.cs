@@ -138,7 +138,13 @@ public static class FromScratchGenerationPatch
             var spawner = _level.Value.BossSpawner.Value;
             var position = new Vector3(spawner.Position[0], spawner.Position[1], spawner.Position[2]);
             var rotation = Quaternion.Euler(spawner.Rotation[0], spawner.Rotation[1], spawner.Rotation[2]);
-            UnityEngine.Object.Instantiate(__instance.bossSpawner, position, rotation);
+            var placed = UnityEngine.Object.Instantiate(__instance.bossSpawner, position, rotation);
+            if (spawner.Scale is { Count: 3 } scale)
+            {
+                placed.transform.localScale = new Vector3(scale[0], scale[1], scale[2]);
+            }
+
+            ChildHider.Hide(placed.gameObject, spawner.HiddenChildren, _logger);
             _logger?.Msg($"FromScratch: boss spawner placed at {position}");
             return false;
         }

@@ -34,7 +34,7 @@ The skater is 1.8 m and the player is 3.85 units, so true scale is about 2.1 uni
 ### Grid orientation
 
 - Map north is grid +Z and map east is grid +X, the same as `SlopeDirection` (`North` is +Z, `East` is +X). Block-local coordinates below are units from the block's south-west corner, `x` east and `z` north.
-- The Warehouse block covers cells x 8-11, z 4-10, which contains the generated spawn cell (10, 7). Only that one cell is kept as a tile, flat at level -1 and hidden under the Warehouse floor; every other cell of the grid is removed (`RemoveTile`) and the authored kill floor ends a fall. The mesh floats like a native island and its own walls enclose the arena, so no tile terrain is needed to hold the playfield in.
+- The Warehouse block covers cells x 8-11, z 4-10. The level is a from-scratch file whose grid holds a single tile in that block, flat at level -2 and hidden under the Warehouse floor, and the authored kill floor ends a fall. The mesh floats like a native island and its own walls enclose the arena, so no tile terrain is needed to hold the playfield in.
 
 ### Player-reachable heights
 
@@ -54,7 +54,7 @@ The Warehouse is one `bundle:thps/Warehouse` placement built from the extracted 
 
 | Feature | How it is built |
 | --- | --- |
-| Arena floor and enclosure | the placed Warehouse mesh: its floor, banks and walls are all in it, and the game's ground-layer spawn raycasts land enemies on its floor. The tile grid keeps only the generated spawn cell, flat at level -1 under the mesh, so the player has somewhere to stand while the edits apply; every other cell is removed and the authored kill floor (`killFloorY` -35) ends a fall |
+| Arena floor and enclosure | the placed Warehouse mesh: its floor, banks and walls are all in it, and the game's ground-layer spawn raycasts land enemies on its floor. The grid holds one tile, flat at level -2 under the mesh, which the game needs to derive its catch floor; the authored kill floor (`killFloorY` -35) ends a fall |
 | Grind rails on the mesh bars | hidden `interactable/rail/0` objects laid along each mesh bar (see "Mesh rail near (75, 3, 28)") |
 | Box piles and the tape | `interactable/chest` and `interactable/chestFree` |
 | Letters | `forest/shrines/0` to `4` |
@@ -124,7 +124,7 @@ The PS1 transparency key (magenta) is baked to alpha 0 in every texture that car
 
 - **Interaction is only partly verified.** The collectibles spawn through the same catalog path as generated chests, and a player standing at the R5 chest shows the chest's 30 gold price label. Opening one needs the `Interact` key and gold, which the harness cannot send.
 - **Shrine effects on the letters.** The mapping is confirmed, but shrines change a run when used, so whether the effect suits a letter is worth a look once they are placed.
-- **Generated clutter.** The seed spawns trees, rocks and shrines inside the block, which are removed with `RemoveObject` (`gen:` ids) from the per-category counts the seed produces (`SEED_OBJECT_COUNTS`, `SEED_TILE_OBJECTS` and `SEED_SCENERY_COUNTS`). The scenery category covers the ruined towers, crates, cubes, pillars and dead trees the tile prefabs leave as uncloned scene roots, which sit under and around the arena once its tiles are removed.
+- **No generated clutter.** A from-scratch level generates no trees, rocks, shrines or tile scenery, so nothing is removed. The Forest particle effect still exists in the level without a placement.
 - **Rail grinding needs the right approach.** The hidden `rail/0` objects do grind — the mesh rails and copings below were all checked in a run — but a rail does not catch on its own, and the harness injects no gameplay input, so speed, approach angle and jump timing still have to come from a hand on the keyboard.
 - **The structure map itself is low confidence.** Box pile numbering, the start block's role and the exact positions are ambiguous in the source analysis; see its Unresolved list.
 
@@ -154,7 +154,7 @@ The reference uses 32 roof sections instead of 1,541 individual quads, including
 variants; different kicker top artwork remains separate. The source-face
 inventory remains complete without requiring an asset for each source instance.
 
-Terrain bootstrap, generated-clutter removals, boss portal, radio and the 14
+Floor tile, boss spawner, radio and the 14
 collectibles reuse the shipped generator's final transforms and overrides.
 There is no `bundle:thps/Warehouse` placement. The shipped level and generator
 remain the byte-preserved monolithic reference; the editable generator refuses
@@ -211,20 +211,20 @@ the entry; press 5 (or click **Place**) to arm placement, then click on the
 map. Middle-clicking a placed object selects its palette entry and switches to
 Place, which is the duplicate flow (`EditorObjectTools: pick block ...`).
 
-**Where a click lands.** The Warehouse levels keep only the generated spawn
-cell (10, 7) and remove the other 224 tiles, and the tile ray only sees the
-baked ground collision, so a place or tile click outside that kept cell is
+**Where a click lands.** The Warehouse levels author one floor
+tile, cell (10, 7), and no other, and the tile ray only sees the
+baked ground collision, so a place or tile click outside that cell is
 silently ignored — no log line, nothing happens. The yellow outline shows the
 targeted cell and, in Place, an orange circle marks the exact point; objects
 do not snap to the quarter-tile guide lines.
 
 **Placement height — the "invisible piece" trap.** A placed piece's Y follows
-the kept tile's surface, and that tile sits at level −1, whose top is at
-y −20 (20 per level, see development.md's camera-pose formula), under the mesh
-that hides it. A fresh click therefore buries the piece 20 units below the
+the floor tile's surface, and that tile sits at level −2, whose top is at
+y −40 (20 per level, see development.md's camera-pose formula), under the mesh
+that hides it. A fresh click therefore buries the piece 40 units below the
 visible Warehouse floor, where it looks invisible from any interior vantage
 while its collider and selection stay live (Select still gets it `via
-nearest`). Raise the cell to level 0 with tool 1 to place at floor height, or
+nearest`). Raise the cell to level 0 with tool 1 (twice) to place at floor height, or
 drag the piece up afterwards; `query_objects` on `Renderer` bounds tells you
 in one call whether a piece is at floor level or under it. The main-pipe
 modules in the recipe below mate at pivots y 0 to −4.93, so they want the
@@ -297,24 +297,23 @@ cursor's ground point.
 
 ### Shipped monolithic reference
 
-`levels/thps.mblevel.json` is generated, not hand-edited: `scripts/build_thps_level.py` writes it (`uv run scripts/build_thps_level.py`) and `tests/test_build_thps_level.py` covers the generator. `ThpsLevelTests` in `tests/MegabonkLevels.Tests` replays the saved file through `EditStack` and `ReachabilityValidator` and checks that the kept tile is reachable from the generated spawn cell, that the authored kill floor sits below it, that the boss portal stands on the floor inside the hanging box, and that the authored `bossSpawnPosition` (no longer read by the mod, kept for round-trip stability) sits on the pipe floor outside it. Regenerate and reload with `uv run scripts/build_thps_level.py` then `relaunch(level="levels/thps.mblevel.json")`.
+`levels/thps.mblevel.json` is generated, not hand-edited: `scripts/build_thps_level.py` writes it (`uv run scripts/build_thps_level.py`) and `tests/test_build_thps_level.py` covers the generator. `ThpsLevelTests` in `tests/MegabonkLevels.Tests` loads the saved file and checks that it is a from-scratch level with one floor tile, that the game keeps the authored kill floor, that the boss portal stands on the floor inside the hanging box, and that the boss redirect is on. Regenerate and reload with `uv run scripts/build_thps_level.py` then `relaunch(level="levels/thps.mblevel.json")`.
 
 What the file contains:
 
-- One kept tile at the generated spawn cell (10, 7) (`GENERATED_SPAWN_CELL`), flat at level -1 (`INNER_LEVEL`), with an explicit `SetTileHeight` and `SetTileSlope` so nothing depends on the generated heights. It is there because the game places the player at the generated spawn before the edits apply, so that cell has to be floor while they run; the mesh hides it. Every other cell of the 15x15 grid is removed. The Warehouse block the mesh spans is 4 tiles east by 7 tiles north at cells x 8-11, z 4-10 (`INNER_X`, `INNER_Z`).
-- `killFloorY` (`KILL_FLOOR_Y`, -35): authored rather than derived, because with a single hidden tile the derived floor would sit 40 units below it, deep enough for an actor to come to rest on the mesh's sub-floor skirt above it and stay unkillable. It is 15 units under the kept tile, so standing on that tile is safe, and above the mesh's lowest geometry (-48.6), so anything that ends up under the Warehouse dies. All 43 mesh faces below -20 are vertical (x 21-80, z 3.5-104: the west wall's skirt), so nothing is restable in that band.
+- `baseline: "none"`, so the file authors its grid instead of editing a generated map, and carries `spawn`, `bossSpawner` and `bossRedirect` (see "From-scratch levels" in [level-format.md](level-format.md)). The grid is the stock 15x15 size with one tile at cell (10, 7) (`FLOOR_CELL`), flat at level -2 (`INNER_LEVEL`). The game derives its catch floor from the tiles and an empty grid arms the kill floor at `int.MaxValue`, which kills the player on spawn, so one tile has to exist; the mesh hides it. The Warehouse block the mesh spans is 4 tiles east by 7 tiles north at cells x 8-11, z 4-10 (`INNER_X`, `INNER_Z`).
+- `killFloorY` (`KILL_FLOOR_Y`, -35): authored rather than derived, because the tile-derived floor would sit 40 units below the lowest tile, deep enough for an actor to come to rest on the mesh's sub-floor skirt above it and stay unkillable. The game raises a kill floor to at least 8 above its catch floor, which is 20 under the lowest tile, so the tile at level -2 puts the catch floor at -60 and keeps -35 as authored. It is above the mesh's lowest geometry (-48.6), so anything that ends up under the Warehouse dies. All 43 mesh faces below -20 are vertical (x 21-80, z 3.5-104: the west wall's skirt), so nothing is restable in that band.
 - One `bundle:thps/Warehouse` placement at uniform scale 79.2 (4.4 units per metre times 18 metres per OBJ unit), centred on the arena and lifted 0.5 above y=0 (`WAREHOUSE_LIFT`). The footprint fits the arena (a test checks it). The level records `packs: {"thps": "<version>"}`, so the version check in asset-bundles.md applies; the pack has to be installed (`task pack:thps`) and the game relaunched before the level loads, or the placement shows a `Missing:` cube.
 - `noGrass`: the game's grass manager raycasts onto the ground layer and otherwise grows through the Warehouse floor.
 - `grindRequiresSlide`: with a rail on every lip, the game's own catch took the player into a grind the moment they rode over one, which is what made the lips impossible to skate (see "Grind gate" in [development.md](development.md)). A grind now starts only while the slide button is held, so an ollie off a lip keeps the player's momentum; see "Coping rails on the half pipes and wall quarter pipes".
-- `playerStart` (`PLAYER_START`): the game places the player at the generated spawn and moving the spawn portal does not move it, so the mod places the player at this position once, after the level's edits are in the world (see "Custom-level startup cover" in [development.md](development.md)). `y` is the on-screen readout value, 1.925 above the feet. The spawn is (109, 38, -116), on the 26 degree slope of the start half pipe 4 units past the platform lip, so the player drops onto the pipe and slides forward; spawned nearer the lip, over its 72 degree face, the player caught the lip rail and stuck.
-- Removal of every generator object except the spawn portal, the boss spawner and the particles, from the per-category counts the seed produces. The boss spawner is stood on the floor inside the hanging glass box above the main half pipe, world (170, 15.6, 27) (`BOSS_SPAWN_LOCAL`, `BOSS_SPAWN_Y`), hidden in plain sight the way the reference map has its secret room (see [thps-warehouse.md](thps-warehouse.md), "Glass corridor and secret room": the skater launches into it off the quarter pipe in front). It is scaled to 0.4 and turned 90 degrees so its arch faces across the floor, and its `BottomPiece` pillar mesh and the 43-unit-tall invisible `Collider` are hidden (`hiddenChildren` on the `object.move`); that collider otherwise reaches down into the pipe and blocks it, and a visible collider in the box would block a grind. In the mesh the box is a closed room: an interior floor top at 15.64 (its slab's underside at 15.31), a roof whose underside sits at 25.42, walls on all four sides between them, over a footprint of x 149.4-178.9, z 20.9-31.4 (`BOSS_PORTAL_FOOTPRINT`).
-- `bossSpawnPosition`: still authored in the generated file and checked by `ThpsLevelTests`, but the mod no longer reads it (see `bossSpawnPosition` in [level-format.md](level-format.md) and "Boss spawn redirect" in [development.md](development.md)). The redirect now teleports each summoned boss to a random walkable spot at least 35 units from the spawner's own position inside the box, keeping the portal, its arch and the Defeat the Boss wiring exactly where this level puts them. A spawner summons its boss at its own position and `EnemyMovementRb` chases with rigidbody physics on a Tiles map that has no navmesh, so a boss materialised inside or on top of the closed box can never get out.
+- `spawn` (`PLAYER_START`): the mod places the player at this position once, after the level's edits are in the world (see "Custom-level startup cover" in [development.md](development.md)). `y` is the on-screen readout value, 1.925 above the feet. The spawn is (109, 38, -116), on the 26 degree slope of the start half pipe 4 units past the platform lip, so the player drops onto the pipe and slides forward; spawned nearer the lip, over its 72 degree face, the player caught the lip rail and stuck.
+- `bossSpawner`: the boss spawner is stood on the floor inside the hanging glass box above the main half pipe, world (170, 15.6, 27) (`BOSS_SPAWN_LOCAL`, `BOSS_SPAWN_Y`), hidden in plain sight the way the reference map has its secret room (see [thps-warehouse.md](thps-warehouse.md), "Glass corridor and secret room": the skater launches into it off the quarter pipe in front). It is scaled to 0.4 (`scale`) and turned 90 degrees so its arch faces across the floor, and its `BottomPiece` pillar mesh and the 43-unit-tall invisible `Collider` are hidden (`hiddenChildren` on the `bossSpawner` entry); that collider otherwise reaches down into the pipe and blocks it, and a visible collider in the box would block a grind. In the mesh the box is a closed room: an interior floor top at 15.64 (its slab's underside at 15.31), a roof whose underside sits at 25.42, walls on all four sides between them, over a footprint of x 149.4-178.9, z 20.9-31.4 (`BOSS_PORTAL_FOOTPRINT`).
+- `bossRedirect`: keeps the boss spawn redirect on, which a from-scratch level otherwise skips (see "Boss spawn redirect" in [development.md](development.md)). The level no longer carries `bossSpawnPosition`, which the mod does not read. The redirect teleports each summoned boss to a random walkable spot at least 35 units from the spawner's own position inside the box, keeping the portal, its arch and the Defeat the Boss wiring exactly where this level puts them. A spawner summons its boss at its own position and `EnemyMovementRb` chases with rigidbody physics on a Tiles map that has no navmesh, so a boss materialised inside or on top of the closed box can never get out.
 - The hidden mesh rails below, the only rails the level places.
 - The collectibles in the table above.
 
 Findings:
 
-- **Spawn.** The player is placed at the generator's spawn before edits apply, so the arena has to contain the generated spawn cell (10, 7); a test checks it.
 - **Flat-tile prefabs are whole tiles.** `forest/stage0/stageTilePrefabs/flat/7` placed a flat slab with a ruined stone tower and blocks, not a crate. The palette thumbnail was misleading. Do not use the flat-tile entries as props.
 - **Rails.** `rail/0` places with a `PlaceObject` and honours rotation and uniform scale. The earlier hand-placed big, ledge and high rails stood in the old layout and were removed with it.
 - **Editor camera.** In editor mode the editor owns the camera, so the harness `camera` command has no effect there. For screenshots call `editor(on=false)`, `freeze()` and then `camera(...)`.

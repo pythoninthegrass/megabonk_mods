@@ -22,8 +22,10 @@ public class ThpsEditableLevelTests
         Assert.Equal(58, placed.Count(pair => pair.Value.Owner != null));
         Assert.Equal(41, placed.Count(pair => pair.Value.CatalogId == "interactable/rail/0"));
         Assert.DoesNotContain(placed, pair => pair.Value.CatalogId == "bundle:thps/Warehouse");
-        Assert.Single(stack.State.Tiles);
-        Assert.Equal(new TileState(-1, SlopeDirection.None), stack.State.GetTile(10, 7));
+        Assert.Empty(stack.State.Tiles);
+        Assert.True(level.IsFromScratch);
+        var floor = Assert.Single(level.Grid!.Value.Cells);
+        Assert.Equal(new AuthoredCell(10, 7, -2), floor);
         Assert.Equal("2", level.PackKitVersions["thps"]);
         Assert.Equal(level, LevelFileSerializer.Deserialize(LevelFileSerializer.Serialize(level)));
         var actions = LiveEditPlan.Build(level.Edits, new LevelState());

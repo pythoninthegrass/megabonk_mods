@@ -73,10 +73,20 @@ def test_level_keeps_legacy_arena_without_monolith_or_duplicate_rails():
     assert level["packKitVersions"] == {"thps": "2"}
     placed = placements(level["edits"])
     assert not any(p["catalogId"] in {"bundle:thps/Warehouse", "interactable/rail/0"} for p in placed)
-    assert level["edits"][: len(legacy.tile_edits())] == legacy.tile_edits()
     assert level["edits"][-15:] == legacy.radio_edits() + legacy.collectible_edits()
-    assert legacy.spawn_moves()[0] in level["edits"]
     assert level == kit.build_level()
+
+
+def test_level_is_from_scratch_with_no_tile_ops_or_generated_targets():
+    level = kit.build_level()
+    assert level["baseline"] == "none"
+    assert level["schemaVersion"] == 4
+    assert level["spawn"] == legacy.build_level()["spawn"]
+    assert level["bossSpawner"] == legacy.boss_spawner()
+    assert level["bossRedirect"] is True
+    assert not [op for op in level["edits"] if op["opType"].startswith("tile.")]
+    assert not [op for op in level["edits"] if op["target"].startswith("gen:")]
+    assert {op["opType"] for op in level["edits"]} == {"object.place"}
 
 
 def test_writer_refuses_shipped_path_and_reproduces_committed_level(tmp_path):

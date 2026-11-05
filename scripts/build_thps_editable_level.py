@@ -86,7 +86,7 @@ def build_level():
     kit_assets = {asset for asset in manifest["assets"] if any(asset.startswith(prefix) for prefix in manifest["kitAssetPrefixes"])}
     if {piece["catalogAsset"] for piece in pieces["pieces"] if piece["catalogAsset"]} != kit_assets:
         raise ValueError("manifest kit assets and pieces.json disagree")
-    level["edits"] = legacy.tile_edits() + legacy.clutter_removals() + legacy.spawn_moves() + piece_edits(pieces, defaults) + legacy.radio_edits() + legacy.collectible_edits()
+    level["edits"] = piece_edits(pieces, defaults) + legacy.radio_edits() + legacy.collectible_edits()
     return level
 
 
