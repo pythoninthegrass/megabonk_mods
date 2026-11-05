@@ -776,6 +776,86 @@ def test_request_result_times_out_with_no_result() -> None:
         assert result is None
 
 
+def press_refusal(error: str) -> tuple[str, dict]:
+    return "rejected", {"command": "press-death-confirm", "ok": False, "error": error}
+
+
+PRESS_DONE = ("done", {"command": "press-death-confirm", "ok": True, "result": {"button": "B_Continue"}})
+
+
+def scripted_request(outcomes: list[tuple[str, dict | None]]):
+    calls: list[dict] = []
+
+    def request(harness: Path, payload: dict, timeout: float) -> tuple[str, dict | None]:
+        calls.append(payload)
+        return outcomes[min(len(calls), len(outcomes)) - 1]
+
+    return request, calls
+
+
+def fake_clock():
+    now = [0.0]
+    return (lambda: now[0]), (lambda seconds: now.__setitem__(0, now[0] + seconds))
+
+
+def test_request_press_retries_a_transient_refusal_until_the_press_lands() -> None:
+    request, calls = scripted_request(
+        [press_refusal("the death screen's Confirm button is not active")] * 3 + [PRESS_DONE]
+    )
+    clock, sleep = fake_clock()
+    outcome, result = run.request_press(Path("h"), {"command": "press-death-confirm"}, 5, wait=15, request=request, sleep=sleep, clock=clock)
+    assert (outcome, result) == PRESS_DONE
+    assert len(calls) == 4
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        "no death screen is showing",
+        "the run summary is not showing",
+        "the death screen's Confirm is not showing",
+        "the run summary's Restart button is not active",
+        "the death screen's Confirm button is not interactable",
+    ],
+)
+def test_request_press_treats_every_gate_refusal_as_transient(error) -> None:
+    request, calls = scripted_request([press_refusal(error), PRESS_DONE])
+    clock, sleep = fake_clock()
+    assert run.request_press(Path("h"), {"command": "x"}, 5, request=request, sleep=sleep, clock=clock) == PRESS_DONE
+    assert len(calls) == 2
+
+
+def test_request_press_gives_up_after_the_wait_and_says_how_long_it_waited() -> None:
+    request, calls = scripted_request([press_refusal("the run summary is not showing")])
+    clock, sleep = fake_clock()
+    outcome, result = run.request_press(Path("h"), {"command": "x"}, 5, wait=3, request=request, sleep=sleep, clock=clock)
+    assert outcome == "rejected"
+    assert result["ok"] is False
+    assert result["error"] == "the run summary is not showing (still refused after waiting 3s)"
+    assert len(calls) > 1
+
+
+def test_request_press_does_not_retry_an_unrelated_error() -> None:
+    request, calls = scripted_request([press_refusal("unknown command")])
+    clock, sleep = fake_clock()
+    outcome, result = run.request_press(Path("h"), {"command": "x"}, 5, request=request, sleep=sleep, clock=clock)
+    assert (outcome, result["error"]) == ("rejected", "unknown command")
+    assert len(calls) == 1
+
+
+def test_request_press_does_not_retry_a_timeout() -> None:
+    request, calls = scripted_request([("timeout", None)])
+    clock, sleep = fake_clock()
+    assert run.request_press(Path("h"), {"command": "x"}, 5, request=request, sleep=sleep, clock=clock) == ("timeout", None)
+    assert len(calls) == 1
+
+
+def test_send_printing_result_uses_the_injected_request(capsys) -> None:
+    request, _ = scripted_request([PRESS_DONE])
+    assert run.send_printing_result(Path("h"), {"command": "press-death-confirm"}, 5, request=request)
+    assert json.loads(capsys.readouterr().out.splitlines()[-1]) == {"button": "B_Continue"}
+
+
 def test_request_result_prints_nothing(capsys) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         game = fake_game(tmp, '{"command":"freeze","ok":true}')

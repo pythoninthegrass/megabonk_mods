@@ -130,6 +130,9 @@ STEAM_READY_POLL_SECONDS = 1.0
 STEAM_OFFLINE_GRACE_SECONDS = 15.0
 GAME_STARTUP_GRACE_SECONDS = 5.0
 WINESERVER_EXIT_TIMEOUT_SECONDS = 15.0
+PRESS_WAIT_SECONDS = 15.0
+PRESS_POLL_INTERVAL = 0.5
+PRESS_REFUSAL_MARKERS = ("no death screen is showing", "is not showing", "is not active", "is not interactable")
 WINE_STUB_KILL_GRACE_SECONDS = 1.5
 GAME_COMMAND = re.compile(r"^(?:[A-Za-z]:\\(?:.*\\)?Megabonk\.exe|(?:\S*/)?Megabonk\.x86_64)(?:\s|$)")
 GAME_IMAGE_WINDOWS = "Megabonk.exe"
@@ -1096,9 +1099,40 @@ def request_result(harness: Path, payload: dict[str, object], timeout: float) ->
     return outcome, read_result(harness, sent.name)
 
 
-def send_for_result(harness: Path, payload: dict[str, object], timeout: float) -> tuple[bool, dict | None]:
+def press_refusal_is_transient(result: dict | None) -> bool:
+    error = result.get("error") if result is not None and result.get("ok") is False else None
+    return isinstance(error, str) and any(marker in error for marker in PRESS_REFUSAL_MARKERS)
+
+
+def request_press(
+    harness: Path,
+    payload: dict[str, object],
+    timeout: float,
+    wait: float | None = None,
+    request: Callable[[Path, dict[str, object], float], tuple[str, dict | None]] = request_result,
+    sleep: Callable[[float], None] = time.sleep,
+    clock: Callable[[], float] = time.monotonic,
+) -> tuple[str, dict | None]:
+    """request_result for the death-screen press verbs: the death screen shows Confirm and then the summary a few seconds after the kill, so a gate refusal is retried until `wait` seconds pass before it is reported."""
+    wait = PRESS_WAIT_SECONDS if wait is None else wait
+    deadline = clock() + wait
+    outcome, result = request(harness, payload, timeout)
+    while press_refusal_is_transient(result) and clock() < deadline:
+        sleep(PRESS_POLL_INTERVAL)
+        outcome, result = request(harness, payload, timeout)
+    if press_refusal_is_transient(result):
+        result["error"] = f"{result['error']} (still refused after waiting {wait:g}s)"
+    return outcome, result
+
+
+def send_for_result(
+    harness: Path,
+    payload: dict[str, object],
+    timeout: float,
+    request: Callable[[Path, dict[str, object], float], tuple[str, dict | None]] = request_result,
+) -> tuple[bool, dict | None]:
     """Send a command; ok is false on a rejected or timed-out command or a result with ok:false."""
-    outcome, result = request_result(harness, payload, timeout)
+    outcome, result = request(harness, payload, timeout)
     print(f"{payload['command']}: {outcome}")
     if result is not None and result.get("ok") is False:
         print(f"{payload['command']}: {result.get('error')}", file=sys.stderr)
@@ -1126,8 +1160,13 @@ def send_steam_ready(harness: Path, timeout: float) -> bool:
     return steam_ready_verdict(harness, timeout) == "ready"
 
 
-def send_printing_result(harness: Path, payload: dict[str, object], timeout: float) -> bool:
-    ok, result = send_for_result(harness, payload, timeout)
+def send_printing_result(
+    harness: Path,
+    payload: dict[str, object],
+    timeout: float,
+    request: Callable[[Path, dict[str, object], float], tuple[str, dict | None]] = request_result,
+) -> bool:
+    ok, result = send_for_result(harness, payload, timeout, request)
     if ok and result is not None:
         print(json.dumps(result.get("result")))
     elif ok:
@@ -1877,7 +1916,7 @@ def main(argv: list[str] | None = None) -> int:
         case "state":
             ok = send_printing_result(harness, build_command("state"), args.timeout)
         case "press-death-confirm" | "press-summary-restart":
-            ok = send_printing_result(harness, build_command(args.action), args.timeout)
+            ok = send_printing_result(harness, build_command(args.action), args.timeout, request=request_press)
         case "kill-enemies":
             ok = send_printing_result(harness, build_kill_enemies_command(args.target), args.timeout)
         case "damage":

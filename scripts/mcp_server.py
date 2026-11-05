@@ -97,19 +97,19 @@ def _encode(payload: object, wrap: bool = True) -> CallToolResult:
     return CallToolResult(content=[TextContent(type="text", text=text)], structured_content=structured)
 
 
-async def _request(harness: Path, payload: dict[str, object], timeout: float) -> dict | None:
+async def _request(harness: Path, payload: dict[str, object], timeout: float, request=None) -> dict | None:
     """Send a harness command off the event loop; raise ToolError on a rejection, a timeout or an ok:false result."""
-    outcome, result = await anyio.to_thread.run_sync(run.request_result, harness, payload, timeout)
+    outcome, result = await anyio.to_thread.run_sync(request or run.request_result, harness, payload, timeout)
     if outcome == "done" and not (result is not None and result.get("ok") is False):
         return result
     error = result.get("error") if result is not None else None
     raise ToolError(error if error else f"{payload['command']} {outcome}")
 
 
-async def _command(harness: Path, payload: dict[str, object], timeout: float) -> CallToolResult:
+async def _command(harness: Path, payload: dict[str, object], timeout: float, request=None) -> CallToolResult:
     """Send a harness command and encode its result; the encoding is validated first so a bad setting does not follow a game action."""
     _encoding()
-    return _encode(await _request(harness, payload, timeout))
+    return _encode(await _request(harness, payload, timeout, request))
 
 
 @mcp.tool()
@@ -319,14 +319,14 @@ async def damage(amount: Annotated[int, Field(strict=True, ge=1, le=99)], nonlet
 
 @mcp.tool()
 async def press_death_confirm() -> CallToolResult:
-    """Press Confirm on the death screen ("you ded"), opening the run summary, through the button's own handler. Returns {screenWasOpen, button}. Errors, with no side effects, when the death screen is not showing or its Confirm button is not interactable."""
-    return await _command(_harness(), run.build_command("press-death-confirm"), TIMEOUT)
+    """Press Confirm on the death screen ("you ded"), opening the run summary, through the button's own handler. Returns {screenWasOpen, button}. Waits up to 15 s for the Confirm button to activate, since it appears a few seconds after the kill. Errors, with no side effects, when the death screen is still not showing or its Confirm button is still not interactable after that."""
+    return await _command(_harness(), run.build_command("press-death-confirm"), TIMEOUT, run.request_press)
 
 
 @mcp.tool()
 async def press_summary_restart() -> CallToolResult:
-    """Press the run summary screen's Restart button, the player-facing path that ends in MapController.RestartRun, unlike restart_run which skips both screens. Returns {screenWasOpen, button}. Errors, with no side effects, when the summary is not showing or the button is not interactable."""
-    return await _command(_harness(), run.build_command("press-summary-restart"), TIMEOUT)
+    """Press the run summary screen's Restart button, the player-facing path that ends in MapController.RestartRun, unlike restart_run which skips both screens. Returns {screenWasOpen, button}. Waits up to 15 s for the summary to show. Errors, with no side effects, when the summary is still not showing or the button is still not interactable after that."""
+    return await _command(_harness(), run.build_command("press-summary-restart"), TIMEOUT, run.request_press)
 
 
 @mcp.tool()

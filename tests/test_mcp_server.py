@@ -5,6 +5,7 @@ import json
 import mcp_server
 import pytest
 import re
+import run
 import struct
 import threading
 import time
@@ -388,6 +389,47 @@ async def test_input_tool_writes_the_harness_payload_and_returns_the_result(tmp_
     assert not result.is_error
     assert seen == [expected]
     assert json.loads(result.content[0].text)["result"] == {"echo": True}
+
+
+@pytest.mark.parametrize(
+    ("tool", "command"),
+    [("press_death_confirm", "press-death-confirm"), ("press_summary_restart", "press-summary-restart")],
+)
+async def test_press_tool_waits_out_a_transient_refusal(tmp_path, monkeypatch, tool, command) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    monkeypatch.setattr(run, "PRESS_POLL_INTERVAL", 0.01)
+    attempts = []
+
+    def responder(payload):
+        attempts.append(payload)
+        if len(attempts) < 3:
+            return "rejected", json.dumps({"command": command, "ok": False, "error": "the run summary is not showing"})
+        return ok_result(payload, {"button": "B"})
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool(tool, {})
+    finally:
+        stop.set()
+    assert not result.is_error
+    assert len(attempts) == 3
+    assert json.loads(result.content[0].text)["result"] == {"button": "B"}
+
+
+async def test_press_tool_surfaces_the_refusal_after_the_wait(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    monkeypatch.setattr(run, "PRESS_POLL_INTERVAL", 0.01)
+    monkeypatch.setattr(run, "PRESS_WAIT_SECONDS", 0.1)
+    refusal = json.dumps({"command": "press-death-confirm", "ok": False, "error": "no death screen is showing"})
+    stop = start_fake_mod(harness, lambda p: ("rejected", refusal))
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("press_death_confirm", {})
+    finally:
+        stop.set()
+    assert result.is_error
+    assert "no death screen is showing (still refused after waiting" in result.content[0].text
 
 
 @pytest.mark.parametrize(
