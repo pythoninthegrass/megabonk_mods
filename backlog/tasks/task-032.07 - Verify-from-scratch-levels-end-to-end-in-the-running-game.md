@@ -1,10 +1,10 @@
 ---
 id: TASK-032.07
 title: Verify from-scratch levels end to end in the running game
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-04 20:37'
-updated_date: '2026-11-05T20:43:00Z'
+updated_date: '2026-11-05T20:45:00Z'
 labels: []
 dependencies:
   - TASK-032.05
@@ -24,20 +24,20 @@ Create the minimal level with the editor's new-level command and commit it as le
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 levels/scratch-minimal.mblevel.json is committed and loads from a fresh relaunch with no generated tiles, props or interactables visible in a screenshot
-- [ ] #2 The player spawns at the authored spawn, reaches the boss spawner and defeats the boss; on this tier 1 level no boss portal activates and the run continues as an endless ghost swarm
-- [ ] #3 Validate passes on the from-scratch level
-- [ ] #4 A death-screen retry restarts without spawn reset or portal interference
-- [ ] #5 levels/thps.mblevel.json and levels/example-forest.mblevel.json load and play as before
-- [ ] #6 Results, screenshots and log excerpts are summarized in the task, and parent TASK-032 acceptance criteria are checked off
+- [x] #1 levels/scratch-minimal.mblevel.json is committed and loads from a fresh relaunch with no generated tiles, props or interactables visible in a screenshot
+- [x] #2 The player spawns at the authored spawn, reaches the boss spawner and defeats the boss; on this tier 1 level no boss portal activates and the run continues as an endless ghost swarm
+- [x] #3 Validate passes on the from-scratch level
+- [x] #4 A death-screen retry restarts without spawn reset or portal interference
+- [x] #5 levels/thps.mblevel.json and levels/example-forest.mblevel.json load and play as before
+- [x] #6 Results, screenshots and log excerpts are summarized in the task, and parent TASK-032 acceptance criteria are checked off
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
+- [x] #1 task check passes
 - [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -50,6 +50,8 @@ Create the minimal level with the editor's new-level command and commit it as le
 5. Die and retry via the death screen; confirm spawn is not reset and the portal does not interfere.
 6. relaunch levels/thps.mblevel.json and levels/example-forest.mblevel.json; confirm they load and play as before.
 7. Save screenshots under .tools/evidence, summarize results and log excerpts in the task, check AC, check parent TASK-032 AC, run task check, commit the level (conventional, no attribution).
+
+Deviations from the plan: the portal step became 'defeat the boss' because tier 1 opens no portal; Validate was accepted as a log-only result because the status line is clipped; the death-screen retry was checked with a manual Confirm and Restart click because the harness cannot press them (TASK-032.08).
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -69,3 +71,9 @@ AC5: thps.mblevel.json (now a from-scratch level): pack 'thps' loaded, `FromScra
 
 task check passes (1235 Python tests passed, 29 skipped, lint clean).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Verified from-scratch levels in the running game through the megabonk MCP server. The blank 7x7 level from the editor's new-level command is committed as levels/scratch-minimal.mblevel.json: it loads with 49 authored tiles and no stock props, the player spawns at the authored spawn, the boss spawner summons a boss and the boss dies through the game's own damage path. A manual Confirm then Restart rebuilt the level with the player back at spawn and no portal interference. thps.mblevel.json loads and plays, and example-forest.mblevel.json loads with a tile hash matching the determinism doc. Tier 1 levels open no boss portal, so the portal criterion was reworded. Validate is a log-only result (no error logged) because the status line's second line is clipped. The harness cannot press the death screen's Confirm or Restart (TASK-032.08), and the MCP interact tool needs a required type after three untyped calls re-summoned the boss (TASK-032.09). task check passes.
+<!-- SECTION:FINAL_SUMMARY:END -->
