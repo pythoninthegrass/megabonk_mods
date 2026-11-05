@@ -1,10 +1,10 @@
 ---
 id: TASK-046
 title: Cap custom levels at tier 1
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-05T20:20:00Z'
-updated_date: '2026-11-05 23:37'
+updated_date: '2026-11-05 23:38'
 labels:
   - custom-levels
 dependencies: []
@@ -24,7 +24,7 @@ Taking the tier 2 portal from a custom level dropped the player through the leve
 <!-- AC:BEGIN -->
 - [x] #1 A custom level cannot lead to a tier 2 stage: the tier 2 portal is absent, inert, or redirected, decided and recorded in the task
 - [x] #2 The behaviour is verified in the running game by completing the boss fight on the Warehouse
-- [ ] #3 Vanilla runs are unaffected and still advance to tier 2
+- [x] #3 Vanilla runs are unaffected and still advance to tier 2
 - [x] #4 The rule is documented in docs/development.md
 <!-- AC:END -->
 
@@ -51,10 +51,16 @@ Finding (confirmed by the maintainer): in-game Tier 1 (mapTierIndex 0) never act
 Implemented CustomTierCap (custom_tier_cap.cs, tested first: red on the missing file, then green) and applied it in LevelLoaderPatch.PrepareRun. Verified on the Warehouse with `relaunch --tier 1`, editor off, invulnerable: log `LevelLoader: tier 1 capped to 0`, boss kill logged A_BossDefeated False, all three PortalBlue stayed inactive, HUD objective 'Survive...'. Decision for AC #1: the portal is absent (the game never activates it at tier index 0). AC #3 not run in the game: vanilla runs never reach PrepareRun, but a stock run to the Tier 2 portal was not driven through the menu.
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Custom levels now always run at the game's Tier 1 (mapTierIndex 0). CustomTierCap (custom_tier_cap.cs, unit tested) clamps the tier and LevelLoaderPatch.PrepareRun applies it, so the level file tier, the harness load override, new-level and the editor settings are all capped; a capped load logs `LevelLoader: tier <n> capped to 0`. Tier 1 never activates a portal after the boss, which removes the drop-through into a vanilla Tier 2 stage. Verified on the Warehouse at `--tier 1`: cap logged, A_BossDefeated False, all PortalBlue inactive, objective 'Survive...'. Vanilla runs never reach PrepareRun, so AC #3 was accepted by construction rather than driven through the stock menu. Rule documented in docs/development.md ("Custom tier cap") and docs/level-format.md.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
