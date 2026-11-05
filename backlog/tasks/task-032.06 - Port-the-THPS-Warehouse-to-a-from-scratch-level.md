@@ -1,10 +1,10 @@
 ---
 id: TASK-032.06
 title: Port the THPS Warehouse to a from-scratch level
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-04 20:37'
-updated_date: '2026-11-04 20:37'
+updated_date: '2026-11-05 17:36'
 labels: []
 dependencies:
   - TASK-032.03
@@ -26,19 +26,55 @@ The preservation baseline (tests/fixtures/thps-preservation.json, scripts/check_
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Both regenerated Warehouse levels are from-scratch files containing no gen: targets and no tile edit ops, and carrying spawn and bossSpawner
-- [ ] #2 Builder tests written first assert those properties for both builders
-- [ ] #3 The preservation baseline is regenerated and the reason is in the commit body
+- [x] #1 Both regenerated Warehouse levels are from-scratch files containing no gen: targets and no tile edit ops, and carrying spawn and bossSpawner
+- [x] #2 Builder tests written first assert those properties for both builders
+- [x] #3 The preservation baseline is regenerated and the reason is in the commit body
 - [ ] #4 The shipped Warehouse loads, starts at the spawn without a reset or Forest flash, and plays through to the boss and portal, verified in the running game
-- [ ] #5 The piece-assembled variant loads and its placements match the pre-port set
-- [ ] #6 Load time on the Warehouse is not slower than before, with before and after timings recorded in the task
-- [ ] #7 docs/thps-warehouse-layout.md no longer describes the hidden spawn cell or the removal counts
+- [x] #5 The piece-assembled variant loads and its placements match the pre-port set
+- [x] #6 Load time on the Warehouse is not slower than before, with before and after timings recorded in the task
+- [x] #7 docs/thps-warehouse-layout.md no longer describes the hidden spawn cell or the removal counts
+- [x] #8 From-scratch files can carry an optional bossRedirect flag, kept through load and save, and the boss spawn redirect arms on a from-scratch level that sets it, so the Warehouse boss summons outside the glass box
+- [x] #9 The bossSpawner entry can carry an optional scale and hiddenChildren, applied when the spawner is instantiated, so the Warehouse portal keeps its 0.4 scale and hidden BottomPiece and Collider
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Redirect (C#, TDD): add an optional boolean bossRedirect to LevelFile (from-scratch only, omitted when false), keep it through FromScratchSnapshot/FoldFromScratch; ShouldArm arms on a from-scratch level only when it is set; update level-format and development docs. The redirect itself picks a ring spot around the spawner and reads no destination, so no position field is added.
+2. Builder tests first (tests/test_build_thps_level.py, test_build_thps_editable_level.py): replace tile/clutter/GENERATED_SPAWN_CELL tests; assert baseline none, schema 4, grid, spawn, bossSpawner, bossRedirect true, no tile.* ops, no gen: targets, unchanged placement set.
+3. Builders: drop tile_edits, clutter_removals, SEED_*, KEPT_OBJECT_CATEGORIES, GENERATED_SPAWN_CELL, spawn_moves; emit minimal grid, spawn from PLAYER_START, bossSpawner at the portal position (170,15.6,27 yaw 90); keep authored killFloorY.
+4. Check in game: empty/single-cell grid loads (else keep one hidden cell under spawn); ForestParticles need an explicit placement; hidden BottomPiece/Collider children on the from-scratch bossSpawner.
+5. Regenerate tests/fixtures/thps-preservation.json and fix check_thps_preservation.py (kept_cells); reason in commit body.
+6. Docs: remove hidden spawn cell and removal counts from docs/thps-warehouse-layout.md, thps-warehouse-pieces.md, development.md.
+7. Verify in running game: load time before/after, no reset or Forest flash, play to boss and portal, editable variant placements match; task check; conventional commit, no attribution.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Before timing (shipped Warehouse, 1241 edits, run 1 via relaunch): StartNewMap 22:20:47.355 -> A_GenerationComplete +2.03s -> LiveEdit applied +3.35s -> KillFloor armed +3.40s -> StartupCover player placed +7.27s.
+
+Decision (Lance): from-scratch files carry the redirect destination in a new optional bossRedirect field, kept verbatim through load and save. bossSpawnPosition keeps its editor-marker meaning on from-scratch sessions. AC #8 reads bossRedirect where it says bossSpawnPosition.
+
+Correction (Lance approved): BossSpawnRedirect never reads a destination (TryFindSpot rings around the spawner), so the bossRedirect position field is replaced by an optional boolean bossRedirect opt-in flag.
+
+Decision (Lance): extend the from-scratch bossSpawner entry with optional scale and hiddenChildren (applied by FromScratchGenerationPatch after it instantiates the spawner) so the Warehouse portal keeps object.move's 0.4 scale and hidden BottomPiece/Collider. Done C# step 1 part 1: LevelFile.BossRedirect plus ShouldArm opt-in, 1944 C# tests green.
+
+After timing (from-scratch Warehouse, 48 edits, 15x15 grid with one hidden floor tile, run 1): StartNewMap 11:32:21.133 -> A_GenerationComplete +1.90s -> LiveEdit applied +2.01s -> KillFloor armed +2.02s -> StartupCover player placed +5.95s. Before was +2.03 / +3.35 / +3.40 / +7.27s. No reset or Forest flash in the log: one 'player placed' line, no timeout warning.
+
+Finding: an empty grid does not work. With zero tiles the game's catch floor derives as int.MaxValue, the kill floor armed at 2.1e9 and the player died on spawn. The grid therefore keeps one hidden floor tile at the old cell (10,7) on the 15x15 stock-size grid (so its world position is unchanged), at level -2 instead of -1 so the catch floor is -60 and the authored kill floor of -35 applies exactly (at -1 the game raised it to -32).
+
+Pre-port placements: object.place edits are byte-identical before and after for both levels (48 shipped, 251 editable); only the tile ops, gen: removals and boss move were dropped.
+
+Verified in the running game (shipped Warehouse): loads with 48 edits, one 'player placed' line at (109, 36.08, -116), no timeout warning, KillFloor armed at -35 (catch floor -60), ForestParticles(Clone) present without a placement. Boss: interacting with the spawner armed the redirect, which moved the boss from (180.7, 27.5, 24.2) to (171.6, 15.7, 68.7), outside the box (z 20.9-31.4). Editable variant loads with 251 edits, same placement and kill floor lines.
+
+NOT verified (AC #4 left unchecked): defeating the boss and reaching the portal. The harness has no tool that kills an enemy, so the run was not played through past the boss summon. Commit 8b58001.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
