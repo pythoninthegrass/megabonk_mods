@@ -116,6 +116,9 @@
     <Compile Include="../../src/MegabonkLevels.Mod/thumbnail_cache.cs" Link="thumbnail_cache.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/editor_editing_support.cs" Link="editor_editing_support.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/validation_targets.cs" Link="validation_targets.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/blank_level.cs" Link="blank_level.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_load_plan.cs" Link="editor_load_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/from_scratch_snapshot.cs" Link="from_scratch_snapshot.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/editor_edit_session.cs" Link="editor_edit_session.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/editor_reenter_policy.cs" Link="editor_reenter_policy.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/editor_session_pick.cs" Link="editor_session_pick.cs" />

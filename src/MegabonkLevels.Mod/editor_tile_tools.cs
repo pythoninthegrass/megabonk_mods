@@ -450,8 +450,9 @@ public static class EditorTileTools
         NewInput(actionsRect, "SaveInput", saveX, 200f, "level");
         NewButton(actionsRect, "Save", "Save", saveX + 206f, 70f, () => { Save(); });
         NewButton(actionsRect, "Load", "Load", saveX + 282f, 70f, LoadSelected);
+        NewButton(actionsRect, "New", "New", saveX + 358f, 70f, StartNewLevel);
 
-        var actionsWidth = saveX + 282f + 70f;
+        var actionsWidth = saveX + 358f + 70f;
         var toolsWidth = toolWidths.Sum() + ToolGap * (toolWidths.Count - 1);
         var toolbarWidth = Mathf.Max(actionsWidth, toolsWidth) + ToolbarMargin * 2f;
         panel.sizeDelta = new Vector2(toolbarWidth, ToolbarHeight);
@@ -802,7 +803,13 @@ public static class EditorTileTools
         var path = Path.Combine(LiveEditPatch.LevelsDirectoryPath(), fileName);
         try
         {
-            File.WriteAllText(path, LevelFileSerializer.Serialize(EditorSettingsPanel.ForSave(level.Value)));
+            var toSave = EditorSettingsPanel.ForSave(level.Value);
+            if (FromScratchGenerationPatch.ActiveLevel is { } active)
+            {
+                toSave = LiveEditPatch.FoldFromScratch(toSave, active);
+            }
+
+            File.WriteAllText(path, LevelFileSerializer.Serialize(toSave));
         }
         catch (Exception ex)
         {
@@ -821,6 +828,28 @@ public static class EditorTileTools
 
         RefreshLoadList(fileName);
         return true;
+    }
+
+    // Starts a blank from-scratch level on the current map, stage and tier; unsaved edits are refused rather than dropped.
+    private static void StartNewLevel()
+    {
+        if (IsDirty())
+        {
+            Fail("new level: save or undo the unsaved edits first");
+            return;
+        }
+
+        var current = FromScratchGenerationPatch.ActiveLevel ?? LiveEditPatch.SnapshotLevelFile(_session?.CurrentEdits ?? LiveEditPatch.SeedEdits);
+        var args = new NewLevelArgs(current is { } level ? (int)level.Map : (int)EMap.Forest, current?.StageIndex ?? 0, current?.Tier ?? 0, BlankLevel.DefaultSize);
+        try
+        {
+            var created = NewLevel.Create(null, args, _logger);
+            ShowTransientStatus($"new level: {created["name"]}");
+        }
+        catch (Exception ex)
+        {
+            Fail($"new level failed: {ex.Message}");
+        }
     }
 
     private static void LoadSelected()
@@ -867,11 +896,22 @@ public static class EditorTileTools
             if (kitWarning != null) _logger.Warning(kitWarning);
         }
 
-        var currentLevel = LiveEditPatch.SnapshotLevelFile(_session?.CurrentEdits ?? LiveEditPatch.SeedEdits);
-        if (currentLevel is { } current && (current.Map != level.Map || current.StageIndex != level.StageIndex || current.Seed != level.Seed || current.Tier != level.Tier))
+        var currentLevel = FromScratchGenerationPatch.ActiveLevel ?? LiveEditPatch.SnapshotLevelFile(_session?.CurrentEdits ?? LiveEditPatch.SeedEdits);
+        switch (EditorLoadPlan.Decide(currentLevel, level))
         {
-            Fail("load requires a fresh run: map, stage, tier or seed differs");
-            return;
+            case EditorLoadAction.Refuse:
+                Fail("load requires a fresh run: map, stage, tier or seed differs");
+                return;
+            case EditorLoadAction.FreshRun:
+                if (!LevelLoaderPatch.LoadAndStart(path, _logger))
+                {
+                    Fail("load failed: could not start the level");
+                    return;
+                }
+
+                EditorMode.RequestReenter(_logger);
+                ShowTransientStatus($"loading: {name}");
+                return;
         }
 
         if (!LiveEditPatch.ResetAndApplyEdits(level.Edits, _logger))

@@ -59,6 +59,26 @@ public static class EditorFileNaming
     private const string LevelPrefix = "level";
     private const string Extension = ".mblevel.json";
 
+    // Without a request the first unused untitled-N name; a requested name that is already taken is refused rather than overwritten.
+    public static string NewLevelFileName(string requested, IEnumerable<string> existing)
+    {
+        var taken = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
+        if (requested != null)
+        {
+            var name = NormalizeLevelFileName(requested);
+            return taken.Contains(name) ? throw new ArgumentException($"level '{name}' already exists") : name;
+        }
+
+        for (var number = 1; ; number++)
+        {
+            var name = $"untitled-{number}{Extension}";
+            if (!taken.Contains(name))
+            {
+                return name;
+            }
+        }
+    }
+
     public static string NormalizeLevelFileName(string rawName)
     {
         var value = (rawName ?? "").Trim();

@@ -335,6 +335,12 @@ INPUT_TOOL_CASES = [
     ("material_dump", {"object": "Warehouse"}, {"command": "material-dump", "object": "Warehouse"}),
     ("save_level", {}, {"command": "save-level"}),
     ("save_level", {"level": "my"}, {"command": "save-level", "level": "my"}),
+    ("new_level", {}, {"command": "new-level"}),
+    (
+        "new_level",
+        {"level": "arena", "map": 64, "stage": 1, "tier": 2, "size": 9},
+        {"command": "new-level", "level": "arena", "map": 64, "stageIndex": 1, "tier": 2, "size": 9},
+    ),
     ("list_levels", {}, {"command": "list-levels"}),
     ("kill", {}, {"command": "kill"}),
     ("restart_run", {}, {"command": "restart-run"}),

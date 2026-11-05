@@ -51,6 +51,43 @@ public class HarnessCommandTests
     }
 
     [Fact]
+    public void TryParse_NewLevel_DefaultsToAForestSevenBySevenGrid()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"new-level"}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.NewLevel, command.Kind);
+        Assert.Null(command.Path);
+        Assert.Equal(new NewLevelArgs((int)EMap.Forest, 0, 0, 7), command.NewLevel);
+    }
+
+    [Fact]
+    public void TryParse_NewLevel_ReadsNameMapStageTierAndSize()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"new-level","level":"arena","map":64,"stageIndex":1,"tier":2,"size":9}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Equal("arena", command.Path);
+        Assert.Equal(new NewLevelArgs(64, 1, 2, 9), command.NewLevel);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"new-level","size":2}""", "size")]
+    [InlineData("""{"command":"new-level","size":"big"}""", "size")]
+    [InlineData("""{"command":"new-level","map":3}""", "map")]
+    [InlineData("""{"command":"new-level","stageIndex":-1}""", "stageIndex")]
+    [InlineData("""{"command":"new-level","tier":-1}""", "tier")]
+    [InlineData("""{"command":"new-level","level":""}""", "level")]
+    public void TryParse_NewLevel_RejectsInvalidArgumentsNamingTheField(string json, string expectedFragment)
+    {
+        var ok = HarnessCommand.TryParse(json, out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains(expectedFragment, error);
+    }
+
+    [Fact]
     public void TryParse_Screenshot_ReturnsKindAndPath()
     {
         var ok = HarnessCommand.TryParse("""{"command":"screenshot","path":"C:\\shots\\one.png"}""", out var command, out _);

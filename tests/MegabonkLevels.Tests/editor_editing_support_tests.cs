@@ -344,4 +344,26 @@ public class InPlaceLoadTileResetTests
 
         Assert.Empty(resets);
     }
+
+    [Fact]
+    public void NewLevelFileName_WithoutARequestPicksTheFirstFreeUntitledName()
+    {
+        var name = EditorFileNaming.NewLevelFileName(null, new[] { "untitled-1.mblevel.json", "untitled-3.mblevel.json", "level.mblevel.json" });
+
+        Assert.Equal("untitled-2.mblevel.json", name);
+    }
+
+    [Fact]
+    public void NewLevelFileName_NormalizesARequestedName()
+    {
+        Assert.Equal("my_arena.mblevel.json", EditorFileNaming.NewLevelFileName("my arena", Array.Empty<string>()));
+    }
+
+    [Fact]
+    public void NewLevelFileName_RefusesANameThatAlreadyExists()
+    {
+        var error = Assert.Throws<ArgumentException>(() => EditorFileNaming.NewLevelFileName("Arena", new[] { "arena.mblevel.json" }));
+
+        Assert.Contains("already exists", error.Message);
+    }
 }

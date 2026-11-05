@@ -1262,6 +1262,27 @@ def test_level_commands_carry_the_optional_level() -> None:
     assert run.save_level_payload(run.parse_args(["save-level", "my"])) == {"command": "save-level", "level": "my"}
 
 
+def test_new_level_command_carries_only_the_given_options() -> None:
+    assert run.build_new_level_command() == {"command": "new-level"}
+    assert run.build_new_level_command("arena", map_id=64, stage=1, tier=2, size=9) == {
+        "command": "new-level",
+        "level": "arena",
+        "map": 64,
+        "stageIndex": 1,
+        "tier": 2,
+        "size": 9,
+    }
+    assert run.new_level_payload(run.parse_args(["new-level"])) == {"command": "new-level"}
+    assert run.new_level_payload(run.parse_args(["new-level", "arena", "--map", "64", "--stage", "1", "--tier", "2", "--size", "9"])) == {
+        "command": "new-level",
+        "level": "arena",
+        "map": 64,
+        "stageIndex": 1,
+        "tier": 2,
+        "size": 9,
+    }
+
+
 def test_build_ui_tree_command_includes_the_point_only_when_given() -> None:
     assert run.build_ui_tree_command() == {"command": "ui-tree"}
     assert run.build_ui_tree_command((10.0, 20.0)) == {"command": "ui-tree", "x": 10.0, "y": 20.0}

@@ -42,6 +42,7 @@ public enum HarnessCommandKind
     ClickWidget,
     UiTree,
     SaveLevel,
+    NewLevel,
     ListLevels,
     QueryObjects,
     Item,
@@ -50,6 +51,9 @@ public enum HarnessCommandKind
     MusicProbe,
     Perf,
 }
+
+// Arguments of a new-level command: the blank from-scratch level's map, stage, tier and square grid size.
+public readonly record struct NewLevelArgs(int Map, int StageIndex, int Tier, int Size);
 
 // World-space camera position and euler rotation in degrees.
 public readonly record struct CameraPose(float X, float Y, float Z, float Rx, float Ry, float Rz);
@@ -134,7 +138,7 @@ public sealed class QueryArgs
 }
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null, PerfArgs Perf = null, int? Offer = null, bool Skip = false, InteractArgs Interact = null)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null, PerfArgs Perf = null, int? Offer = null, bool Skip = false, InteractArgs Interact = null, NewLevelArgs? NewLevel = null)
 {
     public const int MaxTypeLength = 200;
 
@@ -247,6 +251,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseClickWidget(root, out command, out error);
             case "save-level":
                 return TryParseSaveLevel(root, out command, out error);
+            case "new-level":
+                return TryParseNewLevel(root, out command, out error);
             case "list-levels":
                 command = new HarnessCommand(HarnessCommandKind.ListLevels, null);
                 error = null;
@@ -882,6 +888,57 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.SaveLevel, level);
+        error = null;
+        return true;
+    }
+
+    private static bool TryParseNewLevel(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+        string level = null;
+
+        if (root.TryGetPropertyValue("level", out var node) && node != null
+            && (node is not JsonValue value || !value.TryGetValue(out level) || level.Trim().Length == 0))
+        {
+            error = "field 'level' must be a non-empty string";
+            return false;
+        }
+
+        if (!TryGetOptionalInt(root, "map", out var map, out error)
+            || !TryGetOptionalInt(root, "stageIndex", out var stageIndex, out error)
+            || !TryGetOptionalInt(root, "tier", out var tier, out error)
+            || !TryGetOptionalInt(root, "size", out var size, out error))
+        {
+            return false;
+        }
+
+        var mapValue = map ?? (int)EMap.Forest;
+        if (!Enum.IsDefined(typeof(EMap), mapValue) || mapValue == (int)EMap.None)
+        {
+            error = $"field 'map' must be one of {string.Join(", ", Enum.GetValues<EMap>().Where(m => m != EMap.None).Select(m => (int)m))}, got {mapValue}";
+            return false;
+        }
+
+        if (stageIndex is < 0)
+        {
+            error = "field 'stageIndex' must not be negative";
+            return false;
+        }
+
+        if (tier is < 0)
+        {
+            error = "field 'tier' must not be negative";
+            return false;
+        }
+
+        var sizeValue = size ?? BlankLevel.DefaultSize;
+        if (sizeValue < BlankLevel.MinimumSize)
+        {
+            error = $"field 'size' must be at least {BlankLevel.MinimumSize}, got {sizeValue}";
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.NewLevel, level, NewLevel: new NewLevelArgs(mapValue, stageIndex ?? 0, tier ?? 0, sizeValue));
         error = null;
         return true;
     }

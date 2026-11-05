@@ -241,6 +241,8 @@ public static class DevHarness
                 return ClickWidget(command.Input.Text);
             case HarnessCommandKind.SaveLevel:
                 return EditorTileTools.SaveLevel(command.Path);
+            case HarnessCommandKind.NewLevel:
+                return NewLevel.Create(command.Path, command.NewLevel.Value, _logger);
             case HarnessCommandKind.ListLevels:
                 return ListLevels();
             case HarnessCommandKind.QueryObjects:

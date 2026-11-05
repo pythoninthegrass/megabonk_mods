@@ -422,6 +422,18 @@ async def save_level(level: str | None = None) -> CallToolResult:
 
 
 @mcp.tool()
+async def new_level(
+    level: str | None = None,
+    map: int | None = None,
+    stage: int | None = None,
+    tier: int | None = None,
+    size: int | None = None,
+) -> CallToolResult:
+    """Write a blank from-scratch level (a flat `size` by `size` grid, default 7, at least 3, with the spawn at the centre and the boss spawner two cells east) and start it in the editor, as `level` (normalized; default the first free untitled-N; an existing name is an error). `map` is the eMap value (default 1, Forest), `stage` the stage index and `tier` the map tier (both default 0). Returns {name, path}. Loads through the normal level load, so the current run is replaced; a grid larger than the stage's stock size is an error."""
+    return await _command(_harness(), run.build_new_level_command(level, map, stage, tier, size), TIMEOUT)
+
+
+@mcp.tool()
 async def list_levels() -> CallToolResult:
     """List the saved custom-level files as {directory, levels}; the names are what the editor's Load list shows and what a load needs after the directory."""
     return await _command(_harness(), run.build_command("list-levels"), TIMEOUT)

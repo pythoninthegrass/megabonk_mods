@@ -57,6 +57,7 @@ Usage:
                                    Each menu command accepts --host HOST --remote-repo PATH for SSH execution
     run.py ui-tree [X Y]           Print the editor widgets and their rects in screenshot pixels, and the widget at X Y when given
     run.py save-level [name]       Save the editor's level, as <name> when given, and print the file written
+    run.py new-level [name]        Write a blank from-scratch level and open it in the editor; --map, --stage, --tier, --size
     run.py list-levels             Print the saved custom-level files and their directory
     run.py click-widget <name>     Click an editor widget by name (names come from ui-tree), without pixel coordinates
     run.py type <text>             Type text into the focused field (\\b is backspace, \\n is return), at most 200 characters
@@ -500,6 +501,20 @@ def build_save_level_command(level: str | None = None) -> dict[str, object]:
     payload: dict[str, object] = {"command": "save-level"}
     if level is not None:
         payload["level"] = level
+    return payload
+
+
+def build_new_level_command(
+    level: str | None = None,
+    map_id: int | None = None,
+    stage: int | None = None,
+    tier: int | None = None,
+    size: int | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {"command": "new-level"}
+    for key, value in (("level", level), ("map", map_id), ("stageIndex", stage), ("tier", tier), ("size", size)):
+        if value is not None:
+            payload[key] = value
     return payload
 
 
@@ -1383,6 +1398,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     material_dump.add_argument("object", nargs="?", help="substring of an object or ancestor name; defaults to Warehouse")
     save_level = sub.add_parser("save-level")
     save_level.add_argument("level", nargs="?", help="level name to save as; defaults to the editor's save field")
+    new_level = sub.add_parser("new-level")
+    new_level.add_argument("level", nargs="?", help="file name for the new level; defaults to the first free untitled-N")
+    new_level.add_argument("--map", type=int, help="eMap value (default 1, Forest)")
+    new_level.add_argument("--stage", type=int, help="stage index (default 0)")
+    new_level.add_argument("--tier", type=int, help="map tier (default 0)")
+    new_level.add_argument("--size", type=int, help="square grid size, at least 3 (default 7)")
     sub.add_parser("list-levels")
     click_widget = sub.add_parser("click-widget")
     click_widget.add_argument("name")
@@ -1511,6 +1532,10 @@ def material_dump_payload(args: argparse.Namespace) -> dict[str, object]:
 
 def save_level_payload(args: argparse.Namespace) -> dict[str, object]:
     return build_save_level_command(args.level)
+
+
+def new_level_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_new_level_command(args.level, args.map, args.stage, args.tier, args.size)
 
 
 def click_widget_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -1845,6 +1870,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, material_dump_payload(args), args.timeout)
         case "save-level":
             ok = send_printing_result(harness, save_level_payload(args), args.timeout)
+        case "new-level":
+            ok = send_printing_result(harness, new_level_payload(args), args.timeout)
         case "list-levels":
             ok = send_printing_result(harness, build_command("list-levels"), args.timeout)
         case "click-widget":

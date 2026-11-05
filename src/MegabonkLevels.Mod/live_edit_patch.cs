@@ -298,6 +298,14 @@ public static class LiveEditPatch
             ExtraShrineKinds: _randomizationSettings.ExtraShrineKinds);
     }
 
+    // A from-scratch session saves its final tile state and placements instead of an edit log over a generated map.
+    public static LevelFile FoldFromScratch(LevelFile level, LevelFile active)
+    {
+        var template = level with { Baseline = LevelFile.NoBaseline, Grid = active.Grid, Spawn = active.Spawn, BossSpawner = active.BossSpawner };
+        var folded = FromScratchSnapshot.Build(template, _session.Planner.State, level.Edits, level.PlayerStart, level.BossSpawnPosition);
+        return folded with { Packs = BuildPacks(folded.Edits), PackKitVersions = BuildKitVersions(folded.Edits) };
+    }
+
     private static IReadOnlyDictionary<string, string> BuildKitVersions(IReadOnlyList<EditOp> edits)
     {
         var versions = _packKitVersions == null ? new Dictionary<string, string>() : new Dictionary<string, string>(_packKitVersions);
