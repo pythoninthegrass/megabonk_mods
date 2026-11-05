@@ -225,12 +225,16 @@ public static class LevelLoaderPatch
         MapDescription = level.MapDescription;
         CustomLevelState.MarkPendingStart();
         logger.Msg($"LevelLoader: starting map={level.Map} stage={level.StageIndex} tier={level.Tier} seed={level.Seed}");
+        if (CustomTierCap.IsCapped(level.Tier))
+        {
+            logger.Msg($"LevelLoader: tier {level.Tier} capped to {CustomTierCap.MaxTier}");
+        }
 
         return new RunConfig
         {
             mapData = mapData,
             stageData = mapData.stages[level.StageIndex],
-            mapTierIndex = level.Tier,
+            mapTierIndex = CustomTierCap.Clamp(level.Tier),
         };
     }
 

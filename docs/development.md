@@ -737,7 +737,7 @@ Each boss is teleported to a walkable spot in the interior chosen from a random 
 | --- | --- | --- |
 | `BossEvents: A_BossSpawned` | `InteractableBossSpawner.A_BossSpawned` | Once per spawner activation, not once per boss: a Boss Curse summon of two bosses logged one line |
 | `BossEvents: A_StageBossDied` | `EnemyManager.A_StageBossDied` | Once when the fight ends, also for a curse summon |
-| `BossEvents: A_BossDefeated <bool>` | `InteractableBossSpawner.A_BossDefeated` | Once at the kill; `False` on the default relaunch runs, `True` on a `--tier 1` run where waves continue (meaning inferred from those runs) |
+| `BossEvents: A_BossDefeated <bool>` | `InteractableBossSpawner.A_BossDefeated` | Once at the kill; `False` on the default relaunch runs, `True` on a `--tier 1` run where waves continue (meaning inferred from those runs); a custom level is now capped to tier 0 (see "Custom tier cap"), so `True` no longer appears there |
 | `BossEvents: A_NumBossesDefeated <n>` | `InteractableBossSpawner.A_NumBossesDefeated` | Cumulative counter; 1 after one boss, 3 after a following curse summon of two. Did not fire on the tier 1 run |
 | `BossEvents: A_BossDied` | `GraveyardBossRoom.A_BossDied` | Graveyard boss room only; never seen on the Warehouse |
 
@@ -748,6 +748,14 @@ Live findings behind the shape:
 - Anchoring every copy to one authored `bossSpawnPosition` stacked curse copies (the game's own `BaseInteractable.GetOffset` stagger between the summons measured only 2.7/2.9 units in a live run), and bosses released at the half-pipe floor under the box climbed its walls toward the portal — hence the keep-out from the spawner rather than an authored point.
 - A spacing floor of 8 let copies land 14.7 units apart and they still fought on the same spot, so `MinSpacingBetweenCopies` is 20 — but first-fit then landed the next pair 21.2 apart, just over the floor and still reading as stacked, because both copies iterated one shared-seed candidate list and the first survivor past the keep-out always wins. Hence the per-copy seed and maximin `PickSpot`: with 48 candidates the farthest-from-taken pick routinely lands copies dozens of units apart instead of hugging the floor.
 - Dropping each boss straight down under its own spawn fails on this level: `LiveEditPatch.GroundCollider()` is the generated tile mesh, which knows nothing about the bundle-placed warehouse mesh (the redirect logged `no ground under the boss` for both spawns), and gravity alone left the bosses in the pipe at the box foot. Hence the all-collider raycast around a ring instead of a drop at the spawn point.
+
+## Custom tier cap
+
+A custom level always runs at the game's Tier 1, `mapTierIndex` 0. The harness `tier` argument and the level file's `tier` are 0-based, so `tier: 0` is the HUD's "Tier 1" and `tier: 1` is "Tier 2". The two tiers behave differently after the stage boss: at `mapTierIndex` 0 `A_BossDefeated` is `False`, no `InteractablePortal` (the `PortalBlue` objects) ever becomes active, the objective list ends at "Survive..." and waves continue; at `mapTierIndex` 1 `A_BossDefeated` is `True` and one `PortalBlue` activates at once and loads a vanilla-generated Tier 2 stage, such as "Deep Forest". No custom level is built for that stage, so a custom level running at tier 1 or above dropped the player through the level when they took the portal.
+
+`CustomTierCap` (`custom_tier_cap.cs`) clamps the tier to 0, and `LevelLoaderPatch.PrepareRun` applies it when it builds the `RunConfig`. Every way a tier reaches a load goes through `PrepareRun`: the level file's `tier`, the harness `load` override, `new-level` and the editor's level settings. A capped load logs `LevelLoader: tier <n> capped to 0` after the usual `LevelLoader: starting ...` line, which still shows the requested tier. The file schema is unchanged, so an existing file with a higher `tier` loads and runs as Tier 1. Vanilla runs never reach `PrepareRun` and keep their own tiers and portals.
+
+To see the Tier 1 behaviour, `relaunch` a level, send `editor off` and make the player `invulnerable`, then interact with the boss spawner and `kill_enemies bosses`. A run left in the editor, or with the player not invulnerable, dies before anything can be observed. `interact` only matches active interactables, so it cannot force an inactive portal.
 
 ## Kill-floor heartbeat
 
