@@ -1,10 +1,10 @@
 ---
 id: TASK-032.06
 title: Port the THPS Warehouse to a from-scratch level
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-04 20:37'
-updated_date: '2026-11-05 17:36'
+updated_date: '2026-11-05 19:42'
 labels: []
 dependencies:
   - TASK-032.03
@@ -29,7 +29,7 @@ The preservation baseline (tests/fixtures/thps-preservation.json, scripts/check_
 - [x] #1 Both regenerated Warehouse levels are from-scratch files containing no gen: targets and no tile edit ops, and carrying spawn and bossSpawner
 - [x] #2 Builder tests written first assert those properties for both builders
 - [x] #3 The preservation baseline is regenerated and the reason is in the commit body
-- [ ] #4 The shipped Warehouse loads, starts at the spawn without a reset or Forest flash, and plays through to the boss and portal, verified in the running game
+- [x] #4 The shipped Warehouse loads, starts at the spawn without a reset or Forest flash, and plays through to the boss and portal, verified in the running game
 - [x] #5 The piece-assembled variant loads and its placements match the pre-port set
 - [x] #6 Load time on the Warehouse is not slower than before, with before and after timings recorded in the task
 - [x] #7 docs/thps-warehouse-layout.md no longer describes the hidden spawn cell or the removal counts
@@ -69,7 +69,17 @@ Pre-port placements: object.place edits are byte-identical before and after for 
 Verified in the running game (shipped Warehouse): loads with 48 edits, one 'player placed' line at (109, 36.08, -116), no timeout warning, KillFloor armed at -35 (catch floor -60), ForestParticles(Clone) present without a placement. Boss: interacting with the spawner armed the redirect, which moved the boss from (180.7, 27.5, 24.2) to (171.6, 15.7, 68.7), outside the box (z 20.9-31.4). Editable variant loads with 251 edits, same placement and kill floor lines.
 
 NOT verified (AC #4 left unchecked): defeating the boss and reaching the portal. The harness has no tool that kills an enemy, so the run was not played through past the boss summon. Commit 8b58001.
+
+AC #4 confirmed by Lance on a second machine (shipped Warehouse at 08a1847): played to the boss portal, summoned two bosses with a Boss Curse active, and beat them. The redirect moved them to (171.3, 12.4, -8.7) and (145.9, 12.4, 88.1), outside the box. A tier 1 run has no second stage, so the run continues into endless waves after the kill; there is no stage-exit portal to check.
+
+Open observation, not diagnosed: at 13:34:07, about 42 s after the summon, six Enemy1 fell through to the kill floor within 0.25 s around the main half pipe (x 136-166, z -25 to 38). No pre-port log exists to compare against.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Ported both Warehouse levels (levels/thps.mblevel.json, levels/thps-editable.mblevel.json) to from-scratch files. The builders no longer emit tile ops, gen: removals, seed counts or the boss object.move; they emit a grid, spawn, bossSpawner and bossRedirect, with object.place edits identical to the pre-port set (48 shipped, 251 editable). The grid keeps one hidden floor tile at (10, 7), level -2, because an empty grid makes the game derive its catch floor as int.MaxValue and kill the player on spawn; level -2 keeps the authored kill floor of -35 exact. Mod changes: optional bossSpawner scale and hiddenChildren, optional bossRedirect flag that keeps the boss redirect on for a from-scratch level, shared ChildHider. Load reached 'player placed' at +5.95 s against +7.27 s before. The preservation baseline is regenerated on purpose, and the unused boss_spawn_position helper and its tests are removed. Verified in the running game on two machines: load, spawn, kill floor, redirect moving both bosses out of the box, and beating the bosses. Commits 8b58001 and 08a1847.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
