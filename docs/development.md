@@ -715,6 +715,20 @@ The Boss Curse shrine (`InteractableShrineCursed`) increments `GameManager.bossC
 
 Each boss is teleported to a walkable spot in the interior chosen from a random ring around the spawner's XZ at 35-68 units (`MinDistanceFromSpawner`, `MaxDistanceFromSpawner`) — 35 clears the box footprint (half-diagonal ~16 units) with room to spare, so a boss can neither land beside the shrine nor on the box; the ceiling keeps copies inside the arena. The ring is seeded from the tick count at arming plus the move count (`SeedPerCopy`), so curse copies never iterate the same candidate sequence. Every candidate is tested — a down-ray hit against every collider with `normal.y` > 0.8 (the highest hit wins, so a rail or light above the floor does not win), its surface above `killFloorY + 5`, at least 20 units (`MinSpacingBetweenCopies`) from every copy already placed, and `PlacementProbe.ClearPoint` clearance above it — and `BossSpawnRedirect.PickSpot` keeps the usable spot whose nearest placed copy is farthest (maximin), not the first that passes. The game's spawn lift (its `actual - requested` offset, ~11.9 units) is preserved onto the chosen floor point so the boss's feet, not its pivot, land on the surface. Every move logs from- and to-position; when no candidate is usable the boss is left where the game put it and the log says so.
 
+### Boss event log lines
+
+`BossEventPatch` (`boss_event_patch.cs`) subscribes once at startup to the game's static boss events and writes one line per occurrence, formatted by `BossEventLog` (`boss_event_log.cs`), so `log_wait` can match them. The lines are logging only; they run on vanilla maps and mod-loaded levels alike.
+
+| Line | Event (owner) | Observed |
+| --- | --- | --- |
+| `BossEvents: A_BossSpawned` | `InteractableBossSpawner.A_BossSpawned` | Once per spawner activation, not once per boss: a Boss Curse summon of two bosses logged one line |
+| `BossEvents: A_StageBossDied` | `EnemyManager.A_StageBossDied` | Once when the fight ends, also for a curse summon |
+| `BossEvents: A_BossDefeated <bool>` | `InteractableBossSpawner.A_BossDefeated` | Once at the kill; `False` on the default relaunch runs, `True` on a `--tier 1` run where waves continue (meaning inferred from those runs) |
+| `BossEvents: A_NumBossesDefeated <n>` | `InteractableBossSpawner.A_NumBossesDefeated` | Cumulative counter; 1 after one boss, 3 after a following curse summon of two. Did not fire on the tier 1 run |
+| `BossEvents: A_BossDied` | `GraveyardBossRoom.A_BossDied` | Graveyard boss room only; never seen on the Warehouse |
+
+Wait for the kill with `log_wait` on `BossEvents: A_StageBossDied`; match `A_NumBossesDefeated` only on runs that raise it.
+
 Live findings behind the shape:
 
 - Anchoring every copy to one authored `bossSpawnPosition` stacked curse copies (the game's own `BaseInteractable.GetOffset` stagger between the summons measured only 2.7/2.9 units in a live run), and bosses released at the half-pipe floor under the box climbed its walls toward the portal — hence the keep-out from the spawner rather than an authored point.

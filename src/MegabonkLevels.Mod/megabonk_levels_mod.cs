@@ -46,6 +46,7 @@ public class MegabonkLevelsMod : MelonMod
         GrindAssistWatcher.Install(LoggerInstance);
         FallDamagePatch.Install(LoggerInstance);
         BossSpawnRedirectPatch.Install(LoggerInstance);
+        BossEventPatch.Install(LoggerInstance);
         FromScratchGenerationPatch.Install(LoggerInstance);
         PackPrefabs.Initialize(LoggerInstance);
         LevelMusic.Initialize(LoggerInstance);
