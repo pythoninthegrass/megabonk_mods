@@ -50,6 +50,7 @@ public enum HarnessCommandKind
     FallDamage,
     MusicProbe,
     Perf,
+    KillEnemies,
 }
 
 // Arguments of a new-level command: the blank from-scratch level's map, stage, tier and square grid size.
@@ -138,7 +139,7 @@ public sealed class QueryArgs
 }
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null, PerfArgs Perf = null, int? Offer = null, bool Skip = false, InteractArgs Interact = null, NewLevelArgs? NewLevel = null)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null, PerfArgs Perf = null, int? Offer = null, bool Skip = false, InteractArgs Interact = null, NewLevelArgs? NewLevel = null, string KillTarget = null)
 {
     public const int MaxTypeLength = 200;
 
@@ -189,6 +190,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         {
             case "damage":
                 return TryParseDamage(root, out command, out error);
+            case "kill-enemies":
+                return TryParseKillEnemies(root, out command, out error);
             case "quit":
                 command = new HarnessCommand(HarnessCommandKind.Quit, null);
                 error = null;
@@ -323,6 +326,20 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.Damage, null, Damage: new DamageArgs { Amount = amount, Nonlethal = nonlethal });
+        error = null;
+        return true;
+    }
+
+    private static bool TryParseKillEnemies(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+        if (!TryGetString(root, "target", out var target) || Array.IndexOf(EnemyKillTargets.Names, target) < 0)
+        {
+            error = $"field 'target' must be one of {string.Join(", ", EnemyKillTargets.Names)}";
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.KillEnemies, null, KillTarget: target);
         error = null;
         return true;
     }

@@ -1,10 +1,10 @@
 ---
 id: TASK-044
 title: Harness command and MCP tool to kill enemies and bosses
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-05 19:46'
-updated_date: '2026-11-05 19:46'
+updated_date: '2026-11-05T20:25:00Z'
 labels:
   - harness
   - mcp
@@ -15,6 +15,18 @@ references:
     backlog/tasks/task-032.06 -
     Port-the-THPS-Warehouse-to-a-from-scratch-level.md
   - scripts/mcp_server.py
+modified_files:
+  - docs/development.md
+  - scripts/mcp_server.py
+  - scripts/run.py
+  - src/MegabonkLevels.Mod/dev_harness.cs
+  - src/MegabonkLevels.Mod/harness_command.cs
+  - src/MegabonkLevels.Mod/enemy_kill_targets.cs
+  - src/MegabonkLevels.Mod/enemy_killer.cs
+  - tests/MegabonkLevels.Tests/MegabonkLevels.Tests.csproj
+  - tests/MegabonkLevels.Tests/harness_command_tests.cs
+  - tests/test_damage_mcp.py
+  - tests/test_run.py
 priority: medium
 ordinal: 164000
 ---
@@ -29,16 +41,33 @@ First read how the game kills an enemy (the damage and death path, and what the 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The task records whether the harness kill goes through the game's real damage and death handlers, and which path it uses
-- [ ] #2 A harness command and MCP tool can kill the nearest enemy, all enemies and all bosses, with unit tests for the argument handling and reply shape
-- [ ] #3 Killing a boss with the tool raises the same boss events a real kill does, verified in the running game
-- [ ] #4 docs/development.md lists the new command and tool
+- [x] #1 The task records whether the harness kill goes through the game's real damage and death handlers, and which path it uses
+- [x] #2 A harness command and MCP tool can kill the nearest enemy, all enemies and all bosses, with unit tests for the argument handling and reply shape
+- [x] #3 Killing a boss with the tool raises the same boss events a real kill does, verified in the running game
+- [x] #4 docs/development.md lists the new command and tool
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Research (done): Enemy has public DamageExternal(DamageContainer) -> private Damage, plus Enemy.Kill(string) and DiedNextFrame. EnemyManager.enemies (Dictionary<uint,Enemy>) lists live enemies; Enemy.IsBoss/IsStageBoss/IsFinalBoss classify. A_StageBossDied is a static Action on EnemyManager; method bodies are native-only, so the death path is confirmed empirically rather than by decompile.
+2. Path decision: submit lethal damage through Enemy.DamageExternal with a DamageContainer (damage >= hp, BypassAll|IgnoreArmor|BossDamage flags) so the game's own Damage and death handlers run; fall back to Enemy.Kill only if DamageExternal cannot kill a boss (invulnerable phases). Confirm in the running game that A_EnemyDied, then A_StageBossDied, fire.
+3. TDD: C# tests in harness_command_tests.cs for parsing `kill-enemies` with `target` nearest|all|bosses (reject missing/unknown); Python tests for run.build_kill_enemies_command and the MCP `kill_enemies` tool (payload, invalid target rejected before sending, mod rejection surfaced).
+4. Implement: HarnessCommandKind.KillEnemies + parser, EnemyKiller in the mod (reply: target, requested/killed counts, bosses killed, ids), dev_harness dispatch; run.py builder, subcommand and dispatch; mcp_server.py tool.
+5. Verify in the running game on the Warehouse: kill the boss, read A_StageBossDied / A_BossDefeated from the log; also nearest and all.
+6. Docs: command and tool in docs/development.md. Run task check.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added a kill-enemies harness command (targets nearest, all, bosses), run.py kill-enemies and MCP kill_enemies. Path: lethal DamageContainer (1,000,000 damage, BypassAll|IgnoreArmor|BossDamage, source HarnessKill) submitted through Enemy.DamageExternal, i.e. the game's own damage and death handlers, not Enemy.Kill or destroy. Verified live on the Warehouse: killing the spawned stage boss logged A_StageBossDied, A_BossDefeated False and A_NumBossesDefeated 1. Unit tests cover the C# parser and the Python builder/MCP tool; task check passes. The MCP tool itself was not called live (the running MCP server predates it); the same command was driven through run.py. Frozen-editor kills untested.
+<!-- SECTION:FINAL_SUMMARY:END -->

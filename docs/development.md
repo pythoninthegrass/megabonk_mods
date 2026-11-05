@@ -31,6 +31,7 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Make the player survive enemy damage | `{"command":"invulnerable"}` | `run.py invulnerable` |
 | Restore normal player damage | `{"command":"vulnerable"}` | `run.py vulnerable` |
 | Apply 1–99 integer damage, preserving 1 HP by default | `{"command":"damage","amount":37,"nonlethal":true}` | `run.py damage 37` |
+| Kill the nearest enemy, all enemies or all bosses (see "Killing enemies") | `{"command":"kill-enemies","target":"bosses"}` | `run.py kill-enemies bosses` |
 | End the run at once by killing the player (ignores invulnerability) | `{"command":"kill"}` | `run.py kill` |
 | Run the game's own restart, the death screen's Retry button | `{"command":"restart-run"}` | `run.py restart-run` |
 | Show or hide the stock HUD and position readout | `{"command":"hud","enabled":false}` | `run.py hud <on\|off>` |
@@ -537,6 +538,12 @@ Caveats:
 The `item` command reads or sets the player's stack count of one game item. `name` is a case-sensitive `EItem` member (`Mirror`, `Feathers`, and the rest of the enum in `.tools/il2cpp_dump/dump.cs`). Without `amount` it only reads; with `amount`, an integer from 0 to 999, it sets the count exactly and 0 removes the item. The result is `{"item":name,"before":n,"after":n}`. An unknown or wrongly cased name, a missing `name`, or an `amount` that is negative, above 999, or not an integer is rejected with an error and changes nothing. With no player in the scene the command fails with `no player: start a run first`.
 
 `ItemInventory.RemoveItem` drops one stack per call, so lowering an amount repeats it; raising one is a single `AddItem(item, count)`. `invulnerable` and `vulnerable` use the same routine. Items sent through `item` while invulnerable are not tracked: `vulnerable` still restores the Mirror and Feathers amounts held when `invulnerable` was sent.
+
+## Killing enemies
+
+`run.py kill-enemies <nearest|all|bosses>` and MCP `kill_enemies(target=...)` kill live enemies: the one nearest the player, every live enemy, or every enemy for which `Enemy.IsBoss()` is true. Each victim receives a `DamageContainer` of 1,000,000 damage with `BypassAll | IgnoreArmor | BossDamage` flags and the source `HarnessKill`, submitted through `Enemy.DamageExternal`. That is the game's own damage path, so its death handling runs, not a destroy or despawn. A kill that bypassed it could pass a check a real kill fails.
+
+Death is processed a frame or so later, so the reply reports `hpBefore` and `hpAfter` per enemy at submission, and `killed` counts those at 0 HP; read the outcome from the log. A boss killed this way on the Warehouse logged `BossEvents: A_StageBossDied`, `A_BossDefeated False` and `A_NumBossesDefeated 1` about 6 seconds after the boss spawner was used (see "Boss event log lines"), the same events a real kill raises. The checks above ran with the editor off; the frozen-editor case is untested. A boss whose HP is not lethal to the submitted damage, such as one in an invulnerable phase, shows `hpAfter` above 0 in the reply. No enemy found returns `found: 0` rather than an error, and `nearest` without a player is rejected.
 
 ## Controlled player damage
 

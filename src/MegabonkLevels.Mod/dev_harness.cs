@@ -164,6 +164,8 @@ public static class DevHarness
                 break;
             case HarnessCommandKind.Damage:
                 return PlayerDamage.Apply(command.Damage);
+            case HarnessCommandKind.KillEnemies:
+                return EnemyKiller.Kill(command.KillTarget);
             case HarnessCommandKind.Invulnerable:
                 PlayerInvulnerability.Set(true, _logger);
                 break;

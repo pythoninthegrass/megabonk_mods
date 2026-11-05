@@ -28,6 +28,7 @@ Usage:
     run.py vulnerable              Restore normal player damage
     run.py kill                    End the run at once by killing the player, even when invulnerable
     run.py restart-run             Run the game's own restart, the death screen's Retry button
+    run.py kill-enemies <target>   Kill the nearest enemy, all enemies or all bosses through the game's damage path
     run.py damage <1-99>           Apply integer damage bypassing shield; preserves 1 HP unless --no-nonlethal
     run.py steam-ready             Check whether the in-game Steamworks client is ready
     run.py state                   Print the game's current state as JSON (level, editor, player, tool, selection)
@@ -383,6 +384,15 @@ def build_damage_command(amount: int, nonlethal: bool = True) -> dict[str, objec
     if type(nonlethal) is not bool:
         raise ValueError("nonlethal must be a boolean")
     return {"command": "damage", "amount": amount, "nonlethal": nonlethal}
+
+
+KILL_ENEMY_TARGETS = ("nearest", "all", "bosses")
+
+
+def build_kill_enemies_command(target: str) -> dict[str, object]:
+    if target not in KILL_ENEMY_TARGETS:
+        raise ValueError(f"kill-enemies target must be one of {', '.join(KILL_ENEMY_TARGETS)}")
+    return {"command": "kill-enemies", "target": target}
 
 
 def damage_amount(value: str) -> int:
@@ -1352,6 +1362,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("vulnerable")
     sub.add_parser("kill")
     sub.add_parser("restart-run", help="run the game's own restart, the death screen's Retry button")
+    kill_enemies = sub.add_parser("kill-enemies", help="kill the nearest enemy, all enemies or all bosses through the game's own damage path")
+    kill_enemies.add_argument("target", choices=KILL_ENEMY_TARGETS)
     damage = sub.add_parser("damage", help="apply 1–99 damage through the game, bypassing shield; nonlethal by default")
     damage.add_argument("amount", type=damage_amount)
     damage.add_argument("--nonlethal", action=argparse.BooleanOptionalAction, default=True, help="preserve at least 1 HP; --no-nonlethal can end the run")
@@ -1860,6 +1872,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send(harness, build_command(args.action), args.timeout)
         case "state":
             ok = send_printing_result(harness, build_command("state"), args.timeout)
+        case "kill-enemies":
+            ok = send_printing_result(harness, build_kill_enemies_command(args.target), args.timeout)
         case "damage":
             ok = send_printing_result(harness, build_damage_command(args.amount, args.nonlethal), args.timeout)
         case "shader-report":

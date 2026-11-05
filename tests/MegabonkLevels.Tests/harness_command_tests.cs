@@ -3,6 +3,29 @@ namespace MegabonkLevels.Tests;
 public class HarnessCommandTests
 {
     [Theory]
+    [InlineData("nearest")]
+    [InlineData("all")]
+    [InlineData("bosses")]
+    public void TryParse_KillEnemies_CarriesTheTarget(string target)
+    {
+        Assert.True(HarnessCommand.TryParse($$"""{"command":"kill-enemies","target":"{{target}}"}""", out var command, out var error));
+        Assert.Null(error);
+        Assert.Equal(HarnessCommandKind.KillEnemies, command.Kind);
+        Assert.Equal("kill-enemies", command.Name);
+        Assert.Equal(target, command.KillTarget);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"kill-enemies"}""")]
+    [InlineData("""{"command":"kill-enemies","target":"everyone"}""")]
+    [InlineData("""{"command":"kill-enemies","target":3}""")]
+    public void TryParse_KillEnemies_RejectsMissingOrUnknownTarget(string json)
+    {
+        Assert.False(HarnessCommand.TryParse(json, out _, out var error));
+        Assert.NotNull(error);
+    }
+
+    [Theory]
     [InlineData("decode")]
     [InlineData("native-info")]
     [InlineData("native-tone")]

@@ -318,6 +318,16 @@ async def damage(amount: Annotated[int, Field(strict=True, ge=1, le=99)], nonlet
 
 
 @mcp.tool()
+async def kill_enemies(target: str) -> CallToolResult:
+    """Kill the nearest enemy (nearest), every live enemy (all) or every boss (bosses) by submitting lethal damage through the game's own enemy damage path, so the death events a real kill raises fire. Returns the target, how many were found and killed, and how many were bosses; read the boss events with log_wait."""
+    try:
+        payload = run.build_kill_enemies_command(target)
+    except ValueError as error:
+        raise ToolError(str(error)) from error
+    return await _command(_harness(), payload, TIMEOUT)
+
+
+@mcp.tool()
 async def character_screen(on: bool) -> CallToolResult:
     """Restrict the game's Character Selection screen to Calcium and Tony McZoom, pinned first with every other character greyed out (on), or restore the stock grid (off). Applies at once if the screen is built and whenever it opens."""
     return await _command(_harness(), run.build_character_screen_command(on), TIMEOUT)

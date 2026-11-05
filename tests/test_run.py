@@ -2215,3 +2215,15 @@ def test_perf_vsync_needs_exactly_one_state_flag(flags: list[str]) -> None:
     args = run.parse_args(["perf", "vsync", *flags])
     with pytest.raises(SystemExit, match="vsync"):
         run.perf_payload(args)
+
+
+@pytest.mark.parametrize("target", ["nearest", "all", "bosses"])
+def test_build_kill_enemies_command_carries_the_target(target) -> None:
+    assert run.build_kill_enemies_command(target) == {"command": "kill-enemies", "target": target}
+    assert run.parse_args(["kill-enemies", target]).target == target
+
+
+@pytest.mark.parametrize("target", ["", "everyone", None, 3])
+def test_build_kill_enemies_command_rejects_unknown_target(target) -> None:
+    with pytest.raises(ValueError):
+        run.build_kill_enemies_command(target)

@@ -61,3 +61,33 @@ async def test_damage_tool_reports_player_rejection(tmp_path, monkeypatch, error
         stop.set()
     assert result.is_error
     assert error in result.content[0].text
+
+
+@pytest.mark.parametrize("target", ["nearest", "all", "bosses"])
+async def test_kill_enemies_tool_sends_target_and_returns_result(tmp_path, monkeypatch, target):
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def respond(payload):
+        seen.append(payload)
+        return ok_result(payload, {"target": target, "killed": 2, "bossesKilled": 1})
+
+    stop = start_fake_mod(harness, respond)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("kill_enemies", {"target": target})
+    finally:
+        stop.set()
+    assert not result.is_error
+    assert seen == [{"command": "kill-enemies", "target": target}]
+    assert json.loads(result.content[0].text)["result"]["killed"] == 2
+
+
+@pytest.mark.parametrize("target", ["", "everyone", None, 3])
+async def test_kill_enemies_tool_rejects_unknown_target_before_sending(tmp_path, monkeypatch, target):
+    harness = setup_harness(tmp_path, monkeypatch)
+    monkeypatch.setattr(mcp_server, "TIMEOUT", 0.1)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("kill_enemies", {"target": target})
+    assert result.is_error
+    assert not list((harness / "commands").iterdir())
