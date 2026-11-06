@@ -37,7 +37,7 @@ Open question: SpawnShrines is skipped on a from-scratch level, but extra shrine
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The TASK-040 source (extra_shrines authored path, level_file.cs fields, builder changes, level JSON) is committed and pushed to main, recovered from wm2 or reimplemented from the TASK-040 summary with the choice recorded in the task
+- [x] #1 The TASK-040 source (extra_shrines authored path, level_file.cs fields, builder changes, level JSON) is committed and pushed to main, recovered from wm2 or reimplemented from the TASK-040 summary with the choice recorded in the task
 - [x] #2 The level fields extraShrinesMax, shrineSpots, guaranteedShrineKinds and chestLuckRange load, round trip and are covered by tests
 - [x] #3 The from-scratch Warehouse builders emit the shrine and chest-luck settings, and the preservation baseline is regenerated with the reason in the commit body
 - [x] #4 Verified in the running game on the from-scratch Warehouse: 2 to 3 Charge Shrines per run and per restart at the authored spots, and the guaranteed Magnet, Challenge, Boss Curse and Moai shrines
@@ -53,7 +53,7 @@ Answered the open question: the extra-shrines pass does run on the from-scratch 
 
 Verified on the Linux player box under Proton with the thps pack installed (without it the Warehouse is a placeholder and no spot has floor): six runs placed 2, 2, 2, 3, 2 and 2 Charge Shrines plus one each of Magnet, Challenge, Cursed and Moai every run, at differing spots, with a per-run chest luck shift between 0.11 and 1.69. Not tested: interacting with the shrines, golden rarity, and a chest roll under the shift.
 
-Not yet pushed to main; the work is on branch feat/task-045-charge-shrines.
+Pushed to main. `task check` has not been run end to end (the mod build needs the game assemblies on the authoring box), so the Definition of Done stays open; the C# and Python suites pass.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
