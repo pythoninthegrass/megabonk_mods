@@ -1,10 +1,10 @@
 ---
 id: TASK-006.04
 title: Packaged player download and installer contract
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-31T03:12:00Z'
-updated_date: '2026-11-04 20:07'
+updated_date: '2026-11-06T23:23:00Z'
 labels:
   - tooling
 dependencies:
