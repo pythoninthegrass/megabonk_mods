@@ -1,9 +1,10 @@
 ---
 id: TASK-045
 title: Recover and commit the TASK-040 Charge Shrine work
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-05 20:08'
+updated_date: '2026-11-06 15:42'
 labels:
   - thps
   - recovery
