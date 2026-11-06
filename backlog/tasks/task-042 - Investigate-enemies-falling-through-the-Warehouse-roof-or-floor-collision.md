@@ -1,10 +1,10 @@
 ---
 id: TASK-042
 title: Investigate enemies falling through the Warehouse roof or floor collision
-status: In Progress
+status: To Do
 assignee: []
 created_date: '2026-11-05 19:44'
-updated_date: '2026-11-06 01:06'
+updated_date: '2026-11-06 01:07'
 labels:
   - thps
   - collision
