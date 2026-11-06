@@ -1,10 +1,10 @@
 ---
 id: TASK-006.08
 title: Draw the position readout only while the level editor is open
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-06 23:47'
-updated_date: '2026-11-06 23:49'
+updated_date: '2026-11-06 23:52'
 labels:
   - map-selection
   - editor
@@ -60,3 +60,9 @@ Outcome: the readout is drawn only while `EditorMode.Active` is true, and only w
 <!-- SECTION:NOTES:BEGIN -->
 Verified on the authoring box with the Warehouse: the log shows PositionLabel created under the minimap on each editor entry and nothing after exit, and the play screenshot has no readout. The editor screenshot cannot show the label because the editor's Level panel covers that area, so the editor-side check rests on the log line. Vanilla and disabled-harness cases are unchanged: Arm still gates on DevHarness.Enabled and Disarm hides the label. task check not run to green: the 17 failures present on a clean tree remain (see TASK-006.06); the mod unit tests all pass (1999).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+The position readout under the minimap (player, boss, elite and enemy lines) is now drawn only while the level editor is open. A pure rule, `PositionReadout.Visible(armed, editorActive)`, gates it; `PositionLabel.Tick` hides the label whenever the editor is closed, and re-entering the editor recreates it. `Arm`/`Disarm`, `CellOf`, the cell log and `state` are unchanged, so positions are still reported there; position debugging during normal play is deliberately given up. Tests: a unit test over the four input combinations, written first; all 1999 mod unit tests pass. Docs: the Position readout section of `docs/development.md` states the editor-only rule. Verified in the running game with the Warehouse: no readout in play, and the log shows the label created on each editor entry; the editor screenshot cannot show it because the Level panel covers that area. `task check` is not green: the 17 failures present on a clean tree remain (see TASK-006.06), so DoD #1 is left unchecked.
+<!-- SECTION:FINAL_SUMMARY:END -->
