@@ -48,6 +48,7 @@ public class MegabonkLevelsMod : MelonMod
         BossSpawnRedirectPatch.Install(LoggerInstance);
         BossEventPatch.Install(LoggerInstance);
         FromScratchGenerationPatch.Install(LoggerInstance);
+        ChestLuckPatch.Install(LoggerInstance);
         PackPrefabs.Initialize(LoggerInstance);
         LevelMusic.Initialize(LoggerInstance);
         SceneTransitionProbe.Install(LoggerInstance);

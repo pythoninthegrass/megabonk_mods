@@ -13,6 +13,8 @@ internal static class PlacementProbe
 {
     public const float Clearance = 0.6f;
     public const int SamplesPerTile = 4;
+    // A surface counts as floor only when its normal is close enough to up; walls never do.
+    public const float WalkableNormalY = 0.8f;
 
     public static Dictionary<(int X, int Z), Vector3> ReachablePoints(LevelState state, ProceduralTileGeneration tiles, MeshCollider ground,
         Vector3 start, MelonLogger.Instance logger, string logPrefix = "InteractableRandomization")
@@ -44,6 +46,24 @@ internal static class PlacementProbe
         return positions.Where(pair => visited.Contains(pair.Key)
                 && state.Tiles[(pair.Key.X / SamplesPerTile, pair.Key.Z / SamplesPerTile)].Slope == SlopeDirection.None)
             .ToDictionary(pair => pair.Key, pair => pair.Value);
+    }
+
+    // The highest floor-facing surface of any collider on the vertical line through (x, z), between top and bottom, ignoring one object's own colliders.
+    public static bool HighestFloor(float x, float z, float top, float bottom, Transform ignore, out Vector3 floor)
+    {
+        floor = default;
+        var best = float.MinValue;
+        foreach (var hit in Physics.RaycastAll(new Ray(new Vector3(x, top, z), Vector3.down), top - bottom, ~0, QueryTriggerInteraction.Ignore))
+        {
+            if (hit.normal.y < WalkableNormalY || ignore != null && hit.collider.transform.IsChildOf(ignore)) continue;
+            if (hit.point.y > best)
+            {
+                best = hit.point.y;
+                floor = hit.point;
+            }
+        }
+
+        return best != float.MinValue;
     }
 
     public static bool ClearPoint(Vector3 point)
@@ -114,7 +134,10 @@ internal static class PlacementProbe
         return true;
     }
 
-    public static bool Unoccupied(Bounds bounds, float floorY, Transform self)
+    public static bool Unoccupied(Bounds bounds, float floorY, Transform self) => FirstOccupant(bounds, floorY, self) == null;
+
+    // The first collider other than the object itself inside the footprint's box above the floor, or null.
+    public static Collider FirstOccupant(Bounds bounds, float floorY, Transform self)
     {
         var bottom = Mathf.Max(bounds.min.y, floorY) + 0.15f;
         var top = Mathf.Max(bounds.max.y, bottom + 2);
@@ -122,9 +145,9 @@ internal static class PlacementProbe
         var half = new Vector3(bounds.extents.x + Clearance, (top - bottom) * 0.5f, bounds.extents.z + Clearance);
         foreach (var collider in Physics.OverlapBox(center, half, Quaternion.identity, ~0, QueryTriggerInteraction.Ignore))
         {
-            if (collider != null && !collider.transform.IsChildOf(self)) return false;
+            if (collider != null && !collider.transform.IsChildOf(self)) return collider;
         }
-        return true;
+        return null;
     }
 
     public static bool TryBounds(GameObject go, out Bounds bounds)
@@ -157,16 +180,17 @@ internal static class PlacementProbe
         return found;
     }
 
+    // levelObjects false skips the generated and placed objects, for a level whose own floor mesh is a placed object with bounds covering every spot; physics probes catch its solid objects instead.
     public static bool OverlapsObjects(Bounds bounds, GameObject self, IReadOnlyDictionary<string, GameObject> index,
-        IEnumerable<GameObject> additional = null)
+        IEnumerable<GameObject> additional = null, bool levelObjects = true)
     {
         bounds.Expand(Clearance * 2);
-        foreach (var (id, other) in index)
+        foreach (var (id, other) in levelObjects ? index : new Dictionary<string, GameObject>())
         {
             if (!ObjectTools.IsPickableGenId(id) || other == null || other == self || !other.activeInHierarchy) continue;
             if (TryBounds(other, out var occupied) && bounds.Intersects(occupied)) return true;
         }
-        foreach (var (target, other) in LiveEditPatch.PickableObjects())
+        foreach (var (target, other) in levelObjects ? LiveEditPatch.PickableObjects() : Enumerable.Empty<(ObjectTarget Target, GameObject Object)>())
         {
             if (target.Kind != ObjectTargetKind.PlacementId || other == null || other == self) continue;
             if (TryBounds(other, out var occupied) && bounds.Intersects(occupied)) return true;

@@ -3,6 +3,7 @@ Self-test for scripts/build_thps_level.py.
 """
 
 import build_thps_level as b
+import itertools
 import json
 import math
 import pytest
@@ -705,3 +706,43 @@ def test_lowest_clearance_of_a_level_item_is_its_height_above_the_floor() -> Non
     floor = [((-50, 0, -50), (50, 0, -50), (-50, 0, 50)), ((50, 0, -50), (50, 0, 50), (-50, 0, 50))]
     item = b.Collectible("X", "interactable/chest", 0, 0.0, 1.5, 0.0, (0.0, 1.0, 0.0), (270, 0, 0), 0.0, True)
     assert b.lowest_clearance(item, floor) == pytest.approx(1.5 - b.ITEM_METRICS["interactable/chest"].base_offset)
+
+
+@needs_extract
+def test_build_level_asks_for_two_or_three_charge_shrines_a_run_at_the_authored_spots() -> None:
+    level = b.build_level()
+    assert (level["extraShrines"], level["extraShrinesMax"]) == b.SHRINE_COUNT == (2, 3)
+    assert level["extraShrineKinds"] == ["charge"]
+    assert level["shrineSpots"] == [list(spot) for spot in b.SHRINE_SPOTS]
+
+
+@needs_extract
+def test_build_level_guarantees_one_of_each_special_shrine_and_skews_chest_luck_each_run() -> None:
+    level = b.build_level()
+    assert level["guaranteedShrineKinds"] == list(b.GUARANTEED_SHRINE_KINDS) == ["magnet", "challenge", "cursed", "moai"]
+    assert level["chestLuckRange"] == list(b.CHEST_LUCK_RANGE)
+    assert b.CHEST_LUCK_RANGE[0] < 0 < b.CHEST_LUCK_RANGE[1]
+
+
+def test_the_shrine_spots_include_the_ones_the_level_designer_chose() -> None:
+    assert {(30, 2, 71), (41, 10, -41), (173, 28, 27), (22, 6, 4), (79, 10, 103), (178, 10, -32), (178, 10, 123), (139, 38, -123)} <= set(b.SHRINE_SPOTS)
+    assert not {(81, 30, -98), (139, 30, -98), (41, 2, 0)} & set(b.SHRINE_SPOTS)
+
+
+def test_there_are_enough_shrine_spots_for_the_guaranteed_kinds_and_the_largest_charge_count() -> None:
+    assert len(b.SHRINE_SPOTS) >= len(b.GUARANTEED_SHRINE_KINDS) + b.SHRINE_COUNT[1]
+
+
+def test_the_largest_count_of_shrines_can_always_be_placed_clear_of_each_other() -> None:
+    gap = 12.5
+    sets = itertools.combinations(b.SHRINE_SPOTS, len(b.GUARANTEED_SHRINE_KINDS) + b.SHRINE_COUNT[1])
+    assert any(all(math.dist(a, c) >= gap for a, c in itertools.combinations(group, 2)) for group in sets)
+
+
+def test_every_shrine_spot_lies_inside_the_warehouse_footprint() -> None:
+    width, depth = b.warehouse_footprint()
+    wx, wz = b.local_to_world(b.INNER_X * b.TILE / 2, b.INNER_Z * b.TILE / 2)
+    for x, y, z in b.SHRINE_SPOTS:
+        assert abs(x - wx) < width / 2
+        assert abs(z - wz) < depth / 2
+        assert b.KILL_FLOOR_Y < y

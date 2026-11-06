@@ -8,7 +8,7 @@ namespace MegabonkLevels;
 
 public static class LevelSettings
 {
-    public static readonly string[] Fields = { "playerStart", "bossSpawnPosition", "killFloorY", "maxSlopeAngle", "grindRequiresSlide", "fallDamageCharacter", "noGrass", "randomizeShadyGuy", "randomizeChests", "randomizeMoai", "extraShrines", "extraShrineKinds", "music", "title", "description", "mapDescription", "allowedCharacters", "map", "stageIndex", "tier", "seed" };
+    public static readonly string[] Fields = { "playerStart", "bossSpawnPosition", "killFloorY", "maxSlopeAngle", "grindRequiresSlide", "fallDamageCharacter", "noGrass", "randomizeShadyGuy", "randomizeChests", "randomizeMoai", "extraShrines", "extraShrineKinds", "extraShrinesMax", "shrineSpots", "guaranteedShrineKinds", "chestLuckRange", "music", "title", "description", "mapDescription", "allowedCharacters", "map", "stageIndex", "tier", "seed" };
     private static readonly string[] TextFields = { "music", "title", "description", "mapDescription", "fallDamageCharacter" };
 
     public static string Read(LevelFile level, string field)
@@ -70,6 +70,22 @@ public static class LevelSettings
         {
             throw new ArgumentException($"Extra shrine count must be between 0 and {ExtraShrines.MaxCount}.");
         }
+        if (level.ExtraShrinesMax is { } max && (max < level.ExtraShrines || max > ExtraShrines.MaxCount))
+        {
+            throw new ArgumentException($"The extra shrine maximum must be between the count and {ExtraShrines.MaxCount}.");
+        }
+        if (level.ShrineSpots != null && level.ShrineSpots.Any(spot => spot.Count != 3 || spot.Any(v => !float.IsFinite(v))))
+        {
+            throw new ArgumentException("Each shrine spot is three finite coordinates.");
+        }
+        if (level.GuaranteedShrineKinds != null && level.GuaranteedShrineKinds.Any(name => !ExtraShrines.IsKnownKind(name)))
+        {
+            throw new ArgumentException("Guaranteed shrine kinds are challenge, magnet, cursed, greed, balance, moai and charge.");
+        }
+        if (level.ChestLuckRange != null && (level.ChestLuckRange.Count != 2 || level.ChestLuckRange.Any(v => !float.IsFinite(v)) || level.ChestLuckRange[0] > level.ChestLuckRange[1]))
+        {
+            throw new ArgumentException("The chest luck range is two finite numbers, minimum then maximum.");
+        }
         if (level.ExtraShrineKinds != null && level.ExtraShrineKinds.Any(name => !ExtraShrines.IsKnownKind(name)))
         {
             throw new ArgumentException("Extra shrine kinds are challenge, magnet, cursed, greed, balance, moai and charge.");
@@ -90,6 +106,7 @@ public static class LevelSettings
         KillFloorY = settings.KillFloorY, MaxSlopeAngle = settings.MaxSlopeAngle, GrindRequiresSlide = settings.GrindRequiresSlide,
         RandomizeShadyGuy = settings.RandomizeShadyGuy, RandomizeChests = settings.RandomizeChests, RandomizeMoai = settings.RandomizeMoai,
         ExtraShrines = settings.ExtraShrines, ExtraShrineKinds = settings.ExtraShrineKinds,
+        ExtraShrinesMax = settings.ExtraShrinesMax, ShrineSpots = settings.ShrineSpots, GuaranteedShrineKinds = settings.GuaranteedShrineKinds, ChestLuckRange = settings.ChestLuckRange,
         Music = settings.Music, Title = settings.Title, Description = settings.Description, MapDescription = settings.MapDescription,
         AllowedCharacters = settings.AllowedCharacters, Map = settings.Map, StageIndex = settings.StageIndex, Tier = settings.Tier, Seed = settings.Seed,
     };

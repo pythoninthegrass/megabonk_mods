@@ -48,6 +48,14 @@ public readonly record struct LevelFile(
     bool RandomizeMoai = false,
     int ExtraShrines = 0,
     IReadOnlyList<string> ExtraShrineKinds = null,
+    // Upper end of a per-run random shrine count, or null for exactly ExtraShrines.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? ExtraShrinesMax = null,
+    // World positions [x, y, z] extra shrines are placed at, instead of probing the generated tiles; each run picks some of them at random. Height only needs to be near the floor.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<IReadOnlyList<float>> ShrineSpots = null,
+    // Shrine kinds placed once each every run, ahead of the random extras; a repeated name is a minimum of that many.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string> GuaranteedShrineKinds = null,
+    // [min, max] added to chest loot luck, one value drawn per run, or null for the game's own odds.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<float> ChestLuckRange = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string Baseline = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LevelGrid? Grid = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SpawnPoint? Spawn = null,
@@ -82,6 +90,10 @@ public readonly record struct LevelFile(
         && RandomizeMoai == other.RandomizeMoai
         && ExtraShrines == other.ExtraShrines
         && ListEquals(ExtraShrineKinds, other.ExtraShrineKinds)
+        && ExtraShrinesMax == other.ExtraShrinesMax
+        && (ShrineSpots == null ? other.ShrineSpots == null : other.ShrineSpots != null && ShrineSpots.Count == other.ShrineSpots.Count && ShrineSpots.Zip(other.ShrineSpots).All(pair => ListEquals(pair.First, pair.Second)))
+        && ListEquals(GuaranteedShrineKinds, other.GuaranteedShrineKinds)
+        && ListEquals(ChestLuckRange, other.ChestLuckRange)
         && ListEquals(BossSpawnPosition, other.BossSpawnPosition)
         && Music == other.Music
         && Title == other.Title

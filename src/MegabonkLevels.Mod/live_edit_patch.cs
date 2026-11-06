@@ -295,7 +295,11 @@ public static class LiveEditPatch
             RandomizeChests: _randomizationSettings.RandomizeChests,
             RandomizeMoai: _randomizationSettings.RandomizeMoai,
             ExtraShrines: _randomizationSettings.ExtraShrines,
-            ExtraShrineKinds: _randomizationSettings.ExtraShrineKinds);
+            ExtraShrineKinds: _randomizationSettings.ExtraShrineKinds,
+            ExtraShrinesMax: _randomizationSettings.ExtraShrinesMax,
+            ShrineSpots: _randomizationSettings.ShrineSpots,
+            GuaranteedShrineKinds: _randomizationSettings.GuaranteedShrineKinds,
+            ChestLuckRange: _randomizationSettings.ChestLuckRange);
     }
 
     // A from-scratch session saves its final tile state and placements instead of an edit log over a generated map.
@@ -520,6 +524,7 @@ public static class LiveEditPatch
         _session = null;
         BossSpawnRedirectPatch.Disarm();
         ExtraShrinesPatch.ClearStale();
+        ChestLuckPatch.Roll(edits != null ? _randomizationSettings.ChestLuckRange : null, logger);
 
         var controller = UnityEngine.Object.FindObjectOfType<MapGenerationController>();
         if (controller == null)

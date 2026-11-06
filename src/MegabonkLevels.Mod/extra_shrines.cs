@@ -13,6 +13,17 @@ public static class ExtraShrines
 {
     public const int MaxCount = 32;
     public const float ChargeZoneReach = 12.5f;
+    // An authored spot's height is only approximate, so its floor is looked for this far above it and below it.
+    // Authored spots closer than this to a shrine already placed are not used, so no two shrines stack on one spot.
+    public const float MinSpotGap = ChargeZoneReach;
+    // Each authored Charge Shrine is golden (legendary offers) with this chance, drawn again every run. The game's own chance is 0.008, so golden shrines stay uncommon.
+    public const float GoldenChance = 0.1f;
+    public const float SpotFloorAbove = 3f;
+    public const float SpotFloorBelow = 8f;
+    // An authored spot is an anchor: when a shrine does not fit exactly there, the nearest spot that fits within this many rings is used.
+    public const float NudgeStep = 2f;
+    public const int NudgeRings = 4;
+    public const int NudgeDirections = 8;
 
     private static readonly Dictionary<string, ExtraShrineKind> ComponentKinds = new()
     {
@@ -25,7 +36,69 @@ public static class ExtraShrines
         ["ChargeShrine"] = ExtraShrineKind.Charge,
     };
 
-    public static bool Enabled(LevelFile level) => level.ExtraShrines > 0;
+    public static bool Enabled(LevelFile level) => level.ExtraShrines > 0 || level.ExtraShrinesMax > 0 || level.GuaranteedShrineKinds is { Count: > 0 };
+
+    // A uniform count in [min, max] each run, or exactly min without a maximum.
+    public static int ShrineCount(int min, int? max, Random random) => max is { } high ? random.Next(min, high + 1) : min;
+
+    // The index of the next authored spot to try, drawn with odds proportional to the square of its distance from the nearest shrine already placed, so layouts are usually spread out but two can still end up close; -1 when none is far enough.
+    public static int PickSpread(IReadOnlyList<Vector3Data> spots, IReadOnlyList<Vector3Data> taken, Random random)
+    {
+        var weights = spots.Select(spot =>
+        {
+            if (taken.Count == 0) return 1f;
+            var nearest = taken.Min(other => Distance(spot, other));
+            return nearest < MinSpotGap ? 0f : nearest * nearest;
+        }).ToList();
+        var total = weights.Sum();
+        if (total <= 0f) return -1;
+        var target = random.NextDouble() * total;
+        for (var i = 0; i < weights.Count; i++)
+        {
+            target -= weights[i];
+            if (target < 0) return i;
+        }
+
+        return weights.FindLastIndex(weight => weight > 0f);
+    }
+
+    // Horizontal offsets to try around an authored spot, the spot itself first and then rings of directions each a step wider.
+    public static List<(float X, float Z)> NudgeOffsets(float step, int rings, int directions)
+    {
+        var offsets = new List<(float X, float Z)> { (0f, 0f) };
+        for (var ring = 1; ring <= rings; ring++)
+        for (var i = 0; i < directions; i++)
+        {
+            var angle = i * 2f * MathF.PI / directions;
+            offsets.Add((MathF.Cos(angle) * ring * step, MathF.Sin(angle) * ring * step));
+        }
+
+        return offsets;
+    }
+
+    // The kinds named in order, one per name; a name repeated is a repeated kind.
+    public static List<ExtraShrineKind> ParseKinds(IReadOnlyList<string> names) =>
+        (names ?? Array.Empty<string>()).Select(name => Enum.TryParse<ExtraShrineKind>(name, true, out var kind)
+            ? kind
+            : throw new ArgumentException($"Unknown shrine kind '{name}'.")).ToList();
+
+    // The items in a random order, leaving the input as it was.
+    public static List<T> Shuffled<T>(IReadOnlyList<T> items, Random random)
+    {
+        var shuffled = items.ToList();
+        for (var i = shuffled.Count - 1; i > 0; i--)
+        {
+            var j = random.Next(i + 1);
+            (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
+        }
+
+        return shuffled;
+    }
+
+    public static bool RollGolden(Random random, float chance) => random.NextDouble() < chance;
+
+    public static (float Top, float Bottom) SpotFloorWindow(float authoredHeight) =>
+        (authoredHeight + SpotFloorAbove, authoredHeight - SpotFloorBelow);
 
     public static ExtraShrineKind? KindOf(string componentName) =>
         ComponentKinds.TryGetValue(componentName, out var kind) ? kind : null;

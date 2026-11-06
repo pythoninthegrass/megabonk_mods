@@ -28,6 +28,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/interactable_randomization.cs" Link="interactable_randomization.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/extra_shrines.cs" Link="extra_shrines.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/maximin.cs" Link="maximin.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/chest_luck.cs" Link="chest_luck.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_file.cs" Link="level_file.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_settings.cs" Link="level_settings.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_file_migration.cs" Link="level_file_migration.cs" />

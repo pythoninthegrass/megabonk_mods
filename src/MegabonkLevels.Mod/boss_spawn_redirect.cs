@@ -71,44 +71,17 @@ public static class BossSpawnRedirect
         return true;
     }
 
-    // Best-of-ring selection: the usable spot whose nearest already-placed copy is farthest away (XZ); with none
-    // placed yet the first candidate wins. See the "Boss spawn redirect" section in docs/development.md.
-    public static bool PickSpot(IReadOnlyList<Vec3> usable, IReadOnlyList<Vec3> taken, out Vec3 spot)
-    {
-        spot = default;
-        var bestScore = float.MinValue;
-
-        foreach (var candidate in usable)
-        {
-            var score = SpacingScore(candidate, taken);
-            if (score > bestScore)
-            {
-                bestScore = score;
-                spot = candidate;
-            }
-        }
-
-        return usable.Count > 0;
-    }
+    // Best-of-ring selection: the usable spot whose nearest already-placed copy is farthest away (XZ). See the
+    // "Boss spawn redirect" section in docs/development.md.
+    public static bool PickSpot(IReadOnlyList<Vec3> usable, IReadOnlyList<Vec3> taken, out Vec3 spot) =>
+        Maximin.Pick(usable, taken, XzDistance, out spot);
 
     // The game lifts a spawned enemy above the position it was asked for, so the offset it applied is kept and the
     // boss's feet, not its pivot, land on the floor.
     public static Vec3 FloorPlacement(Vec3 floorPoint, Vec3 requestedPosition, Vec3 actualPosition) =>
         new(floorPoint.X, floorPoint.Y + actualPosition.Y - requestedPosition.Y, floorPoint.Z);
 
-    private static float SpacingScore(Vec3 candidate, IReadOnlyList<Vec3> taken)
-    {
-        var score = float.MaxValue;
-        foreach (var other in taken)
-        {
-            var distance = XzDistance(candidate, other);
-            if (distance < score) score = distance;
-        }
-
-        return score;
-    }
-
-    private static float XzDistance(Vec3 a, Vec3 b)
+    public static float XzDistance(Vec3 a, Vec3 b)
     {
         var dx = a.X - b.X;
         var dz = a.Z - b.Z;

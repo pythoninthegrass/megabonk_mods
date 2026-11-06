@@ -128,6 +128,25 @@ COPING_RAILS = tuple(rail_along(start, end) for start, end in COPING_LIPS)
 # The half pipe lips reach 85 degrees, past the game's 45 degree slope limit.
 MAX_SLOPE_ANGLE = 88
 
+# The Warehouse is smaller than the native maps, so it gets 2 to 3 Charge Shrines a run, drawn from the spots below.
+SHRINE_COUNT = (2, 3)
+SHRINE_KINDS = ["charge"]
+# One of each of these is placed every run, shuffled across the spots, on top of the Charge Shrines: Succ (magnet), challenge, boss curse and the totem (the Hawaiian statue, called Moai).
+GUARANTEED_SHRINE_KINDS = ("magnet", "challenge", "cursed", "moai")
+# A shift added to the luck chests roll their loot with, drawn once a run: at 0 a chest is 77% common and 1.6% legendary, at -0.5 84% common, at 2 52% common with 8% legendary.
+CHEST_LUCK_RANGE = (-0.5, 2.0)
+# Where a Charge Shrine may stand: corners and wall stretches clear of the half pipes, ramps and grind lines. Heights only need to be near the floor, which the game finds under each spot.
+SHRINE_SPOTS = (
+    (30, 2, 71),
+    (41, 10, -41),
+    (173, 28, 27),
+    (22, 6, 4),
+    (79, 10, 103),
+    (178, 10, -32),
+    (178, 10, 123),
+    (139, 38, -123),
+)
+
 PACK_ID = "thps"
 PACK_VERSION = "2.0.21"
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "packs" / PACK_ID / "manifest.json"
@@ -484,6 +503,12 @@ def build_level() -> dict:
         "grindRequiresSlide": True,
         # Big airs are the point of the level, and without this the landing off a half pipe takes Calcium's whole health bar.
         "fallDamageCharacter": FALL_DAMAGE_CHARACTER,
+        "extraShrines": SHRINE_COUNT[0],
+        "extraShrinesMax": SHRINE_COUNT[1],
+        "extraShrineKinds": SHRINE_KINDS,
+        "shrineSpots": [list(spot) for spot in SHRINE_SPOTS],
+        "guaranteedShrineKinds": list(GUARANTEED_SHRINE_KINDS),
+        "chestLuckRange": list(CHEST_LUCK_RANGE),
         "music": MUSIC,
         "title": TITLE,
         "description": DESCRIPTION,

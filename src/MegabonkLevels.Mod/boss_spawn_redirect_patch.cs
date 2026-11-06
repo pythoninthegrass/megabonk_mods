@@ -22,8 +22,6 @@ public static class BossSpawnRedirectPatch
     private const int CandidatesPerBoss = 48;
     // Large prime multiplier so each copy of a curse summon samples its own ring instead of the shared candidate order.
     private const int SeedPerCopy = 7919;
-    // A surface counts as floor only when its normal is close enough to up; bosses must not land on a wall face.
-    private const float WalkableNormalY = 0.8f;
 
     private static MelonLogger.Instance _logger;
     private static int? _armedFrame;
@@ -169,25 +167,12 @@ public static class BossSpawnRedirectPatch
                 continue;
             }
 
-            var hits = Physics.RaycastAll(new Ray(new Vector3(candidate.X, top, candidate.Z), Vector3.down),
-                top - (killFloorY == float.MinValue ? -100f : killFloorY - 5f), ~0, QueryTriggerInteraction.Ignore);
-            var best = float.MinValue;
-            foreach (var hit in hits)
-            {
-                if (hit.normal.y < WalkableNormalY || hit.collider.transform.IsChildOf(boss.transform))
-                {
-                    continue;
-                }
-
-                if (hit.point.y > best) best = hit.point.y;
-            }
-
-            if (best == float.MinValue)
+            if (!PlacementProbe.HighestFloor(candidate.X, candidate.Z, top, killFloorY == float.MinValue ? -100f : killFloorY - 5f, boss.transform, out var floor))
             {
                 continue;
             }
 
-            var spot = new Vec3(candidate.X, best, candidate.Z);
+            var spot = new Vec3(candidate.X, floor.y, candidate.Z);
             if (!BossSpawnRedirect.SpotUsable(spot, _spawner, killFloorY, _taken) || !PlacementProbe.ClearPoint(new Vector3(spot.X, spot.Y, spot.Z)))
             {
                 continue;

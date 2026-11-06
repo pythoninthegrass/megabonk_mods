@@ -58,6 +58,63 @@
   "killFloorY": -35.0,
   "grindRequiresSlide": true,
   "fallDamageCharacter": "tonymczoom",
+  "extraShrines": 2,
+  "extraShrinesMax": 3,
+  "extraShrineKinds": [
+    "charge"
+  ],
+  "shrineSpots": [
+    [
+      30,
+      2,
+      71
+    ],
+    [
+      41,
+      10,
+      -41
+    ],
+    [
+      173,
+      28,
+      27
+    ],
+    [
+      22,
+      6,
+      4
+    ],
+    [
+      79,
+      10,
+      103
+    ],
+    [
+      178,
+      10,
+      -32
+    ],
+    [
+      178,
+      10,
+      123
+    ],
+    [
+      139,
+      38,
+      -123
+    ]
+  ],
+  "guaranteedShrineKinds": [
+    "magnet",
+    "challenge",
+    "cursed",
+    "moai"
+  ],
+  "chestLuckRange": [
+    -0.5,
+    2.0
+  ],
   "music": "bundle:thps/04_Superman",
   "title": "Warehouse \u2014 Editable",
   "description": "I'm trying to sleep",

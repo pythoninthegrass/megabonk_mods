@@ -58,6 +58,7 @@ The Warehouse is one `bundle:thps/Warehouse` placement built from the extracted 
 | Grind rails on the mesh bars | hidden `interactable/rail/0` objects laid along each mesh bar (see "Mesh rail near (75, 3, 28)") |
 | Box piles and the tape | `interactable/chest` and `interactable/chestFree` |
 | Letters | `forest/shrines/0` to `4` |
+| Charge Shrines | 2 or 3 each run at authored spots: the level's `extraShrines`, `extraShrinesMax` and `shrineSpots` settings make the mod place them at authored spots each run (see "Charge Shrines" below) |
 | Boss portal | the game's boss spawner, stood on the floor inside the hanging box above the main half pipe; the mod teleports its summoned bosses to random interior spots away from the box (see "Boss spawn redirect" in [development.md](development.md)) |
 
 Catalog IDs follow level-format.md. `rail/0` is a straight bar about 28 units long at scale 1; `rail/1` is about 50 units long with a bend; `rail/2` to `5` are curved variants not yet placed.
@@ -104,6 +105,23 @@ Hand-arranged items. Items moved in the editor are recorded in `scripts/thps_ite
 
 - The chest, shrine and merchant prefabs are authored lying down (the prefab asset's euler X is 270), so a placement at rotation 0 renders them on their side. Items are placed at X 270 on flat ground, and the surface tilt is composed on top of that on a slope (`item_rotation` in `warehouse_surface.py`).
 - `forest/shrines/3` is the `ShadyGuy` prefab, the merchant NPC, not a shrine, and `forest/shrines/0` to `2` and `4` are the Challenge, Magnet, Maoi and Cursed shrines. The mapping stays one catalog entry per letter.
+
+## Charge Shrines
+
+The seed's own Charge Shrines are removed with the rest of the generated clutter, and the Warehouse is far smaller than a native map, so it asks for 2 or 3 each run (`SHRINE_COUNT`, kinds restricted to `charge`) and names where they may stand (`SHRINE_SPOTS`, written to the level as `shrineSpots`; see "Extra shrines" in [level-format.md](level-format.md#extra-shrines)). An earlier version found spots with rules (flat floor, distance from lips and rails, wall contact) and kept putting shrines in front of ramps and half pipes and in the opening run, because none of those rules knew about kickers or the start slope, so the spots are authored instead.
+
+| Spot | Where |
+| --- | --- |
+| (30, 2, 71) | the alcove on the west wall beside the kicker, off the grind line |
+| (22, 6, 4) | the top of Shorty's ledge at the west wall by the anarchy poster, away from the start lip |
+| (41, 10, -41) | the tiered deck on the north wall |
+| (173, 28, 27) | the roof of the hanging box over the main half pipe |
+| (79, 10, 103) | the deck by the pocket on the south wall |
+| (178, 10, -32) | the corner at the east end of the north wall quarter pipe |
+| (178, 10, 123) | the south-east corner deck |
+| (139, 38, -123) | the ledge behind the start lip at the north wall |
+
+Every run places one Succ (Magnet), one Challenge, one Boss Curse and one totem (the Hawaiian statue, `InteractableShrineMoai`) plus 2 or 3 Charge Shrines, shuffled across the spots (`GUARANTEED_SHRINE_KINDS`), so a run has 6 or 7 shrines on 8 spots. The fixed SKATE letters already include one each of those kinds, so these are extras. The chests stay at their fixed positions, but each run shifts the luck their loot is rolled with by a value drawn from -0.5 to 2 (`CHEST_LUCK_RANGE`), so a run's chests are poorer or richer overall. Each spot is an anchor, not an exact position: a shrine is about 3 units wide, so a spot at a wall or the foot of a slope has no room, and the game moves it outward in rings of 2 units to the nearest position where it fits. In the game all eight spots place, most within 6 units of their anchors ((22, 6, 4) settles at (23.4, 4.0, 5.4) and (173, 28, 27) at (177, 25.9, 27)). (178, 10, -32) and (139, 38, -123) are corners at the top of a quarter pipe and a ledge behind a lip, where the flat floor is a strip narrower than the shrine's clearance box, so they take the tight fallback below and stand exactly on their spots. Tests check that there are more spots than the largest count, that the largest count fits with the spots clear of each other and that the spots are inside the Warehouse footprint; whether a shrine fits is only known in the game, where the log names the collider in the way of a spot that fails. The offline Warehouse mesh has no floor under (30, 2, 71) even though the game does, so a floor check against the mesh is not made. Each Charge Shrine is golden with a 10% chance every run and regular otherwise; the other kinds have no rarity (see "Extra shrines" in [level-format.md](level-format.md#extra-shrines)); a charged golden one offered Legendary rewards in the game, a regular one Common. Standing in a spawned shrine's zone charges it and opens its reward window, which `dismiss_offers` closes.
 
 ## Windows opened to the player
 
