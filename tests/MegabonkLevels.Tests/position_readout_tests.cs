@@ -8,6 +8,16 @@ public class PositionReadoutTests
     private static readonly ReadoutActor[] NoActors = [];
 
     [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, false)]
+    public void Visible_NeedsAnArmedLevelAndTheEditor(bool armed, bool editorActive, bool expected)
+    {
+        Assert.Equal(expected, PositionReadout.Visible(armed, editorActive));
+    }
+
+    [Theory]
     [InlineData(-280f, -280f, 0, 0)]
     [InlineData(280f, 280f, 14, 14)]
     [InlineData(0f, 0f, 7, 7)]

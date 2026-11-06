@@ -73,7 +73,13 @@ public static class PositionLabel
 
     public static void Tick()
     {
-        if (!_armed || Time.unscaledTime < _nextUpdate)
+        if (!PositionReadout.Visible(_armed, EditorMode.Active))
+        {
+            Hide();
+            return;
+        }
+
+        if (Time.unscaledTime < _nextUpdate)
         {
             return;
         }

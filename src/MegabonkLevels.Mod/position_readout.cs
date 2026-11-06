@@ -16,6 +16,9 @@ public static class PositionReadout
     private const string MeLabel = "me:";
     private const int MinIdWidth = 3;
 
+    // The readout belongs to the level editor: an armed level shows it only while the editor is open.
+    public static bool Visible(bool armed, bool editorActive) => armed && editorActive;
+
     public static GridCell CellOf(float x, float z, int width, int depth, float spacing)
     {
         var cellX = (int)MathF.Floor(x / spacing + (width - 1) / 2f + 0.5f);
