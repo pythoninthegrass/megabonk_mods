@@ -4,6 +4,7 @@ Self-test for scripts/warehouse_surface.py, on synthetic triangles.
 
 import math
 import pytest
+import struct
 import warehouse_surface as ws
 
 FLOOR = ((0, 0, 0), (10, 0, 0), (0, 0, 10))
@@ -198,3 +199,36 @@ def test_ridge_runs_and_ledge_runs_treat_a_double_sided_mesh_like_a_single_sided
     both = lambda tris: [*tris, *[(t[0], t[2], t[1]) for t in tris]]  # noqa: E731
     assert len(ws.ridge_runs(both(gable(0, 10)))) == 1
     assert len(ws.ledge_runs(both([LEDGE_TOP, LEDGE_FACE]))) == 1
+
+
+UP_FLOOR = ((0, 0, 0), (0, 0, 10), (10, 0, 0))
+UP_FLOOR_FAR = ((10, 0, 10), (10, 0, 0), (0, 0, 10))
+
+
+def unity_mesh_yaml(vertices: list[tuple[float, float, float]], indices: list[int]) -> str:
+    stride_data = b"".join(struct.pack("<3f2f", *v, 0.0, 0.0) for v in vertices)
+    index_data = struct.pack(f"<{len(indices)}H", *indices)
+    return f"  m_IndexBuffer: {index_data.hex()}\n  m_VertexData:\n    m_VertexCount: {len(vertices)}\n    _typelessdata: {stride_data.hex()}\n"
+
+
+def test_unity_mesh_triangles_reads_positions_and_indices_from_a_text_mesh_asset() -> None:
+    text = unity_mesh_yaml([(0, 0, 0), (0, 0, 10), (10, 0, 0), (10, 0, 10)], [0, 1, 2, 3, 2, 1])
+    assert ws.unity_mesh_triangles(text) == [UP_FLOOR, UP_FLOOR_FAR]
+
+
+def test_ground_gaps_is_empty_where_upward_faces_cover_the_grid() -> None:
+    assert ws.ground_gaps([UP_FLOOR, UP_FLOOR_FAR], (0, 10), (0, 10), 2.5) == []
+
+
+def test_ground_gaps_lists_grid_points_outside_every_triangle() -> None:
+    gaps = ws.ground_gaps([UP_FLOOR, UP_FLOOR_FAR], (0, 12), (0, 10), 2.0)
+    assert sorted(gaps) == [(12.0, z) for z in (0.0, 2.0, 4.0, 6.0, 8.0, 10.0)]
+
+
+def test_ground_gaps_ignores_downward_faces() -> None:
+    assert len(ws.ground_gaps([FLOOR, FLOOR_FAR], (0, 10), (0, 10), 5.0)) == 9
+
+
+def test_ground_gaps_skips_degenerate_triangles() -> None:
+    sliver = ((0, 0, 0), (5, 0, 0), (10, 0, 0))
+    assert len(ws.ground_gaps([sliver], (0, 10), (0, 10), 5.0)) == 9

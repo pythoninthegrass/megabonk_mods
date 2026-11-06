@@ -5,6 +5,8 @@ The mesh is read the way unity/pack-authoring/Assets/Editor/ThpsPack.cs imports 
 """
 
 import math
+import re
+import struct
 from pathlib import Path
 from typing import NamedTuple
 
@@ -293,3 +295,44 @@ def lip_runs(triangles: list[Triangle], min_length: float = 2.0, min_slope: floa
 def ledge_runs(triangles: list[Triangle], min_length: float = 2.0, max_grade: float = RIDGE_MAX_GRADE) -> list[tuple[Vec, Vec]]:
     """The top edges of flat decks over a near-vertical face, merged into straight runs of at least `min_length`."""
     return _merged(_edges_where(triangles, max_grade, 0.0, (_is_ledge_top,)), min_length)
+
+
+def unity_mesh_triangles(text: str) -> list[Triangle]:
+    """Triangles of a text-serialised Unity mesh asset, in the mesh's own space and winding, with 16-bit indices and the position first in each vertex."""
+    index_hex = re.search(r"m_IndexBuffer: ([0-9a-f]*)", text)
+    vertex_hex = re.search(r"_typelessdata: ([0-9a-f]*)", text)
+    count = re.search(r"m_VertexCount: (\d+)", text)
+    if not (index_hex and vertex_hex and count):
+        raise ValueError("not a text mesh asset")
+    indices = struct.unpack(f"<{len(index_hex.group(1)) // 4}H", bytes.fromhex(index_hex.group(1)))
+    data = bytes.fromhex(vertex_hex.group(1))
+    stride = len(data) // int(count.group(1))
+    positions = [struct.unpack_from("<3f", data, i * stride) for i in range(int(count.group(1)))]
+    return [(positions[indices[i]], positions[indices[i + 1]], positions[indices[i + 2]]) for i in range(0, len(indices), 3)]
+
+
+def ground_gaps(triangles: list[Triangle], x_range: tuple[float, float], z_range: tuple[float, float], step: float) -> list[tuple[float, float]]:
+    """Grid points over the x and z ranges (inclusive) that no upward-facing triangle covers, so something above them falls past the mesh."""
+    nx = int((x_range[1] - x_range[0]) / step + EPSILON) + 1
+    nz = int((z_range[1] - z_range[0]) / step + EPSILON) + 1
+    covered: set[tuple[int, int]] = set()
+    for t in triangles:
+        if cross(sub(t[1], t[0]), sub(t[2], t[0]))[1] <= EPSILON:
+            continue
+        low_x, high_x = min(v[0] for v in t), max(v[0] for v in t)
+        low_z, high_z = min(v[2] for v in t), max(v[2] for v in t)
+        for i in range(max(0, math.floor((low_x - x_range[0]) / step)), min(nx, math.ceil((high_x - x_range[0]) / step) + 1)):
+            for j in range(max(0, math.floor((low_z - z_range[0]) / step)), min(nz, math.ceil((high_z - z_range[0]) / step) + 1)):
+                if (i, j) not in covered and _covers(t, x_range[0] + i * step, z_range[0] + j * step):
+                    covered.add((i, j))
+    return [(x_range[0] + i * step, z_range[0] + j * step) for i in range(nx) for j in range(nz) if (i, j) not in covered]
+
+
+def _covers(t: Triangle, x: float, z: float) -> bool:
+    a, b, c = t
+    d = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2])
+    if abs(d) < EPSILON:
+        return False
+    l1 = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / d
+    l2 = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / d
+    return min(l1, l2, 1 - l1 - l2) >= -EPSILON
