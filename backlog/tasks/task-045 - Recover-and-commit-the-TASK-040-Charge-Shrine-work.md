@@ -53,13 +53,13 @@ Answered the open question: the extra-shrines pass does run on the from-scratch 
 
 Verified on the Linux player box under Proton with the thps pack installed (without it the Warehouse is a placeholder and no spot has floor): six runs placed 2, 2, 2, 3, 2 and 2 Charge Shrines plus one each of Magnet, Challenge, Cursed and Moai every run, at differing spots, with a per-run chest luck shift between 0.11 and 1.69. Not tested: interacting with the shrines, golden rarity, and a chest roll under the shift.
 
-Pushed to main. `task check` has not been run end to end (the mod build needs the game assemblies on the authoring box), so the Definition of Done stays open; the C# and Python suites pass.
+Pushed to main. `task check` passes on the authoring box (build, 1995 C# tests, 1275 Python tests, lint) with the build's deploy folder redirected to a scratch directory so no game install was touched. The "tests written first" item stays open: the tests came with the recovered source rather than being written ahead of it.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
+- [x] #1 task check passes
 - [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
