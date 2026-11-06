@@ -42,15 +42,17 @@ tasks:
       Steamworks initializes; the Steam client must already be running (task
       game:steam). Use task crossover:run for the CrossOver runtime. Linux:
       uses the native `steam` binary when present, otherwise the Flatpak
-      Steam, defaulting DISPLAY and XAUTHORITY so it also works from a
-      non-graphical shell (KDE Wayland). Windows: runs `steam` directly.
+      Steam, defaulting DISPLAY and XAUTHORITY (the -auth file of the running
+      Xwayland, else a KDE xauth_* file) so it also works from a
+      non-graphical shell. Windows: runs `steam` directly.
     cmds:
       - cmd: uv run scripts/launch_game.py game
         platforms: [darwin]
       - cmd: |
           export DISPLAY="${DISPLAY:-:0}"
           if [ -z "${XAUTHORITY:-}" ]; then
-            auth="$(ls /run/user/$(id -u)/xauth_* 2>/dev/null | head -n 1 || true)"
+            auth="$(pgrep -ax Xwayland | sed -n 's/.*-auth \([^ ]*\).*/\1/p' | head -n 1 || true)"
+            if [ -z "$auth" ]; then auth="$(ls /run/user/$(id -u)/xauth_* 2>/dev/null | head -n 1 || true)"; fi
             if [ -n "$auth" ]; then export XAUTHORITY="$auth"; fi
           fi
           if command -v steam >/dev/null 2>&1; then

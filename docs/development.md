@@ -263,14 +263,14 @@ logged-in GNOME session, saving under `~/Pictures`; retrieve that file with
 
 A shell outside the desktop session has neither `DISPLAY` nor `XAUTHORITY`, so Steam and the game cannot open a window. Steam reports "Unable to open X11 display" in the shell, or shows a zenity "Unable to open a connection to X" dialog on the desktop that nobody sees over SSH. The name of the cookie file differs by desktop: KDE Wayland writes `/run/user/<uid>/xauth_*`, GNOME's mutter writes `/run/user/<uid>/.mutter-Xwaylandauth.<random>`, and the random part changes on every login.
 
-`task game:run` sets `DISPLAY=:0` and, when `XAUTHORITY` is unset, takes the first `/run/user/<uid>/xauth_*`. That matches KDE only. On GNOME nothing matches, Steam starts without `XAUTHORITY` and fails as above, and `run.py relaunch` then waits out its timeout without ever sending the load. The portable lookup reads the `-auth` argument from the running Xwayland command line; export both variables before `task game:run`, `run.py relaunch` or `run.py menu`:
+`task game:run` sets `DISPLAY=:0` and, when `XAUTHORITY` is unset, reads the `-auth` argument from the running Xwayland command line, falling back to the first `/run/user/<uid>/xauth_*` (the KDE name). That covers KDE and GNOME. `run.py relaunch` launches through `task game:run`, so it needs nothing extra. `run.py menu` reads `DISPLAY` and `XAUTHORITY` from its own environment, so export them first, as does any launch that bypasses `task game:run`. The same lookup by hand:
 
 ```sh
 export DISPLAY=:0
-export XAUTHORITY="$(pgrep -af Xwayland | sed -n 's/.*-auth \([^ ]*\).*/\1/p' | head -n1)"
+export XAUTHORITY="$(pgrep -ax Xwayland | sed -n 's/.*-auth \([^ ]*\).*/\1/p' | head -n1)"
 ```
 
-A failed launch leaves a Steam client and its error dialog behind. Clear them with `pkill -x zenity` and `pkill -x steam` (exact names, never `pkill -f`) before retrying. Verified on KDE Wayland and GNOME Wayland. A plain Xorg session and other compositors are unconfirmed: check `pgrep -af 'Xorg|Xwayland'` for the `-auth` argument there, and `game:run` could use the same lookup instead of the KDE glob.
+A failed launch leaves a Steam client and its error dialog behind. Clear them with `pkill -x zenity` and `pkill -x steam` (exact names, never `pkill -f`) before retrying. Verified on KDE Wayland and GNOME Wayland. A plain Xorg session and other compositors are unconfirmed: check `pgrep -af 'Xorg|Xwayland'` for the `-auth` argument there.
 
 ### Verified menu regression under Proton
 
