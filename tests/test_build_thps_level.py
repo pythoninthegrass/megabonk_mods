@@ -745,4 +745,4 @@ def test_every_shrine_spot_lies_inside_the_warehouse_footprint() -> None:
     for x, y, z in b.SHRINE_SPOTS:
         assert abs(x - wx) < width / 2
         assert abs(z - wz) < depth / 2
-        assert b.KILL_FLOOR_Y < y
+        assert y > b.KILL_FLOOR_Y
