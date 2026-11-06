@@ -46,6 +46,9 @@ def workspace(tmp_path, monkeypatch):
     levels.mkdir(parents=True)
     (levels / "example-forest.mblevel.json").write_text('{"version":1}')
     (levels / "scratch.local.mblevel.json").write_text('{"version":1}')
+    (levels / "example-forest.png").write_bytes(b"png bytes")
+    (levels / "scratch.local.png").write_bytes(b"scratch png")
+    (levels / "other-level.png").write_bytes(b"not bundled")
 
     bundles = tmp_path / "repo/.tools/bundles/windows"
     bundles.mkdir(parents=True)
@@ -139,6 +142,18 @@ class TestLayout:
         assert "content/levels/example-forest.mblevel.json" in bundled
         assert not any("scratch.local" in path for path in bundled)
         assert "working file" in capsys.readouterr().out
+
+    def test_level_sidecar_image_is_bundled_beside_its_level(self, workspace):
+        record = build(workspace)
+        dests = {f.path: f.dest for f in record.files}
+        assert dests["content/levels/example-forest.png"] == "UserData/Levels/example-forest.png"
+        assert not any("other-level" in path for path in dests)
+        assert not any("scratch.local" in path for path in dests)
+
+    def test_sidecar_image_in_zip_matches_manifest_hash(self, workspace):
+        record = build(workspace)
+        entry = next(f for f in record.files if f.path == "content/levels/example-forest.png")
+        assert entry.sha256 == hashlib.sha256(b"png bytes").hexdigest()
 
     def test_level_and_pack_destinations(self, workspace):
         record = build(workspace)

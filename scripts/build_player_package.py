@@ -31,6 +31,7 @@ PACKAGE_ID = "megabonk-levels"
 PACKAGE_MANIFEST_NAME = "manifest.json"
 
 MOD_DLL = "MegabonkLevels.Mod.dll"
+SIDECAR_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg"}
 USERLIBS = ["NLayer.dll"]
 MOD_SKIP = {MOD_DLL, "MegabonkLevels.Mod.pdb", "MegabonkLevels.Mod.deps.json", "MegabonkLevels.Mod.runtimeconfig.json", *USERLIBS}
 
@@ -213,17 +214,28 @@ def add_levels(staging: Path, levels_root: Path, names: list[str]) -> list[dict]
         source = levels_root / name
         if not source.is_file():
             raise MissingInput(f"{name} is not in {levels_root}.")
-        target = staging / "content/levels" / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
-        entries.append(
-            {
-                "path": f"content/levels/{name}",
-                "sha256": sha256_file(target),
-                "dest": f"UserData/{LEVELS_DIR_NAME}/{name}",
-            }
-        )
+        for file_name in [name, *sidecar_image_names(levels_root, name)]:
+            target = staging / "content/levels" / file_name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(levels_root / file_name, target)
+            entries.append(
+                {
+                    "path": f"content/levels/{file_name}",
+                    "sha256": sha256_file(target),
+                    "dest": f"UserData/{LEVELS_DIR_NAME}/{file_name}",
+                }
+            )
     return entries
+
+
+def sidecar_image_names(levels_root: Path, level_name: str) -> list[str]:
+    """Names of the png/jpg files beside a level that share its base name; the mod picks them up as the thumbnail."""
+    base = level_name.removesuffix(".mblevel.json") if level_name.endswith(".mblevel.json") else Path(level_name).stem
+    return sorted(
+        p.name
+        for p in levels_root.iterdir()
+        if p.is_file() and p.suffix.lower() in SIDECAR_IMAGE_SUFFIXES and p.stem.lower() == base.lower()
+    )
 
 
 def name_is_local_scratch(name: str) -> bool:

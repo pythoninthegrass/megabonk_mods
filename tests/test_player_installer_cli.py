@@ -361,6 +361,36 @@ def test_uninstall_restores_a_vanilla_game(tmp_path: Path, package: Path, capsys
     assert (game / "Megabonk.exe").is_file() and (game / "Megabonk_Data").is_dir()
 
 
+def _add_level_with_thumbnail(package: Path) -> None:
+    levels = package / "content/levels"
+    levels.mkdir(parents=True)
+    (levels / "thps.mblevel.json").write_bytes(b"{}")
+    (levels / "thps.png").write_bytes(b"png")
+    doc = json.loads((package / "manifest.json").read_text())
+    for name, data in (("thps.mblevel.json", b"{}"), ("thps.png", b"png")):
+        doc["files"].append({"path": f"content/levels/{name}", "sha256": hashlib.sha256(data).hexdigest(), "dest": f"UserData/Levels/{name}"})
+    (package / "manifest.json").write_text(json.dumps(doc))
+
+
+def test_a_level_thumbnail_is_installed_checked_repaired_and_uninstalled(tmp_path: Path, package: Path, capsys) -> None:
+    _add_level_with_thumbnail(package)
+    home, game = _install_tree(tmp_path)
+    argv = ["--home", str(home), "--package", str(package), "--no-gui", "--wine-override", "off"]
+    thumbnail = game / "UserData/Levels/thps.png"
+    assert _run(argv) == cli.EXIT_OK
+    assert thumbnail.read_bytes() == b"png"
+    assert _run([*argv, "--check"]) == cli.EXIT_OK
+    thumbnail.unlink()
+    capsys.readouterr()
+    assert _run([*argv, "--check"]) == cli.EXIT_OUT_OF_DATE
+    assert "thps.png" in capsys.readouterr().out
+    assert _run(argv) == cli.EXIT_OK
+    assert thumbnail.read_bytes() == b"png"
+    assert _run([*argv, "--uninstall"]) == cli.EXIT_OK
+    assert not thumbnail.exists()
+    assert not (game / "UserData/Levels/thps.mblevel.json").exists()
+
+
 def test_a_corrupt_package_fails_before_touching_the_game(tmp_path: Path, package: Path, capsys) -> None:
     home, game = _install_tree(tmp_path)
     (package / "mod" / "MegabonkLevels.Mod.dll").write_bytes(b"corrupted")
