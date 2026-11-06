@@ -3,9 +3,10 @@ id: TASK-006.06
 title: >-
   Ship level thumbnails in the player packages so Warehouse shows its picture in
   level select
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-06 23:11'
+updated_date: '2026-11-06 23:24'
 labels:
   - bug
   - packaging
