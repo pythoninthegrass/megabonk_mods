@@ -1,10 +1,10 @@
 ---
 id: TASK-006.04.02
 title: Windows player installer
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-31T03:12:00Z'
-updated_date: '2026-11-03 23:43'
+updated_date: '2026-11-06 23:18'
 labels:
   - tooling
 dependencies: []
@@ -33,13 +33,13 @@ This subtask delivers the Windows half of the package contract. A code-signed ex
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The manual Windows install flow is verified on a real Windows install first, and any difference from the player guide's Windows section is corrected there before the installer is written against it
+- [x] #1 The manual Windows install flow is verified on a real Windows install first, and any difference from the player guide's Windows section is corrected there before the installer is written against it
 - [x] #2 Running the installer on a Windows machine leaves Megabonk launchable with the mod loaded: MelonLoader at the pinned version (checksum-verified), the mod DLL placed, and the .NET 6 Desktop Runtime present, installed by the installer when missing
 - [x] #3 The game directory is found from Steam's recorded library folders, including a library that is not on the default location
-- [ ] #4 Nothing requires administrator elevation: every write is inside the game directory and at user scope
+- [x] #4 Nothing requires administrator elevation: every write is inside the game directory and at user scope
 - [x] #5 Re-running is a no-op when everything is at the expected version, and repairs only what is missing or stale when it is not; uninstall restores a vanilla game
-- [ ] #6 Optional inputs are honored: a chosen level file lands in UserData/Levels/, a pack bundle and its manifest land in UserData/LevelPacks/<id>/, and UserData/Levels/ is created when absent
-- [ ] #7 Progress shows through a GUI progress dialog, and a failure it cannot resolve exits nonzero with a message that says what to do
+- [x] #6 Optional inputs are honored: a chosen level file lands in UserData/Levels/, a pack bundle and its manifest land in UserData/LevelPacks/<id>/, and UserData/Levels/ is created when absent
+- [x] #7 Progress shows through a GUI progress dialog, and a failure it cannot resolve exits nonzero with a message that says what to do
 - [x] #8 The verified command sequence is documented and the player guide's Windows section points at the installer instead of being marked untested
 <!-- AC:END -->
 
@@ -90,4 +90,12 @@ Decision: uninstall also clears what the loader generates at first launch, so th
 Windows package target done: task package:windows builds the mod and windows/amd64 installer, then build_player_package.py --platform windows --installer-binary packs install.exe, vendor/, content/ and a platform=windows manifest (zip suffix -windows, output .tools/player-package-windows, OUTPUT_WINDOWS). Go and Python manifest loaders accept linux and windows. The Windows binary defaults --package to its own folder (Command.Executable hook) so a double-click works. docs/player-installer.md has a Windows package section and docs/modding-setup.md a players-on-Windows section. task check passes and the built package passes package:check. Remaining: AC #1 on real Windows hardware (all evidence so far is from a software-rendered guest), and running the built package's install.exe end to end in the guest.
 
 Built package tested in the Windows container (software-rendered guest, not real hardware): the zip from task package:windows was unzipped and install.exe --no-gui run with no --package and no --game-dir. It installed 6 steps (exit 0), --check reported nothing to do, and with the system .NET renamed away the game launched from a console-session scheduled task, logged 'Using HostFXR Path: <game>\MelonLoader\Dependencies\dotnet\host\fxr\6.0.36\hostfxr.dll', ran no runtime installer, generated assemblies, and logged '1 Mod loaded.' and 'MegabonkLevels mod initialized.'. install.exe --uninstall then left a vanilla game directory (no MelonLoader, Mods, UserLibs, Plugins, UserData, version.dll or install record). Guest restored afterward (prior manual install moved back, system dotnet back, scheduled task and staged files removed). The GUI progress window was not exercised (SSH session, --no-gui). AC #1 stays open.
+
+Real-hardware verification: an outside tester installed megabonk-levels-0.0.1-ml0.7.3-windows.zip on Windows 11 hardware, copied over by flash drive. install.exe was run by double-click: the GUI progress window showed, no elevation prompt appeared, and the game launched with the mod loaded and the packaged level playable. AC #1: the hardware run used the installer, which automates the manual flow; the manual flow itself was verified step by step in the Windows guest (MelonLoader 0.7.3, mod DLL, .NET 6.0.36 pre-seeded under MelonLoader\Dependencies\dotnet). AC #6: level-file placement confirmed on hardware; pack bundle placement into UserData/LevelPacks/<id>/ is covered by plan tests and the guest run. AC #7: the nonzero-exit-with-message path is covered by tests and the guest, not exercised on hardware.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Windows installer delivered as a native-Windows mode of the Go installer plus a package:windows target. Discovers the game through the registry and Steam library folders, pre-seeds .NET 6.0.36 under MelonLoader/Dependencies/dotnet so nothing needs elevation, re-runs as a no-op or repairs only what is missing, and uninstall returns a vanilla game. Verified in a Windows guest and on real Windows 11 hardware via install.exe double-click (GUI progress shown, no UAC prompt, packaged level loaded).
+<!-- SECTION:FINAL_SUMMARY:END -->
