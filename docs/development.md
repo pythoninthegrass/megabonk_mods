@@ -259,6 +259,19 @@ the saved PNG's `uri` (on success, response code 0). This worked over SSH in the
 logged-in GNOME session, saving under `~/Pictures`; retrieve that file with
 `scp`. Unlike a nested Xwayland capture, it showed the game's warning overlay.
 
+### Reaching the X server from an SSH shell
+
+A shell outside the desktop session has neither `DISPLAY` nor `XAUTHORITY`, so Steam and the game cannot open a window. Steam reports "Unable to open X11 display" in the shell, or shows a zenity "Unable to open a connection to X" dialog on the desktop that nobody sees over SSH. The name of the cookie file differs by desktop: KDE Wayland writes `/run/user/<uid>/xauth_*`, GNOME's mutter writes `/run/user/<uid>/.mutter-Xwaylandauth.<random>`, and the random part changes on every login.
+
+`task game:run` sets `DISPLAY=:0` and, when `XAUTHORITY` is unset, takes the first `/run/user/<uid>/xauth_*`. That matches KDE only. On GNOME nothing matches, Steam starts without `XAUTHORITY` and fails as above, and `run.py relaunch` then waits out its timeout without ever sending the load. The portable lookup reads the `-auth` argument from the running Xwayland command line; export both variables before `task game:run`, `run.py relaunch` or `run.py menu`:
+
+```sh
+export DISPLAY=:0
+export XAUTHORITY="$(pgrep -af Xwayland | sed -n 's/.*-auth \([^ ]*\).*/\1/p' | head -n1)"
+```
+
+A failed launch leaves a Steam client and its error dialog behind. Clear them with `pkill -x zenity` and `pkill -x steam` (exact names, never `pkill -f`) before retrying. Verified on KDE Wayland and GNOME Wayland. A plain Xorg session and other compositors are unconfirmed: check `pgrep -af 'Xorg|Xwayland'` for the `-auth` argument there, and `game:run` could use the same lookup instead of the KDE glob.
+
 ### Verified menu regression under Proton
 
 Verified on 2026-10-31 under Proton Experimental with Megabonk 1.0.69 and MelonLoader 0.7.3 (see [gamepadui.md](gamepadui.md) for the host setup), the installed Windows THPS pack, and Calcium selected. Input came through Linux uinput mouse clicks (with X11 absolute pointer positioning) and a virtual Xbox 360 controller into the stock menus; the harness supplied screenshots, read-only object queries and quit between DLL builds. No save reset, developer character override or `load-level` command was used.
