@@ -1,10 +1,10 @@
 ---
 id: TASK-021
 title: Recreate the THPS Warehouse as a Megabonk level
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-27T22:08:00Z'
-updated_date: '2026-10-27T22:08:00Z'
+updated_date: '2026-11-06 02:29'
 labels:
   - level-editor
   - thps
@@ -15,7 +15,6 @@ references:
   - tools/thps_warehouse_itemless_map.png
   - tools/thps_warehouse_frames/
 priority: medium
-type: feature
 ordinal: 86000
 ---
 
@@ -42,6 +41,12 @@ Subtasks are sequential phases: analysis, layout spec, geometry, new assets, ite
 - [ ] #4 The level plays its own music instead of the stock track
 - [ ] #5 All subtasks are done
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed with the Warehouse as a close enough facsimile of the THPS original; a 1:1 translation is not needed.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
