@@ -23,8 +23,18 @@ public static class BossSpawnRedirect
     // A surface this close above the kill floor is where the level kills things; bosses must not stand there.
     public const float KillFloorMargin = 5f;
 
+    // The glass box spans the floor and roof around the portal; a miniboss spawning in this band around it is stuck.
+    public const float BoxFloorBelowSpawner = 2f;
+    public const float BoxRoofAboveSpawner = 10f;
+
     // A from-scratch level places its own boss spawner, so it only gets the redirect when its file asks for it.
     public static bool ShouldArm(bool customLevelActive, bool fromScratch, bool redirectRequested) => customLevelActive && (!fromScratch || redirectRequested);
+
+    // True when a spawn at pos sits within the glass box's footprint and height band around the portal.
+    public static bool IsInsideBossBox(Vec3 pos, Vec3 spawner) =>
+        XzDistance(pos, spawner) < MinDistanceFromSpawner &&
+        pos.Y >= spawner.Y - BoxFloorBelowSpawner &&
+        pos.Y <= spawner.Y + BoxRoofAboveSpawner;
 
     public static int ExpectedMoves(int bossCurses) => Math.Max(1, 1 + bossCurses);
 

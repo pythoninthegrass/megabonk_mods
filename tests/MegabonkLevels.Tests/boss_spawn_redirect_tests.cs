@@ -180,4 +180,17 @@ public class BossSpawnRedirectTests
         Assert.Equal(6.967f, placed.Y, 3);
         Assert.Equal(40f, placed.Z);
     }
+
+    [Theory]
+    [InlineData(150f, 20f, 27f, true)]
+    [InlineData(165f, 16f, 27f, true)]
+    [InlineData(172f, 25f, 45f, true)]
+    [InlineData(165f, 10f, 27f, false)]
+    [InlineData(165f, 30f, 27f, false)]
+    [InlineData(100f, 20f, 27f, false)]
+    [InlineData(145f, 22f, 116f, false)]
+    public void IsInsideBossBox_IsTheBandAroundThePortalAtTheBoxHeight(float x, float y, float z, bool expected)
+    {
+        Assert.Equal(expected, BossSpawnRedirect.IsInsideBossBox(V(x, y, z), Spawner));
+    }
 }

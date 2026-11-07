@@ -93,6 +93,7 @@ public static class BossSpawnRedirectPatch
     {
         if (!_armedFrame.HasValue)
         {
+            MoveMinibossOutOfTheBox(boss, requested, via);
             return;
         }
 
@@ -123,7 +124,7 @@ public static class BossSpawnRedirectPatch
             return;
         }
 
-        if (!TryFindSpot(boss, out var floor))
+        if (!TryFindSpot(boss, _spawner, _seed + _moveCount * SeedPerCopy, _taken, out var floor))
         {
             _logger?.Msg($"BossSpawnRedirect: no usable interior spot for the boss spawned via {via}, left alone.");
             return;
@@ -151,18 +152,59 @@ public static class BossSpawnRedirectPatch
         }
     }
 
+    // Timeline minibosses spawn on a ring around the player, so one that lands in the glass box while the player is near
+    // it cannot be reached. Any unarmed Boss-flag spawn inside the box band is moved out by the portal rule.
+    private static void MoveMinibossOutOfTheBox(Enemy boss, Vector3 requested, string via)
+    {
+        if (boss == null || !boss.IsBoss() ||
+            !BossSpawnRedirect.ShouldArm(CustomLevelState.IsActive, FromScratchGenerationPatch.ActiveLevel != null, FromScratchGenerationPatch.ActiveLevel?.BossRedirect ?? false))
+        {
+            return;
+        }
+
+        var portal = UnityEngine.Object.FindObjectOfType<InteractableBossSpawner>();
+        if (portal == null)
+        {
+            return;
+        }
+
+        var at = portal.transform.position;
+        var spawner = new Vec3(at.x, at.y, at.z);
+        var from = boss.transform.position;
+        if (!BossSpawnRedirect.IsInsideBossBox(new Vec3(from.x, from.y, from.z), spawner))
+        {
+            return;
+        }
+
+        if (!TryFindSpot(boss, spawner, Environment.TickCount, Array.Empty<Vec3>(), out var floor))
+        {
+            _logger?.Msg($"BossSpawnRedirect: no usable interior spot for the miniboss spawned via {via}, left alone.");
+            return;
+        }
+
+        var placed = BossSpawnRedirect.FloorPlacement(floor, new Vec3(requested.x, requested.y, requested.z), new Vec3(from.x, from.y, from.z));
+        boss.transform.position = new Vector3(placed.X, placed.Y, placed.Z);
+        if (boss.rb != null)
+        {
+            boss.rb.velocity = Vector3.zero;
+        }
+
+        _logger?.Msg($"BossSpawnRedirect: miniboss {boss.enemyData?.enemyName} moved from ({from.x:0.###}, {from.y:0.###}, {from.z:0.###}) to " +
+                     $"({placed.X:0.###}, {placed.Y:0.###}, {placed.Z:0.###}) via {via}.");
+    }
+
     // Collects every usable ring spot (each copy draws its own ring, seeded by move count) and keeps the one
     // farthest from the copies already placed. See BossSpawnRedirect.PickSpot.
-    private static bool TryFindSpot(Enemy boss, out Vec3 floorPoint)
+    private static bool TryFindSpot(Enemy boss, Vec3 spawner, int seed, IReadOnlyList<Vec3> taken, out Vec3 floorPoint)
     {
         floorPoint = default;
         var killFloorY = LiveEditPatch.KillFloorY ?? float.MinValue;
-        var top = _spawner.Y + 20f;
+        var top = spawner.Y + 20f;
         var usable = new List<Vec3>();
 
-        foreach (var candidate in BossSpawnRedirect.CandidateRing(_spawner, _seed + _moveCount * SeedPerCopy, CandidatesPerBoss))
+        foreach (var candidate in BossSpawnRedirect.CandidateRing(spawner, seed, CandidatesPerBoss))
         {
-            if (!BossSpawnRedirect.SpotUsable(candidate, _spawner, killFloorY, _taken))
+            if (!BossSpawnRedirect.SpotUsable(candidate, spawner, killFloorY, taken))
             {
                 continue;
             }
@@ -173,7 +215,7 @@ public static class BossSpawnRedirectPatch
             }
 
             var spot = new Vec3(candidate.X, floor.y, candidate.Z);
-            if (!BossSpawnRedirect.SpotUsable(spot, _spawner, killFloorY, _taken) || !PlacementProbe.ClearPoint(new Vector3(spot.X, spot.Y, spot.Z)))
+            if (!BossSpawnRedirect.SpotUsable(spot, spawner, killFloorY, taken) || !PlacementProbe.ClearPoint(new Vector3(spot.X, spot.Y, spot.Z)))
             {
                 continue;
             }
@@ -181,6 +223,6 @@ public static class BossSpawnRedirectPatch
             usable.Add(spot);
         }
 
-        return BossSpawnRedirect.PickSpot(usable, _taken, out floorPoint);
+        return BossSpawnRedirect.PickSpot(usable, taken, out floorPoint);
     }
 }
