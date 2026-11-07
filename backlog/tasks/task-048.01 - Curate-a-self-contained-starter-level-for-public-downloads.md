@@ -4,7 +4,7 @@ title: Curate a self-contained starter level for public downloads
 status: In Progress
 assignee: []
 created_date: '2026-11-07 01:56'
-updated_date: '2026-11-07 02:54'
+updated_date: '2026-11-07T22:37:00Z'
 labels:
   - onboarding
 dependencies:
@@ -72,4 +72,14 @@ Fresh-process replay verified the saved rock's live Transform at (23.87, 0, -148
 Confirmed the validation blockers predate these changes: extracted clean HEAD to an isolated temporary baseline, shared only local generated inputs, and reproduced the installer install-fresh parity failure plus all three THPS fixture failures unchanged (four failures). C# suite: 2012 passed. Python excluding the parity file and those three named cases: 1281 passed, three skipped. All acceptance criteria are verified, but the task remains In Progress because task check is not green; no commit has been made.
 
 Committed the starter implementation with a conventional commit at the maintainer's request. The task remains In Progress only because the full check is blocked by independently reproduced baseline failures. Fleet synchronization excludes the deferred host.
+
+Redesigned the starter after reviewing Super Mario 64 Bob-omb Battlefield footage as a level-design reference: renamed Mosswatch Hollow to Bramblecrown Hill (slug bramblecrown-hill) and rebuilt it on the 15x15 maximum grid with heights -1 to 4, twelve ramps, a central hill whose only route up is an eighteen-step spiral to a summit boss arena, a fence-line leading line from spawn, and seven districts (meadow, gully, ridge, ruins, pen, highland, spiral) with a chest each and shrine locations in five or more. Selection art redrawn around the hill. Tests written first (15x15 grid, height set, full reachability, summit climb of at least 15 steps, per-district chests and shrine spread); 60 focused Python/package tests and the C# starter test pass, task lint passes.
+
+Runtime check on the authoring Mac under plain Wine via the development harness: 225 tiles, 383 fill pieces and 149 edits built, boss spawner on the summit, kill floor armed, no missing-content, failed-edit or exception log lines; spawn, summit, peak and gully views captured to the gitignored evidence folder. Not repeated for this layout: native-input ramp walking, a combat interval with spawns on, the boss interaction, the first-edit save and replay, and the packaged selection screen. No commit made yet.
+
+Follow-up from play feedback: Greed and Magnet shrines spawned by the extra-shrine pass lay sideways (the mod assumed Y-up models for every kind but Moai; Greed, Magnet, Challenge, Cursed and Balance are Z-up) and chests were authored at X=0 instead of the native 270. Fixed in ExtraShrines.LocalUp and a per-prop NATIVE_ROTATION_X registry in the level builder, with tests; verified live (shrines at 0/270 as the game's own, chests at 270 with the game's small tilt).
+
+Added level-file fields shrineKindRanges (per-run random count per kind, with ShadyGuy now a spawnable kind) and groundZones (per-cell-range ground material), a read-only palette harness command (run.py palette, MCP palette) that dumps every catalog id with its prefab name, and a 2 second editor tooltip dwell. Bramblecrown Hill is now a composite of Forest, Graveyard, Dungeon, Desert and Hell districts with biome ground, 5 guaranteed Charge shrines and 3-8 Moai and Shady Guy per run. Live-checked a spawned Shady Guy opening its shop. Not yet verified: native-input ramp walking, combat, boss, Moai and coffin interactions, first-edit replay, packaged selection screen. Lava and mixed bosses still need mod code.
+
+Later in the same redesign: the lava pool is a sunken basin with a ramp out and a refused spawn inside any lava zone; Forest grass blades are dropped on repainted ground; boss and miniboss pool draws are burned for the rest of the run so an enemy never spawns twice. Committed as 55fe187. The task stays open: still to verify on this layout are native-input ramp walking, a full combat run, the Moai and coffin interactions, the first-edit save and replay, the packaged selection screen, and a green task check (blocked by the installer parity and THPS fixture failures present at HEAD).
 <!-- SECTION:NOTES:END -->
