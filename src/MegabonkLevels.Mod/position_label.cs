@@ -3,6 +3,7 @@ using Il2Cpp;
 using Il2CppAssets.Scripts.Actors.Enemies;
 using Il2CppAssets.Scripts.Actors.Player;
 using Il2CppAssets.Scripts.Managers;
+using Il2CppAssets.Scripts.UI.Debug;
 using Il2CppTMPro;
 using MelonLoader;
 using UnityEngine;
@@ -33,6 +34,7 @@ public static class PositionLabel
     private static float _floorY;
     private static TextMeshProUGUI _label;
     private static bool _warnedNoMinimap;
+    private static readonly CoordinateVisibility Visibility = new();
     private static float _nextUpdate;
     private static float _nextActorUpdate;
     private static readonly NearbyEnemySelector EliteSelector = new(MaxEliteLines);
@@ -40,6 +42,9 @@ public static class PositionLabel
     private static readonly List<ReadoutActor> Actors = new();
     private static bool _cellLogEnabled = EnvFlag.IsSet(CellLogVariable);
     private static readonly CellChangeTracker CellLog = new();
+
+    public static bool Enabled => Visibility.Enabled;
+    public static bool Visible => _label != null && _label.gameObject.activeInHierarchy && (UiManager.Instance?.hudGroup?.alpha ?? 0f) > 0f;
 
     public static void Arm(int gridWidth, int gridDepth, float spacing, float tileHeight, float floorY, MelonLogger.Instance logger)
     {
@@ -49,7 +54,9 @@ public static class PositionLabel
         _spacing = spacing;
         _tileHeight = tileHeight;
         _floorY = floorY;
+        Hide();
         _warnedNoMinimap = false;
+        _nextUpdate = 0f;
         Actors.Clear();
         _nextActorUpdate = 0f;
         CellLog.Reset();
@@ -71,11 +78,42 @@ public static class PositionLabel
         logger.Msg($"PositionLabel: cell log {(enabled ? "on" : "off")}");
     }
 
-    public static void Tick()
+    public static void SetVisible(bool enabled, MelonLogger.Instance logger)
     {
-        if (!PositionReadout.Visible(_armed, EditorMode.Active))
+        Visibility.Set(enabled);
+        _nextUpdate = 0f;
+        if (!enabled)
         {
             Hide();
+        }
+
+        logger.Msg($"PositionLabel: coordinates {(enabled ? "on" : "off")}");
+    }
+
+    public static void Tick()
+    {
+        if (!_armed)
+        {
+            Hide();
+            return;
+        }
+
+        if (_armed && EditorInput.GetKeyDown(KeyCode.F7)
+            && PositionReadout.ShouldToggle(_armed, true, DebugConsole.Instance != null && DebugConsole.Instance.IsActive(), EditorTileTools.TextInputFocused))
+        {
+            SetVisible(!Enabled, _logger);
+        }
+
+        var player = MyPlayer.Instance;
+        var alive = player?.inventory?.playerHealth is { } health && !health.IsDead();
+        var visible = Visibility.Visible(_armed, alive);
+        if (!visible)
+        {
+            Hide();
+        }
+
+        if (!alive || (!visible && !_cellLogEnabled))
+        {
             return;
         }
 
@@ -85,17 +123,6 @@ public static class PositionLabel
         }
 
         _nextUpdate = Time.unscaledTime + UpdateIntervalSeconds;
-        var player = MyPlayer.Instance;
-        if (player == null)
-        {
-            return;
-        }
-
-        if (_label == null && !TryCreate())
-        {
-            return;
-        }
-
         var position = player.transform.position;
         if (_cellLogEnabled)
         {
@@ -106,6 +133,11 @@ public static class PositionLabel
         {
             _nextActorUpdate = Time.unscaledTime + ActorIntervalSeconds;
             RefreshActors(position);
+        }
+
+        if (!visible || (_label == null && !TryCreate()))
+        {
+            return;
         }
 
         var text = PositionReadout.Render(position.x, position.y, position.z, _floorY, Actors);
@@ -212,13 +244,14 @@ public static class PositionLabel
     {
         if (_label != null)
         {
+            _label.gameObject.SetActive(false);
             Object.Destroy(_label.gameObject);
         }
 
         _label = null;
     }
 
-    // The label is a copy of one of the minimap's own direction letters, which brings the game's font and material.
+    // Clone a minimap direction letter to keep the game's original font, material and placement.
     private static bool TryCreate()
     {
         var minimap = Object.FindObjectOfType<MinimapUi>();

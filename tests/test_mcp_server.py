@@ -127,6 +127,25 @@ async def test_editor_tool_sends_the_enabled_flag(tmp_path, monkeypatch) -> None
     assert seen == [{"command": "editor", "enabled": True}]
 
 
+@pytest.mark.parametrize("enabled", [True, False])
+async def test_coordinates_tool_sends_an_independent_flag(tmp_path, monkeypatch, enabled) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def responder(payload):
+        seen.append(payload)
+        return ok_result(payload, {"enabled": enabled, "visible": enabled})
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("coordinates", {"on": enabled})
+    finally:
+        stop.set()
+    assert not result.is_error
+    assert seen == [{"command": "coordinates", "enabled": enabled}]
+
+
 async def test_screenshot_returns_an_inline_png(tmp_path, monkeypatch) -> None:
     harness = setup_harness(tmp_path, monkeypatch)
     monkeypatch.chdir(tmp_path)

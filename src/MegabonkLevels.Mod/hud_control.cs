@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace MegabonkLevels;
 
-// Dev-harness switch that fades the stock HUD group (the position readout sits under the minimap) and the follow-player health bar for clean captures.
+// Fades the stock HUD, including the minimap's coordinate label, without changing the coordinate preference.
 public static class HudControl
 {
     private static readonly HudVisibility Visibility = new();

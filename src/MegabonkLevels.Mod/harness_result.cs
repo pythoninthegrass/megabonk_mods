@@ -53,7 +53,9 @@ public readonly record struct GameStateSnapshot(
     int? PaletteEntries,
     EditsSnapshot? Edits,
     int ScreenWidth,
-    int ScreenHeight)
+    int ScreenHeight,
+    bool CoordinatesEnabled = false,
+    bool CoordinatesVisible = false)
 {
     public JsonObject ToJson() => new()
     {
@@ -63,6 +65,8 @@ public readonly record struct GameStateSnapshot(
         ["frozen"] = Frozen,
         ["invulnerable"] = Invulnerable,
         ["spawnsOff"] = SpawnsOff,
+        ["coordinatesEnabled"] = CoordinatesEnabled,
+        ["coordinatesVisible"] = CoordinatesVisible,
         ["player"] = Player is { } p ? PlayerJson(p) : null,
         ["editorTool"] = EditorTool,
         ["selected"] = Selected,

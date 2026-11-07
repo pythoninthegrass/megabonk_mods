@@ -53,6 +53,7 @@ public enum HarnessCommandKind
     MusicProbe,
     Perf,
     KillEnemies,
+    Coordinates,
 }
 
 // Arguments of a new-level command: the blank from-scratch level's map, stage, tier and square grid size.
@@ -252,6 +253,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseEnabledFlag(root, HarnessCommandKind.Cells, out command, out error);
             case "hud":
                 return TryParseEnabledFlag(root, HarnessCommandKind.Hud, out command, out error);
+            case "coordinates":
+                return TryParseEnabledFlag(root, HarnessCommandKind.Coordinates, out command, out error);
             case "editor":
                 return TryParseEnabledFlag(root, HarnessCommandKind.Editor, out command, out error);
             case "key":

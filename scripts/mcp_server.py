@@ -285,8 +285,14 @@ async def resume() -> CallToolResult:
 
 @mcp.tool()
 async def hud(on: bool) -> CallToolResult:
-    """Show (on) or hide (off) the stock HUD and the position readout, so a screenshot is a clean photo-mode frame. World-space labels stay. Restores the alpha seen when it was hidden."""
+    """Show or hide the stock HUD, its minimap coordinate label and follow-player health bar, without resetting the coordinate toggle."""
     return await _command(_harness(), run.build_hud_command(on), TIMEOUT)
+
+
+@mcp.tool()
+async def coordinates(on: bool) -> CallToolResult:
+    """Show or hide coordinates in gameplay or editor mode without changing the HUD, pause or camera. Also toggled with F7; off by default."""
+    return await _command(_harness(), run.build_coordinates_command(on), TIMEOUT)
 
 
 @mcp.tool()

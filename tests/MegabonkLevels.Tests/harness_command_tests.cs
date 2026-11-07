@@ -3,6 +3,18 @@ namespace MegabonkLevels.Tests;
 public class HarnessCommandTests
 {
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Coordinates_RequiresAnExplicitBoolean(bool enabled)
+    {
+        Assert.True(HarnessCommand.TryParse($$"""{"command":"coordinates","enabled":{{enabled.ToString().ToLowerInvariant()}}}""", out var command, out var error), error);
+        Assert.Equal(HarnessCommandKind.Coordinates, command.Kind);
+        Assert.Equal(enabled, command.Enabled);
+        Assert.False(HarnessCommand.TryParse("""{"command":"coordinates"}""", out _, out _));
+        Assert.False(HarnessCommand.TryParse("""{"command":"coordinates","enabled":"on"}""", out _, out _));
+    }
+
+    [Theory]
     [InlineData("nearest")]
     [InlineData("all")]
     [InlineData("bosses")]

@@ -37,7 +37,8 @@ Usage:
     run.py shader-report           Print which candidate shaders Shader.Find resolves and the shaders and properties of the scene's materials
     run.py material-dump [object]  Print the shader, keywords and textures of every material under the objects whose name contains [object] (default Warehouse)
     run.py character-screen <on|off>  Restrict the game's character screen to Calcium and Tony McZoom (a custom run is being set up) or restore the stock grid
-    run.py hud <on|off>            Show or hide the stock HUD and the position readout for clean screenshots
+    run.py hud <on|off>            Show or hide the stock HUD without resetting the coordinate toggle
+    run.py coordinates <on|off>    Show or hide coordinates in play or editor mode (also F7)
     run.py spawns <on|off>         Allow or stop new enemy spawns (off leaves enemies already alive; resets on level load)
     run.py heartbeat <on|off>      Start or stop the kill-floor heartbeat (actor counts and lowest heights every 5 seconds)
     run.py perf <verb> [--count N] [--value X] [--target NAME] [--enable|--disable] [--hp N]
@@ -418,6 +419,10 @@ def build_character_screen_command(enabled: bool) -> dict[str, object]:
 
 def build_hud_command(visible: bool) -> dict[str, object]:
     return {"command": "hud", "enabled": visible}
+
+
+def build_coordinates_command(visible: bool) -> dict[str, object]:
+    return {"command": "coordinates", "enabled": visible}
 
 
 def build_spawns_command(enabled: bool) -> dict[str, object]:
@@ -1515,6 +1520,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     spawns.add_argument("state", choices=["on", "off"])
     hud = sub.add_parser("hud")
     hud.add_argument("state", choices=["on", "off"])
+    coordinates = sub.add_parser("coordinates")
+    coordinates.add_argument("state", choices=["on", "off"])
     heartbeat = sub.add_parser("heartbeat")
     heartbeat.add_argument("state", choices=["on", "off"])
     cells = sub.add_parser("cells")
@@ -1744,6 +1751,10 @@ def character_screen_payload(args: argparse.Namespace) -> dict[str, object]:
 
 def hud_payload(args: argparse.Namespace) -> dict[str, object]:
     return build_hud_command(args.state == "on")
+
+
+def coordinates_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_coordinates_command(args.state == "on")
 
 
 def spawns_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -2053,6 +2064,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send(harness, spawns_payload(args), args.timeout)
         case "hud":
             ok = send(harness, hud_payload(args), args.timeout)
+        case "coordinates":
+            ok = send_printing_result(harness, coordinates_payload(args), args.timeout)
         case "heartbeat":
             ok = send(harness, heartbeat_payload(args), args.timeout)
         case "cells":

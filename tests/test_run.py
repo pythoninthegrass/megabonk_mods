@@ -399,6 +399,17 @@ def test_build_hud_command_carries_the_enabled_flag() -> None:
     assert run.build_hud_command(False) == {"command": "hud", "enabled": False}
 
 
+@pytest.mark.parametrize("state,enabled", [("on", True), ("off", False)])
+def test_coordinates_cli_and_payload(state, enabled) -> None:
+    assert run.coordinates_payload(run.parse_args(["coordinates", state])) == {"command": "coordinates", "enabled": enabled}
+
+
+@pytest.mark.parametrize("args", [["coordinates"], ["coordinates", "maybe"]])
+def test_coordinates_rejects_missing_or_invalid_state(args) -> None:
+    with pytest.raises(SystemExit):
+        run.parse_args(args)
+
+
 def test_hud_payload_maps_the_state_to_the_wire_command() -> None:
     assert run.hud_payload(run.parse_args(["hud", "on"])) == {"command": "hud", "enabled": True}
     assert run.hud_payload(run.parse_args(["hud", "off"])) == {"command": "hud", "enabled": False}

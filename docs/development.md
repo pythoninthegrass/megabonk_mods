@@ -34,7 +34,8 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Kill the nearest enemy, all enemies or all bosses (see "Killing enemies") | `{"command":"kill-enemies","target":"bosses"}` | `run.py kill-enemies bosses` |
 | End the run at once by killing the player (ignores invulnerability) | `{"command":"kill"}` | `run.py kill` |
 | Run the game's own restart, the death screen's Retry button | `{"command":"restart-run"}` | `run.py restart-run` |
-| Show or hide the stock HUD and position readout | `{"command":"hud","enabled":false}` | `run.py hud <on\|off>` |
+| Show or hide the stock HUD | `{"command":"hud","enabled":false}` | `run.py hud <on\|off>` |
+| Independently show or hide coordinates | `{"command":"coordinates","enabled":true}` | `run.py coordinates <on\|off>` (also F7) |
 | Allow or stop new enemy spawns | `{"command":"spawns","enabled":false}` | `run.py spawns <on\|off>` |
 | Check in-game Steamworks readiness | `{"command":"steam-ready"}` | `run.py steam-ready` |
 | Read the game's current state | `{"command":"state"}` | `run.py state` |
@@ -165,6 +166,8 @@ Before moving a command file to `done/` or `rejected/`, the mod writes `harness/
 | `frozen` | bool | `MyTime.paused` |
 | `invulnerable` | bool | The harness's invulnerability is active on the current player's inventory |
 | `spawnsOff` | bool | The harness has stopped enemy spawns on the current `EnemyManager` |
+| `coordinatesEnabled` | bool | Explicit coordinate preference, off at startup and unchanged by editor/HUD toggles or level loads |
+| `coordinatesVisible` | bool | The coordinate label exists and its HUD is visible; can be false while enabled during loading, after death, with the HUD hidden or outside a supported custom run |
 | `player` | object or null | `{"position":[x,y,z],"cell":[column,row]}`. `null` when there is no player in the scene (menu, loading). `cell` is `null` when the position label's grid is not armed (no kill floor), and can lie outside the grid |
 | `editorTool` | string or null | The active tool name (`Raise`, `Lower`, `Slope`, `Remove`, `Place`, `Select`). `null` outside editor mode, where the tool is not read |
 | `selected` | string or null | The selected object as `gen:<genId>` or `placement:<id>`. `null` outside editor mode or when nothing is selected |
@@ -798,13 +801,27 @@ The kill line itself always carries the actor's id, world position and `lowest` 
 
 ## Clean screenshots
 
-`hud` with `enabled:false` (`run.py hud off`, MCP `hud(on=false)`) sets `UiManager.Instance.hudGroup.alpha` to 0, which hides the stock HUD (stage clock, XP and HP bars, minimap, quest box, weapon icons, the map title card) and the position readout, since that label is parented under the minimap. It also fades the `CanvasGroup` of each active `HealthUI` with `followPlayer` set, the health and shield bar drawn under the character, which sits outside the HUD group; the game's own `Update` does not fight the alpha. `enabled:true` puts back the alpha that was there when the HUD was first hidden, so a HUD that was already faded stays faded and a second `hud off` does not overwrite the saved value. Combine it with `camera`, `freeze` and `screenshot` for a photo-mode frame: `freeze`, `camera` to the pose, `hud off`, `screenshot`, then `hud on`, `camera --clear` and `resume`.
+`hud` with `enabled:false` (`run.py hud off`, MCP `hud(on=false)`) sets `UiManager.Instance.hudGroup.alpha` to 0, which hides the stock HUD (stage clock, XP and HP bars, minimap, quest box, weapon icons, the map title card) and the coordinate label parented under the minimap. This does not reset the independent coordinate preference: `hud on` restores the readout if coordinates were enabled. The HUD command also fades the `CanvasGroup` of each active `HealthUI` with `followPlayer` set, the health and shield bar drawn under the character, which sits outside the HUD group; the game's own `Update` does not fight the alpha. `enabled:true` puts back the alpha that was there when the HUD was first hidden, so a HUD that was already faded stays faded and a second `hud off` does not overwrite the saved value. For a photo-mode frame, use `freeze`, `camera` to the pose, `hud off`, `screenshot`, then restore the HUD, clear the camera and resume.
 
 World-space elements are not part of the HUD group and stay in the frame: enemy name labels, price tags, damage numbers and elite crown icons. The level-up, pause and death screens are separate UI and are not hidden either. An editor on/off round trip leaves the HUD hidden. A level load or new run builds a new HUD, so the HUD is visible again after a `load`; send `hud off` again after each.
 
 ## Position readout
 
-With the harness enabled, a mod-loaded level draws, while the level editor is open and not otherwise, monospace (`RobotoMono`) yellow text anchored under the game's minimap, left-aligned within a box whose right edge sits under the minimap's right edge (the minimap itself is flush with the screen's own top-right corner, so anchoring under its left edge instead would run new lines straight off-screen). The player's own line is labelled `me:`:
+Coordinates are an independent, explicit toggle, **off by default**. Press **F7**
+in gameplay or the editor, use `run.py coordinates on|off`, or call MCP
+`coordinates(on=true|false)`. Toggling coordinates does not enter the editor,
+pause/unpause the run, move the camera or change the stock HUD. F7 is ignored
+when the debug console or an editor text field is focused. The preference
+survives editor entry/exit and level loads within the process; restarting the
+game resets it to off. `coordinates` returns the requested `enabled` state and
+the current `visible` state; rendering may follow on the next frame.
+
+When enabled on a harness-armed custom level with a living player, the original
+yellow monospace (`RobotoMono`) readout draws under the minimap. Its original
+minimap anchoring, transparent background, font size, dynamic column widths and
+text formatting are unchanged. Overlap with the minimap or editor panels is
+intentional; this is not a new bottom-right panel. The player's own line is
+labelled `me:`:
 
 ```text
 me:        pos(120, 2, 3) floor -72
@@ -813,7 +830,14 @@ enemy: 4   pos(125, 2, -10)
 
 Every line shares the same columns (label, id, then `pos(x, y, z)`), but the column widths are computed each refresh from what is actually on screen that refresh (`PositionReadout.Render`), not a fixed guess: the label column is as wide as the longest label shown (at least `me:`), the id column at least 3 digits (wider only if an id needs more, so ids don't jitter the column within a normal run), and each of x/y/z is as wide as that coordinate's widest current value. A value wider than its column still prints in full, only pushing what comes after it on that line; lines share these widths so the `pos` column lines up between them. `pos` itself is the world position rounded to whole units. `floor` on the player's line is the kill-floor height, and `BELOW FLOOR` is appended when an actor's position is below it (the kill floor uses the lower of the position and the collider bottom, so an actor can be killed a moment before its line is flagged). Boss-tier lines also carry the enemy's type name, directly after the position or the `BELOW FLOOR` flag with a single space — it is not column-aligned across lines, since reserving width for it on every line left large dead space when only one boss-tier actor was shown. The player's line is refreshed ten times a second, the actor lines every 0.75 seconds: that sweep walks every live enemy, so at a few hundred of them a 4 Hz pass was a measurable share of a frame for text nobody reads that fast.
 
-It is drawn only when the harness is enabled, the level is mod-loaded (which is when the kill floor arms) and the editor is open (`PositionReadout.Visible`): leaving the editor removes the label and re-entering it draws it again, so normal play of a mod-loaded level shows no readout and `state` and the cell log are the way to read positions there. A vanilla level or a disabled harness draws nothing. The label is a copy of one of the minimap's own direction letters, parented to the minimap root; its box is resized every refresh to the actual rendered text (`GetPreferredValues`), so it hugs the minimap instead of carrying a fixed width. If the minimap does not exist yet it logs `PositionLabel: no minimap found, readout not drawn` once and retries on the next tick; the log line `PositionLabel: created under the minimap` marks the first draw. The conversion and the text format are pure logic in `position_readout.cs`.
+Vanilla levels, a disabled harness, loading screens and dead players draw no
+readout even if the preference is on. The label is a copy of a native minimap
+direction letter, parented to the minimap root and resized to the text's
+preferred width. A missing minimap delays rendering until it exists. `state`
+exposes `coordinatesEnabled` and `coordinatesVisible` separately and continues
+reporting player position/cell when coordinates are off. The `cells` log is also
+independent: it tracks player and boss-tier cell changes without requiring the
+readout. Conversion, visibility and formatting rules live in `position_readout.cs`.
 
 ### Enemy kinds
 
@@ -1315,6 +1339,7 @@ The same toolbar now owns the editing loop controls:
 | `Save+Load` | saves first using the current name field, then loads that same file and requests editor auto-re-enter |
 | `Load` and right-side list | browses `.mblevel.json` files in `<game>/UserData/Levels/` (case-insensitive sort); the list shows 4 files per page with `<` and `>` buttons and an `n/N` page counter in its title row; the wheel over the list changes page, one page per notch, stopping at the first and last page (the same `PalettePager` as the palette); click a row to select it, which also copies its file stem into the save form; the selected row has a lighter fill and yellow text, the hovered row a lighter fill; after `Save` the list shows the page holding the saved file; `Load` starts that file through `LevelLoaderPatch.LoadAndStart` and editor mode then auto-re-enters once the new run is active |
 | `F8` | toggles editing and live playtesting of the same run; no save or stage reload is required, and undo/redo history is retained |
+| `F7` | independently toggles coordinates in play or editor mode on a harness-enabled custom level |
 
 Validation overlays are explicitly stale after any edit/undo/redo and are cleared until `Validate` is pressed again.
 

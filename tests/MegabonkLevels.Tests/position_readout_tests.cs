@@ -12,10 +12,36 @@ public class PositionReadoutTests
     [InlineData(true, false, false)]
     [InlineData(false, true, false)]
     [InlineData(false, false, false)]
-    public void Visible_NeedsAnArmedLevelAndTheEditor(bool armed, bool editorActive, bool expected)
+    public void Visible_NeedsAnArmedLevelAndTheExplicitPreference(bool armed, bool enabled, bool expected)
     {
-        Assert.Equal(expected, PositionReadout.Visible(armed, editorActive));
+        Assert.Equal(expected, PositionReadout.Visible(armed, enabled));
     }
+
+    [Fact]
+    public void CoordinateVisibility_IsOffByDefaultAndExplicitlyToggleable()
+    {
+        var visibility = new CoordinateVisibility();
+        Assert.False(visibility.Enabled);
+        Assert.False(visibility.Visible(true, true));
+        visibility.Toggle();
+        Assert.True(visibility.Visible(true, true));
+        visibility.Set(true);
+        Assert.True(visibility.Enabled);
+        Assert.False(visibility.Visible(false, true));
+        Assert.False(visibility.Visible(true, false));
+        Assert.True(visibility.Enabled);
+        visibility.Toggle();
+        Assert.False(visibility.Visible(true, true));
+    }
+
+    [Theory]
+    [InlineData(true, true, false, false, true)]
+    [InlineData(false, true, false, false, false)]
+    [InlineData(true, false, false, false, false)]
+    [InlineData(true, true, true, false, false)]
+    [InlineData(true, true, false, true, false)]
+    public void CoordinateHotkey_RequiresAnArmedLevelAndNoFocusedInput(bool armed, bool pressed, bool console, bool text, bool expected) =>
+        Assert.Equal(expected, PositionReadout.ShouldToggle(armed, pressed, console, text));
 
     [Theory]
     [InlineData(-280f, -280f, 0, 0)]

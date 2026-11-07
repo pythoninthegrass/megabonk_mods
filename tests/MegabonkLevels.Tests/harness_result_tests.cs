@@ -83,7 +83,9 @@ public class HarnessResultTests
             PaletteEntries: 12,
             Edits: new EditsSnapshot(3, true, "forest.mblevel.json", "saved"),
             ScreenWidth: 1920,
-            ScreenHeight: 1080);
+            ScreenHeight: 1080,
+            CoordinatesEnabled: true,
+            CoordinatesVisible: false);
 
         var root = snapshot.ToJson();
 
@@ -93,6 +95,8 @@ public class HarnessResultTests
         Assert.True((bool?)root["frozen"]);
         Assert.False((bool?)root["invulnerable"]);
         Assert.True((bool?)root["spawnsOff"]);
+        Assert.True((bool?)root["coordinatesEnabled"]);
+        Assert.False((bool?)root["coordinatesVisible"]);
         Assert.Equal(new[] { 1.5f, 2f, -3f }, root["player"]!["position"]!.AsArray().Select(n => (float)n!).ToArray());
         Assert.Equal(new[] { 4, 5 }, root["player"]!["cell"]!.AsArray().Select(n => (int)n!).ToArray());
         Assert.Equal("Select", (string?)root["editorTool"]);

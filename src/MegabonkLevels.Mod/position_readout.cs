@@ -9,6 +9,14 @@ public readonly record struct GridCell(int X, int Z, bool InGrid);
 
 public readonly record struct ReadoutActor(string Label, uint Id, float X, float Y, float Z, string TypeName = null);
 
+public sealed class CoordinateVisibility
+{
+    public bool Enabled { get; private set; }
+    public void Set(bool enabled) => Enabled = enabled;
+    public void Toggle() => Set(!Enabled);
+    public bool Visible(bool armed, bool playerAlive) => playerAlive && PositionReadout.Visible(armed, Enabled);
+}
+
 // See "Position readout" in docs/development.md for the on-screen format and the column-sizing rule.
 public static class PositionReadout
 {
@@ -16,8 +24,10 @@ public static class PositionReadout
     private const string MeLabel = "me:";
     private const int MinIdWidth = 3;
 
-    // The readout belongs to the level editor: an armed level shows it only while the editor is open.
-    public static bool Visible(bool armed, bool editorActive) => armed && editorActive;
+    public static bool Visible(bool armed, bool enabled) => armed && enabled;
+
+    public static bool ShouldToggle(bool armed, bool pressed, bool consoleOpen, bool textFocused) =>
+        armed && pressed && !consoleOpen && !textFocused;
 
     public static GridCell CellOf(float x, float z, int width, int depth, float spacing)
     {

@@ -214,6 +214,9 @@ public static class DevHarness
             case HarnessCommandKind.Hud:
                 HudControl.Set(command.Enabled, _logger);
                 break;
+            case HarnessCommandKind.Coordinates:
+                PositionLabel.SetVisible(command.Enabled, _logger);
+                return new JsonObject { ["enabled"] = PositionLabel.Enabled, ["visible"] = PositionLabel.Visible };
             case HarnessCommandKind.Editor:
                 if (command.Enabled && EditorMode.CurrentMapSupport() is { Supported: false } unsupported)
                 {
@@ -881,7 +884,9 @@ public static class DevHarness
             PaletteEntries: editor ? EditorPalette.Selection.Entries.Count : null,
             Edits: editor ? EditorTileTools.ReadEdits() : null,
             ScreenWidth: Screen.width,
-            ScreenHeight: Screen.height);
+            ScreenHeight: Screen.height,
+            CoordinatesEnabled: PositionLabel.Enabled,
+            CoordinatesVisible: PositionLabel.Visible);
     }
 
     private static void WriteResult(string commandFile, HarnessResult result)
