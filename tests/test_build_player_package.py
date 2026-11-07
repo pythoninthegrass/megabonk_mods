@@ -168,6 +168,29 @@ class TestLayout:
         assert dests["content/levels/example-forest.mblevel.json"] == "UserData/Levels/example-forest.mblevel.json"
         assert dests["content/packs/thps/thps"] == "UserData/LevelPacks/thps/thps"
 
+    def test_default_task_bundles_only_the_starter_level(self):
+        if shutil.which("task") is None:
+            pytest.skip("task is not installed")
+        commands = _dry_run()
+        assert "for level in mosswatch-hollow.mblevel.json;" in commands
+        assert "example-forest.mblevel.json" not in commands
+        assert "thps.mblevel.json" not in commands
+        assert "for pack in ;" in commands
+
+    def test_starter_package_contains_only_approved_content(self, workspace):
+        record = build(
+            workspace,
+            levels_dir=Path(__file__).resolve().parents[1] / "levels",
+            level_names=["mosswatch-hollow.mblevel.json"],
+            pack_names=[],
+        )
+        assert {entry.path for entry in record.files if entry.path.startswith("content/")} == {
+            "content/levels/mosswatch-hollow.mblevel.json",
+            "content/levels/mosswatch-hollow.png",
+            "content/levels/mosswatch-hollow.biome.png",
+        }
+        assert verify_package(workspace["output"]) == []
+
     def test_a_pack_whose_id_disagrees_with_its_folder_is_refused(self, workspace):
         (workspace["packs_src"] / "thps/manifest.json").write_text(
             '{"id":"other","name":"THPS","author":"a","version":"1","assets":["thps"]}'

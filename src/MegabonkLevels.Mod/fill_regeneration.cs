@@ -16,7 +16,7 @@ public static class FillRegeneration
     private static readonly MethodInfo FillEdge = typeof(ProceduralTileGeneration).GetMethod(
         "FillEdge", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
-    public static void Regenerate(ProceduralTileGeneration tileGen, float tileWidth, IEnumerable<(int X, int Z)> touched, MelonLogger.Instance logger)
+    public static void Regenerate(ProceduralTileGeneration tileGen, float tileWidth, IEnumerable<(int X, int Z)> touched, MelonLogger.Instance logger, bool includeExterior = false)
     {
         if (FillHole == null || FillEdge == null)
         {
@@ -29,7 +29,9 @@ public static class FillRegeneration
         bool Occupied(int x, int z) => InGrid(x, z) && grid[x][z] != null;
         var cells = touched.ToList();
         var edges = FillEdgePlan.EdgesAround(cells, Occupied);
-        var holeEdges = FillEdgePlan.EdgesAroundRemovals(cells, Occupied, InGrid);
+        var holeEdges = includeExterior
+            ? FillEdgePlan.ExposedEdges(cells, Occupied)
+            : FillEdgePlan.EdgesAroundRemovals(cells, Occupied, InGrid);
         var cleanup = FillEdgePlan.CleanupEdges(cells, Occupied, InGrid);
 
         var removed = RemoveStalePieces(tileGen, tileWidth, cleanup);

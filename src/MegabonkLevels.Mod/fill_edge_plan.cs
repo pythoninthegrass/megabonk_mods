@@ -44,6 +44,25 @@ public static class FillEdgePlan
 
     public static int HoleWallOffset(int minimumHeight, int tileHeight) => minimumHeight - 1 - tileHeight;
 
+    public static IReadOnlyList<CellEdge> ExposedEdges(IEnumerable<(int X, int Z)> cells, Func<int, int, bool> isOccupied)
+    {
+        var edges = new HashSet<CellEdge>();
+        foreach (var (x, z) in cells.Distinct().Where(p => isOccupied(p.X, p.Z)))
+        {
+            foreach (var (dx, dz) in Neighbours)
+            {
+                var next = (X: x + dx, Z: z + dz);
+                if (!isOccupied(next.X, next.Z))
+                {
+                    edges.Add((x, z).CompareTo(next) < 0
+                        ? new CellEdge(x, z, next.X, next.Z) : new CellEdge(next.X, next.Z, x, z));
+                }
+            }
+        }
+
+        return edges.OrderBy(e => (e.Ax, e.Az, e.Bx, e.Bz)).ToList();
+    }
+
     // Edges between a touched, occupied cell and an occupied neighbour. A neighbour that is empty or outside the
     // grid has no tile to wall against, so that edge is left alone.
     public static IReadOnlyList<CellEdge> EdgesAround(IEnumerable<(int X, int Z)> touched, Func<int, int, bool> isOccupied)

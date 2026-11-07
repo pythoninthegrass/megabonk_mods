@@ -2,6 +2,20 @@ namespace MegabonkLevels.Tests;
 
 public class FromScratchLayoutTests
 {
+    [Fact]
+    public void ExposedEdges_IncludeTheExteriorAndSparseHolesButNotSharedFaces()
+    {
+        var cells = new HashSet<(int X, int Z)> { (0, 0), (1, 0), (1, 1) };
+        var edges = FillEdgePlan.ExposedEdges(cells, (x, z) => cells.Contains((x, z)));
+
+        Assert.Equal(8, edges.Count);
+        Assert.Contains(new CellEdge(-1, 0, 0, 0), edges);
+        Assert.Contains(new CellEdge(0, 0, 0, 1), edges);
+        Assert.DoesNotContain(new CellEdge(0, 0, 1, 0), edges);
+        Assert.Equal(edges.Count, edges.Distinct().Count());
+        Assert.All(edges, edge => Assert.NotEqual(cells.Contains((edge.Ax, edge.Az)), cells.Contains((edge.Bx, edge.Bz))));
+    }
+
     private static LevelGrid Grid(int width, int depth) => new(width, depth, Array.Empty<AuthoredCell>());
 
     [Fact]

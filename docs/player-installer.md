@@ -150,14 +150,14 @@ After a game update the answer is the same run again. The game build comparison 
 
 ```sh
 task package:linux
-task package:linux LEVELS="example-forest.mblevel.json thps.mblevel.json" PACKS=thps MOD_VERSION=0.4.2
+task package:linux MOD_VERSION=0.4.2
 ```
 
 `scripts/build_player_package.py` builds the mod, assembles everything into `.tools/player-package/`, and writes a distributable zip beside it.
 
 Two choices are intentional:
 
-- **Nothing is bundled unless asked.** `levels/` is a working directory full of dev regression maps, so levels are named individually with `--level` and packs with `--pack`. A `.local.mblevel.json` file is skipped even when named: it is a scratch file. A named level also brings its sidecar thumbnail and biome icon (`thps.biome.png`, the base name plus `.biome`; see [Level biome icon](level-format.md#level-biome-icon)): any `.png`, `.jpg` or `.jpeg` in the levels directory with the level's base name (`thps.png` for `thps.mblevel.json`) is bundled next to it under `content/levels/` and installed beside it in `UserData/Levels/`, which is where the mod looks for the Map Selection picture. The image is an ordinary manifest file, so `--check` reports it when missing, a rerun restores it and `--uninstall` removes it with the level. Images that match no bundled level are left out.
+- **The default is Mosswatch Hollow only.** The package tasks name `mosswatch-hollow.mblevel.json`, bringing its original selection illustration and biome icon, with no packs or music. See [Starter level](starter-level.md) for the content inventory, first-edit tutorial and packaged smoke test. `levels/` also holds development fixtures, so there is no directory-wide bundling. Explicit `LEVELS` and `PACKS` overrides still support local packages; the lower-level builder bundles only files named with `--level` and `--pack`. A `.local.mblevel.json` is skipped even when named. Matching thumbnail and `.biome` sidecars are ordinary hashed manifest files, installed beside the level, repaired by a rerun and removed with it on uninstall. Images that match no bundled level stay out.
 - **Packs come from two places, the way `task pack:install` assembles them**: the built AssetBundle from `.tools/bundles/<platform>/<pack>` and the manifest (plus optional attachments) from `unity/pack-authoring/packs/<pack>/`. `--pack-platform` picks the bundle; `windows` is right on Linux because the game runs the Windows build. Staged packs are validated with `validate_pack_source`, which reproduces the game's own rules — required `id`/`name`/`author`/`version`/`assets` fields, `id` matching the folder name, a bundle file present, and a `pack-attachments/1` sidecar when there is one — so a broken pack fails the build instead of landing in the Warehouse as a placeholder.
 
 Vendor archives are taken from `.tools/vendor-cache/` and only verified there, never downloaded unless you pass `--allow-download` (`ALLOW_DOWNLOAD=true` to the task, which forwards it). The build writes into a staging directory and swaps it in at the end, so a failure leaves the previous package untouched.
@@ -170,7 +170,7 @@ The zip is deterministic — sorted entries, fixed timestamps, modes 0755 for `i
 
 ```sh
 task package:windows
-task package:windows LEVELS="example-forest.mblevel.json" PACKS=thps MOD_VERSION=0.4.2
+task package:windows MOD_VERSION=0.4.2
 ```
 
 `task package:windows` builds the mod and the `windows/amd64` Go installer, then runs `scripts/build_player_package.py --platform windows --installer-binary <exe>`. The package has the same `vendor/`, `content/` and `manifest.json` layout as the Linux one with `"platform": "windows"`, but `install.exe` replaces `install.sh` and the bundled Python installer. It lands in `.tools/player-package-windows/` (override with `OUTPUT_WINDOWS`), with `megabonk-levels-<mod>-ml<loader>-windows.zip` beside it. Windows players unzip it and double-click `install.exe`: with no `--package`, the Go installer takes the folder it runs from.
@@ -183,7 +183,7 @@ The first launch downloads Cpp2IL from GitHub and takes about 35 seconds, so it 
 
 ```sh
 task package:macos
-task package:macos LEVELS="example-forest.mblevel.json" PACKS=thps MOD_VERSION=0.4.2
+task package:macos MOD_VERSION=0.4.2
 APPLE_SIGNING_IDENTITY="<Developer ID Application identity>" NOTARY_PROFILE=<notarytool keychain profile> task package:macos
 ```
 

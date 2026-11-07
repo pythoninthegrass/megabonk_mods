@@ -7,7 +7,7 @@ vars:
   OUTPUT_WINDOWS: '{{.OUTPUT_WINDOWS | default ".tools/player-package-windows"}}'
   OUTPUT_MACOS: '{{.OUTPUT_MACOS | default ".tools/player-package-macos"}}'
   MOD_VERSION: '{{.MOD_VERSION | default "dev"}}'
-  LEVELS: '{{.LEVELS | default "example-forest.mblevel.json"}}'
+  LEVELS: '{{.LEVELS | default "mosswatch-hollow.mblevel.json"}}'
   PACKS: '{{.PACKS | default ""}}'
   ALLOW_DOWNLOAD: '{{.ALLOW_DOWNLOAD | default "false"}}'
 
@@ -19,11 +19,11 @@ tasks:
 
       Assembles the download a player unzips and runs ./install.sh on: the mod DLL,
       the vendored Windows MelonLoader and .NET 6 archives, the installer, and any
-      levels or packs you name. Nothing is bundled unless you ask for it, so a dev
-      map never reaches a player by accident.
+      Mosswatch Hollow and its selection art by default. Explicit LEVELS and PACKS
+      override the content selection; development maps are not included by default.
 
         task package:linux
-        task package:linux LEVELS="example-forest.mblevel.json thps.mblevel.json" PACKS=thps
+        task package:linux LEVELS="thps.mblevel.json" PACKS=thps
         task package:linux MOD_VERSION=0.4.2
 
       LEVELS are filenames under levels/ and PACKS are pack ids built by task pack:*.
@@ -54,7 +54,7 @@ tasks:
       Arguments and vendor caching match package:linux.
 
         task package:windows
-        task package:windows LEVELS="example-forest.mblevel.json" MOD_VERSION=0.4.2
+        task package:windows MOD_VERSION=0.4.2
     cmds:
       - dotnet build src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj -c Release
       - task installer:build TARGETS=windows/amd64

@@ -35,6 +35,13 @@ Details of what each installer does, and what has and has not been tested, are i
 
 The installer is the recommended route. If it cannot run on your machine you can install by hand; the steps are in [Installing by hand](modding-setup.md#installing-by-hand-for-players).
 
+## Try the included starter
+
+Default player packages include **Mosswatch Hollow**, a woodland level with
+clearings, ramps and ruined watchposts. Choose it on Map Selection; it needs no
+extra packs or music. See [Mosswatch Hollow](starter-level.md) for what to expect
+and a short move-rock, save-copy, replay tutorial.
+
 ## Finding your levels folder
 
 Levels live in the game's own folder, in `UserData/Levels/`:

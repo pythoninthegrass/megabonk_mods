@@ -210,4 +210,13 @@ Go. Replacing generation needs only localized patches: one prefix on `Generate` 
 
 ### Shipped load path
 
-The "go" verdict is implemented in `from_scratch_generation_patch.cs`; [development.md](development.md#from-scratch-level-load-path) describes the load path and its log lines. Confirmed in the running game with `levels/from-scratch-fixture.mblevel.json`: `tiles=49 flatTiles=48 fillTiles=0 objects=0` for 49 authored cells (so `InstantiateTile` appends to both lists itself and the patch must not), `MapParameters size=7`, one `TileSlope(Clone)` and 48 `TileGround(Clone)` objects, no `(Clone)` chests, and the player at the authored spawn after the first load and after a death-screen restart. A boss summoned from the authored spawner walks across the grid. The teal tint and tall translucent walls around the grid and the grass placement are still not investigated.
+Authored grids build their cliff faces before baking collision. The from-scratch
+builder passes every occupied cell to `FillRegeneration` with `includeExterior`
+enabled: shared edges use the native `FillHole` calls, while
+`FillEdgePlan.ExposedEdges` includes sparse holes and the outer grid boundary.
+Exposed faces extend downward to one level below the lowest authored tile.
+Tile, flat and fill pieces are parented together and included in the collision
+bake. The normal edit path leaves unchanged outer cliffs alone. Omitting this
+initial fill pass leaves raised tiles and ramp sides visibly open to the sky.
+
+The "go" verdict is implemented in `from_scratch_generation_patch.cs`; [development.md](development.md#from-scratch-level-load-path) describes the load path and its log lines. Earlier verification, before the initial fill pass was added, reported `tiles=49 flatTiles=48 fillTiles=0 objects=0` for `levels/from-scratch-fixture.mblevel.json`'s 49 authored cells. `InstantiateTile` appends to both tile lists itself and the patch must not. That run had `MapParameters size=7`, one `TileSlope(Clone)` and 48 `TileGround(Clone)` objects, no `(Clone)` chests, and the player at the authored spawn after both loading and a death-screen restart. A summoned boss walked across the grid. With initial fill enabled, Mosswatch Hollow's 121 cells produce 220 shared edges, 44 exposed edges and 123 fill pieces on the tested game build. The teal tint, translucent map boundary and grass placement remain native behaviours rather than authored scenery.

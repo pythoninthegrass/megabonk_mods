@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using HarmonyLib;
 using Il2Cpp;
 using Il2CppAssets.Scripts.MapGeneration.ProceduralTiles;
@@ -82,9 +83,11 @@ public static class FromScratchGenerationPatch
             columns[tile.X][tile.Z] = created.GetComponent<ProceduralTile>();
         }
 
+        FillRegeneration.Regenerate(tileGen, parameters.scaledTileWidth, grid.Cells.Select(cell => (cell.X, cell.Z)), _logger, includeExterior: true);
+
         var parent = new GameObject("TilesParent");
         tileGen.tilesParent = parent;
-        foreach (var list in new[] { tileGen.tiles, tileGen.flatTiles })
+        foreach (var list in new[] { tileGen.tiles, tileGen.flatTiles, tileGen.fillTiles })
         {
             for (var i = 0; i < list.Count; i++)
             {
