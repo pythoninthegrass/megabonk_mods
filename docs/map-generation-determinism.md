@@ -101,3 +101,57 @@ is therefore not yet confirmed; shared RNG consumers and placement timing need
 further investigation. Compare runs with matching baseline hashes when isolating
 the effect of the relocation flags, rather than attributing baseline drift to
 the private randomization pass.
+
+## How the original game uses random numbers, per map
+
+This section maps each generator to the random source it draws from. Each claim carries its provenance: **decompiled** means a function read in Ghidra, **dump** means a signature or field in the Il2Cpp dump (`.tools/il2cpp_dump/dump.cs`), and **measured** means a result recorded in this document or in `runtime-map-structure.md`. Only `ProceduralTileGeneration.Generate`, `Maze.Generate` and the `MazeHeightGenerator.GenerateHeight` dispatcher were decompiled; everything else below is dump signatures or measurements.
+
+### Map identifiers
+
+The dump's `EMap` enum lists None 0, Forest 1, Desert 2, Hell 4 and Graveyard 8, but the loaded `MapData` assets report Forest 1, Desert 2, Graveyard 8, Dungeon 16 and Hell 64 (see `CatalogPrefabs.TryFindMap`), and the mod's `EMap` mirrors the assets. Trust the live `MapData.eMap` values over the dump's enum. `EMapType` has only `Tiles` and `ProceduralMesh`. The only dungeon-like generator found is the crypt (`RsgController`), a side dungeon reached from the Graveyard map.
+
+### Generators and their random sources
+
+| Generator | Random source | Provenance |
+| --- | --- | --- |
+| Tile maze layout and tile heights (Forest, Graveyard) | `seed = useDebugSeed ? debugSeed : UnityEngine.Random.Range(0, int.MaxValue)`, written back to `debugSeed`; the same value feeds `Maze.Generate(size, size, seed)` and `MazeHeightGenerator.GenerateHeight(..., seed, mapParams)` | decompiled (`ProceduralTileGeneration.Generate`, RVA 0x5208A0) |
+| Maze algorithm | A private `System.Random(seed)`, separate from every other stream | decompiled (`Maze.Generate`, RVA 0x423F60) |
+| Tile props, shrines, chests, rails (`GenerateTileObjects`, `RandomObjectPlacer`, `SpawnInteractables`) | Positions draw from `UnityEngine.Random`, the global stream. Per-entry counts draw from `Utility.MyRandom.random`, one static `ConsistentRandom` seeded once per process from the performance counter. Neither is tied to `debugSeed` | measured; field in dump |
+| `MapGenerationController.mapSeed` | No effect on tile layout or props: Forest was identical across three runs with different `mapSeed` | measured |
+| Desert and Hell terrain | `MapGenerator.GenerateMap(MapData, StageData, int seed = 105)` and a private static `MapGenerator.seed`; who supplies the argument is not confirmed | dump |
+| Crypt (side dungeon) | `RsgController.Generate(int newSeed, EDungeonType, out float)` with a private static `ConsistentRandom`, `SetCustomSeed`, `HasCustomSeed` and `CanUseCustomSeed`; `MapGenerationController.CryptGeneration(int seed, ...)` | dump |
+| Enemy waves, minibosses, boss | `StageTimeline` is authored data (`startEnemies`, `events`, `boss`, `minibosses`); `SummonerController` holds a `minibossPool`. No seed field was found | dump |
+
+Streams are shared and sequential, so changing a count or adding a prop shifts every later draw. The documented order is tile `Generate`, `GenerateTileObjects.Generate` (the boss spawner on a random flat tile, then the map-specific tiles), then `SetArea`, `SpawnRails`, `SpawnChests`, `SpawnShrines`, `SpawnOther`, and finally one `RandomObjectSpawner` pass per `StageData.randomMapObjects` entry, shrine entry and `MapData.randomObjectsOverride`. This is why `seed_force_patch.cs` reseeds both of the game's generators at the start of each phase. A Forest run on Proton still drifted in `objectsHash` after forcing; the cause is unknown.
+
+### Tiles maps (Forest, Graveyard)
+
+`ProceduralTileGeneration.GenerateTileGrid` allocates a `size` by `size` grid from `MapParameters.size`. `Maze.Generate` is a randomized depth-first search: it picks a random start cell with `Random(seed).Next`, keeps a stack and a visited array, shuffles the neighbour directions with `Maze.Shuffle<T>(list, Random)`, and carves walls as bit flags (top 1, right 2, bottom 4, left 8) into a `NodeTree` rooted at the start (decompiled). `GenerateHeight` then dispatches on `MapParameters.heightGenerationStrategy`: 0 calls `GenerateHeightHein` and 1 calls `GenerateHeightMe`, driven by `volatility`, `centerHeightTarget`, `slopeStrength`, `yOffset`, `flatMapBias`, a Gaussian or linear `biasStrategy`, and the tile width, height and scale (decompiled dispatcher; the two height functions were not read). Before collision is combined, `FillHoles` runs and `StageData.mapEdgeFillType` selects one edge treatment: 0 `FillEdgesIsland`, 1 `FillEdgesTrees`, 2 `FillEdgesWalls`, or none (decompiled). Flat tile prefabs come from `StageTilePrefabs.flatTilePrefabs` and specific tiles such as the Graveyard `CoffinTile` from `mapSpecificTilesPrefabs`, placed by `GenerateTileObjects.MapSpecificTiles` (dump; its random source was not read).
+
+### Procedural-mesh maps (Desert, Hell)
+
+`MapGenerator` builds a heightmap with `Noise.GenerateNoiseMap(w, h, seed, scale, octaves, persistance, lacunarity, blend, blendStrength, offset)` and `GeneratePerlinNoiseMap(NoiseData, seed, useFalloffMap)`, then `MeshGenerator.GenerateTerrainMesh(heightMap, heightMultiplier, heightCurve, lod)`. `StageData` supplies `proceduralTerrainData`, `proceduralNoiseData` and `proceduralMapScale`; the numeric values live in ScriptableObject assets, not the dump (dump). Desert reproduced across runs while `debugSeed` stayed unchanged, because `ProceduralTileGeneration.Generate` is never called for it, so the `debugSeed` force does not apply (measured). Hell has no measurements here and presumably follows the same path.
+
+### Props and interactables
+
+`RandomMapObject` carries `amount`, `maxAmount`, `checkRadius`, `scaleMin`, `scaleMax`, `maxSlopeAngle`, `upOffset`, `prefabs[]`, `randomRotationVector` and `alignWithNormal`; `GetAmount()` draws from `MyRandom.random`. `RandomObjectSpawner` loops per entry with `amountMultiplier` and the `MapData` multipliers (`numShrinesMultiplier`, `numChestsMultiplier`, `numShrinesPotsAndOtherMultiplier`). `SpawnInteractables` has `numChestsPerStage` 46, `numShrines` 14, `chestDensity`, `shrineDensity`, `chanceForFreeChest` and `numRails`. The raycast, clearance and rotation code was not decompiled, and per-prefab values live in assets (dump).
+
+### What stays random in an authored from-scratch level
+
+A from-scratch level skips the maze, the heights, the prop placers and the `Spawn*` methods, so terrain and prop layout are fully determined by the level file, and `seed` is bookkeeping. Skipping `GenerateTileObjects.Generate` also skips the boss spawner and its random tile pick, so the level file's `bossSpawner` replaces it. These still vary every run and are not tied to level data:
+
+- Enemy waves and minibosses, from the stage timeline and summoners; which random source they use is unconfirmed.
+- The boss spawn redirect, a random walkable spot at least 35 units from the spawner.
+- Extra shrines, placed by the mod's own `System.Random` seeded from a fresh `Guid` each run, including the counts rolled from `shrineKindRanges`.
+- Interactable relocation, drawn from the mod's private random source.
+- Chest loot and any other consumer of `UnityEngine.Random` during play.
+
+### Unknowns
+
+1. Who passes the Desert and Hell seed to `MapGenerator.GenerateMap`, and the noise parameters.
+2. How `GenerateHeightHein` and `GenerateHeightMe` consume randomness.
+3. Which random source the enemy, miniboss and boss draws use.
+4. The `RandomObjectSpawner` raycast, rotation and `alignWithNormal` details.
+5. The `RsgController.Generate` algorithm and the `HasCustomSeed` rules.
+6. Where `mapSeed` is written and read; it may only matter to the crypt.
+7. The cause of the residual Forest drift on Proton.

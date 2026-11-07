@@ -63,6 +63,7 @@ Usage:
     run.py save-level [name]       Save the editor's level, as <name> when given, and print the file written
     run.py new-level [name]        Write a blank from-scratch level and open it in the editor; --map, --stage, --tier, --size
     run.py list-levels             Print the saved custom-level files and their directory
+    run.py palette                 Print every palette entry for the loaded map as [id, name, category, map] rows
     run.py click-widget <name>     Click an editor widget by name (names come from ui-tree), without pixel coordinates
     run.py type <text>             Type text into the focused field (\\b is backspace, \\n is return), at most 200 characters
     run.py teleport X Y Z          Move the player's feet to a world position and print the position reached
@@ -1563,6 +1564,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     new_level.add_argument("--tier", type=int, help="map tier (default 0)")
     new_level.add_argument("--size", type=int, help="square grid size, at least 3 (default 7)")
     sub.add_parser("list-levels")
+    sub.add_parser("palette")
     click_widget = sub.add_parser("click-widget")
     click_widget.add_argument("name")
     teleport = sub.add_parser("teleport")
@@ -2040,6 +2042,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, new_level_payload(args), args.timeout)
         case "list-levels":
             ok = send_printing_result(harness, build_command("list-levels"), args.timeout)
+        case "palette":
+            ok = send_printing_result(harness, build_command("palette"), args.timeout)
         case "click-widget":
             ok = send_printing_result(harness, click_widget_payload(args), args.timeout)
         case "teleport":

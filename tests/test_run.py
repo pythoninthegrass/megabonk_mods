@@ -1355,6 +1355,8 @@ def test_level_commands_carry_the_optional_level() -> None:
     assert run.build_save_level_command() == {"command": "save-level"}
     assert run.build_save_level_command("my level") == {"command": "save-level", "level": "my level"}
     assert run.build_command("list-levels") == {"command": "list-levels"}
+    assert run.build_command("palette") == {"command": "palette"}
+    assert run.parse_args(["palette"]).action == "palette"
     assert run.save_level_payload(run.parse_args(["save-level"])) == {"command": "save-level"}
     assert run.save_level_payload(run.parse_args(["save-level", "my"])) == {"command": "save-level", "level": "my"}
 

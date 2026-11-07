@@ -41,11 +41,12 @@ public static class ExtraShrinesPatch
         var guaranteed = ExtraShrines.ParseKinds(settings.GuaranteedShrineKinds);
         if (ReferenceEquals(allowed, s_skipPass))
         {
-            if (guaranteed.Count == 0) return;
+            if (guaranteed.Count == 0 && settings.ShrineKindRanges is not { Count: > 0 }) return;
             allowed = new HashSet<ExtraShrineKind>();
         }
 
-        var poolKinds = allowed == null ? null : allowed.Concat(guaranteed).ToHashSet();
+        var ranged = ExtraShrines.RangedKinds(settings.ShrineKindRanges, new System.Random(System.Guid.NewGuid().GetHashCode()));
+        var poolKinds = allowed == null ? null : allowed.Concat(guaranteed).Concat(ranged).ToHashSet();
         var pool = BuildPool(settings, controller, poolKinds, logger);
         if (pool.Count == 0) return;
 
@@ -60,12 +61,13 @@ public static class ExtraShrinesPatch
         if (onMesh)
         {
             var randomPool = pool.Where(entry => allowed == null || allowed.Contains(entry.Kind)).ToList();
-            var plan = ExtraShrines.Shuffled(guaranteed.Concat(Enumerable.Range(0, randomPool.Count == 0 ? 0 : requested).Select(_ => randomPool[random.Next(randomPool.Count)].Kind)).ToList(), random);
+            var plan = ExtraShrines.Shuffled(guaranteed.Concat(ranged).Concat(Enumerable.Range(0, randomPool.Count == 0 ? 0 : requested).Select(_ => randomPool[random.Next(randomPool.Count)].Kind)).ToList(), random);
             var meshSpawned = SpawnAtAuthoredSpots(settings, index, pool, plan, random, logger);
-            logger.Msg($"ExtraShrines: spawned={meshSpawned} planned={plan.Count} guaranteed={guaranteed.Count} spots={settings.ShrineSpots.Count} pool={pool.Count} path=spots");
+            logger.Msg($"ExtraShrines: spawned={meshSpawned} planned={plan.Count} guaranteed={guaranteed.Count} ranged={ranged.Count} spots={settings.ShrineSpots.Count} pool={pool.Count} path=spots");
             return;
         }
 
+        if (ranged.Count > 0) logger.Warning("ExtraShrines: shrineKindRanges need shrineSpots and are ignored on the tile probe path");
         var points = PlacementProbe.ReachablePoints(state, tiles, ground, start, logger, "ExtraShrines").Values.ToList();
         var spacing = tiles.currentMapParameters.scaledTileWidth / PlacementProbe.SamplesPerTile;
         var spawned = 0;
@@ -298,11 +300,12 @@ public static class ExtraShrinesPatch
     }
 
     // Cloning a live shrine preserves its authored pivot and upright rotation; prefabs get the
-    // native-up correction (Moai models are authored Z-up, the rest Y-up).
+    // native-up correction for their model's authored up axis.
     private static GameObject CreateTrial(PoolEntry entry, Vector3 floor)
     {
         if (entry.LiveClone != null) return UnityEngine.Object.Instantiate(entry.LiveClone, floor, entry.LiveClone.transform.rotation);
-        var axis = entry.Kind == ExtraShrineKind.Moai ? new Vector3(0, 0, 1) : Vector3.up;
+        var up = ExtraShrines.LocalUp(entry.Kind);
+        var axis = new Vector3(up.X, up.Y, up.Z);
         var rotation = entry.Prefab.transform.rotation;
         var upright = Quaternion.FromToRotation(rotation * axis, Vector3.up) * rotation;
         return UnityEngine.Object.Instantiate(entry.Prefab, floor, upright);
@@ -358,6 +361,7 @@ public static class ExtraShrinesPatch
         if (go.GetComponentInChildren<InteractableShrineBalance>() != null) return ExtraShrineKind.Balance;
         if (go.GetComponentInChildren<InteractableShrineMoai>() != null) return ExtraShrineKind.Moai;
         if (go.GetComponentInChildren<ChargeShrine>() != null) return ExtraShrineKind.Charge;
+        if (go.GetComponentInChildren<InteractableShadyGuy>() != null) return ExtraShrineKind.ShadyGuy;
         return null;
     }
 }

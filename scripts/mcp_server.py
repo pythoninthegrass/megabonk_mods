@@ -462,6 +462,12 @@ async def new_level(
 
 
 @mcp.tool()
+async def palette() -> CallToolResult:
+    """List every editor palette entry for the loaded map as {count, entries}, each entry [catalog id, display name, category, map]. It covers all five maps (about 490 rows), so prefer `run.py palette` redirected to a file and filtered with jq over reading it inline."""
+    return await _command(_harness(), run.build_command("palette"), TIMEOUT)
+
+
+@mcp.tool()
 async def list_levels() -> CallToolResult:
     """List the saved custom-level files as {directory, levels}; the names are what the editor's Load list shows and what a load needs after the directory."""
     return await _command(_harness(), run.build_command("list-levels"), TIMEOUT)

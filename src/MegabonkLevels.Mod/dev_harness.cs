@@ -254,6 +254,8 @@ public static class DevHarness
                 return NewLevel.Create(command.Path, command.NewLevel.Value, _logger);
             case HarnessCommandKind.ListLevels:
                 return ListLevels();
+            case HarnessCommandKind.Palette:
+                return PaletteRows();
             case HarnessCommandKind.QueryObjects:
                 return QueryObjects(command.Query);
             case HarnessCommandKind.Teleport:
@@ -390,6 +392,18 @@ public static class DevHarness
         }
 
         return new JsonObject { ["directory"] = LiveEditPatch.LevelsDirectoryPath(), ["levels"] = levels };
+    }
+
+    // Every entry the editor palette lists for the loaded map, as [id, display name, category, map] rows, without needing the editor open.
+    private static JsonObject PaletteRows()
+    {
+        var rows = new JsonArray();
+        foreach (var entry in EditorPalette.CatalogEntries())
+        {
+            rows.Add(new JsonArray(entry.Id.Serialize(), entry.DisplayName, entry.Category.ToString(), entry.Map.ToString()));
+        }
+
+        return new JsonObject { ["count"] = rows.Count, ["entries"] = rows };
     }
 
     private static JsonObject QueryObjects(QueryArgs args)

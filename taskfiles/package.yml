@@ -7,7 +7,7 @@ vars:
   OUTPUT_WINDOWS: '{{.OUTPUT_WINDOWS | default ".tools/player-package-windows"}}'
   OUTPUT_MACOS: '{{.OUTPUT_MACOS | default ".tools/player-package-macos"}}'
   MOD_VERSION: '{{.MOD_VERSION | default "dev"}}'
-  LEVELS: '{{.LEVELS | default "mosswatch-hollow.mblevel.json"}}'
+  LEVELS: '{{.LEVELS | default "bramblecrown-hill.mblevel.json"}}'
   PACKS: '{{.PACKS | default ""}}'
   ALLOW_DOWNLOAD: '{{.ALLOW_DOWNLOAD | default "false"}}'
 
@@ -19,7 +19,7 @@ tasks:
 
       Assembles the download a player unzips and runs ./install.sh on: the mod DLL,
       the vendored Windows MelonLoader and .NET 6 archives, the installer, and any
-      Mosswatch Hollow and its selection art by default. Explicit LEVELS and PACKS
+      Bramblecrown Hill and its selection art by default. Explicit LEVELS and PACKS
       override the content selection; development maps are not included by default.
 
         task package:linux

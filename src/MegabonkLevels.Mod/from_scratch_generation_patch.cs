@@ -81,6 +81,7 @@ public static class FromScratchGenerationPatch
             var prefab = tile.IsSlope ? tileGen.slopeTile : tileGen.flatTile;
             var created = tileGen.InstantiateTile(new Vector2Int(tile.X, tile.Z), tile.Height, prefab, direction, direction);
             columns[tile.X][tile.Z] = created.GetComponent<ProceduralTile>();
+            GroundSkin.Apply(created, tile.X, tile.Z, level.GroundZones, _logger);
         }
 
         FillRegeneration.Regenerate(tileGen, parameters.scaledTileWidth, grid.Cells.Select(cell => (cell.X, cell.Z)), _logger, includeExterior: true);

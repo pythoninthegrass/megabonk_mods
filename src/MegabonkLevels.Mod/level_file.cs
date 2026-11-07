@@ -54,6 +54,15 @@ public readonly record struct LevelFile(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<IReadOnlyList<float>> ShrineSpots = null,
     // Shrine kinds placed once each every run, ahead of the random extras; a repeated name is a minimum of that many.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string> GuaranteedShrineKinds = null,
+    // Per-run random count [min, max] for each named kind, placed on the authored shrine spots in addition to the guaranteed kinds and extras.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, IReadOnlyList<int>> ShrineKindRanges = null,
+    // Cell ranges whose ground tiles are drawn with a named game material, such as a biome's terrain.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<GroundZone> GroundZones = null,
+    // Enemy names (EEnemy) a stage or final boss spawn is replaced by, drawn at random, and likewise for minibosses; the game's own pick when absent.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string> BossPool = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string> MinibossPool = null,
+    // Cell ranges that damage a player standing on them.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<LavaZone> LavaZones = null,
     // [min, max] added to chest loot luck, one value drawn per run, or null for the game's own odds.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<float> ChestLuckRange = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string Baseline = null,
@@ -93,6 +102,11 @@ public readonly record struct LevelFile(
         && ExtraShrinesMax == other.ExtraShrinesMax
         && (ShrineSpots == null ? other.ShrineSpots == null : other.ShrineSpots != null && ShrineSpots.Count == other.ShrineSpots.Count && ShrineSpots.Zip(other.ShrineSpots).All(pair => ListEquals(pair.First, pair.Second)))
         && ListEquals(GuaranteedShrineKinds, other.GuaranteedShrineKinds)
+        && (ShrineKindRanges == null ? other.ShrineKindRanges == null : other.ShrineKindRanges != null && ShrineKindRanges.Count == other.ShrineKindRanges.Count && ShrineKindRanges.All(pair => other.ShrineKindRanges.TryGetValue(pair.Key, out var range) && ListEquals(pair.Value, range)))
+        && ListEquals(GroundZones, other.GroundZones)
+        && ListEquals(BossPool, other.BossPool)
+        && ListEquals(MinibossPool, other.MinibossPool)
+        && ListEquals(LavaZones, other.LavaZones)
         && ListEquals(ChestLuckRange, other.ChestLuckRange)
         && ListEquals(BossSpawnPosition, other.BossSpawnPosition)
         && Music == other.Music

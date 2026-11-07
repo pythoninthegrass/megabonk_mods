@@ -8,7 +8,7 @@ namespace MegabonkLevels;
 
 public static class LevelSettings
 {
-    public static readonly string[] Fields = { "playerStart", "bossSpawnPosition", "killFloorY", "maxSlopeAngle", "grindRequiresSlide", "fallDamageCharacter", "noGrass", "randomizeShadyGuy", "randomizeChests", "randomizeMoai", "extraShrines", "extraShrineKinds", "extraShrinesMax", "shrineSpots", "guaranteedShrineKinds", "chestLuckRange", "music", "title", "description", "mapDescription", "allowedCharacters", "map", "stageIndex", "tier", "seed" };
+    public static readonly string[] Fields = { "playerStart", "bossSpawnPosition", "killFloorY", "maxSlopeAngle", "grindRequiresSlide", "fallDamageCharacter", "noGrass", "randomizeShadyGuy", "randomizeChests", "randomizeMoai", "extraShrines", "extraShrineKinds", "extraShrinesMax", "shrineSpots", "guaranteedShrineKinds", "shrineKindRanges", "groundZones", "bossPool", "minibossPool", "lavaZones", "chestLuckRange", "music", "title", "description", "mapDescription", "allowedCharacters", "map", "stageIndex", "tier", "seed" };
     private static readonly string[] TextFields = { "music", "title", "description", "mapDescription", "fallDamageCharacter" };
 
     public static string Read(LevelFile level, string field)
@@ -80,15 +80,23 @@ public static class LevelSettings
         }
         if (level.GuaranteedShrineKinds != null && level.GuaranteedShrineKinds.Any(name => !ExtraShrines.IsKnownKind(name)))
         {
-            throw new ArgumentException("Guaranteed shrine kinds are challenge, magnet, cursed, greed, balance, moai and charge.");
+            throw new ArgumentException("Guaranteed shrine kinds are challenge, magnet, cursed, greed, balance, moai, charge and shadyGuy.");
         }
+        if (level.ShrineKindRanges != null && level.ShrineKindRanges.Any(pair => !ExtraShrines.IsKnownKind(pair.Key) || pair.Value is not { Count: 2 } || pair.Value[0] < 0 || pair.Value[0] > pair.Value[1] || pair.Value[1] > ExtraShrines.MaxCount))
+        {
+            throw new ArgumentException($"Shrine kind ranges name a known kind with a minimum and maximum between 0 and {ExtraShrines.MaxCount}.");
+        }
+        GroundZones.Validate(level.GroundZones);
+        BossPools.Validate(level.BossPool, "bossPool");
+        BossPools.Validate(level.MinibossPool, "minibossPool");
+        LavaZones.Validate(level.LavaZones);
         if (level.ChestLuckRange != null && (level.ChestLuckRange.Count != 2 || level.ChestLuckRange.Any(v => !float.IsFinite(v)) || level.ChestLuckRange[0] > level.ChestLuckRange[1]))
         {
             throw new ArgumentException("The chest luck range is two finite numbers, minimum then maximum.");
         }
         if (level.ExtraShrineKinds != null && level.ExtraShrineKinds.Any(name => !ExtraShrines.IsKnownKind(name)))
         {
-            throw new ArgumentException("Extra shrine kinds are challenge, magnet, cursed, greed, balance, moai and charge.");
+            throw new ArgumentException("Extra shrine kinds are challenge, magnet, cursed, greed, balance, moai, charge and shadyGuy.");
         }
     }
 
@@ -106,7 +114,7 @@ public static class LevelSettings
         KillFloorY = settings.KillFloorY, MaxSlopeAngle = settings.MaxSlopeAngle, GrindRequiresSlide = settings.GrindRequiresSlide,
         RandomizeShadyGuy = settings.RandomizeShadyGuy, RandomizeChests = settings.RandomizeChests, RandomizeMoai = settings.RandomizeMoai,
         ExtraShrines = settings.ExtraShrines, ExtraShrineKinds = settings.ExtraShrineKinds,
-        ExtraShrinesMax = settings.ExtraShrinesMax, ShrineSpots = settings.ShrineSpots, GuaranteedShrineKinds = settings.GuaranteedShrineKinds, ChestLuckRange = settings.ChestLuckRange,
+        ExtraShrinesMax = settings.ExtraShrinesMax, ShrineSpots = settings.ShrineSpots, GuaranteedShrineKinds = settings.GuaranteedShrineKinds, ShrineKindRanges = settings.ShrineKindRanges, GroundZones = settings.GroundZones, BossPool = settings.BossPool, MinibossPool = settings.MinibossPool, LavaZones = settings.LavaZones, ChestLuckRange = settings.ChestLuckRange,
         Music = settings.Music, Title = settings.Title, Description = settings.Description, MapDescription = settings.MapDescription,
         AllowedCharacters = settings.AllowedCharacters, Map = settings.Map, StageIndex = settings.StageIndex, Tier = settings.Tier, Seed = settings.Seed,
     };

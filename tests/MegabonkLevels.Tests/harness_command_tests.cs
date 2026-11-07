@@ -767,6 +767,13 @@ public class HarnessCommandTests
     }
 
     [Fact]
+    public void TryParse_Palette_NeedsNoArguments()
+    {
+        Assert.True(HarnessCommand.TryParse("""{"command":"palette"}""", out var command, out _));
+        Assert.Equal(HarnessCommandKind.Palette, command.Kind);
+    }
+
+    [Fact]
     public void TryParse_UiTree_NeedsNoArguments()
     {
         var ok = HarnessCommand.TryParse("""{"command":"ui-tree"}""", out var command, out _);

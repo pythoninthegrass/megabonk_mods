@@ -46,6 +46,9 @@ public class MegabonkLevelsMod : MelonMod
         GrindAssistWatcher.Install(LoggerInstance);
         FallDamagePatch.Install(LoggerInstance);
         BossSpawnRedirectPatch.Install(LoggerInstance);
+        BossPoolPatch.Install(LoggerInstance);
+        LavaWatcher.Install(LoggerInstance);
+        GrassMask.Install(LoggerInstance);
         BossEventPatch.Install(LoggerInstance);
         FromScratchGenerationPatch.Install(LoggerInstance);
         ChestLuckPatch.Install(LoggerInstance);
@@ -85,6 +88,7 @@ public class MegabonkLevelsMod : MelonMod
         PerfMonitor.Timed(PerfTick.MenuNotice, _tickMenuNotice);
         PerfMonitor.Timed(PerfTick.PositionLabel, _tickPositionLabel);
         PerfMonitor.Timed(PerfTick.EditorMode, _tickEditorMode);
+        LavaWatcher.Tick();
 
         if (DevHarness.Enabled && EditorMode.Active)
         {

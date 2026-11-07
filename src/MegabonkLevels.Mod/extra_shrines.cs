@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace MegabonkLevels;
 
-public enum ExtraShrineKind { Challenge, Magnet, Cursed, Greed, Balance, Moai, Charge }
+public enum ExtraShrineKind { Challenge, Magnet, Cursed, Greed, Balance, Moai, Charge, ShadyGuy }
 
 // Placement policy for the extra shrines a level spawns each run: which kinds exist, and the
 // keep-clear rules that keep a shrine's 12.5-unit charge sphere off other shrines and off the
@@ -34,9 +34,26 @@ public static class ExtraShrines
         ["InteractableShrineBalance"] = ExtraShrineKind.Balance,
         ["InteractableShrineMoai"] = ExtraShrineKind.Moai,
         ["ChargeShrine"] = ExtraShrineKind.Charge,
+        ["InteractableShadyGuy"] = ExtraShrineKind.ShadyGuy,
     };
 
-    public static bool Enabled(LevelFile level) => level.ExtraShrines > 0 || level.ExtraShrinesMax > 0 || level.GuaranteedShrineKinds is { Count: > 0 };
+    // Charge Shrine and merchant models are authored Y-up; every other kind is authored Z-up (prefab euler X of 270).
+    public static Vector3Data LocalUp(ExtraShrineKind kind) => kind is ExtraShrineKind.Charge or ExtraShrineKind.ShadyGuy ? new Vector3Data(0, 1, 0) : new Vector3Data(0, 0, 1);
+
+    public static bool Enabled(LevelFile level) => level.ExtraShrines > 0 || level.ExtraShrinesMax > 0 || level.GuaranteedShrineKinds is { Count: > 0 } || level.ShrineKindRanges is { Count: > 0 };
+
+    // Each named kind repeated a uniform count in its own [min, max] each run.
+    public static List<ExtraShrineKind> RangedKinds(IReadOnlyDictionary<string, IReadOnlyList<int>> ranges, Random random)
+    {
+        var kinds = new List<ExtraShrineKind>();
+        foreach (var (name, range) in ranges ?? new Dictionary<string, IReadOnlyList<int>>())
+        {
+            var kind = ParseKinds(new[] { name })[0];
+            kinds.AddRange(Enumerable.Repeat(kind, ShrineCount(range[0], range[1], random)));
+        }
+
+        return kinds;
+    }
 
     // A uniform count in [min, max] each run, or exactly min without a maximum.
     public static int ShrineCount(int min, int? max, Random random) => max is { } high ? random.Next(min, high + 1) : min;

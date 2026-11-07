@@ -46,6 +46,12 @@ public static class LevelFileValidator
 
         ValidateGrid(level.Grid.Value);
         ValidateScale(level.BossSpawner.Value.Scale);
+        var lavaRefusal = LavaZones.SpawnRefusal(level.Grid.Value, level.Spawn.Value.Position, level.LavaZones)
+            ?? LavaZones.SpawnRefusal(level.Grid.Value, level.PlayerStart, level.LavaZones);
+        if (lavaRefusal != null)
+        {
+            throw new ArgumentException(lavaRefusal);
+        }
 
         foreach (var op in level.Edits)
         {

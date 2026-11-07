@@ -385,6 +385,17 @@ public static class EditorPalette
 
     private static string PrefabName(CatalogId id) => PrefabFor(id)?.name;
 
+    // The catalog entries the palette would list for the loaded map, named from their prefabs, without building the UI.
+    public static IReadOnlyList<PaletteEntry> CatalogEntries()
+    {
+        var mapData = MapController.currentMap;
+        if (mapData == null) return new List<PaletteEntry>();
+        var controller = Object.FindObjectOfType<MapGenerationController>();
+        _interactables = controller?.interactablesSpawner;
+        _placer = controller?.randomObjectPlacer;
+        return PaletteCatalogBuilder.BuildAll(CatalogPrefabs.DescribeAll(mapData, _interactables, _placer), PrefabName).ToList();
+    }
+
     private static RawImage AddThumb(RectTransform parent)
     {
         var rect = EditorUi.NewRect("Thumb", parent);

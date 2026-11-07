@@ -9,7 +9,7 @@ public sealed class EditorTooltip
 {
     private const float LabelMargin = 8f;
     private const float PointerOffset = 16f;
-    private const float HoverSeconds = 3f;
+    private const float HoverSeconds = 2f;
     private const float GraceSeconds = 2f;
 
     private static readonly HoverActivity SharedActivity = new();

@@ -172,7 +172,7 @@ class TestLayout:
         if shutil.which("task") is None:
             pytest.skip("task is not installed")
         commands = _dry_run()
-        assert "for level in mosswatch-hollow.mblevel.json;" in commands
+        assert "for level in bramblecrown-hill.mblevel.json;" in commands
         assert "example-forest.mblevel.json" not in commands
         assert "thps.mblevel.json" not in commands
         assert "for pack in ;" in commands
@@ -181,13 +181,13 @@ class TestLayout:
         record = build(
             workspace,
             levels_dir=Path(__file__).resolve().parents[1] / "levels",
-            level_names=["mosswatch-hollow.mblevel.json"],
+            level_names=["bramblecrown-hill.mblevel.json"],
             pack_names=[],
         )
         assert {entry.path for entry in record.files if entry.path.startswith("content/")} == {
-            "content/levels/mosswatch-hollow.mblevel.json",
-            "content/levels/mosswatch-hollow.png",
-            "content/levels/mosswatch-hollow.biome.png",
+            "content/levels/bramblecrown-hill.mblevel.json",
+            "content/levels/bramblecrown-hill.png",
+            "content/levels/bramblecrown-hill.biome.png",
         }
         assert verify_package(workspace["output"]) == []
 

@@ -46,6 +46,7 @@ public enum HarnessCommandKind
     SaveLevel,
     NewLevel,
     ListLevels,
+    Palette,
     QueryObjects,
     Item,
     GrindSlide,
@@ -271,6 +272,10 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseNewLevel(root, out command, out error);
             case "list-levels":
                 command = new HarnessCommand(HarnessCommandKind.ListLevels, null);
+                error = null;
+                return true;
+            case "palette":
+                command = new HarnessCommand(HarnessCommandKind.Palette, null);
                 error = null;
                 return true;
             case "query-objects":

@@ -362,6 +362,7 @@ INPUT_TOOL_CASES = [
         {"command": "new-level", "level": "arena", "map": 64, "stageIndex": 1, "tier": 2, "size": 9},
     ),
     ("list_levels", {}, {"command": "list-levels"}),
+    ("palette", {}, {"command": "palette"}),
     ("kill", {}, {"command": "kill"}),
     ("restart_run", {}, {"command": "restart-run"}),
     ("press_death_confirm", {}, {"command": "press-death-confirm"}),

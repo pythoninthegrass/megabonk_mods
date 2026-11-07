@@ -32,6 +32,9 @@ public static class LiveEditPatch
     private static string _fallDamageCharacter;
     private static IReadOnlyDictionary<string, string> _packKitVersions;
     private static LevelFile _randomizationSettings;
+
+    // The settings of the level that is running, which the boss and lava hooks read.
+    public static LevelFile CurrentSettings => _randomizationSettings;
     private static Session _session;
     private static int _runGeneration;
 
@@ -139,6 +142,8 @@ public static class LiveEditPatch
     private static Session LiveSession => _session is { } session && session.Controller != null ? session : null;
 
     public static LiveGrid? Grid => LiveSession?.Grid;
+
+    public static ProceduralTileGeneration TileGen => LiveSession?.TileGen;
 
     // True on a ProceduralMesh map, where there is no tile grid and only objects can be edited.
     public static bool IsTerrainMap => LiveSession is { } session && session.TileGen == null;
@@ -299,6 +304,11 @@ public static class LiveEditPatch
             ExtraShrinesMax: _randomizationSettings.ExtraShrinesMax,
             ShrineSpots: _randomizationSettings.ShrineSpots,
             GuaranteedShrineKinds: _randomizationSettings.GuaranteedShrineKinds,
+            ShrineKindRanges: _randomizationSettings.ShrineKindRanges,
+            GroundZones: _randomizationSettings.GroundZones,
+            BossPool: _randomizationSettings.BossPool,
+            MinibossPool: _randomizationSettings.MinibossPool,
+            LavaZones: _randomizationSettings.LavaZones,
             ChestLuckRange: _randomizationSettings.ChestLuckRange);
     }
 
@@ -1015,6 +1025,7 @@ public static class LiveEditPatch
             var prefab = slope ? _tileGen.slopeTile : _tileGen.flatTile;
             var created = _tileGen.InstantiateTile(new Vector2Int(x, z), state.Height, prefab, direction, direction);
             var tile = created.GetComponent<ProceduralTile>();
+            GroundSkin.Apply(created, x, z, _randomizationSettings.GroundZones, _logger);
 
             if (live != null)
             {

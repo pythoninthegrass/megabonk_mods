@@ -7,6 +7,78 @@ public class ExtraShrinesTests
     private static LevelFile Level() => LevelFileSerializer.Deserialize("""{"schemaVersion":3,"map":1,"seed":20261007,"packs":{},"edits":[]}""");
 
     [Theory]
+    [InlineData(ExtraShrineKind.Charge, 0, 1, 0)]
+    [InlineData(ExtraShrineKind.ShadyGuy, 0, 1, 0)]
+    [InlineData(ExtraShrineKind.Greed, 0, 0, 1)]
+    [InlineData(ExtraShrineKind.Magnet, 0, 0, 1)]
+    [InlineData(ExtraShrineKind.Challenge, 0, 0, 1)]
+    [InlineData(ExtraShrineKind.Cursed, 0, 0, 1)]
+    [InlineData(ExtraShrineKind.Balance, 0, 0, 1)]
+    [InlineData(ExtraShrineKind.Moai, 0, 0, 1)]
+    public void UprightAxisComesFromTheNativeModel(ExtraShrineKind kind, float x, float y, float z)
+    {
+        Assert.Equal(new Vector3Data(x, y, z), ExtraShrines.LocalUp(kind));
+    }
+
+    [Fact]
+    public void ShadyGuyIsRecognisedByItsComponent()
+    {
+        Assert.Equal(ExtraShrineKind.ShadyGuy, ExtraShrines.KindOf("InteractableShadyGuy"));
+        Assert.True(ExtraShrines.IsKnownKind("shadyGuy"));
+    }
+
+    [Fact]
+    public void KindRangesRoundTripAndSurviveSaveCopyAndHistory()
+    {
+        var original = Level();
+        var changed = LevelSettings.Change(original, "shrineKindRanges", """{"moai":[3,8],"shadyGuy":[3,8]}""");
+        Assert.NotEqual(original, changed);
+        Assert.Equal(new[] { 3, 8 }, changed.ShrineKindRanges["moai"]);
+        Assert.Equal(changed, LevelFileSerializer.Deserialize(LevelFileSerializer.Serialize(changed)));
+        Assert.Equal(changed, LevelSettings.CopyTo(changed, original));
+        Assert.True(ExtraShrines.Enabled(changed));
+        Assert.Null(LevelFileSerializer.Deserialize(LevelFileSerializer.Serialize(original)).ShrineKindRanges);
+        Assert.Equal(original, LevelSettings.Change(changed, "shrineKindRanges", "null"));
+
+        var history = new LevelSettingsHistory(original);
+        history.Apply("shrineKindRanges", """{"moai":[3,8]}""", hasEdits: true);
+        Assert.True(history.Dirty);
+        Assert.True(history.Undo());
+        Assert.Equal(original, history.Current);
+    }
+
+    [Theory]
+    [InlineData("""{"moai":[3]}""")]
+    [InlineData("""{"moai":[8,3]}""")]
+    [InlineData("""{"moai":[3,33]}""")]
+    [InlineData("""{"moai":[-1,3]}""")]
+    [InlineData("""{"vendor":[3,8]}""")]
+    public void KindRangesAreValidated(string json) =>
+        Assert.ThrowsAny<ArgumentException>(() => LevelSettings.Change(Level(), "shrineKindRanges", json));
+
+    [Fact]
+    public void RangedKindsDrawEachKindWithinItsRange()
+    {
+        var ranges = new Dictionary<string, IReadOnlyList<int>> { ["moai"] = new[] { 3, 8 }, ["shadyGuy"] = new[] { 3, 8 } };
+        var seen = new HashSet<int>();
+        for (var seed = 0; seed < 400; seed++)
+        {
+            var kinds = ExtraShrines.RangedKinds(ranges, new Random(seed));
+            var moai = kinds.Count(kind => kind == ExtraShrineKind.Moai);
+            var shady = kinds.Count(kind => kind == ExtraShrineKind.ShadyGuy);
+            Assert.InRange(moai, 3, 8);
+            Assert.InRange(shady, 3, 8);
+            Assert.Equal(moai + shady, kinds.Count);
+            seen.Add(moai);
+            seen.Add(shady);
+        }
+
+        Assert.Contains(3, seen);
+        Assert.Contains(8, seen);
+        Assert.Empty(ExtraShrines.RangedKinds(null, new Random(1)));
+    }
+
+    [Theory]
     [InlineData(1)]
     [InlineData(2)]
     [InlineData(3)]

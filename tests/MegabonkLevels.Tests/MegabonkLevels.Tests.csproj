@@ -27,6 +27,9 @@
     <Compile Include="../../src/MegabonkLevels.Mod/spawn_seed.cs" Link="spawn_seed.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/interactable_randomization.cs" Link="interactable_randomization.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/extra_shrines.cs" Link="extra_shrines.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/ground_zones.cs" Link="ground_zones.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/boss_pools.cs" Link="boss_pools.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/lava_zones.cs" Link="lava_zones.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/maximin.cs" Link="maximin.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/chest_luck.cs" Link="chest_luck.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_file.cs" Link="level_file.cs" />

@@ -37,9 +37,9 @@ The installer is the recommended route. If it cannot run on your machine you can
 
 ## Try the included starter
 
-Default player packages include **Mosswatch Hollow**, a woodland level with
-clearings, ramps and ruined watchposts. Choose it on Map Selection; it needs no
-extra packs or music. See [Mosswatch Hollow](starter-level.md) for what to expect
+Default player packages include **Bramblecrown Hill**, a composite level with
+forest, graveyard, dungeon, desert and hell districts around a tall hill you can climb by a spiral path. Choose it on Map Selection; it needs no
+extra packs or music. See [Bramblecrown Hill](starter-level.md) for what to expect
 and a short move-rock, save-copy, replay tutorial.
 
 ## Finding your levels folder
