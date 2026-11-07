@@ -7,7 +7,8 @@ namespace MegabonkLevels;
 public static class PrefabThumbnails
 {
     public const int Size = 128;
-    private const int Layer = 31;
+    public const int ThumbnailLayer = 31;
+    public const int SceneLayer = 0;
     private static readonly Vector3 Far = new(0f, -5000f, 0f);
     private static readonly Vector3 ViewDirection = new Vector3(1f, 0.8f, -1f).normalized;
 
@@ -21,7 +22,7 @@ public static class PrefabThumbnails
         var fogBefore = RenderSettings.fog;
         try
         {
-            proxy = BuildProxy(prefab);
+            proxy = BuildProxy(prefab, ThumbnailLayer);
             if (proxy == null)
             {
                 return null;
@@ -57,7 +58,8 @@ public static class PrefabThumbnails
         }
     }
 
-    private static GameObject BuildProxy(GameObject prefab)
+    // A mesh-only copy of the prefab: no colliders, particles or scripts, so nothing of the prefab's own behaviour runs.
+    public static GameObject BuildProxy(GameObject prefab, int layer)
     {
         var root = new GameObject("MegabonkLevelsThumbnailProxy");
         root.transform.position = Far;
@@ -70,7 +72,7 @@ public static class PrefabThumbnails
                 continue;
             }
 
-            AddPart(root.transform, prefab.transform, filter.transform, filter.sharedMesh, renderer.sharedMaterials);
+            AddPart(root.transform, prefab.transform, filter.transform, filter.sharedMesh, renderer.sharedMaterials, layer);
             drawn++;
         }
 
@@ -81,7 +83,7 @@ public static class PrefabThumbnails
                 continue;
             }
 
-            AddPart(root.transform, prefab.transform, skinned.transform, skinned.sharedMesh, skinned.sharedMaterials);
+            AddPart(root.transform, prefab.transform, skinned.transform, skinned.sharedMesh, skinned.sharedMaterials, layer);
             drawn++;
         }
 
@@ -98,10 +100,10 @@ public static class PrefabThumbnails
     private static bool IsLowerLod(string name) => name.Contains("LOD", StringComparison.OrdinalIgnoreCase)
         && !name.Contains("LOD0", StringComparison.OrdinalIgnoreCase);
 
-    private static void AddPart(Transform proxyRoot, Transform prefabRoot, Transform source, Mesh mesh, Material[] materials)
+    private static void AddPart(Transform proxyRoot, Transform prefabRoot, Transform source, Mesh mesh, Material[] materials, int layer)
     {
         var part = new GameObject("Part");
-        part.layer = Layer;
+        part.layer = layer;
         part.transform.SetParent(proxyRoot, false);
         part.transform.localPosition = prefabRoot.InverseTransformPoint(source.position);
         part.transform.localRotation = Quaternion.Inverse(prefabRoot.rotation) * source.rotation;
@@ -129,14 +131,14 @@ public static class PrefabThumbnails
         lightObject.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
         var light = lightObject.AddComponent<Light>();
         light.type = LightType.Directional;
-        light.cullingMask = 1 << Layer;
+        light.cullingMask = 1 << ThumbnailLayer;
         light.intensity = 1.1f;
 
         var cameraObject = new GameObject("Camera");
         cameraObject.transform.SetParent(rig.transform, false);
         var camera = cameraObject.AddComponent<Camera>();
         camera.enabled = false;
-        camera.cullingMask = 1 << Layer;
+        camera.cullingMask = 1 << ThumbnailLayer;
         camera.clearFlags = CameraClearFlags.SolidColor;
         camera.backgroundColor = new Color(0f, 0f, 0f, 0f);
         camera.fieldOfView = 30f;

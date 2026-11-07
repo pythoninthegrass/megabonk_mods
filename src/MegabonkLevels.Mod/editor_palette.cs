@@ -229,6 +229,8 @@ public static class EditorPalette
         else if (hover is { Entry: { } entry })
         {
             Selection.Select(entry.Id);
+            // Choosing what to place also picks the tool that places it, the way pick-block does.
+            EditorTileTools.SelectTool(EditorTool.Place);
         }
         else if (TabAt(mouse) is { } tab)
         {
