@@ -212,18 +212,26 @@ public static class ObjectTools
 
     public static EditOp Place(CatalogId catalogId, Vector3Data position, Vector3Data prefabRotation, Vector3Data scale, float cameraYaw,
         IReadOnlyList<ObjectAttachmentSpec> attachments = null) =>
-        new PlaceObject(catalogId.Serialize(), position, prefabRotation with { Y = FacingYaw(cameraYaw) }, scale, Attachments: attachments).ToEditOp();
+        PlaceWithRotation(catalogId, position, prefabRotation with { Y = FacingYaw(cameraYaw) }, scale, attachments);
+
+    // The object lands with exactly this rotation, so a preview can show what a click will create.
+    public static EditOp PlaceWithRotation(CatalogId catalogId, Vector3Data position, Vector3Data rotation, Vector3Data scale,
+        IReadOnlyList<ObjectAttachmentSpec> attachments = null) =>
+        new PlaceObject(catalogId.Serialize(), position, rotation, scale, Attachments: attachments).ToEditOp();
 
     public static EditOp Move(ObjectTarget target, TransformData current, Vector3Data position) =>
         new MoveObject(target, current with { Position = position }).ToEditOp();
 
-    // Steps the object a quarter turn about a world axis; yaw edits the Y euler directly, pitch and roll compose in world space.
-    public static EditOp Rotate(ObjectTarget target, TransformData current, RotationAxis axis, bool positive)
+    public static EditOp Rotate(ObjectTarget target, TransformData current, RotationAxis axis, bool positive) =>
+        new MoveObject(target, current with { Rotation = StepRotation(current.Rotation, axis, positive) }).ToEditOp();
+
+    // A quarter turn about a world axis; yaw edits the Y euler directly, pitch and roll compose in world space.
+    public static Vector3Data StepRotation(Vector3Data euler, RotationAxis axis, bool positive)
     {
-        var rotation = axis == RotationAxis.Yaw
-            ? current.Rotation with { Y = NormalizeAngle(current.Rotation.Y + (positive ? QuarterTurn : -QuarterTurn)) }
-            : WorldStep(current.Rotation, axis, positive ? QuarterTurn : -QuarterTurn);
-        return new MoveObject(target, current with { Rotation = rotation }).ToEditOp();
+        var degrees = positive ? QuarterTurn : -QuarterTurn;
+        return axis == RotationAxis.Yaw
+            ? euler with { Y = NormalizeAngle(euler.Y + degrees) }
+            : WorldStep(euler, axis, degrees);
     }
 
     public static EditOp Remove(ObjectTarget target) => new RemoveObject(target).ToEditOp();

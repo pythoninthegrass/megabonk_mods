@@ -210,6 +210,7 @@ public static class EditorTileTools
         {
             _ctrlHeldSince = -1f;
             _target = null;
+            EditorObjectTools.HidePlacePreview();
             Refresh();
             return;
         }
@@ -238,6 +239,10 @@ public static class EditorTileTools
             Use(target.X, target.Z, target.State);
             _target = FindTarget();
         }
+        else
+        {
+            EditorObjectTools.HidePlacePreview();
+        }
 
         Refresh();
     }
@@ -257,6 +262,9 @@ public static class EditorTileTools
 
         _tool = tool;
     }
+
+    // Lets another panel choose the active tool, e.g. the palette switching to Place when an item is picked.
+    public static void SelectTool(EditorTool tool) => SetTool(tool);
 
     private static (int X, int Z, TileState State)? FindTarget()
     {

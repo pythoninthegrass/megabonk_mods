@@ -350,6 +350,27 @@ public class ObjectToolTests
     }
 
     [Fact]
+    public void PlaceWithRotation_UsesTheGivenRotationInsteadOfFacingTheCamera()
+    {
+        var op = ObjectTools.PlaceWithRotation(CatalogId.Parse(Chest), new Vector3Data(80f, 40f, 0f), new Vector3Data(5f, 33f, 7f), new Vector3Data(2f, 2f, 2f));
+
+        var expected = new PlaceObject(Chest, new Vector3Data(80f, 40f, 0f), new Vector3Data(5f, 33f, 7f), new Vector3Data(2f, 2f, 2f));
+        Assert.Equal(expected.ToEditOp(), op);
+    }
+
+    // The ghost and the click must agree: the previewed rotation places exactly what was shown.
+    [Fact]
+    public void PlaceWithRotation_MatchesPlaceOnceTheYawFacesTheCamera()
+    {
+        var position = new Vector3Data(80f, 40f, 0f);
+        var scale = new Vector3Data(2f, 2f, 2f);
+        var id = CatalogId.Parse(Chest);
+
+        var previewed = ObjectTools.PlaceWithRotation(id, position, new Vector3Data(5f, ObjectTools.FacingYaw(90f), 7f), scale);
+        Assert.Equal(previewed, ObjectTools.Place(id, position, new Vector3Data(5f, 33f, 7f), scale, 90f));
+    }
+
+    [Fact]
     public void Move_ChangesOnlyThePosition()
     {
         var op = ObjectTools.Move(Generated, Current, new Vector3Data(80f, 40f, 0f));
@@ -444,6 +465,17 @@ public class ObjectToolTests
 
         Assert.Equal(Current.Position, transform.Position);
         Assert.Equal(Current.Scale, transform.Scale);
+    }
+
+    [Theory]
+    [InlineData(RotationAxis.Pitch, true)]
+    [InlineData(RotationAxis.Yaw, true)]
+    [InlineData(RotationAxis.Roll, false)]
+    public void StepRotation_StepsLikeTheRotateKeyWithoutAnEditOp(RotationAxis axis, bool positive)
+    {
+        var op = ObjectTools.Rotate(Generated, Current, axis, positive);
+
+        Assert.Equal(MoveObject.FromEditOp(op).NewTransform.Rotation, ObjectTools.StepRotation(Current.Rotation, axis, positive));
     }
 
     [Fact]

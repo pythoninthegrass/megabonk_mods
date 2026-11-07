@@ -47,6 +47,19 @@ public static class EditorObjectTools
     private static (float X, float Z) _dragGrab;
     private static bool _onTerrain;
 
+    private const string PreviewName = "MegabonkLevelsPlacePreview";
+    private static readonly Color PreviewColor = new(0.4f, 1f, 0.5f, 0.45f);
+    private static readonly Color PreviewBlockedColor = new(1f, 0.4f, 0.4f, 0.45f);
+
+    private static GameObject _preview;
+    private static CatalogId? _previewId;
+    private static bool _previewMissing;
+    private static CatalogId? _previewRotatedFor;
+    private static Vector3Data? _previewRotation;
+    private static Color? _previewColor;
+    private static Material _previewMaterial;
+    private static (CatalogId Id, Vector3Data Position, bool Blocked)? _previewStacked;
+
     public static ObjectTarget? Selected => _selected;
 
     public static void OnEditorEntered(MelonLogger.Instance logger)
@@ -54,6 +67,8 @@ public static class EditorObjectTools
         _logger = logger;
         _selected = null;
         _hovered = null;
+        _previewRotation = null;
+        DestroyPreview();
         _selectionOutline = BuildOutline(SelectionColor, OutlineWidth, RingSegments, loop: true, onTop: true);
         _gridLines = BuildOutline(GridColor, GridWidth, 0, loop: false);
         _placeMarker = BuildOutline(MarkerColor, MarkerWidth, RingSegments, loop: true);
@@ -65,6 +80,8 @@ public static class EditorObjectTools
         DestroyLine(ref _selectionOutline);
         DestroyLine(ref _gridLines);
         DestroyLine(ref _placeMarker);
+        DestroyPreview();
+        _previewRotation = null;
         _selected = null;
         _hovered = null;
     }
@@ -72,6 +89,8 @@ public static class EditorObjectTools
     public static void OnToolChanged(EditorTool tool)
     {
         CancelDrag();
+        DestroyPreview();
+        _previewRotation = null;
         _selected = null;
         _hovered = null;
     }
@@ -126,6 +145,7 @@ public static class EditorObjectTools
 
         RefreshOutline(tool);
         RefreshGrid(tool, target, point);
+        RefreshPreview(tool, pointerFree, target, point);
         return switchTo;
     }
 
@@ -207,8 +227,11 @@ public static class EditorObjectTools
             return;
         }
 
-        var op = ObjectTools.Place(id, position, ToData(prefab.transform.eulerAngles), ToData(prefab.transform.localScale), camera.transform.eulerAngles.y,
-            PackPrefabs.AttachmentsFor(id));
+        var attachments = PackPrefabs.AttachmentsFor(id);
+        var scale = ToData(prefab.transform.localScale);
+        var op = _previewRotation is { } rotation
+            ? ObjectTools.PlaceWithRotation(id, position, rotation, scale, attachments)
+            : ObjectTools.Place(id, position, ToData(prefab.transform.eulerAngles), scale, camera.transform.eulerAngles.y, attachments);
         Apply(op, $"place '{id.Serialize()}' at ({position.X:0.##}, {position.Z:0.##}) {(target is { } cell ? $" in cell ({cell.X},{cell.Z})" : "")}");
     }
 
@@ -432,6 +455,7 @@ public static class EditorObjectTools
     private static void Apply(EditOp op, string what)
     {
         var applied = EditorTileTools.ApplyFromObjectTools(op, what);
+        _previewStacked = null;
         _logger.Msg($"EditorObjectTools: {what} -> {op.OpType}{(applied ? "" : " not applied")}");
     }
 
@@ -726,6 +750,163 @@ public static class EditorObjectTools
         SetRing(_placeMarker, marker.X, marker.Y + OutlineLift, marker.Z, MarkerRadius);
         _gridLines.enabled = true;
         _placeMarker.enabled = tool == EditorTool.Place;
+    }
+
+    // The object a click would create, drawn at the cursor so it can be seen and rotated before it is placed.
+    private static void RefreshPreview(EditorTool tool, bool pointerFree, (int X, int Z, TileState State)? target, Vector3 point)
+    {
+        var id = EditorPalette.Selection.Current;
+        if (_previewRotatedFor != id)
+        {
+            _previewRotatedFor = id;
+            _previewRotation = null;
+        }
+
+        var camera = PlayerCamera.Instance?.camera;
+        GameObject prefab = null;
+        Vector3Data? position = null;
+        if (tool == EditorTool.Place && pointerFree && id is { } chosen && camera != null)
+        {
+            prefab = LiveEditPatch.PrefabFor(chosen);
+            position = prefab == null ? null : CursorPosition(target, point, (0f, 0f));
+        }
+
+        if (!PlacePreview.IsVisible(tool == EditorTool.Place, !pointerFree, id.HasValue, prefab != null, camera != null, position.HasValue))
+        {
+            HidePlacePreview();
+            return;
+        }
+
+        ShowPreview(prefab, id.Value, position.Value, StepPreviewRotation(prefab, id.Value, camera.transform.eulerAngles.y));
+    }
+
+    // The rotation the ghost and the placed object share: camera-facing until R/F/G steps it.
+    private static Vector3Data StepPreviewRotation(GameObject prefab, CatalogId id, float cameraYaw)
+    {
+        var axis = RotationKeyPressed();
+        var negative = EditorInput.GetKey(KeyCode.LeftShift) || EditorInput.GetKey(KeyCode.RightShift);
+        var rotation = PlacePreview.Rotation(_previewRotation, ToData(prefab.transform.eulerAngles), cameraYaw, axis, !negative);
+        if (axis is { } pressed)
+        {
+            _previewRotation = rotation;
+            _logger.Msg($"EditorObjectTools: preview '{id.Serialize()}' {pressed} {(negative ? "negative" : "positive")} to ({rotation.X:0.#}, {rotation.Y:0.#}, {rotation.Z:0.#})");
+        }
+
+        return rotation;
+    }
+
+    private static void ShowPreview(GameObject prefab, CatalogId id, Vector3Data position, Vector3Data rotation)
+    {
+        // A scene reload takes the ghost with it, so a proxy that has gone is rebuilt rather than left missing.
+        if (_previewId != id || (_preview == null && !_previewMissing))
+        {
+            DestroyPreview();
+            _previewId = id;
+            _preview = PrefabThumbnails.BuildProxy(prefab, PrefabThumbnails.SceneLayer);
+            if (_preview == null)
+            {
+                _previewMissing = true;
+                _logger.Warning($"EditorObjectTools: no placement preview for '{id.Serialize()}', the prefab has no mesh");
+                return;
+            }
+
+            _preview.name = PreviewName;
+            var scale = prefab.transform.localScale;
+            _preview.transform.localScale = new Vector3(scale.x, scale.y, scale.z);
+            _previewColor = null;
+        }
+
+        if (_preview == null)
+        {
+            return;
+        }
+
+        _preview.transform.position = new Vector3(position.X, position.Y, position.Z);
+        _preview.transform.rotation = Quaternion.Euler(rotation.X, rotation.Y, rotation.Z);
+        if (!_preview.activeSelf)
+        {
+            _preview.SetActive(true);
+        }
+
+        var color = StandsAt(id, prefab.name, position) ? PreviewBlockedColor : PreviewColor;
+        if (_previewColor != color)
+        {
+            PaintPreview(color);
+            _previewColor = color;
+        }
+    }
+
+    // Whether a click here would be refused as a duplicate of an identical object, cached while the ghost stands still.
+    private static bool StandsAt(CatalogId id, string prefabName, Vector3Data position)
+    {
+        if (_previewStacked is { } cached && cached.Id.Equals(id) && cached.Position.Equals(position))
+        {
+            return cached.Blocked;
+        }
+
+        var blocked = IsStacked(prefabName, position, null);
+        _previewStacked = (id, position, blocked);
+        return blocked;
+    }
+
+    private static void PaintPreview(Color color)
+    {
+        var material = PreviewMaterial(color);
+        foreach (var renderer in _preview.GetComponentsInChildren<Renderer>())
+        {
+            if (material != null)
+            {
+                renderer.sharedMaterial = material;
+            }
+
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+        }
+    }
+
+    // One shared translucent material, so a prefab's own materials are never touched; with no shader the proxy keeps them.
+    private static Material PreviewMaterial(Color color)
+    {
+        var shader = Shader.Find("UI/Default") ?? Shader.Find("Sprites/Default") ?? Shader.Find("Hidden/Internal-Colored");
+        if (shader == null)
+        {
+            _logger.Warning("EditorObjectTools: no shader found for the placement preview, it shows the prefab's own materials");
+            return null;
+        }
+
+        _previewMaterial ??= new Material(shader)
+        {
+            name = PreviewName,
+            hideFlags = HideFlags.HideAndDontSave,
+            renderQueue = 3000,
+        };
+        _previewMaterial.color = color;
+        return _previewMaterial;
+    }
+
+    // The ghost follows the cursor, so it disappears whenever a click there would not place.
+    public static void HidePlacePreview()
+    {
+        if (_preview != null && _preview.activeSelf)
+        {
+            _preview.SetActive(false);
+        }
+
+        _previewStacked = null;
+    }
+
+    private static void DestroyPreview()
+    {
+        if (_preview != null)
+        {
+            Object.Destroy(_preview);
+            _preview = null;
+        }
+
+        _previewId = null;
+        _previewMissing = false;
+        _previewColor = null;
+        _previewStacked = null;
     }
 
     private static void SetRing(LineRenderer line, float x, float y, float z, float radius)

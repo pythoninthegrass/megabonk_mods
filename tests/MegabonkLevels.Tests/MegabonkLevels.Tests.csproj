@@ -110,6 +110,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/tile_tool.cs" Link="tile_tool.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/editor_tool.cs" Link="editor_tool.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/object_tool.cs" Link="object_tool.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/place_preview.cs" Link="place_preview.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/object_picker.cs" Link="object_picker.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/palette_pick.cs" Link="palette_pick.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/palette_thumbnail_queue.cs" Link="palette_thumbnail_queue.cs" />
