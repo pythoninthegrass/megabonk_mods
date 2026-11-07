@@ -1,10 +1,10 @@
 ---
 id: TASK-021.28
 title: Relocate minibosses like Chunkham out of the Warehouse's suspended glass box
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-06 23:09'
-updated_date: '2026-11-06 23:09'
+updated_date: '2026-11-07 00:52'
 labels:
   - bug
   - enemies
@@ -37,18 +37,41 @@ Reproduce: `relaunch levels/thps.mblevel.json` (needs `MEGABONK_DEV=true` and th
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Reproduce a miniboss (Chunkham or another type) stuck in the suspended glass box on the Warehouse level and record where it spawned and which miniboss types are affected in docs/development.md
-- [ ] #2 Minibosses spawned on the Warehouse level are relocated to a reachable walkable spot in the level interior, away from the glass box, using the same rule bosses use
-- [ ] #3 Boss portal bosses and Boss Curse copies keep their current relocation behaviour; the miniboss change does not move unrelated enemies
-- [ ] #4 A Python or C# unit test covers the new miniboss relocation rule where it can run without the game
-- [ ] #5 Verified in the running game: a miniboss that previously stuck in the glass box now reaches the player, and the result is recorded in docs/development.md
-- [ ] #6 docs/development.md describes the miniboss relocation alongside the existing boss spawn redirect
+- [x] #1 Reproduce a miniboss (Chunkham or another type) stuck in the suspended glass box on the Warehouse level and record where it spawned and which miniboss types are affected in docs/development.md
+- [x] #2 Minibosses spawned on the Warehouse level are relocated to a reachable walkable spot in the level interior, away from the glass box, using the same rule bosses use
+- [x] #3 Boss portal bosses and Boss Curse copies keep their current relocation behaviour; the miniboss change does not move unrelated enemies
+- [x] #4 A Python or C# unit test covers the new miniboss relocation rule where it can run without the game
+- [x] #5 Verified in the running game: a miniboss that previously stuck in the glass box now reaches the player, and the result is recorded in docs/development.md
+- [x] #6 docs/development.md describes the miniboss relocation alongside the existing boss spawn redirect
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Reproduce on the fedora Windows/Proton box: add a log line for every Boss-flag spawn that BossSpawnRedirectPatch does not consume (position, enemy name, portal spawner position) and read where the timeline miniboss (MinibossPig at ~3:00) lands against the glass box.
+2. Tests first in tests/MegabonkLevels.Tests/boss_spawn_redirect_tests.cs for a Unity-free rule: a Boss-flag spawn outside the portal arming window, on a level that gets the redirect, is a miniboss to relocate; portal and curse spawns and non-boss enemies are unchanged.
+3. Implement in BossSpawnRedirect/BossSpawnRedirectPatch: miniboss spawns reuse TryFindSpot/FloorPlacement, anchored on the level's InteractableBossSpawner position (looked up on demand, since a miniboss can spawn before the portal is used), same ring, kill-floor margin and spacing rules.
+4. Rebuild, deploy to fedora, verify a miniboss reaches the player; update docs/development.md (reproduction, affected types, relocation, verification).
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+DoD #1 (task check) left unchecked: 17 Python tests fail identically on a clean HEAD (test_installer_parity, test_thps_preservation, test_thps_attachments) on this host; the C# suite passes (2006).
+
+Narrow rule chosen with Lance: relocate only a Boss-flag spawn that lands in the glass-box band around the portal, for every miniboss type.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Minibosses spawned inside the Warehouse glass box are now moved out with the portal-boss placement rule (commit d1fda03). Timeline minibosses spawn on a ring around the player, so they only land in the box when the player is near it at box height; BossSpawnRedirect.IsInsideBossBox (XZ < 35 of the portal, y from 2 below to 10 above it) gates the move for any Boss-flag spawn outside the portal arming window. Verified on the Linux Proton box: with the player in the box, MinibossPig (Chunkham the Terrible) spawned inside it and was moved 59 units away, then reached and was damaged by the player. docs/development.md has a Miniboss relocation section. Unit tests added for IsInsideBossBox.
+<!-- SECTION:FINAL_SUMMARY:END -->
