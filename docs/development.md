@@ -1057,6 +1057,8 @@ The tooling scripts under `scripts/` are covered by pytest tests in `tests/` (th
 
 `task check` ends with `task lint`, which runs `markdownlint -c .markdownlint.jsonc .` and needs a `markdownlint` binary on `PATH`; a machine without one runs every test and then fails the check with `executable file not found`, so read the output above the final error before assuming a test broke. Install `markdownlint-cli` (`brew install markdownlint-cli`), not `markdownlint-cli2`, which is a different command with no `-c` flag that ignores `.markdownlintignore`.
 
+`task check` runs the build, then `task installer:test` (gofmt, `go vet` and `go test` over the Go installer, which is the only player installer), then the C# and Python tests, then lint. The Go step needs the Go toolchain that mise installs from `.tool-versions` and fails when `go` is not on `PATH` rather than skipping, so run `task check` through `mise exec --` on a machine that has not activated mise. The Python installer and its parity tests were removed; `scripts/package_contract/` keeps only the manifest and pack checks the package builder shares with it.
+
 `pyproject.toml` declares runtime dependencies under `[project.dependencies]`
 and test and lint tooling under `[dependency-groups] dev`; `uv.lock` records
 their resolved versions. uv installs the `dev` group by default, so a test run

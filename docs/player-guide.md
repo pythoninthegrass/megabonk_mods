@@ -22,7 +22,7 @@ Downloads will be published on GitHub Releases: `<GitHub Releases link: to be ad
 Unzip the package, then:
 
 - **Windows:** double-click `install.exe`. It finds the game through Steam, shows a progress window, and does not ask for administrator rights.
-- **Linux:** open a terminal in the unzipped folder and run `./install.sh`. It needs Python 3.11 or newer and nothing else.
+- **Linux:** open a terminal in the unzipped folder and run `./megabonk-installer`. It needs nothing else installed.
 - **macOS:** open Terminal in the unzipped folder and run `./megabonk-installer`.
 
 The Windows and macOS installers open a window that lists what they will do and waits for you to press Install; on Linux the installer prints its steps as it goes. When it finishes, start Megabonk from Steam. If the game shows a Map Selection screen with extra levels, it worked. If the installer says it found a different game build than the one the package was verified against, it still installs, but the mod may not load until a matching package is released.

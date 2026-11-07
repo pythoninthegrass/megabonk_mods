@@ -137,8 +137,8 @@ ssh game-host 'mkdir -p ~/mb-player && cd ~/mb-player &&
 ssh game-host 'cd ~/mb-player
   G=/media/sdcard/SteamLibrary/steamapps/common/Megabonk
   P="$HOME/.local/share/Steam/steamapps/compatdata/3405340/pfx"
-  ./install.sh --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry &&
-  ./install.sh --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry --check'
+  ./megabonk-installer --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry &&
+  ./megabonk-installer --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry --check'
 ssh game-host 'steam steam://rungameid/3405340'
 ```
 
@@ -208,7 +208,7 @@ scp .tools/bundles/windows/thps \
   unity/pack-authoring/packs/thps/attachments.json \
   game-host:~/mb-player/thps-source/thps/
 ssh game-host 'cd ~/mb-player &&
-  ./install.sh --game-dir "$G" --prefix "$P" --levels "$HOME/mb-player/content/levels" \
+  ./megabonk-installer --game-dir "$G" --prefix "$P" --levels "$HOME/mb-player/content/levels" \
     --packs "$HOME/mb-player/content/packs" --thps-bundle thps-source/thps'
 ```
 

@@ -1,8 +1,8 @@
 # Player installer
 
-The player-facing download: a folder a Linux player unzips and runs `./install.sh` in, which installs MelonLoader, the MegabonkLevels mod, the .NET 6 runtime it needs, and any levels or packs the package carries. This doc is the contract between the two halves — the **package** the build produces and the **installer** that consumes it — plus the Linux-specific behaviour that contract cannot express.
+The player-facing download: a folder a Linux player unzips and runs `./megabonk-installer` in, which installs MelonLoader, the MegabonkLevels mod, the .NET 6 runtime it needs, and any levels or packs the package carries. This doc is the contract between the two halves — the **package** the build produces and the **installer** that consumes it — plus the Linux-specific behaviour that contract cannot express.
 
-Everything here is Python standard library only, on both sides. The installer runs as `python3 -m player_installer` from a copy of `scripts/player_installer/` that travels inside the package, so a player needs Python 3.11 or newer and nothing else: no uv, no repo checkout, no .NET SDK, no Wine installation. The floor is set by the newest feature the bundled modules use and is enforced by `install.sh` rather than just advertised, so an older interpreter gets a package-manager hint instead of a traceback.
+The installer is one static Go binary per platform, built from `go/` by `task installer:build` and shipped inside the package, so a player needs nothing else: no Python, no uv, no repo checkout, no .NET SDK, no Wine installation. The package builder and verifier (`scripts/build_player_package.py`, `task package:check`) are Python and share a small contract module with the installer, `scripts/package_contract/`: the manifest schema in `manifest.py` and the pack checks in `packs.py`. The installer parses the same manifest in `go/internal/manifest`.
 
 ## Linux player setup
 
@@ -13,7 +13,7 @@ switch on Fedora; editing Steam's configuration alone did not. Launch vanilla
 once to create the prefix, choose **DX11 - Recommended**, then quit the game
 before installing. `-force-d3d11` in Steam's Launch Options pins that renderer.
 
-Unzip the player package and run `./install.sh` with Python 3.11 or newer.
+Unzip the player package and run `./megabonk-installer`.
 Packages are currently built with `task package:linux`; a published player
 download URL is not yet available. No separate Wine install is needed with
 Steam Proton. For a game whose prefix is in a different Steam library, pass
@@ -30,8 +30,8 @@ for measurement, package transfer, and remote launch commands.
 cd /path/to/unzipped-player-package
 G=/media/sdcard/SteamLibrary/steamapps/common/Megabonk
 P="$HOME/.local/share/Steam/steamapps/compatdata/3405340/pfx"
-./install.sh --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry
-./install.sh --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry --check
+./megabonk-installer --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry
+./megabonk-installer --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry --check
 ```
 
 `--check` must exit 0 and report that the install matches the package. Start
@@ -45,7 +45,7 @@ override method: the observed run reported `via: wine` despite requesting
 registry mode. Do not infer success from the Steam launch command or an old log.
 
 Re-run the same install command to repair drift. With the game stopped,
-`./install.sh --game-dir "$G" --prefix "$P" --uninstall` removes recorded
+`./megabonk-installer --game-dir "$G" --prefix "$P" --uninstall` removes recorded
 installer-owned files, not unrelated mods or saves. Packs must contain Windows
 bundles even though the host OS is Linux.
 
@@ -53,19 +53,18 @@ bundles even though the host OS is Linux.
 
 ```text
 megabonk-levels-<mod>-ml<melonloader>-linux/
-├── install.sh                    sh wrapper: picks a new enough interpreter, execs the bundled installer
+├── megabonk-installer            the Go installer for this platform (install.exe on Windows)
 ├── manifest.json                 the contract, described below
-├── installer/player_installer/   the installer's own modules, copied in
 ├── vendor/                       vendor archives, named exactly as the manifest names them
 ├── content/levels/               bundled .mblevel.json files and their sidecar thumbnails
 └── content/packs/<pack-id>/      bundle + manifest.json (+ attachments.json) per pack
 ```
 
-`install.sh` is the only entry point a player needs. It picks an interpreter — `--python PATH`, else `MEGABONK_PYTHON`, else `python3` on PATH — checks that it is new enough, and in both failure cases names the package manager command that installs a version that is, then hands the rest to `"$PYTHON" -m player_installer --package <its own directory>`. The interpreter choice is resolved in the wrapper, not by the module: a PATH `python3` too old to parse the bundled code cannot reach an argparse flag, so `--python` has to be read by `sh`; `player_installer` merely declares the flag so it survives the hand-off. A bad explicit path exits 2, an explicit or default interpreter below the floor exits 1, and a missing default `python3` exits 1. Because `-m` resolves modules from the working directory rather than the script's own, the wrapper also puts the bundled `installer/` directory on `PYTHONPATH` — running the module by name without that fails with `No module named player_installer` no matter where the player stands. The floor lives in one place, `MIN_PYTHON` in `scripts/build_player_package.py`, which the wrapper text is built from; the tests parse every bundled module with `ast` at that `feature_version`, and `ruff.toml` exempts `scripts/player_installer/` from pyupgrade so a repo-wide autofix on the 3.13-targeted config cannot raise the bundled code's floor behind the tests' back.
+`megabonk-installer` is the only entry point a player needs: a static binary that reads `manifest.json` from the folder it runs in (or `--package <dir>`), so there is no interpreter to choose and nothing to put on a path. The builder copies the platform's binary from `.tools/installer/` and marks it executable; a package build without `--installer-binary` fails, and a missing file is a missing input that points at `task installer:build`.
 
 ## The manifest
 
-`manifest.json` is a JSON object with `schema` `megabonk-player-package/1`. `load_manifest` in `scripts/player_installer/manifest.py` refuses anything it cannot use, naming the missing or bad key rather than failing later during the install.
+`manifest.json` is a JSON object with `schema` `megabonk-player-package/1`. `load_manifest` in `scripts/package_contract/manifest.py` (the builder's side) and `LoadManifest` in `go/internal/manifest` (the installer's) refuse anything they cannot use, naming the missing or bad key rather than failing later during the install.
 
 | Key | Meaning |
 | --- | --- |
@@ -122,7 +121,7 @@ That one file drives both `--check` and `--uninstall`. Uninstall is deliberately
 
 ## Installer contract
 
-Every installer — the Python reference behind `install.sh` and the Go binary behind `install.exe` and `megabonk-installer` — implements the steps below in this order, and a player's experience differs between platforms only in how the installer is launched. The sections after this one describe the platform specifics; this one is the single list they must agree with, and `tests/test_installer_parity.py` holds the two implementations to it.
+Every platform's installer — the same Go binary, built as `megabonk-installer` for Linux and macOS and `install.exe` for Windows — implements the steps below in this order, and a player's experience differs between platforms only in how the installer is launched. The sections after this one describe the platform specifics; this one is the single list they must agree with, and the Go tests under `go/internal` hold the installer to it.
 
 1. **Check the package.** Load `manifest.json` and verify every `vendor/` archive and `files[]` entry against its digest before touching the game. A bad or tampered package exits 1 with the list of mismatches and changes nothing.
 2. **Find the game directory.** Use `--game-dir` when given. Otherwise read Steam's recorded libraries and accept a directory only when it holds `Megabonk.exe`, `Megabonk.x86_64` or `Megabonk_Data/`. A game that cannot be found exits 3 and names every Steam client and library considered, each with why it was rejected, plus the flag to retry with.
@@ -158,13 +157,13 @@ task package:linux MOD_VERSION=0.4.2
 Two choices are intentional:
 
 - **The default is Bramblecrown Hill only.** The package tasks name `bramblecrown-hill.mblevel.json`, bringing its original selection illustration and biome icon, with no packs or music. See [Starter level](starter-level.md) for the content inventory, first-edit tutorial and packaged smoke test. `levels/` also holds development fixtures, so there is no directory-wide bundling. Explicit `LEVELS` and `PACKS` overrides still support local packages; the lower-level builder bundles only files named with `--level` and `--pack`. A `.local.mblevel.json` is skipped even when named. Matching thumbnail and `.biome` sidecars are ordinary hashed manifest files, installed beside the level, repaired by a rerun and removed with it on uninstall. Images that match no bundled level stay out.
-- **Packs come from two places, the way `task pack:install` assembles them**: the built AssetBundle from `.tools/bundles/<platform>/<pack>` and the manifest (plus optional attachments) from `unity/pack-authoring/packs/<pack>/`. `--pack-platform` picks the bundle; `windows` is right on Linux because the game runs the Windows build. Staged packs are validated with `validate_pack_source`, which reproduces the game's own rules — required `id`/`name`/`author`/`version`/`assets` fields, `id` matching the folder name, a bundle file present, and a `pack-attachments/1` sidecar when there is one — so a broken pack fails the build instead of landing in the Warehouse as a placeholder.
+- **Packs come from two places, the way `task pack:install` assembles them**: the built AssetBundle from `.tools/bundles/<platform>/<pack>` and the manifest (plus optional attachments) from `unity/pack-authoring/packs/<pack>/`. `--pack-platform` picks the bundle; `windows` is right on Linux because the game runs the Windows build. Staged packs are validated with `validate_pack_source` (`scripts/package_contract/packs.py`), which reproduces the game's own rules — required `id`/`name`/`author`/`version`/`assets` fields, `id` matching the folder name, a bundle file present, and a `pack-attachments/1` sidecar when there is one — so a broken pack fails the build instead of landing in the Warehouse as a placeholder.
 
 Vendor archives are taken from `.tools/vendor-cache/` and only verified there, never downloaded unless you pass `--allow-download` (`ALLOW_DOWNLOAD=true` to the task, which forwards it). The build writes into a staging directory and swaps it in at the end, so a failure leaves the previous package untouched.
 
 When a download does happen it goes through `scripts/asset_download.py`, the only code in `scripts/` that touches the network (a test pins that). The rules: https only, TLS 1.2 floor with certificate verification; the status is checked before the body is read, so a 404, a login or captive-portal page, or an empty body reads as a missing asset rather than a checksum mismatch, and nothing poisoned ever lands in the cache; the body is capped, and an archive whose digest does not match the manifest pin is refused before it is cached. Redirects stay on the original host except for an explicit CDN allowance — GitHub release assets hand off to `release-assets.githubusercontent.com` and dotnetcli to azureedge/microsoft hosts — so an off-list redirect is refused as a missing asset. `install_melonloader.py` uses the same fetcher. The `url` in a manifest entry stays provenance for the player side: the installer itself never downloads.
 
-The zip is deterministic — sorted entries, fixed timestamps, modes 0755 for `install.sh` and 0644 elsewhere — so two builds of the same inputs are byte-identical once `SOURCE_DATE_EPOCH` is pinned.
+The zip is deterministic — sorted entries, fixed timestamps, modes 0755 for the installer binary and 0644 elsewhere — so two builds of the same inputs are byte-identical once `SOURCE_DATE_EPOCH` is pinned.
 
 ## Windows package
 
@@ -173,7 +172,7 @@ task package:windows
 task package:windows MOD_VERSION=0.4.2
 ```
 
-`task package:windows` builds the mod and the `windows/amd64` Go installer, then runs `scripts/build_player_package.py --platform windows --installer-binary <exe>`. The package has the same `vendor/`, `content/` and `manifest.json` layout as the Linux one with `"platform": "windows"`, but `install.exe` replaces `install.sh` and the bundled Python installer. It lands in `.tools/player-package-windows/` (override with `OUTPUT_WINDOWS`), with `megabonk-levels-<mod>-ml<loader>-windows.zip` beside it. Windows players unzip it and double-click `install.exe`: with no `--package`, the Go installer takes the folder it runs from.
+`task package:windows` builds the mod and the `windows/amd64` Go installer, then runs `scripts/build_player_package.py --platform windows --installer-binary <exe>`. The package has the same `vendor/`, `content/` and `manifest.json` layout as the Linux one with `"platform": "windows"`, but the binary is `install.exe`. It lands in `.tools/player-package-windows/` (override with `OUTPUT_WINDOWS`), with `megabonk-levels-<mod>-ml<loader>-windows.zip` beside it. Windows players unzip it and double-click `install.exe`: with no `--package`, the Go installer takes the folder it runs from.
 
 On native Windows the installer finds Steam through `HKCU\Software\Valve\Steam` (then `HKLM\...\WOW6432Node\Valve\Steam` and the Program Files default) and reads `libraryfolders.vdf` for libraries on other drives. It has no prefix, no `version.dll` override and no launch option; every write is inside the game directory. MelonLoader's bootstrap otherwise installs .NET 6 machine-wide under Program Files on first launch, so the installer pre-seeds the vendored runtime into `MelonLoader/Dependencies/dotnet`, the path the loader itself uses; it then logs `Using HostFXR Path: <game>\MelonLoader\Dependencies\dotnet\host\fxr\6.0.36\hostfxr.dll` and runs no runtime installer. `--uninstall` also removes the files the loader creates at first launch (`UserData/Loader.cfg`, and `Plugins/`, `UserData/Levels`, `UserData/LevelPacks`, `UserData` when empty), so the game returns to vanilla while a player's own plugins, preferences and levels stay.
 
@@ -225,13 +224,13 @@ On an Apple silicon Mac with plain Wine 11 (Wine Devel), against a copy of a wor
 
 ### The Windows build only
 
-The installer classifies the game directory before touching it (`scripts/player_installer/gamebuild.py`). `Megabonk.exe` plus `Megabonk_Data/` is the Windows build and the only supported one. A directory with `Megabonk.x86_64` is the native Linux build and the installer stops with exit 4 and instructions for switching to the Windows build through Steam Play, because MelonLoader 0.7.3 segfaults the native binary during Il2Cpp assembly generation and the upstream fix is not in a release. That is a hard refusal, not a warning: installing onto it would leave a player with a crashed game and no log.
+The installer classifies the game directory before touching it (`gamebuild.Classify` in `go/internal/gamebuild`). `Megabonk.exe` plus `Megabonk_Data/` is the Windows build and the only supported one. A directory with `Megabonk.x86_64` is the native Linux build and the installer stops with exit 4 and instructions for switching to the Windows build through Steam Play, because MelonLoader 0.7.3 segfaults the native binary during Il2Cpp assembly generation and the upstream fix is not in a release. That is a hard refusal, not a warning: installing onto it would leave a player with a crashed game and no log.
 
 ### Finding Steam and the game
 
-`scripts/player_installer/steam.py` looks for a Steam install under `$XDG_DATA_HOME/Steam`, `~/.local/share/Steam`, `~/.steam/root`, `~/.steam/steam`, the two Flatpak locations (`~/.var/app/com.valvesoftware.Steam/...`), and any Flatpak-granted path. A directory counts as a client when it has `steamapps/`. Library folders are read out of `config/libraryfolders.vdf` (`vdf.py`, a read-only parser — the installer never writes VDF).
+`go/internal/steam` looks for a Steam install under `$XDG_DATA_HOME/Steam`, `~/.local/share/Steam`, `~/.steam/root`, `~/.steam/steam`, the two Flatpak locations (`~/.var/app/com.valvesoftware.Steam/...`), and any Flatpak-granted path. A directory counts as a client when it has `steamapps/`. Library folders are read out of `config/libraryfolders.vdf` (`go/internal/vdf`, a read-only parser — the installer never writes VDF).
 
-Game identity comes from `game_candidates`, which offers every directory three searches thought might be Megabonk, in the order it should be trusted: the `installdir` in the library's own `appmanifest_3405340.acf`, then `steamapps/common/Megabonk` by name, then any other Il2Cpp install in `common`. The third tier exists because a copy moved out of its library keeps `GameAssembly.dll` and its data folder but loses the name. Acceptance never rests on that shape: a candidate is Megabonk only when it holds `Megabonk.exe`, `Megabonk.x86_64` or `Megabonk_Data/`, all three named by this game alone. `find_game_dir` takes the first accepted candidate; `--check` and the not-found report name what was rejected and why (`an Il2Cpp install (GameAssembly.dll) but no Megabonk.exe, Megabonk.x86_64 or Megabonk_Data/`), so a machine with another Unity/Il2Cpp title installed says so instead of installing into it.
+Game identity comes from `GameCandidates`, which offers every directory three searches thought might be Megabonk, in the order it should be trusted: the `installdir` in the library's own `appmanifest_3405340.acf`, then `steamapps/common/Megabonk` by name, then any other Il2Cpp install in `common`. The third tier exists because a copy moved out of its library keeps `GameAssembly.dll` and its data folder but loses the name. Acceptance never rests on that shape: a candidate is Megabonk only when it holds `Megabonk.exe`, `Megabonk.x86_64` or `Megabonk_Data/`, all three named by this game alone. `FindGameDir` takes the first accepted candidate; `--check` and the not-found report name what was rejected and why (`an Il2Cpp install (GameAssembly.dll) but no Megabonk.exe, Megabonk.x86_64 or Megabonk_Data/`), so a machine with another Unity/Il2Cpp title installed says so instead of installing into it.
 
 Two more things make this sturdier than it looks:
 
@@ -240,7 +239,7 @@ Two more things make this sturdier than it looks:
 
 ### Which Proton prefix
 
-Steam keeps the prefix at `<library>/steamapps/compatdata/<appid>/pfx` **in the library the game was installed to**, which is not always the one holding the game files after a move — the SD-card layout has the files on removable media and the live prefix in the home library. `find_prefix` prefers the game's own library, and when that prefix has no `drive_c/` it takes the only other usable prefix among the libraries searched and prints `Proton prefix: <path> (Steam keeps it in that library, not beside the game)`. Two usable prefixes elsewhere is a guess, so nothing is chosen: both are printed with the `--prefix` hint, and the plan falls back to `gamedir` mode. A prefix passed with `--prefix` silences all of that reporting. `--check` names the prefixes it considered and why each was rejected (`no steamapps/compatdata prefix in this library`, `the prefix has no drive_c/: the game has never been launched under Proton in this library`).
+Steam keeps the prefix at `<library>/steamapps/compatdata/<appid>/pfx` **in the library the game was installed to**, which is not always the one holding the game files after a move — the SD-card layout has the files on removable media and the live prefix in the home library. `FindPrefix` prefers the game's own library, and when that prefix has no `drive_c/` it takes the only other usable prefix among the libraries searched and prints `Proton prefix: <path> (Steam keeps it in that library, not beside the game)`. Two usable prefixes elsewhere is a guess, so nothing is chosen: both are printed with the `--prefix` hint, and the plan falls back to `gamedir` mode. A prefix passed with `--prefix` silences all of that reporting. `--check` names the prefixes it considered and why each was rejected (`no steamapps/compatdata prefix in this library`, `the prefix has no drive_c/: the game has never been launched under Proton in this library`).
 
 ### .NET placement and the launch option
 
@@ -255,11 +254,11 @@ DOTNET_ROOT=Z:\path\to\game\dotnet6-win %command%
 
 `Z:` is Proton's drive letter for the filesystem root, so the path after it is the ordinary Unix path. The installer **never edits `localconfig.vdf`**: Steam rewrites that file while it runs and a concurrent write loses. It prints the exact line and leaves the paste to the player.
 
-`usable_prefix` checks for `drive_c`, which Steam creates on the first Proton launch — so the fallback to `gamedir` mode fires when the player has not launched the game yet under Proton, and the warning tells them the launch option is coming.
+`UsablePrefix` checks for `drive_c`, which Steam creates on the first Proton launch — so the fallback to `gamedir` mode fires when the player has not launched the game yet under Proton, and the warning tells them the launch option is coming.
 
 ### version.dll override
 
-IL2Cpp hooking under Proton needs the `version.dll` = `native,builtin` DLL override in the prefix, and the game directory ships a `version.dll` stub for it to pick up. `proton.set_dll_override` writes it through the Proton tool's own `wine` with `reg add` when that binary is findable (`via: wine`), and otherwise merges `Software\Wine\DllOverrides` into the prefix's `user.reg` (`via: registry`). `--wine-override off` skips it; `--wine-override wine` fails loudly when no wine binary exists instead of falling back.
+IL2Cpp hooking under Proton needs the `version.dll` = `native,builtin` DLL override in the prefix, and the game directory ships a `version.dll` stub for it to pick up. `SetDllOverride` in `go/internal/proton` writes it through the Proton tool's own `wine` with `reg add` when that binary is findable (`via: wine`), and otherwise merges `Software\Wine\DllOverrides` into the prefix's `user.reg` (`via: registry`). `--wine-override off` skips it; `--wine-override wine` fails loudly when no wine binary exists instead of falling back.
 
 The override is written when the entry is **missing or** when the runtime is being (re)installed. The second condition matters: a wiped prefix loses the override along with the runtime, and reinstalling only one of the two leaves a game that starts and never loads a mod.
 
@@ -271,43 +270,19 @@ The method actually used is recorded and echoed back, so a player reporting a pr
 
 ### Progress reporting
 
-`pick_progress` in `scripts/player_installer/ui.py` requires both a controlling
-terminal (`/dev/tty` opens and passes `isatty`) and a desktop session (`DISPLAY`
-or `WAYLAND_DISPLAY`, plus a session bus for kdialog) for a GUI progress dialog.
-Without either it uses numbered lines on stdout. The terminal probe never reads
-stdin, so piped input is left untouched; a pipe alone does not imply headless
-when the caller still has a controlling terminal. A tty alone cannot supply a
-missing display/session environment, and an SSH session with display variables
-but no controlling tty stays headless.
+The installer shows a native progress window when it has a display and falls back to numbered `N/M label` lines otherwise; the window is described under "Progress window" below. `--non-interactive`, `--no-gui` or `MEGABONK_NON_INTERACTIVE=1` force plain text for install and uninstall, even on a desktop. The environment setting also accepts `true`, `yes` and `on` (case-insensitive); empty, `0`, `false`, `no` and `off` leave automatic selection enabled. `--json` suppresses progress output and dialogs. No installer prompt reads stdin.
 
-`--non-interactive`, `--no-gui` or `MEGABONK_NON_INTERACTIVE=1` forces plain text
-for install and uninstall, even on a desktop with a tty. The environment setting
-also accepts `true`, `yes` and `on` (case-insensitive); empty, `0`, `false`, `no`
-and `off` leave automatic selection enabled. `--json` suppresses progress output
-and dialogs. No installer prompt reads stdin.
+## The installer
 
-Three backends, tried in order: zenity and yad are driven by writing `NN` and `# label` lines to their stdin; KDE's kdialog takes `--progressbar <label> 100` and prints its D-Bus reference (`org.kde.kdialog-<pid> /ProgressDialog`) on stdout, so `GuiProgress` drives it with `qdbus-qt6` (or `qdbus`) instead — `<service> <path> org.kde.kdialog.ProgressDialog.value N` sets progress (the dotted property assignment; `org.freedesktop.DBus.Properties.Set` fails with `InternalError` on this object), `setLabelText` retitles, and `close()` dismisses. kdialog aborts with rc 134 without a display or session bus, so it is only chosen when both are present and a qdbus tool exists; if the dialog never answers or a D-Bus call fails, that step and all later ones fall back to text rather than losing the message.
-
-## The Go port
-
-`go/` holds a port of the same installer in Go: `go/cmd/megabonk-installer` builds one
-cgo-free binary per platform. The one external module is MyGo (`github.com/egoist/mygo`),
-used only for the progress window below, and `task installer:verify-static` fails if any
-other direct dependency appears or if a Linux binary needs anything at load time beyond glibc. It is a companion to the Python reference, not a replacement: `install.sh`
-still runs `scripts/player_installer`, the player package zip carries no Go binary, and the
-binaries land in gitignored `.tools/installer/`.
+`go/` holds the installer: `go/cmd/megabonk-installer` builds one cgo-free binary per platform. The one external module is MyGo (`github.com/egoist/mygo`), used only for the progress window below, and `task installer:verify-static` fails if any other direct dependency appears or if a Linux binary needs anything at load time beyond glibc. `task package:linux`, `package:windows` and `package:macos` each copy the matching binary into their package; the binaries themselves land in gitignored `.tools/installer/`.
 
 ```sh
 task installer:build            # cross-compile into .tools/installer
-task installer:test             # gofmt check, go vet, go test
+task installer:test             # gofmt check, go vet, go test (part of task check)
 task installer:verify-static    # CGO off, MyGo the only module, glibc-only load deps
-task installer:parity           # both installers over the same scenarios
 ```
 
-Targets are `darwin/arm64`, `linux/amd64` and `windows/amd64`. `linux/arm64` is left out on
-purpose: the game and its Proton prefixes are x86_64, so an arm64 Linux player would run the
-installer and never the mod. The Windows binary is executed in a Windows 11 Docker guest
-against the Python reference on the same guest (see below).
+Targets are `darwin/arm64`, `linux/amd64` and `windows/amd64`. `linux/arm64` is left out on purpose: the game and its Proton prefixes are x86_64, so an arm64 Linux player would run the installer and never the mod. The Windows binary is exercised in a Windows 11 Docker guest (see below).
 
 Windows path handling has one rule: `resolve` answers in slash-separated form on every OS.
 `filepath.Abs` and `filepath.EvalSymlinks` return backslash paths there, and any comparison
@@ -315,42 +290,13 @@ that mixes them with the slash-separated install paths misclassifies safe zip me
 escaping the game directory. The `plan` and `steam` resolve seams take injectable
 abs/toSlash/eval so tests pin this without a Windows host; a guest run first caught the leak.
 
-### The parity contract
+### Test seams
 
-The Go installer is the source of truth. The Python installer is the reference it was ported from and will eventually be removed, so it is allowed to drift: `tests/test_installer_parity.py` already fails on the Go closing message being capitalised and on the loader leftovers the Go uninstall clears, and neither is being fixed on the Python side. The build-match line from the installer contract is the same in both.
-
-The two implementations agree **semantically**, not byte for byte:
-
-- **Exact**: exit codes; the installed, repaired and removed file trees (every path and
-  content digest under the game directory and the prefix); the install record compared as
-  parsed JSON, so key order and the `null` spelling of an absent launch option are free.
-- **Anchored**: refusal, discovery and help lines must name the same path, registry key or
-  flag and the same stable verb phrase — `no usable Proton prefix at <path>`, `pass --prefix
-  <path to the pfx directory>`, `no wine binary found in the Proton tools under <lib>`, the
-  `Steam clients considered:` / `Libraries searched:` / `Libraries skipped:` blocks with
-  their `— retry with --library <path>` hints, and the numbered `N/M label` progress lines.
-  Quoting style is free: Go may print `"%q"` or a codec error where Python prints `!r`.
-- **Not compared**: `--help` and any other argparse-rendered text. Go's flag package cannot
-  reproduce argparse's wrapping and it is not worth a formatter for it.
-
-`tests/test_installer_parity.py` is the Go test suite of record. It builds a fixture tree
-twice, under `python/` and `go/`, drives the same argv list through `python -m
-player_installer` and the host-native Go binary, and compares exit codes, both streams, both
-trees, and both records; scenario anchors then pin the phrases that must survive in either
-run. Fixture paths, timestamps and the program name are normalised away (`<ROOT>`, `<TIME>`,
-`<PROG>`) — the one thing two installers named differently cannot share is their own name.
-
-Runs are hermetic by construction. `MEGABONK_MOUNT_ROOTS` replaces the removable-media scan
-list (empty scans nothing) so a maintainer's mounted library cannot turn a "not found"
-scenario into an install, and each fixture home carries a `local-overrides` file with no
-grants, which is the source `flatpak_granted_paths` prefers, so the host's `flatpak` CLI is
-never asked. Go unit tests cover only what is awkward to reach through a subprocess — path
-arithmetic, the VDF and registry parsers, the flag seam above — rather than mirroring
-`tests/test_player_installer_*.py` one for one.
+Go tests are hermetic by construction. `MEGABONK_MOUNT_ROOTS` replaces the removable-media scan list (empty scans nothing) so a maintainer's mounted library cannot turn a "not found" scenario into an install, and a `local-overrides` file with no grants is the source `flatpak_granted_paths` prefers, so the host's `flatpak` CLI is never asked. Go unit tests cover what is awkward to reach through a subprocess — path arithmetic, the VDF and registry parsers, the flag seam above.
 
 ### Progress window
 
-The Go binary reports progress in a MyGo native-UI window — a checklist of the plan's steps (pending circle, spinner on the running step, green check when done, red cross on the step that failed), a collapsible Details log and Cancel and Install buttons — drawn with GTK 3 on Linux, Metal on macOS and Direct3D 11 on Windows. It never uses MyGo's webview mode, so WebKitGTK is never loaded. The selection order is the window, then plain numbered text; kdialog, zenity and yad are not used by the Go binary (the Python reference keeps its dialog backends).
+The Go binary reports progress in a MyGo native-UI window — a checklist of the plan's steps (pending circle, spinner on the running step, green check when done, red cross on the step that failed), a collapsible Details log and Cancel and Install buttons — drawn with GTK 3 on Linux, Metal on macOS and Direct3D 11 on Windows. It never uses MyGo's webview mode, so WebKitGTK is never loaded. The selection order is the window, then plain numbered text; kdialog, zenity and yad are not used.
 
 On Linux the window needs a display (`DISPLAY` or `WAYLAND_DISPLAY`) and GTK 3, which the desktops players run already carry; GTK is `dlopen`ed at run time, so the binary itself loads only glibc and nothing depends on GTK being installed. `--no-gui`, `--non-interactive`, `MEGABONK_NON_INTERACTIVE=1`, `--json`, no display, or an app that cannot start (missing GTK) all give the text reporter, with `N/M label` lines, a closing message that starts with a capital letter, and the same exit codes.
 
@@ -362,97 +308,29 @@ Cancel, or closing the window, once the run has started is only a request: the e
 
 ## What is verified, and what is not
 
-Verified offline, on macOS, against a synthetic Windows-layout game directory and a synthetic `steamapps/compatdata/<appid>/pfx` prefix:
+Automated, in `task check`:
 
-- package assembly, manifest round-trip through `load_manifest`, and `verify_package` clean on a real package built from the real vendored archives;
-- the full install → `--check` (no drift) → `--uninstall` lifecycle in both `gamedir` and `prefix` modes, leaving the game's own files and an untouched `UserData` behind;
-- `version.dll` recorded as `via: registry` with `user.reg` actually carrying the key, and cleared on uninstall;
-- refusal of a native-Linux game directory with exit 4;
-- every plan, prefix-selection, VDF-parsing, Steam-discovery and manifest rule under `tests/test_player_installer_*.py` and `tests/test_build_player_package.py`.
+- Go: `task installer:test` runs gofmt, `go vet` and the unit tests under `go/internal`: plan, prefix selection, VDF and Steam discovery, manifest rules, record-driven uninstall, cancellation and the text reporter.
+- Python: `tests/test_build_player_package.py`, `tests/test_package_manifest.py` and `tests/test_package_packs.py` cover assembly for all three platforms, the manifest round-trip and `verify_package` on built packages, deterministic zips, vendor download handling and pack validation.
 
-The `install.sh` wrapper is checked apart from the game-directory fixtures: `sh -n` parses it, and the version gate was exercised against stub interpreters reporting versions above and below the floor — the floor run reaches the bundled module and `--help` prints, an older one is refused with exit 1, the found version, and the `--python` hint, and a `--python`/`MEGABONK_PYTHON` path that cannot run is refused with exit 2 naming it. The built wrapper also runs end to end under a mise interpreter at exactly the floor version where one is installed locally.
+Run against the real binaries when the installer was ported, using the Python installer it replaced as the oracle (it is no longer in the repository):
 
-Verified on the AlmaLinux 10.2 maintainer host, against its real Flatpak Steam with the whole root relocated to a data disk: the distributed zip's sha256 survived the transfer and `install.sh` runs the bundled module from any directory on the host's system `python3` 3.12.15 with a bare `PATH=/usr/bin:/bin` — no mise, nothing installed — where an earlier 3.13 floor had refused that interpreter; `--python` and `MEGABONK_PYTHON` honour an explicit interpreter and refuse a dead path with exit 2; discovery finds the relocated root through its Flatpak grant, reports the granted path, skips the unmounted library that `libraryfolders.vdf` still lists, and stops with exit 4 and the Windows-build steps on the native install; `--uninstall` with no record leaves the game's `Mods` alone; and on that host's KDE session the progress dialog is a real kdialog driven over D-Bus — value read back from the live dialog as 40 at 2/5 and 100 at 5/5, closed cleanly — while the same call with no session bus picks plain text.
+- `linux/amd64` runs the full lifecycle — install, `--check` no-drift, drift repair with exit 10, uninstall — on `ubuntu:24.04`, `fedora:42` and the SteamOS-based `thevakhovske/holoiso` image, and in a `FROM scratch` image holding nothing but the binary and the fixture tree (no shell, no interpreter), so the no-interpreter claim is measured rather than inferred.
+- The four library layouts discovery has to survive ran as a non-root user in `fedora:42` and `ubuntu:24.04` with no network: a single library holding Megabonk beside an unrelated Il2Cpp title that sorts first, the same library with no Megabonk at all, the game on removable media with the live prefix in the home library, and two other libraries each with a usable prefix. The decoy keeps its own digest through every install, the report names the Il2Cpp install it refused with its reason, the SD-card install writes the .NET runtime into the home library's prefix and says so, and the two-prefix case prints both candidates with the `--prefix` hint and falls back to `gamedir` mode until `--prefix` picks one.
+- `windows/amd64` runs the same lifecycle in the dockurr/windows Windows 11 guest. `windows_path` keeps an existing drive letter and only prefixes `Z:` for drive-less paths, so the `DOTNET_ROOT` launch option legitimately differs between a Linux host run and a native Windows run.
+- On the AlmaLinux 10.2 maintainer host's real layout (Flatpak Steam with the root relocated to `/media/steam`, the stale unmounted library still in `libraryfolders.vdf`, and the native install present) the installer reports `Flatpak Steam may only read: /media/steam`, finds the relocated root through its Flatpak grant, skips the unmounted library, and refuses the native build with exit 4 and the Windows-build steps.
+- The download path runs against the real vendors: both pinned archives, the GitHub MelonLoader release and the dotnetcli .NET 6 runtime, download through their cross-host redirects with digests matching the pins, a real GitHub 404 reads as a missing asset, plain http and an off-list redirect host are refused, and a 404 leaves nothing in the cache; a cold-cache `--allow-download` rebuilds the whole package from scratch.
 
-Verified on the CachyOS Proton host: the player-package install and `--check`,
-Windows .NET 6 resolving inside the active home-library prefix while the game
-lives on SD-card storage, the DLL override recorded as `via: wine`, and a fresh
-launch logging the mod-initialized marker. The live prefix also exposed Wine's
-timestamped registry section headers, now covered by regression tests. See
-[gamepadui.md](gamepadui.md) for the measured workflow.
+Live-game evidence below was gathered with the Python installer that this one replaced, and has not been repeated with the Go binary:
 
-That host now also carries the clean-install proof itself: uninstalling a previous
-install to a vanilla tree, installing the distributed 0.4.2 package with the
-documented pinned flags, `--check` reporting a match, and a Steam launch whose fresh
-`MelonLoader/Latest.log` shows `Assembly Generation Successful!`, `1 Mod loaded.`
-and `[MegabonkLevels] MegabonkLevels mod initialized.` with Bootstrap resolving
-`hostfxr.dll` under the vendored prefix runtime — prefix mode proven end to end
-without any development leftovers beside the game. The launch initially did nothing
-because a Steam Cloud save-conflict dialog was pending; see
-[gamepadui.md](gamepadui.md) for the three launch traps that cost time there.
-
-The Fedora player box carries the matching proof for auto-discovery: uninstalling
-its development install to a vanilla tree, then running the distributed package's
-`install.sh` with **no flags at all** against a real single library that holds an
-unrelated Il2Cpp title sorting before Megabonk — discovery picked Megabonk through
-the appmanifest and the library's own prefix. `--check` matched, and with Steam
-stopped the game launched directly under Proton through the offline Steamworks
-stub (the pressure-vessel `_v2-entry-point --verb=waitforexitandrun` chain, Proton
-Experimental, `XAUTHORITY` pointed at the desktop's Xwayland cookie) to the same
-three markers, stable over three minutes of mod telemetry, then a clean TERM
-shutdown.
-
-The four library layouts the discovery code has to survive are run through both
-implementations in containers as well as fixtures: a single library holding Megabonk
-beside an unrelated Il2Cpp title that sorts first, the same library with no Megabonk
-at all, the game on removable media with the live prefix in the home library, and two
-other libraries each with a usable prefix. Each case runs the full
-install → `--check` → drift → repair sequence as a non-root user in `fedora:42` and
-`ubuntu:24.04` (no network, `HOME` and the Steam root inside the mounted tree), and is
-compared to the Python reference on the host for exit codes, stdout, stderr and the
-installed tree. The decoy keeps its own digest through every install, the report names
-the Il2Cpp install it refused with its reason, the SD-card install writes the .NET
-runtime into the home library's prefix and says so, and the two-prefix case prints both
-candidates with the `--prefix` hint and falls back to `gamedir` mode until `--prefix`
-picks one.
-
-The download path is exercised against the real vendors, not just fakes: both pinned
-archives — the GitHub MelonLoader release and the dotnetcli .NET 6 runtime — download
-through their cross-host redirects with digests matching the pins, a real GitHub 404
-reads as a missing asset, plain http and an off-list redirect host are refused, and a
-404 leaves nothing in the cache; a cold-cache `--allow-download` rebuilds the whole
-package from scratch.
-
-The fleet also includes Fedora 42 with GNOME Wayland, Intel Arc graphics and a
-gamescope + Steam gamepadui launcher. Its verified setup includes switching to
-Windows depot `3405342` through Steam's GUI and selecting DX11 (confirmed in the
-active prefix's `Player.log`). This is not yet evidence of a wiped player-package
-install with the mod loaded. Native Linux loader installation is out of scope;
-the AlmaLinux host supplies Flatpak discovery and KDE progress evidence only.
-
-The Go binaries are exercised beyond the parity host. `linux/amd64` runs the full
-lifecycle — install, `--check` no-drift, drift repair with exit 10, uninstall — on
-`ubuntu:24.04`, `fedora:42` and the SteamOS-based `thevakhovske/holoiso` image with
-identical exit codes, streams, installed and final trees, and install record; none of
-those images ships `python3`, `python`, `go`, `pip` or `pip3`, and a `FROM scratch`
-image holding nothing but the binary and the fixture tree — 46 filesystem entries, no
-shell, no interpreter — runs the same lifecycle with the same exits, so the
-no-interpreter claim is measured, not inferred. `windows/amd64` runs the same lifecycle
-in the dockurr/windows Windows 11 guest and matches a `python -m player_installer`
-reference run through the same steps on the same guest — the reference is compared
-per platform, since `windows_path` keeps an existing drive letter and only prefixes
-`Z:` for drive-less paths, so the `DOTNET_ROOT` launch option legitimately differs
-between a Linux host run and a native Windows run. On the AlmaLinux maintainer host's
-real layout (Flatpak Steam with the root relocated to `/media/steam`, the stale
-unmounted `/mnt/games/GameLibrary/Steam` entry still in `libraryfolders.vdf`, and the
-native install present) the Go binary prints byte-identical output to the Python
-reference, including `Flatpak Steam may only read: /media/steam` and the exit-4
-Windows-build refusal.
+- On the CachyOS Proton host, the player-package install and `--check`, Windows .NET 6 resolving inside the active home-library prefix while the game lives on SD-card storage, the DLL override recorded as `via: wine`, and a fresh launch logging the mod-initialized marker. See [gamepadui.md](gamepadui.md) for the measured workflow and the three launch traps that cost time there.
+- On the Fedora player box, auto-discovery with no flags against a real single library holding an unrelated Il2Cpp title that sorts before Megabonk: discovery picked Megabonk through the appmanifest and the library's own prefix, `--check` matched, and with Steam stopped the game launched under Proton through the offline Steamworks stub to the same three markers (`Assembly Generation Successful!`, `1 Mod loaded.`, `[MegabonkLevels] MegabonkLevels mod initialized.`), stable over three minutes of mod telemetry.
+- On an Apple silicon Mac with plain Wine, see "macOS package" above.
 
 Still pending:
 
-- what a Steam update or "verify integrity of game files" does to the loader files in the game directory, which decides whether re-running after an update is ever needed beyond the build warning;
-- the printed game-directory `DOTNET_ROOT` launch option working when Steam actually applies it (both live proofs use prefix mode);
-- the persisted `local-overrides` file as the source of the Flatpak grants — the real host went through `flatpak override --show`, which is the other of the two paths in `flatpak_granted_paths`;
-- the zenity and yad dialog paths — the verified host has neither installed, so those branches run only in tests (the kdialog-over-D-Bus path above is the one with desktop evidence);
+- A live Steam launch from a Go-installed Linux package, now that the Go binary is the only installer.
+- What a Steam update or "verify integrity of game files" does to the loader files in the game directory, which decides whether re-running after an update is ever needed beyond the build warning.
+- The printed game-directory `DOTNET_ROOT` launch option working when Steam actually applies it (both live proofs use prefix mode).
+- The persisted `local-overrides` file as the source of the Flatpak grants; the real host went through `flatpak override --show`, which is the other of the two paths.
 - Steam's own behaviour around the download, including whether the Windows build needs the "Only download on my OS" untick on a given Steam version.
