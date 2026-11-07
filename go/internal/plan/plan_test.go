@@ -78,7 +78,7 @@ func sortedKeys(entries map[string]string) []string {
 	return keys
 }
 
-// makePackage mirrors _package in tests/test_player_installer_plan.py.
+// makePackage builds a synthetic package tree for the plan tests.
 func makePackage(t *testing.T) string {
 	t.Helper()
 	packageDir := filepath.Join(t.TempDir(), "package")

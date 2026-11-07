@@ -1,8 +1,7 @@
-// Package ppath mirrors the slice of pathlib the Python installer relies on:
-// slash-separated joins, the str(Path(...)) normalisation every message and
-// record path carries, and parent/name accessors. Slashes are deliberate on
-// every target so the install record and the byte-parity messages match the
-// reference on all platforms.
+// Package ppath provides slash-separated joins, the normalisation every
+// message and record path carries, and parent/name accessors. Slashes are
+// deliberate on every target so the install record and the printed messages
+// read the same on all platforms.
 package ppath
 
 import (

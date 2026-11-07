@@ -177,8 +177,8 @@ func Load(path string) (*Dict, error) {
 	return Parse(ToValidUTF8(string(raw)))
 }
 
-// ToValidUTF8 replaces each invalid UTF-8 byte with U+FFFD, matching the
-// errors="replace" handler the Python reference reads Steam files with.
+// ToValidUTF8 replaces each invalid UTF-8 byte with U+FFFD, so a Steam file
+// with stray bytes still parses.
 func ToValidUTF8(s string) string {
 	if utf8.ValidString(s) {
 		return s

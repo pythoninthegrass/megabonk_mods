@@ -20,7 +20,7 @@ func write(t *testing.T, path, text string) string {
 	return path
 }
 
-// packSource mirrors _pack_source in tests/test_player_installer_plan.py.
+// packSource builds a synthetic pack directory for the pack validation tests.
 func packSource(t *testing.T, packID string) string {
 	t.Helper()
 	source := filepath.Join(t.TempDir(), "packsrc", packID)

@@ -40,8 +40,8 @@ const (
 // MountRoots are the places removable Steam libraries turn up.
 var MountRoots = defaultMountRoots()
 
-// defaultMountRoots reads the same override the Python reference honours so a
-// harness can keep a mounted library out of discovery.
+// defaultMountRoots reads MEGABONK_MOUNT_ROOTS so a test can keep a mounted
+// library out of discovery.
 func defaultMountRoots() []string {
 	raw, found := os.LookupEnv("MEGABONK_MOUNT_ROOTS")
 	if !found {
@@ -241,7 +241,6 @@ func newFlagSet(options *Options) (*flag.FlagSet, *stringList, *stringList, *str
 	fs.BoolVar(&options.DryRun, "dry-run", false, "print what would be done and change nothing")
 	fs.BoolVar(&options.Uninstall, "uninstall", false, "remove what this installer placed")
 	fs.BoolVar(&options.AsJSON, "json", false, "machine-readable output on stdout")
-	fs.String("python", "", "the interpreter install.sh chose; accepted for the wrapper")
 	return fs, &libraries, &levels, &packs
 }
 
@@ -279,7 +278,7 @@ func usage() string {
 	fs.SetOutput(&body)
 	fs.PrintDefaults()
 	lines := []string{
-		"usage: " + Prog + " [-h] [--package PACKAGE] [--python PYTHON] [--home HOME]",
+		"usage: " + Prog + " [-h] [--package PACKAGE] [--home HOME]",
 		"                    [--game-dir GAME_DIR] [--prefix PREFIX] [--library LIBRARY]",
 		"                    [--level LEVEL] [--pack PACK] [--dotnet-in {gamedir,prefix}]",
 		"                    [--wine-override {auto,off,registry,wine}] [--proton PROTON]",

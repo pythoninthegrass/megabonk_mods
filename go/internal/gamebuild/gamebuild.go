@@ -36,7 +36,7 @@ func (b Build) Supported() bool {
 	return IsSupported(b.Kind)
 }
 
-// Classify inspects the directory the way the Python reference does.
+// Classify inspects a game directory for the Windows build's files and the native Linux build's.
 func Classify(gameDir string) Build {
 	build := Build{
 		GameDir:       ppath.Normalize(gameDir),

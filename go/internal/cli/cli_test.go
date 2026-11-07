@@ -1005,8 +1005,8 @@ func TestPlanOptionsTakeTheCommandLine(t *testing.T) {
 	}
 }
 
-// TestMountRootsHonoursTheEnvironment pins the seam the parity harness uses to
-// keep a mounted library out of discovery: an empty value means "scan nothing",
+// TestMountRootsHonoursTheEnvironment pins the seam tests use to keep a
+// mounted library out of discovery: an empty value means "scan nothing",
 // not "fall back to the defaults".
 func TestMountRootsHonoursTheEnvironment(t *testing.T) {
 	t.Setenv("MEGABONK_MOUNT_ROOTS", "")
