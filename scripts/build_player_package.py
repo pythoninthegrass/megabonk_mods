@@ -16,8 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import asset_download  # noqa: E402
 from build_thps_level import GAME_BUILD_ID  # noqa: E402
 from install_melonloader import ASSET_WINDOWS, MELONLOADER_VERSION, release_asset  # noqa: E402
-from player_installer import manifest as manifest_mod  # noqa: E402
-from player_installer.content import LEVEL_PACKS_DIR_NAME, LEVELS_DIR_NAME, validate_pack_source  # noqa: E402
+from package_contract import manifest as manifest_mod  # noqa: E402
+from package_contract.packs import LEVEL_PACKS_DIR_NAME, LEVELS_DIR_NAME, validate_pack_source  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MOD_OUTPUT_DIR = REPO_ROOT / "src/MegabonkLevels.Mod/bin/Release/net6.0"

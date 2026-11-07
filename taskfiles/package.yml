@@ -134,7 +134,7 @@ tasks:
         PYTHONPATH=scripts uv run python - <<'PY'
         import sys
         from pathlib import Path
-        from player_installer.manifest import verify_package
+        from package_contract.manifest import verify_package
 
         problems = verify_package(Path("{{.OUTPUT}}"))
         for problem in problems:
