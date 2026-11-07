@@ -91,8 +91,3 @@ docstring-quotes = "double"
 [lint.mccabe]
 # Unlike Flake8, default to a complexity level of 10.
 max-complexity = 10
-
-# The bundled installer ships inside the player package and must run on MIN_PYTHON,
-# while this config targets 3.13: pyupgrade fixes would raise its floor.
-[lint.per-file-ignores]
-"scripts/player_installer/*.py" = ["UP"]

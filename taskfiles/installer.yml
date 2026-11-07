@@ -19,8 +19,8 @@ tasks:
       file a player can download and run; on Linux the only load-time dependency
       is glibc (purego's cgo-free dlopen), and GUI libraries are loaded only at
       runtime when the progress window opens. The binaries land in
-      .tools/installer and are never added to the player package zip: install.sh
-      keeps running the Python reference.
+      .tools/installer; task package:linux, package:windows and package:macos copy
+      the matching one into each player package.
 
         task installer:build
         task installer:build TARGETS=linux/amd64
@@ -85,9 +85,3 @@ tasks:
           fi
           echo "verified: $binary"
         done
-
-  parity:
-    desc: "Run the Go installer and the Python reference over the same scenarios"
-    depends: [build]
-    cmds:
-      - uv run pytest tests/test_installer_parity.py
