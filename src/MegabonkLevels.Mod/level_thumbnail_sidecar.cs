@@ -7,17 +7,19 @@ namespace MegabonkLevels;
 
 public readonly record struct ThumbnailSidecar(string Path, string Warning);
 
-// Finds the jpg/png cover image named after a level file; see docs/level-format.md.
+// Finds the jpg/png cover image named after a level file, or with a stem suffix its biome icon; see docs/level-format.md.
 public static class LevelThumbnailSidecar
 {
     public const long MaxBytes = 8 * 1024 * 1024;
     public const int MaxDimension = 4096;
+    public const string BiomeSuffix = ".biome";
 
     private const string LevelSuffix = ".mblevel.json";
     private static readonly string[] Extensions = { ".png", ".jpg", ".jpeg" };
 
-    public static ThumbnailSidecar Find(string levelPath)
+    public static ThumbnailSidecar Find(string levelPath, string stemSuffix = "")
     {
+        var kind = stemSuffix == BiomeSuffix ? "biome icon" : "thumbnail";
         var fileName = Path.GetFileName(levelPath);
         var baseName = fileName.EndsWith(LevelSuffix, StringComparison.OrdinalIgnoreCase) ? fileName[..^LevelSuffix.Length] : Path.GetFileNameWithoutExtension(fileName);
         var folder = Path.GetDirectoryName(Path.GetFullPath(levelPath));
@@ -33,12 +35,12 @@ public static class LevelThumbnailSidecar
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            return new ThumbnailSidecar(null, $"could not scan '{folder}' for a thumbnail: {ex.Message}.");
+            return new ThumbnailSidecar(null, $"could not scan '{folder}' for a {kind}: {ex.Message}.");
         }
 
         var candidates = files
             .Where(f => Extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase)
-                && string.Equals(Path.GetFileNameWithoutExtension(f), baseName, StringComparison.OrdinalIgnoreCase))
+                && string.Equals(Path.GetFileNameWithoutExtension(f), baseName + stemSuffix, StringComparison.OrdinalIgnoreCase))
             .OrderBy(f => f, StringComparer.Ordinal)
             .ToList();
         if (candidates.Count == 0)
@@ -48,15 +50,15 @@ public static class LevelThumbnailSidecar
 
         if (string.IsNullOrWhiteSpace(baseName) || baseName.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 || baseName.Any(char.IsControl))
         {
-            return new ThumbnailSidecar(null, $"skipping thumbnail for invalid level name '{baseName}'.");
+            return new ThumbnailSidecar(null, $"skipping {kind} for invalid level name '{baseName}'.");
         }
 
         if (candidates.Count != 1)
         {
-            return new ThumbnailSidecar(null, $"ambiguous thumbnail for '{baseName}': {string.Join(", ", candidates.Select(Path.GetFileName))}; keep one image.");
+            return new ThumbnailSidecar(null, $"ambiguous {kind} for '{baseName}': {string.Join(", ", candidates.Select(Path.GetFileName))}; keep one image.");
         }
 
-        return Validate(candidates[0]);
+        return Validate(candidates[0], kind);
     }
 
     public static bool TryReadDimensions(byte[] data, out int width, out int height)
@@ -68,30 +70,30 @@ public static class LevelThumbnailSidecar
     public static bool DimensionsWithinLimit(int width, int height) =>
         width is > 0 and <= MaxDimension && height is > 0 and <= MaxDimension;
 
-    private static ThumbnailSidecar Validate(string file)
+    private static ThumbnailSidecar Validate(string file, string kind)
     {
         var name = Path.GetFileName(file);
         try
         {
             if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
             {
-                return new ThumbnailSidecar(null, $"skipping linked thumbnail '{name}'.");
+                return new ThumbnailSidecar(null, $"skipping linked {kind} '{name}'.");
             }
 
             var length = new FileInfo(file).Length;
             if (length == 0)
             {
-                return new ThumbnailSidecar(null, $"thumbnail '{name}' is empty.");
+                return new ThumbnailSidecar(null, $"{kind} '{name}' is empty.");
             }
 
             if (length > MaxBytes)
             {
-                return new ThumbnailSidecar(null, $"thumbnail '{name}' is {length} bytes, over the {MaxBytes} byte limit.");
+                return new ThumbnailSidecar(null, $"{kind} '{name}' is {length} bytes, over the {MaxBytes} byte limit.");
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new ThumbnailSidecar(null, $"could not inspect thumbnail '{name}': {ex.Message}.");
+            return new ThumbnailSidecar(null, $"could not inspect {kind} '{name}': {ex.Message}.");
         }
 
         return new ThumbnailSidecar(file, null);

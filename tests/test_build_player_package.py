@@ -47,6 +47,7 @@ def workspace(tmp_path, monkeypatch):
     (levels / "example-forest.mblevel.json").write_text('{"version":1}')
     (levels / "scratch.local.mblevel.json").write_text('{"version":1}')
     (levels / "example-forest.png").write_bytes(b"png bytes")
+    (levels / "example-forest.biome.png").write_bytes(b"biome bytes")
     (levels / "scratch.local.png").write_bytes(b"scratch png")
     (levels / "other-level.png").write_bytes(b"not bundled")
 
@@ -149,6 +150,12 @@ class TestLayout:
         assert dests["content/levels/example-forest.png"] == "UserData/Levels/example-forest.png"
         assert not any("other-level" in path for path in dests)
         assert not any("scratch.local" in path for path in dests)
+
+    def test_level_biome_icon_is_bundled_beside_its_level(self, workspace):
+        record = build(workspace)
+        entry = next(f for f in record.files if f.path == "content/levels/example-forest.biome.png")
+        assert entry.dest == "UserData/Levels/example-forest.biome.png"
+        assert entry.sha256 == hashlib.sha256(b"biome bytes").hexdigest()
 
     def test_sidecar_image_in_zip_matches_manifest_hash(self, workspace):
         record = build(workspace)

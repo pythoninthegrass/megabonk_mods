@@ -20,6 +20,7 @@ public static class MapSelectionPatch
     private static readonly List<GameObject> _spawned = new();
     private static readonly List<Texture2D> _thumbnails = new();
     private static readonly Dictionary<int, CustomMapEntry> _entryByButton = new();
+    private static readonly Dictionary<string, Texture2D> _biomeIcons = new();
     private static CustomMapEntry? _selectedEntry;
     private static readonly Dictionary<int, (Selectable Button, Navigation Navigation)> _navigation = new();
 
@@ -65,12 +66,12 @@ public static class MapSelectionPatch
         return _placeholder;
     }
 
-    private static Texture2D LoadThumbnail(string levelPath)
+    private static Texture2D LoadSidecarImage(string levelPath, string stemSuffix, string kind, string fallback)
     {
-        var sidecar = LevelThumbnailSidecar.Find(levelPath);
+        var sidecar = LevelThumbnailSidecar.Find(levelPath, stemSuffix);
         if (sidecar.Warning != null)
         {
-            _logger?.Warning($"MapSelection: {sidecar.Warning}; using the placeholder.");
+            _logger?.Warning($"MapSelection: {sidecar.Warning}; using {fallback}.");
         }
 
         if (sidecar.Path == null)
@@ -84,7 +85,7 @@ public static class MapSelectionPatch
             var bytes = File.ReadAllBytes(sidecar.Path);
             if (!LevelThumbnailSidecar.TryReadDimensions(bytes, out var width, out var height) || !LevelThumbnailSidecar.DimensionsWithinLimit(width, height))
             {
-                _logger?.Warning($"MapSelection: thumbnail '{name}' is not a png/jpg within {LevelThumbnailSidecar.MaxDimension}px per side; using the placeholder.");
+                _logger?.Warning($"MapSelection: {kind} '{name}' is not a png/jpg within {LevelThumbnailSidecar.MaxDimension}px per side; using {fallback}.");
                 return null;
             }
 
@@ -92,7 +93,7 @@ public static class MapSelectionPatch
             if (!NativeImageLoader.LoadImage(texture, bytes))
             {
                 UnityEngine.Object.Destroy(texture);
-                _logger?.Warning($"MapSelection: could not decode thumbnail '{name}'; using the placeholder.");
+                _logger?.Warning($"MapSelection: could not decode {kind} '{name}'; using {fallback}.");
                 return null;
             }
 
@@ -101,10 +102,14 @@ public static class MapSelectionPatch
         }
         catch (Exception ex)
         {
-            _logger?.Warning($"MapSelection: could not load thumbnail '{name}': {ex.Message}; using the placeholder.");
+            _logger?.Warning($"MapSelection: could not load {kind} '{name}': {ex.Message}; using {fallback}.");
             return null;
         }
     }
+
+    private static Texture2D LoadThumbnail(string levelPath) => LoadSidecarImage(levelPath, "", "thumbnail", "the placeholder");
+
+    private static Texture2D LoadBiomeIcon(string levelPath) => LoadSidecarImage(levelPath, LevelThumbnailSidecar.BiomeSuffix, "biome icon", "the stock biome icon");
 
     private static void DestroySpawned()
     {
@@ -128,6 +133,7 @@ public static class MapSelectionPatch
 
         _thumbnails.Clear();
         _entryByButton.Clear();
+        _biomeIcons.Clear();
         _selectedEntry = null;
     }
 
@@ -182,6 +188,12 @@ public static class MapSelectionPatch
         mapEntry.t_name.text = entry.Title;
         mapEntry.t_description.text = entry.Description;
         mapEntry.mapIcon.texture = LoadThumbnail(entry.Path) ?? PlaceholderTexture();
+
+        var biomeIcon = LoadBiomeIcon(entry.Path);
+        if (biomeIcon != null)
+        {
+            _biomeIcons[entry.Path] = biomeIcon;
+        }
 
         _spawned.Add(clone);
         _entryByButton[mapEntry.buttonScript.GetInstanceID()] = entry;
@@ -339,8 +351,14 @@ public static class MapSelectionPatch
     {
         private static void Postfix(MapStatsInfoUi __instance)
         {
-            if (_selectedEntry != null)
+            if (_selectedEntry is { } entry)
             {
+                __instance.t_mapName.text = entry.Title;
+                if (_biomeIcons.TryGetValue(entry.Path, out var biomeIcon) && biomeIcon != null)
+                {
+                    __instance.mapIcon.texture = biomeIcon;
+                }
+
                 __instance.t_mapRuns.text = string.Empty;
                 __instance.t_highscore.text = string.Empty;
                 __instance.t_fastestTime.text = string.Empty;

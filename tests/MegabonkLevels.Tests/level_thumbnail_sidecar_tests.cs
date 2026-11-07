@@ -43,6 +43,54 @@ public class LevelThumbnailSidecarTests : IDisposable
         Assert.Null(result.Warning);
     }
 
+    [Fact]
+    public void Find_BiomeIconIsSeparateFromTheThumbnail()
+    {
+        var level = Write("thps.mblevel.json");
+        var thumbnail = Write("thps.png");
+        var biome = Write("thps.biome.png");
+
+        Assert.Equal(thumbnail, LevelThumbnailSidecar.Find(level).Path);
+        Assert.Equal(biome, LevelThumbnailSidecar.Find(level, LevelThumbnailSidecar.BiomeSuffix).Path);
+    }
+
+    [Fact]
+    public void Find_BiomeIconAloneLeavesTheThumbnailEmpty()
+    {
+        var level = Write("thps.mblevel.json");
+        Write("thps.biome.jpg");
+
+        var result = LevelThumbnailSidecar.Find(level);
+
+        Assert.Null(result.Path);
+        Assert.Null(result.Warning);
+    }
+
+    [Fact]
+    public void Find_MissingBiomeIconReturnsNothingWithoutWarning()
+    {
+        var level = Write("thps.mblevel.json");
+        Write("thps.png");
+
+        var result = LevelThumbnailSidecar.Find(level, LevelThumbnailSidecar.BiomeSuffix);
+
+        Assert.Null(result.Path);
+        Assert.Null(result.Warning);
+    }
+
+    [Fact]
+    public void Find_AmbiguousBiomeIconWarnsByName()
+    {
+        var level = Write("thps.mblevel.json");
+        Write("thps.biome.png");
+        Write("thps.biome.jpg");
+
+        var result = LevelThumbnailSidecar.Find(level, LevelThumbnailSidecar.BiomeSuffix);
+
+        Assert.Null(result.Path);
+        Assert.Contains("biome icon", result.Warning);
+    }
+
     [Theory]
     [InlineData(".png")]
     [InlineData(".PNG")]

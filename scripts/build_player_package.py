@@ -229,12 +229,12 @@ def add_levels(staging: Path, levels_root: Path, names: list[str]) -> list[dict]
 
 
 def sidecar_image_names(levels_root: Path, level_name: str) -> list[str]:
-    """Names of the png/jpg files beside a level that share its base name; the mod picks them up as the thumbnail."""
+    """Names of the png/jpg files beside a level named for its base name (thumbnail) or base name plus `.biome` (biome icon)."""
     base = level_name.removesuffix(".mblevel.json") if level_name.endswith(".mblevel.json") else Path(level_name).stem
     return sorted(
         p.name
         for p in levels_root.iterdir()
-        if p.is_file() and p.suffix.lower() in SIDECAR_IMAGE_SUFFIXES and p.stem.lower() == base.lower()
+        if p.is_file() and p.suffix.lower() in SIDECAR_IMAGE_SUFFIXES and p.stem.lower() in (base.lower(), f"{base.lower()}.biome")
     )
 
 
