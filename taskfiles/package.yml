@@ -17,10 +17,11 @@ tasks:
     summary: |
       Usage: task package:linux [LEVELS=...] [PACKS=...] [MOD_VERSION=...] [OUTPUT=...]
 
-      Assembles the download a player unzips and runs ./install.sh on: the mod DLL,
-      the vendored Windows MelonLoader and .NET 6 archives, the installer, and any
-      Bramblecrown Hill and its selection art by default. Explicit LEVELS and PACKS
-      override the content selection; development maps are not included by default.
+      Assembles the download a Linux player unzips and runs ./megabonk-installer from:
+      the mod DLL, the vendored Windows MelonLoader and .NET 6 archives, the linux/amd64
+      Go installer (built by installer:build) and, by default, Bramblecrown Hill and its
+      selection art. Explicit LEVELS and PACKS override the content selection;
+      development maps are not included by default.
 
         task package:linux
         task package:linux LEVELS="thps.mblevel.json" PACKS=thps
@@ -31,6 +32,7 @@ tasks:
       fetch anything missing. Set SOURCE_DATE_EPOCH for a byte-identical zip.
     cmds:
       - dotnet build src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj -c Release
+      - task installer:build TARGETS=linux/amd64
       - |-
         set -eu
         args=()
@@ -38,6 +40,7 @@ tasks:
         for pack in {{.PACKS}}; do args+=(--pack "$pack"); done
         if [ "{{.ALLOW_DOWNLOAD}}" = "true" ]; then args+=(--allow-download); fi
         uv run scripts/build_player_package.py \
+          --installer-binary .tools/installer/megabonk-installer-linux-amd64 \
           --output "{{.OUTPUT}}" \
           --mod-dir src/MegabonkLevels.Mod/bin/Release/net6.0 \
           --mod-version "{{.MOD_VERSION}}" \

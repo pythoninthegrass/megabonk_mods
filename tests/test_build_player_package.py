@@ -1,4 +1,3 @@
-import ast
 import build_player_package as module
 import hashlib
 import io
@@ -6,23 +5,19 @@ import os
 import pytest
 import shutil
 import subprocess
-import sys
 import zipfile
 from build_player_package import (
     DOTNET_WINDOWS_ASSET,
     MELONLOADER_ASSET,
-    MIN_PYTHON,
     BuildError,
     build_package,
-    install_sh_content,
     make_zip,
 )
+from package_contract.manifest import load_manifest, verify_package
 from pathlib import Path
-from player_installer.manifest import load_manifest, verify_package
 
 MOD_VERSION = "0.4.2"
 MELONLOADER_VERSION = "0.7.3"
-INSTALLER_SOURCE = Path(__file__).resolve().parent.parent / "scripts/player_installer"
 
 
 def archive_bytes(payloads: dict[str, bytes]) -> bytes:
@@ -72,7 +67,11 @@ def workspace(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "DOTNET_WINDOWS_SHA256", hashlib.sha256(dotnet).hexdigest())
     monkeypatch.chdir(tmp_path)
 
+    binary = tmp_path / "megabonk-installer-linux-amd64"
+    binary.write_bytes(b"ELF installer")
+
     return {
+        "binary": binary,
         "mod": mod_dir,
         "levels": levels,
         "bundles": tmp_path / "repo/.tools/bundles",
@@ -106,6 +105,7 @@ def build(workspace, **overrides):
         "pack_names": ["thps"],
         "allow_download": False,
     }
+    kwargs.setdefault("installer_binary", workspace["binary"])
     kwargs.update(overrides)
     return build_package(workspace["output"], cache=workspace["cache"], **kwargs)
 
@@ -116,8 +116,9 @@ class TestLayout:
         out = workspace["output"]
         assert (out / "vendor" / MELONLOADER_ASSET).is_file()
         assert (out / "vendor" / DOTNET_WINDOWS_ASSET).is_file()
-        assert (out / "installer/player_installer/cli.py").is_file()
-        assert (out / "install.sh").is_file()
+        assert (out / "megabonk-installer").read_bytes() == b"ELF installer"
+        assert not (out / "install.sh").exists()
+        assert not (out / "installer").exists()
         assert (out / "manifest.json").is_file()
         assert [(v.kind, v.version) for v in record.vendors] == [("melonloader", MELONLOADER_VERSION), ("dotnet", "6.0.36")]
         assert [v.name for v in record.vendors] == [MELONLOADER_ASSET, DOTNET_WINDOWS_ASSET]
@@ -203,11 +204,6 @@ class TestLayout:
         with pytest.raises(BuildError, match="AssetBundle"):
             build(workspace)
 
-    def test_installer_is_copied_not_imported(self, workspace):
-        build(workspace)
-        copied = workspace["output"] / "installer/player_installer/manifest.py"
-        assert copied.read_text(encoding="utf-8") == (INSTALLER_SOURCE / "manifest.py").read_text(encoding="utf-8")
-
 
 class TestVendorHandling:
     def test_a_tampered_archive_is_refused(self, workspace):
@@ -289,190 +285,45 @@ class TestVendorHandling:
         assert 'if [ "false" = "true" ]; then args+=(--allow-download); fi' in _dry_run()
 
 
-class TestInstallSh:
-    def test_wrapper_runs_the_package_installer(self):
-        text = install_sh_content()
-        assert '"$PYTHON" -m player_installer' in text
-        assert "--package" in text
-        assert text.startswith("#!/bin/sh")
+class TestLinuxPackage:
+    def test_carries_the_installer_binary_with_no_extension(self, workspace):
+        record = build(workspace)
+        out = workspace["output"]
+        assert (out / "megabonk-installer").read_bytes() == b"ELF installer"
+        assert not (out / "install.sh").exists()
+        assert not (out / "install.exe").exists()
+        assert not (out / "installer").exists()
+        assert record.platform == "linux"
 
-    def test_wrapper_says_what_to_install_when_python_is_missing(self):
-        assert "sudo dnf install python3" in install_sh_content()
-
-    def test_wrapper_declares_and_enforces_the_python_floor(self):
-        text = install_sh_content()
-        version = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}"
-        assert f"Requires Python {version} or newer" in text
-        assert f"sys.version_info >= {MIN_PYTHON!r}" in text
-        assert "--python" in text
-
-    def test_wrapper_is_valid_sh(self, tmp_path):
-        path = tmp_path / "install.sh"
-        path.write_text(install_sh_content(), encoding="utf-8")
-        subprocess.run(["sh", "-n", str(path)], check=True)
-
-    def test_wrapper_reaches_the_bundled_installer(self, workspace):
+    def test_manifest_loads_and_every_hash_verifies(self, workspace):
         build(workspace)
-        script = workspace["output"] / "install.sh"
-        env = {**os.environ, "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"}
-        result = subprocess.run(
-            [str(script), "--help"],
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=str(workspace["output"].parent),
+        assert load_manifest(workspace["output"] / "manifest.json").platform == "linux"
+        assert verify_package(workspace["output"]) == []
+
+    def test_a_missing_binary_is_a_missing_input(self, workspace, tmp_path):
+        with pytest.raises(module.MissingInput, match="installer:build"):
+            build(workspace, installer_binary=tmp_path / "absent")
+
+    def test_linux_needs_a_binary_argument(self, workspace):
+        with pytest.raises(BuildError, match="installer binary"):
+            build(workspace, installer_binary=None)
+
+    def test_zip_keeps_the_installer_executable(self, workspace, capsys):
+        code = module.main(
+            [
+                "--installer-binary", str(workspace["binary"]),
+                "--output", str(workspace["output"]),
+                "--cache", str(workspace["cache"]),
+                "--mod-dir", str(workspace["mod"]),
+                "--mod-version", MOD_VERSION,
+            ]
         )
-        assert result.returncode == 0, result.stderr
-        assert "usage: player_installer" in result.stdout
-
-
-FLOOR_TEXT = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}"
-
-
-def _stub_python(path: Path, *, version: str, at_or_above_floor: bool) -> Path:
-    """A python3 that reports a chosen version and hands module runs to the real interpreter."""
-    body = (
-        "#!/bin/sh\n"
-        'if [ -n "${STUB_LOG:-}" ]; then printf \'%s\\n\' "$*" >> "$STUB_LOG"; fi\n'
-        'code="$2"\n'
-        "case \"$code\" in\n"
-        f'  *"sys.exit(0 if"*) exit {0 if at_or_above_floor else 1};;\n'
-        f'  *"version_info"*) echo "{version}";;\n'
-        "esac\n"
-        'case "$*" in\n'
-        '  *"-m player_installer"*) exec "$STUB_REAL" "$@";;\n'
-        "esac\n"
-        "exit 0\n"
-    )
-    path.write_text(body, encoding="utf-8")
-    path.chmod(0o755)
-    return path
-
-
-class TestPythonFloor:
-    def test_bundled_modules_stay_parseable_on_the_floor(self):
-        for path in sorted(INSTALLER_SOURCE.glob("*.py")):
-            ast.parse(path.read_text(encoding="utf-8"), filename=str(path), feature_version=MIN_PYTHON)
-
-    def test_bundled_modules_stay_importable_below_the_floor(self):
-        # ruff targets 3.13 and would autofix timezone.utc to datetime.UTC, which is 3.11+:
-        # a real player box still runs a 3.10-era interpreter, and the modules must load there.
-        for path in sorted(INSTALLER_SOURCE.glob("*.py")):
-            assert "from datetime import UTC" not in path.read_text(encoding="utf-8"), path.name
-
-    def test_the_floor_stays_within_the_interpreter_a_current_lts_ships(self):
-        assert MIN_PYTHON <= (3, 12)
-
-    def test_wrapper_accepts_an_interpreter_at_the_floor(self, workspace, tmp_path):
-        build(workspace)
-        stub_dir = tmp_path / "bin"
-        stub_dir.mkdir()
-        _stub_python(stub_dir / "python3", version=FLOOR_TEXT, at_or_above_floor=True)
-        env = {
-            **os.environ,
-            "PATH": f"{stub_dir}{os.pathsep}{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}",
-            "STUB_REAL": sys.executable,
-        }
-        result = subprocess.run(
-            [str(workspace["output"] / "install.sh"), "--help"],
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=str(workspace["output"].parent),
-        )
-        assert result.returncode == 0, result.stderr
-        assert "usage: player_installer" in result.stdout
-
-    def test_wrapper_refuses_an_interpreter_below_the_floor_by_name(self, workspace, tmp_path):
-        build(workspace)
-        stub_dir = tmp_path / "bin"
-        stub_dir.mkdir()
-        below = (MIN_PYTHON[0], MIN_PYTHON[1] - 1)
-        _stub_python(stub_dir / "python3", version=f"{below[0]}.{below[1]}", at_or_above_floor=False)
-        env = {**os.environ, "PATH": f"{stub_dir}{os.pathsep}{os.environ['PATH']}", "STUB_REAL": sys.executable}
-        result = subprocess.run(
-            [str(workspace["output"] / "install.sh"), "--help"],
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=str(workspace["output"].parent),
-        )
-        assert result.returncode == 1
-        assert f"needs Python {FLOOR_TEXT} or newer" in result.stderr
-        assert f"found {below[0]}.{below[1]}" in result.stderr
-        assert "--python" in result.stderr
-
-    def test_wrapper_runs_with_an_explicit_interpreter(self, workspace, tmp_path):
-        build(workspace)
-        stub = _stub_python(tmp_path / "py-3.99", version="3.99", at_or_above_floor=True)
-        log = tmp_path / "calls.log"
-        env = {
-            **os.environ,
-            "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}",
-            "STUB_REAL": sys.executable,
-            "STUB_LOG": str(log),
-        }
-        result = subprocess.run(
-            [str(workspace["output"] / "install.sh"), "--python", str(stub), "--help"],
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=str(workspace["output"].parent),
-        )
-        assert result.returncode == 0, result.stderr
-        assert "usage: player_installer" in result.stdout
-        assert "-m player_installer" in log.read_text(encoding="utf-8")
-
-    def test_wrapper_runs_with_an_interpreter_named_in_the_environment(self, workspace, tmp_path):
-        build(workspace)
-        stub = _stub_python(tmp_path / "py-env", version="3.99", at_or_above_floor=True)
-        env = {
-            **os.environ,
-            "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}",
-            "STUB_REAL": sys.executable,
-            "STUB_LOG": str(tmp_path / "calls.log"),
-            "MEGABONK_PYTHON": str(stub),
-        }
-        result = subprocess.run(
-            [str(workspace["output"] / "install.sh"), "--help"],
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=str(workspace["output"].parent),
-        )
-        assert result.returncode == 0, result.stderr
-        assert (tmp_path / "calls.log").exists()
-
-    def test_wrapper_refuses_an_interpreter_path_it_cannot_run(self, workspace, tmp_path):
-        build(workspace)
-        missing = tmp_path / "no-such-python"
-        env = {**os.environ, "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"}
-        result = subprocess.run(
-            [str(workspace["output"] / "install.sh"), "--python", str(missing), "--help"],
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=str(workspace["output"].parent),
-        )
-        assert result.returncode == 2
-        assert str(missing) in result.stderr
-
-    def test_built_wrapper_runs_on_a_floor_interpreter_when_one_is_installed(self, workspace):
-        homes = Path.home() / ".local/share/mise/installs/python"
-        candidates = sorted(homes.glob(f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}*/bin/python3")) if homes.is_dir() else []
-        if not candidates:
-            pytest.skip(f"no mise interpreter at the {FLOOR_TEXT} floor installed")
-        build(workspace)
-        env = {**os.environ, "PATH": f"{candidates[-1].parent}{os.pathsep}{os.environ['PATH']}"}
-        result = subprocess.run(
-            [str(workspace["output"] / "install.sh"), "--help"],
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=str(workspace["output"].parent),
-        )
-        assert result.returncode == 0, result.stderr
-        assert "usage: player_installer" in result.stdout
+        assert code == 0
+        name = f"megabonk-levels-{MOD_VERSION}-ml{MELONLOADER_VERSION}-linux.zip"
+        assert name in capsys.readouterr().out
+        with zipfile.ZipFile(workspace["output"].parent / name) as archive:
+            info = archive.getinfo("megabonk-installer")
+            assert (info.external_attr >> 16) & 0o111 == 0o111
 
 
 class TestWindowsPackage:
@@ -482,7 +333,7 @@ class TestWindowsPackage:
         path.write_bytes(b"MZ installer")
         return path
 
-    def test_carries_the_installer_binary_instead_of_the_python_installer(self, workspace, binary):
+    def test_carries_the_installer_binary_as_install_exe(self, workspace, binary):
         record = build(workspace, platform="windows", installer_binary=binary)
         out = workspace["output"]
         assert (out / "install.exe").read_bytes() == b"MZ installer"
@@ -501,7 +352,7 @@ class TestWindowsPackage:
 
     def test_windows_needs_a_binary_argument(self, workspace):
         with pytest.raises(BuildError, match="installer binary"):
-            build(workspace, platform="windows")
+            build(workspace, platform="windows", installer_binary=None)
 
     def test_zip_name_and_cli(self, workspace, binary, capsys):
         code = module.main(
@@ -548,7 +399,7 @@ class TestMacosPackage:
 
     def test_macos_needs_a_binary_argument(self, workspace):
         with pytest.raises(BuildError, match="installer binary"):
-            build(workspace, platform="macos")
+            build(workspace, platform="macos", installer_binary=None)
 
     def test_zip_keeps_the_installer_executable(self, workspace, binary, capsys):
         code = module.main(
@@ -576,14 +427,14 @@ class TestZip:
         second = make_zip(workspace["output"], tmp_path / "b.zip")
         assert first.read_bytes() == second.read_bytes()
 
-    def test_zip_entries_are_sorted_and_install_sh_is_executable(self, workspace, tmp_path):
+    def test_zip_entries_are_sorted_and_the_installer_is_executable(self, workspace, tmp_path):
         build(workspace)
         path = make_zip(workspace["output"], tmp_path / "pkg.zip")
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
             assert names == sorted(names)
-            assert "install.sh" in names
-            assert archive.getinfo("install.sh").external_attr >> 16 == 0o755
+            assert "megabonk-installer" in names
+            assert archive.getinfo("megabonk-installer").external_attr >> 16 == 0o755
             assert "__pycache__" not in "".join(names)
 
 
@@ -593,6 +444,7 @@ class TestCli:
 
         code = module.main(
             [
+                "--installer-binary", str(workspace["binary"]),
                 "--output", str(workspace["output"]),
                 "--cache", str(workspace["cache"]),
                 "--mod-dir", str(workspace["mod"]),
@@ -614,6 +466,7 @@ class TestCli:
 
         code = module.main(
             [
+                "--installer-binary", str(workspace["binary"]),
                 "--output", str(workspace["output"]),
                 "--cache", str(workspace["cache"]),
                 "--mod-dir", str(workspace["mod"]),
