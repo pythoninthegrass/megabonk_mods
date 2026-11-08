@@ -919,7 +919,9 @@ public static class DevHarness
             ScreenWidth: Screen.width,
             ScreenHeight: Screen.height,
             CoordinatesEnabled: PositionLabel.Enabled,
-            CoordinatesVisible: PositionLabel.Visible);
+            CoordinatesVisible: PositionLabel.Visible,
+            CursorVisible: Cursor.visible,
+            CursorLocked: Cursor.lockState != CursorLockMode.None);
     }
 
     private static void WriteResult(string commandFile, HarnessResult result)

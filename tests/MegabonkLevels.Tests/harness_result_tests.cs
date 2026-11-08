@@ -85,7 +85,9 @@ public class HarnessResultTests
             ScreenWidth: 1920,
             ScreenHeight: 1080,
             CoordinatesEnabled: true,
-            CoordinatesVisible: false);
+            CoordinatesVisible: false,
+            CursorVisible: true,
+            CursorLocked: false);
 
         var root = snapshot.ToJson();
 
@@ -97,6 +99,8 @@ public class HarnessResultTests
         Assert.True((bool?)root["spawnsOff"]);
         Assert.True((bool?)root["coordinatesEnabled"]);
         Assert.False((bool?)root["coordinatesVisible"]);
+        Assert.True((bool?)root["cursorVisible"]);
+        Assert.False((bool?)root["cursorLocked"]);
         Assert.Equal(new[] { 1.5f, 2f, -3f }, root["player"]!["position"]!.AsArray().Select(n => (float)n!).ToArray());
         Assert.Equal(new[] { 4, 5 }, root["player"]!["cell"]!.AsArray().Select(n => (int)n!).ToArray());
         Assert.Equal("Select", (string?)root["editorTool"]);

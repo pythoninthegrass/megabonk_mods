@@ -55,7 +55,9 @@ public readonly record struct GameStateSnapshot(
     int ScreenWidth,
     int ScreenHeight,
     bool CoordinatesEnabled = false,
-    bool CoordinatesVisible = false)
+    bool CoordinatesVisible = false,
+    bool CursorVisible = false,
+    bool CursorLocked = false)
 {
     public JsonObject ToJson() => new()
     {
@@ -67,6 +69,8 @@ public readonly record struct GameStateSnapshot(
         ["spawnsOff"] = SpawnsOff,
         ["coordinatesEnabled"] = CoordinatesEnabled,
         ["coordinatesVisible"] = CoordinatesVisible,
+        ["cursorVisible"] = CursorVisible,
+        ["cursorLocked"] = CursorLocked,
         ["player"] = Player is { } p ? PlayerJson(p) : null,
         ["editorTool"] = EditorTool,
         ["selected"] = Selected,

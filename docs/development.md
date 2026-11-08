@@ -179,6 +179,8 @@ Before moving a command file to `done/` or `rejected/`, the mod writes `harness/
 | `spawnsOff` | bool | The harness has stopped enemy spawns on the current `EnemyManager` |
 | `coordinatesEnabled` | bool | Explicit coordinate preference, off at startup and unchanged by editor/HUD toggles or level loads |
 | `coordinatesVisible` | bool | The coordinate label exists and its HUD is visible; can be false while enabled during loading, after death, with the HUD hidden or outside a supported custom run |
+| `cursorVisible` | bool | `Cursor.visible` at the time of the call |
+| `cursorLocked` | bool | `Cursor.lockState` is not `None`; both cursor fields read the game's actual cursor, which the console and editor palette unlock while open |
 | `player` | object or null | `{"position":[x,y,z],"cell":[column,row]}`. `null` when there is no player in the scene (menu, loading). `cell` is `null` when the position label's grid is not armed (no kill floor), and can lie outside the grid |
 | `editorTool` | string or null | The active tool name (`Raise`, `Lower`, `Slope`, `Remove`, `Place`, `Select`). `null` outside editor mode, where the tool is not read |
 | `selected` | string or null | The selected object as `gen:<genId>` or `placement:<id>`. `null` outside editor mode or when nothing is selected |
