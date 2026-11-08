@@ -214,4 +214,35 @@ public class ConsoleScrollbackTests
     {
         Assert.Equal(7, new ConsoleScrollback(100, 7).Viewport);
     }
+
+    [Fact]
+    public void Wrap_BreaksALongLineIntoRowsOfAtMostTheColumnCount()
+    {
+        Assert.Equal(new[] { "abcd", "efgh", "ij" }, ConsoleScrollback.Wrap("abcdefghij", 4));
+    }
+
+    [Fact]
+    public void Wrap_LeavesAShortLineAlone()
+    {
+        Assert.Equal(new[] { "abc" }, ConsoleScrollback.Wrap("abc", 4));
+        Assert.Equal(new[] { "abcd" }, ConsoleScrollback.Wrap("abcd", 4));
+    }
+
+    [Fact]
+    public void Append_WrapsALongLineAcrossRows()
+    {
+        var scrollback = new ConsoleScrollback(10, 5, 4);
+        scrollback.Append("abcdefghij\nxy");
+
+        Assert.Equal(new[] { "abcd", "efgh", "ij", "xy" }, scrollback.Lines);
+    }
+
+    [Fact]
+    public void Append_WithoutAWrapWidth_KeepsLongLinesWhole()
+    {
+        var scrollback = new ConsoleScrollback(10, 5);
+        scrollback.Append(new string('a', 500));
+
+        Assert.Single(scrollback.Lines);
+    }
 }

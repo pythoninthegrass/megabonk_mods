@@ -23,13 +23,12 @@ public static class ConsoleOverlay
     private const float SideMargin = 16f;
     private const float Padding = 10f;
     private const float LineHeight = 22f;
-    private const float InputHeight = 30f;
-    private const float InputGap = 6f;
     private const float FontSize = 16f;
     private const int MaxScrollbackLines = 400;
     private const int WheelLinesPerNotch = 3;
     private const float ScrollbarWidth = 6f;
     private const float ScrollbarMinThumb = 16f;
+    private const string PromptText = ">";
     private const int InputMaxLength = 512;
     private const int HistoryLimit = 200;
     private const string LogFileName = "console_log.jsonl";
@@ -55,6 +54,8 @@ public static class ConsoleOverlay
     private static RectTransform _thumb;
     private static TextMeshProUGUI[] _scrollLabels = Array.Empty<TextMeshProUGUI>();
     private static TextFieldView _inputView;
+    private static int _wrapColumns = int.MaxValue;
+    private static float _promptWidth;
     private static TextMeshProUGUI _placeholder;
     // Set by the first typed character and cleared on open, so the placeholder stays hidden until the console is reopened.
     private static bool _placeholderDismissed;
@@ -265,11 +266,11 @@ public static class ConsoleOverlay
     {
         if (EditorInput.GetKeyDown(KeyCode.UpArrow) || (CtrlHeld() && EditorInput.GetKeyDown(KeyCode.P)))
         {
-            _finder.Move(-1);
+            _finder.Move(1);
         }
         else if (EditorInput.GetKeyDown(KeyCode.DownArrow) || (CtrlHeld() && EditorInput.GetKeyDown(KeyCode.N)))
         {
-            _finder.Move(1);
+            _finder.Move(-1);
         }
 
         var accepted = _field.Type(input);
@@ -383,16 +384,30 @@ public static class ConsoleOverlay
             _scrollLabels[i].overflowMode = TextOverflowModes.Overflow;
         }
 
+        var charWidth = _scrollLabels[0].GetPreferredValues("0000000000").x / 10f;
+        if (charWidth > 0f)
+        {
+            _wrapColumns = Math.Max(1, Mathf.FloorToInt((PanelWidth() - Padding * 2f - ScrollbarWidth) / charWidth));
+        }
+
+        _promptWidth = charWidth > 0f ? charWidth * (PromptText.Length + 1) : 18f;
         _thumb = EditorUi.NewRect("ScrollbarThumb", _scrollRect);
         _thumb.gameObject.AddComponent<Image>().color = ScrollbarColor;
         _thumb.gameObject.SetActive(false);
 
-        var input = EditorUi.Bordered("Input", _panel, EditorUi.SlotBorder, EditorUi.SearchFill);
-        _inputRect = input.Outer;
+        _inputRect = EditorUi.NewRect("Input", _scrollRect);
+        var prompt = EditorUi.NewRect("Prompt", _inputRect);
+        prompt.anchorMin = Vector2.zero;
+        prompt.anchorMax = new Vector2(0f, 1f);
+        prompt.offsetMin = Vector2.zero;
+        prompt.offsetMax = new Vector2(_promptWidth, 0f);
+        var promptLabel = EditorUi.NewLabel(prompt, font, TextAlignmentOptions.MidlineLeft, FontSize);
+        EditorUi.FixInputBaseline(promptLabel);
+        promptLabel.text = PromptText;
         var inputText = EditorUi.NewRect("Text", _inputRect);
         inputText.anchorMin = Vector2.zero;
         inputText.anchorMax = Vector2.one;
-        inputText.offsetMin = new Vector2(8f, 0f);
+        inputText.offsetMin = new Vector2(_promptWidth, 0f);
         inputText.offsetMax = new Vector2(-8f, 0f);
         var label = EditorUi.NewLabel(inputText, font, TextAlignmentOptions.MidlineLeft, FontSize);
         EditorUi.FixInputBaseline(label);
@@ -401,14 +416,14 @@ public static class ConsoleOverlay
         var placeholderRect = EditorUi.NewRect("Placeholder", _inputRect);
         placeholderRect.anchorMin = Vector2.zero;
         placeholderRect.anchorMax = Vector2.one;
-        placeholderRect.offsetMin = new Vector2(8f, 0f);
+        placeholderRect.offsetMin = new Vector2(_promptWidth, 0f);
         placeholderRect.offsetMax = new Vector2(-8f, 0f);
         _placeholder = EditorUi.NewLabel(placeholderRect, font, TextAlignmentOptions.MidlineLeft, FontSize);
         EditorUi.FixInputBaseline(_placeholder);
         _placeholder.color = PlaceholderColor;
         _placeholder.text = PlaceholderText;
 
-        _scrollback = new ConsoleScrollback(MaxScrollbackLines, _viewportLines);
+        _scrollback = new ConsoleScrollback(MaxScrollbackLines, Math.Max(1, _viewportLines - 1), _wrapColumns);
         RestorePersistedLog();
     }
 
@@ -434,9 +449,8 @@ public static class ConsoleOverlay
         var height = Screen.height * PanelHeightFraction;
         _panel.sizeDelta = new Vector2(-SideMargin * 2f, height);
         _panel.anchoredPosition = new Vector2(0f, 0f);
-        _viewportLines = Math.Max(1, Mathf.FloorToInt((height - Padding * 2f - InputHeight - InputGap) / LineHeight));
-        var scrollTop = Padding + InputHeight + InputGap;
-        EditorUi.PlaceTopLeft(_scrollRect, 0f, scrollTop, PanelWidth(), height - scrollTop - Padding);
+        _viewportLines = Math.Max(1, Mathf.FloorToInt((height - Padding * 2f) / LineHeight));
+        EditorUi.PlaceTopLeft(_scrollRect, 0f, Padding, PanelWidth(), height - Padding * 2f);
     }
 
     private static float PanelWidth() => Screen.width - SideMargin * 2f;
@@ -449,20 +463,18 @@ public static class ConsoleOverlay
 
     private static void RenderFinder()
     {
-        var rows = Math.Max(1, _viewportLines - 1);
-        var top = _finder.Window(rows);
-        SetScrollLabel(0, $"  {_finder.Info}");
-        for (var i = 0; i < _viewportLines - 1; i++)
+        var top = _finder.Window(ConsoleLayout.FinderListRows(_viewportLines));
+        var infoRow = ConsoleLayout.FinderInfoRow(_viewportLines);
+        for (var row = 0; row < _viewportLines; row++)
         {
-            var index = top + i;
-            var text = "";
-            if (index < _finder.Rows.Count)
+            var text = row == infoRow ? $"  {_finder.Info}" : "";
+            var index = ConsoleLayout.FinderIndex(row, _viewportLines, top);
+            if (index >= 0 && index < _finder.Rows.Count)
             {
-                var hit = _finder.Rows[index];
-                text = ConsoleFinder.RowMarkup(_finder.RowText(index), hit.Positions, index == _finder.Selected);
+                text = ConsoleFinder.RowMarkup(_finder.RowText(index), _finder.Rows[index].Positions, index == _finder.Selected);
             }
 
-            SetScrollLabel(i + 1, text);
+            SetScrollLabel(row, text);
         }
     }
 
@@ -479,25 +491,18 @@ public static class ConsoleOverlay
         if (_finder != null)
         {
             RenderFinder();
-            RenderInput();
+            RenderInput(_viewportLines - 1);
             _thumb.gameObject.SetActive(false);
             return;
         }
 
         var visible = _scrollback.VisibleLines;
-        // Bottom-align: the newest line sits on the last row, so a short buffer hugs the input rather than the top.
-        var start = Math.Max(0, visible.Count - _viewportLines);
         for (var i = 0; i < _viewportLines; i++)
         {
-            var index = start + i;
-            var text = index < visible.Count ? visible[index] : "";
-            if (_scrollLabels[i].text != text)
-            {
-                _scrollLabels[i].text = text;
-            }
+            SetScrollLabel(i, i < visible.Count ? visible[i] : "");
         }
 
-        RenderInput();
+        RenderInput(ConsoleLayout.PromptRow(visible.Count, _viewportLines, _scrollback.Offset));
         RenderScrollbar();
     }
 
@@ -515,9 +520,9 @@ public static class ConsoleOverlay
         EditorUi.PlaceTopLeft(_thumb, PanelWidth() - Padding / 2f - ScrollbarWidth, thumb.Top, ScrollbarWidth, thumb.Height);
     }
 
-    private static void RenderInput()
+    private static void RenderInput(int row)
     {
-        EditorUi.PlaceTopLeft(_inputRect, Padding, Padding, PanelWidth() - Padding * 2f, InputHeight);
+        EditorUi.PlaceTopLeft(_inputRect, Padding, row * LineHeight, PanelWidth() - Padding * 2f, LineHeight);
         _inputView.Render(_field, true, null);
         _placeholder.gameObject.SetActive(!_placeholderDismissed && _field.Text.Length == 0);
     }

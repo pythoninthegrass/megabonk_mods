@@ -159,6 +159,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/console_fuzzy.cs" Link="console_fuzzy.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/console_finder.cs" Link="console_finder.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/console_scrollbar.cs" Link="console_scrollbar.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_layout.cs" Link="console_layout.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/console_scrollback.cs" Link="console_scrollback.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/console_log_store.cs" Link="console_log_store.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/console_state.cs" Link="console_state.cs" />

@@ -10,12 +10,15 @@ public sealed class ConsoleScrollback
     private readonly List<string> _lines = new();
     private readonly int _maxLines;
     private readonly int _viewport;
+    private readonly int _wrapColumns;
     private int _offset;
 
-    public ConsoleScrollback(int maxLines, int viewportLines)
+    // wrapColumns is the row width in characters; longer lines are hard-wrapped into several rows as they are appended.
+    public ConsoleScrollback(int maxLines, int viewportLines, int wrapColumns = int.MaxValue)
     {
         _maxLines = Math.Max(1, maxLines);
         _viewport = Math.Max(1, viewportLines);
+        _wrapColumns = Math.Max(1, wrapColumns);
     }
 
     public IReadOnlyList<string> Lines => _lines;
@@ -58,12 +61,24 @@ public sealed class ConsoleScrollback
         return lines;
     }
 
+    public static IReadOnlyList<string> Wrap(string line, int columns)
+    {
+        columns = Math.Max(1, columns);
+        var rows = new List<string>();
+        for (var start = 0; start < line.Length; start += columns)
+        {
+            rows.Add(line.Substring(start, Math.Min(columns, line.Length - start)));
+        }
+
+        return rows;
+    }
+
     public void Append(string text)
     {
         var followed = _offset == 0;
         foreach (var line in Split(text))
         {
-            _lines.Add(line);
+            _lines.AddRange(Wrap(line, _wrapColumns));
         }
 
         if (_lines.Count > _maxLines)
