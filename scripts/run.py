@@ -19,8 +19,8 @@ Drives the MegabonkLevels dev harness (see docs/development.md) by dropping JSON
 Usage:
     run.py enable                  Create the harness marker; takes effect on the next game launch
     run.py disable                 Remove the harness marker
-    run.py load <level> [--map N] [--stage N] [--tier N] [--seed N]
-                                   Load a level file and start it, optionally replacing those fields for this load
+    run.py load <level> [--map N] [--stage N] [--tier N] [--seed N] [--no-seed]
+                                   Load a level file and start it, optionally replacing those fields for this load; --no-seed lets the game roll its own
     run.py screenshot <out.png>    Save the game's rendered frame
     run.py freeze                  Pause gameplay through MyTime.Pause
     run.py resume                  Unpause gameplay through MyTime.Unpause
@@ -64,6 +64,7 @@ Usage:
     run.py new-level [name]        Write a blank from-scratch level and open it in the editor; --map, --stage, --tier, --size
     run.py list-levels             Print the saved custom-level files and their directory
     run.py palette                 Print every palette entry for the loaded map as [id, name, category, map] rows
+    run.py query-objects <TYPE>    Print the live assets of a UnityEngine.Object type as JSON; --fields and --depth
     run.py click-widget <name>     Click an editor widget by name (names come from ui-tree), without pixel coordinates
     run.py type <text>             Type text into the focused field (\\b is backspace, \\n is return), at most 200 characters
     run.py teleport X Y Z          Move the player's feet to a world position and print the position reached
@@ -78,8 +79,8 @@ Usage:
                                    The same, plus shutting the Steam client and the menu input service down
     run.py teardown [--stop-steam] [--stop-menu]
                                    The quit teardown without the harness marker or a running game
-    run.py relaunch [level] [--no-level] [--map N] [--stage N] [--tier N] [--seed N] [--character NAME]
-                                   Quit and relaunch the game, load a level (default: the test forest) and enter editor; --no-level stops at the main menu
+    run.py relaunch [level] [--no-level] [--map N] [--stage N] [--tier N] [--seed N] [--no-seed] [--character NAME]
+                                   Quit and relaunch the game, load a level (default: the test forest) and enter editor; --no-level stops at the main menu, --no-seed lets the game roll its own
                                    An offline run (Steam stub, no Steam session) continues once the game reports Steamworks not ready; a game that exits during startup fails fast
     run.py cycle <level> <out.png> Load, wait --settle seconds, screenshot, quit
                                    [--invulnerable] applies before the settle wait
@@ -118,6 +119,7 @@ from typing import Literal, NamedTuple
 
 MACOS_RUNTIMES = ("wine", "crossover")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+MAX_QUERY_DEPTH = 6  # must match AssetDump.MaxDepth in the mod
 POLL_SECONDS = 0.1
 RELAUNCH_READY_TIMEOUT = 60.0
 KILL_FLOOR_ARMED_LINE = "KillFloor: armed"
@@ -385,12 +387,17 @@ def build_load_level_command(
     tier: int | None = None,
     seed: int | None = None,
     character: str | None = None,
+    unseeded: bool = False,
 ) -> dict[str, object]:
-    """A load-level command whose supplied overrides replace those fields of the level file for this load only; character names the dev-flag character (calcium or tonymczoom)."""
+    """A load-level command whose supplied overrides replace those fields of the level file for this load only; character names the dev-flag character (calcium or tonymczoom). unseeded sends seed null so the game rolls its own instead of forcing one."""
+    if unseeded and seed is not None:
+        raise ValueError("build_load_level_command: unseeded and seed cannot both be set")
     payload: dict[str, object] = dict(build_command("load-level", path))
     for field, value in (("map", map), ("stageIndex", stage), ("tier", tier), ("seed", seed)):
         if value is not None:
             payload[field] = value
+    if unseeded:
+        payload["seed"] = None
     if character is not None:
         payload["character"] = character
     return payload
@@ -401,6 +408,7 @@ def add_load_overrides(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--stage", type=int, help="replace the level's stage index")
     parser.add_argument("--tier", type=int, help="replace the level's tier")
     parser.add_argument("--seed", type=int, help="replace the level's debug seed")
+    parser.add_argument("--no-seed", action="store_true", help="let the game roll its own seed instead of forcing the level's")
     parser.add_argument("--character", help="character for the run when MEGABONK_DEV is on: calcium or tonymczoom (default tonymczoom)")
 
 
@@ -410,8 +418,15 @@ def add_client_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--stop-menu", action="store_true", help="also stop the OS-level menu input service")
 
 
-def load_overrides(args: argparse.Namespace) -> dict[str, int | str]:
-    return {k: v for k in ("map", "stage", "tier", "seed", "character") if (v := getattr(args, k)) is not None}
+def load_overrides(args: argparse.Namespace) -> dict[str, object]:
+    overrides: dict[str, object] = {k: v for k in ("map", "stage", "tier", "seed", "character") if (v := getattr(args, k, None)) is not None}
+    if getattr(args, "no_seed", False):
+        overrides["unseeded"] = True
+    return overrides
+
+
+def load_level_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_load_level_command(to_game_path(Path(args.level).resolve()), **load_overrides(args))
 
 
 def build_character_screen_command(enabled: bool) -> dict[str, object]:
@@ -615,8 +630,22 @@ def build_grind_slide_command(held: bool | None = None) -> dict[str, object]:
     return payload
 
 
-def build_query_objects_command(type_name: str, fields: list[str] | None = None) -> dict[str, object]:
-    return {"command": "query-objects", "type": type_name, "fields": list(fields or [])}
+def query_depth(value: str) -> int:
+    depth = int(value)
+    if not 0 <= depth <= MAX_QUERY_DEPTH:
+        raise argparse.ArgumentTypeError(f"depth must be an integer from 0 to {MAX_QUERY_DEPTH}")
+    return depth
+
+
+def build_query_objects_command(type_name: str, fields: list[str] | None = None, depth: int = 0) -> dict[str, object]:
+    command: dict[str, object] = {"command": "query-objects", "type": type_name, "fields": list(fields or [])}
+    if depth:
+        command["depth"] = depth
+    return command
+
+
+def query_objects_payload(args: argparse.Namespace) -> dict[str, object]:
+    return build_query_objects_command(args.type, args.fields, getattr(args, "depth", 0))
 
 
 def build_fall_damage_command() -> dict[str, object]:
@@ -1565,6 +1594,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     new_level.add_argument("--size", type=int, help="square grid size, at least 3 (default 7)")
     sub.add_parser("list-levels")
     sub.add_parser("palette")
+    query_objects = sub.add_parser("query-objects")
+    query_objects.add_argument("type", help="UnityEngine.Object type name, e.g. MapData")
+    query_objects.add_argument("--fields", nargs="*", metavar="FIELD", help="public fields to read besides name")
+    query_objects.add_argument("--depth", type=query_depth, help=f"expand nested assets this many levels deep (0-{MAX_QUERY_DEPTH})")
     click_widget = sub.add_parser("click-widget")
     click_widget.add_argument("name")
     teleport = sub.add_parser("teleport")
@@ -1892,7 +1925,7 @@ def relaunch(
     task: str,
     on_step: Callable[[str], None],
     on_error: Callable[[str], None],
-    overrides: Mapping[str, int | str] | None = None,
+    overrides: Mapping[str, int | str | bool] | None = None,
     spawns: bool = True,
     invulnerable: bool = False,
     feathers: int = 2,
@@ -2010,8 +2043,7 @@ def main(argv: list[str] | None = None) -> int:
 
     match args.action:
         case "load":
-            payload = build_load_level_command(to_game_path(args.level.resolve()), **load_overrides(args))
-            ok = send(harness, payload, args.timeout)
+            ok = send(harness, load_level_payload(args), args.timeout)
         case "bundle":
             ok = send_printing_result(harness, build_command("load-bundle", to_game_path(args.bundle.resolve())), args.timeout)
         case "screenshot":
@@ -2044,6 +2076,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, build_command("list-levels"), args.timeout)
         case "palette":
             ok = send_printing_result(harness, build_command("palette"), args.timeout)
+        case "query-objects":
+            ok = send_printing_result(harness, query_objects_payload(args), args.timeout)
         case "click-widget":
             ok = send_printing_result(harness, click_widget_payload(args), args.timeout)
         case "teleport":

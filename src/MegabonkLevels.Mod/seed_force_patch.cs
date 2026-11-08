@@ -42,6 +42,14 @@ public static class SeedForcePatch
         _logger?.Msg($"SeedForcePatch mode -> {Mode} (levelSeed={seed})");
     }
 
+    // Back to no forcing at all: the next generation rolls its own seed and the spawner reseeding stops.
+    public static void ReleaseLevelSeed()
+    {
+        LevelSeedValue = 0;
+        Mode = SeedForceMode.Off;
+        _logger?.Msg($"SeedForcePatch mode -> {Mode} (seed left to the game)");
+    }
+
     // Object placement draws from UnityEngine.Random and Utility.MyRandom.random, neither tied to the
     // tile grid's debugSeed; reseed both per phase. See docs/map-generation-determinism.md.
     private static void ReseedPhase(int phase)

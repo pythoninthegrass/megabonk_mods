@@ -226,3 +226,100 @@ The "go" verdict is implemented in `from_scratch_generation_patch.cs`; [developm
 Measured Forest stage assets use the same generator strategies but different grid metrics and prop sets: stages 1, 2 and 3 have size/scale pairs 15/20, 15/22 and 16/24. They are not merely re-skins at identical dimensions. Stage 1 has two bush groups instead of one, with `Bush1` aligned to the surface normal, and ten fewer logs than stages 2 and 3.
 
 The measured Desert asset's fixed `NoiseData.seed` (257) is a field value, not proof that runtime noise offsets use it instead of the generator's seed argument. See [Procedural-mesh maps](map-generation-determinism.md#procedural-mesh-maps-desert-hell) for the decompiled seed path. Repeated snapshots alone do not establish which seed controls the terrain.
+
+## 12. Tier 2 stage identity and per-stage generation parameters (measured)
+
+Everything in this section was read from the running game (offline Wine prefix, game build 1.0.69) with `query-objects --depth`, the read-only asset query described in [development.md](development.md#querying-live-objects). `depth` makes the query walk nested `UnityEngine.Object` references and collections instead of printing their `ToString()`, so one call returns a whole `MapData` with its `stages`, `MapParameters`, `NoiseData` and `TerrainData` inlined. The JSON dumps this section summarizes are the gitignored `.tools/evidence/task053_*.json` files (`task053_mapdata_d3.json`, `task053_stagedata_d2.json`, `task053_challengedata.json`, `task053_mapparameters.json`, `task053_noisedata.json`, `task053_terraindata.json`, `task053_ptg_forest_stage2.json`).
+
+### Which stage index is the vanilla Tier 2 stage
+
+Stage index 1. Two independent asset sources agree, and both are read live rather than inferred from the level format:
+
+| `MapData.stages` index | Forest | Desert | `StageData.challenges` rows | `ChallengeData.tier` of those rows |
+| --- | --- | --- | --- | --- |
+| 0 | `StageForest1` | `StageDesert1` | 13 `a_forest1_*` / 9 `a_desert1_*` | 0 |
+| 1 | `StageForest2` | `StageDesert2` | 6 `a_forest2_*` / 5 `a_desert2_*` | 1 |
+| 2 | `StageForest3` | `StageDesert3` | 6 `a_forest3_*` / 5 `a_desert3_*` | 2 |
+
+`StageData` has no tier field of its own, so the tier lives only on `ChallengeData`: the 55 loaded challenge rows carry `map` (Forest 1, Desert 2, Warehouse 8), `name`, `requiresNumChallengesCompleted` and `tier`, and their counts per `(map, tier)` are exactly the `challenges` arrays above (Forest 13/6/6, Desert 9/5/5), with the `a_<map><index>_<challenge>` name prefix carrying the stage number as `tier + 1`. So the stage the game presents as Tier 2 is `MapData.stages[1]` — `StageForest2` for Forest and `StageDesert2` for Desert — and a level that wants to author or replay vanilla Tier 2 sets `stageIndex: 1`, not 2. The Warehouse group (`map: 8`, 11 rows named `a_forest1_hard 1` and similar) is challenge metadata for the Warehouse rather than a third stage band.
+
+### Forest stage parameters (measured)
+
+`MapData` `MapForest`: `eMap` 1, `mapType` 0 (`Tiles`), `stageDuration` 600, `numChestsMultiplier`, `numShrinesMultiplier` and `numShrinesPotsAndOtherMultiplier` all 1. Nothing differs between the stages except `mapParameters`, the prefab sets behind `randomMapObjects` and `challenges`:
+
+| Field | `StageForest1` | `StageForest2` | `StageForest3` |
+| --- | --- | --- | --- |
+| `mapParameters` | `ParamForest1` | `ParamForest2` | `ParamForest3` |
+| `MapParameters.size` | 15 | 15 | 16 |
+| `MapParameters.scale` | 20 | 22 | 24 |
+| `tileWidth` / `tileHeight` | 2 / 1 | 2 / 1 | 2 / 1 |
+| `scaledTileWidth` / `scaledTileHeight` | 40 / 20 | 44 / 22 | 48 / 24 |
+| `volatility` | 0.8 | 0.8 | 0.8 |
+| `centerHeightTarget`, `slopeStrength`, `yOffset`, `flatMapBias` | 0 | 0 | 0 |
+| `biasStrategy` / `heightGenerationStrategy` | 0 / 1 | 0 / 1 | 0 / 1 |
+| `proceduralNoiseData` / `proceduralTerrainData` | null / null | null / null | null / null |
+| `proceduralMapScale` | 1 | 1 | 1 |
+| `mapEdgeFillType` | 3 | 3 | 3 |
+| `randomMapObjects` groups | 6 | 5 | 5 |
+| `stageTilePrefabs` | 9 flat prefabs, `populateTilesRatio` 0.25 | same | same |
+| `challenges` | 13 `a_forest1_*` | 6 `a_forest2_*` | 6 `a_forest3_*` |
+
+The tile grid therefore grows only in `size` and `scale`: stage 3 is a 16×16 grid of `48 × 24` scaled tiles while stages 1 and 2 are 15×15 grids of `40 × 20` and `44 × 22`. Everything else that differs per stage is the prop set, and no group ever changes its `checkRadius` or `upOffset`. What changes is the prefab list, the count, and the scale range (`scaleMin`–`scaleMax` in parentheses):
+
+| Group | `StageForest1` | `StageForest2` | `StageForest3` |
+| --- | --- | --- | --- |
+| Trees | 300 `Tree0` (0.75–2.5) | 300 `Tree0Forest2`, `Tree1Forest2`, `Tree2` (1–4) | 300 `DeadTree0`, `DeadTree1`, `DeadTree2` (1–5) |
+| Logs | 40 `Log0` (0.75–1.5) | 50 `Log0` (0.75–3) | 50 `Log0Dead` (0.75–3) |
+| Bushes | 100 `Bush0` (0.75–1.25) plus 100 `Bush1` (1–2, `alignWithNormal`) | 300 `Bush` (0.75–3.5, `alignWithNormal`) | 300 `BushRed` (0.75–3.5, `alignWithNormal`) |
+| Rocks | 150 `rock_medium_01`–`03`, `rock_small_01`/`02`/`05` (1–7) | same six prefabs, same range | the same six as `*Dark` variants (1–8) |
+| Boulders | 8 `Boulder` (0.75–2, `upOffset` 4, `alignWithNormal`) | same | same |
+
+### Desert stage parameters (measured)
+
+`MapData` `MapDesert`: `eMap` 2, `mapType` 1 (`Terrain`), `stageDuration` 600, all three object multipliers 1. Desert stages carry no `MapParameters`; their assets instead reference noise and terrain settings. The measured differences include `proceduralMapScale`, the stage-3 noise asset and prop settings:
+
+| Field | `StageDesert1` | `StageDesert2` | `StageDesert3` |
+| --- | --- | --- | --- |
+| `mapParameters` | null | null | null |
+| `proceduralNoiseData` | `NoiseDesert1` | `NoiseDesert1` | `NoiseDesert3` |
+| `NoiseData.noiseScale` | 100 | 100 | 40 |
+| `octaves` / `lacunarity` | 2 / 3 | 2 / 3 | 2 / 3 |
+| `persistance` (the game's spelling) | 0.4 | 0.4 | 0.5 |
+| `blend` / `blendStrength` / `seed` | 0.02 / 0 / 257 | 0.02 / 0 / 257 | 0.02 / 0 / 257 |
+| `proceduralTerrainData` | `TerrainDesert` | `TerrainDesert` | `TerrainDesert` |
+| `TerrainData.uniformScale` / `useFalloff` / `heightMultiplier` | 1 / false / 11 | 1 / false / 11 | 1 / false / 11 |
+| `proceduralMapScale` | 1 | **1.1** | **1.2** |
+| `mapEdgeFillType` | 3 | 3 | 3 |
+| `randomMapObjects` groups | 7 | 7 | 7 |
+| `stageTilePrefabs` | 0 flat prefabs, `populateTilesRatio` 0.33 | same | same |
+| `challenges` | 9 `a_desert1_*` | 5 `a_desert2_*` | 5 `a_desert3_*` |
+
+The seven Desert prop groups are, in the asset's own order: 8 landmarks (`Ladnmark1`, `Ladnmark2`, `Landmark3`, `Landmark4` — the first two are misspelled in the game's own prefabs), 15 houses (`TilePrefabHouse`, `TilePrefabHouse2`), 60 `Rock_*_Small` rocks, 120 cacti, 60 logs (`Log0 1`, `Log2`, the space included), 15 desert trees and 300 `DesertBush`. Only three groups move between stages: stage 2 widens the landmark scale from 1.3–3 to 2–5, and stage 3 takes the landmark count to 14 with scale 2–6, the rock count to 100 with `scaleMax` 8, and the tree count to 50.
+
+### How far the stage override actually reaches
+
+`run.py load <level> --stage N` (or the MCP `load(stage=N)`) requests the stage index for that load, and the log confirms the request — `LevelLoader: starting map=Forest stage=2 tier=0 seed=424242`. What the running generator does with that number is a different matter. Requests for Forest stage 0, 1 and 2 at a fixed seed produced the same tile snapshot (`tiles=225 flatTiles=165 fillTiles=190`, `nodes=415`, `hash=A2B9C891…`, `objects=847`), and the live `ProceduralTileGeneration` dump taken after a stage-2 request (`task053_ptg_forest_stage2.json`) reported `currentStage=StageForest1` with `currentMapParameters=ParamForest1` (`size` 15) — not the requested `StageForest3`. `RunConfig.mapTierIndex`, which `CustomTierCap` pins to 0 on this harness (`src/MegabonkLevels.Mod/custom_tier_cap.cs`), is a candidate explanation, not established causality. Neither the effective challenge band nor successful Tier 2 generation follows from the request log. Effective-stage selection remains unresolved; the repeat measurements below must not be presented as verified Tier 2 layouts.
+
+### Repeat behaviour of the generated layout
+
+The Forest tile snapshot repeated under the seed pin; its object hash did not always repeat. On Forest, `debugSeed` is the level seed under the pin and the game's own roll appears there on an unseeded load. Desert does not run that tile-generator hook, so its logged `debugSeed` is not an unseeded-terrain control. `hash`/`objectsHash` are SHA-256 hashes over the tile-list and `(Clone)` root snapshots taken at `A_GenerationComplete` (`src/MegabonkLevels.Mod/generation_patch.cs`), shown as prefixes below. The tile-list hash does not capture Desert mesh terrain. The snapshot column gives counts (`tiles / flatTiles / fillTiles`), not width, height and depth; stage indices are requests, not verified effective stages.
+
+| Map | Stage | Seed | Loads | Tile snapshot | Nodes | Tile hash | Objects | Objects hash |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Forest | 0 | 424242 | 1 (Mac) | 225 / 165 / 190 | 415 | `A2B9C891…` | 847 | `C0376874…` |
+| Forest | 1 | 424242 | 8 (Mac) | 225 / 165 / 190 | 415 | `A2B9C891…` | 847 | `C0376874…` ×4, `92A74E52…` ×4 |
+| Forest | 2 | 424242 | 3 (Mac) | 225 / 165 / 190 | 415 | `A2B9C891…` | 847 | `C0376874…`, `92A74E52…` ×2 |
+| Forest | 1 | game-rolled | 2 (Mac) | 225 / 170 / 227 and 225 / 165 / 198 | 452, 423 | `79FD5A54…`, `92594BE1…` | 848, 847 | differs every load |
+| Desert | 0, 1, 2 | 424242 and game-rolled | 6 (Mac: 4 seeded, 2 game-rolled) | 400 / 292 / 417 | 817 | `692987B2…` | 0 | `E3B0C442…` |
+
+The per-run rows behind that table are the Mac `task053_*_gen.txt` and `task053_*_log.txt` files under `.tools/evidence`. The table counts each labelled Mac run once, not each log copy. Linux files with inconsistent requested-map labels or incomplete generation records are excluded rather than counted as independent runs. The larger batch's files are no longer available; these totals cover only surviving records, not the planned matrix.
+
+Three findings come out of that table.
+
+The recorded seeded Mac Forest tile snapshots match (`A2B9C891…`, 415 records, 225 / 165 / 190). This establishes repeatability for the captured runs, not all stages or platforms. The two Mac unseeded Forest loads (`run.py load <level> --no-seed`, MCP `load(unseeded=true)`) instead produced 225 / 170 / 227 with 452 records and 225 / 165 / 198 with 423. Their game-rolled `debugSeed` values were `63019176` and `1314710470`, rather than the pinned `424242`; their tile and object hashes differed. The tile count itself stayed 225.
+
+The recorded Mac Forest object hashes are **bimodal**: the 12 seeded records contain two values, `C0376874…` on 6 and `92A74E52…` on 6, with `objects=847` throughout. Matching counts do not reveal which transforms or identities differ. A second random stream, capture timing, or another cause has not been established. The next measurement should compare full object snapshots, including repeated captures within a single generation, rather than infer a cause from hash prefixes alone.
+
+This resembles the residual Forest `objectsHash` drift left open in [map-generation-determinism.md](map-generation-determinism.md): identical tile hash, differing object hash, with the mod's per-phase reseeding active. The Mac offline Wine prefix also produced it, splitting its 8 same-stage seeded repeats 4 and 4. Two observed hashes in a finite sample do not establish a binary RNG decision, identify a consumer, or bound future outcomes. The cause remains unresolved; equal object counts do not establish stable object identity or transforms.
+
+Desert says nothing about object determinism, because the snapshot is empty: `objects=0` and `objectsHash=E3B0C442…` (SHA-256 of empty input). The patch collects scene-root `(Clone)` objects occurring after the `TileObjectsParent` root, not children under that parent. No objects were captured by that selection in these Desert runs. The tile-list snapshot also repeated (`400 / 292 / 417`, 817 records, `692987B2…`), but it does not describe the generated mesh. Neither stable terrain nor absent props follows from these snapshots. Desert object placement, its capture coverage and the effective runtime terrain seed remain unresolved.

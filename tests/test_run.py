@@ -478,6 +478,33 @@ def test_build_query_objects_command_carries_the_type_and_fields() -> None:
     assert run.build_query_objects_command("MapData") == {"command": "query-objects", "type": "MapData", "fields": []}
 
 
+def test_build_query_objects_command_carries_depth_only_when_it_is_not_the_default() -> None:
+    assert run.build_query_objects_command("MapData", ["stages"], depth=4) == {
+        "command": "query-objects",
+        "type": "MapData",
+        "fields": ["stages"],
+        "depth": 4,
+    }
+    assert "depth" not in run.build_query_objects_command("MapData", ["stages"], depth=0)
+
+
+def test_query_objects_cli_builds_the_command_from_its_arguments() -> None:
+    args = run.parse_args(["query-objects", "MapData", "--fields", "stages", "mapType", "--depth", "3"])
+
+    assert args.action == "query-objects"
+    assert run.query_objects_payload(args) == {
+        "command": "query-objects",
+        "type": "MapData",
+        "fields": ["stages", "mapType"],
+        "depth": 3,
+    }
+    assert run.query_objects_payload(run.parse_args(["query-objects", "MapData"])) == {
+        "command": "query-objects",
+        "type": "MapData",
+        "fields": [],
+    }
+
+
 def test_build_teleport_command_carries_a_position_or_a_cell() -> None:
     assert run.build_teleport_command(position=(1.5, 0.0, -200.0)) == {"command": "teleport", "position": [1.5, 0.0, -200.0]}
     assert run.build_teleport_command(cell=(3, 12)) == {"command": "teleport", "cell": [3, 12]}
@@ -2255,6 +2282,24 @@ def test_build_load_level_command_adds_only_the_supplied_overrides() -> None:
         "stageIndex": 1,
         "seed": 0,
     }
+
+
+def test_build_load_level_command_asks_for_the_games_own_seed_when_unseeded() -> None:
+    assert run.build_load_level_command("p", unseeded=True) == {
+        "command": "load-level",
+        "path": "p",
+        "seed": None,
+    }
+    assert run.load_level_payload(run.parse_args(["load", "a.json", "--no-seed"])) == {
+        "command": "load-level",
+        "path": run.to_game_path(Path("a.json").resolve()),
+        "seed": None,
+    }
+
+
+def test_build_load_level_command_rejects_naming_a_seed_it_should_not_use() -> None:
+    with pytest.raises(ValueError, match="seed"):
+        run.build_load_level_command("p", seed=7, unseeded=True)
 
 
 def test_parse_args_load_and_relaunch_take_integer_overrides() -> None:

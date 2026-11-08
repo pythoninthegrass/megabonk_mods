@@ -81,6 +81,20 @@ public class ObjectQueryTests
     }
 
     [Fact]
+    public void Read_WithDepth_ExpandsANestedObjectIntoItsMembers()
+    {
+        var items = new[] { new Asset { name = "a", Linked = new Asset { name = "inner", Order = 4, Flag = true } } };
+
+        var result = ObjectQuery.Read(typeof(Asset), items, new[] { "Linked" }, depth: 2);
+
+        var linked = ((JsonArray)result["objects"]!)[0]!["Linked"]!.AsObject();
+        Assert.Equal("Asset", (string)linked["$type"]!);
+        Assert.Equal("inner", (string)linked["name"]!);
+        Assert.Equal(4L, (long)linked["Order"]!);
+        Assert.True((bool)linked["Flag"]!);
+    }
+
+    [Fact]
     public void Read_WithNameRequestedTwice_ReturnsItOnce()
     {
         var result = ObjectQuery.Read(typeof(Asset), new[] { new Asset { name = "a" } }, new[] { "name", "name" });

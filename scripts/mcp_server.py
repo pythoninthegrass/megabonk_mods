@@ -47,6 +47,7 @@ from PIL import Image as PilImage
 from pydantic import Field, StrictBool
 
 TIMEOUT = 15.0
+MAX_QUERY_DEPTH = run.MAX_QUERY_DEPTH
 LAUNCH_MARKER = "DevHarness: enabled"
 DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parent.parent / ".tools" / "evidence"
 LOG_POLL_INTERVAL = 0.2
@@ -135,9 +136,12 @@ async def relaunch(
     stage: int | None = None,
     tier: int | None = None,
     seed: int | None = None,
+    unseeded: bool = False,
     no_level: bool = False,
 ) -> CallToolResult:
-    """Quit and relaunch the game, load a level, enter editor with 2 Feathers, enemy spawns on and normal damage; MEGABONK_RELAUNCH_FEATHERS sets the Feathers amount (0 leaves it alone); MEGABONK_RELAUNCH_SPAWNS=false stops spawns and MEGABONK_RELAUNCH_INVULNERABLE=true makes the player invulnerable; returns the final state. no_level stops at the main menu without loading a level or entering the editor, e.g. to check the stock character screen. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only."""
+    """Quit and relaunch the game, load a level, enter editor with 2 Feathers, enemy spawns on and normal damage; MEGABONK_RELAUNCH_FEATHERS sets the Feathers amount (0 leaves it alone); MEGABONK_RELAUNCH_SPAWNS=false stops spawns and MEGABONK_RELAUNCH_INVULNERABLE=true makes the player invulnerable; returns the final state. no_level stops at the main menu without loading a level or entering the editor, e.g. to check the stock character screen. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only. unseeded leaves seeding to the game, which rolls its own seed instead of the mod forcing one; it cannot be combined with seed."""
+    if unseeded and seed is not None:
+        raise ToolError("relaunch: unseeded and seed cannot both be set")
     game_dir = _game_dir()
     harness = game_dir / "harness"
     level_path = None if no_level else Path(level) if level else run.TEST_FOREST_LEVEL
@@ -153,6 +157,8 @@ async def relaunch(
             pass
 
     overrides = {k: v for k, v in (("map", map), ("stage", stage), ("tier", tier), ("seed", seed)) if v is not None}
+    if unseeded:
+        overrides["unseeded"] = True
     ok = await anyio.to_thread.run_sync(
         run.relaunch,
         harness,
@@ -179,10 +185,13 @@ async def load(
     stage: int | None = None,
     tier: int | None = None,
     seed: int | None = None,
+    unseeded: bool = False,
     character: str | None = None,
 ) -> CallToolResult:
-    """Load a level file and start it. character (calcium or tonymczoom) names the run's character when MEGABONK_DEV is on; the default is Tony McZoom. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only; the file is not modified."""
-    payload = run.build_load_level_command(run.to_game_path(Path(level).resolve()), map, stage, tier, seed, character)
+    """Load a level file and start it. character (calcium or tonymczoom) names the run's character when MEGABONK_DEV is on; the default is Tony McZoom. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only; the file is not modified. unseeded leaves seeding to the game, which rolls its own seed instead of the mod forcing one; it cannot be combined with seed."""
+    if unseeded and seed is not None:
+        raise ToolError("load: unseeded and seed cannot both be set")
+    payload = run.build_load_level_command(run.to_game_path(Path(level).resolve()), map, stage, tier, seed, character, unseeded)
     return await _command(_harness(), payload, TIMEOUT)
 
 
@@ -534,15 +543,17 @@ def _run_jq(program: "jq._Program", data: object) -> object:
 
 
 @mcp.tool()
-async def query_objects(type: str, fields: list[str] | None = None, jq: str | None = None) -> CallToolResult:
-    """List every loaded UnityEngine.Object of the named type (short or full class name, e.g. MapData) as {type, count, objects: [{name, ...fields}]}, reading the live game with no rebuild. fields are public field or property names to read besides name; enums come back as their integer value, so a live asset that disagrees with the Il2Cpp dump shows. An unknown type or field is an error naming it. Read-only; works with a run active or frozen. jq is an optional jq expression applied to that result before it is returned, e.g. `.objects[] | select(.eMap == 64) | .name`: one output is returned as is, several or none as a list."""
+async def query_objects(type: str, fields: list[str] | None = None, depth: int = 0, jq: str | None = None) -> CallToolResult:
+    """List every loaded UnityEngine.Object of the named type (short or full class name, e.g. MapData) as {type, count, objects: [{name, ...fields}]}, reading the live game with no rebuild. fields are public field or property names to read besides name; enums come back as their integer value, so a live asset that disagrees with the Il2Cpp dump shows. An unknown type or field is an error naming it. depth expands nested assets (stage arrays, MapParameters, noises) that many levels deep, 0 to 6: an object becomes {$type, ...members} with name where available, a collection becomes an array (or {count, truncated: true, items} beyond 64 items), and a cycle carries {$cycle: true}. Non-ScriptableObject Unity objects expand fields only. Read-only; works with a run active or frozen. jq is an optional jq expression applied to that result before it is returned, e.g. `.objects[] | select(.eMap == 64) | .name`: one output is returned as is, several or none as a list."""
     if not type:
         raise ToolError("query_objects: type must not be empty")
     if any(not name for name in fields or []):
         raise ToolError("query_objects: fields must not contain an empty name")
+    if not isinstance(depth, int) or isinstance(depth, bool) or not 0 <= depth <= MAX_QUERY_DEPTH:
+        raise ToolError(f"query_objects: depth must be an integer from 0 to {MAX_QUERY_DEPTH}")
     program = _compile_jq(jq) if jq is not None else None
     _encode(None)
-    reply = await _request(_harness(), run.build_query_objects_command(type, fields), TIMEOUT)
+    reply = await _request(_harness(), run.build_query_objects_command(type, fields, depth), TIMEOUT)
     result = reply.get("result") if reply else None
     return _encode(_run_jq(program, result) if program is not None else result)
 

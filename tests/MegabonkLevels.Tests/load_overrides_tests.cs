@@ -39,6 +39,15 @@ public class LoadOverridesTests
     }
 
     [Fact]
+    public void Apply_Unseeded_KeepsTheLevelsSeedInTheRecord()
+    {
+        var result = new LoadOverrides(Unseeded: true).Apply(Level);
+
+        Assert.Equal(Level.Seed, result.Seed);
+        Assert.True(new LoadOverrides(Unseeded: true).Unseeded);
+    }
+
+    [Fact]
     public void Apply_KeepsEdits()
     {
         var edited = Level with { Edits = new List<EditOp> { new("op", "t", "p") } };
@@ -66,7 +75,7 @@ public class LoadOverridesTests
     [InlineData("""{"command":"load-level","path":"a","map":"forest"}""", "map")]
     [InlineData("""{"command":"load-level","path":"a","stageIndex":1.5}""", "stageIndex")]
     [InlineData("""{"command":"load-level","path":"a","tier":true}""", "tier")]
-    [InlineData("""{"command":"load-level","path":"a","seed":null}""", "seed")]
+    [InlineData("""{"command":"load-level","path":"a","seed":"42"}""", "seed")]
     [InlineData("""{"command":"load-level","path":"a","map":3}""", "map")]
     public void TryParse_RejectsAnOverrideThatIsNotAnIntegerOrAKnownMap_NamingTheField(string json, string field)
     {

@@ -838,6 +838,43 @@ public class HarnessCommandTests
         Assert.Contains(expectedFragment, error);
     }
 
+    [Fact]
+    public void TryParse_QueryObjects_DepthDefaultsToZero()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"query-objects","type":"MapData"}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Equal(0, command.Query.Depth);
+    }
+
+    [Fact]
+    public void TryParse_QueryObjects_ReadsDepth()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"query-objects","type":"MapData","fields":["stages"],"depth":4}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal(4, command.Query.Depth);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"query-objects","type":"MapData","depth":-1}""")]
+    [InlineData("""{"command":"query-objects","type":"MapData","depth":"4"}""")]
+    public void TryParse_QueryObjectsWithUnusableDepth_FailsNamingTheField(string json)
+    {
+        Assert.False(HarnessCommand.TryParse(json, out _, out var error));
+        Assert.Contains("depth", error);
+    }
+
+    [Fact]
+    public void TryParse_QueryObjects_DepthAboveTheWalkerCap_FailsNamingTheField()
+    {
+        var json = $$"""{"command":"query-objects","type":"MapData","depth":{{AssetDump.MaxDepth + 1}}}""";
+
+        Assert.False(HarnessCommand.TryParse(json, out _, out var error));
+        Assert.Contains("depth", error);
+    }
+
     [Theory]
     [InlineData("true", true)]
     [InlineData("false", false)]
@@ -907,6 +944,25 @@ public class HarnessCommandTests
         HarnessCommand.TryParse("""{"command":"load-level","path":"p"}""", out var command, out _);
 
         Assert.Null(command.Overrides.Character);
+    }
+
+    [Fact]
+    public void TryParse_LoadLevel_NullSeed_LeavesSeedingToTheGame()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"load-level","path":"p","seed":null}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.True(command.Overrides.Unseeded);
+        Assert.Null(command.Overrides.Seed);
+    }
+
+    [Fact]
+    public void TryParse_LoadLevel_WithoutSeed_IsNotUnseeded()
+    {
+        HarnessCommand.TryParse("""{"command":"load-level","path":"p"}""", out var command, out _);
+
+        Assert.False(command.Overrides.Unseeded);
     }
 
     [Fact]

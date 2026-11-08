@@ -141,6 +141,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/overview_target.cs" Link="overview_target.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/teleport_target.cs" Link="teleport_target.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/object_query.cs" Link="object_query.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/asset_dump.cs" Link="asset_dump.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/custom_map_entries.cs" Link="custom_map_entries.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/character_policy.cs" Link="character_policy.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/death_screen_press_gate.cs" Link="death_screen_press_gate.cs" />

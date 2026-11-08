@@ -24,7 +24,7 @@ public static class LevelLoaderPatch
     // Levels whose MapData isn't loaded yet wait here and are retried each frame by Pump() until the
     // main scene provides the map, so a load-level issued during startup doesn't fail with
     // "no MapData found". Each entry is removed once the run starts or the load is fatally rejected.
-    private static readonly List<(LevelFile Level, MelonLogger.Instance Logger, string Path, float QueuedAt, string Character)> _pending = new();
+    private static readonly List<(LevelFile Level, MelonLogger.Instance Logger, string Path, float QueuedAt, string Character, bool Unseeded)> _pending = new();
 
     // The level's allowedCharacters as loaded, kept so an editor save writes them back.
     public static IReadOnlyList<string> AllowedCharacters { get; private set; }
@@ -86,7 +86,7 @@ public static class LevelLoaderPatch
             return false;
         }
 
-        _awaitingCharacter = (level, logger, false);
+        _awaitingCharacter = (level, logger, false, false);
         return true;
     }
 
@@ -100,7 +100,7 @@ public static class LevelLoaderPatch
             return false;
         }
 
-        _pending.Add((level, logger, path, Time.realtimeSinceStartup, overrides.Character));
+        _pending.Add((level, logger, path, Time.realtimeSinceStartup, overrides.Character, overrides.Unseeded));
         return true;
     }
 
@@ -110,8 +110,8 @@ public static class LevelLoaderPatch
     {
         for (var i = _pending.Count - 1; i >= 0; i--)
         {
-            var (level, logger, _, queuedAt, character) = _pending[i];
-            if (StartOnce(level, logger, character))
+            var (level, logger, _, queuedAt, character, unseeded) = _pending[i];
+            if (StartOnce(level, logger, character, unseeded))
             {
                 _pending.RemoveAt(i);
             }
@@ -126,7 +126,7 @@ public static class LevelLoaderPatch
     // Starts a run from an in-memory level file, reusing the same seed forcing, pending-edit and
     // custom-run marking as a disk load. Returns false when the MapData isn't loaded yet (Pump
     // retries); returns true once the run starts or the load is fatally rejected.
-    private static bool StartOnce(LevelFile level, MelonLogger.Instance logger, string characterName)
+    private static bool StartOnce(LevelFile level, MelonLogger.Instance logger, string characterName, bool unseeded)
     {
         var mapData = FindMapData(level.Map);
         if (mapData == null)
@@ -156,7 +156,7 @@ public static class LevelLoaderPatch
             var allowedIds = CharacterPolicy.AllowedIds(level.AllowedCharacters);
             if (allowedIds != null)
             {
-                _awaitingCharacter = (level, logger, true);
+                _awaitingCharacter = (level, logger, true, unseeded);
                 CharacterScreenPatch.SetRestricted(true, allowedIds);
                 logger.Msg($"LevelLoader: waiting for a character to be confirmed on the character screen for map={level.Map}");
                 return true;
@@ -180,7 +180,7 @@ public static class LevelLoaderPatch
             return true;
         }
 
-        var runConfig = PrepareRun(level, logger, mapData);
+        var runConfig = PrepareRun(level, logger, mapData, unseeded);
         try
         {
             MapController.StartNewMap(runConfig);
@@ -214,9 +214,18 @@ public static class LevelLoaderPatch
     }
 
     // Seed, edits, music, title and custom-run marking for a run about to start; returns the config the run starts with.
-    private static RunConfig PrepareRun(LevelFile level, MelonLogger.Instance logger, MapData mapData)
+    // An unseeded load hands seeding back to the game so the run shows what an unforced generation looks like.
+    private static RunConfig PrepareRun(LevelFile level, MelonLogger.Instance logger, MapData mapData, bool unseeded)
     {
-        SeedForcePatch.ForceLevelSeed(level.Seed);
+        if (unseeded)
+        {
+            SeedForcePatch.ReleaseLevelSeed();
+        }
+        else
+        {
+            SeedForcePatch.ForceLevelSeed(level.Seed);
+        }
+
         FromScratchGenerationPatch.Arm(level);
         LiveEditPatch.SetPendingEdits(level.Edits, level.NoGrass, level.PlayerStart ?? level.Spawn?.Position, level.MaxSlopeAngle, level.KillFloorY, level.BossSpawnPosition, level.GrindRequiresSlide, level.PackKitVersions, fallDamageCharacter: level.FallDamageCharacter, randomizationSettings: level);
         LevelMusic.Prepare(level.Music, logger);
@@ -224,7 +233,7 @@ public static class LevelLoaderPatch
         AllowedCharacters = level.AllowedCharacters;
         MapDescription = level.MapDescription;
         CustomLevelState.MarkPendingStart();
-        logger.Msg($"LevelLoader: starting map={level.Map} stage={level.StageIndex} tier={level.Tier} seed={level.Seed}");
+        logger.Msg($"LevelLoader: starting map={level.Map} stage={level.StageIndex} tier={level.Tier} seed={(unseeded ? "game-rolled" : level.Seed.ToString())}");
         if (CustomTierCap.IsCapped(level.Tier))
         {
             logger.Msg($"LevelLoader: tier {level.Tier} capped to {CustomTierCap.MaxTier}");
@@ -242,7 +251,7 @@ public static class LevelLoaderPatch
     private const string DevVariable = "MEGABONK_DEV";
 
     // A load held back until the player confirms a character on the restricted character screen.
-    private static (LevelFile Level, MelonLogger.Instance Logger, bool RestrictsScreen)? _awaitingCharacter;
+    private static (LevelFile Level, MelonLogger.Instance Logger, bool RestrictsScreen, bool Unseeded)? _awaitingCharacter;
 
     public static bool HasAwaitingCharacter => _awaitingCharacter != null;
 
@@ -259,7 +268,7 @@ public static class LevelLoaderPatch
 
     public static void CancelAwaitingCharacter()
     {
-        if (_awaitingCharacter is var (_, logger, _))
+        if (_awaitingCharacter is var (_, logger, _, _))
         {
             StartupCover.OnCancelled("load cancelled while waiting for a character");
             logger.Msg("LevelLoader: cancelled held load");
@@ -275,7 +284,7 @@ public static class LevelLoaderPatch
         [HarmonyPriority(Priority.First)]
         private static void Prefix(ref RunConfig newRunConfig)
         {
-            if (_awaitingCharacter is not var (level, logger, restrictsScreen) || (restrictsScreen && !CharacterScreenPatch.Restricted))
+            if (_awaitingCharacter is not var (level, logger, restrictsScreen, unseeded) || (restrictsScreen && !CharacterScreenPatch.Restricted))
             {
                 return;
             }
@@ -299,7 +308,7 @@ public static class LevelLoaderPatch
                 return;
             }
 
-            newRunConfig = PrepareRun(level, logger, mapData);
+            newRunConfig = PrepareRun(level, logger, mapData, unseeded);
             if (restrictsScreen)
             {
                 CharacterScreenPatch.SetRestricted(false);

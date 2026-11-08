@@ -134,12 +134,14 @@ public sealed class PerfArgs
     public int? Hp { get; init; }
 }
 
-// The type to enumerate and the public fields to read besides name.
+// The type to enumerate, the public fields to read besides name, and how many levels of nested assets to expand.
 public sealed class QueryArgs
 {
     public string TypeName { get; init; }
 
     public IReadOnlyList<string> Fields { get; init; } = Array.Empty<string>();
+
+    public int Depth { get; init; }
 }
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
@@ -1008,7 +1010,17 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
             }
         }
 
-        command = new HarnessCommand(HarnessCommandKind.QueryObjects, null, Query: new QueryArgs { TypeName = typeName, Fields = fields });
+        var depth = 0;
+        if (root.TryGetPropertyValue("depth", out var depthNode) && depthNode != null)
+        {
+            error = $"field 'depth' must be an integer from 0 to {AssetDump.MaxDepth}";
+            if (depthNode is not JsonValue depthValue || !depthValue.TryGetValue(out depth) || depth < 0 || depth > AssetDump.MaxDepth)
+            {
+                return false;
+            }
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.QueryObjects, null, Query: new QueryArgs { TypeName = typeName, Fields = fields, Depth = depth });
         error = null;
         return true;
     }
@@ -1095,7 +1107,7 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         if (!TryGetOptionalInt(root, "map", out var map, out error)
             || !TryGetOptionalInt(root, "stageIndex", out var stageIndex, out error)
             || !TryGetOptionalInt(root, "tier", out var tier, out error)
-            || !TryGetOptionalInt(root, "seed", out var seed, out error))
+            || !TryGetSeedField(root, out var seed, out var unseeded, out error))
         {
             command = default;
             return false;
@@ -1108,8 +1120,36 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
             return false;
         }
 
-        command = command with { Overrides = new LoadOverrides(map, stageIndex, tier, seed, TryGetString(root, "character", out var character) ? character : null) };
+        command = command with { Overrides = new LoadOverrides(map, stageIndex, tier, seed, TryGetString(root, "character", out var character) ? character : null, unseeded) };
         return true;
+    }
+
+    // "seed": 424242 forces that seed, "seed": null lets the game roll its own, and no seed field keeps the level file's.
+    private static bool TryGetSeedField(JsonObject root, out int? seed, out bool unseeded, out string error)
+    {
+        seed = null;
+        unseeded = false;
+        error = null;
+
+        if (!root.TryGetPropertyValue("seed", out var node))
+        {
+            return true;
+        }
+
+        if (node is null)
+        {
+            unseeded = true;
+            return true;
+        }
+
+        if (node is JsonValue jsonValue && jsonValue.TryGetValue(out int parsed))
+        {
+            seed = parsed;
+            return true;
+        }
+
+        error = "field 'seed' must be an integer or null";
+        return false;
     }
 
     private static bool TryGetOptionalInt(JsonObject root, string field, out int? value, out string error)

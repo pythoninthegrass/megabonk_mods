@@ -23,7 +23,7 @@ public static class ObjectQuery
     }
 
     // Checks the field names against the type first so an unknown one fails even when no instance is loaded.
-    public static JsonObject Read(Type type, IEnumerable<object> items, IReadOnlyList<string> fields)
+    public static JsonObject Read(Type type, IEnumerable<object> items, IReadOnlyList<string> fields, int depth = 0)
     {
         var names = fields.Prepend("name").Distinct().ToList();
         var readers = names.Select(name => (name, reader: FindReader(type, name))).ToList();
@@ -34,7 +34,7 @@ public static class ObjectQuery
             var row = new JsonObject();
             foreach (var (name, reader) in readers)
             {
-                row[name] = ToJson(reader(item));
+                row[name] = AssetDump.Describe(reader(item), depth);
             }
 
             rows.Add(row);
@@ -57,17 +57,4 @@ public static class ObjectQuery
 
         throw new InvalidOperationException($"type '{type.Name}' has no public field '{name}'");
     }
-
-    private static JsonNode ToJson(object value) => value switch
-    {
-        null => null,
-        Enum e => JsonValue.Create(Convert.ToInt64(e)),
-        string s => JsonValue.Create(s),
-        bool b => JsonValue.Create(b),
-        sbyte or byte or short or ushort or int or uint or long => JsonValue.Create(Convert.ToInt64(value)),
-        ulong u => JsonValue.Create(u),
-        float f => JsonValue.Create(f),
-        double d => JsonValue.Create(d),
-        _ => JsonValue.Create(value.ToString()),
-    };
 }

@@ -410,7 +410,7 @@ public static class DevHarness
     {
         var type = ObjectQuery.ResolveType(UnityObjectTypes(), args.TypeName);
         var items = Resources.FindObjectsOfTypeAll(Il2CppType.From(type)).Select(found => Activator.CreateInstance(type, found.Pointer)).ToList();
-        return ObjectQuery.Read(type, items, args.Fields);
+        return ObjectQuery.Read(type, items, args.Fields, args.Depth);
     }
 
     private static IEnumerable<Type> UnityObjectTypes()

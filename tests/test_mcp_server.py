@@ -907,6 +907,20 @@ async def test_query_objects_rejects_an_empty_type_or_field(tmp_path, monkeypatc
         assert seen == []
 
 
+async def test_query_objects_sends_depth_when_it_is_given(tmp_path, monkeypatch) -> None:
+    result, seen = await query_objects(tmp_path, monkeypatch, {"type": "MapData", "fields": ["stages"], "depth": 4})
+    assert not result.is_error
+    assert seen == [{"command": "query-objects", "type": "MapData", "fields": ["stages"], "depth": 4}]
+
+
+async def test_query_objects_rejects_a_depth_outside_the_walkers_range(tmp_path, monkeypatch) -> None:
+    for index, depth in enumerate((-1, mcp_server.MAX_QUERY_DEPTH + 1)):
+        result, seen = await query_objects(tmp_path / str(index), monkeypatch, {"type": "MapData", "depth": depth})
+        assert result.is_error
+        assert "depth" in result.content[0].text
+        assert seen == []
+
+
 async def test_load_tool_sends_the_overrides(tmp_path, monkeypatch) -> None:
     harness = setup_harness(tmp_path, monkeypatch)
     seen = []
@@ -933,6 +947,32 @@ async def test_load_tool_rejects_a_non_integer_override(tmp_path, monkeypatch) -
     assert "stage" in result.content[0].text
 
 
+async def test_load_tool_sends_a_null_seed_when_unseeded(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def responder(payload):
+        seen.append(payload)
+        return ok_result(payload)
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("load", {"level": "a.json", "unseeded": True})
+    finally:
+        stop.set()
+    assert not result.is_error
+    assert seen[0]["seed"] is None
+
+
+async def test_load_tool_rejects_naming_a_seed_it_should_not_use(tmp_path, monkeypatch) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("load", {"level": "a.json", "seed": 7, "unseeded": True})
+    assert result.is_error
+    assert "seed" in result.content[0].text
+
+
 async def test_relaunch_tool_forwards_the_overrides(tmp_path, monkeypatch) -> None:
     setup_harness(tmp_path, monkeypatch)
     seen = {}
@@ -956,6 +996,34 @@ async def test_relaunch_tool_forwards_the_overrides(tmp_path, monkeypatch) -> No
     assert seen["spawns"] is True
     assert seen["invulnerable"] is False
     assert seen["feathers"] == 2
+
+
+async def test_relaunch_tool_forwards_an_unseeded_load(tmp_path, monkeypatch) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    seen = {}
+
+    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2):
+        seen["overrides"] = overrides
+        return True
+
+    monkeypatch.setattr(mcp_server.run, "relaunch", fake_relaunch)
+
+    async def fake_command(harness, payload, timeout):
+        return mcp_server._encode({"ok": True})
+
+    monkeypatch.setattr(mcp_server, "_command", fake_command)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("relaunch", {"stage": 1, "unseeded": True})
+    assert not result.is_error
+    assert seen["overrides"] == {"stage": 1, "unseeded": True}
+
+
+async def test_relaunch_tool_rejects_naming_a_seed_it_should_not_use(tmp_path, monkeypatch) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("relaunch", {"seed": 3, "unseeded": True})
+    assert result.is_error
+    assert "seed" in result.content[0].text
 
 
 async def test_relaunch_tool_no_level_passes_no_level_path(tmp_path, monkeypatch) -> None:
