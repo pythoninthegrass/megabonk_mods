@@ -2542,3 +2542,21 @@ def test_build_music_command_track_carries_the_number() -> None:
 def test_build_music_command_rejects_bad_arguments(action, track) -> None:
     with pytest.raises(ValueError):
         run.build_music_command(action, track)
+
+
+def test_clear_console_log_removes_the_persisted_log_and_reports_it(tmp_path) -> None:
+    log = tmp_path / "UserData" / "console_log.jsonl"
+    log.parent.mkdir()
+    log.write_text('{"k":"in","v":"music.list"}\n')
+    assert run.console_log_path(tmp_path) == log
+    assert run.clear_console_log(tmp_path) is True
+    assert not log.exists()
+
+
+def test_clear_console_log_without_a_log_is_not_an_error(tmp_path) -> None:
+    assert run.clear_console_log(tmp_path) is False
+
+
+def test_clear_console_log_cli_parses() -> None:
+    assert run.parse_args(["clear-console-log"]).action == "clear-console-log"
+

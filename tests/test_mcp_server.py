@@ -1264,3 +1264,19 @@ async def test_perf_tool_requires_enabled_for_vsync(tmp_path, monkeypatch) -> No
     assert result.is_error
     assert "enabled" in result.content[0].text
     assert not list((harness / "commands").glob("*.json"))
+
+
+async def test_clear_console_log_deletes_the_persisted_log(tmp_path, monkeypatch) -> None:
+    setup_harness(tmp_path, monkeypatch)
+    log = tmp_path / "game" / "UserData" / "console_log.jsonl"
+    log.parent.mkdir()
+    log.write_text('{"k":"out","v":"38  37_The_Tourist"}\n')
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("clear_console_log", {})
+    assert not result.is_error
+    assert not log.exists()
+    assert json.loads(result.content[0].text) == {"path": str(log), "removed": True}
+    async with Client(mcp_server.mcp) as client:
+        again = await client.call_tool("clear_console_log", {})
+    assert json.loads(again.content[0].text)["removed"] is False
+

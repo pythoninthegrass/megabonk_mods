@@ -19,6 +19,7 @@ Drives the MegabonkLevels dev harness (see docs/development.md) by dropping JSON
 Usage:
     run.py enable                  Create the harness marker; takes effect on the next game launch
     run.py disable                 Remove the harness marker
+    run.py clear-console-log       Delete the console's persisted history and scrollback
     run.py load <level> [--map N] [--stage N] [--tier N] [--seed N] [--no-seed]
                                    Load a level file and start it, optionally replacing those fields for this load; --no-seed lets the game roll its own
     run.py screenshot <out.png>    Save the game's rendered frame
@@ -470,6 +471,17 @@ def build_music_command(action: str, track: int | None = None) -> dict[str, obje
     if track is not None:
         raise ValueError("music takes a track number only with the track action")
     return {"command": "music", "action": action}
+
+
+def console_log_path(game_dir: Path) -> Path:
+    return game_dir / "UserData" / "console_log.jsonl"
+
+
+def clear_console_log(game_dir: Path) -> bool:
+    log = console_log_path(game_dir)
+    existed = log.is_file()
+    log.unlink(missing_ok=True)
+    return existed
 
 
 def build_kill_enemies_command(target: str) -> dict[str, object]:
@@ -1547,6 +1559,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             command.add_argument("--out", type=Path, help="screenshot path on this machine, downloaded when --host is used")
     sub.add_parser("enable")
     sub.add_parser("disable")
+    sub.add_parser("clear-console-log", help="delete the console's persisted history and scrollback so the next launch starts empty")
     quit_parser = sub.add_parser("quit")
     add_client_flags(quit_parser)
     teardown_parser = sub.add_parser("teardown", help="quit the game, reap the Wine leftovers, and stop the clients a run leaves behind")
@@ -2062,6 +2075,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.action in ("enable", "disable"):
         set_enabled(game_dir, args.action == "enable")
         print(f"harness {args.action}d at {harness}")
+        return 0
+
+    if args.action == "clear-console-log":
+        print(f"console log {'removed' if clear_console_log(game_dir) else 'not present'} at {console_log_path(game_dir)}")
         return 0
 
     if args.action == "teardown":

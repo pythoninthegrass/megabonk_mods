@@ -115,6 +115,13 @@ async def _command(harness: Path, payload: dict[str, object], timeout: float, re
 
 
 @mcp.tool()
+async def clear_console_log() -> CallToolResult:
+    """Delete the in-game console's persisted history and scrollback (UserData/console_log.jsonl) so the next launch starts with an empty console. Use it after changing behaviour or output that earlier console lines recorded, since the console replays old output after a relaunch. A running game keeps its in-memory history until it relaunches, so call this before relaunch. Returns the path and whether a log was removed."""
+    log = run.console_log_path(_game_dir())
+    return _encode({"path": str(log), "removed": run.clear_console_log(_game_dir())}, wrap=False)
+
+
+@mcp.tool()
 async def paths() -> CallToolResult:
     """Return the resolved game_dir, harness folder, latest_log path and levels_dir (where the editor saves custom levels), so harness command files can be written without hand-typing the prefix path."""
     game = _game_dir()
