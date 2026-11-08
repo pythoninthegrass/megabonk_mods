@@ -28,6 +28,7 @@ public enum PerfTick
     MenuNotice,
     PositionLabel,
     EditorMode,
+    Console,
     RenderCull,
     PhysicsFreeze,
     AnimationCull,

@@ -346,12 +346,19 @@ public static class DevHarness
 
     private static List<UiWidget> EditorWidgets()
     {
+        // Outside the editor the console is the only overlay with widgets, so it is the only one ui-tree can report there.
         if (!EditorMode.Active)
         {
-            throw new InvalidOperationException("editor mode is off: the widgets only exist inside the editor");
+            var outside = ConsoleOverlay.ListWidgets().ToList();
+            if (outside.Count > 0)
+            {
+                return outside;
+            }
+
+            throw new InvalidOperationException("editor mode is off: the widgets only exist inside the editor or while the console is open");
         }
 
-        return EditorTileTools.ListWidgets().Concat(EditorPalette.ListWidgets()).ToList();
+        return EditorTileTools.ListWidgets().Concat(EditorPalette.ListWidgets()).Concat(ConsoleOverlay.ListWidgets()).ToList();
     }
 
     private static JsonObject WidgetJson(UiWidget widget) =>

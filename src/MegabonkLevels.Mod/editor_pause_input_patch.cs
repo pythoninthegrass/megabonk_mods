@@ -12,6 +12,12 @@ public static class EditorPauseInputPatch
     {
         private static bool Prefix()
         {
+            if (ConsoleOverlay.Focused)
+            {
+                MelonLogger.Msg("Console: consumed game menu toggle while the console has focus");
+                return false;
+            }
+
             if (!EditorTextInputPolicy.BlockGameMenu(EditorMode.Active, EditorEscapeInput.BlocksMenu))
             {
                 return true;

@@ -29,6 +29,7 @@ public class MegabonkLevelsMod : MelonMod
     private static readonly Action _tickMenuNotice = MenuNotice.Tick;
     private static readonly Action _tickPositionLabel = PositionLabel.Tick;
     private static readonly Action _tickEditorMode = () => EditorMode.Tick(_logger);
+    private static readonly Action _tickConsole = ConsoleOverlay.Tick;
 
     public override void OnInitializeMelon()
     {
@@ -62,6 +63,7 @@ public class MegabonkLevelsMod : MelonMod
         CharacterScreenPatch.Install(LoggerInstance);
         MapSelectionPatch.Install(LoggerInstance);
         SteamWriteGuard.Install(LoggerInstance);
+        ConsoleOverlay.Install(LoggerInstance);
         DevHarness.Install(LoggerInstance);
         PerfProbes.Install(LoggerInstance);
         PerfMonitor.Install(LoggerInstance);
@@ -79,6 +81,14 @@ public class MegabonkLevelsMod : MelonMod
     {
         PerfMonitor.Tick();
         EditorInput.Queue.BeginFrame(Time.frameCount, Time.unscaledTime, (Input.mousePosition.x, Input.mousePosition.y));
+
+        // The backquote toggle runs before every hotkey so the F6-F9 and editor keys are skipped on the frame the
+        // console takes focus, and while it stays open.
+        if (EditorInput.GetKeyDown(KeyCode.BackQuote))
+        {
+            ConsoleOverlay.Toggle(_logger);
+        }
+
         PerfMonitor.Timed(PerfTick.DevHarnessPoll, _pollHarness);
         PerfMonitor.Timed(PerfTick.LoadPump, _pumpLoad);
         PerfMonitor.Timed(PerfTick.StartupCover, _tickStartupCover);
@@ -89,12 +99,19 @@ public class MegabonkLevelsMod : MelonMod
         PerfMonitor.Timed(PerfTick.MenuNotice, _tickMenuNotice);
         PerfMonitor.Timed(PerfTick.PositionLabel, _tickPositionLabel);
         PerfMonitor.Timed(PerfTick.EditorMode, _tickEditorMode);
+        // Ticked after the editor: the console keeps rendering while the editor holds the run frozen.
+        PerfMonitor.Timed(PerfTick.Console, _tickConsole);
         LavaWatcher.Tick();
         FallDamagePatch.Tick();
 
         if (DevHarness.Enabled && EditorMode.Active)
         {
             EditorInput.LogRealTextInput(_logger, EditorTileTools.TextInputFocused);
+        }
+
+        if (ConsoleOverlay.Focused)
+        {
+            return;
         }
 
         if (EditorInput.GetKeyDown(KeyCode.F9))

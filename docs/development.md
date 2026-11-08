@@ -1041,6 +1041,24 @@ The in-game console (the tilde drop-down) turns a typed line into a harness comm
 
 The music verbs (`music.play/pause/next/prev/track/list/now`) are registered here so the table is complete but bind to no command yet; their harness transport is still to come.
 
+## Console overlay
+
+`ConsoleOverlay` (`console_overlay.cs`) is the visible console: a Fallout-style drop-down that slides **up from the bottom** of the screen. It is driven from the mod's `OnUpdate` through `PerfMonitor.Timed(PerfTick.Console, …)`, following the same tick and perf-timer pattern as the other per-frame ticks; there is no injected MonoBehaviour. The Unity-free decisions behind it — whether a toggle may run, how the slide advances, and what pause and cursor state a close restores — live in `console_state.cs` (`ConsoleState`, `ConsoleSlide`, `ConsoleEntryState`, `ConsoleLinePlan`) and are unit tested in `tests/MegabonkLevels.Tests/console_state_tests.cs` like the command language. The overlay itself only reads input, builds UGUI, and applies those decisions.
+
+**Look**: a dark grey translucent panel (`EditorUi.PanelBorder`/`PanelFill`) anchored to the bottom edge, roughly 40% of screen height, using the game's RobotoMono TMP font and the shared editor UI helpers. It has a scrollback area (a column of labels bottom-aligned to the input) and a single input line with a blinking caret (`TextFieldView`, the same single-line model as the palette search and save-name fields).
+
+**Toggle**: the backquote/tilde key opens and closes it. The toggle is read in `OnUpdate` before every mod hotkey and the console's own tick runs after the editor's, so the panel keeps rendering while the editor holds the run frozen. The character the backquote produces is dropped from the frame's text so the toggling key never lands in the input line. The toggle does nothing while the game's own F10 `DebugConsole` is active or the game's pause menu is up — those own the keyboard — so it neither opens over them nor closes them. While the console has focus the mod's F6–F9 hotkeys and the editor's hotkeys do not fire (the frame returns before reaching them), and a `PauseUi.Toggle` prefix consumes the game menu toggle, so Esc closes the console without opening the pause menu.
+
+**Keys while open** (all read through `EditorInput`, never `UnityEngine.Input`, so the harness `key`/`type` commands drive it): Enter runs the line and echoes `> <line>` plus the reply into scrollback; Up/Down walk history; Tab completes the verb at the caret; PageUp/PageDown scroll the scrollback; Left/Right/Home/End/Delete edit the caret and Backspace deletes; Esc closes the console. BackQuote, PageUp, PageDown, Home and End were added to the harness key-name allow-list (`KeyNames`, mirrored in `scripts/mcp_server.py`) so `run.py key` and the MCP `key` tool can drive those keys.
+
+**Pause and cursor**: opening pauses the run through `MyTime.Pause()` and records the pause and cursor state at that moment in a `ConsoleEntryState`. Closing restores it: only a run the console itself paused is unpaused, so a console opened inside the already-frozen editor (or during the death screen) leaves it frozen on close, and opening on the main menu pauses nothing because there is no run. The cursor is set visible and unlocked while open and its previous state is restored on close.
+
+**Command execution**: a typed line is bound by `ConsoleCommandRegistry` and, if it names a harness command, run in-process through `DevHarness.Run` (the same entry point the file queue uses), so a console verb and the same `run.py` command cannot drift. `ConsoleState.Plan` turns the bind plus the harness result into the lines to print, whether the scrollback clears, and whether the line enters history; a refused line echoes the line and the refusal, a console-only verb (`clear`, `help`, `history`) prints its own reply, and a bound line prints what the harness returned.
+
+**Visibility to tooling**: the console registers `ConsoleInput`, `ConsoleScrollback` and `ConsolePanel` as widgets, so the harness `ui-tree`/`click-widget` commands see them even outside the editor.
+
+Not yet verified in the live game (no screenshot evidence captured): the slide animation while paused, cursor restore, and the exact DebugConsole and hotkey interaction all need an in-game check.
+
 ## Not covered
 
 The harness does not press menu buttons or open the level-up dialog. Only `state`, `ui-tree`, `click-widget`, `save-level`, `new-level`, `list-levels`, `palette`, `query-objects`, `teleport`, `item`, `dismiss-levelup`, `dismiss-offers`, `interact` and `perf` return data; the other commands report success or failure and nothing else, and `state` does not report health, inventory, enemies or the level-up dialog (the profiler's `perf status` reports live enemy counts and the player's hit points). Use `freeze` to stop an idle player dying during a screenshot, or `invulnerable` when enemies must keep moving.

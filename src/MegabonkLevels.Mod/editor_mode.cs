@@ -41,12 +41,13 @@ public static class EditorMode
             Enter(logger);
         }
 
-        if (EditorInput.GetKeyDown(ToggleKey) && !ConsoleOpen())
+        if (EditorInput.GetKeyDown(ToggleKey) && !ConsoleOpen() && !ConsoleOverlay.Focused)
         {
             Set(!_session.Active, logger);
         }
 
-        if (_session.Active)
+        // The console owns the keyboard while focused, so the editor's hotkeys, tools and fly camera stay out of the way.
+        if (_session.Active && !ConsoleOverlay.Focused)
         {
             EditorEscapeInput.Tick();
             EditorPalette.Tick();

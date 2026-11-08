@@ -63,6 +63,7 @@ KEY_NAMES = (
     "UpArrow", "DownArrow", "LeftArrow", "RightArrow",
     "Escape", "Return", "Backspace", "Delete", "Space", "Tab",
     "LeftShift", "RightShift", "LeftControl", "RightControl", "LeftAlt", "RightAlt",
+    "BackQuote", "PageUp", "PageDown", "Home", "End",
 )  # fmt: skip
 
 mcp = MCPServer("megabonk")

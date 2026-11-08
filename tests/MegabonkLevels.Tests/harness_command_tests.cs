@@ -689,6 +689,7 @@ public class HarnessCommandTests
             "A", "Z", "Alpha0", "Alpha9", "Keypad0", "Keypad9", "F1", "F12", "UpArrow", "DownArrow", "LeftArrow", "RightArrow",
             "Escape", "Return", "Backspace", "Delete", "Space", "Tab",
             "LeftShift", "RightShift", "LeftControl", "RightControl", "LeftAlt", "RightAlt",
+            "BackQuote", "PageUp", "PageDown", "Home", "End",
         ];
 
         Assert.All(expected, name => Assert.True(KeyNames.IsValid(name), name));

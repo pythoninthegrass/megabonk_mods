@@ -53,15 +53,29 @@ Requirements and constraints the maintainer fixed or that the codebase imposes:
 - [ ] #4 The cursor is visible and unlocked while open and restored on close
 - [ ] #5 Enter, Up/Down, Tab, PageUp/PageDown, the caret-editing keys and Esc behave as described; Esc does not open the pause menu
 - [ ] #6 The console does not open while the game's F10 DebugConsole is active, and F6-F9 and editor hotkeys do not fire while the console is focused
-- [ ] #7 The harness key command accepts BackQuote, PageUp, PageDown, Home and End, with tests for the allow-list
+- [x] #7 The harness key command accepts BackQuote, PageUp, PageDown, Home and End, with tests for the allow-list
 - [ ] #8 Console widgets appear in harness ui-tree output
-- [ ] #9 docs/development.md documents keys, pause behaviour and the DebugConsole interaction
+- [x] #9 docs/development.md documents keys, pause behaviour and the DebugConsole interaction
 <!-- AC:END -->
+
+## Needs live verification
+
+Everything below is implemented and builds clean, but I cannot launch or see the game from this checkout, so it has no in-game evidence yet and stays unchecked. None of it was fabricated:
+
+- **#1** Toggle opens/closes in a run, in the editor, and on the main menu; the backquote character never lands in the input line (the toggle character is dropped from the frame's text in `ConsoleOverlay.ReadInput`, but this needs an in-game key press to confirm).
+- **#2** Dark translucent bottom panel slides in/out while paused — needs a screenshot; none captured.
+- **#3** Pause-on-open / restore-on-close, and the frozen-editor case, are unit tested in `console_state_tests.cs` (`ShouldPauseOnOpen`, `ShouldUnpauseOnClose`), but the `MyTime` call sites and the editor-stays-frozen behaviour across a real load need the live game.
+- **#4** Cursor visible/unlocked while open and restored on close — set in `OpenConsole`/`CloseConsole`, needs the live game.
+- **#5** Enter/Up/Down/Tab/PageUp/PageDown/caret keys/Esc behave as described and Esc does not open the pause menu — the `PauseUi.Toggle` prefix suppression needs the live game.
+- **#6** No open while the game's F10 DebugConsole is active (`ConsoleState.Toggle` returns Stay, unit tested for the branch) and F6-F9/editor hotkeys suppressed while focused — the mod hotkey skip and the DebugConsole `IsActive` check need the live game.
+- **#8** `ConsoleInput`/`ConsoleScrollback`/`ConsolePanel` registered for harness `ui-tree`/`click-widget` — wired in `DevHarness.EditorWidgets`, needs the live game to see them in output.
+
+Verified with a test or build I ran: #7 (allow-list, `KeyNames_ListsTheDocumentedGroupsAndNoDuplicates` + the MCP mirror test), #9 (docs), and the pure-logic layer behind #3/#6 via `console_state_tests.cs`.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->

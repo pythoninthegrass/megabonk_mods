@@ -157,6 +157,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/console_command_registry.cs" Link="console_command_registry.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/console_history.cs" Link="console_history.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/console_scrollback.cs" Link="console_scrollback.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_state.cs" Link="console_state.cs" />
     <Compile Include="../../unity/pack-authoring/Assets/Editor/CoplanarLayering.cs" Link="CoplanarLayering.cs" />
     <Compile Include="../../unity/pack-authoring/Assets/Editor/WarehouseRoof.cs" Link="WarehouseRoof.cs" />
     <Compile Include="../../unity/pack-authoring/Assets/Editor/WarehousePieces.cs" Link="WarehousePieces.cs" />
