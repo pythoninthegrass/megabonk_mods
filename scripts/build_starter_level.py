@@ -82,7 +82,7 @@ GROUND_MATERIAL = {"desert": "m_1_TerrainDesert", "dungeon": "m_crypt_Floor", "h
 LAVA_CELLS = (12, 13, 3, 4)
 LAVA_DAMAGE, LAVA_INTERVAL = 3, 0.5
 # Enemy names (EEnemy) a stage boss or miniboss spawn is replaced by, drawn from every map's roster.
-BOSS_POOL = ["Ent1", "Ent2", "Ent3", "Pharaoh1", "Pharaoh2", "Pharaoh3", "Bandit", "Bush"]
+BOSS_POOL = ["Ent1", "Ent2", "Ent3", "Pharaoh1", "Pharaoh2", "Pharaoh3"]
 MINIBOSS_POOL = ["MinibossPig", "MinibossGolem", "MinibossGolemSand", "MinibossScorpion", "Ghostham", "CalciumDad"]
 CHESTS = [(0, 0), (0, 14), (7, 13), (14, 14), (14, 0), (5, 9), (12, 11), (10, 4)]
 FREE_CHEST = (5, 2)
@@ -95,7 +95,8 @@ SHRINE_CELLS = [
     (14, 5), (13, 2), (14, 7), (12, 6),
 ]
 GUARANTEED_CHARGE_SHRINES = 5
-MERCHANT_AND_MOAI_RANGE = [3, 8]
+MOAI_RANGE = [3, 5]
+SHADY_GUY_RANGE = [2, 3]
 
 
 def height(x: int, z: int) -> int:
@@ -112,6 +113,11 @@ def height(x: int, z: int) -> int:
             return 1
         return 3 if x >= 13 and z >= 13 else 2
     return int(z >= 11)
+
+
+def meadow_rect() -> dict:
+    x0, x1, z0, z1 = DISTRICTS["spawn meadow"]
+    return {"minX": 40 * (x0 - CENTER) - 20, "maxX": 40 * (x1 - CENTER) + 20, "minZ": 40 * (z0 - CENTER) - 20, "maxZ": 40 * (z1 - CENTER) + 20}
 
 
 def point(x: int, z: int, dx: float = 0, dz: float = 0, lift: float = 0) -> list[float]:
@@ -229,7 +235,8 @@ def build_level() -> dict:
         "guaranteedShrineKinds": ["charge"] * GUARANTEED_CHARGE_SHRINES,
         "extraShrines": 2, "extraShrinesMax": 3,
         "extraShrineKinds": ["charge", "magnet", "greed"],
-        "shrineKindRanges": {"moai": MERCHANT_AND_MOAI_RANGE, "shadyGuy": MERCHANT_AND_MOAI_RANGE},
+        "shrineKindRanges": {"moai": MOAI_RANGE, "shadyGuy": SHADY_GUY_RANGE},
+        "shrineGuarantees": [{"kind": kind, **meadow_rect(), "outside": True} for kind in ("moai", "shadyGuy")],
         "groundZones": [
             {"material": material, "minX": x0, "maxX": x1, "minZ": z0, "maxZ": z1}
             for biome, material in GROUND_MATERIAL.items()

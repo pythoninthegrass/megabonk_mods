@@ -118,6 +118,7 @@ public static class ExtraShrinesPatch
         var offsets = ExtraShrines.NudgeOffsets(ExtraShrines.NudgeStep, ExtraShrines.NudgeRings, ExtraShrines.NudgeDirections);
         var remaining = settings.ShrineSpots.Select(spot => new Vector3Data(spot[0], spot[1], spot[2])).ToList();
         var taken = new List<Vector3Data>();
+        var placed = new List<(ExtraShrineKind Kind, Vector3Data Position)>();
         var spawned = 0;
         foreach (var kind in plan)
         {
@@ -128,9 +129,18 @@ public static class ExtraShrinesPatch
                 continue;
             }
 
+            var restrict = true;
             while (true)
             {
-                var pick = ExtraShrines.PickSpread(remaining, taken, random);
+                var allowed = restrict ? ShrineGuarantees.CandidateIndexes(settings.ShrineGuarantees, kind, remaining, placed) : null;
+                var pick = allowed == null ? ExtraShrines.PickSpread(remaining, taken, random) : PickAmong(allowed, remaining, taken, random);
+                if (pick < 0 && allowed != null)
+                {
+                    logger.Warning($"ExtraShrines: no authored spot is left to satisfy a {kind} guarantee; placing it anywhere");
+                    restrict = false;
+                    continue;
+                }
+
                 if (pick < 0)
                 {
                     logger.Warning($"ExtraShrines: no authored spot is left for a {kind} shrine");
@@ -139,22 +149,36 @@ public static class ExtraShrinesPatch
 
                 var spot = remaining[pick];
                 remaining.RemoveAt(pick);
-                if (TryPlaceAtSpot(ofKind[random.Next(ofKind.Count)], spot, offsets, index, random, logger))
+                if (TryPlaceAtSpot(ofKind[random.Next(ofKind.Count)], spot, offsets, index, random, logger, out var at))
                 {
                     taken.Add(spot);
+                    placed.Add((kind, new Vector3Data(at.x, at.y, at.z)));
                     spawned++;
                     break;
                 }
             }
         }
 
+        foreach (var unmet in ShrineGuarantees.Unmet(settings.ShrineGuarantees, placed))
+        {
+            logger.Warning($"ExtraShrines: guarantee unmet: {unmet.Kind} {(unmet.Outside ? "outside" : "inside")} x[{unmet.MinX:F0},{unmet.MaxX:F0}] z[{unmet.MinZ:F0},{unmet.MaxZ:F0}]");
+        }
+
         return spawned;
+    }
+
+    // PickSpread over only the spots at the given indexes, answering an index into the full list.
+    private static int PickAmong(IReadOnlyList<int> allowed, IReadOnlyList<Vector3Data> spots, IReadOnlyList<Vector3Data> taken, System.Random random)
+    {
+        var pick = ExtraShrines.PickSpread(allowed.Select(i => spots[i]).ToList(), taken, random);
+        return pick < 0 ? -1 : allowed[pick];
     }
 
     // Looks for a place for the shrine at an authored spot: the spot itself and then rings around it, each needing clear space, and failing that the nearest floor regardless.
     private static bool TryPlaceAtSpot(PoolEntry entry, Vector3Data spot, IReadOnlyList<(float X, float Z)> offsets,
-        IReadOnlyDictionary<string, GameObject> index, System.Random random, MelonLogger.Instance logger)
+        IReadOnlyDictionary<string, GameObject> index, System.Random random, MelonLogger.Instance logger, out Vector3 placedAt)
     {
+        placedAt = default;
         var (top, bottom) = ExtraShrines.SpotFloorWindow(spot.Y);
         var placed = false;
         var position = default(Vector3);
@@ -187,6 +211,7 @@ public static class ExtraShrinesPatch
             return false;
         }
 
+        placedAt = position;
         var golden = entry.Kind == ExtraShrineKind.Charge && ExtraShrines.RollGolden(random, ExtraShrines.GoldenChance);
         if (entry.Kind == ExtraShrineKind.Charge) SetRarity(shrine, golden);
         logger.Msg($"ExtraShrines: spawned {(golden ? "golden " : "")}{entry.Kind} at {position.ToString("F3")} for authored spot ({spot.X:F1}, {spot.Y:F1}, {spot.Z:F1})");

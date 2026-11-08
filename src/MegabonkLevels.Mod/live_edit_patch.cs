@@ -312,6 +312,7 @@ public static class LiveEditPatch
             ShrineSpots: _randomizationSettings.ShrineSpots,
             GuaranteedShrineKinds: _randomizationSettings.GuaranteedShrineKinds,
             ShrineKindRanges: _randomizationSettings.ShrineKindRanges,
+            ShrineGuarantees: _randomizationSettings.ShrineGuarantees,
             GroundZones: _randomizationSettings.GroundZones,
             BossPool: _randomizationSettings.BossPool,
             MinibossPool: _randomizationSettings.MinibossPool,

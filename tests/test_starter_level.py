@@ -114,13 +114,27 @@ def test_large_map_has_many_charge_shrines_on_well_spaced_spots():
     spots = level["shrineSpots"]
     assert level["guaranteedShrineKinds"].count("charge") >= 5
     assert set(level["guaranteedShrineKinds"]) == {"charge"}
-    assert level["shrineKindRanges"] == {"moai": [3, 8], "shadyGuy": [3, 8]}
+    assert level["shrineKindRanges"] == {"moai": [3, 5], "shadyGuy": [2, 3]}
+    assert (level["extraShrines"], level["extraShrinesMax"]) == (2, 3)
+    planned = [len(level["guaranteedShrineKinds"]) + level["extraShrines"] + sum(low for low, _ in level["shrineKindRanges"].values()),
+               len(level["guaranteedShrineKinds"]) + level["extraShrinesMax"] + sum(high for _, high in level["shrineKindRanges"].values())]
+    assert planned == [12, 16]
     most = len(level["guaranteedShrineKinds"]) + level["extraShrinesMax"] + sum(high for _, high in level["shrineKindRanges"].values())
     assert len(spots) >= most + 2
     cells = {(cell["x"], cell["z"]): cell for cell in level["grid"]["cells"]}
     assert all("slope" not in cells[round(x / 40 + 7), round(z / 40 + 7)] for x, _, z in spots)
     assert all(math.dist((a[0], a[2]), (b[0], b[2])) >= 40 for i, a in enumerate(spots) for b in spots[i + 1 :])
     assert "balance" not in level["extraShrineKinds"]
+
+
+def test_moai_and_shady_guy_are_guaranteed_outside_the_spawn_meadow():
+    level = starter().build_level()
+    assert level["shrineGuarantees"] == [
+        {"kind": kind, "minX": -140, "maxX": 140, "minZ": -300, "maxZ": -60, "outside": True} for kind in ("moai", "shadyGuy")
+    ]
+    spots = level["shrineSpots"]
+    outside = [s for s in spots if not (-140 <= s[0] <= 140 and -300 <= s[2] <= -60)]
+    assert len(outside) >= 20
 
 
 def test_every_placed_prop_uses_its_native_upright_rotation():
@@ -195,9 +209,9 @@ def test_lava_is_a_sunken_basin_ringed_by_platforms_with_a_way_out():
 def test_boss_and_miniboss_pools_mix_enemies_from_every_map():
     level = starter().build_level()
     bosses, minis = level["bossPool"], level["minibossPool"]
-    assert len(bosses) == len(set(bosses)) >= 8
+    assert len(bosses) == len(set(bosses)) == 6
     assert len(minis) == len(set(minis)) >= 6
-    assert {"Ent1", "Pharaoh1", "Bandit", "Bush"} <= set(bosses)
+    assert bosses == ["Ent1", "Ent2", "Ent3", "Pharaoh1", "Pharaoh2", "Pharaoh3"]
     assert {"MinibossPig", "MinibossGolemSand", "Ghostham"} <= set(minis)
 
 

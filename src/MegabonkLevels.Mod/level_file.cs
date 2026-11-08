@@ -56,6 +56,8 @@ public readonly record struct LevelFile(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string> GuaranteedShrineKinds = null,
     // Per-run random count [min, max] for each named kind, placed on the authored shrine spots in addition to the guaranteed kinds and extras.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, IReadOnlyList<int>> ShrineKindRanges = null,
+    // Rectangles a placed shrine of a kind must stand in (or outside), enforced when authored spots are used.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ShrineGuarantee> ShrineGuarantees = null,
     // Cell ranges whose ground tiles are drawn with a named game material, such as a biome's terrain.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<GroundZone> GroundZones = null,
     // Enemy names (EEnemy) a stage or final boss spawn is replaced by, drawn at random, and likewise for minibosses; the game's own pick when absent.
@@ -103,6 +105,7 @@ public readonly record struct LevelFile(
         && (ShrineSpots == null ? other.ShrineSpots == null : other.ShrineSpots != null && ShrineSpots.Count == other.ShrineSpots.Count && ShrineSpots.Zip(other.ShrineSpots).All(pair => ListEquals(pair.First, pair.Second)))
         && ListEquals(GuaranteedShrineKinds, other.GuaranteedShrineKinds)
         && (ShrineKindRanges == null ? other.ShrineKindRanges == null : other.ShrineKindRanges != null && ShrineKindRanges.Count == other.ShrineKindRanges.Count && ShrineKindRanges.All(pair => other.ShrineKindRanges.TryGetValue(pair.Key, out var range) && ListEquals(pair.Value, range)))
+        && ListEquals(ShrineGuarantees, other.ShrineGuarantees)
         && ListEquals(GroundZones, other.GroundZones)
         && ListEquals(BossPool, other.BossPool)
         && ListEquals(MinibossPool, other.MinibossPool)

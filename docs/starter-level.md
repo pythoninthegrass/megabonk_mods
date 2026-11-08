@@ -24,7 +24,7 @@ Around the hill, a ring of districts each has its own biome, a chest and shrine 
 
 The routes form loops: the meadow, ridge and ruins connect around the back of the hill, and the pen connects to the highland and on to the ruins, so no district is a long dead end.
 
-The current plan requests five Charge Shrines, two or three extras drawn from Charge, Magnet and Greed, three to eight Moai shrines and three to eight Shady Guy merchants, using 27 authored candidate locations. These are planned counts, not verified successful-placement or district guarantees. Tighter budgets and useful district coverage still need curation and playtesting.
+The current plan requests five Charge Shrines, two or three extras drawn from Charge, Magnet and Greed, three to five Moai shrines and two or three Shady Guy merchants, for 12 to 16 planned shrines from 27 authored candidate locations. These are planned counts. At least one Moai and one Shady Guy stand outside the spawn meadow (`shrineGuarantees`): the first of each kind is drawn only from spots beyond the meadow and checked against its placed position, with a `guarantee unmet` warning in the log when no such shrine could be placed. The guarantee has no runtime evidence yet, and the budget itself still needs playtesting.
 
 The level seed fixes shrine count/kind/order planning and the custom placement draws. Boss/miniboss replacements use a separate seeded stream: identical controlled spawn-call sequences repeat picks until their shared unused-name pool is exhausted, after which vanilla picks stand. All streams reset at generation start, and seed 0 is valid. Physics clearance can still change successful shrine placements; ordinary enemies, loot, combat and boss spawn offsets remain random. The authored grid, spiral and explicit prop transforms do not reroll with this seed.
 
@@ -48,7 +48,7 @@ The grid is 15 by 15 cells, the largest Forest stage 0 allows, with heights from
 
 Each biome is a district plus a `groundZones` entry (desert sand, crypt floor and hell rock under the matching district; see [level-format.md](level-format.md)) and a scatter table of that biome's props. Every prop is registered with the euler X the game authored it with (most props, chests and trees are authored lying down at 270, rocks and ruin tiles at 0) and a scale chosen for this level's cell size, so everything stands upright; a test fails when a placed prop has no registered rotation. Props from other maps are placed by catalog id, which keeps their own map prefix, so no pack is needed.
 
-The east pen holds a lava pool (`lavaZones` plus a `Lava` ground zone) that burns a standing player, away from the ramps, chests and shrine spots, and the spawn can never be on it. Stage-boss spawns are drawn from a pool of Forest, Desert and other bosses (`bossPool`) and minibosses from a mixed pool (`minibossPool`). Per-biome sky and fog are not part of the level format, so the level plays on Forest's rules, and the Graveyard coffin tile is placed as scenery whose enemy behaviour is untested.
+The east pen holds a lava pool (`lavaZones` plus a `Lava` ground zone) that burns a standing player, away from the ramps, chests and shrine spots, and the spawn can never be on it. Stage-boss spawns are drawn from a pool of the Ent and Pharaoh bosses (`bossPool`: `Ent1`-`Ent3`, `Pharaoh1`-`Pharaoh3`), with Bandit and Bush left out, and minibosses from a mixed pool (`minibossPool`). Per-biome sky and fog are not part of the level format, so the level plays on Forest's rules, and the Graveyard coffin tile is placed as scenery whose enemy behaviour is untested.
 
 ## Content and distribution
 
@@ -101,10 +101,12 @@ assets were `StageForest1`/`ParamForest1`, with spacing 40 and height step 20.
 
 All four generations logged the same ordered 16-kind plan, all 16 successful
 placement positions (reported to three decimal places), golden outcomes and
-first boss replacement (`Ent1` → `Bush`). No placement failure or tight fallback
+first boss replacement (`Ent1` → `Bush`, drawn from the earlier eight-boss roster, which has since dropped Bush). No placement failure or tight fallback
 was logged. Restart restored the authored start `(0, 0, -240)` and repeated the
 first boss replacement after it had already been used in the previous run.
 The saved copy retained seed 0, `baseline:none`, Forest stage 0 and Tier 1.
+
+A later offline plain-Wine pass covered the 12-16 budget, the outside-meadow guarantee and the six-boss roster: two fresh-process seed-0 loads logged identical 14-kind plans and placements, and seeds 1, 7 and 42 planned 14, 15 and 13 shrines with 3-5 Moai and 2-3 Shady Guy each. In every run the first Moai and first Shady Guy stood outside the meadow rectangle (all of them did in seeds 1, 7 and 42; seed 0 had a second Shady Guy inside it, which the guarantee allows), with no `guarantee unmet`, placement-failure or content-load line. A forced boss spawn (`Ent1` → `Pharaoh3`) came from the new roster. These runs used the editor harness with Calcium and zero Feathers; the guarantee was not seen failing, so only its passing path is measured, and positions are at logged three-decimal precision.
 
 Identity and local evidence:
 

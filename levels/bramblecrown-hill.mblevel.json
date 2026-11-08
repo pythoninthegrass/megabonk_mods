@@ -1332,13 +1332,31 @@
   "shrineKindRanges": {
     "moai": [
       3,
-      8
+      5
     ],
     "shadyGuy": [
-      3,
-      8
+      2,
+      3
     ]
   },
+  "shrineGuarantees": [
+    {
+      "kind": "moai",
+      "minX": -140,
+      "maxX": 140,
+      "minZ": -300,
+      "maxZ": -60,
+      "outside": true
+    },
+    {
+      "kind": "shadyGuy",
+      "minX": -140,
+      "maxX": 140,
+      "minZ": -300,
+      "maxZ": -60,
+      "outside": true
+    }
+  ],
   "groundZones": [
     {
       "material": "m_1_TerrainDesert",
@@ -1385,9 +1403,7 @@
     "Ent3",
     "Pharaoh1",
     "Pharaoh2",
-    "Pharaoh3",
-    "Bandit",
-    "Bush"
+    "Pharaoh3"
   ],
   "minibossPool": [
     "MinibossPig",
