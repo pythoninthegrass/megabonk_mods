@@ -234,6 +234,11 @@ public static class LevelLoaderPatch
         MapDescription = level.MapDescription;
         CustomLevelState.MarkPendingStart();
         InitialStage.Arm(level.StageIndex, EnvFlag.IsSet(DevVariable), EnvFlag.IsSet("MEGABONK_DEV_STAGE_OVERRIDE"));
+        TerrainSeedMeasurement.Arm(unseeded ? null : level.Seed, EnvFlag.IsSet(DevVariable), TerrainSeedMeasurement.IsEnabled);
+        if (TerrainSeedMeasurement.IsArmed)
+        {
+            logger.Msg($"TerrainSeed: armed terrain seed {level.Seed} for the next generation");
+        }
         logger.Msg($"LevelLoader: starting map={level.Map} stage={level.StageIndex} tier={level.Tier} seed={(unseeded ? "game-rolled" : level.Seed.ToString())}");
         if (CustomTierCap.IsCapped(level.Tier))
         {
