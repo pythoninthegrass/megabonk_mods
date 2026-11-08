@@ -158,6 +158,21 @@ public static class ExtraShrines
     public static bool ShrineClear(Vector3Data point, IReadOnlyList<Vector3Data> shrinePositions, float keepClear) =>
         shrinePositions.All(position => Distance(point, position) >= keepClear);
 
+    public static bool SpotClear(ExtraShrineKind kind, Vector3Data point,
+        IReadOnlyList<(ExtraShrineKind Kind, Vector3Data Position)> placed, IReadOnlyDictionary<string, float> spacing)
+    {
+        var gap = spacing?.FirstOrDefault(pair => string.Equals(pair.Key, kind.ToString(), StringComparison.OrdinalIgnoreCase)).Value ?? 0f;
+        return placed.All(other => Distance(point, other.Position) >= MinSpotGap
+            && (other.Kind != kind || HorizontalDistance(point, other.Position) >= gap));
+    }
+
+    public static float HorizontalDistance(Vector3Data a, Vector3Data b)
+    {
+        var dx = a.X - b.X;
+        var dz = a.Z - b.Z;
+        return MathF.Sqrt(dx * dx + dz * dz);
+    }
+
     public static float Distance(Vector3Data a, Vector3Data b)
     {
         var dx = a.X - b.X;

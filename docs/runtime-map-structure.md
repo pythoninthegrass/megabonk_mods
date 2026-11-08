@@ -184,14 +184,16 @@ The boss portal on a Tiles map is part of the boss spawner prefab, not a separat
 
 ### What sizes the catch floor, minimap, edges and grass
 
-World size comes from map parameters and tile heights, not from the grid array: `GetWorldSize` returns `(size * scaledTileWidth, maxY - minY, size * scaledTileWidth)`, where `size` and `scaledTileWidth` are read from `currentMapParameters` and `maxY`/`minY` are the tile `transform.position.y` extremes across the `tiles` list. `GetWorldCenter` returns `(0, minY + (maxY - minY) / 2, 0)` from the same heights. An empty `tiles` list does not throw but gives a nonsensical height range.
+On stock maps, world size comes from map parameters and tile heights, not from the grid array: `GetWorldSize` returns `(size * scaledTileWidth, maxY - minY, size * scaledTileWidth)`, where `size` and `scaledTileWidth` are read from `currentMapParameters` and `maxY`/`minY` are the tile `transform.position.y` extremes across the `tiles` list. `GetWorldCenter` returns `(0, minY + (maxY - minY) / 2, 0)` from the same heights. An empty `tiles` list does not throw but gives a nonsensical height range.
 
 - Catch floor (`colliderBox`, 0x50): scaled to `worldSize * 1.55` on every axis with `worldSize.y + 200` as the height input, centred `20 + worldSize.y / 2` below `worldCenter`.
 - Minimap: the static bounds are set from `worldCenter` and `worldSize` (minimum `center - size / 2`, maximum `center + size / 2`), and `minimapMesh` is built from the `collider` mesh.
 - Map edges: `MapEdges.Set` (0x499B80) runs only when `mapEdgeFillType` is `None`, with `worldCenter` and `worldSize`.
 - Grass: `grassRenderer` is given the stage grass material and `grassPerChunk` only; its placement is not derived from these values in `GenerateMap`, so how it samples the world is unconfirmed.
 
-A from-scratch level with a small grid must therefore hand `Generate` a cloned `MapParameters` whose `size` matches the authored grid, or the catch floor and minimap stay sized for the stock map.
+A from-scratch level hands `Generate` a cloned `MapParameters` whose `size` is the longer grid side, because the tile array is square. This is not sufficient to size the world around a rectangle: a 13 by 12 grid occupies X `[-260,260]` and Z `[-260,220]` at 40-unit spacing, while the square size alone puts the northern barrier at Z=260, leaving a 40-unit gap beyond the ground. This mismatch was measured on the live collision mesh and native edge collider.
+
+For an active from-scratch level, postfixes on `GetWorldSize` and `GetWorldCenter` substitute horizontal bounds from the declared grid width/depth and the live cell-zero position. Size becomes `(width * spacing, nativeY, depth * spacing)`; centre becomes `(originX + (width - 1) * spacing / 2, nativeY, originZ + (depth - 1) * spacing / 2)`. Vertical values remain native, preserving the catch-floor height calculation. These values feed the native edge, catch-box and minimap setup; generated-baseline maps are untouched. The 13 by 12 example therefore has size `(520,nativeY,480)` and centre `(0,nativeY,-20)`. A fresh-process plain-Wine check measured matching `WorldEdgeBot` and `CombinedCollisionMesh` horizontal bounds X `[-260,260]`, Z `[-260,220]` after the correction. This confirms collider-bound alignment, not a physical perimeter traversal or a minimap visual check.
 
 ### Dynamic proof
 

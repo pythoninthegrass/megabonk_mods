@@ -58,6 +58,7 @@ public readonly record struct LevelFile(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, IReadOnlyList<int>> ShrineKindRanges = null,
     // Rectangles a placed shrine of a kind must stand in (or outside), enforced when authored spots are used.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ShrineGuarantee> ShrineGuarantees = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, float> ShrineKindSpacing = null,
     // Cell ranges whose ground tiles are drawn with a named game material, such as a biome's terrain.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<GroundZone> GroundZones = null,
     // Enemy names (EEnemy) a stage or final boss spawn is replaced by, drawn at random, and likewise for minibosses; the game's own pick when absent.
@@ -72,7 +73,8 @@ public readonly record struct LevelFile(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SpawnPoint? Spawn = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SpawnPoint? BossSpawner = null,
     // From-scratch only: keeps the boss spawn redirect on for a level whose boss spawner stands in a closed room.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool BossRedirect = false)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool BossRedirect = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] float? FallDamageFreeHeight = null)
 {
     public const int CurrentSchemaVersion = 4;
 
@@ -96,6 +98,7 @@ public readonly record struct LevelFile(
         && KillFloorY == other.KillFloorY
         && GrindRequiresSlide == other.GrindRequiresSlide
         && FallDamageCharacter == other.FallDamageCharacter
+        && FallDamageFreeHeight == other.FallDamageFreeHeight
         && RandomizeShadyGuy == other.RandomizeShadyGuy
         && RandomizeChests == other.RandomizeChests
         && RandomizeMoai == other.RandomizeMoai
@@ -106,6 +109,7 @@ public readonly record struct LevelFile(
         && ListEquals(GuaranteedShrineKinds, other.GuaranteedShrineKinds)
         && (ShrineKindRanges == null ? other.ShrineKindRanges == null : other.ShrineKindRanges != null && ShrineKindRanges.Count == other.ShrineKindRanges.Count && ShrineKindRanges.All(pair => other.ShrineKindRanges.TryGetValue(pair.Key, out var range) && ListEquals(pair.Value, range)))
         && ListEquals(ShrineGuarantees, other.ShrineGuarantees)
+        && (ShrineKindSpacing == null ? other.ShrineKindSpacing == null : other.ShrineKindSpacing != null && ShrineKindSpacing.Count == other.ShrineKindSpacing.Count && ShrineKindSpacing.All(pair => other.ShrineKindSpacing.TryGetValue(pair.Key, out var gap) && pair.Value == gap))
         && ListEquals(GroundZones, other.GroundZones)
         && ListEquals(BossPool, other.BossPool)
         && ListEquals(MinibossPool, other.MinibossPool)

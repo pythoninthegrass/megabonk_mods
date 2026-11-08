@@ -137,6 +137,8 @@ public static class LiveEditPatch
         MapGenerationController.A_PreGeneration += (Il2CppSystem.Action)(() =>
         {
             RunRandom.Reset(_randomizationSettings.Seed);
+            FallDamagePatch.ResetTracking();
+            GroundSkin.ClearSurfaces();
             if (CustomLevelState.IsActive)
                 logger.Msg($"CustomRunRandom: reset seed={_randomizationSettings.Seed} phases=101,102,103");
         });
@@ -297,6 +299,7 @@ public static class LiveEditPatch
             BossSpawnPosition: _bossSpawnPosition,
             GrindRequiresSlide: _grindRequiresSlide,
             FallDamageCharacter: _fallDamageCharacter,
+            FallDamageFreeHeight: _randomizationSettings.FallDamageFreeHeight,
             Music: LevelMusic.Reference,
             Title: LevelTitle.Title,
             Description: LevelTitle.Description,
@@ -313,6 +316,7 @@ public static class LiveEditPatch
             GuaranteedShrineKinds: _randomizationSettings.GuaranteedShrineKinds,
             ShrineKindRanges: _randomizationSettings.ShrineKindRanges,
             ShrineGuarantees: _randomizationSettings.ShrineGuarantees,
+            ShrineKindSpacing: _randomizationSettings.ShrineKindSpacing,
             GroundZones: _randomizationSettings.GroundZones,
             BossPool: _randomizationSettings.BossPool,
             MinibossPool: _randomizationSettings.MinibossPool,

@@ -13,6 +13,12 @@ public static class FromScratchLayout
     // The game's tile array is square, so a rectangular grid is built inside the longer side.
     public static int GeneratorSize(LevelGrid grid) => System.Math.Max(grid.Width, grid.Depth);
 
+    public static Vector3Data WorldSize(LevelGrid grid, float cellWidth, Vector3Data nativeSize) =>
+        new(grid.Width * cellWidth, nativeSize.Y, grid.Depth * cellWidth);
+
+    public static Vector3Data WorldCenter(LevelGrid grid, float cellWidth, Vector3Data origin, Vector3Data nativeCenter) =>
+        new(origin.X + (grid.Width - 1) * cellWidth / 2, nativeCenter.Y, origin.Z + (grid.Depth - 1) * cellWidth / 2);
+
     // A flat tile faces +Z like a freshly instantiated one; a slope faces its uphill side.
     public static FromScratchTile TileArguments(AuthoredCell cell)
     {

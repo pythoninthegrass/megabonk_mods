@@ -24,6 +24,10 @@ public static class FallDamagePolicy
     public static bool Applies(bool customLevelActive, int? referenceCharacterId, int activeCharacterId) =>
         customLevelActive && referenceCharacterId.HasValue && referenceCharacterId.Value != activeCharacterId;
 
+    public static bool FreeDropApplies(bool customLevelActive, float? freeHeight, float? drop) =>
+        customLevelActive && freeHeight is { } height && float.IsFinite(height) && height >= 0
+        && drop is { } distance && float.IsFinite(distance) && distance <= height + 0.25f;
+
     // Additive rows (Addition and Flat) sum onto the base, multiplicative rows scale that sum, which is how the game's
     // stat components combine them. Confirmed against the live GetStat of both Warehouse characters.
     public static float StatTotal(float baseValue, IEnumerable<StatModifierRow> rows, int stat)
@@ -54,4 +58,27 @@ public static class FallDamagePolicy
 
         return additive * multiplier;
     }
+}
+
+public sealed class LandingHeightTracker
+{
+    private float? _groundedY;
+    public float? GroundedHeight => _groundedY;
+
+    public void ObserveContact(bool grounded, float bodyY, float? surfaceY, float bodyOffset)
+    {
+        if (!grounded || surfaceY is not { } floor || !float.IsFinite(bodyY) || !float.IsFinite(floor)) return;
+        var clearance = bodyY - floor;
+        if (clearance < -0.25f || clearance > bodyOffset + 0.5f) return;
+        Observe(true, floor);
+    }
+
+    public void Observe(bool grounded, float bodyY)
+    {
+        if (grounded && float.IsFinite(bodyY)) _groundedY = bodyY;
+    }
+
+    public float? DropTo(float bodyY) => _groundedY is { } from && float.IsFinite(bodyY) ? from - bodyY : null;
+
+    public void Reset() => _groundedY = null;
 }

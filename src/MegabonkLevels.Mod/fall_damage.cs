@@ -64,6 +64,14 @@ public static class FallDamage
             ["lastPlayerValue"] = Number(FallDamagePatch.LastPlayerValue),
             ["lastReferenceValue"] = Number(FallDamagePatch.LastReferenceValue),
             ["lastReadBack"] = Number(FallDamagePatch.LastReadBack),
+            ["freeHeight"] = LiveEditPatch.CurrentSettings.FallDamageFreeHeight,
+            ["lastDrop"] = FallDamagePatch.LastDrop,
+            ["freeLandings"] = FallDamagePatch.FreeLandings,
+            ["takeoffSurfaceY"] = FallDamagePatch.LastTakeoffSurface,
+            ["landingSurfaceY"] = FallDamagePatch.LastLandingSurface,
+            ["freeLanding"] = FallDamagePatch.LastFreeLanding,
+            ["hpBefore"] = FallDamagePatch.LastHpBefore,
+            ["hpAfter"] = FallDamagePatch.LastHpAfter,
         };
     }
 

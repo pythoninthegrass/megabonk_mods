@@ -26,6 +26,31 @@ public static class FromScratchGenerationPatch
     // Stays set across a death-screen restart, which regenerates the same level; CustomLevelState ends it with the run.
     private static bool Building => _level != null && CustomLevelState.IsActive;
 
+    [HarmonyPatch(typeof(ProceduralTileGeneration), nameof(ProceduralTileGeneration.GetWorldSize))]
+    private static class WorldSizePostfix
+    {
+        private static void Postfix(ProceduralTileGeneration __instance, ref Vector3 __result)
+        {
+            if (!Building) return;
+            var size = FromScratchLayout.WorldSize(_level.Value.Grid.Value, __instance.currentMapParameters.scaledTileWidth,
+                new Vector3Data(__result.x, __result.y, __result.z));
+            __result = new Vector3(size.X, size.Y, size.Z);
+        }
+    }
+
+    [HarmonyPatch(typeof(ProceduralTileGeneration), nameof(ProceduralTileGeneration.GetWorldCenter))]
+    private static class WorldCenterPostfix
+    {
+        private static void Postfix(ProceduralTileGeneration __instance, ref Vector3 __result)
+        {
+            if (!Building) return;
+            var origin = __instance.TilePositionToWorldPosition(Vector2Int.zero);
+            var center = FromScratchLayout.WorldCenter(_level.Value.Grid.Value, __instance.currentMapParameters.scaledTileWidth,
+                new Vector3Data(origin.x, origin.y, origin.z), new Vector3Data(__result.x, __result.y, __result.z));
+            __result = new Vector3(center.X, center.Y, center.Z);
+        }
+    }
+
     [HarmonyPatch(typeof(ProceduralTileGeneration), nameof(ProceduralTileGeneration.Generate))]
     private static class GeneratePrefix
     {

@@ -132,9 +132,11 @@ public static class ExtraShrinesPatch
             var restrict = true;
             while (true)
             {
-                var allowed = restrict ? ShrineGuarantees.CandidateIndexes(settings.ShrineGuarantees, kind, remaining, placed) : null;
-                var pick = allowed == null ? ExtraShrines.PickSpread(remaining, taken, random) : PickAmong(allowed, remaining, taken, random);
-                if (pick < 0 && allowed != null)
+                var guaranteed = restrict ? ShrineGuarantees.CandidateIndexes(settings.ShrineGuarantees, kind, remaining, placed) : null;
+                var allowed = (guaranteed ?? Enumerable.Range(0, remaining.Count).ToList())
+                    .Where(i => ExtraShrines.SpotClear(kind, remaining[i], placed, settings.ShrineKindSpacing)).ToList();
+                var pick = PickAmong(allowed, remaining, taken, random);
+                if (pick < 0 && guaranteed != null)
                 {
                     logger.Warning($"ExtraShrines: no authored spot is left to satisfy a {kind} guarantee; placing it anywhere");
                     restrict = false;
@@ -143,15 +145,16 @@ public static class ExtraShrinesPatch
 
                 if (pick < 0)
                 {
-                    logger.Warning($"ExtraShrines: no authored spot is left for a {kind} shrine");
+                    logger.Warning($"ExtraShrines: placement unmet: no authored spot with required spacing is left for a {kind} shrine");
                     break;
                 }
 
                 var spot = remaining[pick];
                 remaining.RemoveAt(pick);
-                if (TryPlaceAtSpot(ofKind[random.Next(ofKind.Count)], spot, offsets, index, random, logger, out var at))
+                if (TryPlaceAtSpot(ofKind[random.Next(ofKind.Count)], spot, offsets, index, random, logger,
+                    point => ExtraShrines.SpotClear(kind, point, placed, settings.ShrineKindSpacing), out var at))
                 {
-                    taken.Add(spot);
+                    taken.Add(new Vector3Data(at.x, at.y, at.z));
                     placed.Add((kind, new Vector3Data(at.x, at.y, at.z)));
                     spawned++;
                     break;
@@ -176,7 +179,8 @@ public static class ExtraShrinesPatch
 
     // Looks for a place for the shrine at an authored spot: the spot itself and then rings around it, each needing clear space, and failing that the nearest floor regardless.
     private static bool TryPlaceAtSpot(PoolEntry entry, Vector3Data spot, IReadOnlyList<(float X, float Z)> offsets,
-        IReadOnlyDictionary<string, GameObject> index, System.Random random, MelonLogger.Instance logger, out Vector3 placedAt)
+        IReadOnlyDictionary<string, GameObject> index, System.Random random, MelonLogger.Instance logger,
+        System.Func<Vector3Data, bool> spacingClear, out Vector3 placedAt)
     {
         placedAt = default;
         var (top, bottom) = ExtraShrines.SpotFloorWindow(spot.Y);
@@ -191,7 +195,7 @@ public static class ExtraShrinesPatch
             if (!PlacementProbe.HighestFloor(spot.X + dx, spot.Z + dz, top, bottom, null, out var floor)) continue;
             withFloor++;
             nearestFloor ??= floor;
-            if (TryPlace(entry, floor, null, index, out position, out rejection, out shrine))
+            if (TryPlace(entry, floor, null, index, out position, out rejection, out shrine, spacingClear: spacingClear))
             {
                 placed = true;
                 break;
@@ -199,7 +203,7 @@ public static class ExtraShrinesPatch
         }
 
         // The spot is authored, so when nothing fits cleanly (a corner at the top of a quarter pipe leaves a strip narrower than the shrine) it goes on the nearest floor regardless.
-        if (!placed && nearestFloor is { } tight && TryPlace(entry, tight, null, index, out position, out rejection, out shrine, requireClear: false))
+        if (!placed && nearestFloor is { } tight && TryPlace(entry, tight, null, index, out position, out rejection, out shrine, requireClear: false, spacingClear: spacingClear))
         {
             placed = true;
             logger.Msg($"ExtraShrines: authored spot ({spot.X:F1}, {spot.Y:F1}, {spot.Z:F1}) is tight; placed without clearance at {position.ToString("F3")}");
@@ -228,7 +232,8 @@ public static class ExtraShrinesPatch
     }
 
     // Instantiates a trial shrine on the floor point and keeps it only when nothing overlaps it; a tile ground also has to support its footprint. A rejection names the check that failed.
-    private static bool TryPlace(PoolEntry entry, Vector3 floor, MeshCollider ground, IReadOnlyDictionary<string, GameObject> index, out Vector3 position, out string rejection, out GameObject placed, bool requireClear = true)
+    private static bool TryPlace(PoolEntry entry, Vector3 floor, MeshCollider ground, IReadOnlyDictionary<string, GameObject> index, out Vector3 position, out string rejection, out GameObject placed, bool requireClear = true,
+        System.Func<Vector3Data, bool> spacingClear = null)
     {
         position = default;
         rejection = null;
@@ -241,7 +246,10 @@ public static class ExtraShrinesPatch
         }
 
         Physics.SyncTransforms();
-        if (!PlacementProbe.TryBounds(trial, out var bounds)) rejection = "noBounds";
+        var boundsFound = PlacementProbe.TryBounds(trial, out var bounds);
+        var at = trial.transform.position + Vector3.up * (floor.y - bounds.min.y);
+        if (!boundsFound) rejection = "noBounds";
+        else if (spacingClear != null && !spacingClear(new Vector3Data(at.x, at.y, at.z))) rejection = "spacing";
         else if (ground != null && !PlacementProbe.Supported(ground, ShiftedDown(bounds, floor.y), floor.y)) rejection = "unsupported";
         else if (requireClear && PlacementProbe.FirstOccupant(ShiftedDown(bounds, floor.y), floor.y, trial.transform) is { } occupant)
             rejection = $"occupied by {occupant.name} at {occupant.bounds.center.ToString("F1")}";

@@ -90,6 +90,7 @@ public class MegabonkLevelsMod : MelonMod
         PerfMonitor.Timed(PerfTick.PositionLabel, _tickPositionLabel);
         PerfMonitor.Timed(PerfTick.EditorMode, _tickEditorMode);
         LavaWatcher.Tick();
+        FallDamagePatch.Tick();
 
         if (DevHarness.Enabled && EditorMode.Active)
         {

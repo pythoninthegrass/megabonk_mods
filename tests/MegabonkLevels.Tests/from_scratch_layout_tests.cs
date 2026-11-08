@@ -45,6 +45,46 @@ public class FromScratchLayoutTests
     public void GeneratorSize_IsTheLongerSideBecauseTheGameGridIsSquare(int width, int depth, int expected) =>
         Assert.Equal(expected, FromScratchLayout.GeneratorSize(Grid(width, depth)));
 
+    [Theory]
+    [InlineData(13, 12, -240, -240, 0, -20, 520, 480)]
+    [InlineData(12, 13, -240, -240, -20, 0, 480, 520)]
+    [InlineData(15, 15, -280, -280, 0, 0, 600, 600)]
+    [InlineData(4, 3, 100, -70, 160, -30, 160, 120)]
+    public void WorldBoundsFollowTheAuthoredRectangleNotTheSquareBackingArray(
+        int width, int depth, float originX, float originZ, float centerX, float centerZ, float sizeX, float sizeZ)
+    {
+        var grid = Grid(width, depth);
+        var size = FromScratchLayout.WorldSize(grid, 40, new Vector3Data(600, 100, 600));
+        var center = FromScratchLayout.WorldCenter(grid, 40, new Vector3Data(originX, 0, originZ), new Vector3Data(0, 30, 0));
+
+        Assert.Equal(new Vector3Data(sizeX, 100, sizeZ), size);
+        Assert.Equal(new Vector3Data(centerX, 30, centerZ), center);
+        Assert.Equal(originX - 20, center.X - size.X / 2);
+        Assert.Equal(originZ - 20, center.Z - size.Z / 2);
+        Assert.Equal(originX + (width - 1) * 40 + 20, center.X + size.X / 2);
+        Assert.Equal(originZ + (depth - 1) * 40 + 20, center.Z + size.Z / 2);
+    }
+
+    [Fact]
+    public void CompactNorthernBarrierMeetsTheGroundAtTheReportedGap()
+    {
+        var grid = Grid(13, 12);
+        var size = FromScratchLayout.WorldSize(grid, 40, new Vector3Data(520, 100, 520));
+        var center = FromScratchLayout.WorldCenter(grid, 40, new Vector3Data(-240, 0, -240), new Vector3Data(0, 30, 0));
+
+        Assert.Equal(220, center.Z + size.Z / 2);
+        Assert.True(217 < center.Z + size.Z / 2);
+        Assert.True(240 > center.Z + size.Z / 2);
+    }
+
+    [Fact]
+    public void WorldBoundsUseTheLiveCellSpacingAndLeaveVerticalValuesAlone()
+    {
+        var grid = Grid(7, 5);
+        Assert.Equal(new Vector3Data(140, 73, 100), FromScratchLayout.WorldSize(grid, 20, new Vector3Data(140, 73, 140)));
+        Assert.Equal(new Vector3Data(0, -13, -20), FromScratchLayout.WorldCenter(grid, 20, new Vector3Data(-60, 99, -60), new Vector3Data(0, -13, 0)));
+    }
+
     [Fact]
     public void TileArguments_FlatCellFacesNorthAtItsHeight()
     {

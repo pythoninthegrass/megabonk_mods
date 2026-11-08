@@ -10,9 +10,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUG = "bramblecrown-hill"
-SIZE = 15
-CENTER = 7
-SPAWN_CELL = (7, 1)
+WIDTH, DEPTH = 13, 12
+CENTER = 6
+SPAWN_CELL = (6, 1)
 # Euler X each placeable prefab is authored with, read from the game's own prefabs: most props are authored lying down at 270.
 NATIVE_ROTATION_X: dict[str, float] = {}
 
@@ -59,40 +59,41 @@ DENSITY = {"forest": 0.4, "desert": 0.9, "dungeon": 1.0, "graveyard": 1.0, "hell
 EDGE_LEAD = {"forest": (TREE, 2.5), "desert": (DESERT + "5/0", 3), "dungeon": (DUNGEON + "4/0", 3), "graveyard": (GRAVEYARD + "0/0", 2.5), "hell": (HELL + "4/0", 5)}
 # Ramp cells: (height at the low edge, uphill side).
 RAMPS = {
-    (6, 6): (0, "west"), (5, 7): (1, "north"), (6, 10): (2, "east"), (9, 9): (3, "south"),
-    (3, 2): (-1, "east"), (1, 6): (-1, "north"), (2, 10): (0, "north"), (10, 10): (0, "north"),
-    (11, 2): (0, "east"), (12, 8): (1, "north"), (10, 13): (1, "east"), (13, 12): (2, "north"),
-    (13, 5): (0, "north"),
+    (5, 4): (0, "west"), (4, 5): (1, "north"), (5, 8): (2, "east"), (8, 7): (3, "south"),
+    (2, 2): (-1, "east"), (1, 4): (-1, "north"), (1, 8): (0, "north"), (3, 8): (0, "north"),
+    (9, 2): (0, "east"), (10, 7): (1, "north"), (9, 10): (1, "east"), (11, 11): (2, "east"),
+    (11, 5): (0, "north"), (12, 5): (0, "north"),
+    (11, 3): (0, "west"), (12, 1): (0, "south"),
 }
 # Flat cells of the hill's spiral ring; the summit sits inside it.
 HILL = {
-    (5, 6): 1, (7, 6): 0, (8, 6): 0, (9, 6): 0, (5, 8): 2, (5, 9): 2, (5, 10): 2,
-    (7, 10): 3, (8, 10): 3, (9, 10): 3, (9, 8): 4, (9, 7): 4,
+    (4, 4): 1, (6, 4): 0, (7, 4): 0, (8, 4): 0, (4, 6): 2, (4, 7): 2, (4, 8): 2,
+    (6, 8): 3, (7, 8): 3, (8, 8): 3, (8, 6): 4, (8, 5): 4,
 }
-SUMMIT_CELLS = [(x, z) for x in (6, 7, 8) for z in (7, 8, 9)]
+SUMMIT_CELLS = [(x, z) for x in (5, 6, 7) for z in (5, 6, 7)]
 DISTRICTS = {
-    "spawn meadow": (4, 10, 0, 5), "west gully": (0, 3, 0, 6), "west ridge": (0, 3, 7, 14),
-    "north ruins": (4, 10, 11, 14), "east highland": (11, 14, 9, 14), "east pen": (11, 14, 0, 8),
-    "spiral": (5, 9, 6, 10),
+    "spawn meadow": (3, 9, 0, 3), "west gully": (0, 2, 0, 4), "west ridge": (0, 2, 5, 11),
+    "north ruins": (3, 9, 9, 11), "east highland": (10, 12, 8, 11), "east pen": (10, 12, 0, 7),
+    "spiral": (4, 8, 4, 8),
 }
 ZONE_DISTRICTS = {"graveyard": "west gully", "dungeon": "north ruins", "hell": "east pen", "desert": "east highland"}
 # Terrain materials of the game's own biomes, painted over the Forest ground of the matching district.
 GROUND_MATERIAL = {"desert": "m_1_TerrainDesert", "dungeon": "m_crypt_Floor", "hell": "m_TerrainHell"}
-# Cells (min x, max x, min z, max z) of the lava pool in the hell pen, sunk one level below the pen floor that rings it, with a ramp at (13, 5) to climb out; and what standing in it costs.
-LAVA_CELLS = (12, 13, 3, 4)
+LAVA_BANDS = [(11, 11, 2, 2), (11, 11, 4, 4)]
+COURT_CELLS = (11, 12, 1, 4)
 LAVA_DAMAGE, LAVA_INTERVAL = 3, 0.5
 # Enemy names (EEnemy) a stage boss or miniboss spawn is replaced by, drawn from every map's roster.
 BOSS_POOL = ["Ent1", "Ent2", "Ent3", "Pharaoh1", "Pharaoh2", "Pharaoh3"]
 MINIBOSS_POOL = ["MinibossPig", "MinibossGolem", "MinibossGolemSand", "MinibossScorpion", "Ghostham", "CalciumDad"]
-CHESTS = [(0, 0), (0, 14), (7, 13), (14, 14), (14, 0), (5, 9), (12, 11), (10, 4)]
-FREE_CHEST = (5, 2)
+CHESTS = [(0, 0), (0, 11), (6, 11), (12, 11), (12, 0), (4, 7), (12, 9), (8, 1)]
+FREE_CHEST = (4, 1)
 SHRINE_CELLS = [
-    (9, 3), (4, 4), (5, 0), (10, 1),
-    (1, 3), (2, 0), (0, 5), (3, 4), (0, 2), (2, 4),
-    (1, 9), (3, 8), (1, 12), (3, 13), (0, 7),
-    (5, 13), (9, 12), (7, 11),
-    (12, 10), (12, 13), (13, 10), (11, 12), (14, 12),
-    (14, 5), (13, 2), (14, 7), (12, 6),
+    (8, 3), (3, 3), (4, 0), (9, 0),
+    (0, 2), (1, 0), (0, 4), (2, 3), (1, 2),
+    (0, 6), (2, 6), (1, 10), (2, 11), (0, 8),
+    (4, 10), (8, 10), (6, 9), (8, 11),
+    (10, 9), (10, 11), (11, 8), (12, 10),
+    (10, 0), (10, 4), (10, 6), (11, 6), (12, 7),
 ]
 GUARANTEED_CHARGE_SHRINES = 5
 MOAI_RANGE = [3, 5]
@@ -102,17 +103,17 @@ SHADY_GUY_RANGE = [2, 3]
 def height(x: int, z: int) -> int:
     if (x, z) in SUMMIT_CELLS:
         return 4
-    if LAVA_CELLS[0] <= x <= LAVA_CELLS[1] and LAVA_CELLS[2] <= z <= LAVA_CELLS[3]:
+    if (x, z) == (10, 1) or COURT_CELLS[0] <= x <= COURT_CELLS[1] and COURT_CELLS[2] <= z <= COURT_CELLS[3]:
         return 0
     if (x, z) in HILL:
         return HILL[x, z]
-    if x <= 3:
-        return -1 if z <= 6 else int(z >= 11)
-    if x >= 11:
-        if z <= 8:
+    if x <= 2:
+        return -1 if z <= 4 else int(z >= 9)
+    if x >= 10:
+        if z <= 7:
             return 1
-        return 3 if x >= 13 and z >= 13 else 2
-    return int(z >= 11)
+        return 3 if x == 12 and z == 11 else 2
+    return int(z >= 9)
 
 
 def meadow_rect() -> dict:
@@ -157,44 +158,48 @@ def build_edits(spawn: list[float], boss: list[float], shrine_spots: list[list[f
     add(CHEST_FREE, point(*FREE_CHEST, lift=0.5), 135)
     reserved += [(p[0], p[2], 19) for p in (spawn, boss, *shrine_spots)]
 
-    for z in range(2, 6):
+    for z in range(2, 4):
         for dz in (-10, 10):
             for side in (-20, 20):
                 catalog = ROCK if (z + (dz > 0) + (side > 0)) % 2 else BUSH
-                add(catalog, point(7, z, side, dz), rng.randrange(360), 1.5 if catalog == ROCK else 1.8)
-    for ruin, x, z, dx, dz, yaw in [(2, 6, 9, -8, 8, 90), (1, 8, 9, 8, 8, 0), (0, 6, 7, -8, -8, 270)]:
+                add(catalog, point(6, z, side, dz), rng.randrange(360), 1.5 if catalog == ROCK else 1.8)
+    for ruin, x, z, dx, dz, yaw in [(2, 5, 7, 4, -4, 90), (1, 7, 7, -4, -4, 0), (0, 5, 5, 4, 4, 270)]:
         add(RUIN + str(ruin), point(x, z, dx, dz), yaw)
-    for x, z, dx, dz in [(4, 9, 0, 0), (10, 9, 0, 0), (5, 5, 12, -12), (9, 5, -12, -12)]:
+    for x, z, dx, dz in [(3, 7, 0, 0), (9, 7, 0, 0), (4, 3, 12, -12), (8, 3, -12, -12)]:
         add(BUSH, point(x, z, dx, dz), rng.randrange(360), 1.8)
 
     # North plateau: dungeon sets, one per quarter of the plateau.
-    for tile, (x, z) in zip(DUNGEON_TILES, [(5, 12), (8, 12), (9, 14), (6, 14)], strict=True):
+    for tile, (x, z) in zip((DUNGEON_TILES[1], DUNGEON_TILES[3]), [(8, 9), (4, 11)], strict=True):
         add(tile, point(x, z), rng.choice((0, 90, 180, 270)), 1, 26)
     # East highland: desert landmarks and houses.
-    add(DESERT_LANDMARKS[0], point(11, 14), 200, 0.7 * 6, 45)
-    add(DESERT_LANDMARKS[3], point(14, 9), 90, 0.7 * 5, 40)
-    add(DESERT_HOUSES[0], point(11, 10, dx=-8), 90, 1.3, 26)
-    add(DESERT_HOUSES[1], point(11, 13, dx=-8), 270, 1.3, 26)
-    # East pen: a hell wall along the west side with a gap at the ramp, a landmark in the far corner.
-    for i, z in enumerate((0, 1, 3, 4, 5, 6, 7, 8)):
-        add(HELL_WALLS[i % 4], point(11, z, dx=-14), 90, 5.5, 22)
-    add(HELL_LANDMARK, point(14, 3), 270, 0.8 * 4, 40)
-    for z, dz in ((1, 14), (3, -14)):
-        add(HELL_COLUMN, point(11, z, dx=-14, dz=dz), 0, 5, 14)
-    for x, z in [(12, 0), (14, 8), (12, 7)]:
+    add(DESERT_LANDMARKS[0], point(10, 11), 200, 0.7 * 6, 30)
+    add(DESERT_LANDMARKS[3], point(12, 8), 90, 0.7 * 5, 26)
+    add(DESERT_HOUSES[0], point(11, 9, dx=-8), 90, 1.3, 26)
+    add(DESERT_HOUSES[1], point(11, 10, dx=-8), 270, 1.3, 26)
+    add(DESERT + "3/0", point(10, 8, dx=-12, dz=-12), 0, 3.5, 12)
+    add(DESERT + "3/1", point(12, 10, dx=12, dz=12), 0, 3.5, 12)
+    for i, z in enumerate((1, 2, 3, 4)):
+        for x, dx in ((11, -19.5), (12, 19.5)):
+            if (x, z) in ((11, 1), (11, 3), (12, 1)):
+                continue
+            add(HELL_WALLS[i % 4], point(x, z, dx=dx), 90, 5.5, 14)
+    add(HELL_LANDMARK, point(10, 3, dx=-10), 270, 0.8 * 4, 20)
+    for x in (11, 12):
+        add(HELL_COLUMN, point(x, 6, dx=-14), 0, 5, 14)
+    for x, z in [(10, 0), (12, 6), (10, 6)]:
         add(FIRE, point(x, z, dx=10, dz=10), 0, 3.5, 14)
     # West gully: a graveyard gate at the ramp, cobble patches, and the coffin tile.
-    add(ARCH, point(2, 2), 90, 2.5, 30)
+    add(ARCH, point(1, 3), 90, 2.5, 25)
     add(COFFIN_TILE, point(1, 1), 0, 1, 40)
-    for tile, (x, z) in zip(GRAVE_TILES, [(0, 3), (3, 5), (2, 6), (0, 4), (3, 0), (1, 5)], strict=True):
+    for tile, (x, z) in zip(GRAVE_TILES, [(0, 3), (2, 4), (2, 1), (0, 4), (2, 0), (0, 1)], strict=True):
         add(tile, point(x, z, dx=10, dz=10), 0, 1, 12)
 
-    for x in range(SIZE):
-        for z in range(SIZE):
-            if (x, z) in RAMPS or 5 <= x <= 9 and 6 <= z <= 10 or 5 <= x <= 9 and z <= 5 or LAVA_CELLS[0] <= x <= LAVA_CELLS[1] and LAVA_CELLS[2] <= z <= LAVA_CELLS[3]:
+    for x in range(WIDTH):
+        for z in range(DEPTH):
+            if (x, z) in RAMPS or (x, z) == (10, 1) or 4 <= x <= 8 and 4 <= z <= 8 or 4 <= x <= 8 and z <= 3 or COURT_CELLS[0] <= x <= COURT_CELLS[1] and COURT_CELLS[2] <= z <= COURT_CELLS[3]:
                 continue
             zone = zone_of(x, z)
-            edge = x in (0, SIZE - 1) or z in (0, SIZE - 1)
+            edge = x in (0, WIDTH - 1) or z in (0, DEPTH - 1)
             count = 2 if edge else int(rng.random() < DENSITY[zone]) if zone != "graveyard" else 1
             for n in range(count):
                 dx, dz = rng.choice((-12, 12)), rng.choice((-12, 12))
@@ -211,24 +216,25 @@ def build_edits(spawn: list[float], boss: list[float], shrine_spots: list[list[f
 
 def build_level() -> dict:
     cells = []
-    for x in range(SIZE):
-        for z in range(SIZE):
+    for x in range(WIDTH):
+        for z in range(DEPTH):
             cell = {"x": x, "z": z, "height": height(x, z)}
             if (x, z) in RAMPS:
                 cell["height"], cell["slope"] = RAMPS[x, z]
             cells.append(cell)
 
     spawn = point(*SPAWN_CELL, lift=1.925)
-    boss = point(7, 8)
+    boss = point(6, 6)
     shrine_spots = [point(x, z) for x, z in SHRINE_CELLS]
     return {
         "schemaVersion": 4,
         "gameBuildId": "21750826",
         "title": "Bramblecrown Hill",
         "description": "A bramble-ringed hill with a ruined watchpost on its crown. Follow the fence line to the foot of the hill and climb the spiral path.",
-        "mapDescription": "A handcrafted woodland of meadows, ridges and mossy ruins around one tall hill. Wander the districts for chests and shrines, or climb the spiral to the summit. A first adventure, and a first level to make your own. No extra packs needed.",
+        "mapDescription": "Five visual districts around one tall hill, with Forest gameplay throughout. Explore compact loops for chests and shrines, a walled lava court, or the spiral to the summit. The seed fixes custom shrine plans and boss picks, not combat or loot. No extra packs needed.",
         "baseline": "none", "map": 1, "stageIndex": 0, "tier": 0, "seed": 0, "packs": {},
-        "grid": {"width": SIZE, "depth": SIZE, "cells": cells},
+        "fallDamageFreeHeight": 40,
+        "grid": {"width": WIDTH, "depth": DEPTH, "cells": cells},
         "spawn": {"position": spawn, "rotation": [0, 0, 0]},
         "bossSpawner": {"position": boss, "rotation": [0, 180, 0]},
         "shrineSpots": shrine_spots,
@@ -237,13 +243,15 @@ def build_level() -> dict:
         "extraShrineKinds": ["charge", "magnet", "greed"],
         "shrineKindRanges": {"moai": MOAI_RANGE, "shadyGuy": SHADY_GUY_RANGE},
         "shrineGuarantees": [{"kind": kind, **meadow_rect(), "outside": True} for kind in ("moai", "shadyGuy")],
+        "shrineKindSpacing": {"moai": 120},
         "groundZones": [
             {"material": material, "minX": x0, "maxX": x1, "minZ": z0, "maxZ": z1}
             for biome, material in GROUND_MATERIAL.items()
             for x0, x1, z0, z1 in [DISTRICTS[ZONE_DISTRICTS[biome]]]
         ]
-        + [dict(zip(("material", "minX", "maxX", "minZ", "maxZ"), ("Lava", *LAVA_CELLS), strict=True))],
-        "lavaZones": [dict(zip(("minX", "maxX", "minZ", "maxZ", "damage", "interval"), (*LAVA_CELLS, LAVA_DAMAGE, LAVA_INTERVAL), strict=True))],
+        + [dict(zip(("material", "minX", "maxX", "minZ", "maxZ"), ("m_crypt_Floor", *COURT_CELLS), strict=True))]
+        + [dict(zip(("material", "minX", "maxX", "minZ", "maxZ"), ("LavaCrypt", *band), strict=True)) for band in LAVA_BANDS],
+        "lavaZones": [dict(zip(("minX", "maxX", "minZ", "maxZ", "damage", "interval"), (*band, LAVA_DAMAGE, LAVA_INTERVAL), strict=True)) for band in LAVA_BANDS],
         "bossPool": BOSS_POOL,
         "minibossPool": MINIBOSS_POOL,
         "edits": build_edits(spawn, boss, shrine_spots),
@@ -268,6 +276,11 @@ def artwork() -> Image.Image:
     draw.polygon([(505, 305), (505, 215), (518, 215), (518, 232), (534, 232), (534, 210), (550, 210), (550, 232), (568, 232), (568, 222), (582, 222), (582, 305)], fill="#bec6b0")
     draw.polygon([(550, 232), (568, 232), (568, 222), (582, 222), (582, 305), (550, 305)], fill="#899f8d")
     draw.rounded_rectangle((525, 262, 546, 304), radius=10, fill="#24483f")
+    draw.polygon([(790, 650), (810, 570), (950, 570), (970, 650)], fill="#808b83")
+    for y in (600, 630):
+        draw.rectangle((820, y, 900, y + 12), fill="#ee6731")
+    draw.line([(790, 650), (810, 570), (810, 548)], fill="#404c4b", width=12)
+    draw.line([(970, 650), (950, 570), (950, 548)], fill="#404c4b", width=12)
     for x, y, scale in [(70, 430, 1.4), (200, 470, 1), (990, 480, 1.3), (1050, 410, 1.6), (90, 670, 1.8), (1000, 680, 1.7)]:
         draw.rectangle((x - 8 * scale, y - 30 * scale, x + 8 * scale, y + 65 * scale), fill="#345244")
         draw.polygon([(x, y - 150 * scale), (x - 65 * scale, y - 15 * scale), (x - 38 * scale, y - 24 * scale), (x - 82 * scale, y + 32 * scale), (x + 75 * scale, y + 32 * scale), (x + 38 * scale, y - 25 * scale), (x + 58 * scale, y - 15 * scale)], fill="#214f43")

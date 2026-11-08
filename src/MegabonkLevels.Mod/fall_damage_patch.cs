@@ -24,6 +24,15 @@ public static class FallDamagePatch
     private static float _lastPlayerValue = float.NaN;
     private static float _lastReferenceValue = float.NaN;
     private static float _lastReadBack = float.NaN;
+    private static readonly LandingHeightTracker _landingHeight = new();
+    private static int _trackedPlayer;
+    public static float? LastDrop { get; private set; }
+    public static int FreeLandings { get; private set; }
+    public static float? LastTakeoffSurface { get; private set; }
+    public static float? LastLandingSurface { get; private set; }
+    public static bool LastFreeLanding { get; private set; }
+    public static float? LastHpBefore { get; private set; }
+    public static float? LastHpAfter { get; private set; }
 
     public static void Install(MelonLogger.Instance logger)
     {
@@ -33,7 +42,45 @@ public static class FallDamagePatch
     // The character whose landing stats this level borrows, from the level file, or null when it names none.
     public static int? ReferenceCharacterId => FallDamagePolicy.ReferenceCharacter(LiveEditPatch.FallDamageCharacter);
 
-    public static bool IsActive => FallDamagePolicy.Applies(CustomLevelState.IsActive, ReferenceCharacterId, ActiveCharacterId);
+    public static bool IsActive => CustomLevelState.IsActive && (LiveEditPatch.CurrentSettings.FallDamageFreeHeight.HasValue
+        || FallDamagePolicy.Applies(true, ReferenceCharacterId, ActiveCharacterId));
+
+    public static void ResetTracking()
+    {
+        _landingHeight.Reset();
+        _trackedPlayer = 0;
+        LastDrop = null;
+        FreeLandings = 0;
+        LastTakeoffSurface = null;
+        LastLandingSurface = null;
+        LastFreeLanding = false;
+        LastHpBefore = null;
+        LastHpAfter = null;
+    }
+
+    public static void Tick()
+    {
+        var player = MyPlayer.Instance;
+        if (!CustomLevelState.IsActive || LiveEditPatch.CurrentSettings.FallDamageFreeHeight == null || player == null || EditorMode.Active)
+        {
+            _landingHeight.Reset();
+            return;
+        }
+        if (_trackedPlayer != player.GetInstanceID())
+        {
+            ResetTracking();
+            _trackedPlayer = player.GetInstanceID();
+        }
+        if (player.playerMovement != null && player.playerMovement.grounded)
+            _landingHeight.ObserveContact(true, player.transform.position.y, SupportingSurface(player), TeleportTarget.PlayerBodyOffsetY);
+    }
+
+    private static float? SupportingSurface(MyPlayer player)
+    {
+        var at = player.transform.position;
+        return PlacementProbe.HighestFloor(at.x, at.z, at.y + 0.25f, at.y - TeleportTarget.PlayerBodyOffsetY - 0.5f,
+            player.transform, out var floor) ? floor.y : null;
+    }
 
     public static int ActiveCharacterId => (int)(MyPlayer.Instance ? MyPlayer.Instance.character : (ECharacter)(-1));
 
@@ -93,7 +140,14 @@ public static class FallDamagePatch
             }
 
             var stats = MyPlayer.Instance ? MyPlayer.Instance.inventory?.playerStats : null;
-            var reference = ReferenceValue();
+            LastHpBefore = __instance.hp;
+            LastHpAfter = null;
+            LastTakeoffSurface = _landingHeight.GroundedHeight;
+            LastLandingSurface = MyPlayer.Instance ? SupportingSurface(MyPlayer.Instance) : null;
+            LastDrop = LastLandingSurface is { } surface ? _landingHeight.DropTo(surface) : null;
+            LastFreeLanding = false;
+            var free = FallDamagePolicy.FreeDropApplies(CustomLevelState.IsActive, LiveEditPatch.CurrentSettings.FallDamageFreeHeight, LastDrop);
+            var reference = free ? 1f : FallDamagePolicy.Applies(CustomLevelState.IsActive, ReferenceCharacterId, ActiveCharacterId) ? ReferenceValue() : float.NaN;
             if (stats == null || stats.stats == null || float.IsNaN(reference))
             {
                 return true;
@@ -120,6 +174,12 @@ public static class FallDamagePatch
             }
             __state = swap;
             _swapCount++;
+            if (free)
+            {
+                LastFreeLanding = true;
+                FreeLandings++;
+                LogOnce($"FallDamagePatch: free landing drop={LastDrop:F3} limit={LiveEditPatch.CurrentSettings.FallDamageFreeHeight:F3}");
+            }
             _lastPlayerValue = old;
             _lastReferenceValue = reference;
             _lastReadBack = stats.GetStat(Stat);
@@ -127,8 +187,14 @@ public static class FallDamagePatch
             return true;
         }
 
-        private static void Postfix(object __state)
+        private static void Postfix(PlayerHealth __instance, object __state)
         {
+            if (IsActive)
+            {
+                LastHpAfter = __instance.hp;
+                if (LastHpAfter < LastHpBefore)
+                    _logger?.Msg($"FallDamagePatch: landing hurt hp={LastHpBefore:F3}->{LastHpAfter:F3} drop={LastDrop:F3} takeoff={LastTakeoffSurface:F3} landing={LastLandingSurface:F3} free={LastFreeLanding}");
+            }
             if (__state is not Swapped swap)
             {
                 return;

@@ -8,7 +8,7 @@ namespace MegabonkLevels;
 
 public static class LevelSettings
 {
-    public static readonly string[] Fields = { "playerStart", "bossSpawnPosition", "killFloorY", "maxSlopeAngle", "grindRequiresSlide", "fallDamageCharacter", "noGrass", "randomizeShadyGuy", "randomizeChests", "randomizeMoai", "extraShrines", "extraShrineKinds", "extraShrinesMax", "shrineSpots", "guaranteedShrineKinds", "shrineKindRanges", "shrineGuarantees", "groundZones", "bossPool", "minibossPool", "lavaZones", "chestLuckRange", "music", "title", "description", "mapDescription", "allowedCharacters", "map", "stageIndex", "tier", "seed" };
+    public static readonly string[] Fields = { "playerStart", "bossSpawnPosition", "killFloorY", "maxSlopeAngle", "grindRequiresSlide", "fallDamageCharacter", "fallDamageFreeHeight", "noGrass", "randomizeShadyGuy", "randomizeChests", "randomizeMoai", "extraShrines", "extraShrineKinds", "extraShrinesMax", "shrineSpots", "guaranteedShrineKinds", "shrineKindRanges", "shrineGuarantees", "shrineKindSpacing", "groundZones", "bossPool", "minibossPool", "lavaZones", "chestLuckRange", "music", "title", "description", "mapDescription", "allowedCharacters", "map", "stageIndex", "tier", "seed" };
     private static readonly string[] TextFields = { "music", "title", "description", "mapDescription", "fallDamageCharacter" };
 
     public static string Read(LevelFile level, string field)
@@ -66,6 +66,10 @@ public static class LevelSettings
         {
             throw new ArgumentException("The fall damage character must be calcium, tony or tonymczoom.");
         }
+        if (level.FallDamageFreeHeight is { } freeHeight && (!float.IsFinite(freeHeight) || freeHeight < 0))
+        {
+            throw new ArgumentException("The free fall height must be finite and non-negative.");
+        }
         if (level.ExtraShrines < 0 || level.ExtraShrines > ExtraShrines.MaxCount)
         {
             throw new ArgumentException($"Extra shrine count must be between 0 and {ExtraShrines.MaxCount}.");
@@ -87,6 +91,11 @@ public static class LevelSettings
             throw new ArgumentException($"Shrine kind ranges name a known kind with a minimum and maximum between 0 and {ExtraShrines.MaxCount}.");
         }
         ShrineGuarantees.Validate(level.ShrineGuarantees);
+        if (level.ShrineKindSpacing != null && (level.ShrineKindSpacing.Any(pair => !ExtraShrines.IsKnownKind(pair.Key) || !float.IsFinite(pair.Value) || pair.Value < 0)
+            || level.ShrineKindSpacing.Keys.Distinct(StringComparer.OrdinalIgnoreCase).Count() != level.ShrineKindSpacing.Count))
+        {
+            throw new ArgumentException("Shrine kind spacing names unique known kinds with finite non-negative horizontal gaps.");
+        }
         GroundZones.Validate(level.GroundZones);
         BossPools.Validate(level.BossPool, "bossPool");
         BossPools.Validate(level.MinibossPool, "minibossPool");
@@ -113,9 +122,10 @@ public static class LevelSettings
     {
         NoGrass = settings.NoGrass, PlayerStart = settings.PlayerStart, BossSpawnPosition = settings.BossSpawnPosition,
         KillFloorY = settings.KillFloorY, MaxSlopeAngle = settings.MaxSlopeAngle, GrindRequiresSlide = settings.GrindRequiresSlide,
+        FallDamageFreeHeight = settings.FallDamageFreeHeight,
         RandomizeShadyGuy = settings.RandomizeShadyGuy, RandomizeChests = settings.RandomizeChests, RandomizeMoai = settings.RandomizeMoai,
         ExtraShrines = settings.ExtraShrines, ExtraShrineKinds = settings.ExtraShrineKinds,
-        ExtraShrinesMax = settings.ExtraShrinesMax, ShrineSpots = settings.ShrineSpots, GuaranteedShrineKinds = settings.GuaranteedShrineKinds, ShrineKindRanges = settings.ShrineKindRanges, ShrineGuarantees = settings.ShrineGuarantees, GroundZones = settings.GroundZones, BossPool = settings.BossPool, MinibossPool = settings.MinibossPool, LavaZones = settings.LavaZones, ChestLuckRange = settings.ChestLuckRange,
+        ExtraShrinesMax = settings.ExtraShrinesMax, ShrineSpots = settings.ShrineSpots, GuaranteedShrineKinds = settings.GuaranteedShrineKinds, ShrineKindRanges = settings.ShrineKindRanges, ShrineGuarantees = settings.ShrineGuarantees, ShrineKindSpacing = settings.ShrineKindSpacing, GroundZones = settings.GroundZones, BossPool = settings.BossPool, MinibossPool = settings.MinibossPool, LavaZones = settings.LavaZones, ChestLuckRange = settings.ChestLuckRange,
         Music = settings.Music, Title = settings.Title, Description = settings.Description, MapDescription = settings.MapDescription,
         AllowedCharacters = settings.AllowedCharacters, Map = settings.Map, StageIndex = settings.StageIndex, Tier = settings.Tier, Seed = settings.Seed,
     };
