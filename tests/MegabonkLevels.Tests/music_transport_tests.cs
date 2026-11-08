@@ -71,4 +71,34 @@ public class MusicTransportTests
         Assert.Equal("2/2  The_Tourist", MusicTransportReply.Now(names, 2));
         Assert.Equal("playing 2/2  The_Tourist", MusicTransportReply.Changed(names, 2));
     }
+
+    [Fact]
+    public void Resume_WhenAlreadyPlayingSaysSo()
+    {
+        Assert.Equal("music is already playing", MusicTransportReply.Resume(wasPlaying: true, nowPlaying: true));
+    }
+
+    [Fact]
+    public void Resume_WhenPausedMusicStartsAgainSaysResumed()
+    {
+        Assert.Equal("music resumed", MusicTransportReply.Resume(wasPlaying: false, nowPlaying: true));
+    }
+
+    [Fact]
+    public void Resume_WhenNothingStartsSaysThereWasNothingToResume()
+    {
+        Assert.Equal("no paused music to resume", MusicTransportReply.Resume(wasPlaying: false, nowPlaying: false));
+    }
+
+    [Fact]
+    public void Pause_WhenPlayingSaysPaused()
+    {
+        Assert.Equal("music paused", MusicTransportReply.Pause(wasPlaying: true));
+    }
+
+    [Fact]
+    public void Pause_WhenNothingIsPlayingSaysSo()
+    {
+        Assert.Equal("music is not playing", MusicTransportReply.Pause(wasPlaying: false));
+    }
 }

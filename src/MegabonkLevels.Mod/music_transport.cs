@@ -44,5 +44,11 @@ public static class MusicTransportReply
 
     public static string Changed(IReadOnlyList<string> names, int current) => "playing " + Now(names, current);
 
+    // UnPause on a stopped source starts nothing, so the reply follows whether the source is playing afterwards.
+    public static string Resume(bool wasPlaying, bool nowPlaying) =>
+        wasPlaying ? "music is already playing" : nowPlaying ? "music resumed" : "no paused music to resume";
+
+    public static string Pause(bool wasPlaying) => wasPlaying ? "music paused" : "music is not playing";
+
     public static string OutOfRange(int number, int count) => $"track {number} is not between 1 and {count}";
 }

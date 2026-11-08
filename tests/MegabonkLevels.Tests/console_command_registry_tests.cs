@@ -155,6 +155,7 @@ public class ConsoleCommandRegistryTests
     [InlineData("music.next")]
     [InlineData("music.prev")]
     [InlineData("music.track 3")]
+    [InlineData("music.play 37")]
     [InlineData("music.list")]
     [InlineData("music.now")]
     public void Bind_UngatedVerbs_WorkWithoutTheDevFlag(string line)
@@ -240,6 +241,9 @@ public class ConsoleCommandRegistryTests
     [InlineData("music.track 0")]
     [InlineData("music.track two")]
     [InlineData("music.track 1 2")]
+    [InlineData("music.play 0")]
+    [InlineData("music.play two")]
+    [InlineData("music.play 1 2")]
     [InlineData("music.next now")]
     public void Bind_RepliesWithTheUsageLineForBadValues(string line)
     {
@@ -922,6 +926,7 @@ public class ConsoleCommandRegistryTests
     [InlineData("music.list", "list", 0)]
     [InlineData("music.now", "now", 0)]
     [InlineData("music.track 12", "track", 12)]
+    [InlineData("music.play 37", "track", 37)]
     public void Bind_MusicVerbs_CarryTheActionAndTrack(string line, string action, int track)
     {
         var command = ConsoleCommandRegistry.Default.Bind(line, DevState(false), Toggles()).Command.Value;

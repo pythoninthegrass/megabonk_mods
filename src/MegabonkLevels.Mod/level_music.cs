@@ -222,18 +222,29 @@ public static class LevelMusic
         if (args.Action is MusicActions.Play or MusicActions.Pause)
         {
             var source = MusicController.Instance?.musicSource ?? throw new InvalidOperationException("no music source in the scene");
-            var pause = args.Action == MusicActions.Pause;
-            if (pause)
+            var wasPlaying = source.isPlaying;
+            string reply;
+            if (args.Action == MusicActions.Pause)
             {
-                source.Pause();
+                if (wasPlaying)
+                {
+                    source.Pause();
+                }
+
+                reply = MusicTransportReply.Pause(wasPlaying);
             }
             else
             {
-                source.UnPause();
+                if (!wasPlaying)
+                {
+                    source.UnPause();
+                }
+
+                reply = MusicTransportReply.Resume(wasPlaying, source.isPlaying);
             }
 
-            _logger?.Msg($"Music: {(pause ? "paused" : "resumed")}.");
-            return new JsonObject { ["message"] = pause ? "music paused" : "music resumed", ["playlist"] = HasPlaylist };
+            _logger?.Msg($"Music: {reply}.");
+            return new JsonObject { ["message"] = reply, ["playlist"] = HasPlaylist };
         }
 
         if (!HasPlaylist)
