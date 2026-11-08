@@ -1,10 +1,10 @@
 ---
 id: TASK-053
 title: Record the generated Forest and Desert Tier 2 stage parameters and layouts
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-07T23:07:00Z'
-updated_date: '2026-11-08T01:55:00Z'
+updated_date: '2026-11-08T04:32:00Z'
 labels:
   - research
   - generation
@@ -28,7 +28,7 @@ To audit how levels are generated, the Tier 2 stages of Forest and Desert need t
 <!-- AC:BEGIN -->
 - [x] #1 It is established and written down which stage index of Forest and of Desert is the vanilla Tier 2 stage (for example Deep Forest), with the evidence.
 - [x] #2 For Forest and for Desert at that stage, the stage's generation parameters (grid size, height strategy and its inputs, edge fill, prop and interactable counts or multipliers, and for the procedural-mesh map its terrain and noise settings) are recorded in a document with the values read from the running game.
-- [ ] #3 Each of the two stages is generated at least twice with the same forced seed and at least twice without, and the generation log lines (seed, counts, layout hash, object hash) are recorded to show what repeats and what varies.
+- [x] #3 Each of the two stages is generated at least twice with the same forced seed and at least twice without, and the generation log lines (seed, counts, layout hash, object hash) are recorded to show what repeats and what varies.
 - [x] #4 The findings are added to docs/map-generation-determinism.md or docs/runtime-map-structure.md, and any harness or script change needed to capture them is covered by tests.
 <!-- AC:END -->
 
@@ -49,6 +49,8 @@ To audit how levels are generated, the Tier 2 stages of Forest and Desert need t
 4. Record two forced-seed requests and two unseeded runs per effective stage, keeping Desert hook/capture limitations explicit. Exclude unverified probes and the default-off control.
 5. Publish section 12 and development instructions; verify exact log lines against the journal, markdownlint and full task check; commit implementation and findings separately with conventional subjects and no attribution.
 6. Leave a normal default-off Forest run unfrozen, spawns on, editor off and camera cleared; finalize only after all criteria and DoD are verified.
+
+Approved continuation: add a separate default-off dev terrain-seed measurement path (never broaden SeedForcePatch or change CustomTierCap), pin the three-argument MapGenerator call, observe the Noise seed and hash its mesh-input grid. Preserve the original 11 journal records byte-identically; rerun Desert control, two identical pins, another seed, two unseeded launches and one Forest inertness check, with a fresh offline Mac relaunch each time. Publish exact evidence and buffer-read limitations, run lint/full checks, commit atomically and restore normal gameplay before finalization.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -91,4 +93,16 @@ Validation complete: markdownlint -c .markdownlint.jsonc docs passed; full mise 
 Implementation committed as 0cfa58a (feat(dev): add opt-in initial stage measurements), with no attribution. AC3 remains unchecked under its literal controlled-seed requirement: all eight runs have verified Tier 2 stage assets, and the two forced requests/two unseeded loads per map are recorded, but Desert does not reach the seed-force hook and its actual mapSeed differs between its two forced requests. The documentation explicitly reports that limitation rather than claiming a pinned Desert seed. Finishing that strict requirement needs an approved Desert terrain seed-control path and another verified matrix; this completion pass does not silently broaden the seed hook or reinterpret requests as successful pins. All DoD items are now met; task stays In Progress because AC3 is not genuinely met.
 
 Final game cleanup verified by state: default-off Forest control run left running, editor=false, frozen=false, spawnsOff=false, invulnerable=false; explicit camera clear sent. Fresh docs-only final wording passed markdownlint again. No new task created for Desert seed control.
+
+Terrain seed follows MapGenerationController.mapSeed into MapGenerator.GenerateMap and pure Noise.GenerateNoiseMap. A ref-argument prefix corrupted the native call; guarded re-invocation with a value argument works. The mesh builder input provides 58081 float cells via buffer@multi; wrapper field reads are unreadable and no cell-by-cell validation occurred. Initial seven-run results showed equal repeated-pin hashes, another hash at another seed and different unseeded hashes; these are archived separately pending fresh stats-bearing measurements. Stats compilation fixed (nullable value extraction), deployed DLL hash verified; 2175 C# tests and 37 capture self-checks pass. Original 11 journal records retain SHA-256 f15fcd55649627c1f90bbddd54c198a855984b0bdb884a8bc7fb0d04f5c45226. Fresh seven-run matrix is in progress; completion remains unclaimed.
+
+Fresh stats-bearing matrix complete: seven new launches, all verified, with original 11 records still byte-identical (SHA-256 f15fcd55649627c1f90bbddd54c198a855984b0bdb884a8bc7fb0d04f5c45226). Desert StageDesert2/index1/proceduralMapScale1.1 verified in every controller dump; RunConfig.mapTierIndex remains 0. Pins 424242 at game rolls 1696564175 and 1387787013 both reach Noise as 424242 and produce CF4ED58EB73F18CE2D1832595B65577CB1E745B2CDD488E195F65FA7FB0555F6. Pin 1234567 gives 7B398C89…; unseeded rolls/noise seeds 1766705161 and 1355200338 give 8C8520D7… and D14E53CF…. All five grids are 58081 cells, buffer@multi, range 0–1; means 0.5011/0.5011/0.4732/0.5109/0.5262. No independent cell reads succeeded. Hashes compare four-decimal normalized mesh input, not final vertex/index buffers or bitwise float identity. Desert debugSeed remains 1952838951, tile hash 692987B2…, objects=0 and empty hash; no object determinism claim. Switch-off Desert control emits no measurement lines. Forest inertness verifies StageForest2/ParamForest2 and original tile hash, never enters terrain generator, and adds object hash 3E9FD818… to the original two outcomes.
+
+All 26 published evidence lines round-trip exactly to the journal. Final validation: task check passes with 2175 C# tests and 1107 Python tests, Ruff and repository Markdown lint; separate markdownlint -c .markdownlint.jsonc docs passes after final wording. Capture self-test passes 37 checks. Rebuilt/deployed DLL byte-verified. Implementation commit e386be9; findings commit 0c02b85. Final default-off Forest relaunch completed, camera-clear sent; state verifies editor=false, frozen=false, invulnerable=false, spawnsOff=false. No seed-force broadening, tier-cap edits or environment-file changes.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added a separate default-off development terrain-seed pin and mesh-input measurement path. Replaced request-only Desert seed evidence with two verified identical pins and two unseeded generations, plus different-seed/control checks; preserved the original Forest matrix and all 11 legacy journal records. Documented exact seed/noise/grid evidence, stage-asset versus progression limits, buffer-read uncertainty, unresolved Forest object drift and missing Desert prop/final-mesh coverage. Full tests and lint pass; implementation and findings committed separately. Game restored to default-off, unfrozen gameplay with spawns on and editor/camera overrides cleared.
+<!-- SECTION:FINAL_SUMMARY:END -->
