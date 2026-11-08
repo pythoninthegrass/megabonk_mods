@@ -16,8 +16,54 @@ public readonly record struct ConsoleTokens(IReadOnlyList<string> Tokens, string
     public IReadOnlyList<string> Arguments => Tokens is List<string> list and { Count: > 1 } ? list.GetRange(1, list.Count - 1) : Array.Empty<string>();
 }
 
+// The word being typed at the end of a line: where it starts, its text with quotes removed, and how many whole words precede it.
+public readonly record struct ConsoleLastWord(int Start, string Text, int WordsBefore);
+
 public static class ConsoleCommandTokenizer
 {
+    // Reads the line with Tokenize's quoting, so a word inside an unterminated quote still counts as the last word.
+    public static ConsoleLastWord LastWord(string line)
+    {
+        var words = 0;
+        var start = 0;
+        var text = new StringBuilder();
+        var inWord = false;
+        var quoted = false;
+
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (!quoted && char.IsWhiteSpace(c))
+            {
+                if (inWord)
+                {
+                    words++;
+                    inWord = false;
+                    text.Clear();
+                }
+
+                continue;
+            }
+
+            if (!inWord)
+            {
+                inWord = true;
+                start = i;
+            }
+
+            if (c == '"')
+            {
+                quoted = !quoted;
+            }
+            else
+            {
+                text.Append(c);
+            }
+        }
+
+        return inWord ? new ConsoleLastWord(start, text.ToString(), words) : new ConsoleLastWord(line.Length, "", words);
+    }
+
     public static ConsoleTokens Tokenize(string line)
     {
         if (line == null || line.Trim().Length == 0)

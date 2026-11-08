@@ -473,6 +473,116 @@ public class ConsoleCommandRegistryTests
     }
 
     [Fact]
+    public void Completion_VerbName_ReplacementLineKeepsNothingBeforeIt()
+    {
+        var completion = ConsoleCommandRegistry.Default.Complete("player.ad");
+
+        Assert.Equal("player.add_item", completion.Line);
+    }
+
+    [Fact]
+    public void Completion_LevelLoadArgument_CompletesATitlePrefix()
+    {
+        var completion = ConsoleCommandRegistry.Default.Complete("level.load th", LevelList());
+
+        Assert.Equal(new[] { "thps" }, completion.Matches);
+        Assert.Equal("level.load thps", completion.Line);
+    }
+
+    [Fact]
+    public void Completion_LevelLoadArgument_AliasUsesTheSameCandidates()
+    {
+        var completion = ConsoleCommandRegistry.Default.Complete("coc th", LevelList());
+
+        Assert.Equal("coc thps", completion.Line);
+    }
+
+    [Fact]
+    public void Completion_LevelLoadArgument_EmptyPrefixOffersEveryLevel()
+    {
+        var completion = ConsoleCommandRegistry.Default.Complete("level.load ", LevelList());
+
+        Assert.Equal(new[] { "Bramblecrown Hill", "thps" }, completion.Matches);
+    }
+
+    [Fact]
+    public void Completion_LevelLoadArgument_PrefixIgnoresCase()
+    {
+        var completion = ConsoleCommandRegistry.Default.Complete("level.load THP", LevelList());
+
+        Assert.Equal("level.load thps", completion.Line);
+    }
+
+    [Fact]
+    public void Completion_LevelLoadArgument_CyclesAndWraps()
+    {
+        var levels = new[] { "alpha.mblevel.json", "alps.mblevel.json" };
+        var completion = ConsoleCommandRegistry.Default.Complete("level.load al", levels);
+
+        Assert.Equal("level.load alpha", completion.Line);
+        Assert.Equal("level.load alps", completion.Next().Line);
+        Assert.Equal("level.load alpha", completion.Next().Next().Line);
+    }
+
+    [Fact]
+    public void Completion_LevelLoadArgument_TitleWithSpacesIsQuoted()
+    {
+        var completion = ConsoleCommandRegistry.Default.Complete("level.load bram", LevelList());
+
+        Assert.Equal("level.load \"Bramblecrown Hill\"", completion.Line);
+    }
+
+    [Fact]
+    public void Completion_LevelLoadArgument_CompletesInsideAnOpenQuote()
+    {
+        var completion = ConsoleCommandRegistry.Default.Complete("level.load \"bramblecrown h", LevelList());
+
+        Assert.Equal("level.load \"Bramblecrown Hill\"", completion.Line);
+    }
+
+    [Fact]
+    public void Completion_LevelLoadArgument_QuotedTitleIsAcceptedBySubmit()
+    {
+        var levels = LevelList();
+        var line = ConsoleCommandRegistry.Default.Complete("level.load bram", levels).Line;
+
+        var result = ConsoleCommandRegistry.Default.Bind(line, DevState(true), Toggles(), levels);
+
+        Assert.True(result.Ok);
+        Assert.Equal("Bramblecrown Hill.mblevel.json", result.Command.Value.Path);
+    }
+
+    [Fact]
+    public void Completion_LevelLoadArgument_KeepsEarlierWordsOfTheLine()
+    {
+        var completion = ConsoleCommandRegistry.Default.Complete("level.load  th", LevelList());
+
+        Assert.Equal("level.load  thps", completion.Line);
+    }
+
+    [Theory]
+    [InlineData("level.load zzz")]
+    [InlineData("nosuchverb th")]
+    [InlineData("player.god o")]
+    [InlineData("level.load thps map")]
+    public void Completion_NothingToOffer_LeavesTheLineUnchanged(string line)
+    {
+        var completion = ConsoleCommandRegistry.Default.Complete(line, LevelList());
+
+        Assert.Empty(completion.Matches);
+        Assert.Equal(line, completion.Line);
+        Assert.Equal(line, completion.Next().Line);
+    }
+
+    [Fact]
+    public void Completion_LevelLoadArgument_WithoutALevelListOffersNothing()
+    {
+        var completion = ConsoleCommandRegistry.Default.Complete("level.load th");
+
+        Assert.Empty(completion.Matches);
+    }
+
+    [Fact]
     public void ToggleVerbs_WithNoArgumentFlipTheCurrentState()
     {
         var toggles = Toggles(invulnerable: true, editor: false, hud: true, coordinates: false);

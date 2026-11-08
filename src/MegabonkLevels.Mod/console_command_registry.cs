@@ -25,6 +25,8 @@ public sealed class ConsoleVerb
 {
     private readonly Func<IReadOnlyList<string>, ConsoleToggleState, IReadOnlyList<string>, ConsoleBindResult> _bind;
 
+    private Func<int, IReadOnlyList<string>, IEnumerable<string>> _candidates;
+
     public ConsoleVerb(string name, string help, bool gated, Func<IReadOnlyList<string>, ConsoleToggleState, IReadOnlyList<string>, ConsoleBindResult> bind, string usage = null)
     {
         Name = name;
@@ -59,16 +61,30 @@ public sealed class ConsoleVerb
         return this;
     }
 
+    // What Tab offers for the argument at the given index; a verb without a provider offers nothing.
+    public ConsoleVerb WithCandidates(Func<int, IReadOnlyList<string>, IEnumerable<string>> candidates)
+    {
+        _candidates = candidates;
+        return this;
+    }
+
+    internal IEnumerable<string> Candidates(int argumentIndex, IReadOnlyList<string> levels) =>
+        _candidates?.Invoke(argumentIndex, levels) ?? Enumerable.Empty<string>();
+
     internal ConsoleBindResult Bind(IReadOnlyList<string> args, ConsoleToggleState toggles, IReadOnlyList<string> levels) => _bind(args, toggles, levels);
 }
 
-// The prefixes Tab completes over, and which match the key is cycling through. Index is -1 when nothing matches.
-public readonly record struct ConsoleCompletion(IReadOnlyList<string> Matches, int Index, string Prefix)
+// What Tab completes over and which match the key is cycling through. Index is -1 when nothing matches.
+// Lines holds the whole input line for each match, quoted where the word needs it; Original is the line when nothing matches.
+public readonly record struct ConsoleCompletion(IReadOnlyList<string> Matches, int Index, string Prefix, IReadOnlyList<string> Lines = null, string Original = "")
 {
     public string Text => Matches is { Count: > 0 } m && Index >= 0 && Index < m.Count ? m[Index] : "";
 
     // The characters to insert after the prefix to complete the word.
     public string Completion => Text.Length >= Prefix.Length ? Text.Substring(Prefix.Length) : "";
+
+    // The input line with the last word completed to the current match, or the line as typed when nothing matches.
+    public string Line => Lines is { Count: > 0 } l && Index >= 0 && Index < l.Count ? l[Index] : Original;
 
     // Tab cycles the matches and wraps at the ends; an empty match set stays empty.
     public ConsoleCompletion Next() => Matches is { Count: > 0 } m ? this with { Index = (Index + 1) % m.Count } : this;
@@ -144,17 +160,28 @@ public sealed class ConsoleCommandRegistry
         return result;
     }
 
-    // The verbs and aliases a Tab should offer for a prefix. Cycling lives in the returned value, so a fresh prefix starts at the first match.
-    public ConsoleCompletion Complete(string prefix) =>
-        new(MatchNames(prefix ??= ""), 0, prefix);
-
-    private List<string> MatchNames(string prefix) =>
-        _verbs
-            .SelectMany(VerbNames)
-            .Where(name => name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+    // Completes the last word of the line: the verb name for the first word, the verb's own candidates for an argument.
+    // Cycling lives in the returned value, so a fresh line starts at the first match.
+    public ConsoleCompletion Complete(string line, IReadOnlyList<string> levels = null)
+    {
+        line ??= "";
+        var word = ConsoleCommandTokenizer.LastWord(line);
+        var head = line.Substring(0, word.Start);
+        var matches = Candidates(head, word.WordsBefore, levels)
+            .Where(name => name.StartsWith(word.Text, StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(name => name, StringComparer.Ordinal)
             .ToList();
+
+        return new ConsoleCompletion(matches, matches.Count == 0 ? -1 : 0, word.Text, matches.Select(m => head + QuoteWord(m)).ToList(), line);
+    }
+
+    private IEnumerable<string> Candidates(string head, int wordsBefore, IReadOnlyList<string> levels) =>
+        wordsBefore == 0
+            ? _verbs.SelectMany(VerbNames).OrderBy(name => name, StringComparer.Ordinal)
+            : Find(ConsoleCommandTokenizer.Tokenize(head).Verb)?.Candidates(wordsBefore - 1, levels) ?? Enumerable.Empty<string>();
+
+    // A word with whitespace needs the quotes the tokenizer reads back as one argument.
+    private static string QuoteWord(string word) => word.Any(char.IsWhiteSpace) ? "\"" + word + "\"" : word;
 
     // help [filter]: one aligned line per verb the caller may use, with its aliases; gated verbs need the dev flag.
     private string Help(string filter, bool dev)
@@ -322,7 +349,7 @@ public sealed class ConsoleCommandRegistry
 
         registry.Add(new ConsoleVerb("level.list", "list the saved custom-level files", false, (_, _, _) => Command(HarnessCommandKind.ListLevels)));
         registry.Add(new ConsoleVerb("level.load", "load a level by path or title, with map/stage/tier/seed/noseed", true, (args, _, levels) => LoadLevel(args, levels))
-            .WithAliases("coc").WithRawError());
+            .WithAliases("coc").WithRawError().WithCandidates(LevelTitles));
         registry.Add(new ConsoleVerb("level.save", "save the editor's level, optionally under a name", true, (args, _, _) =>
             args.Count <= 1 && (args.Count == 0 || args[0].Trim().Length > 0)
                 ? Command(new HarnessCommand(HarnessCommandKind.SaveLevel, args.Count == 1 ? args[0] : null))
@@ -613,6 +640,10 @@ public sealed class ConsoleCommandRegistry
         error = $"no level named '{target}'; run level.list";
         return null;
     }
+
+    // Only the first argument of level.load names a level; the rest are map/stage/tier/seed options.
+    private static IEnumerable<string> LevelTitles(int argumentIndex, IReadOnlyList<string> levels) =>
+        argumentIndex == 0 && levels != null ? levels.Select(LevelStem) : Enumerable.Empty<string>();
 
     private static string Normalize(string value) =>
         new((value ?? "").Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());

@@ -62,6 +62,11 @@ public static class ConsoleOverlay
     private static ConsoleSlide _slide = ConsoleSlide.Parked;
     private static ConsoleEntryState? _entry;
     private static ConsoleFinder _finder;
+
+    // The completion Tab last wrote and the line it produced; a repeat Tab on that unedited line steps to the next match.
+    private static ConsoleCompletion _completion;
+
+    private static string _completedLine;
     private static string _finderSavedText = "";
     private static int _finderSavedCaret;
     private static int _viewportLines = 1;
@@ -287,14 +292,17 @@ public static class ConsoleOverlay
 
     private static void Complete()
     {
-        var (head, prefix) = SplitWord(_field.Text, _field.Caret);
-        var completion = ConsoleCommandRegistry.Default.Complete(prefix);
+        var completion = _completedLine != null && _field.Text == _completedLine
+            ? _completion.Next()
+            : ConsoleCommandRegistry.Default.Complete(_field.Text.Substring(0, _field.Caret), SafeLevelList());
         if (completion.Matches.Count == 0)
         {
             return;
         }
 
-        _field.Set(head + completion.Text + " ");
+        _completion = completion;
+        _completedLine = completion.Line + " ";
+        _field.Set(_completedLine);
     }
 
     private static ConsoleLinePlan PlanLine(string line)
@@ -541,17 +549,6 @@ public static class ConsoleOverlay
             EditorUi.ToWidget("ConsolePanel", _panel),
         };
         return widgets.Where(widget => widget.HasValue).Select(widget => widget.Value);
-    }
-
-    private static (string Head, string Prefix) SplitWord(string text, int caret)
-    {
-        var start = caret;
-        while (start > 0 && !char.IsWhiteSpace(text[start - 1]))
-        {
-            start--;
-        }
-
-        return (text.Substring(0, start), text.Substring(start, caret - start));
     }
 
     private static ConsoleToggleState CurrentToggles() =>
