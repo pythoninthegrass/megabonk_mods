@@ -10,6 +10,8 @@ This file provides guidance to AI agents when working with code in this reposito
 
 The single-page Astro showcase and its `PRODUCT.md`, `DESIGN.md` and `.impeccable/` context live in `site/`; see [Website development](docs/website.md) for commands and maintenance, and run Impeccable from `site/` or with an explicit site target. Website-only changes use the site checks and do not require rebuilding or relaunching the game mod.
 
+The site at `megabonkmod.party` is deployed by the icarus CLI (`ic`) from the `dokploy.yml` at the repository root, which is reconciled against a self-hosted Dokploy control plane whose URL and API key live only in the gitignored `site/.env`. Run every `ic` command from `site/`, and see [Deployment](docs/website.md#deployment) before changing hosting or DNS.
+
 ## Linux and Flatpak Steam caveats
 
 Megabonk ships a native Linux build (`Megabonk.x86_64`); when running that build there is no Proton or Wine prefix and the CrossOver `version.dll` override does not apply. `compatdata/3405340` can stay empty. The caveats below concern that native-build setup, not the Windows build under Proton.

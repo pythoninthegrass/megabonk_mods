@@ -55,13 +55,13 @@ docker compose -f site/docker-compose.yml logs site       # server logs
 docker compose -f site/docker-compose.yml down            # stop
 ```
 
-Open `http://127.0.0.1:8080/`. The published host port defaults to `8080` and is configurable through `SITE_PORT`, either per command (`SITE_PORT=8123 docker compose -f site/docker-compose.yml up -d`) or in a gitignored `site/.env` file that Compose reads automatically. Rebuild after editing content, the server or the image itself with `up -d --build`. The service publishes on `127.0.0.1` only, serves the static files with content types and cache headers (immutable for hashed `_astro/` assets, revalidation for `index.html`), and runs `node smoke.mjs` as its health check; `ps` reports `healthy` once it passes. To run that smoke check by hand, which fetches the home page and every local CSS, JavaScript and image it references and asserts status and content type:
+Open `http://127.0.0.1:8080/`. The published host port defaults to `8080` and is configurable through `SITE_PORT`, either per command (`SITE_PORT=8123 docker compose -f site/docker-compose.yml up -d`) or in a gitignored `site/.env` file that Compose reads automatically; [`site/.env.example`](../site/.env.example) is the template for both that variable and the deployment settings below. Rebuild after editing content, the server or the image itself with `up -d --build`. The service publishes on `127.0.0.1` only, serves the static files with content types and cache headers (immutable for hashed `_astro/` assets, revalidation for `index.html`), and runs `node smoke.mjs` as its health check; `ps` reports `healthy` once it passes. To run that smoke check by hand, which fetches the home page and every local CSS, JavaScript and image it references and asserts status and content type:
 
 ```sh
 docker compose -f site/docker-compose.yml exec site node smoke.mjs
 ```
 
-The same checks run on the host as part of `npm run test:site`. Container serving is a local preview workflow; it does not publish the site, and public hosting and DNS remain undecided.
+The same checks run on the host as part of `npm run test:site`. Compose is the local preview path; the published site is deployed by Dokploy under Deployment.
 
 ## Source map
 
@@ -81,6 +81,8 @@ Paths below are relative to the repository root.
 | `site/server.mjs` | Dependency-free static server used by the container and the built-output serve tests |
 | `site/smoke.mjs` | Smoke check of the home page and every local CSS, JavaScript and image it references |
 | `site/Dockerfile`, `site/docker-compose.yml`, `site/.dockerignore` | Multi-stage container build and local Compose serving, described under Container serving |
+| `site/.env.example` | Template for the gitignored `site/.env`: Compose port plus the Dokploy CLI credentials |
+| `dokploy.yml` | Declarative Dokploy deployment config for the published site, applied with the `ic` CLI under Deployment |
 
 Keep `site/package.json` and `site/package-lock.json` together when changing dependencies. `site/node_modules/`, `site/.astro/` and `site/dist/` are generated and ignored by Git.
 
@@ -130,11 +132,39 @@ From the repository root, `task lint` checks Markdown and Python lint. The Markd
 
 Review desktop and mobile layouts in a real browser, including both screenshot emphasis states, copy feedback, keyboard focus and the expanded MCP configuration. Long configuration lines must scroll inside their block rather than widen the page. Check that all images load before full-page screenshots, that reduced motion is respected and that content and native disclosures remain usable without JavaScript.
 
-## Deployment boundary
+## Deployment
 
-`npm run build` produces `site/dist/`, suitable for a static host at the domain root. Hosting is undecided; there is no deployment or DNS automation in the website project. Configure the custom domain and HTTPS at the selected host before launch. The Compose service under Container serving publishes the same build only on a loopback address of the local machine and is not hosting automation.
+`npm run build` produces `site/dist/`, suitable for a static host at the domain root; the site is published at `https://megabonkmod.party/`. Deployment is declarative: `dokploy.yml` at the repository root describes the project, the single `site` app and its domain, and the [icarus](https://github.com/pythoninthegrass/icarus) CLI (`ic`) reconciles that file against a self-hosted Dokploy control plane through its API. The control plane's address, API key and SSH target are the only hosting details that live outside the repository, in a gitignored `site/.env` copied from [`site/.env.example`](../site/.env.example) (`DOKPLOY_URL`, `DOKPLOY_API_KEY`, `DOKPLOY_ENV`, `DOKPLOY_SSH_*`); `site/.dockerignore` keeps that file out of the image and the Compose build context, and the credentials configure the CLI only — `dokploy.yml` sets `create_env_file: false`, so nothing from it is pushed into the container. Icarus reads `.env` from the working directory and locates `dokploy.yml` by walking up, so run every `ic` command from `site/`:
 
-The canonical URL appears in `site/astro.config.mjs` and the page's metadata, including social-image URLs. Keep those values consistent if the domain changes. Build and publish the static output; no Node server, game installation or harness endpoint is needed in production.
+```sh
+cd site
+ic --env prod check         # credentials, reachability and config validity
+ic --env prod plan          # diff against the server without writing
+ic --env prod apply         # check, setup, push env, deploy in wave order
+ic --env prod status        # build and deploy status per app
+ic --env prod logs site     # container logs, over SSH
+```
+
+Install the CLI once from a checkout of icarus (`uv tool install <icarus checkout>`). What the config provisions:
+
+| Piece | Value |
+| --- | --- |
+| Project | `megabonkmod-party`, containing the one `site` app |
+| Source | GitHub `main`; Dokploy clones the repository and builds `site/Dockerfile` with the `site/` build context, so the published image is the one the local Compose file builds |
+| Domain | `megabonkmod.party` routed to container port `8080`, HTTPS with a Let's Encrypt certificate |
+| Health check | `node smoke.mjs` inside the container, the same check the Compose healthcheck runs |
+| Auto-deploy | a push to `main` that touches `site/**` |
+
+Because Dokploy builds from the pushed commit, content reaches the site only after it is committed and pushed; `ic --env prod trigger` re-runs a deploy on demand. `.dokploy-state/prod.json` maps the config's names to Dokploy's resource ids and is gitignored: `ic --env prod import` regenerates it from an existing project, and it must be present before `apply`, which otherwise creates a duplicate project. Verify a deploy from anywhere with the container's own smoke check:
+
+```sh
+curl -sI https://megabonkmod.party/          # 200, text/html
+node smoke.mjs https://megabonkmod.party/    # exit 0 when every referenced asset serves
+```
+
+The domain's DNS must resolve directly to the host with no CDN proxy in front, or the Let's Encrypt HTTP-01 challenge cannot complete. `www.megabonkmod.party` resolves but has no router yet, so its TLS handshake fails; either register it as a second host for the app in `dokploy.yml` or redirect it to the apex at the DNS provider — undecided.
+
+The canonical URL appears in `site/astro.config.mjs` and the page's metadata, including social-image URLs. Keep those values consistent if the domain changes. Build and publish the static output; no Node server, game installation or harness endpoint is needed in production beyond the dependency-free static server in the image.
 
 ## Documentation references
 

@@ -1,6 +1,6 @@
 # megabonkmod.party
 
-Single-page, static Astro showcase for Megabonk Levels. Hosting is intentionally undecided; nothing in this project deploys the site or changes DNS.
+Single-page, static Astro showcase for Megabonk Levels, published at [megabonkmod.party](https://megabonkmod.party/) from the Dokploy configuration in [`dokploy.yml`](../dokploy.yml).
 
 See [Website development](../docs/website.md) for the full workflow. Website design context lives alongside this file in [`PRODUCT.md`](PRODUCT.md), [`DESIGN.md`](DESIGN.md) and `.impeccable/`; run Impeccable from `site/` or target the site explicitly from the repository root.
 
@@ -36,7 +36,11 @@ docker compose logs site       # server logs
 docker compose down            # stop
 ```
 
-Re-run `docker compose up -d --build` after content or server changes to rebuild. The published host port defaults to `8080` and is configurable with `SITE_PORT` (per command, or in a gitignored `site/.env` that Compose reads): `SITE_PORT=8123 docker compose up -d`. The service publishes on `127.0.0.1` only, and `smoke.mjs` — the container health check — fetches the home page and every referenced local CSS, JavaScript and image; run it on demand with `docker compose exec site node smoke.mjs`. Container serving is a local preview; public hosting and DNS remain undecided.
+Re-run `docker compose up -d --build` after content or server changes to rebuild. The published host port defaults to `8080` and is configurable with `SITE_PORT` (per command, or in a gitignored `site/.env` that Compose reads; [`.env.example`](.env.example) is the template): `SITE_PORT=8123 docker compose up -d`. The service publishes on `127.0.0.1` only, and `smoke.mjs` — the container health check — fetches the home page and every referenced local CSS, JavaScript and image; run it on demand with `docker compose exec site node smoke.mjs`. Container serving is the local preview path; the published site is deployed with the same image, described under Deployment.
+
+## Deployment
+
+The site at `megabonkmod.party` is deployed declaratively: [`dokploy.yml`](../dokploy.yml) at the repository root describes the Dokploy project, the `site` app and its domain, and the icarus CLI (`ic`) reconciles it against the control plane. Commands run from `site/` because icarus reads `.env` from the working directory, where the control plane's URL and API key live in the gitignored file; the server address itself is never committed. `ic --env prod check`, `plan`, `apply` and `status` cover the workflow, Dokploy builds `site/Dockerfile` from the pushed commit, and `node smoke.mjs` is both the container health check and the post-deploy verification. See [Deployment](../docs/website.md#deployment) for the full setup, DNS requirements and state file.
 
 ## Editing content
 

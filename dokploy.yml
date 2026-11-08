@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/pythoninthegrass/icarus/main/schemas/dokploy.schema.json
+
+# Deploys the megabonkmod.party showcase (site/) to Dokploy.
+# Run from the repository root with the ic CLI, e.g. `ic --env prod apply`.
+
+project:
+  name: megabonkmod-party
+  description: |
+    Single-page static Astro showcase for Megabonk Levels, served by the
+    dependency-free Node static server defined in site/Dockerfile.
+
+  deploy_order:
+    - [site]
+
+github:
+  owner: pythoninthegrass
+  repository: megabonk_mods
+  branch: main
+
+environments:
+  prod:
+    apps:
+      site:
+        domain:
+          host: megabonkmod.party
+          port: 8080
+          https: true
+          certificateType: letsencrypt
+        autoDeploy: true
+
+apps:
+  - name: site
+    source: github
+    buildType: dockerfile
+    dockerfile: site/Dockerfile
+    dockerContextPath: site
+    buildPath: /
+    triggerType: push
+    autoDeploy: false
+    watchPaths:
+      - site/**
+    create_env_file: false
+    healthCheck:
+      command: node smoke.mjs
+      interval: 30s
+      timeout: 10s
+      startPeriod: 15s
+      retries: 3
+    restartPolicy:
+      condition: any
