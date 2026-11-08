@@ -220,3 +220,9 @@ bake. The normal edit path leaves unchanged outer cliffs alone. Omitting this
 initial fill pass leaves raised tiles and ramp sides visibly open to the sky.
 
 The "go" verdict is implemented in `from_scratch_generation_patch.cs`; [development.md](development.md#from-scratch-level-load-path) describes the load path and its log lines. Earlier verification, before the initial fill pass was added, reported `tiles=49 flatTiles=48 fillTiles=0 objects=0` for `levels/from-scratch-fixture.mblevel.json`'s 49 authored cells. `InstantiateTile` appends to both tile lists itself and the patch must not. That run had `MapParameters size=7`, one `TileSlope(Clone)` and 48 `TileGround(Clone)` objects, no `(Clone)` chests, and the player at the authored spawn after both loading and a death-screen restart. A summoned boss walked across the grid. With initial fill enabled, Bramblecrown Hill's 225 cells log `420 edge(s), 60 hole edge(s)` and create 383 fill pieces on the tested game build. The teal tint, translucent map boundary and grass placement remain native behaviours rather than authored scenery.
+
+## Stage parameter interpretation
+
+Measured Forest stage assets use the same generator strategies but different grid metrics and prop sets: stages 1, 2 and 3 have size/scale pairs 15/20, 15/22 and 16/24. They are not merely re-skins at identical dimensions. Stage 1 has two bush groups instead of one, with `Bush1` aligned to the surface normal, and ten fewer logs than stages 2 and 3.
+
+The measured Desert asset's fixed `NoiseData.seed` (257) is a field value, not proof that runtime noise offsets use it instead of the generator's seed argument. See [Procedural-mesh maps](map-generation-determinism.md#procedural-mesh-maps-desert-hell) for the decompiled seed path. Repeated snapshots alone do not establish which seed controls the terrain.
