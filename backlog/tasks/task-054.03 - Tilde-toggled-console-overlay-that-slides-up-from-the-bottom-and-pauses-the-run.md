@@ -3,10 +3,10 @@ id: TASK-054.03
 title: >-
   Tilde-toggled console overlay that slides up from the bottom and pauses the
   run
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-08T07:54:00Z'
-updated_date: '2026-11-08T18:10:00Z'
+updated_date: '2026-11-08T18:18:00Z'
 labels: []
 dependencies:
   - TASK-054.01
@@ -49,11 +49,11 @@ Requirements and constraints the maintainer fixed or that the codebase imposes:
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 Backquote/tilde opens and closes the console in a run, in editor mode, and on the main menu; the toggle character is never typed into the input line
-- [ ] #2 The panel is dark grey and translucent, anchored to the bottom edge, and slides in and out while the game is paused (screenshot attached to the task as evidence)
+- [x] #2 The panel is dark grey and translucent, anchored to the bottom edge, and slides in and out while the game is paused (screenshot attached to the task as evidence)
 - [x] #3 Opening pauses the run; closing restores the prior pause state, and an editor session stays frozen after the console closes
 - [x] #4 The cursor is visible and unlocked while open and restored on close
 - [x] #5 Enter, Up/Down, Tab, PageUp/PageDown, the caret-editing keys and Esc behave as described; Esc does not open the pause menu
-- [ ] #6 The console does not open while the game's F10 DebugConsole is active, and F6-F9 and editor hotkeys do not fire while the console is focused
+- [x] #6 The console does not open while the game's F10 DebugConsole is active, and F6-F9 and editor hotkeys do not fire while the console is focused
 - [x] #7 The harness key command accepts BackQuote, PageUp, PageDown, Home and End, with tests for the allow-list
 - [x] #8 Console widgets appear in harness ui-tree output
 - [x] #9 docs/development.md documents keys, pause behaviour and the DebugConsole interaction
@@ -70,8 +70,15 @@ Requirements and constraints the maintainer fixed or that the codebase imposes:
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-#4 verified live through the new `cursorVisible`/`cursorLocked` fields of the harness `state` result: in a run the cursor is hidden and locked, with the console open it is visible and unlocked, and after close it is hidden and locked again. Screenshot of the open panel (dark, translucent, bottom-anchored, paused run): .tools/evidence/task-054-03-console-open.png. #2 (slide animation, 0.12 s) is covered only by the Slide_* unit tests and #6 (F10 DebugConsole) only by ConsoleState.Toggle unit tests; both stay unchecked.
+#4 verified live through the new `cursorVisible`/`cursorLocked` fields of the harness `state` result: in a run the cursor is hidden and locked, with the console open it is visible and unlocked, and after close it is hidden and locked again. Screenshot of the open panel (dark, translucent, bottom-anchored, paused run): .tools/evidence/task-054-03-console-open.png.
+#2 and #6 verified by the maintainer in the running game: the panel slides in and out while paused, and the console does not open while the F10 DebugConsole is active.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added the tilde-toggled console overlay: a dark grey, translucent, terminal-style panel anchored to the bottom (about 40% of the screen) that slides on unscaled time, pauses the run and restores the prior pause and cursor state on close, and is driven through EditorInput from the mod's per-frame update. Harness key allow-list covers BackQuote, PageUp, PageDown, Home and End; console widgets show in ui_tree; F6-F9 and editor hotkeys are gated while it has focus, including the F7 coordinate toggle fixed during verification. This session added `cursorVisible` and `cursorLocked` to the harness `state` result (unit tested, documented) so the cursor behaviour could be checked live. Verification: unit tests and build pass; driven live through the harness for toggle, pause, keys, ui_tree and cursor; slide and F10 DebugConsole behaviour confirmed by the maintainer. Evidence screenshot: .tools/evidence/task-054-03-console-open.png (gitignored).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Live verification
 
