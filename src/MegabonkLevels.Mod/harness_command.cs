@@ -57,6 +57,7 @@ public enum HarnessCommandKind
     Coordinates,
     Music,
     EditorLoad,
+    Console,
 }
 
 // Arguments of a new-level command: the blank from-scratch level's map, stage, tier and square grid size.
@@ -147,7 +148,7 @@ public sealed class QueryArgs
 }
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null, PerfArgs Perf = null, int? Offer = null, bool Skip = false, InteractArgs Interact = null, NewLevelArgs? NewLevel = null, string KillTarget = null, MusicArgs Music = null)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null, PerfArgs Perf = null, int? Offer = null, bool Skip = false, InteractArgs Interact = null, NewLevelArgs? NewLevel = null, string KillTarget = null, MusicArgs Music = null, string Line = null)
 {
     public const int MaxTypeLength = 200;
 
@@ -196,6 +197,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
 
         switch (name)
         {
+            case "console":
+                return TryParseConsole(root, out command, out error);
             case "damage":
                 return TryParseDamage(root, out command, out error);
             case "kill-enemies":
@@ -1070,6 +1073,20 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.UiTree, null, Input: new InputArgs { Action = "ui-tree", X = x, Y = y });
+        return true;
+    }
+
+    private static bool TryParseConsole(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+        if (!TryGetString(root, "line", out var line) || string.IsNullOrWhiteSpace(line))
+        {
+            error = "console needs a non-empty string field 'line'";
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.Console, null, Line: line);
+        error = null;
         return true;
     }
 

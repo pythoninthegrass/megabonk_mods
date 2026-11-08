@@ -2,6 +2,27 @@ namespace MegabonkLevels.Tests;
 
 public class HarnessCommandTests
 {
+    [Fact]
+    public void Console_PreservesTheRawLine()
+    {
+        Assert.True(HarnessCommand.TryParse("""{"command":"console","line":"  help player  "}""", out var command, out var error), error);
+        Assert.Equal(HarnessCommandKind.Console, command.Kind);
+        Assert.Equal("console", command.Name);
+        Assert.Equal("  help player  ", command.Line);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"console"}""")]
+    [InlineData("""{"command":"console","line":""}""")]
+    [InlineData("""{"command":"console","line":"   "}""")]
+    [InlineData("""{"command":"console","line":null}""")]
+    [InlineData("""{"command":"console","line":42}""")]
+    public void Console_RejectsMissingOrEmptyLines(string json)
+    {
+        Assert.False(HarnessCommand.TryParse(json, out _, out var error));
+        Assert.Equal("console needs a non-empty string field 'line'", error);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

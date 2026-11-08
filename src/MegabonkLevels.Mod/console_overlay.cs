@@ -67,6 +67,7 @@ public static class ConsoleOverlay
     private static string _finderSavedText = "";
     private static int _finderSavedCaret;
     private static int _viewportLines = 1;
+    private static bool _logLoaded;
 
     public static bool Open { get; private set; }
 
@@ -335,9 +336,9 @@ public static class ConsoleOverlay
 
     private static ConsoleLinePlan PlanLine(string line)
     {
+        RestorePersistedLog();
         var dev = ConsoleState.DevState(Environment.GetEnvironmentVariable);
-        var bind = ConsoleCommandRegistry.Default.Bind(line, dev, CurrentToggles(), SafeLevelList());
-        return ConsoleState.Plan(line, bind, Run, _history.Entries);
+        return ConsoleState.Execute(line, dev, CurrentToggles(), DevHarness.Run, _history.Entries, SafeLevelList());
     }
 
     private static void ClearScrollbackAndStore()
@@ -357,7 +358,12 @@ public static class ConsoleOverlay
 
     private static void Submit()
     {
-        var line = _field.Text;
+        SubmitLine(_field.Text);
+        _field.Clear();
+    }
+
+    public static ConsoleLinePlan SubmitLine(string line)
+    {
         var plan = PlanLine(line);
 
         if (plan.ClearScrollback)
@@ -381,14 +387,7 @@ public static class ConsoleOverlay
         }
 
         _scrollback.ScrollToBottom();
-        _field.Clear();
-    }
-
-    // Runs one bound command in-process (the in-process harness entry point) and formats its result for scrollback.
-    private static string Run(HarnessCommand command)
-    {
-        var result = DevHarness.Run(command);
-        return ConsoleState.ReplyFor(result);
+        return plan;
     }
 
     private static void Build()
@@ -462,13 +461,24 @@ public static class ConsoleOverlay
         _placeholder.color = PlaceholderColor;
         _placeholder.text = PlaceholderText;
 
-        _scrollback = new ConsoleScrollback(MaxScrollbackLines, Math.Max(1, _viewportLines - 1), _wrapColumns);
         RestorePersistedLog();
+        var previousLines = _scrollback.Lines;
+        _scrollback = new ConsoleScrollback(MaxScrollbackLines, Math.Max(1, _viewportLines - 1), _wrapColumns);
+        foreach (var line in previousLines)
+        {
+            _scrollback.Append(line);
+        }
     }
 
     // Brings the previous sessions' history and scrollback back, trimming the file as it goes.
     private static void RestorePersistedLog()
     {
+        if (_logLoaded)
+        {
+            return;
+        }
+
+        _logLoaded = true;
         _store.Compact(HistoryLimit, MaxScrollbackLines);
         var snapshot = _store.Load(HistoryLimit, MaxScrollbackLines);
         foreach (var line in snapshot.History)

@@ -87,6 +87,37 @@ async def test_state_tool_returns_the_result_and_writes_nothing_to_stdout(tmp_pa
     assert capsys.readouterr().out == ""
 
 
+@pytest.mark.parametrize("ok", [True, False])
+async def test_console_tool_sends_raw_line_and_returns_reply(tmp_path, monkeypatch, ok) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+    line = 'level.load "my level"'
+    reply = {"ok": ok, "lines": ["> " + line, "loaded" if ok else "requires MEGABONK_DEV"]}
+
+    def responder(payload):
+        seen.append(payload)
+        return ok_result(payload, reply)
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("console", {"line": line})
+    finally:
+        stop.set()
+    assert not result.is_error
+    assert seen == [{"command": "console", "line": line}]
+    assert json.loads(result.content[0].text)["result"] == reply
+
+
+async def test_console_tool_rejects_blank_input_without_queuing(tmp_path, monkeypatch) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    async with Client(mcp_server.mcp) as client:
+        result = await client.call_tool("console", {"line": "  "})
+    assert result.is_error
+    assert "non-empty" in result.content[0].text
+    assert not list((harness / "commands").glob("*.json"))
+
+
 async def test_rejected_command_surfaces_the_error_as_a_toolerror(tmp_path, monkeypatch) -> None:
     harness = setup_harness(tmp_path, monkeypatch)
     rejected = json.dumps({"command": "state", "ok": False, "error": "no player here"})
@@ -1279,4 +1310,3 @@ async def test_clear_console_log_deletes_the_persisted_log(tmp_path, monkeypatch
     async with Client(mcp_server.mcp) as client:
         again = await client.call_tool("clear_console_log", {})
     assert json.loads(again.content[0].text)["removed"] is False
-

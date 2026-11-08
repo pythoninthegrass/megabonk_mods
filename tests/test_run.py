@@ -265,6 +265,30 @@ def test_state_prints_the_result_json(capsys) -> None:
     assert json.loads(printed) == {"editor": True, "player": None}
 
 
+def test_console_preserves_one_raw_argument() -> None:
+    line = 'level.load "my level" --seed 12'
+    assert run.parse_args(["console", line]).line == line
+    assert run.build_console_command(line) == {"command": "console", "line": line}
+
+
+@pytest.mark.parametrize("line", ["", "   "])
+def test_console_rejects_empty_lines(line) -> None:
+    with pytest.raises(ValueError, match="non-empty"):
+        run.build_console_command(line)
+
+
+@pytest.mark.parametrize("ok", [True, False])
+def test_console_prints_reply_lines_and_uses_console_ok(capsys, ok) -> None:
+    lines = ["> state", "ok" if ok else "requires MEGABONK_DEV"]
+    body = json.dumps({"command": "console", "ok": True, "result": {"ok": ok, "lines": lines}})
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, body)
+        assert run_main(game, "console", "state") == (0 if ok else 1)
+        payload = json.loads(next((game / "harness" / "done").glob("*.json")).read_text())
+        assert payload == {"command": "console", "line": "state"}
+    assert capsys.readouterr().out.endswith("\n".join(lines) + "\n")
+
+
 def test_bundle_sends_load_bundle_and_prints_the_result_json(capsys) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         game = fake_game(tmp, '{"command":"load-bundle","ok":true,"result":{"assets":["a.prefab"],"prefab":"A"}}')
@@ -2563,4 +2587,3 @@ def test_clear_console_log_without_a_log_is_not_an_error(tmp_path) -> None:
 
 def test_clear_console_log_cli_parses() -> None:
     assert run.parse_args(["clear-console-log"]).action == "clear-console-log"
-

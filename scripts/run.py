@@ -36,6 +36,7 @@ Usage:
     run.py damage <1-99>           Apply integer damage bypassing shield; preserves 1 HP unless --no-nonlethal
     run.py steam-ready             Check whether the in-game Steamworks client is ready
     run.py state                   Print the game's current state as JSON (level, editor, player, tool, selection)
+    run.py console '<line>'        Run a console line and print the overlay's reply without opening it
     run.py shader-report           Print which candidate shaders Shader.Find resolves and the shaders and properties of the scene's materials
     run.py material-dump [object]  Print the shader, keywords and textures of every material under the objects whose name contains [object] (default Warehouse)
     run.py character-screen <on|off>  Restrict the game's character screen to Calcium and Tony McZoom (a custom run is being set up) or restore the stock grid
@@ -463,6 +464,12 @@ def build_music_command(action: str, track: int | None = None) -> dict[str, obje
     if track is not None:
         raise ValueError("music takes a track number only with the track action")
     return {"command": "music", "action": action}
+
+
+def build_console_command(line: str) -> dict[str, object]:
+    if not line.strip():
+        raise ValueError("console needs a non-empty line")
+    return {"command": "console", "line": line}
 
 
 def console_log_path(game_dir: Path) -> Path:
@@ -1332,6 +1339,19 @@ def send_printing_result(
     return ok and result is not None
 
 
+def send_console(harness: Path, line: str, timeout: float) -> bool:
+    ok, result = send_for_result(harness, build_console_command(line), timeout)
+    if not ok:
+        return False
+    reply = (result or {}).get("result")
+    if not isinstance(reply, dict) or not isinstance(reply.get("lines"), list):
+        print("console: no reply lines returned", file=sys.stderr)
+        return False
+    for printed in reply["lines"]:
+        print(printed)
+    return reply.get("ok") is True
+
+
 def send_screenshot(harness: Path, out: Path, timeout: float) -> bool:
     out = out.resolve()
     out.unlink(missing_ok=True)
@@ -1574,6 +1594,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     damage.add_argument("--nonlethal", action=argparse.BooleanOptionalAction, default=True, help="preserve at least 1 HP; --no-nonlethal can end the run")
     sub.add_parser("steam-ready")
     sub.add_parser("state")
+    console = sub.add_parser("console", help="run one console line without opening the overlay")
+    console.add_argument("line", help="entire console line as one quoted argument")
     sub.add_parser("shader-report")
     character_screen = sub.add_parser("character-screen")
     character_screen.add_argument("state", choices=["on", "off"])
@@ -2096,6 +2118,11 @@ def main(argv: list[str] | None = None) -> int:
             ok = send(harness, build_command(args.action), args.timeout)
         case "state":
             ok = send_printing_result(harness, build_command("state"), args.timeout)
+        case "console":
+            try:
+                ok = send_console(harness, args.line, args.timeout)
+            except ValueError as error:
+                raise SystemExit(str(error)) from error
         case "press-death-confirm" | "press-summary-restart":
             ok = send_printing_result(harness, build_command(args.action), args.timeout, request=request_press)
         case "music":

@@ -121,6 +121,18 @@ public static class DevHarness
     {
         switch (command.Kind)
         {
+            case HarnessCommandKind.Console:
+                var plan = ConsoleOverlay.SubmitLine(command.Line);
+                var lines = new JsonArray();
+                foreach (var printed in plan.PrintLines)
+                {
+                    foreach (var line in ConsoleScrollback.Split(printed))
+                    {
+                        lines.Add(line);
+                    }
+                }
+
+                return new JsonObject { ["ok"] = plan.Ok, ["lines"] = lines };
             case HarnessCommandKind.LoadLevel:
                 _logger.Msg($"DevHarness: load-level '{command.Path}'.");
                 // Always resolve relative paths from the repo workspace into the game's Z: mount.

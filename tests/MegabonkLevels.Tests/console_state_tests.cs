@@ -304,4 +304,48 @@ public class ConsoleStateTests
         Assert.True(HarnessCommand.TryParse(json, out var command, out var error), error);
         return command;
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Execute_UsesRegistryGatingBeforeDispatch(bool dev)
+    {
+        var calls = 0;
+        var plan = ConsoleState.Execute("tp 1 2 3", new ConsoleDevState(dev), default, command =>
+        {
+            calls++;
+            Assert.Equal(HarnessCommandKind.Teleport, command.Kind);
+            return HarnessResult.Success(command.Name, null);
+        });
+
+        Assert.Equal(dev, plan.Ok);
+        Assert.Equal(dev ? 1 : 0, calls);
+        Assert.Equal(dev ? "ok" : "requires MEGABONK_DEV", plan.PrintLines[1]);
+        Assert.Equal(dev, plan.RememberHistory);
+    }
+
+    [Fact]
+    public void Execute_ReturnsFailedDispatchAndTheOverlayReply()
+    {
+        var plan = ConsoleState.Execute("state", new ConsoleDevState(false), default,
+            command => HarnessResult.Failure(command.Name, "no player"));
+
+        Assert.False(plan.Ok);
+        Assert.Equal(new[] { "> state", "error: no player" }, plan.PrintLines);
+        Assert.True(plan.RememberHistory);
+    }
+
+    [Fact]
+    public void Execute_HistoryAndClearUseTheConsoleOnlyPath()
+    {
+        HarnessResult NoDispatch(HarnessCommand _) => throw new InvalidOperationException("console-only verb dispatched");
+        var history = ConsoleState.Execute("history", default, default, NoDispatch, new[] { "state" });
+        Assert.True(history.Ok);
+        Assert.Equal(new[] { "  1  state" }, history.PrintLines);
+        Assert.True(history.RememberHistory);
+        var clear = ConsoleState.Execute("clear", default, default, NoDispatch);
+        Assert.True(clear.Ok);
+        Assert.True(clear.ClearScrollback);
+        Assert.Empty(clear.PrintLines);
+    }
 }

@@ -283,6 +283,16 @@ async def state() -> CallToolResult:
 
 
 @mcp.tool()
+async def console(line: str) -> CallToolResult:
+    """Run a raw console line without opening the overlay. Returns result.ok and result.lines (the overlay's printed lines); refusals such as 'requires MEGABONK_DEV' have result.ok false. Uses the same registry, gating, scrollback and history as typed input."""
+    try:
+        payload = run.build_console_command(line)
+    except ValueError as error:
+        raise ToolError(str(error)) from error
+    return await _command(_harness(), payload, TIMEOUT)
+
+
+@mcp.tool()
 async def editor(on: bool) -> CallToolResult:
     """Enter or leave editor mode (frozen run, free-fly camera), like pressing F8."""
     return await _command(_harness(), run.build_editor_command(on), TIMEOUT)

@@ -78,6 +78,19 @@ public static class ConsoleState
     public static ConsoleToggleState Toggles(Func<bool> invulnerable, Func<bool> editor, Func<bool> hud, Func<bool> coordinates) =>
         new(invulnerable(), editor(), hud(), coordinates());
 
+    public static ConsoleLinePlan Execute(string line, ConsoleDevState dev, ConsoleToggleState toggles, Func<HarnessCommand, HarnessResult> runCommand, IReadOnlyList<string> history = null, IReadOnlyList<string> levels = null)
+    {
+        var bind = ConsoleCommandRegistry.Default.Bind(line, dev, toggles, levels);
+        var ok = bind.Ok;
+        var plan = Plan(line, bind, command =>
+        {
+            var result = runCommand(command);
+            ok = result.Ok;
+            return ReplyFor(result);
+        }, history);
+        return plan with { Ok = ok };
+    }
+
     // A line with no verb is a no-op; a refusal echoes the line and the reply; a console-only verb prints its own
     // reply (or clears); a bound line runs through the harness and echoes the line plus what came back.
     public static ConsoleLinePlan Plan(string line, ConsoleBindResult bind, Func<HarnessCommand, string> runCommand, IReadOnlyList<string> history = null)
@@ -142,7 +155,7 @@ public static class ConsoleState
 
 // What the console prints for one submitted line, whether it cleared the scrollback, and whether the line is
 // remembered in history.
-public readonly record struct ConsoleLinePlan(IReadOnlyList<string> PrintLines, bool ClearScrollback, bool RememberHistory)
+public readonly record struct ConsoleLinePlan(IReadOnlyList<string> PrintLines, bool ClearScrollback, bool RememberHistory, bool Ok = true)
 {
     public static ConsoleLinePlan Blank { get; } = new(Array.Empty<string>(), false, false);
 }
