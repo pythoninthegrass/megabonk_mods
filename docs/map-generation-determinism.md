@@ -155,7 +155,7 @@ The sequencer hands the per-run `mapSeed` to `MapGenerator.GenerateMap(MapData, 
 
 ### Enemies, minibosses and the boss
 
-`StageTimeline` data decides what appears and when (`startEnemies`, `events`, `boss`, `minibosses`), and no seed field exists on it (dump). The runtime draws split across the two streams: `StageSummoner.AddEnemyToPoolAndPickNewCard` picks from the enemy pool with `UnityEngine.Random.Range(0, count)` (decompiled, 0x485DB0), while `BaseSummoner.GetRandomCard` (0x46CDD0) and `SummonerController.EventMiniboss` (0x487240) weight and select on `MyRandom.random`. `SummonerController.SpawnStageBoss` (0x487C20) offsets the boss position with `Random.insideUnitSphere`, and `EnemyManager.SpawnBoss` (0x41A200) is a coroutine wrapper that spawns nothing itself; `EnemyManager.SpawnEnemy` takes an explicit position (dump).
+`StageTimeline` data decides what appears and when (`startEnemies`, `events`, `boss`, `minibosses`), and no seed field exists on it (dump). The runtime draws split across the two streams: `StageSummoner.AddEnemyToPoolAndPickNewCard` picks from the enemy pool with `UnityEngine.Random.Range(0, count)` (decompiled, 0x485DB0), while `BaseSummoner.GetRandomCard` (0x46CDD0) and `SummonerController.EventMiniboss` (0x487240) weight and select on `MyRandom.random`. `SummonerController.SpawnStageBoss` (0x487C20) offsets the boss position with `Random.insideUnitSphere`. `EnemyManager.SpawnBoss(EEnemy, int, EEnemyFlag, Vector3, float)` resolves the enemy data and calls the positional `EnemyManager.SpawnEnemy` overload at 0x41A3F0; it is not a coroutine wrapper (dump signature and decompiled, 0x41A200).
 
 ### What stays random in an authored from-scratch level
 

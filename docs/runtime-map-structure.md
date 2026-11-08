@@ -107,7 +107,7 @@ The game has its own catch floor: a `WorldCollider` (`WorldColliderTrigger`) at 
 
 ## 4. `genId` scheme
 
-Tiles-map generation is fully deterministic given a fixed `debugSeed` (see [map-generation-determinism.md](map-generation-determinism.md)), and the live index built at `A_GenerationComplete` has the same categories and counts on repeat loads of the same level (Forest, seed 20261007: 225 tiles, 160 flat, 203 fill, 39 tile objects, 1474 indexed in total). Each generated object gets a stable id:
+The Tiles terrain snapshot repeats with a fixed `debugSeed`; this does not guarantee every generated object's transform or identity repeats (see [map-generation-determinism.md](map-generation-determinism.md) and the measured repeat behaviour below). The live index built at `A_GenerationComplete` had the same categories and counts on repeat loads of Forest seed 20261007: 225 tiles, 160 flat, 203 fill, 39 tile objects, 1474 indexed in total. Each generated object gets an order-based id within that generation; equal counts alone do not prove that an id refers to the same object and transform across generations:
 
 ```text
 {category}:{sequentialIndexWithinCategory, 4 digits, zero-based}
