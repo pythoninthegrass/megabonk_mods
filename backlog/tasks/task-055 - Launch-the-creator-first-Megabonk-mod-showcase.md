@@ -1,10 +1,10 @@
 ---
 id: TASK-055
 title: Launch the creator-first Megabonk mod showcase
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-08T20:49:00Z'
-updated_date: '2026-11-08T21:49:00Z'
+updated_date: '2026-11-08T22:33:00Z'
 labels: []
 dependencies: []
 references:
@@ -32,10 +32,10 @@ Creators need a concise public explanation of what this repository adds to Megab
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
+- [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -65,10 +65,22 @@ All acceptance criteria are verified. Keep In Progress for remaining repository 
 Follow-up: all 12 current off-site links, including the Markdown harness link and newly embedded https://melon-loader.com/ link on MelonLoader in the setup checklist, use target=_blank and rel=noopener noreferrer. Local fragment navigation stays in the current tab. Inline prose links are visibly underlined. Added a regression test first (observed failure), then verified generated HTML and the live browser: 12 external links, no incorrect targets/rel values, MelonLoader label/URL correct. Astro check and all 5 built-page tests pass; no new Markdown dependency was added.
 
 Website design context is now scoped under site/: PRODUCT.md, DESIGN.md and the entire .impeccable/ directory moved from the repository root, preserving ignored screenshots and seed history. Surface brief renamed to site/.impeccable/surfaces/src-pages-index-astro.md with primary_target src/pages/index.astro; sidecar source references rebased. docs/website.md, site/README.md and the two-sentence AGENTS.md website pointer document the new root. Shared skills remain in .agents/skills/. Verified surface-brief lookup from site/, config/JSON validity, documentation links, preserved review captures, Git ignore behavior, Markdown lint and static build.
+
+Closure verification (mbp, pushed HEAD 40effa8): task check exit 0, covering the mod build and deploy, the Go installer, 1158 pytest items and task lint. Website checks green: astro check 0 errors/warnings, 3 clipboard tests, 10 built-output and static-server tests, production build, npm audit 0 vulnerabilities. Committed and pushed as 13bd501 (container tooling) and 40effa8 (deployment docs and site/.env.example), both conventional subject and body only with no attribution trailer.
+
+Hosting was decided after the original plan and is now implemented: the site is live at https://megabonkmod.party/ served from the multi-stage image built from site/Dockerfile, deployed declaratively through dokploy.yml with the icarus CLI and documented under docs/website.md#deployment. Live verification: apex answers 200 text/html over HTTPS with a Let's Encrypt certificate, plain HTTP 301s to HTTPS, and the container smoke check run against the public origin passes with 18 local references (1 css, 1 js, 16 images) at exit 0.
+
+Remaining deferred items, neither covered by an acceptance criterion: the editor and gameplay video placeholders remain placeholders by design, and www.megabonkmod.party resolves but has no router yet, so its TLS handshake fails; it needs a second host entry on the app or a redirect at the DNS provider.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Built a creator-first, single-page showcase for megabonkmod.party in site/, using Astro, Markdown-first content, vanilla JavaScript, Alpine.js and Basecoat UI. Includes original Bramblecrown screenshots, editor/gameplay video placeholders, accurately labeled commands and setup/compatibility guidance. Build, Astro check, 7 tests, dependency audit and repo lint pass; desktop/mobile and progressive enhancement behavior verified in a real browser. Two finish-review fixes were scored resolved. Deployment and actual recordings remain intentionally deferred; changes are uncommitted.
+Built a creator-first, single-page showcase for megabonkmod.party in site/, using Astro, Markdown-first content, vanilla JavaScript, Alpine.js and Basecoat UI. Includes original Bramblecrown editor, gameplay and console captures, honestly labeled editor and gameplay video placeholders, accurately labeled console/shell/MCP commands, creator-focused guide links and compatibility notes, and canonical metadata in a host-independent static output. Website design context (PRODUCT.md, DESIGN.md, .impeccable/) is scoped under site/.
+
+The site is published at https://megabonkmod.party/ from the container image the repository builds: a multi-stage site/Dockerfile served by the dependency-free static server, deployed declaratively through dokploy.yml with the icarus CLI and documented under docs/website.md#deployment, with the container smoke check doubling as the health check and the post-deploy verification. Container serving for local preview is documented under docs/website.md.
+
+Verification: astro check 0 errors/warnings; 3 clipboard tests written first and observed red before implementation, plus 10 built-output and static-server tests; production build and npm audit with 0 vulnerabilities; task check exit 0 including the mod build, installer, Python suites and lint; task lint clean. Real-browser desktop and mobile review covers both screenshot emphasis states, copy feedback, keyboard focus, the expanded MCP configuration and no-JavaScript content. Live checks against the public origin: HTTPS 200 text/html with a Let's Encrypt certificate, HTTP 301 to HTTPS, and the smoke check passes 18 local references at exit 0.
+
+Deferred by design or out of scope: the two video placeholders await real recordings, and www.megabonkmod.party still needs a router or a DNS-level redirect.
 <!-- SECTION:FINAL_SUMMARY:END -->
