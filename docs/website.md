@@ -42,6 +42,27 @@ Open the URL Astro prints, normally `http://127.0.0.1:4321/`. The npm scripts bi
 npm exec astro dev stop
 ```
 
+## Container serving
+
+Docker Engine with Docker Compose v2 is the only prerequisite: the image builds the site from source inside the container, so the host needs no Node, npm or game tooling for this workflow. The container tooling lives with the site: `site/Dockerfile`, `site/docker-compose.yml`, `site/.dockerignore`, plus the dependency-free static server `site/server.mjs` and the smoke check `site/smoke.mjs`. The multi-stage Dockerfile runs `npm ci` and `astro build` in a Node 22 Alpine build stage, then serves `dist/` from a slim stage that contains only `dist/`, `server.mjs` and `smoke.mjs` and runs as a non-root user. The build context is `site/`, so game and mod assets never enter it, and `site/.dockerignore` additionally keeps out `node_modules/`, `.astro/`, `dist/`, the `.impeccable/` design-review state, `.env*` files and logs.
+
+From the repository root:
+
+```sh
+docker compose -f site/docker-compose.yml up -d --build   # build and start
+docker compose -f site/docker-compose.yml ps              # status, including health
+docker compose -f site/docker-compose.yml logs site       # server logs
+docker compose -f site/docker-compose.yml down            # stop
+```
+
+Open `http://127.0.0.1:8080/`. The published host port defaults to `8080` and is configurable through `SITE_PORT`, either per command (`SITE_PORT=8123 docker compose -f site/docker-compose.yml up -d`) or in a gitignored `site/.env` file that Compose reads automatically. Rebuild after editing content, the server or the image itself with `up -d --build`. The service publishes on `127.0.0.1` only, serves the static files with content types and cache headers (immutable for hashed `_astro/` assets, revalidation for `index.html`), and runs `node smoke.mjs` as its health check; `ps` reports `healthy` once it passes. To run that smoke check by hand, which fetches the home page and every local CSS, JavaScript and image it references and asserts status and content type:
+
+```sh
+docker compose -f site/docker-compose.yml exec site node smoke.mjs
+```
+
+The same checks run on the host as part of `npm run test:site`. Container serving is a local preview workflow; it does not publish the site, and public hosting and DNS remain undecided.
+
 ## Source map
 
 Paths below are relative to the repository root.
@@ -57,6 +78,9 @@ Paths below are relative to the repository root.
 | `site/public/` | Unprocessed public files, including the favicon, social image and robots rules |
 | `site/astro.config.mjs` | Canonical site URL, static output, Tailwind integration and Markdown highlighting |
 | `site/tests/` | Clipboard unit tests and assertions against the generated page |
+| `site/server.mjs` | Dependency-free static server used by the container and the built-output serve tests |
+| `site/smoke.mjs` | Smoke check of the home page and every local CSS, JavaScript and image it references |
+| `site/Dockerfile`, `site/docker-compose.yml`, `site/.dockerignore` | Multi-stage container build and local Compose serving, described under Container serving |
 
 Keep `site/package.json` and `site/package-lock.json` together when changing dependencies. `site/node_modules/`, `site/.astro/` and `site/dist/` are generated and ignored by Git.
 
@@ -100,7 +124,7 @@ npm audit
 npm run preview
 ```
 
-`test:site` reads `dist/index.html`, so build first. It checks static content, local assets, video placeholders, fragment destinations, setup claims and safe new-tab behavior for external links. `npm test` checks exact clipboard text and unavailable/denied clipboard behavior. The production preview serves the built files, not the development source; rebuild after edits before reviewing it.
+`test:site` reads `dist/index.html`, so build first. It checks static content, local assets, video placeholders, fragment destinations, setup claims and safe new-tab behavior for external links. It also serves `dist/` through `server.mjs` and runs the container smoke checks, asserting the home page plus every referenced local CSS, JavaScript and image answer with the right status and content type. `npm test` checks exact clipboard text and unavailable/denied clipboard behavior. The production preview serves the built files, not the development source; rebuild after edits before reviewing it.
 
 From the repository root, `task lint` checks Markdown and Python lint. The Markdown ignore file excludes website dependencies, generated files and embedded content fragments, whose heading levels and sentence-style headings belong to the surrounding page. The repository's `task check` also builds/deploys the game mod and runs unrelated suites; it does not replace the website checks above.
 
@@ -108,7 +132,7 @@ Review desktop and mobile layouts in a real browser, including both screenshot e
 
 ## Deployment boundary
 
-`npm run build` produces `site/dist/`, suitable for a static host at the domain root. Hosting is undecided; there is no deployment or DNS automation in the website project. Configure the custom domain and HTTPS at the selected host before launch.
+`npm run build` produces `site/dist/`, suitable for a static host at the domain root. Hosting is undecided; there is no deployment or DNS automation in the website project. Configure the custom domain and HTTPS at the selected host before launch. The Compose service under Container serving publishes the same build only on a loopback address of the local machine and is not hosting automation.
 
 The canonical URL appears in `site/astro.config.mjs` and the page's metadata, including social-image URLs. Keep those values consistent if the domain changes. Build and publish the static output; no Node server, game installation or harness endpoint is needed in production.
 

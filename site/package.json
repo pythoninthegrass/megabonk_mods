@@ -8,7 +8,7 @@
     "preview": "astro preview --host 127.0.0.1",
     "check": "astro check",
     "test": "node --test tests/clipboard.test.js",
-    "test:site": "node --test tests/site.test.js"
+    "test:site": "node --test tests/site.test.js tests/server.test.js"
   },
   "dependencies": {
     "@fontsource/archivo": "^5.2.0",

@@ -25,6 +25,19 @@ npm run preview
 
 The build produces `dist/`, suitable for a static host at the domain root. The canonical URL is set in `astro.config.mjs` and page metadata. Configure the custom domain and HTTPS at the chosen host before launch.
 
+## Serving with Docker
+
+With Docker Engine and Docker Compose v2 installed, the site builds and serves in a container without host Node or npm. The multi-stage `Dockerfile` builds `dist/` on Node 22 Alpine, then serves it with the dependency-free static server in `server.mjs`; the image contains only `dist/`, `server.mjs` and `smoke.mjs`, runs as a non-root user, and the `site/`-scoped build context with `.dockerignore` excludes `node_modules/`, `.astro/`, `dist/`, the `.impeccable/` design-review state and `.env*` files. From `site/`:
+
+```sh
+docker compose up -d --build   # build and start, then open http://127.0.0.1:8080/
+docker compose ps              # status, including health
+docker compose logs site       # server logs
+docker compose down            # stop
+```
+
+Re-run `docker compose up -d --build` after content or server changes to rebuild. The published host port defaults to `8080` and is configurable with `SITE_PORT` (per command, or in a gitignored `site/.env` that Compose reads): `SITE_PORT=8123 docker compose up -d`. The service publishes on `127.0.0.1` only, and `smoke.mjs` — the container health check — fetches the home page and every referenced local CSS, JavaScript and image; run it on demand with `docker compose exec site node smoke.mjs`. Container serving is a local preview; public hosting and DNS remain undecided.
+
 ## Editing content
 
 - `src/content/*.md`: prose, setup instructions and syntax-highlighted command examples. These render at build time, not in the browser.
