@@ -63,10 +63,7 @@ public static class ConsoleOverlay
     private static ConsoleEntryState? _entry;
     private static ConsoleFinder _finder;
 
-    // The completion Tab last wrote and the line it produced; a repeat Tab on that unedited line steps to the next match.
-    private static ConsoleCompletion _completion;
-
-    private static string _completedLine;
+    private static readonly ConsoleCompleter _completer = new(ConsoleCommandRegistry.Default);
     private static string _finderSavedText = "";
     private static int _finderSavedCaret;
     private static int _viewportLines = 1;
@@ -292,17 +289,11 @@ public static class ConsoleOverlay
 
     private static void Complete()
     {
-        var completion = _completedLine != null && _field.Text == _completedLine
-            ? _completion.Next()
-            : ConsoleCommandRegistry.Default.Complete(_field.Text.Substring(0, _field.Caret), SafeLevelList());
-        if (completion.Matches.Count == 0)
+        var completed = _completer.Tab(_field.Text, _field.Caret, SafeLevelList());
+        if (completed != null)
         {
-            return;
+            _field.Set(completed);
         }
-
-        _completion = completion;
-        _completedLine = completion.Line + " ";
-        _field.Set(_completedLine);
     }
 
     private static ConsoleLinePlan PlanLine(string line)
