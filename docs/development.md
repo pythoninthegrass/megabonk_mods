@@ -824,7 +824,7 @@ Coordinates are an independent, explicit toggle, **off by default**. Press **F7*
 in gameplay or the editor, use `run.py coordinates on|off`, or call MCP
 `coordinates(on=true|false)`. Toggling coordinates does not enter the editor,
 pause/unpause the run, move the camera or change the stock HUD. F7 is ignored
-when the debug console or an editor text field is focused. The preference
+when the game's debug console, the mod's tilde console or an editor text field is focused. The preference
 survives editor entry/exit and level loads within the process; restarting the
 game resets it to off. `coordinates` returns the requested `enabled` state and
 the current `visible` state; rendering may follow on the next frame.

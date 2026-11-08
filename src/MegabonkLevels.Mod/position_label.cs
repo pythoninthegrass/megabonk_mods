@@ -99,7 +99,7 @@ public static class PositionLabel
         }
 
         if (_armed && EditorInput.GetKeyDown(KeyCode.F7)
-            && PositionReadout.ShouldToggle(_armed, true, DebugConsole.Instance != null && DebugConsole.Instance.IsActive(), EditorTileTools.TextInputFocused))
+            && PositionReadout.ShouldToggle(_armed, true, DebugConsole.Instance != null && DebugConsole.Instance.IsActive(), EditorTileTools.TextInputFocused, ConsoleOverlay.Focused))
         {
             SetVisible(!Enabled, _logger);
         }

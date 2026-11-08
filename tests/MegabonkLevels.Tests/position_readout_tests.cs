@@ -43,6 +43,10 @@ public class PositionReadoutTests
     public void CoordinateHotkey_RequiresAnArmedLevelAndNoFocusedInput(bool armed, bool pressed, bool console, bool text, bool expected) =>
         Assert.Equal(expected, PositionReadout.ShouldToggle(armed, pressed, console, text));
 
+    [Fact]
+    public void CoordinateHotkey_IsIgnoredWhileTheModConsoleHasFocus() =>
+        Assert.False(PositionReadout.ShouldToggle(true, true, false, false, modConsoleFocused: true));
+
     [Theory]
     [InlineData(-280f, -280f, 0, 0)]
     [InlineData(280f, 280f, 14, 14)]

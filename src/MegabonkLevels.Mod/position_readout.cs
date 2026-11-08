@@ -26,8 +26,8 @@ public static class PositionReadout
 
     public static bool Visible(bool armed, bool enabled) => armed && enabled;
 
-    public static bool ShouldToggle(bool armed, bool pressed, bool consoleOpen, bool textFocused) =>
-        armed && pressed && !consoleOpen && !textFocused;
+    public static bool ShouldToggle(bool armed, bool pressed, bool consoleOpen, bool textFocused, bool modConsoleFocused = false) =>
+        armed && pressed && !consoleOpen && !textFocused && !modConsoleFocused;
 
     public static GridCell CellOf(float x, float z, int width, int depth, float spacing)
     {
