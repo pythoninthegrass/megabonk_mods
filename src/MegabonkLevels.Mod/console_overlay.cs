@@ -54,6 +54,9 @@ public static class ConsoleOverlay
     private static bool _placeholderDismissed;
     private static ConsoleSlide _slide = ConsoleSlide.Parked;
     private static ConsoleEntryState? _entry;
+    private static ConsoleFinder _finder;
+    private static string _finderSavedText = "";
+    private static int _finderSavedCaret;
     private static int _viewportLines = 1;
 
     public static bool Open { get; private set; }
@@ -140,6 +143,11 @@ public static class ConsoleOverlay
             Cursor.lockState = state.CursorLocked ? CursorLockMode.Locked : CursorLockMode.None;
         }
 
+        if (_finder != null)
+        {
+            CancelFinder();
+        }
+
         _entry = null;
         Open = false;
         _logger.Msg($"Console: closed, MyTime.paused={MyTime.paused}.");
@@ -149,7 +157,15 @@ public static class ConsoleOverlay
     {
         if (EditorInput.GetKeyDown(KeyCode.Escape))
         {
-            CloseConsole();
+            if (_finder != null)
+            {
+                CancelFinder();
+            }
+            else
+            {
+                CloseConsole();
+            }
+
             return;
         }
 
@@ -160,10 +176,24 @@ public static class ConsoleOverlay
             input = input.Substring(1);
         }
 
+        // A held Ctrl turns letter keys into chords, but key-down text rebuilding would still type them.
+        if (CtrlHeld())
+        {
+            input = "";
+        }
+
         _field.Navigate(_caret.Read());
         _placeholderDismissed |= input.Length > 0;
 
-        if (EditorInput.GetKeyDown(KeyCode.UpArrow))
+        if (_finder != null)
+        {
+            ReadFinderInput(input);
+        }
+        else if (CtrlHeld() && EditorInput.GetKeyDown(KeyCode.R))
+        {
+            OpenFinder();
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.UpArrow))
         {
             _field.Set(_history.Previous());
         }
@@ -187,6 +217,46 @@ public static class ConsoleOverlay
         {
             Submit();
         }
+    }
+
+    private static bool CtrlHeld() => EditorInput.GetKey(KeyCode.LeftControl) || EditorInput.GetKey(KeyCode.RightControl);
+
+    private static void OpenFinder()
+    {
+        _finder = new ConsoleFinder(_history.Entries);
+        _finderSavedText = _field.Text;
+        _finderSavedCaret = _field.Caret;
+        _placeholderDismissed = true;
+        _field.Clear();
+    }
+
+    private static void CancelFinder()
+    {
+        _finder = null;
+        _field.Set(_finderSavedText, _finderSavedCaret);
+    }
+
+    private static void ReadFinderInput(string input)
+    {
+        if (EditorInput.GetKeyDown(KeyCode.UpArrow) || (CtrlHeld() && EditorInput.GetKeyDown(KeyCode.P)))
+        {
+            _finder.Move(-1);
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.DownArrow) || (CtrlHeld() && EditorInput.GetKeyDown(KeyCode.N)))
+        {
+            _finder.Move(1);
+        }
+
+        var accepted = _field.Type(input);
+        _finder.SetQuery(_field.Text);
+        if (!accepted || _finder.SelectedEntry is not { } entry)
+        {
+            return;
+        }
+
+        _finder = null;
+        _field.Set(entry);
+        Submit();
     }
 
     private static void Complete()
@@ -331,8 +401,42 @@ public static class ConsoleOverlay
         _panel.anchoredPosition = new Vector2(0f, -(1f - _slide.Progress) * height);
     }
 
+    private static void RenderFinder()
+    {
+        var rows = Math.Max(1, _viewportLines - 1);
+        var top = _finder.Window(rows);
+        SetScrollLabel(0, $"  {_finder.Info}");
+        for (var i = 0; i < _viewportLines - 1; i++)
+        {
+            var index = top + i;
+            var text = "";
+            if (index < _finder.Rows.Count)
+            {
+                var hit = _finder.Rows[index];
+                text = ConsoleFinder.RowMarkup(_finder.RowText(index), hit.Positions, index == _finder.Selected);
+            }
+
+            SetScrollLabel(i + 1, text);
+        }
+    }
+
+    private static void SetScrollLabel(int row, string text)
+    {
+        if (_scrollLabels[row].text != text)
+        {
+            _scrollLabels[row].text = text;
+        }
+    }
+
     private static void Render()
     {
+        if (_finder != null)
+        {
+            RenderFinder();
+            RenderInput();
+            return;
+        }
+
         var visible = _scrollback.VisibleLines;
         // Bottom-align: the newest line sits on the last row, so a short buffer hugs the input rather than the top.
         var start = Math.Max(0, visible.Count - _viewportLines);
@@ -346,6 +450,11 @@ public static class ConsoleOverlay
             }
         }
 
+        RenderInput();
+    }
+
+    private static void RenderInput()
+    {
         EditorUi.PlaceTopLeft(_inputRect, Padding, Padding, PanelWidth() - Padding * 2f, InputHeight);
         _inputView.Render(_field, true, null);
         _placeholder.gameObject.SetActive(!_placeholderDismissed && _field.Text.Length == 0);

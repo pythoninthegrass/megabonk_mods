@@ -111,4 +111,25 @@ public class TextFieldModelTests
         Assert.Equal("", field.Text);
         Assert.Equal(0, field.Caret);
     }
+
+    [Fact]
+    public void Set_WithACaretPlacesItThere()
+    {
+        var field = new TextFieldModel(20);
+
+        field.Set("player.teleport", 6);
+
+        Assert.Equal("player.teleport", field.Text);
+        Assert.Equal(6, field.Caret);
+    }
+
+    [Fact]
+    public void Set_WithACaretClampsItToTheText()
+    {
+        var field = new TextFieldModel(20);
+
+        field.Set("abc", 99);
+
+        Assert.Equal(3, field.Caret);
+    }
 }

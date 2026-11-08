@@ -24,6 +24,12 @@ public sealed class TextFieldModel
         Caret = Text.Length;
     }
 
+    public void Set(string text, int caret)
+    {
+        Set(text);
+        Caret = Math.Clamp(caret, 0, Text.Length);
+    }
+
     public void Clear() => Set("");
 
     // Returns true when Enter was typed; text after it is dropped.
