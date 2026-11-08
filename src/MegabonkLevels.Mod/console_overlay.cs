@@ -193,6 +193,10 @@ public static class ConsoleOverlay
         {
             OpenFinder();
         }
+        else if (CtrlHeld() && EditorInput.GetKeyDown(KeyCode.L))
+        {
+            ClearScrollbackChord();
+        }
         else if (EditorInput.GetKeyDown(KeyCode.UpArrow))
         {
             _field.Set(_history.Previous());
@@ -271,19 +275,36 @@ public static class ConsoleOverlay
         _field.Set(head + completion.Text + " ");
     }
 
+    private static ConsoleLinePlan PlanLine(string line)
+    {
+        var dev = ConsoleState.DevState(Environment.GetEnvironmentVariable);
+        var bind = ConsoleCommandRegistry.Default.Bind(line, dev, CurrentToggles(), SafeLevelList());
+        return ConsoleState.Plan(line, bind, Run, _history.Entries);
+    }
+
+    private static void ClearScrollbackAndStore()
+    {
+        _scrollback.Clear();
+        _store.AppendClear();
+    }
+
+    // Ctrl-L: runs the `clear` verb's plan without touching the input line or history.
+    private static void ClearScrollbackChord()
+    {
+        if (PlanLine("clear").ClearScrollback)
+        {
+            ClearScrollbackAndStore();
+        }
+    }
+
     private static void Submit()
     {
         var line = _field.Text;
-        var dev = ConsoleState.DevState(Environment.GetEnvironmentVariable);
-        var toggles = CurrentToggles();
-        var levels = SafeLevelList();
-        var bind = ConsoleCommandRegistry.Default.Bind(line, dev, toggles, levels);
-        var plan = ConsoleState.Plan(line, bind, Run, _history.Entries);
+        var plan = PlanLine(line);
 
         if (plan.ClearScrollback)
         {
-            _scrollback.Clear();
-            _store.AppendClear();
+            ClearScrollbackAndStore();
         }
 
         foreach (var printed in plan.PrintLines)

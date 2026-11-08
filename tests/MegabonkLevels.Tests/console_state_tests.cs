@@ -192,6 +192,16 @@ public class ConsoleStateTests
     }
 
     [Fact]
+    public void Plan_ClearBoundByTheRegistry_ClearsScrollbackOnly()
+    {
+        var bind = ConsoleCommandRegistry.Default.Bind("clear", new ConsoleDevState(false), new ConsoleToggleState(false, false, false, false));
+        var plan = ConsoleState.Plan("clear", bind, _ => throw new InvalidOperationException("clear must not run a harness command"));
+
+        Assert.True(plan.ClearScrollback);
+        Assert.Empty(plan.PrintLines);
+    }
+
+    [Fact]
     public void Plan_HistoryVerb_ListsTheRememberedLinesNumbered()
     {
         var bind = new ConsoleBindResult(null, "", null, ListHistory: true);
