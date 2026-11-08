@@ -4,7 +4,7 @@ title: Curate a self-contained starter level for public downloads
 status: In Progress
 assignee: []
 created_date: '2026-11-07 01:56'
-updated_date: '2026-11-08T05:03:00Z'
+updated_date: '2026-11-08T05:47:00Z'
 labels:
   - onboarding
 dependencies:
@@ -132,4 +132,17 @@ Per maintainer: Moai and Shady Guy guaranteed outside the spawn meadow; Bandit a
 Offline plain-Wine check of the new budget, guarantee and roster (Steam stub, Calcium, MEGABONK_RELAUNCH_FEATHERS=0, no invulnerability, dev stage/terrain overrides off). Identity: level JSON SHA256 0973184fdb633fecda642e4647308fe63d0dc3cb5216bea277ade1d90d216f76; deployed DLL SHA256 b94676499e36fe14d5f329a38ea3ec545f032218bf0e77909974b530e7113690 (contains the guarantee strings). Two fresh-process seed-0 loads gave byte-identical logs after timestamps: 14-kind plan, 14/14 placements. Seeds 1, 7, 42 planned 14, 15, 13 shrines; Moai 5/5/3, Shady Guy 2/3/2, all inside the 12-16, 3-5 and 2-3 bounds. Every placed Moai and Shady Guy was outside the meadow rectangle (seed 0 had one Shady Guy in it, the guarantee only needs the first). No guarantee-unmet, placement-failure, missing-content or exception lines. A forced boss spawn replaced Ent1 with Pharaoh3 (in the new roster). Evidence in gitignored .tools/evidence/bramblecrown-guarantee/. Limits: editor-harness runs, boss portal forced from 290 units, guarantee failure path never observed live, only first boss pick seen, miniboss rosters unchanged and unchecked, no district-coverage beyond the meadow rule, no ramp/spiral walking, combat, lava or interaction checks, no packaged first-play or edit-save-replay. AC #6 stays unchecked: guarantees are measured on 4 seeds but ramp/spiral non-obstruction was not checked. AC #8 stays unchecked: roster suitability needs playtesting. Docs updated; uncommitted.
 
 Correction to the previous note: every placed Moai and Shady Guy was outside the meadow in seeds 1, 7 and 42; in seed 0 the first of each kind was outside and a second Shady Guy was inside the meadow, which the guarantee permits. Docs corrected to match.
+
+Maintainer play feedback on Bramblecrown Hill (plain-Wine walk session): (1) Moai shrines cluster; they should be sparse and spread across the map. (2) The lava pit needs reworking to look like the stock Graveyard intro area. (3) The level could be about 30% smaller; there is a lot of unused blank space. None implemented yet. Direction: any of the captured Graveyard approaches below is preferable to the current implementation.
+
+Observed in the stock Graveyard intro (screenshots in gitignored .tools/evidence/bramblecrown-walk/, lava-frozen-2, lava-angle-high-south, lava-4 to lava-10; observations from screenshots only, no measurements of dimensions or damage):
+- Lava is a hazard set inside dungeon architecture, not a pit in open ground. Every pool sits in a room or corridor with tall brick walls on the sides; the corridor is roughly three player-widths wide in lava-4.
+- Pools are rectangular with straight hard edges, no curb or rail, flush with the surrounding stone floor.
+- A pool can fill the corridor width, so crossing is the choice: lava-4 shows a raised stone platform stepping into the pool with a boost-arrow pad on it, and lava-6 shows floor strip, lava band, floor strip, lava band repeating down one lane.
+- Pools are stacked at different heights and joined by short stair runs or ramps (lava-angle-high-south, lava-9/10), so lava is part of the vertical route.
+- Raised platforms stand inside pools, some with a floor plate or a prop, as stepping stones and resting spots (lava-frozen-2, lava-5).
+- Props (crates, clay pots, barrels) sit against walls and on ledges, leaving the floor and the route clear; crates stack against walls.
+- The structure sits on a thin ledge at the map edge with open sky beyond one wall (lava-9/10).
+- Flying enemies (ghosts) cross lava, so lava does not gate them; loot lies on floor next to pools (lava-5).
+- Harness notes from the session: resume re-enabled spawns until sent 'spawns off' again, restart-run also re-enabled spawns, and one resume call left the game frozen until repeated. A spawned boss is not removed by spawns off, and kill-enemies bosses killed 0 of 1 (HP reported 3.4e38 before and after, cause not established).
 <!-- SECTION:NOTES:END -->
