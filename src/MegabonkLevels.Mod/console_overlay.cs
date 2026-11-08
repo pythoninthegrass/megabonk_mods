@@ -22,7 +22,7 @@ public static class ConsoleOverlay
     private const float PanelHeightFraction = 0.4f;
     private const float SideMargin = 16f;
     private const float Padding = 10f;
-    private const float LineHeight = 20f;
+    private const float LineHeight = 22f;
     private const float InputHeight = 30f;
     private const float InputGap = 6f;
     private const float FontSize = 16f;
@@ -267,6 +267,8 @@ public static class ConsoleOverlay
             var row = EditorUi.NewRect($"Line{i}", _scrollRect);
             EditorUi.PlaceTopLeft(row, Padding, i * LineHeight, PanelWidth() - Padding * 2f, LineHeight);
             _scrollLabels[i] = EditorUi.NewLabel(row, scrollFont, TextAlignmentOptions.MidlineLeft, FontSize);
+            // Ellipsis culls every glyph when the row is shorter than the font's line, so rows overflow instead.
+            _scrollLabels[i].overflowMode = TextOverflowModes.Overflow;
         }
 
         var input = EditorUi.Bordered("Input", _panel, EditorUi.SlotBorder, EditorUi.SearchFill);
@@ -341,7 +343,6 @@ public static class ConsoleOverlay
             if (_scrollLabels[i].text != text)
             {
                 _scrollLabels[i].text = text;
-                _scrollLabels[i].ForceMeshUpdate();
             }
         }
 
