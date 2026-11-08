@@ -22,10 +22,20 @@ environments:
     apps:
       site:
         domain:
-          host: megabonkmod.party
-          port: 8080
-          https: true
-          certificateType: letsencrypt
+          - host: megabonkmod.party
+            port: 8080
+            https: true
+            certificateType: letsencrypt
+          - host: www.megabonkmod.party
+            port: 8080
+            https: true
+            certificateType: letsencrypt
+        # Traefik redirectRegex: the apex is canonical, so www redirects to it.
+        # permanent: true surfaces as HTTP 308, which preserves the method and path.
+        redirects:
+          - regex: ^https?://www\.megabonkmod\.party(.*)$
+            replacement: https://megabonkmod.party$1
+            permanent: true
         autoDeploy: true
 
 apps:

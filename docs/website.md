@@ -151,7 +151,7 @@ Install the CLI once from a checkout of icarus (`uv tool install <icarus checkou
 | --- | --- |
 | Project | `megabonkmod-party`, containing the one `site` app |
 | Source | GitHub `main`; Dokploy clones the repository and builds `site/Dockerfile` with the `site/` build context, so the published image is the one the local Compose file builds |
-| Domain | `megabonkmod.party` routed to container port `8080`, HTTPS with a Let's Encrypt certificate |
+| Domain | `megabonkmod.party` routed to container port `8080`, HTTPS with a Let's Encrypt certificate; `www.megabonkmod.party` has its own router, certificate and a redirect to the apex |
 | Health check | `node smoke.mjs` inside the container, the same check the Compose healthcheck runs |
 | Auto-deploy | a push to `main` that touches `site/**` |
 
@@ -162,7 +162,7 @@ curl -sI https://megabonkmod.party/          # 200, text/html
 node smoke.mjs https://megabonkmod.party/    # exit 0 when every referenced asset serves
 ```
 
-The domain's DNS must resolve directly to the host with no CDN proxy in front, or the Let's Encrypt HTTP-01 challenge cannot complete. `www.megabonkmod.party` resolves but has no router yet, so its TLS handshake fails; either register it as a second host for the app in `dokploy.yml` or redirect it to the apex at the DNS provider — undecided.
+Both hosts' DNS is managed by DNSControl in the infrastructure repo's `dns/records/dnsconfig.js`, not in this repository. The apex and `www` are A records under `CF_PROXY_DEFAULT_OFF`, so each resolves directly to the host with no CDN proxy — otherwise the Let's Encrypt HTTP-01 challenge cannot complete. `www.megabonkmod.party` has its own router and Let's Encrypt certificate in `dokploy.yml`, plus a Traefik `redirectRegex` that sends it to the apex at HTTP 308 with the path preserved. DNSControl changes follow the usual preview-then-push loop against the `cloudflare` provider: `dnscontrol preview --domains megabonkmod.party` reports `0 corrections` when the zone matches the config, which is the check to run before a `push`.
 
 The canonical URL appears in `site/astro.config.mjs` and the page's metadata, including social-image URLs. Keep those values consistent if the domain changes. Build and publish the static output; no Node server, game installation or harness endpoint is needed in production beyond the dependency-free static server in the image.
 
