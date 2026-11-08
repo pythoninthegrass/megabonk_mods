@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace MegabonkLevels;
 
@@ -30,11 +31,16 @@ public static class MusicTransportReply
 {
     public const string NoPlaylist = "no custom playlist on this stage";
 
+    private static readonly Regex LeadingFileNumber = new(@"^\d+(?:[._]\d+)*[ _.\-]+(?=.)", RegexOptions.Compiled);
+
+    // A clip's own file number (06_01, 37) differs from its playlist position, so the console shows the name without it.
+    public static string DisplayName(string name) => LeadingFileNumber.Replace(name, "");
+
     public static string List(IReadOnlyList<string> names, int current) =>
-        string.Join("\n", names.Select((name, at) => $" {(at + 1 == current ? ">" : " ")}{at + 1,2}  {name}"));
+        string.Join("\n", names.Select((name, at) => $" {(at + 1 == current ? ">" : " ")}{at + 1,2}  {DisplayName(name)}"));
 
     public static string Now(IReadOnlyList<string> names, int current) =>
-        current < 1 ? "no track chosen yet" : $"{current}/{names.Count}  {names[current - 1]}";
+        current < 1 ? "no track chosen yet" : $"{current}/{names.Count}  {DisplayName(names[current - 1])}";
 
     public static string Changed(IReadOnlyList<string> names, int current) => "playing " + Now(names, current);
 
