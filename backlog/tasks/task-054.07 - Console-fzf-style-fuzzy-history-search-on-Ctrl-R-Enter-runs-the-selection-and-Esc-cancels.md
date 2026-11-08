@@ -3,10 +3,10 @@ id: TASK-054.07
 title: >-
   Console fzf-style fuzzy history search on Ctrl-R, Enter runs the selection and
   Esc cancels
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-08T16:49:00Z'
-updated_date: '2026-11-08T16:51:00Z'
+updated_date: '2026-11-08T16:58:00Z'
 labels: []
 dependencies: []
 references:
@@ -16,6 +16,16 @@ references:
   - src/MegabonkLevels.Mod/console_history.cs
   - 'https://github.com/junegunn/fzf'
 documentation:
+  - docs/development.md
+modified_files:
+  - src/MegabonkLevels.Mod/console_fuzzy.cs
+  - src/MegabonkLevels.Mod/console_finder.cs
+  - src/MegabonkLevels.Mod/console_overlay.cs
+  - src/MegabonkLevels.Mod/text_field_model.cs
+  - tests/MegabonkLevels.Tests/console_fuzzy_tests.cs
+  - tests/MegabonkLevels.Tests/console_finder_tests.cs
+  - tests/MegabonkLevels.Tests/text_field_model_tests.cs
+  - tests/MegabonkLevels.Tests/MegabonkLevels.Tests.csproj
   - docs/development.md
 parent_task_id: TASK-054
 priority: medium
@@ -45,20 +55,37 @@ Implementation notes: the matcher, query parser and filtering are Unity-free pur
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A pure fuzzy matcher and extended-search query parser implement fzf's term types (fuzzy, 'exact, ^prefix, suffix$, !inverse, !^ and !$ forms, | OR, space AND) with smart-case, covered by unit tests written first
-- [ ] #2 Matching returns the matched character positions so the overlay can highlight them, covered by unit tests
-- [ ] #3 Ctrl-R opens the finder over the remembered history; typing filters the list live and an info line shows matched/total
-- [ ] #4 Up/Down and Ctrl-P/Ctrl-N move a highlighted selection that scrolls with the list and clamps at the ends
-- [ ] #5 Enter executes the selected entry through the normal submit path (echoed, run, recorded in history) and closes the finder; with zero matches Enter does nothing
-- [ ] #6 Esc cancels the finder and restores the input line and caret exactly as they were before Ctrl-R, running nothing and adding no history entry; the console stays open
-- [ ] #7 Matched characters are highlighted in each row and the selected row is visibly marked, confirmed by harness screenshot in the running game
-- [ ] #8 The behaviour, key bindings and search syntax are documented in docs/development.md under the console overlay section
+- [x] #1 A pure fuzzy matcher and extended-search query parser implement fzf's term types (fuzzy, 'exact, ^prefix, suffix$, !inverse, !^ and !$ forms, | OR, space AND) with smart-case, covered by unit tests written first
+- [x] #2 Matching returns the matched character positions so the overlay can highlight them, covered by unit tests
+- [x] #3 Ctrl-R opens the finder over the remembered history; typing filters the list live and an info line shows matched/total
+- [x] #4 Up/Down and Ctrl-P/Ctrl-N move a highlighted selection that scrolls with the list and clamps at the ends
+- [x] #5 Enter executes the selected entry through the normal submit path (echoed, run, recorded in history) and closes the finder; with zero matches Enter does nothing
+- [x] #6 Esc cancels the finder and restores the input line and caret exactly as they were before Ctrl-R, running nothing and adding no history entry; the console stays open
+- [x] #7 Matched characters are highlighted in each row and the selected row is visibly marked, confirmed by harness screenshot in the running game
+- [x] #8 The behaviour, key bindings and search syntax are documented in docs/development.md under the console overlay section
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Pure matcher (done): `console_fuzzy.cs` parses fzf extended-search queries (fuzzy, 'exact, ^prefix, suffix$, !inverse forms, space AND, lone | OR binding tighter than space, smart-case) and returns matched positions; `ConsoleFuzzy.Filter` keeps chronological order. Tests in `console_fuzzy_tests.cs`, linked into the test project.
+2. Pure finder state: `console_finder.cs` holds the query, hits (newest first so row 0 sits next to the prompt, which is above the scrollback), clamped selection and a scroll window. Tests first in `console_finder_tests.cs`.
+3. `TextFieldModel.Set(text, caret)` overload so Esc restores the caret exactly; unit test it.
+4. Overlay: Ctrl-R (either Ctrl) opens the finder, saving the line and caret and clearing the field; the input line holds the query; each frame the query is pushed to the finder; Up/Down/Ctrl-P/Ctrl-N move; Enter runs the selection through `Submit` (set the field to the entry first); Esc restores and stays open; finder rows replace scrollback rows with a gutter marker and matched characters highlighted via TMP rich text, plus a `matched/total` info line.
+5. Docs under "Console overlay" in docs/development.md; verify in the running game via the megabonk MCP (relaunch, load, key/type, screenshot); run `task check`.
+6. Commit as conventional commit with no attribution.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Ctrl-R opens an fzf-style finder over the console history. `console_fuzzy.cs` implements the extended-search matcher (fuzzy, 'exact, ^prefix, suffix$, whole line, !inverse forms, space AND, lone | OR binding tighter than space, smart-case) and returns matched positions. `console_finder.cs` holds rows (newest first, row 0 next to the prompt), clamped selection, scroll window, info line and rich-text row markup. The overlay saves and clears the line on open, drives Up/Down/Ctrl-P/Ctrl-N, runs the selection through the normal Submit path on Enter (no-op with zero matches), and restores line and caret on Esc without closing the console. `TextFieldModel.Set(text, caret)` supports the restore. Tests were written first (all 2578 .NET tests and 1114 pytest tests pass; `task check` exits 0). Verified in the running game: finder list with `>` marker and `11/11`, amber matched characters, Down moves selection, Esc restores `st|a` with the caret after `st` (typed X gives `stXa`) and keeps the console open, Enter on `hel` ran help and recorded it in console_log.jsonl, Enter with 0 matches did nothing. Docs added under "Console overlay". Design note: with the prompt above the list the layout is fzf's reverse layout, so Down moves to older entries. The running MCP server's key allow-list predates BackQuote, so the check drove the same harness through run.py.
+<!-- SECTION:FINAL_SUMMARY:END -->
