@@ -9,15 +9,21 @@ public sealed class EditorCaretInput
     private readonly KeyRepeater _right = new();
     private readonly KeyRepeater _delete = new();
 
+    // Option (Alt) with an arrow jumps a word instead of a character.
     public CaretKeys Read()
     {
         var dt = Time.unscaledDeltaTime;
+        var word = EditorInput.GetKey(KeyCode.LeftAlt) || EditorInput.GetKey(KeyCode.RightAlt);
+        var left = Repeat(_left, KeyCode.LeftArrow, dt);
+        var right = Repeat(_right, KeyCode.RightArrow, dt);
         return new CaretKeys(
-            Left: Repeat(_left, KeyCode.LeftArrow, dt),
-            Right: Repeat(_right, KeyCode.RightArrow, dt),
+            Left: word ? 0 : left,
+            Right: word ? 0 : right,
             Delete: Repeat(_delete, KeyCode.Delete, dt),
             Home: EditorInput.GetKeyDown(KeyCode.Home),
-            End: EditorInput.GetKeyDown(KeyCode.End));
+            End: EditorInput.GetKeyDown(KeyCode.End),
+            WordLeft: word ? left : 0,
+            WordRight: word ? right : 0);
     }
 
     private static int Repeat(KeyRepeater repeater, KeyCode key, float dt) =>

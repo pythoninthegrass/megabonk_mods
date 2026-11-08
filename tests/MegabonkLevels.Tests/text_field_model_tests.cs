@@ -132,4 +132,101 @@ public class TextFieldModelTests
 
         Assert.Equal(3, field.Caret);
     }
+
+    [Theory]
+    [InlineData("music.play 3", 12, "music.play ", 11)]
+    [InlineData("music.play 3  ", 14, "music.play ", 11)]
+    [InlineData("music.play", 10, "", 0)]
+    [InlineData("a bc def", 4, "a  def", 2)]
+    [InlineData("a bc def", 5, "a def", 2)]
+    [InlineData("  abc", 5, "  ", 2)]
+    [InlineData("abc", 0, "abc", 0)]
+    [InlineData("", 0, "", 0)]
+    public void DeleteWordLeft_RemovesTheWhitespaceDelimitedWordBeforeTheCaret(string text, int caret, string expected, int expectedCaret)
+    {
+        var field = new TextFieldModel(40);
+        field.Set(text, caret);
+
+        field.DeleteWordLeft();
+
+        Assert.Equal(expected, field.Text);
+        Assert.Equal(expectedCaret, field.Caret);
+    }
+
+    [Theory]
+    [InlineData("music.play 3", 12, "", 0)]
+    [InlineData("music.play 3", 6, "play 3", 0)]
+    [InlineData("abc", 0, "abc", 0)]
+    [InlineData("", 0, "", 0)]
+    public void DeleteToStart_RemovesEverythingBeforeTheCaret(string text, int caret, string expected, int expectedCaret)
+    {
+        var field = new TextFieldModel(40);
+        field.Set(text, caret);
+
+        field.DeleteToStart();
+
+        Assert.Equal(expected, field.Text);
+        Assert.Equal(expectedCaret, field.Caret);
+    }
+
+    [Theory]
+    [InlineData("a bc def", 8, 5)]
+    [InlineData("a bc def", 5, 2)]
+    [InlineData("a bc def", 2, 0)]
+    [InlineData("a bc def", 0, 0)]
+    [InlineData("ab  ", 4, 0)]
+    [InlineData("a  bc", 5, 3)]
+    public void NavigateWordLeft_JumpsToTheStartOfTheWhitespaceDelimitedWord(string text, int caret, int expected)
+    {
+        var field = new TextFieldModel(40);
+        field.Set(text, caret);
+
+        field.Navigate(new CaretKeys(WordLeft: 1));
+
+        Assert.Equal(expected, field.Caret);
+        Assert.Equal(text, field.Text);
+    }
+
+    [Theory]
+    [InlineData("a bc def", 0, 1)]
+    [InlineData("a bc def", 1, 4)]
+    [InlineData("a bc def", 4, 8)]
+    [InlineData("a bc def", 8, 8)]
+    [InlineData("  ab", 0, 4)]
+    [InlineData("ab  ", 2, 4)]
+    public void NavigateWordRight_JumpsToTheEndOfTheWhitespaceDelimitedWord(string text, int caret, int expected)
+    {
+        var field = new TextFieldModel(40);
+        field.Set(text, caret);
+
+        field.Navigate(new CaretKeys(WordRight: 1));
+
+        Assert.Equal(expected, field.Caret);
+    }
+
+    [Fact]
+    public void NavigateWordLeft_RepeatCountMovesThatManyWords()
+    {
+        var field = Field("a bc def");
+
+        field.Navigate(new CaretKeys(WordLeft: 2));
+
+        Assert.Equal(2, field.Caret);
+    }
+
+    [Theory]
+    [InlineData("music.play 3", 6, "music.", 6)]
+    [InlineData("music.play 3", 0, "", 0)]
+    [InlineData("music.play 3", 12, "music.play 3", 12)]
+    [InlineData("", 0, "", 0)]
+    public void DeleteToEnd_RemovesEverythingAfterTheCaretAndKeepsTheCaret(string text, int caret, string expected, int expectedCaret)
+    {
+        var field = new TextFieldModel(40);
+        field.Set(text, caret);
+
+        field.DeleteToEnd();
+
+        Assert.Equal(expected, field.Text);
+        Assert.Equal(expectedCaret, field.Caret);
+    }
 }

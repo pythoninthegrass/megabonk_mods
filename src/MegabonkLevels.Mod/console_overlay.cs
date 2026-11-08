@@ -208,6 +208,10 @@ public static class ConsoleOverlay
         {
             ClearScrollbackChord();
         }
+        else if (LineEditChordDown())
+        {
+            ReadLineEditChords();
+        }
         else if (EditorInput.GetKeyDown(KeyCode.UpArrow))
         {
             _field.Set(_history.Previous());
@@ -275,6 +279,11 @@ public static class ConsoleOverlay
             _finder.Move(-1);
         }
 
+        if (LineEditChordDown())
+        {
+            ReadLineEditChords();
+        }
+
         var accepted = _field.Type(input);
         _finder.SetQuery(_field.Text);
         if (!accepted || _finder.SelectedEntry is not { } entry)
@@ -282,9 +291,37 @@ public static class ConsoleOverlay
             return;
         }
 
+        // Like fzf, Enter drops the entry into the line without running it; a second Enter submits.
         _finder = null;
         _field.Set(entry);
-        Submit();
+    }
+
+    private static bool LineEditChordDown() =>
+        CtrlHeld() && (EditorInput.GetKeyDown(KeyCode.W) || EditorInput.GetKeyDown(KeyCode.U) || EditorInput.GetKeyDown(KeyCode.K) || EditorInput.GetKeyDown(KeyCode.A) || EditorInput.GetKeyDown(KeyCode.E));
+
+    // Ctrl-W, Ctrl-U, Ctrl-K, Ctrl-A and Ctrl-E edit or move within the line, or the finder's query while it is open.
+    private static void ReadLineEditChords()
+    {
+        if (EditorInput.GetKeyDown(KeyCode.W))
+        {
+            _field.DeleteWordLeft();
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.U))
+        {
+            _field.DeleteToStart();
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.K))
+        {
+            _field.DeleteToEnd();
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.A))
+        {
+            _field.Navigate(new CaretKeys(Home: true));
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.E))
+        {
+            _field.Navigate(new CaretKeys(End: true));
+        }
     }
 
     private static void Complete()
