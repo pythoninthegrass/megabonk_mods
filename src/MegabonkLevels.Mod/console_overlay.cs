@@ -416,6 +416,8 @@ public static class ConsoleOverlay
             var row = EditorUi.NewRect($"Line{i}", _scrollRect);
             EditorUi.PlaceTopLeft(row, Padding, i * LineHeight, PanelWidth() - Padding * 2f, LineHeight);
             _scrollLabels[i] = EditorUi.NewLabel(row, scrollFont, TextAlignmentOptions.MidlineLeft, FontSize);
+            // Replies and history contain literal Windows paths, not TMP backslash escapes.
+            _scrollLabels[i].parseCtrlCharacters = false;
             // Ellipsis culls every glyph when the row is shorter than the font's line, so rows overflow instead.
             _scrollLabels[i].overflowMode = TextOverflowModes.Overflow;
         }
@@ -446,6 +448,7 @@ public static class ConsoleOverlay
         inputText.offsetMin = new Vector2(_promptWidth, 0f);
         inputText.offsetMax = new Vector2(-8f, 0f);
         var label = EditorUi.NewLabel(inputText, font, TextAlignmentOptions.MidlineLeft, FontSize);
+        label.parseCtrlCharacters = false;
         EditorUi.FixInputBaseline(label);
         _inputView = new TextFieldView(label, blockCaret: true);
 

@@ -1094,6 +1094,8 @@ Matching is smart-case: case-insensitive unless the query contains an uppercase 
 
 **Command execution**: a typed line is bound by `ConsoleCommandRegistry` and, if it names a harness command, run in-process through `DevHarness.Run` (the same entry point the file queue uses), so a console verb and the same `run.py` command cannot drift. `ConsoleState.Plan` turns the bind plus the harness result into the lines to print, whether the scrollback clears, and whether the line enters history; a refused line echoes the line and the refusal, a console-only verb (`clear`, `help`, `history`) prints its own reply, and a bound line prints what the harness returned.
 
+**Backslashes**: input, replies and history-search rows display backslashes literally; TMP control-sequence parsing is disabled so a Windows path ending in `\tony.png` keeps its separator and `t` instead of turning `\t` into a tab. Real newline characters still split replies into scrollback lines. Structured replies without a `message` (such as `level.save`) remain JSON, including JSON's doubled backslashes; the console does not unescape that JSON or change the persisted text.
+
 **Visibility to tooling**: the console registers `ConsoleInput`, `ConsoleScrollback` and `ConsolePanel` as widgets, so the harness `ui-tree`/`click-widget` commands see them even outside the editor.
 
 Verified in the live game by screenshot: scrollback and input text, the placeholder, the block caret, `?`, `history`, `clear` and persistence across a relaunch. Not yet verified: the slide animation while paused, cursor restore, and the exact DebugConsole and hotkey interaction.

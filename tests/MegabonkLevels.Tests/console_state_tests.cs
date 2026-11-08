@@ -275,6 +275,30 @@ public class ConsoleStateTests
         Assert.Equal("1  a\n2  b", reply);
     }
 
+    [Theory]
+    [InlineData(@"screenshot: Z:\repo\.tools\evidence\tony.png")]
+    [InlineData(@"saved: C:\new\temp\run.mblevel.json")]
+    [InlineData(@"literal: \n \r \t \v \\ ")]
+    public void ReplyAndScrollback_PreserveLiteralBackslashes(string message)
+    {
+        var result = HarnessResult.Success("screenshot", new JsonObject { ["message"] = message });
+        var plan = ConsoleState.Plan("debug.screenshot tony.png", new ConsoleBindResult(Harness("""{"command":"screenshot","path":"tony.png"}"""), null, null), _ => ConsoleState.ReplyFor(result));
+        var scrollback = new ConsoleScrollback(20, 20, 17);
+        scrollback.Append(plan.PrintLines[1]);
+
+        Assert.Equal(message, string.Concat(scrollback.VisibleLines));
+    }
+
+    [Fact]
+    public void ErrorReplyAndScrollback_PreserveLiteralBackslashes()
+    {
+        const string error = @"file already exists: Z:\repo\.tools\evidence\tony.png";
+        var scrollback = new ConsoleScrollback(20, 20);
+        scrollback.Append(ConsoleState.ReplyFor(HarnessResult.Failure("screenshot", error)));
+
+        Assert.Equal("error: " + error, Assert.Single(scrollback.VisibleLines));
+    }
+
     private static HarnessCommand Harness(string json)
     {
         Assert.True(HarnessCommand.TryParse(json, out var command, out var error), error);
