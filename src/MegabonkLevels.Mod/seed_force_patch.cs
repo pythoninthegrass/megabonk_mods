@@ -42,13 +42,8 @@ public static class SeedForcePatch
         _logger?.Msg($"SeedForcePatch mode -> {Mode} (levelSeed={seed})");
     }
 
-    // Object placement draws from two independent RNGs, neither tied to the tile grid's debugSeed:
-    // positions via UnityEngine.Random, and per-prefab counts via RandomMapObject.GetAmount() ->
-    // Utility.MyRandom.random, a static ConsistentRandom seeded once from QueryPerformanceCounter
-    // (wall clock) in its static constructor. Without controlling the count RNG, counts drift every
-    // run and cascade into different positions even when UnityEngine.Random is reseeded. Reseed both
-    // before every spawn sub-phase (phases run across coroutine frames sharing process-wide RNG state)
-    // with a phase-distinct derived seed so each phase reproduces independently of inter-phase drift.
+    // Object placement draws from UnityEngine.Random and Utility.MyRandom.random, neither tied to the
+    // tile grid's debugSeed; reseed both per phase. See docs/map-generation-determinism.md.
     private static void ReseedPhase(int phase)
     {
         var baseSeed = SpawnSeed.ForcedSeed(Mode, FixedSeed, LevelSeedValue);
