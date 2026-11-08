@@ -6,6 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-11-08T07:54:00Z'
+updated_date: '2026-11-08T20:41:00Z'
 labels: []
 dependencies: []
 references:
@@ -86,5 +87,11 @@ The music verbs are added by TASK-054.04. Its registry entries plug into the sam
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Parent closeout audit confirmed the conventional implementation commit 1d6cd44 (feat(console): add the console command language, history, completion and scrollback); reconciled the stale commit checkbox.
+<!-- SECTION:NOTES:END -->

@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-11-08T07:54:00Z'
-updated_date: '2026-11-08T18:28:00Z'
+updated_date: '2026-11-08T20:41:00Z'
 labels: []
 dependencies:
   - TASK-054.01
@@ -63,7 +63,7 @@ For harness and MCP parity, the same operations should be reachable as a harness
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -77,6 +77,12 @@ For harness and MCP parity, the same operations should be reachable as a harness
 6. docs/development.md music section: verbs and harness command (AC8).
 7. Build with task mod:build, verify in game: THPS Warehouse (pack playlist, `task game:editor -- levels/thps.mblevel.json` / relaunch) and a level with a track: reference; check log lines and loop-advance continuity (AC8).
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Parent closeout audit confirmed the conventional implementation commit 1380494 (feat(console): add music transport verbs and harness command); reconciled the stale commit checkbox.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
