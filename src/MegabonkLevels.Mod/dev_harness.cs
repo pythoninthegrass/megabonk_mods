@@ -40,13 +40,13 @@ public static class DevHarness
 
     public static void Install(MelonLogger.Instance logger)
     {
+        _logger = logger;
         var root = Path.Combine(MelonEnvironment.GameRootDirectory, "harness");
         if (!File.Exists(Path.Combine(root, "enabled")))
         {
             return;
         }
 
-        _logger = logger;
         _commandsDir = Path.Combine(root, "commands");
         _processingDir = Path.Combine(root, "processing");
         _doneDir = Path.Combine(root, "done");
@@ -100,18 +100,21 @@ public static class DevHarness
 
         // Move first so a command that throws or quits the game is never replayed.
         var processingFile = MoveTo(file, _processingDir);
-        try
+        var result = Run(command);
+        WriteResult(file, result);
+        MoveTo(processingFile, result.Ok ? _doneDir : _rejectedDir);
+    }
+
+    // In-process entry point; call from the main thread. Works without the harness/enabled marker, which gates only the file queue.
+    public static HarnessResult Run(HarnessCommand command)
+    {
+        var result = HarnessRunner.Run(command, Execute);
+        if (!result.Ok)
         {
-            var result = Execute(command);
-            WriteResult(file, HarnessResult.Success(command.Name, result));
-            MoveTo(processingFile, _doneDir);
+            _logger.Error($"DevHarness: '{command.Kind}' failed: {result.Error}");
         }
-        catch (Exception ex)
-        {
-            _logger.Error($"DevHarness: '{command.Kind}' failed: {ex.Message}");
-            WriteResult(file, HarnessResult.Failure(command.Name, ex.Message));
-            MoveTo(processingFile, _rejectedDir);
-        }
+
+        return result;
     }
 
     private static JsonObject Execute(HarnessCommand command)

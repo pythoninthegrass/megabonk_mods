@@ -96,6 +96,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/fall_damage_policy.cs" Link="fall_damage_policy.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/load_overrides.cs" Link="load_overrides.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/harness_result.cs" Link="harness_result.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/harness_runner.cs" Link="harness_runner.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/steam_readiness.cs" Link="steam_readiness.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/png_encoder.cs" Link="png_encoder.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/character_override.cs" Link="character_override.cs" />
