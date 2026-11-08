@@ -218,6 +218,8 @@ public static class DevHarness
             case HarnessCommandKind.Hud:
                 HudControl.Set(command.Enabled, _logger);
                 break;
+            case HarnessCommandKind.Music:
+                return LevelMusic.Transport(command.Music);
             case HarnessCommandKind.Coordinates:
                 PositionLabel.SetVisible(command.Enabled, _logger);
                 return new JsonObject { ["enabled"] = PositionLabel.Enabled, ["visible"] = PositionLabel.Visible };

@@ -33,6 +33,7 @@ The game directory is resolved the same way as in `scripts/game_paths.py`: proce
 | Make the player survive enemy damage | `{"command":"invulnerable"}` | `run.py invulnerable` |
 | Restore normal player damage | `{"command":"vulnerable"}` | `run.py vulnerable` |
 | Apply 1–99 integer damage, preserving 1 HP by default | `{"command":"damage","amount":37,"nonlethal":true}` | `run.py damage 37` |
+| Control level music: play, pause, next, prev, track, list, now (see "Music transport") | `{"command":"music","action":"track","track":12}` | `run.py music track 12` |
 | Kill the nearest enemy, all enemies or all bosses (see "Killing enemies") | `{"command":"kill-enemies","target":"bosses"}` | `run.py kill-enemies bosses` |
 | End the run at once by killing the player (ignores invulnerability) | `{"command":"kill"}` | `run.py kill` |
 | Run the game's own restart, the death screen's Retry button | `{"command":"restart-run"}` | `run.py restart-run` |
@@ -122,6 +123,14 @@ LaunchAgent definitions live under `~/Library/Application Support/Megabonk/launc
 
 Omit the old machine-local `.tools/exit-trace/wine` override and leave `MEGABONK_RELAUNCH_DIAG` unset or false for ordinary SSH launches. The Mac must remain logged in and awake; this is not a headless replacement for its desktop session.
 
+### Music transport
+
+The `music` command and the ungated console verbs `music.play`, `music.pause`, `music.next`, `music.prev`, `music.track n`, `music.list` and `music.now` control the level's music. `run.py music <action> [n]` and the MCP `music(action, track)` tool send the same payload: `{"command":"music","action":"play|pause|next|prev|track|list|now"}`, with `"track":<n>` for `track`.
+
+Track numbers are 1-based, in playlist order: clip-name order for a pack playlist (`bundle:<pack>/<clip>`), numeric filename order for runtime mp3s (`track:<name>`). `next` and `prev` wrap at both ends; `track` rejects a number outside 1 to the track count with an error. A track change goes through the same playback path as the boombox and the automatic advance, and the playlist remembers the chosen track, so the next loop advance or boombox press continues from it. The log records the new track as `Radio: playing ...`.
+
+`play` and `pause` pause and resume the music source, so they also work on a stock stage. `next`, `prev`, `track`, `list` and `now` reply `no custom playlist on this stage` when the level has no custom playlist (`playlist` is `false` in the result). Otherwise the result holds `message` (the text the console prints), `playlist`, `count`, `current` (1-based, 0 before a track is chosen) and `tracks`.
+
 ### Runtime music probe
 
 With the harness enabled and a run loaded, copy an mp3 into the game's `UserData/CustomMusic/`, then use:
@@ -157,7 +166,7 @@ The default `--variant il2cpp` uses the working `Il2CppStructArray<float>` signa
 
 ### Results
 
-Before moving a command file to `done/` or `rejected/`, the mod writes `harness/results/<command file name>`: UTF-8 JSON, one object, written to `<name>.tmp` and renamed so a reader never sees a partial file. A command that succeeds writes `{"command":"<wire name>","ok":true,"result":<object or null>}`. A command that fails while running writes `{"command":"<wire name>","ok":false,"error":"<message>"}`. A file that does not parse writes the same failure shape with `"command":null`. Every command other than `state`, `ui-tree`, `click-widget`, `save-level`, `new-level`, `list-levels`, `palette`, `query-objects`, `teleport`, `grind-slide`, `dismiss-levelup`, `dismiss-offers`, `interact`, `music-probe` and `steam-ready` has `"result":null`. The result file is written before the command file moves, so a caller that sees the file in `done/` or `rejected/` can read the result at once. Result files are never deleted by the mod.
+Before moving a command file to `done/` or `rejected/`, the mod writes `harness/results/<command file name>`: UTF-8 JSON, one object, written to `<name>.tmp` and renamed so a reader never sees a partial file. A command that succeeds writes `{"command":"<wire name>","ok":true,"result":<object or null>}`. A command that fails while running writes `{"command":"<wire name>","ok":false,"error":"<message>"}`. A file that does not parse writes the same failure shape with `"command":null`. Every command other than `state`, `ui-tree`, `click-widget`, `save-level`, `new-level`, `list-levels`, `palette`, `query-objects`, `teleport`, `grind-slide`, `dismiss-levelup`, `dismiss-offers`, `interact`, `music`, `music-probe` and `steam-ready` has `"result":null`. The result file is written before the command file moves, so a caller that sees the file in `done/` or `rejected/` can read the result at once. Result files are never deleted by the mod.
 
 `run.py` reads them with `read_result(harness, name)`, which returns `None` when the file is absent or not valid JSON. Every subcommand that sends a command exits 1 and prints the `error` text on stderr when the result has `ok:false`, even if the command file landed in `done/`. A missing result file does not fail a command, so `run.py` still works against a mod built before results existed.
 
@@ -1043,7 +1052,7 @@ The in-game console (the tilde drop-down) turns a typed line into a harness comm
 - **Console-only verbs** are `help` (alias `?`), `clear` (alias `cls`) and `history`; none reaches the harness, and none needs `MEGABONK_DEV`.
 - **`level.load`** resolves a bare target as a title against the saved level list — case, spaces and punctuation are ignored — and reports every candidate when the title is ambiguous; a target that already equals a saved file name (or a path) is left as typed. Options are `map/stage/tier/seed/noseed`.
 
-The music verbs (`music.play/pause/next/prev/track/list/now`) are registered here so the table is complete but bind to no command yet; their harness transport is still to come.
+The music verbs (`music.play/pause/next/prev/track/list/now`) bind to the `music` harness command; see [Music transport](#music-transport).
 
 ## Console overlay
 

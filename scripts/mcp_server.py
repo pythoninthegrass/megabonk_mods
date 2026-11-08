@@ -346,6 +346,16 @@ async def press_summary_restart() -> CallToolResult:
 
 
 @mcp.tool()
+async def music(action: str, track: int | None = None) -> CallToolResult:
+    """Control the level's music like the console's music.* verbs. action is play (resume), pause, next, prev, track (with a 1-based track number), list or now. next, prev, track, list and now act on a pack or runtime-mp3 playlist and reply 'no custom playlist on this stage' elsewhere; play and pause also work on stock music. Returns message (the console text), playlist, count, current (1-based) and tracks."""
+    try:
+        payload = run.build_music_command(action, track)
+    except ValueError as error:
+        raise ToolError(str(error)) from error
+    return await _command(_harness(), payload, TIMEOUT)
+
+
+@mcp.tool()
 async def kill_enemies(target: str) -> CallToolResult:
     """Kill the nearest enemy (nearest), every live enemy (all) or every boss (bosses) by submitting lethal damage through the game's own enemy damage path, so the death events a real kill raises fire. Returns the target, how many were found and killed, and how many were bosses; read the boss events with log_wait. A freshly spawned boss took no damage (hpAfter equal to hpBefore, killed 0) while the editor froze the run, and for a short time after it was left; retry once the run has been unfrozen for a few seconds."""
     try:

@@ -52,6 +52,63 @@ public class RuntimeMusicSessionTests
         Assert.All(resources, resource => Assert.Equal(1, resource.Releases));
     }
 
+    private static RuntimeMusicSession<Resource> ThreeTrackSession()
+    {
+        var library = CustomMusicLibrary.FromFiles(new[] { "/music/1 One.mp3", "/music/2 Two.mp3", "/music/3 Three.mp3" });
+        return new RuntimeMusicSession<Resource>(library,
+            new RuntimeMusicOwner<Resource>((path, token) => Tone(),
+                (path, audio) => new Resource(Path.GetFileNameWithoutExtension(path)), _ => { }));
+    }
+
+    [Fact]
+    public void Transport_ExposesOrderedNamesAndTheCurrentNumber()
+    {
+        using var session = ThreeTrackSession();
+
+        session.Select("2 Two", _ => { });
+
+        Assert.Equal(new[] { "1 One", "2 Two", "3 Three" }, session.Names);
+        Assert.Equal(2, session.CurrentNumber);
+    }
+
+    [Fact]
+    public void PlayPrevious_StepsBackAndWraps()
+    {
+        using var session = ThreeTrackSession();
+        session.Select("1 One", _ => { });
+
+        session.PlayPrevious(_ => { });
+        Assert.Equal("3 Three", session.Current.Name);
+        session.PlayPrevious(_ => { });
+        Assert.Equal("2 Two", session.Current.Name);
+    }
+
+    [Fact]
+    public void PlayTrack_JumpsToTheNumberAndNextContinuesFromIt()
+    {
+        using var session = ThreeTrackSession();
+        session.Select("1 One", _ => { });
+
+        session.PlayTrack(3, _ => { });
+        Assert.Equal("3 Three", session.Current.Name);
+        Assert.Equal(3, session.CurrentNumber);
+        session.PlayNext(_ => { });
+        Assert.Equal("1 One", session.Current.Name);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(4)]
+    public void PlayTrack_RejectsAnOutOfRangeNumberWithoutChangingTheTrack(int number)
+    {
+        using var session = ThreeTrackSession();
+        session.Select("2 Two", _ => { });
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => session.PlayTrack(number, _ => { }));
+        Assert.Equal("2 Two", session.Current.Name);
+        Assert.Equal(2, session.CurrentNumber);
+    }
+
     [Fact]
     public void FailedSuccessor_IsSurfacedAndCanBeCleanedUpWithoutLeaking()
     {

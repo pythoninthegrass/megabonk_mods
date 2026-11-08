@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Nodes;
 
 namespace MegabonkLevels;
 
@@ -128,6 +129,11 @@ public static class ConsoleState
         if (!result.Ok)
         {
             return "error: " + result.Error;
+        }
+
+        if (result.Result is JsonObject payload && payload["message"] is JsonValue message && message.TryGetValue(out string text))
+        {
+            return text;
         }
 
         return result.Result == null ? "ok" : result.Result.ToJsonString();

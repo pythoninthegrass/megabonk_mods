@@ -381,6 +381,9 @@ INPUT_TOOL_CASES = [
     ("grind_slide", {"held": False}, {"command": "grind-slide", "held": False}),
     ("grind_slide", {}, {"command": "grind-slide"}),
     ("fall_damage", {}, {"command": "fall-damage"}),
+    ("music", {"action": "next"}, {"command": "music", "action": "next"}),
+    ("music", {"action": "list"}, {"command": "music", "action": "list"}),
+    ("music", {"action": "track", "track": 12}, {"command": "music", "action": "track", "track": 12}),
     ("dismiss_levelup", {}, {"command": "dismiss-levelup", "choice": 0}),
     ("dismiss_levelup", {"choice": 2}, {"command": "dismiss-levelup", "choice": 2}),
     ("dismiss_offers", {}, {"command": "dismiss-offers"}),
@@ -405,6 +408,25 @@ async def test_interact_without_a_type_is_a_tool_error_and_sends_nothing(tmp_pat
     try:
         async with Client(mcp_server.mcp) as client:
             result = await client.call_tool("interact", args)
+    finally:
+        stop.set()
+    assert result.is_error
+    assert seen == []
+
+
+@pytest.mark.parametrize("args", [{"action": "shuffle"}, {"action": "track"}, {"action": "track", "track": 0}, {"action": "next", "track": 2}])
+async def test_music_with_bad_arguments_is_a_tool_error_and_sends_nothing(tmp_path, monkeypatch, args) -> None:
+    harness = setup_harness(tmp_path, monkeypatch)
+    seen = []
+
+    def responder(payload):
+        seen.append(payload)
+        return ok_result(payload, {})
+
+    stop = start_fake_mod(harness, responder)
+    try:
+        async with Client(mcp_server.mcp) as client:
+            result = await client.call_tool("music", args)
     finally:
         stop.set()
     assert result.is_error

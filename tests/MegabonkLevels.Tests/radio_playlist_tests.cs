@@ -63,6 +63,106 @@ public class RadioPlaylistTests
         Assert.Equal("01_A", playlist.Next());
     }
 
+    [Fact]
+    public void Names_AreTheOrderedClipsAndCountMatches()
+    {
+        var playlist = new RadioPlaylist(["02_B", "01_A", "02_B"]);
+
+        Assert.Equal(["01_A", "02_B"], playlist.Names);
+        Assert.Equal(2, playlist.Count);
+    }
+
+    [Fact]
+    public void CurrentNumber_IsZeroUntilAClipIsChosen_ThenTracksTheLastClipPlayed()
+    {
+        var playlist = new RadioPlaylist(["01_A", "02_B", "03_C"]);
+
+        Assert.Equal(0, playlist.CurrentNumber);
+        playlist.Next();
+        Assert.Equal(1, playlist.CurrentNumber);
+        playlist.Next();
+        Assert.Equal(2, playlist.CurrentNumber);
+    }
+
+    [Fact]
+    public void CurrentNumber_FollowsStartAfter()
+    {
+        var playlist = new RadioPlaylist(["01_A", "02_B", "03_C"]);
+
+        playlist.StartAfter("02_B");
+
+        Assert.Equal(2, playlist.CurrentNumber);
+    }
+
+    [Fact]
+    public void Previous_StepsBackAndWrapsToTheLastClip()
+    {
+        var playlist = new RadioPlaylist(["01_A", "02_B", "03_C"]);
+        playlist.StartAfter("02_B");
+
+        Assert.Equal("01_A", playlist.Previous());
+        Assert.Equal("03_C", playlist.Previous());
+        Assert.Equal("02_B", playlist.Previous());
+    }
+
+    [Fact]
+    public void Previous_WithNothingPlayedStartsAtTheLastClip()
+    {
+        Assert.Equal("03_C", new RadioPlaylist(["01_A", "02_B", "03_C"]).Previous());
+    }
+
+    [Fact]
+    public void Previous_WithNoClipsReturnsNull()
+    {
+        Assert.Null(new RadioPlaylist([]).Previous());
+    }
+
+    [Fact]
+    public void Next_AfterPreviousContinuesFromTheClipChosen()
+    {
+        var playlist = new RadioPlaylist(["01_A", "02_B", "03_C"]);
+        playlist.StartAfter("03_C");
+
+        Assert.Equal("02_B", playlist.Previous());
+        Assert.Equal("03_C", playlist.Next());
+        Assert.Equal("01_A", playlist.Next());
+    }
+
+    [Theory]
+    [InlineData(1, "01_A")]
+    [InlineData(3, "03_C")]
+    public void Select_PicksTheOneBasedClip(int number, string clip)
+    {
+        var playlist = new RadioPlaylist(["01_A", "02_B", "03_C"]);
+
+        Assert.Equal(clip, playlist.Select(number));
+        Assert.Equal(number, playlist.CurrentNumber);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(4)]
+    [InlineData(-1)]
+    public void Select_RejectsOutOfRangeAndLeavesThePlaylistAlone(int number)
+    {
+        var playlist = new RadioPlaylist(["01_A", "02_B", "03_C"]);
+        playlist.StartAfter("01_A");
+
+        Assert.Null(playlist.Select(number));
+        Assert.Equal(1, playlist.CurrentNumber);
+        Assert.Equal("02_B", playlist.Next());
+    }
+
+    [Fact]
+    public void Next_AfterSelectContinuesFromTheChosenClipAndWraps()
+    {
+        var playlist = new RadioPlaylist(["01_A", "02_B", "03_C"]);
+
+        playlist.Select(3);
+
+        Assert.Equal("01_A", playlist.Next());
+    }
+
     [Theory]
     [InlineData(150f, 0.4f, true)]
     [InlineData(30.2f, 30.3f, false)]

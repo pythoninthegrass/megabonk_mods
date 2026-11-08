@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -34,7 +35,23 @@ public sealed class RuntimeMusicSession<T> : IDisposable where T : class
         _owner.Prefetch(_library.Resolve(_playlist.Peek()));
     }
 
+    public IReadOnlyList<string> Names => _playlist.Names;
+
+    public int CurrentNumber => _playlist.CurrentNumber;
+
     public void PlayNext(Action<T> play) => Select(_playlist.Next(), play);
+
+    public void PlayPrevious(Action<T> play) => Select(_playlist.Previous(), play);
+
+    public void PlayTrack(int number, Action<T> play)
+    {
+        if (number < 1 || number > _playlist.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(number), $"Track {number} is not between 1 and {_playlist.Count}.");
+        }
+
+        Select(_playlist.Names[number - 1], play);
+    }
 
     public void Dispose() => _owner.Dispose();
 }

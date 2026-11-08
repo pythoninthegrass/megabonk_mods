@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text.Json.Nodes;
 using HarmonyLib;
 using Il2Cpp;
 using Il2CppAssets.Scripts.Audio.Music;
@@ -145,23 +147,43 @@ public static class LevelMusic
         return track;
     }
 
-    // Plays the next soundtrack clip as the level music; false when there is nothing to play.
-    private static bool PlayNext()
+    private static bool PlayNext() => PlayStep(MusicActions.Next, 0);
+
+    // Plays the playlist's next, previous or numbered clip as the level music; false when there is nothing to play.
+    private static bool PlayStep(string action, int number)
     {
         if (_runtime != null)
         {
-            _runtime.PlayNext(track =>
+            Action<RuntimeMusicTrack> play = track =>
             {
                 _radioTrack = track.Track.Pointer;
                 track.Play();
-            });
+            };
+            switch (action)
+            {
+                case MusicActions.Prev:
+                    _runtime.PlayPrevious(play);
+                    break;
+                case MusicActions.Track:
+                    _runtime.PlayTrack(number, play);
+                    break;
+                default:
+                    _runtime.PlayNext(play);
+                    break;
+            }
+
             _track = _runtime.Current.Track;
             _lastTime = 0f;
             _logger?.Msg($"Radio: playing runtime '{_track.trackName}'.");
             return true;
         }
 
-        var name = _radio.Next();
+        var name = action switch
+        {
+            MusicActions.Prev => _radio.Previous(),
+            MusicActions.Track => _radio.Select(number),
+            _ => _radio.Next(),
+        };
         var clip = name == null ? null : PackPrefabs.ResolveClip(_pack, name);
         if (clip == null)
         {
@@ -186,6 +208,71 @@ public static class LevelMusic
         _lastTime = 0f;
         _logger?.Msg($"Radio: playing '{clip.name}'.");
         return true;
+    }
+
+    private static bool HasPlaylist => (_radio != null || _runtime != null) && CustomLevelState.IsActive;
+
+    private static IReadOnlyList<string> PlaylistNames => _runtime != null ? _runtime.Names : _radio.Names;
+
+    private static int CurrentNumber => _runtime != null ? _runtime.CurrentNumber : _radio.CurrentNumber;
+
+    // Runs one console or harness music request; the result's message is what the console prints.
+    public static JsonObject Transport(MusicArgs args)
+    {
+        if (args.Action is MusicActions.Play or MusicActions.Pause)
+        {
+            var source = MusicController.Instance?.musicSource ?? throw new InvalidOperationException("no music source in the scene");
+            var pause = args.Action == MusicActions.Pause;
+            if (pause)
+            {
+                source.Pause();
+            }
+            else
+            {
+                source.UnPause();
+            }
+
+            _logger?.Msg($"Music: {(pause ? "paused" : "resumed")}.");
+            return new JsonObject { ["message"] = pause ? "music paused" : "music resumed", ["playlist"] = HasPlaylist };
+        }
+
+        if (!HasPlaylist)
+        {
+            return new JsonObject { ["message"] = MusicTransportReply.NoPlaylist, ["playlist"] = false };
+        }
+
+        var names = PlaylistNames;
+        string message;
+        switch (args.Action)
+        {
+            case MusicActions.List:
+                message = MusicTransportReply.List(names, CurrentNumber);
+                break;
+            case MusicActions.Now:
+                message = MusicTransportReply.Now(names, CurrentNumber);
+                break;
+            default:
+                if (args.Action == MusicActions.Track && args.Track > names.Count)
+                {
+                    throw new ArgumentException(MusicTransportReply.OutOfRange(args.Track, names.Count));
+                }
+
+                if (!PlayStep(args.Action, args.Track))
+                {
+                    throw new InvalidOperationException("the chosen track could not be played; see the log");
+                }
+
+                message = MusicTransportReply.Changed(names, CurrentNumber);
+                break;
+        }
+
+        var tracks = new JsonArray();
+        foreach (var name in names)
+        {
+            tracks.Add(name);
+        }
+
+        return new JsonObject { ["message"] = message, ["playlist"] = true, ["count"] = names.Count, ["current"] = CurrentNumber, ["tracks"] = tracks };
     }
 
     // Moves on to the next clip when the looping level or radio clip wraps round to its start.

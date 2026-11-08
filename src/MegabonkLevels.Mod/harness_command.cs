@@ -55,6 +55,7 @@ public enum HarnessCommandKind
     Perf,
     KillEnemies,
     Coordinates,
+    Music,
 }
 
 // Arguments of a new-level command: the blank from-scratch level's map, stage, tier and square grid size.
@@ -145,7 +146,7 @@ public sealed class QueryArgs
 }
 
 // A parsed dev-harness command file; see docs/development.md for the wire format.
-public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null, PerfArgs Perf = null, int? Offer = null, bool Skip = false, InteractArgs Interact = null, NewLevelArgs? NewLevel = null, string KillTarget = null)
+public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Path, CameraPose Pose = default, bool Enabled = false, string Name = null, InputArgs Input = null, TeleportArgs Teleport = null, int Choice = 0, QueryArgs Query = null, LoadOverrides Overrides = default, ItemArgs Item = null, bool? Held = null, DamageArgs Damage = null, PerfArgs Perf = null, int? Offer = null, bool Skip = false, InteractArgs Interact = null, NewLevelArgs? NewLevel = null, string KillTarget = null, MusicArgs Music = null)
 {
     public const int MaxTypeLength = 200;
 
@@ -198,6 +199,8 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return TryParseDamage(root, out command, out error);
             case "kill-enemies":
                 return TryParseKillEnemies(root, out command, out error);
+            case "music":
+                return TryParseMusic(root, out command, out error);
             case "quit":
                 command = new HarnessCommand(HarnessCommandKind.Quit, null);
                 error = null;
@@ -346,6 +349,28 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
         }
 
         command = new HarnessCommand(HarnessCommandKind.Damage, null, Damage: new DamageArgs { Amount = amount, Nonlethal = nonlethal });
+        error = null;
+        return true;
+    }
+
+    private static bool TryParseMusic(JsonObject root, out HarnessCommand command, out string error)
+    {
+        command = default;
+        if (!TryGetString(root, "action", out var action) || Array.IndexOf(MusicActions.Names, action) < 0)
+        {
+            error = $"field 'action' must be one of {string.Join(", ", MusicActions.Names)}";
+            return false;
+        }
+
+        var track = 0;
+        if (action == MusicActions.Track
+            && (root["track"] is not JsonValue trackValue || !trackValue.TryGetValue(out track) || track < 1))
+        {
+            error = "field 'track' must be an integer of at least 1";
+            return false;
+        }
+
+        command = new HarnessCommand(HarnessCommandKind.Music, null, Music: new MusicArgs { Action = action, Track = track });
         error = null;
         return true;
     }

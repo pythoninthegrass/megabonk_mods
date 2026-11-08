@@ -383,17 +383,22 @@ public sealed class ConsoleCommandRegistry
         registry.Add(new ConsoleVerb("app.quit", "quit the game", true, (_, _, _) => Command(HarnessCommandKind.Quit))
             .WithAliases("qqq"));
 
-        registry.Add(new ConsoleVerb("music.play", "resume paused music", false, (_, _, _) => NoMatch()));
-        registry.Add(new ConsoleVerb("music.pause", "pause the current music", false, (_, _, _) => NoMatch()));
-        registry.Add(new ConsoleVerb("music.next", "go to the next track", false, (_, _, _) => NoMatch()));
-        registry.Add(new ConsoleVerb("music.prev", "go to the previous track", false, (_, _, _) => NoMatch()));
-        registry.Add(new ConsoleVerb("music.track", "jump to a numbered track", false, (args, _, _) =>
-            args.Count == 1 && Int(args[0], 1, int.MaxValue, out _) ? NoMatch() : NoMatch()));
-        registry.Add(new ConsoleVerb("music.list", "list the playlist with the current track marked", false, (_, _, _) => NoMatch()));
-        registry.Add(new ConsoleVerb("music.now", "name the current track", false, (_, _, _) => NoMatch()));
+        registry.Add(new ConsoleVerb("music.play", "resume paused music", false, (args, _, _) => MusicTransport(args, MusicActions.Play)));
+        registry.Add(new ConsoleVerb("music.pause", "pause the current music", false, (args, _, _) => MusicTransport(args, MusicActions.Pause)));
+        registry.Add(new ConsoleVerb("music.next", "go to the next track", false, (args, _, _) => MusicTransport(args, MusicActions.Next)));
+        registry.Add(new ConsoleVerb("music.prev", "go to the previous track", false, (args, _, _) => MusicTransport(args, MusicActions.Prev)));
+        registry.Add(new ConsoleVerb("music.track", "jump to track n", false, (args, _, _) =>
+            args.Count == 1 && Int(args[0], 1, int.MaxValue, out var track)
+                ? Command(new HarnessCommand(HarnessCommandKind.Music, null, Music: new MusicArgs { Action = MusicActions.Track, Track = track }))
+                : NoMatch(), "usage: music.track n"));
+        registry.Add(new ConsoleVerb("music.list", "list the tracks, marking the current one", false, (args, _, _) => MusicTransport(args, MusicActions.List)));
+        registry.Add(new ConsoleVerb("music.now", "show the current track", false, (args, _, _) => MusicTransport(args, MusicActions.Now)));
 
         return registry;
     }
+
+    private static ConsoleBindResult MusicTransport(IReadOnlyList<string> args, string action) =>
+        args.Count == 0 ? Command(new HarnessCommand(HarnessCommandKind.Music, null, Music: new MusicArgs { Action = action })) : NoMatch();
 
     // Console-only verbs produce no harness command; the console handles them itself.
     private static ConsoleBindResult NoCommand() => new(null, "", null);

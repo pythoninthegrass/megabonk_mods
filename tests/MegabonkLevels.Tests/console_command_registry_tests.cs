@@ -78,6 +78,14 @@ public class ConsoleCommandRegistryTests
         new object[] { "ui.coordinates on", HarnessCommandKind.Coordinates },
         new object[] { "ui.coordinates off", HarnessCommandKind.Coordinates },
         new object[] { "ui.coordinates", HarnessCommandKind.Coordinates },
+        // Music
+        new object[] { "music.play", HarnessCommandKind.Music },
+        new object[] { "music.pause", HarnessCommandKind.Music },
+        new object[] { "music.next", HarnessCommandKind.Music },
+        new object[] { "music.prev", HarnessCommandKind.Music },
+        new object[] { "music.track 12", HarnessCommandKind.Music },
+        new object[] { "music.list", HarnessCommandKind.Music },
+        new object[] { "music.now", HarnessCommandKind.Music },
         // Perf
         new object[] { "perf.report", HarnessCommandKind.Perf },
         new object[] { "perf.status", HarnessCommandKind.Perf },
@@ -142,6 +150,13 @@ public class ConsoleCommandRegistryTests
     [InlineData("ui.hud on")]
     [InlineData("ui.coordinates on")]
     [InlineData("level.list")]
+    [InlineData("music.play")]
+    [InlineData("music.pause")]
+    [InlineData("music.next")]
+    [InlineData("music.prev")]
+    [InlineData("music.track 3")]
+    [InlineData("music.list")]
+    [InlineData("music.now")]
     public void Bind_UngatedVerbs_WorkWithoutTheDevFlag(string line)
     {
         var result = ConsoleCommandRegistry.Default.Bind(line, DevState(false), Toggles());
@@ -221,6 +236,11 @@ public class ConsoleCommandRegistryTests
     [InlineData("perf.toggle KillFloor maybe")]
     [InlineData("debug.ui_tree 960")]
     [InlineData("ui.hud maybe")]
+    [InlineData("music.track")]
+    [InlineData("music.track 0")]
+    [InlineData("music.track two")]
+    [InlineData("music.track 1 2")]
+    [InlineData("music.next now")]
     public void Bind_RepliesWithTheUsageLineForBadValues(string line)
     {
         var result = ConsoleCommandRegistry.Default.Bind(line, DevState(true), Toggles());
@@ -783,4 +803,20 @@ public class ConsoleCommandRegistryTests
         new(invulnerable, editor, hud, coordinates);
 
     private static IReadOnlyList<string> LevelList() => new[] { "Bramblecrown Hill.mblevel.json", "thps.mblevel.json" };
+
+    [Theory]
+    [InlineData("music.play", "play", 0)]
+    [InlineData("music.pause", "pause", 0)]
+    [InlineData("music.next", "next", 0)]
+    [InlineData("music.prev", "prev", 0)]
+    [InlineData("music.list", "list", 0)]
+    [InlineData("music.now", "now", 0)]
+    [InlineData("music.track 12", "track", 12)]
+    public void Bind_MusicVerbs_CarryTheActionAndTrack(string line, string action, int track)
+    {
+        var command = ConsoleCommandRegistry.Default.Bind(line, DevState(false), Toggles()).Command.Value;
+
+        Assert.Equal(action, command.Music.Action);
+        Assert.Equal(track, command.Music.Track);
+    }
 }

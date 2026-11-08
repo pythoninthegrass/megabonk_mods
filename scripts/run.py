@@ -30,6 +30,7 @@ Usage:
     run.py restart-run             Run the game's own restart, the death screen's Retry button
     run.py press-death-confirm     Press Confirm on the death screen, opening the run summary; fails when the death screen is not showing
     run.py press-summary-restart   Press the run summary's Restart button; fails when the summary is not showing
+    run.py music <action> [n]      Control level music: play, pause, next, prev, track <n>, list, now
     run.py kill-enemies <target>   Kill the nearest enemy, all enemies or all bosses through the game's damage path
     run.py damage <1-99>           Apply integer damage bypassing shield; preserves 1 HP unless --no-nonlethal
     run.py steam-ready             Check whether the in-game Steamworks client is ready
@@ -454,6 +455,21 @@ def build_damage_command(amount: int, nonlethal: bool = True) -> dict[str, objec
 
 
 KILL_ENEMY_TARGETS = ("nearest", "all", "bosses")
+
+
+MUSIC_ACTIONS = ("play", "pause", "next", "prev", "track", "list", "now")
+
+
+def build_music_command(action: str, track: int | None = None) -> dict[str, object]:
+    if action not in MUSIC_ACTIONS:
+        raise ValueError(f"music action must be one of {', '.join(MUSIC_ACTIONS)}")
+    if action == "track":
+        if not isinstance(track, int) or isinstance(track, bool) or track < 1:
+            raise ValueError("music track needs a track number of at least 1")
+        return {"command": "music", "action": action, "track": track}
+    if track is not None:
+        raise ValueError("music takes a track number only with the track action")
+    return {"command": "music", "action": action}
 
 
 def build_kill_enemies_command(target: str) -> dict[str, object]:
@@ -1543,6 +1559,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub.add_parser("restart-run", help="run the game's own restart, the death screen's Retry button")
     sub.add_parser("press-death-confirm", help="press Confirm on the death screen, opening the run summary")
     sub.add_parser("press-summary-restart", help="press the run summary's Restart button")
+    music = sub.add_parser("music", help="control level music: play, pause, next, prev, track <n>, list, now")
+    music.add_argument("music_action", metavar="action", choices=MUSIC_ACTIONS)
+    music.add_argument("track", nargs="?", type=int, help="1-based track number, for the track action")
     kill_enemies = sub.add_parser("kill-enemies", help="kill the nearest enemy, all enemies or all bosses through the game's own damage path")
     kill_enemies.add_argument("target", choices=KILL_ENEMY_TARGETS)
     damage = sub.add_parser("damage", help="apply 1–99 damage through the game, bypassing shield; nonlethal by default")
@@ -2070,6 +2089,12 @@ def main(argv: list[str] | None = None) -> int:
             ok = send_printing_result(harness, build_command("state"), args.timeout)
         case "press-death-confirm" | "press-summary-restart":
             ok = send_printing_result(harness, build_command(args.action), args.timeout, request=request_press)
+        case "music":
+            try:
+                payload = build_music_command(args.music_action, args.track)
+            except ValueError as error:
+                raise SystemExit(str(error)) from error
+            ok = send_printing_result(harness, payload, args.timeout)
         case "kill-enemies":
             ok = send_printing_result(harness, build_kill_enemies_command(args.target), args.timeout)
         case "damage":

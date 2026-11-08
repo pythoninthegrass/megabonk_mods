@@ -38,6 +38,43 @@ public class HarnessCommandTests
     }
 
     [Theory]
+    [InlineData("play")]
+    [InlineData("pause")]
+    [InlineData("next")]
+    [InlineData("prev")]
+    [InlineData("list")]
+    [InlineData("now")]
+    public void TryParse_Music_CarriesTheAction(string action)
+    {
+        Assert.True(HarnessCommand.TryParse($$"""{"command":"music","action":"{{action}}"}""", out var command, out var error), error);
+        Assert.Equal(HarnessCommandKind.Music, command.Kind);
+        Assert.Equal("music", command.Name);
+        Assert.Equal(action, command.Music.Action);
+    }
+
+    [Fact]
+    public void TryParse_Music_TrackCarriesTheNumber()
+    {
+        Assert.True(HarnessCommand.TryParse("""{"command":"music","action":"track","track":12}""", out var command, out var error), error);
+        Assert.Equal("track", command.Music.Action);
+        Assert.Equal(12, command.Music.Track);
+    }
+
+    [Theory]
+    [InlineData("""{"command":"music"}""")]
+    [InlineData("""{"command":"music","action":"shuffle"}""")]
+    [InlineData("""{"command":"music","action":3}""")]
+    [InlineData("""{"command":"music","action":"track"}""")]
+    [InlineData("""{"command":"music","action":"track","track":"2"}""")]
+    [InlineData("""{"command":"music","action":"track","track":0}""")]
+    [InlineData("""{"command":"music","action":"track","track":-1}""")]
+    public void TryParse_Music_RejectsMissingUnknownOrBadTrack(string json)
+    {
+        Assert.False(HarnessCommand.TryParse(json, out _, out var error));
+        Assert.NotNull(error);
+    }
+
+    [Theory]
     [InlineData("decode")]
     [InlineData("native-info")]
     [InlineData("native-tone")]

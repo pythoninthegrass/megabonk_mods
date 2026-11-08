@@ -267,6 +267,14 @@ public class ConsoleStateTests
         Assert.Equal("""{"editor":true}""", reply);
     }
 
+    [Fact]
+    public void ReplyFor_ResultWithAMessage_PrintsTheMessageInsteadOfTheJson()
+    {
+        var reply = ConsoleState.ReplyFor(HarnessResult.Success("music", new JsonObject { ["message"] = "1  a\n2  b", ["count"] = 2 }));
+
+        Assert.Equal("1  a\n2  b", reply);
+    }
+
     private static HarnessCommand Harness(string json)
     {
         Assert.True(HarnessCommand.TryParse(json, out var command, out var error), error);

@@ -2521,3 +2521,24 @@ def test_build_kill_enemies_command_carries_the_target(target) -> None:
 def test_build_kill_enemies_command_rejects_unknown_target(target) -> None:
     with pytest.raises(ValueError):
         run.build_kill_enemies_command(target)
+
+
+@pytest.mark.parametrize("action", ["play", "pause", "next", "prev", "list", "now"])
+def test_build_music_command_carries_the_action(action) -> None:
+    assert run.build_music_command(action) == {"command": "music", "action": action}
+    assert run.parse_args(["music", action]).music_action == action
+
+
+def test_build_music_command_track_carries_the_number() -> None:
+    assert run.build_music_command("track", 12) == {"command": "music", "action": "track", "track": 12}
+    args = run.parse_args(["music", "track", "12"])
+    assert (args.music_action, args.track) == ("track", 12)
+
+
+@pytest.mark.parametrize(
+    ("action", "track"),
+    [("shuffle", None), ("", None), ("track", None), ("track", 0), ("track", -1), ("next", 3)],
+)
+def test_build_music_command_rejects_bad_arguments(action, track) -> None:
+    with pytest.raises(ValueError):
+        run.build_music_command(action, track)
