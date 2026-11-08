@@ -28,6 +28,35 @@ public class ObjectQueryTests
     {
     }
 
+    private sealed class Controller
+    {
+        public static int Index = 1;
+        public static Asset CurrentStage => new() { name = "StageDesert2", Order = 2 };
+        public int InstanceOnly => 3;
+    }
+
+    [Fact]
+    public void ReadStatics_ReturnsOneNamedRowAndExpandsStageWithDepth()
+    {
+        var result = ObjectQuery.ReadStatics(typeof(Controller), new[] { "Index", "CurrentStage", "name", "Index" }, depth: 1);
+        Assert.Equal(1, (int)result["count"]!);
+        var row = result["objects"]![0]!;
+        Assert.Equal("Controller", (string)row["name"]!);
+        Assert.Equal(1L, (long)row["Index"]!);
+        Assert.Equal("StageDesert2", (string)row["CurrentStage"]!["name"]!);
+        Assert.Equal(3, row.AsObject().Count);
+    }
+
+    [Theory]
+    [InlineData("InstanceOnly")]
+    [InlineData("Missing")]
+    public void ReadStatics_RejectsInstanceOrUnknownMembers(string field)
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => ObjectQuery.ReadStatics(typeof(Controller), new[] { field }));
+        Assert.Contains(field, ex.Message);
+        Assert.Contains("Controller", ex.Message);
+    }
+
     private static class Nested
     {
         public sealed class Asset

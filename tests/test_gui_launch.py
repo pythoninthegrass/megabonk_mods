@@ -110,6 +110,13 @@ def test_gui_handoff_steam_launch_needs_no_working_directory(monkeypatch, tmp_pa
     assert "WorkingDirectory" not in config
 
 
+def test_gui_handoff_preserves_opt_in_stage_measurement_switch(monkeypatch, tmp_path):
+    calls = launchctl_stubs(monkeypatch, tmp_path)
+    lg.spawn_in_gui(lg.Launch(["/wine", "game.exe"], {}, None), {"MEGABONK_DEV_STAGE_OVERRIDE": "true"})
+    config = plistlib.loads(Path(calls[-1][3]).read_bytes())
+    assert config["EnvironmentVariables"]["MEGABONK_DEV_STAGE_OVERRIDE"] == "true"
+
+
 def test_missing_gui_session_fails_without_bootstrap_or_log_rotation(monkeypatch, tmp_path):
     calls = launchctl_stubs(monkeypatch, tmp_path, gui=False)
     log = tmp_path / "wine-latest.log"

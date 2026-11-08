@@ -43,14 +43,25 @@ public static class ObjectQuery
         return new JsonObject { ["type"] = type.Name, ["count"] = rows.Count, ["objects"] = rows };
     }
 
-    private static Func<object, object> FindReader(Type type, string name)
+    public static JsonObject ReadStatics(Type type, IReadOnlyList<string> fields, int depth = 0)
     {
-        if (type.GetProperty(name, Members) is { } property && property.GetIndexParameters().Length == 0)
+        var row = new JsonObject { ["name"] = type.Name };
+        foreach (var name in fields.Distinct().Where(name => name != "name"))
+        {
+            row[name] = AssetDump.Describe(FindReader(type, name, BindingFlags.Public | BindingFlags.Static)(null), depth);
+        }
+
+        return new JsonObject { ["type"] = type.Name, ["count"] = 1, ["objects"] = new JsonArray(row) };
+    }
+
+    private static Func<object, object> FindReader(Type type, string name, BindingFlags members = Members)
+    {
+        if (type.GetProperty(name, members) is { } property && property.GetIndexParameters().Length == 0)
         {
             return property.GetValue;
         }
 
-        if (type.GetField(name, Members) is { } field)
+        if (type.GetField(name, members) is { } field)
         {
             return field.GetValue;
         }

@@ -233,6 +233,7 @@ public static class LevelLoaderPatch
         AllowedCharacters = level.AllowedCharacters;
         MapDescription = level.MapDescription;
         CustomLevelState.MarkPendingStart();
+        InitialStage.Arm(level.StageIndex, EnvFlag.IsSet(DevVariable), EnvFlag.IsSet("MEGABONK_DEV_STAGE_OVERRIDE"));
         logger.Msg($"LevelLoader: starting map={level.Map} stage={level.StageIndex} tier={level.Tier} seed={(unseeded ? "game-rolled" : level.Seed.ToString())}");
         if (CustomTierCap.IsCapped(level.Tier))
         {
@@ -249,6 +250,21 @@ public static class LevelLoaderPatch
 
     // Set to MEGABONK_DEV=true to skip the character screen: a harness load then starts at once with the default or named character.
     private const string DevVariable = "MEGABONK_DEV";
+
+    private static readonly InitialStageOverride InitialStage = new();
+
+    [HarmonyPatch(typeof(MapController), nameof(MapController.LoadNextStage))]
+    private static class InitialStagePrefix
+    {
+        private static void Prefix()
+        {
+            if (InitialStage.TakeBeforeAdvance(MapController.index) is int previousIndex)
+            {
+                MapController.index = previousIndex;
+                MelonLogger.Msg($"LevelLoader: development initial stage override -> {previousIndex + 1}");
+            }
+        }
+    }
 
     // A load held back until the player confirms a character on the restricted character screen.
     private static (LevelFile Level, MelonLogger.Instance Logger, bool RestrictsScreen, bool Unseeded)? _awaitingCharacter;

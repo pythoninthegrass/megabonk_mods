@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Il2Cpp;
 using Il2CppAssets.Scripts.Actors.Player;
+using Il2CppAssets.Scripts.Managers;
 using Il2CppAssets.Scripts.UI.InGame.Levelup;
 using Il2CppAssets.Scripts.UI.InGame.Rewards;
 using Il2CppAssets.Scripts.Utility;
@@ -408,6 +409,11 @@ public static class DevHarness
 
     private static JsonObject QueryObjects(QueryArgs args)
     {
+        if (args.TypeName == nameof(MapController) || args.TypeName == typeof(MapController).FullName)
+        {
+            return ObjectQuery.ReadStatics(typeof(MapController), args.Fields, args.Depth);
+        }
+
         var type = ObjectQuery.ResolveType(UnityObjectTypes(), args.TypeName);
         var items = Resources.FindObjectsOfTypeAll(Il2CppType.From(type)).Select(found => Activator.CreateInstance(type, found.Pointer)).ToList();
         return ObjectQuery.Read(type, items, args.Fields, args.Depth);
