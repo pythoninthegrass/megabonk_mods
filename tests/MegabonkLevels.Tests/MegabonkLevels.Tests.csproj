@@ -153,6 +153,10 @@
     <Compile Include="../../src/MegabonkLevels.Mod/custom_map_entries.cs" Link="custom_map_entries.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/character_policy.cs" Link="character_policy.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/death_screen_press_gate.cs" Link="death_screen_press_gate.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_command_tokenizer.cs" Link="console_command_tokenizer.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_command_registry.cs" Link="console_command_registry.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_history.cs" Link="console_history.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_scrollback.cs" Link="console_scrollback.cs" />
     <Compile Include="../../unity/pack-authoring/Assets/Editor/CoplanarLayering.cs" Link="CoplanarLayering.cs" />
     <Compile Include="../../unity/pack-authoring/Assets/Editor/WarehouseRoof.cs" Link="WarehouseRoof.cs" />
     <Compile Include="../../unity/pack-authoring/Assets/Editor/WarehousePieces.cs" Link="WarehousePieces.cs" />

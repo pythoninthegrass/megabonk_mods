@@ -3,7 +3,7 @@ id: TASK-054.02
 title: >-
   Console command language: snake_case dot verbs, aliases, gating, help,
   completion and history
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-08T07:54:00Z'
 labels: []
@@ -72,19 +72,19 @@ The music verbs are added by TASK-054.04. Its registry entries plug into the sam
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A tokenizer splits a line into verb and arguments, honouring double-quoted arguments, and is covered by tests including empty input, unterminated quotes and extra whitespace
-- [ ] #2 Every verb and alias in the description's table binds to the expected HarnessCommand kind and arguments via HarnessCommand.TryParse, with one test per verb
-- [ ] #3 Unknown verbs reply with a suggestion of the closest matching verbs; bad arity or values reply with the verb's usage line
-- [ ] #4 With MEGABONK_DEV not true, every starred verb replies 'requires MEGABONK_DEV' without producing a command, and unstarred verbs still bind; tested both ways
-- [ ] #5 Toggle verbs (player.god/tgm, editor/tfc, ui.hud/tm) with no argument flip the current state
-- [ ] #6 help with and without a filter lists verbs, aliases and one-line help; Tab completion cycles prefix matches; history skips consecutive duplicates; scrollback is bounded and pages; each covered by tests
-- [ ] #7 New files are Unity-free and linked into tests/MegabonkLevels.Tests/MegabonkLevels.Tests.csproj
+- [x] #1 A tokenizer splits a line into verb and arguments, honouring double-quoted arguments, and is covered by tests including empty input, unterminated quotes and extra whitespace
+- [x] #2 Every verb and alias in the description's table binds to the expected HarnessCommand kind and arguments via HarnessCommand.TryParse, with one test per verb
+- [x] #3 Unknown verbs reply with a suggestion of the closest matching verbs; bad arity or values reply with the verb's usage line
+- [x] #4 With MEGABONK_DEV not true, every starred verb replies 'requires MEGABONK_DEV' without producing a command, and unstarred verbs still bind; tested both ways
+- [x] #5 Toggle verbs (player.god/tgm, editor/tfc, ui.hud/tm) with no argument flip the current state
+- [x] #6 help with and without a filter lists verbs, aliases and one-line help; Tab completion cycles prefix matches; history skips consecutive duplicates; scrollback is bounded and pages; each covered by tests
+- [x] #7 New files are Unity-free and linked into tests/MegabonkLevels.Tests/MegabonkLevels.Tests.csproj
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
