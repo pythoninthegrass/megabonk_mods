@@ -440,6 +440,30 @@ public class HarnessCommandTests
     }
 
     [Fact]
+    public void TryParse_MouseScroll_ReadsDeltaAndMoveFirstPosition()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"mouse","action":"scroll","delta":2,"x":10,"y":20}""", out var command, out var error);
+
+        Assert.True(ok);
+        Assert.Null(error);
+        Assert.Equal("scroll", command.Input.Action);
+        Assert.Equal(2f, command.Input.Value);
+        Assert.Equal(10f, command.Input.X);
+        Assert.Equal(20f, command.Input.Y);
+    }
+
+    [Fact]
+    public void TryParse_MouseScroll_WithoutAPositionLeavesThePointer()
+    {
+        var ok = HarnessCommand.TryParse("""{"command":"mouse","action":"scroll","delta":-1.5}""", out var command, out _);
+
+        Assert.True(ok);
+        Assert.Equal(-1.5f, command.Input.Value);
+        Assert.Null(command.Input.X);
+        Assert.Null(command.Input.Y);
+    }
+
+    [Fact]
     public void TryParse_MouseClear_NeedsNoCoordinates()
     {
         var ok = HarnessCommand.TryParse("""{"command":"mouse","action":"clear"}""", out var command, out _);
@@ -456,6 +480,9 @@ public class HarnessCommandTests
     [InlineData("""{"command":"mouse","action":"move","x":"1","y":2}""", "x")]
     [InlineData("""{"command":"mouse","action":"click","x":1}""", "y")]
     [InlineData("""{"command":"mouse","action":"click","y":1}""", "x")]
+    [InlineData("""{"command":"mouse","action":"scroll"}""", "delta")]
+    [InlineData("""{"command":"mouse","action":"scroll","delta":"up"}""", "delta")]
+    [InlineData("""{"command":"mouse","action":"scroll","delta":1,"x":1}""", "y")]
     [InlineData("""{"command":"mouse","action":"click","button":3}""", "button")]
     [InlineData("""{"command":"mouse","action":"click","button":-1}""", "button")]
     [InlineData("""{"command":"mouse","action":"down","button":"left"}""", "button")]

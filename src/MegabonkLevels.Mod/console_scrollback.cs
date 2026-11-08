@@ -22,6 +22,11 @@ public sealed class ConsoleScrollback
 
     public int Count => _lines.Count;
 
+    public int Viewport => _viewport;
+
+    // Lines the viewport sits above the bottom; 0 while following.
+    public int Offset => _offset;
+
     // The viewport's lines: the tail of the buffer while following, or _offset lines back from the bottom once scrolled up.
     public IReadOnlyList<string> VisibleLines
     {
@@ -84,6 +89,9 @@ public sealed class ConsoleScrollback
 
     // One PageUp scrolls a viewport; the top page may be partial when the last page was.
     public void PageUp() => _offset = Math.Min(_offset + _viewport, Math.Max(0, _lines.Count - _viewport));
+
+    // Positive moves toward older lines, negative toward newer, clamped to the buffer.
+    public void ScrollBy(int lines) => _offset = Math.Clamp(_offset + lines, 0, Math.Max(0, _lines.Count - _viewport));
 
     public void PageDown() => _offset = Math.Max(0, _offset - _viewport);
 

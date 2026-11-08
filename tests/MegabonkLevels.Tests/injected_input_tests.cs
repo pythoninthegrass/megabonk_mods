@@ -341,4 +341,29 @@ public class InjectedInputQueueTests
         Assert.False(queue.IsMouseHeld(0));
         Assert.Equal("", queue.InputStringThisFrame);
     }
+
+    [Fact]
+    public void Scroll_AppliesOnTheNextFrameAndClearsAfterwards()
+    {
+        var queue = new InjectedInputQueue();
+        queue.EnqueueScroll(2f);
+
+        queue.BeginFrame(1);
+        Assert.Equal(2f, queue.ScrollDeltaThisFrame);
+
+        queue.BeginFrame(2);
+        Assert.Equal(0f, queue.ScrollDeltaThisFrame);
+    }
+
+    [Fact]
+    public void Scroll_QueuedAfterAMove_LandsOnTheMovedPointer()
+    {
+        var queue = new InjectedInputQueue();
+        queue.EnqueueMouseMove(10f, 20f);
+        queue.EnqueueScroll(-1f);
+
+        queue.BeginFrame(1);
+        Assert.Equal((10f, 20f), queue.MousePosition);
+        Assert.Equal(-1f, queue.ScrollDeltaThisFrame);
+    }
 }

@@ -879,6 +879,9 @@ public static class DevHarness
             case "up":
                 queue.EnqueueMouseUp(input.Button);
                 break;
+            case "scroll":
+                queue.EnqueueScroll(input.Value ?? 0f);
+                break;
         }
     }
 

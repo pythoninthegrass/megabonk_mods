@@ -16,7 +16,7 @@ public static class EditorInput
 
     public static string InputString => RealText() + Queue.InputStringThisFrame;
 
-    public static Vector2 MouseScrollDelta => Input.mouseScrollDelta;
+    public static Vector2 MouseScrollDelta => Input.mouseScrollDelta + new Vector2(0f, Queue.ScrollDeltaThisFrame);
 
     public static bool GetKey(KeyCode key) => Input.GetKey(key) || Queue.IsKeyHeld(key.ToString());
 

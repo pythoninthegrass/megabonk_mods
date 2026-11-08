@@ -27,6 +27,8 @@ public sealed class InjectedInputQueue
 
     public string InputStringThisFrame { get; private set; } = "";
 
+    public float ScrollDeltaThisFrame { get; private set; }
+
     public void EnqueueTap(string key, IReadOnlyList<string> modifiers)
     {
         var offset = _cursor;
@@ -89,6 +91,13 @@ public sealed class InjectedInputQueue
         }
     }
 
+    // Positive notches scroll up, matching UnityEngine.Input.mouseScrollDelta.y.
+    public void EnqueueScroll(float notches) => ScheduleNext(() =>
+    {
+        ScrollDeltaThisFrame = notches;
+        _mouseTouchedAt = _now;
+    });
+
     public void ClearMouse() => MousePosition = null;
 
     // The injected pointer yields to the real mouse once it moves, and lapses after MouseIdleSeconds without a move or button event unless an injected button is held.
@@ -107,6 +116,7 @@ public sealed class InjectedInputQueue
         _pressedButtons.Clear();
         _releasedButtons.Clear();
         InputStringThisFrame = "";
+        ScrollDeltaThisFrame = 0f;
 
         var due = _pending.FindAll(step => step.Offset == 0);
         _pending.RemoveAll(step => step.Offset == 0);

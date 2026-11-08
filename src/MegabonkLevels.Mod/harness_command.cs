@@ -791,13 +791,14 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
     {
         command = default;
 
-        if (!TryReadAction(root, new[] { "move", "click", "down", "up", "clear" }, out var action, out error))
+        if (!TryReadAction(root, new[] { "move", "click", "down", "up", "scroll", "clear" }, out var action, out error))
         {
             return false;
         }
 
         float? x = null;
         float? y = null;
+        float? delta = null;
         var button = 0;
         if (action != "clear")
         {
@@ -808,13 +809,20 @@ public readonly record struct HarnessCommand(HarnessCommandKind Kind, string Pat
                 return false;
             }
 
-            if (action != "move" && !TryReadButton(root, out button, out error))
+            if (action == "scroll")
+            {
+                if (!TryReadCoordinate(root, "delta", true, out delta, out error))
+                {
+                    return false;
+                }
+            }
+            else if (action != "move" && !TryReadButton(root, out button, out error))
             {
                 return false;
             }
         }
 
-        command = new HarnessCommand(HarnessCommandKind.Mouse, null, Input: new InputArgs { Action = action, X = x, Y = y, Button = button });
+        command = new HarnessCommand(HarnessCommandKind.Mouse, null, Input: new InputArgs { Action = action, X = x, Y = y, Button = button, Value = delta });
         return true;
     }
 

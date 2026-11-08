@@ -423,18 +423,23 @@ async def key(key: str, modifiers: list[str] | None = None, action: Literal["tap
 
 @mcp.tool()
 async def mouse(
-    action: Literal["move", "click", "down", "up", "clear"],
+    action: Literal["move", "click", "down", "up", "scroll", "clear"],
     x: float | None = None,
     y: float | None = None,
     button: int = 0,
+    delta: float | None = None,
 ) -> CallToolResult:
-    """Inject mouse input for the editor. x and y are screenshot pixels with the origin at the top left, the same space as the screenshot tool and the screen field of state. move needs x and y; click, down and up take an optional x and y (both or neither) that move the pointer first, and button 0 left, 1 right, 2 middle; clear returns the pointer to the real cursor. A click is one frame down then one frame up, so a screenshot straight after may predate its effect."""
+    """Inject mouse input for the editor. x and y are screenshot pixels with the origin at the top left, the same space as the screenshot tool and the screen field of state. move needs x and y; click, down and up take an optional x and y (both or neither) that move the pointer first, and button 0 left, 1 right, 2 middle; scroll turns the wheel by delta notches (positive up) after the optional move and needs delta; the console scrolls three lines per notch while the pointer is over it; clear returns the pointer to the real cursor. A click is one frame down then one frame up, so a screenshot straight after may predate its effect."""
     if (x is None) != (y is None):
         raise ToolError("mouse: give both or neither of x and y")
     if action == "move" and x is None:
         raise ToolError("mouse: move needs x and y")
+    if action == "scroll" and delta is None:
+        raise ToolError("mouse: scroll needs delta")
+    if action != "scroll" and delta is not None:
+        raise ToolError("mouse: delta only applies to scroll")
     position = (x, y) if x is not None and y is not None else None
-    payload = run.build_mouse_command(action, position, button if action in ("click", "down", "up") else None)
+    payload = run.build_mouse_command(action, position, button if action in ("click", "down", "up") else None, delta)
     return await _command(_harness(), payload, TIMEOUT)
 
 

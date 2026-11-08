@@ -177,4 +177,41 @@ public class ConsoleScrollbackTests
 
         Assert.Empty(scrollback.VisibleLines);
     }
+
+    [Fact]
+    public void ScrollBy_PositiveMovesTowardOlderLines()
+    {
+        var scrollback = new ConsoleScrollback(100, 5);
+        for (var i = 0; i < 20; i++)
+        {
+            scrollback.Append($"line{i}");
+        }
+
+        scrollback.ScrollBy(3);
+
+        Assert.Equal(3, scrollback.Offset);
+        Assert.Equal("line16", scrollback.VisibleLines[^1]);
+    }
+
+    [Fact]
+    public void ScrollBy_ClampsAtTheTopAndBottom()
+    {
+        var scrollback = new ConsoleScrollback(100, 5);
+        for (var i = 0; i < 20; i++)
+        {
+            scrollback.Append($"line{i}");
+        }
+
+        scrollback.ScrollBy(500);
+        Assert.Equal(15, scrollback.Offset);
+
+        scrollback.ScrollBy(-500);
+        Assert.Equal(0, scrollback.Offset);
+    }
+
+    [Fact]
+    public void Viewport_ReportsTheConfiguredLineCount()
+    {
+        Assert.Equal(7, new ConsoleScrollback(100, 7).Viewport);
+    }
 }

@@ -1425,6 +1425,29 @@ def test_ui_tree_payload_rejects_half_a_point() -> None:
         run.ui_tree_payload(run.parse_args(["ui-tree", "5"]))
 
 
+def test_build_mouse_command_scroll_carries_the_delta() -> None:
+    assert run.build_mouse_command("scroll", None, None, 3.0) == {"command": "mouse", "action": "scroll", "delta": 3.0}
+    assert run.build_mouse_command("scroll", (1.0, 2.0), None, -1.0) == {
+        "command": "mouse",
+        "action": "scroll",
+        "x": 1.0,
+        "y": 2.0,
+        "delta": -1.0,
+    }
+
+
+def test_mouse_payload_scroll_needs_a_delta() -> None:
+    assert run.mouse_payload(run.parse_args(["mouse", "scroll", "--delta", "2"])) == {
+        "command": "mouse",
+        "action": "scroll",
+        "delta": 2.0,
+    }
+    with pytest.raises(SystemExit):
+        run.mouse_payload(run.parse_args(["mouse", "scroll"]))
+    with pytest.raises(SystemExit):
+        run.mouse_payload(run.parse_args(["mouse", "click", "--delta", "2"]))
+
+
 def test_mouse_payload_maps_the_subcommands() -> None:
     assert run.mouse_payload(run.parse_args(["mouse", "move", "960", "540"])) == {
         "command": "mouse",

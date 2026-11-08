@@ -27,11 +27,15 @@ public static class ConsoleOverlay
     private const float InputGap = 6f;
     private const float FontSize = 16f;
     private const int MaxScrollbackLines = 400;
+    private const int WheelLinesPerNotch = 3;
+    private const float ScrollbarWidth = 6f;
+    private const float ScrollbarMinThumb = 16f;
     private const int InputMaxLength = 512;
     private const int HistoryLimit = 200;
     private const string LogFileName = "console_log.jsonl";
     private const KeyCode ToggleKey = KeyCode.BackQuote;
     private static readonly Color PanelFill = new(0.08f, 0.08f, 0.08f, 0.72f);
+    private static readonly Color ScrollbarColor = new(0.85f, 0.85f, 0.85f, 0.55f);
     private static readonly Color PlaceholderColor = new(0.65f, 0.65f, 0.65f, 1f);
     private const string PlaceholderText = "type a command, ~ to close";
 
@@ -39,6 +43,7 @@ public static class ConsoleOverlay
     private static readonly ConsoleHistory _history = new(HistoryLimit);
     private static ConsoleScrollback _scrollback = new(MaxScrollbackLines, 1);
     private static readonly EditorCaretInput _caret = new();
+    private static readonly ConsoleScrollbar _scrollbar = new();
 
     private static readonly ConsoleLogStore _store = new(Path.Combine(MelonEnvironment.GameRootDirectory, "UserData", LogFileName));
 
@@ -47,6 +52,7 @@ public static class ConsoleOverlay
     private static RectTransform _panel;
     private static RectTransform _scrollRect;
     private static RectTransform _inputRect;
+    private static RectTransform _thumb;
     private static TextMeshProUGUI[] _scrollLabels = Array.Empty<TextMeshProUGUI>();
     private static TextFieldView _inputView;
     private static TextMeshProUGUI _placeholder;
@@ -125,6 +131,7 @@ public static class ConsoleOverlay
         _placeholderDismissed = false;
         _history.Reset();
         _scrollback.Follow();
+        _scrollbar.Hide();
         Open = true;
         _slide = ConsoleState.StepSlide(_slide, true, 0f);
         _logger.Msg($"Console: opened, MyTime.paused={MyTime.paused}.");
@@ -182,6 +189,7 @@ public static class ConsoleOverlay
             input = "";
         }
 
+        ReadWheel();
         _field.Navigate(_caret.Read());
         _placeholderDismissed |= input.Length > 0;
 
@@ -221,6 +229,19 @@ public static class ConsoleOverlay
         {
             Submit();
         }
+    }
+
+    // A wheel notch up scrolls toward older lines. Only the scrollback scrolls, so the finder's list is left alone.
+    private static void ReadWheel()
+    {
+        var notches = EditorInput.MouseScrollDelta.y;
+        if (_finder != null || notches == 0f || EditorInput.MousePosition.y > Screen.height * PanelHeightFraction)
+        {
+            return;
+        }
+
+        _scrollback.ScrollBy(Mathf.RoundToInt(notches * WheelLinesPerNotch));
+        _scrollbar.OnWheel(Time.unscaledTimeAsDouble);
     }
 
     private static bool CtrlHeld() => EditorInput.GetKey(KeyCode.LeftControl) || EditorInput.GetKey(KeyCode.RightControl);
@@ -362,6 +383,10 @@ public static class ConsoleOverlay
             _scrollLabels[i].overflowMode = TextOverflowModes.Overflow;
         }
 
+        _thumb = EditorUi.NewRect("ScrollbarThumb", _scrollRect);
+        _thumb.gameObject.AddComponent<Image>().color = ScrollbarColor;
+        _thumb.gameObject.SetActive(false);
+
         var input = EditorUi.Bordered("Input", _panel, EditorUi.SlotBorder, EditorUi.SearchFill);
         _inputRect = input.Outer;
         var inputText = EditorUi.NewRect("Text", _inputRect);
@@ -455,6 +480,7 @@ public static class ConsoleOverlay
         {
             RenderFinder();
             RenderInput();
+            _thumb.gameObject.SetActive(false);
             return;
         }
 
@@ -472,6 +498,21 @@ public static class ConsoleOverlay
         }
 
         RenderInput();
+        RenderScrollbar();
+    }
+
+    private static void RenderScrollbar()
+    {
+        var show = _scrollbar.Visible(Time.unscaledTimeAsDouble, _scrollback.Count, _scrollback.Viewport);
+        _thumb.gameObject.SetActive(show);
+        if (!show)
+        {
+            return;
+        }
+
+        var track = _scrollRect.sizeDelta.y;
+        var thumb = ConsoleScrollbar.Thumb(_scrollback.Offset, _scrollback.Count, _scrollback.Viewport, track, ScrollbarMinThumb);
+        EditorUi.PlaceTopLeft(_thumb, PanelWidth() - Padding / 2f - ScrollbarWidth, thumb.Top, ScrollbarWidth, thumb.Height);
     }
 
     private static void RenderInput()

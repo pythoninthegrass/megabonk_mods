@@ -554,12 +554,19 @@ def build_key_command(action: str, key: str, modifiers: list[str] | None = None)
     return payload
 
 
-def build_mouse_command(action: str, position: tuple[float, float] | None = None, button: int | None = None) -> dict[str, object]:
+def build_mouse_command(
+    action: str,
+    position: tuple[float, float] | None = None,
+    button: int | None = None,
+    delta: float | None = None,
+) -> dict[str, object]:
     payload: dict[str, object] = {"command": "mouse", "action": action}
     if position is not None:
         payload["x"], payload["y"] = position
     if button is not None:
         payload["button"] = button
+    if delta is not None:
+        payload["delta"] = delta
     return payload
 
 
@@ -1577,9 +1584,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     key_action.add_argument("--up", action="store_true", help="release a held key")
     key.add_argument("--mod", action="append", default=[], metavar="NAME", help="modifier key held during a tap; repeatable")
     mouse = sub.add_parser("mouse")
-    mouse.add_argument("verb", choices=["move", "click", "down", "up", "clear"])
+    mouse.add_argument("verb", choices=["move", "click", "down", "up", "scroll", "clear"])
     mouse.add_argument("position", type=float, nargs="*", metavar="X Y", help="screenshot pixels, origin top left")
     mouse.add_argument("--button", type=int, choices=[0, 1, 2], help="0 left (default), 1 right, 2 middle")
+    mouse.add_argument("--delta", type=float, help="wheel notches for scroll, positive up (toward older console lines)")
     ui_tree = sub.add_parser("ui-tree")
     ui_tree.add_argument("position", type=float, nargs="*", metavar="X Y", help="screenshot pixels, origin top left")
     material_dump = sub.add_parser("material-dump")
@@ -1709,8 +1717,12 @@ def mouse_payload(args: argparse.Namespace) -> dict[str, object]:
         raise SystemExit("mouse move: give X Y")
     if args.verb == "clear" and (args.position or args.button is not None):
         raise SystemExit("mouse clear takes no coordinates or button")
+    if args.verb == "scroll" and args.delta is None:
+        raise SystemExit("mouse scroll: give --delta")
+    if args.verb != "scroll" and args.delta is not None:
+        raise SystemExit("mouse: --delta only applies to scroll")
     position = (args.position[0], args.position[1]) if args.position else None
-    return build_mouse_command(args.verb, position, args.button)
+    return build_mouse_command(args.verb, position, args.button, args.delta)
 
 
 def ui_tree_payload(args: argparse.Namespace) -> dict[str, object]:
