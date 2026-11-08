@@ -4,7 +4,7 @@ title: Launch the creator-first Megabonk mod showcase
 status: Done
 assignee: []
 created_date: '2026-11-08T20:49:00Z'
-updated_date: '2026-11-08T22:33:00Z'
+updated_date: '2026-11-08T22:44:00Z'
 labels: []
 dependencies: []
 references:
@@ -71,6 +71,8 @@ Closure verification (mbp, pushed HEAD 40effa8): task check exit 0, covering the
 Hosting was decided after the original plan and is now implemented: the site is live at https://megabonkmod.party/ served from the multi-stage image built from site/Dockerfile, deployed declaratively through dokploy.yml with the icarus CLI and documented under docs/website.md#deployment. Live verification: apex answers 200 text/html over HTTPS with a Let's Encrypt certificate, plain HTTP 301s to HTTPS, and the container smoke check run against the public origin passes with 18 local references (1 css, 1 js, 16 images) at exit 0.
 
 Remaining deferred items, neither covered by an acceptance criterion: the editor and gameplay video placeholders remain placeholders by design, and www.megabonkmod.party resolves but has no router yet, so its TLS handshake fails; it needs a second host entry on the app or a redirect at the DNS provider.
+
+Follow-up, resolved after closure: www.megabonkmod.party is now served rather than unrouted. It is registered as a second host on the app in dokploy.yml with its own Let's Encrypt certificate, and a Traefik redirectRegex sends every www URL to the apex, preserving the path, at HTTP 308 because permanent redirects in this stack are method-preserving rather than 301. DNS was never the gap: both the apex and the www A records are already declared in the DNSControl config in the infrastructure repository under CF_PROXY_DEFAULT_OFF, so they resolve straight to the host and the HTTP-01 challenge completes; dnscontrol preview for the zone reports 0 corrections. Verified live: apex 200, www 308 with a location on the apex, path preserved on a deep asset URL, and the smoke check passes against both origins at exit 0.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -82,5 +84,5 @@ The site is published at https://megabonkmod.party/ from the container image the
 
 Verification: astro check 0 errors/warnings; 3 clipboard tests written first and observed red before implementation, plus 10 built-output and static-server tests; production build and npm audit with 0 vulnerabilities; task check exit 0 including the mod build, installer, Python suites and lint; task lint clean. Real-browser desktop and mobile review covers both screenshot emphasis states, copy feedback, keyboard focus, the expanded MCP configuration and no-JavaScript content. Live checks against the public origin: HTTPS 200 text/html with a Let's Encrypt certificate, HTTP 301 to HTTPS, and the smoke check passes 18 local references at exit 0.
 
-Deferred by design or out of scope: the two video placeholders await real recordings, and www.megabonkmod.party still needs a router or a DNS-level redirect.
+Deferred by design: the two video placeholders await real recordings.
 <!-- SECTION:FINAL_SUMMARY:END -->
