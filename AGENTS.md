@@ -6,6 +6,10 @@ This file provides guidance to AI agents when working with code in this reposito
 
 - Launch the Warehouse level as Tony McZoom in editor mode: `task game:editor -- levels/thps.mblevel.json`. It needs `MEGABONK_DEV=true` in `.env` and the `thps` pack installed in the game; run `task mod:build` first after a code change. `levels/thps-editable.mblevel.json` is the piece-assembled editable variant. See [Loading the THPS level](#loading-the-thps-level).
 
+## Website
+
+The single-page Astro showcase and its `PRODUCT.md`, `DESIGN.md` and `.impeccable/` context live in `site/`; see [Website development](docs/website.md) for commands and maintenance, and run Impeccable from `site/` or with an explicit site target. Website-only changes use the site checks and do not require rebuilding or relaunching the game mod.
+
 ## Linux and Flatpak Steam caveats
 
 Megabonk ships a native Linux build (`Megabonk.x86_64`); when running that build there is no Proton or Wine prefix and the CrossOver `version.dll` override does not apply. `compatdata/3405340` can stay empty. The caveats below concern that native-build setup, not the Windows build under Proton.
@@ -113,11 +117,15 @@ Document the content itself — the schema, the rule, the API, the gotcha — no
 ## Context7 Libraries
 
 - astral-sh/docs
+- hunvreus/basecoat
 - j178/prek
 - jdx/mise
 - mrlesk/backlog.md
+- pbakaus/impeccable
+- websites/alpinejs_dev
 - websites/binary_ninja
 - websites/taskfile_dev
+- withastro/astro
 
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 <!-- backlog.md-instructions-version: 1.48.0 -->

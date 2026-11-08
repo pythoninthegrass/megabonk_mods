@@ -242,8 +242,10 @@ venv.bak/
 # Rope project settings
 .ropeproject
 
-# mkdocs/Zensical documentation
-/site
+# Astro showcase generated output
+/site/node_modules/
+/site/.astro/
+/site/dist/
 
 # mypy
 .mypy_cache/

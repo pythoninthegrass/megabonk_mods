@@ -9,3 +9,11 @@ backlog/**
 docs/reverse_engineering_megabonk_sphaerophoria.md
 docs/i_made_a_random_megabonk_level_generator_alexk.md
 tools/thps_warehouse_strategywiki.md
+
+# Website dependencies and generated files
+site/node_modules/**
+site/.astro/**
+site/dist/**
+
+# Embedded page fragments use h2/h3 and sentence headings; validate the built page
+site/src/content/**

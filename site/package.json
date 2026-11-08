@@ -1,0 +1,29 @@
+{
+  "name": "megabonkmod-party",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1",
+    "build": "astro build",
+    "preview": "astro preview --host 127.0.0.1",
+    "check": "astro check",
+    "test": "node --test tests/clipboard.test.js",
+    "test:site": "node --test tests/site.test.js"
+  },
+  "dependencies": {
+    "@fontsource/archivo": "^5.2.0",
+    "@fontsource-variable/public-sans": "^5.2.0",
+    "@tailwindcss/vite": "^4.1.0",
+    "alpinejs": "^3.15.0",
+    "astro": "^7.4.7",
+    "basecoat-css": "^1.1.0",
+    "sharp": "^0.35.5",
+    "tailwindcss": "^4.1.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.0",
+    "@types/alpinejs": "^3.13.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {"node": ">=22.12.0"}
+}

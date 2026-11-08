@@ -2,6 +2,8 @@
 
 The mod ships a development-only command channel so a shell script can run a load-and-check cycle against the running game without simulating keyboard or mouse input: load a level, capture the game's own rendered frame, and quit. It is driven by `scripts/run.py`.
 
+For the separate **megabonkmod.party** Astro showcase, see [Website development](website.md) for local commands, content and media maintenance, validation and deployment boundaries.
+
 ## Enabling
 
 The harness is off by default. It runs only if the marker file `<game dir>/harness/enabled` exists when the game starts, so a normal install exposes no command channel.

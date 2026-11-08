@@ -1,0 +1,10 @@
+---
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+interface Props { title: string; description: string; poster: ImageMetadata; alt: string; }
+const { title, description, poster, alt } = Astro.props;
+---
+<figure class="video-placeholder">
+  <div class="video-poster"><Image src={poster} alt={alt} widths={[480, 800, 1200]} sizes="(max-width: 700px) 100vw, 50vw" format="webp" loading="lazy" /><span class="video-status">Video coming soon</span></div>
+  <figcaption><strong>{title}</strong><p>{description}</p></figcaption>
+</figure>
