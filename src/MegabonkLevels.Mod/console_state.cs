@@ -79,7 +79,7 @@ public static class ConsoleState
 
     // A line with no verb is a no-op; a refusal echoes the line and the reply; a console-only verb prints its own
     // reply (or clears); a bound line runs through the harness and echoes the line plus what came back.
-    public static ConsoleLinePlan Plan(string line, ConsoleBindResult bind, Func<HarnessCommand, string> runCommand)
+    public static ConsoleLinePlan Plan(string line, ConsoleBindResult bind, Func<HarnessCommand, string> runCommand, IReadOnlyList<string> history = null)
     {
         if (string.IsNullOrWhiteSpace(line))
         {
@@ -92,6 +92,11 @@ public static class ConsoleState
             return new ConsoleLinePlan(new[] { echo, bind.Error }, false, false);
         }
 
+        if (bind.ListHistory)
+        {
+            return new ConsoleLinePlan(HistoryLines(history), false, true);
+        }
+
         if (bind.Command == null)
         {
             var clear = string.IsNullOrEmpty(bind.Reply);
@@ -99,6 +104,22 @@ public static class ConsoleState
         }
 
         return new ConsoleLinePlan(new[] { echo, runCommand(bind.Command.Value) }, false, true);
+    }
+
+    private static IReadOnlyList<string> HistoryLines(IReadOnlyList<string> history)
+    {
+        if (history == null || history.Count == 0)
+        {
+            return new List<string> { "history is empty" };
+        }
+
+        var lines = new List<string>();
+        for (var i = 0; i < history.Count; i++)
+        {
+            lines.Add($"{i + 1,3}  {history[i]}");
+        }
+
+        return lines;
     }
 
     // The line the console prints for one harness result: the result's message lines, or a generic ok/failure line.

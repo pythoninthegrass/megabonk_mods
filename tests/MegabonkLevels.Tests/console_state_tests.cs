@@ -192,6 +192,39 @@ public class ConsoleStateTests
     }
 
     [Fact]
+    public void Plan_HistoryVerb_ListsTheRememberedLinesNumbered()
+    {
+        var bind = new ConsoleBindResult(null, "", null, ListHistory: true);
+
+        var plan = ConsoleState.Plan("history", bind, _ => "ok", new[] { "state", "editor on" });
+
+        Assert.Equal(new[] { "  1  state", "  2  editor on" }, plan.PrintLines);
+        Assert.False(plan.ClearScrollback);
+        Assert.True(plan.RememberHistory);
+    }
+
+    [Fact]
+    public void Plan_HistoryVerb_WithNoEntriesSaysSo()
+    {
+        var bind = new ConsoleBindResult(null, "", null, ListHistory: true);
+
+        var plan = ConsoleState.Plan("history", bind, _ => "ok", Array.Empty<string>());
+
+        Assert.Equal(new[] { "history is empty" }, plan.PrintLines);
+        Assert.False(plan.ClearScrollback);
+    }
+
+    [Fact]
+    public void Plan_HistoryVerb_WithoutAHistoryArgumentSaysItIsEmpty()
+    {
+        var bind = new ConsoleBindResult(null, "", null, ListHistory: true);
+
+        var plan = ConsoleState.Plan("history", bind, _ => "ok");
+
+        Assert.Equal(new[] { "history is empty" }, plan.PrintLines);
+    }
+
+    [Fact]
     public void Plan_BoundLine_RunsThroughTheCallbackAndEchoesTheReply()
     {
         var runs = new List<string>();

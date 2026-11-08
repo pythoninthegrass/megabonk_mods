@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Il2Cpp;
 using Il2CppAssets.Scripts.Actors.Player;
@@ -7,6 +8,7 @@ using Il2CppAssets.Scripts.UI.Debug;
 using Il2CppAssets.Scripts.Utility;
 using Il2CppTMPro;
 using MelonLoader;
+using MelonLoader.Utils;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -26,12 +28,19 @@ public static class ConsoleOverlay
     private const float FontSize = 16f;
     private const int MaxScrollbackLines = 400;
     private const int InputMaxLength = 512;
+    private const int HistoryLimit = 200;
+    private const string LogFileName = "console_log.jsonl";
     private const KeyCode ToggleKey = KeyCode.BackQuote;
+    private static readonly Color PanelFill = new(0.08f, 0.08f, 0.08f, 0.72f);
+    private static readonly Color PlaceholderColor = new(0.65f, 0.65f, 0.65f, 1f);
+    private const string PlaceholderText = "type a command, ~ to close";
 
     private static readonly TextFieldModel _field = new(InputMaxLength);
-    private static readonly ConsoleHistory _history = new();
+    private static readonly ConsoleHistory _history = new(HistoryLimit);
     private static ConsoleScrollback _scrollback = new(MaxScrollbackLines, 1);
     private static readonly EditorCaretInput _caret = new();
+
+    private static readonly ConsoleLogStore _store = new(Path.Combine(MelonEnvironment.GameRootDirectory, "UserData", LogFileName));
 
     private static MelonLogger.Instance _logger;
     private static GameObject _root;
@@ -40,6 +49,9 @@ public static class ConsoleOverlay
     private static RectTransform _inputRect;
     private static TextMeshProUGUI[] _scrollLabels = Array.Empty<TextMeshProUGUI>();
     private static TextFieldView _inputView;
+    private static TextMeshProUGUI _placeholder;
+    // Set by the first typed character and cleared on open, so the placeholder stays hidden until the console is reopened.
+    private static bool _placeholderDismissed;
     private static ConsoleSlide _slide = ConsoleSlide.Parked;
     private static ConsoleEntryState? _entry;
     private static int _viewportLines = 1;
@@ -107,6 +119,7 @@ public static class ConsoleOverlay
 
         Build();
         _field.Clear();
+        _placeholderDismissed = false;
         _history.Reset();
         _scrollback.Follow();
         Open = true;
@@ -148,6 +161,7 @@ public static class ConsoleOverlay
         }
 
         _field.Navigate(_caret.Read());
+        _placeholderDismissed |= input.Length > 0;
 
         if (EditorInput.GetKeyDown(KeyCode.UpArrow))
         {
@@ -194,21 +208,27 @@ public static class ConsoleOverlay
         var toggles = CurrentToggles();
         var levels = SafeLevelList();
         var bind = ConsoleCommandRegistry.Default.Bind(line, dev, toggles, levels);
-        var plan = ConsoleState.Plan(line, bind, Run);
+        var plan = ConsoleState.Plan(line, bind, Run, _history.Entries);
 
         if (plan.ClearScrollback)
         {
             _scrollback.Clear();
+            _store.AppendClear();
         }
 
         foreach (var printed in plan.PrintLines)
         {
             _scrollback.Append(printed);
+            foreach (var printedLine in ConsoleScrollback.Split(printed))
+            {
+                _store.AppendOutput(printedLine);
+            }
         }
 
         if (plan.RememberHistory)
         {
             _history.Add(line);
+            _store.AppendInput(line.Trim());
         }
 
         _scrollback.ScrollToBottom();
@@ -231,7 +251,8 @@ public static class ConsoleOverlay
 
         _root = EditorUi.NewCanvas("MegabonkLevelsConsole");
         var font = PositionLabel.FindFontAsset(EditorUi.FontName);
-        _panel = EditorUi.Bordered("Console", _root.transform, EditorUi.PanelBorder, EditorUi.PanelFill).Outer;
+        _panel = EditorUi.NewRect("Console", _root.transform);
+        _panel.gameObject.AddComponent<Image>().color = PanelFill;
         _panel.anchorMin = new Vector2(0f, 0f);
         _panel.anchorMax = new Vector2(1f, 0f);
         _panel.pivot = new Vector2(0.5f, 0f);
@@ -257,9 +278,36 @@ public static class ConsoleOverlay
         inputText.offsetMax = new Vector2(-8f, 0f);
         var label = EditorUi.NewLabel(inputText, font, TextAlignmentOptions.MidlineLeft, FontSize);
         EditorUi.FixInputBaseline(label);
-        _inputView = new TextFieldView(label);
+        _inputView = new TextFieldView(label, blockCaret: true);
+
+        var placeholderRect = EditorUi.NewRect("Placeholder", _inputRect);
+        placeholderRect.anchorMin = Vector2.zero;
+        placeholderRect.anchorMax = Vector2.one;
+        placeholderRect.offsetMin = new Vector2(8f, 0f);
+        placeholderRect.offsetMax = new Vector2(-8f, 0f);
+        _placeholder = EditorUi.NewLabel(placeholderRect, font, TextAlignmentOptions.MidlineLeft, FontSize);
+        EditorUi.FixInputBaseline(_placeholder);
+        _placeholder.color = PlaceholderColor;
+        _placeholder.text = PlaceholderText;
 
         _scrollback = new ConsoleScrollback(MaxScrollbackLines, _viewportLines);
+        RestorePersistedLog();
+    }
+
+    // Brings the previous sessions' history and scrollback back, trimming the file as it goes.
+    private static void RestorePersistedLog()
+    {
+        _store.Compact(HistoryLimit, MaxScrollbackLines);
+        var snapshot = _store.Load(HistoryLimit, MaxScrollbackLines);
+        foreach (var line in snapshot.History)
+        {
+            _history.Add(line);
+        }
+
+        foreach (var line in snapshot.Scrollback)
+        {
+            _scrollback.Append(line);
+        }
     }
 
     // Panel height and the scrollback/input rects depend on the screen, so re-measured each time the panel is shown.
@@ -269,7 +317,8 @@ public static class ConsoleOverlay
         _panel.sizeDelta = new Vector2(-SideMargin * 2f, height);
         _panel.anchoredPosition = new Vector2(0f, 0f);
         _viewportLines = Math.Max(1, Mathf.FloorToInt((height - Padding * 2f - InputHeight - InputGap) / LineHeight));
-        EditorUi.PlaceTopLeft(_scrollRect, 0f, Padding, PanelWidth(), height - Padding * 2f - InputHeight - InputGap);
+        var scrollTop = Padding + InputHeight + InputGap;
+        EditorUi.PlaceTopLeft(_scrollRect, 0f, scrollTop, PanelWidth(), height - scrollTop - Padding);
     }
 
     private static float PanelWidth() => Screen.width - SideMargin * 2f;
@@ -288,13 +337,17 @@ public static class ConsoleOverlay
         for (var i = 0; i < _viewportLines; i++)
         {
             var index = start + i;
-            _scrollLabels[i].text = index < visible.Count ? visible[index] : "";
+            var text = index < visible.Count ? visible[index] : "";
+            if (_scrollLabels[i].text != text)
+            {
+                _scrollLabels[i].text = text;
+                _scrollLabels[i].ForceMeshUpdate();
+            }
         }
 
-        var inputY = _panel.rect.height - InputHeight - Padding;
-        _inputRect.anchoredPosition = new Vector2(Padding, -(inputY));
-        _inputRect.sizeDelta = new Vector2(PanelWidth() - Padding * 2f, InputHeight);
-        _inputView.Render(_field, true, "type a command, ~ to close");
+        EditorUi.PlaceTopLeft(_inputRect, Padding, Padding, PanelWidth() - Padding * 2f, InputHeight);
+        _inputView.Render(_field, true, null);
+        _placeholder.gameObject.SetActive(!_placeholderDismissed && _field.Text.Length == 0);
     }
 
     public static IEnumerable<UiWidget> ListWidgets()

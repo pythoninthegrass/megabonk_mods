@@ -8,6 +8,8 @@ public class ConsoleCommandRegistryTests
         // Console-only verbs run without a harness command.
         new object[] { "help", null },
         new object[] { "help state", null },
+        new object[] { "?", null },
+        new object[] { "? state", null },
         new object[] { "clear", null },
         new object[] { "cls", null },
         new object[] { "history", null },
@@ -134,6 +136,7 @@ public class ConsoleCommandRegistryTests
     [Theory]
     [InlineData("state")]
     [InlineData("help")]
+    [InlineData("?")]
     [InlineData("clear")]
     [InlineData("history")]
     [InlineData("ui.hud on")]
@@ -240,6 +243,42 @@ public class ConsoleCommandRegistryTests
 
         Assert.Contains("cls", reply);
         Assert.Contains("clear", reply);
+    }
+
+    [Fact]
+    public void Help_ListsTheQuestionMarkAliasOnTheHelpLine()
+    {
+        var reply = ConsoleCommandRegistry.Default.Bind("help", DevState(false), Toggles()).Reply;
+
+        var helpLine = reply.Split('\n').First(line => line.TrimStart().StartsWith("help"));
+        Assert.Contains("?", helpLine);
+    }
+
+    [Fact]
+    public void QuestionMark_ProducesTheSameReplyAsHelp()
+    {
+        var help = ConsoleCommandRegistry.Default.Bind("help", DevState(false), Toggles());
+        var question = ConsoleCommandRegistry.Default.Bind("?", DevState(false), Toggles());
+
+        Assert.Equal(help.Reply, question.Reply);
+    }
+
+    [Fact]
+    public void Bind_History_AsksForTheHistoryListing()
+    {
+        var result = ConsoleCommandRegistry.Default.Bind("history", DevState(false), Toggles());
+
+        Assert.True(result.ListHistory);
+        Assert.False(result.Command.HasValue);
+        Assert.Null(result.Error);
+    }
+
+    [Fact]
+    public void Bind_Clear_DoesNotAskForTheHistoryListing()
+    {
+        var result = ConsoleCommandRegistry.Default.Bind("clear", DevState(false), Toggles());
+
+        Assert.False(result.ListHistory);
     }
 
     [Fact]

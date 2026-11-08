@@ -13,8 +13,9 @@ public readonly record struct ConsoleDevState(bool DevEnabled);
 public readonly record struct ConsoleToggleState(bool Invulnerable, bool Editor, bool Hud, bool Coordinates);
 
 // The outcome of binding one console line: Command is what the console hands to the harness, Reply is text to print,
-// and Error is a refusal or a usage line. Ok means nothing was refused.
-public readonly record struct ConsoleBindResult(HarnessCommand? Command, string Reply, string Error)
+// and Error is a refusal or a usage line. Ok means nothing was refused. ListHistory asks the console to print the
+// remembered lines, which only the console holds.
+public readonly record struct ConsoleBindResult(HarnessCommand? Command, string Reply, string Error, bool ListHistory = false)
 {
     public bool Ok => Error == null;
 }
@@ -246,9 +247,11 @@ public sealed class ConsoleCommandRegistry
         var registry = new ConsoleCommandRegistry();
 
         registry.Add(new ConsoleVerb("help", "list verbs, aliases and one line of help", false, (args, _, _) =>
-            args.Count <= 1 ? new ConsoleBindResult(null, null, null) : NoMatch()));
+            args.Count <= 1 ? new ConsoleBindResult(null, null, null) : NoMatch())
+            .WithAliases("?"));
         registry.Add(new ConsoleVerb("clear", "clear the console scrollback", false, (_, _, _) => NoCommand()).WithAliases("cls"));
-        registry.Add(new ConsoleVerb("history", "list the lines typed this session", false, (_, _, _) => NoCommand()));
+        registry.Add(new ConsoleVerb("history", "list the lines typed in earlier sessions and this one", false,
+            (_, _, _) => new ConsoleBindResult(null, "", null, ListHistory: true)));
 
         registry.Add(new ConsoleVerb("state", "read the game's current state", false, (_, _, _) => Command(HarnessCommandKind.State)));
 
