@@ -348,7 +348,7 @@ public sealed class ConsoleCommandRegistry
         registry.Add(new ConsoleVerb("run.press_summary_restart", "press the run summary's restart", true, (_, _, _) => Command(HarnessCommandKind.PressSummaryRestart)));
 
         registry.Add(new ConsoleVerb("level.list", "list the saved custom-level files", false, (_, _, _) => Command(HarnessCommandKind.ListLevels)));
-        registry.Add(new ConsoleVerb("level.load", "load a level by path or title, with map/stage/tier/seed/noseed", true, (args, _, levels) => LoadLevel(args, levels))
+        registry.Add(new ConsoleVerb("level.load", "load a level by path or title, with map/stage/tier/seed/noseed", true, (args, toggles, levels) => LoadLevel(args, toggles, levels))
             .WithAliases("coc").WithRawError().WithCandidates(LevelTitles));
         registry.Add(new ConsoleVerb("level.save", "save the editor's level, optionally under a name", true, (args, _, _) =>
             args.Count <= 1 && (args.Count == 0 || args[0].Trim().Length > 0)
@@ -503,7 +503,7 @@ public sealed class ConsoleCommandRegistry
         }
     }
 
-    private static ConsoleBindResult LoadLevel(IReadOnlyList<string> args, IReadOnlyList<string> levels)
+    private static ConsoleBindResult LoadLevel(IReadOnlyList<string> args, ConsoleToggleState toggles, IReadOnlyList<string> levels)
     {
         if (args.Count == 0 || string.IsNullOrWhiteSpace(args[0]))
         {
@@ -517,9 +517,20 @@ public sealed class ConsoleCommandRegistry
         }
 
         var overrides = ParseOverrides(args.Skip(1).ToArray(), false);
-        return overrides.Bad
-            ? NoMatch()
-            : Command(new HarnessCommand(HarnessCommandKind.LoadLevel, resolved, Overrides: new LoadOverrides(overrides.Map, overrides.Stage, overrides.Tier, overrides.Seed, null, overrides.Unseeded)));
+        if (overrides.Bad)
+        {
+            return NoMatch();
+        }
+
+        // In the editor a bare level name loads like the Load button; overrides and explicit paths need a fresh run.
+        var plainName = !resolved.Contains('/') && !resolved.Contains('\\');
+        var hasOverrides = overrides.Map != null || overrides.Stage != null || overrides.Tier != null || overrides.Seed != null || overrides.Unseeded;
+        if (toggles.Editor && plainName && !hasOverrides)
+        {
+            return Command(new HarnessCommand(HarnessCommandKind.EditorLoad, resolved));
+        }
+
+        return Command(new HarnessCommand(HarnessCommandKind.LoadLevel, resolved, Overrides: new LoadOverrides(overrides.Map, overrides.Stage, overrides.Tier, overrides.Seed, null, overrides.Unseeded)));
     }
 
     private static ConsoleBindResult NewLevel(IReadOnlyList<string> args)

@@ -587,6 +587,52 @@ public class ConsoleCommandRegistryTests
     }
 
     [Fact]
+    public void LevelLoad_InTheEditor_UsesTheEditorLoadWithTheListedFileName()
+    {
+        var command = ConsoleCommandRegistry.Default.Bind("level.load thps", DevState(true), Toggles(editor: true), LevelList()).Command.Value;
+
+        Assert.Equal(HarnessCommandKind.EditorLoad, command.Kind);
+        Assert.Equal("thps.mblevel.json", command.Path);
+    }
+
+    [Fact]
+    public void LevelLoad_InTheEditor_AcceptsAQuotedTitleWithSpaces()
+    {
+        var command = ConsoleCommandRegistry.Default.Bind("level.load \"Bramblecrown Hill\"", DevState(true), Toggles(editor: true), LevelList()).Command.Value;
+
+        Assert.Equal(HarnessCommandKind.EditorLoad, command.Kind);
+        Assert.Equal("Bramblecrown Hill.mblevel.json", command.Path);
+    }
+
+    [Fact]
+    public void LevelLoad_WithTheEditorOff_StartsAFreshRun()
+    {
+        var command = ConsoleCommandRegistry.Default.Bind("level.load thps", DevState(true), Toggles(editor: false), LevelList()).Command.Value;
+
+        Assert.Equal(HarnessCommandKind.LoadLevel, command.Kind);
+    }
+
+    [Theory]
+    [InlineData("level.load thps map 2")]
+    [InlineData("level.load thps seed 7")]
+    [InlineData("level.load thps noseed")]
+    [InlineData("level.load levels/thps.mblevel.json")]
+    public void LevelLoad_InTheEditor_OverridesOrAPathStillStartAFreshRun(string line)
+    {
+        var command = ConsoleCommandRegistry.Default.Bind(line, DevState(true), Toggles(editor: true), LevelList()).Command.Value;
+
+        Assert.Equal(HarnessCommandKind.LoadLevel, command.Kind);
+    }
+
+    [Fact]
+    public void LevelLoad_InTheEditor_UnknownTitleStillReportsTheError()
+    {
+        var result = ConsoleCommandRegistry.Default.Bind("level.load NoSuchMap", DevState(true), Toggles(editor: true), LevelList());
+
+        Assert.Contains("no level named", result.Error);
+    }
+
+    [Fact]
     public void ToggleVerbs_WithNoArgumentFlipTheCurrentState()
     {
         var toggles = Toggles(invulnerable: true, editor: false, hud: true, coordinates: false);

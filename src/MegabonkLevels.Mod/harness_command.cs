@@ -56,6 +56,7 @@ public enum HarnessCommandKind
     KillEnemies,
     Coordinates,
     Music,
+    EditorLoad,
 }
 
 // Arguments of a new-level command: the blank from-scratch level's map, stage, tier and square grid size.

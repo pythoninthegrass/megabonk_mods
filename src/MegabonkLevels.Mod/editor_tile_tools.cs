@@ -868,7 +868,27 @@ public static class EditorTileTools
             return;
         }
 
-        var name = _levelFiles[Mathf.Clamp(_selectedLevel, 0, _levelFiles.Count - 1)];
+        TryLoad(_levelFiles[Mathf.Clamp(_selectedLevel, 0, _levelFiles.Count - 1)], out _);
+    }
+
+    // The console's level.load inside the editor: the Load button's logic for a named file in the levels folder.
+    public static JsonObject LoadLevel(string name)
+    {
+        if (!EditorMode.Active)
+        {
+            throw new InvalidOperationException("editor mode is off");
+        }
+
+        if (!TryLoad(name, out var message))
+        {
+            throw new InvalidOperationException(message);
+        }
+
+        return new JsonObject { ["name"] = name, ["message"] = message };
+    }
+
+    private static bool TryLoad(string name, out string message)
+    {
         var path = Path.Combine(LiveEditPatch.LevelsDirectoryPath(), name);
 
         LevelFile level;
@@ -879,8 +899,9 @@ public static class EditorTileTools
         }
         catch (Exception ex)
         {
-            Fail($"load failed: {ex.Message}");
-            return;
+            message = $"load failed: {ex.Message}";
+            Fail(message);
+            return false;
         }
 
         var warning = GameBuildIdCheck.MismatchWarning(level.GameBuildId, GameBuildIdPatch.CurrentBuildId());
@@ -908,24 +929,28 @@ public static class EditorTileTools
         switch (EditorLoadPlan.Decide(currentLevel, level))
         {
             case EditorLoadAction.Refuse:
-                Fail("load requires a fresh run: map, stage, tier or seed differs");
-                return;
+                message = "load requires a fresh run: map, stage, tier or seed differs";
+                Fail(message);
+                return false;
             case EditorLoadAction.FreshRun:
                 if (!LevelLoaderPatch.LoadAndStart(path, _logger))
                 {
-                    Fail("load failed: could not start the level");
-                    return;
+                    message = "load failed: could not start the level";
+                    Fail(message);
+                    return false;
                 }
 
                 EditorMode.RequestReenter(_logger);
-                ShowTransientStatus($"loading: {name}");
-                return;
+                message = $"loading: {name}";
+                ShowTransientStatus(message);
+                return true;
         }
 
         if (!LiveEditPatch.ResetAndApplyEdits(level.Edits, _logger))
         {
-            Fail("load failed: no active run");
-            return;
+            message = "load failed: no active run";
+            Fail(message);
+            return false;
         }
 
         _session = new EditorEditSession(level.Edits);
@@ -936,7 +961,9 @@ public static class EditorTileTools
         _lastSavedName = name;
         InvalidateValidation();
         _validateSummary = $"loaded {name}";
-        ShowTransientStatus($"loaded: {name}");
+        message = $"loaded: {name}";
+        ShowTransientStatus(message);
+        return true;
     }
 
     // Load applies the selected file's edits in-place (resets live tiles/objects to baseline, then replays the file's edits) without relaunching.
