@@ -304,36 +304,84 @@ The fresh measurements use the default-off [development initial-stage switch](de
 
 Before accepting each Forest hash, the depth-2 `ProceduralTileGeneration` dump showed `currentStage=StageForest2` and `currentMapParameters=ParamForest2` (`size=15`, `scale=22`, `scaledTileWidth=44`, `scaledTileHeight=22`). Before accepting each Desert hash, the depth-2 `MapController` dump showed `index=1`, `currentStage=StageDesert2`, null `mapParameters` and `proceduralMapScale=1.1`; the `MapGenerator` dump matched that stage's `TerrainDesert` and `NoiseDesert1` assets and the settings above. Desert's tile-generator `currentStage` and `currentMapParameters` were both null, because that generator is unused. `MapGenerationController.testStageData` remained its serialized `StageForest1` test default, not the active stage: its generation coroutine (`MoveNext`, RVA `0x4A26F0`) reads `MapController.currentStage` into its captured `stageData` and passes that to `MapGenerator.GenerateMap` (`0x509EA0`). This establishes the actual controller stage source independently of the requested configuration.
 
+### The terrain seed under control (measured)
+
+Desert's effective terrain seed is the integer passed to the three-argument `MapGenerator.GenerateMap(MapData, StageData, int)` overload, not `ProceduralTileGeneration.debugSeed` or the serialized `NoiseData.seed=257`. The native generation coroutine rolls `MapGenerationController.mapSeed` with `Random.Range(0, 0x7FFFFFFF)` and forwards it to that overload; `GeneratePerlinNoiseMap` passes the seed to `Noise.GenerateNoiseMap` (RVA `0x51CED0`), whose octave offsets use a new `System.Random(seed)`. The native call chain and the observed noise-call seed independently identify the seed under test.
+
+The separate default-off `MEGABONK_DEV_TERRAIN_SEED=true` switch requires `MEGABONK_DEV=true`. A seeded harness load arms one replacement argument; `--no-seed` observes generation without pinning it. A guarded value-argument re-invocation replaces the call rather than mutating an interop `ref int`, which corrupted the native mesh call during development. The original seed-force hook and tier cap are unchanged. The game's static `mapSeed` retains its own roll, so a varying `A_GenerationComplete mapSeed` is expected even when `TerrainSeed: pinned seed=...` and the subsequent noise call prove a successful pin.
+
+The measured grid is the array argument received by `MeshGenerator.GenerateTerrainMesh`, labelled `meshArgument`, not a final mesh fingerprint. Its SHA-256 input is the copied float sequence formatted invariantly to four decimal places with comma separators; equal hashes establish equality at that precision, not bitwise float identity. The reader probes array-header layouts and reports how it obtained the values. `buffer@multi` means a bulk copy from the multidimensional-array layout passed finite-value and variation checks; it does not mean an independent cell-by-cell read succeeded. Seed sensitivity and repeated-pin reproducibility corroborate this buffer interpretation. The `heightMap` and `staticNoiseMap` field reads remain separate corroborating attempts, not substitutes for the mesh argument when their wrappers are unreadable.
+
 ### Repeat behaviour at the verified effective stage
 
-Exactly two forced-seed requests and two unseeded runs per map are counted below, all fresh relaunches with passing effective-stage checks. The earlier request-only matrix, the launch that lost the switch at the GUI handoff, the Desert probe without an authoritative stage dump and the final default-off control are excluded. That control again selected `StageForest1`/`ParamForest1` despite a stage-1 request, confirming normal initial-stage behaviour is unchanged. The snapshot column is `tiles / flatTiles / fillTiles`, not dimensions. Hashes are prefixes of the `A_GenerationComplete` SHA-256 snapshots; the complete lines follow. The tile-list hash does not measure Desert's mesh, and its empty object snapshot does not measure props.
+The primary comparison uses the original four verified Forest runs and four freshly measured Desert runs: two forced 424242 and two unseeded per map, all fresh relaunches with passing effective-stage checks. Three additional fresh launches test a different Desert seed, a terrain-switch-off Desert control and Forest patch inertness. The original 11 journal records are preserved byte-identically; the prior seven exploratory terrain captures are archived separately and are not added to these counts. Earlier request-only measurements, the GUI switch-loss attempt, the unverified Desert probe and the old default-off control are excluded from the primary comparison. The old control selected `StageForest1`/`ParamForest1` despite a stage-1 request. The snapshot column is `tiles / flatTiles / fillTiles`, not dimensions. Hashes are prefixes; the complete generation lines follow. The tile-list hash does not measure Desert's mesh, and its empty object snapshot does not measure props.
 
 | Map / effective stage | Seed mode | Runs | Tile snapshot | Nodes | Tile hash | Objects | Objects hash |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Forest / `StageForest2` | forced 424242 | 2 | 225 / 165 / 190 | 415 | `0BDEF92F…` ×2 | 957 | `CCCC82DA…`, `AF779C3A…` |
 | Forest / `StageForest2` | unseeded | 2 | 225 / 171 / 410; 225 / 161 / 253 | 635; 478 | `634C6141…`, `71E5849D…` | 958 | `342A971E…`, `9CFE2513…` |
-| Desert / `StageDesert2` | forced 424242 requested, hook not reached | 2 | 400 / 292 / 417 | 817 | `692987B2…` ×2 | 0 | `E3B0C442…` ×2 |
+| Desert / `StageDesert2` | terrain pinned 424242 | 2 | 400 / 292 / 417 | 817 | `692987B2…` ×2 | 0 | `E3B0C442…` ×2 |
 | Desert / `StageDesert2` | unseeded | 2 | 400 / 292 / 417 | 817 | `692987B2…` ×2 | 0 | `E3B0C442…` ×2 |
 
 Forest's forced runs repeat the tile hash, but not the object hash, even with the mod's per-phase reseeding active. Unseeded loads explicitly release the seed force (`--no-seed`, logged as `mode -> Off`), and the game's `debugSeed` rolls are 1591920135 and 1647530316; both tile and object hashes differ. These observations establish only what repeated in these four captures, not universal determinism. Equal object counts do not imply equal identities or transforms.
 
-Desert never reaches the `ProceduralTileGeneration.Generate` seed-force hook. Its forced requests are recorded separately, not described as successful terrain seed pins. Its logged `mapSeed` varies across all four runs, whereas `debugSeed=1952838951` is an unused serialized tile-generator value. The live `NoiseData.seed=257` alone does not establish the effective terrain RNG seed. All four tile-list hashes match, but that snapshot does not describe the mesh; `objects=0` and `objectsHash=E3B0C442…` hash empty input. The selection collects scene-root `(Clone)` objects after `TileObjectsParent`, not children under it; absent captured roots do not imply absent props.
+Desert never reaches the `ProceduralTileGeneration.Generate` seed-force hook: `debugSeed=1952838951` remains an unused serialized tile-generator value, even when terrain is successfully pinned. All four tile-list hashes match, but that snapshot does not describe the mesh; `objects=0` and `objectsHash=E3B0C442…` hash empty input. The selection collects scene-root `(Clone)` objects after `TileObjectsParent`, not children under it; absent captured roots do not imply absent props.
 
-Generation lines in run order (Forest forced ×2, Forest unseeded ×2, Desert forced requests ×2, Desert unseeded ×2):
+| Desert test | Game roll / logged `mapSeed` | Effective noise seed | Mesh-input hash | Cells | Min / max / mean |
+| --- | --- | --- | --- | --- | --- |
+| Forced 424242, first | 1696564175 | 424242 | `CF4ED58E…` | 58081 | 0 / 1 / 0.5011 |
+| Forced 424242, second | 1387787013 | 424242 | `CF4ED58E…` | 58081 | 0 / 1 / 0.5011 |
+| Forced 1234567 | 912264387 | 1234567 | `7B398C89…` | 58081 | 0 / 1 / 0.4732 |
+| Unseeded, first | 1766705161 | 1766705161 | `8C8520D7…` | 58081 | 0 / 1 / 0.5109 |
+| Unseeded, second | 1355200338 | 1355200338 | `D14E53CF…` | 58081 | 0 / 1 / 0.5262 |
+
+All five measured Desert grids report `read=buffer@multi`, with 241×241 cells and normalized values spanning 0–1; no cell-by-cell validation occurred. The two identical pins repeat the hash despite different game rolls and buffer addresses, while a different pin and both unseeded rolls change it. This establishes observed mesh-input grid repeatability at four-decimal precision for these settings, not universal terrain determinism. The separate field reads report `heightMap read=unreadable:Il2CppObjectBase` and `staticNoiseMap read=none`. The terrain-switch-off Desert control verifies `StageDesert2`, logs `mapSeed=2070115922`, emits no terrain measurement lines and retains the same tile/empty-object snapshots.
+
+The fresh Forest inertness check verifies `StageForest2`/`ParamForest2`, `debugSeed=424242` and the original `0BDEF92F…` tile hash. It arms the terrain pin but emits no pin-consumption, noise or mesh-grid lines: this tile map never calls the three-argument terrain generator, so terrain measurement is not applicable rather than failed. Its `objects=957` but `objectsHash=3E9FD818…` adds a third observed seeded object hash to the original pair; object drift is not bounded to two outcomes.
+
+Generation lines for the primary comparison (original Forest forced ×2 and unseeded ×2, then fresh Desert pinned ×2 and unseeded ×2):
 
 ```text
 A_GenerationComplete: map=MapForest mapType=0 mapSeed=1007355861 debugSeed=424242 tiles=225 flatTiles=165 fillTiles=190 nodes=415 hash=0BDEF92F14BCB2FE911B37ECEA0043F6A6365C1D072E5296AFAA5BEF905B7A65 objects=957 objectsHash=CCCC82DA13225EF70DA5EDF8BF7893E189E5A3685C2206248A6327CEEC50FCA1
 A_GenerationComplete: map=MapForest mapType=0 mapSeed=267817188 debugSeed=424242 tiles=225 flatTiles=165 fillTiles=190 nodes=415 hash=0BDEF92F14BCB2FE911B37ECEA0043F6A6365C1D072E5296AFAA5BEF905B7A65 objects=957 objectsHash=AF779C3A3BA1AA37F9C484D6713646966276DF679383CCAB4A504CA9AD1A11E1
 A_GenerationComplete: map=MapForest mapType=0 mapSeed=1354662620 debugSeed=1591920135 tiles=225 flatTiles=171 fillTiles=410 nodes=635 hash=634C614173A4029E667C6A2A4526FBE96F3FC94B2CF1B0351A20891B58E86879 objects=958 objectsHash=342A971E5915F463D041D558502604FE9A1771ADC235802B5CB038CFEF010770
 A_GenerationComplete: map=MapForest mapType=0 mapSeed=1892994173 debugSeed=1647530316 tiles=225 flatTiles=161 fillTiles=253 nodes=478 hash=71E5849D9A6CE7C9DE7928BB90B5075285AD57CEF7E42F553A5C1DF74595CEC8 objects=958 objectsHash=9CFE251361030E91CDFE7D2F50B66B4686D49CF5C0C5B69290DEBAA3AE7E212D
-A_GenerationComplete: map=MapDesert mapType=1 mapSeed=1288405723 debugSeed=1952838951 tiles=400 flatTiles=292 fillTiles=417 nodes=817 hash=692987B28DBC32CF22A58EED963FC8FD85F98C211DBEF66CE0A08370CBDB3546 objects=0 objectsHash=E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855
-A_GenerationComplete: map=MapDesert mapType=1 mapSeed=1439882283 debugSeed=1952838951 tiles=400 flatTiles=292 fillTiles=417 nodes=817 hash=692987B28DBC32CF22A58EED963FC8FD85F98C211DBEF66CE0A08370CBDB3546 objects=0 objectsHash=E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855
-A_GenerationComplete: map=MapDesert mapType=1 mapSeed=80866481 debugSeed=1952838951 tiles=400 flatTiles=292 fillTiles=417 nodes=817 hash=692987B28DBC32CF22A58EED963FC8FD85F98C211DBEF66CE0A08370CBDB3546 objects=0 objectsHash=E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855
-A_GenerationComplete: map=MapDesert mapType=1 mapSeed=480924260 debugSeed=1952838951 tiles=400 flatTiles=292 fillTiles=417 nodes=817 hash=692987B28DBC32CF22A58EED963FC8FD85F98C211DBEF66CE0A08370CBDB3546 objects=0 objectsHash=E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855
+A_GenerationComplete: map=MapDesert mapType=1 mapSeed=1696564175 debugSeed=1952838951 tiles=400 flatTiles=292 fillTiles=417 nodes=817 hash=692987B28DBC32CF22A58EED963FC8FD85F98C211DBEF66CE0A08370CBDB3546 objects=0 objectsHash=E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855
+A_GenerationComplete: map=MapDesert mapType=1 mapSeed=1387787013 debugSeed=1952838951 tiles=400 flatTiles=292 fillTiles=417 nodes=817 hash=692987B28DBC32CF22A58EED963FC8FD85F98C211DBEF66CE0A08370CBDB3546 objects=0 objectsHash=E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855
+A_GenerationComplete: map=MapDesert mapType=1 mapSeed=1766705161 debugSeed=1952838951 tiles=400 flatTiles=292 fillTiles=417 nodes=817 hash=692987B28DBC32CF22A58EED963FC8FD85F98C211DBEF66CE0A08370CBDB3546 objects=0 objectsHash=E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855
+A_GenerationComplete: map=MapDesert mapType=1 mapSeed=1355200338 debugSeed=1952838951 tiles=400 flatTiles=292 fillTiles=417 nodes=817 hash=692987B28DBC32CF22A58EED963FC8FD85F98C211DBEF66CE0A08370CBDB3546 objects=0 objectsHash=E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855
+```
+
+Additional generation lines (terrain-switch-off Desert control, different Desert pin, Forest inertness check):
+
+```text
+A_GenerationComplete: map=MapDesert mapType=1 mapSeed=2070115922 debugSeed=1952838951 tiles=400 flatTiles=292 fillTiles=417 nodes=817 hash=692987B28DBC32CF22A58EED963FC8FD85F98C211DBEF66CE0A08370CBDB3546 objects=0 objectsHash=E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855
+A_GenerationComplete: map=MapDesert mapType=1 mapSeed=912264387 debugSeed=1952838951 tiles=400 flatTiles=292 fillTiles=417 nodes=817 hash=692987B28DBC32CF22A58EED963FC8FD85F98C211DBEF66CE0A08370CBDB3546 objects=0 objectsHash=E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855
+A_GenerationComplete: map=MapForest mapType=0 mapSeed=484051898 debugSeed=424242 tiles=225 flatTiles=165 fillTiles=190 nodes=415 hash=0BDEF92F14BCB2FE911B37ECEA0043F6A6365C1D072E5296AFAA5BEF905B7A65 objects=957 objectsHash=3E9FD818D0FDCD6BEACA38BD64631F173A82FAA781F4555354447B5DF4BBB39B
+```
+
+Terrain-call evidence in table order (pin or game roll, effective noise call, then the copied mesh argument):
+
+```text
+TerrainSeed: pinned seed=424242 (the game rolled 1696564175) stage=StageDesert2
+TerrainSeed: noise seed=424242 scale=100 octaves=2 persistance=0.4 lacunarity=3 blend=0.02 blendStrength=0
+TerrainSeed: meshArgument hash=CF4ED58EB73F18CE2D1832595B65577CB1E745B2CDD488E195F65FA7FB0555F6 cells=58081 read=buffer@multi ptr=0x7401D000 min=0.0000 max=1.0000 mean=0.5011
+TerrainSeed: pinned seed=424242 (the game rolled 1387787013) stage=StageDesert2
+TerrainSeed: noise seed=424242 scale=100 octaves=2 persistance=0.4 lacunarity=3 blend=0.02 blendStrength=0
+TerrainSeed: meshArgument hash=CF4ED58EB73F18CE2D1832595B65577CB1E745B2CDD488E195F65FA7FB0555F6 cells=58081 read=buffer@multi ptr=0x74005000 min=0.0000 max=1.0000 mean=0.5011
+TerrainSeed: pinned seed=1234567 (the game rolled 912264387) stage=StageDesert2
+TerrainSeed: noise seed=1234567 scale=100 octaves=2 persistance=0.4 lacunarity=3 blend=0.02 blendStrength=0
+TerrainSeed: meshArgument hash=7B398C89AC093A2ECF8F085A915C5DFDFE81BAC67BACCFC78293D44399909486 cells=58081 read=buffer@multi ptr=0x73F49000 min=0.0000 max=1.0000 mean=0.4732
+TerrainSeed: seed=1766705161 left to the game stage=StageDesert2
+TerrainSeed: noise seed=1766705161 scale=100 octaves=2 persistance=0.4 lacunarity=3 blend=0.02 blendStrength=0
+TerrainSeed: meshArgument hash=8C8520D7DF3601C6568A8A76F04B5D8D70EF0C210CEC7F02A226694BA521E034 cells=58081 read=buffer@multi ptr=0x73FA8000 min=0.0000 max=1.0000 mean=0.5109
+TerrainSeed: seed=1355200338 left to the game stage=StageDesert2
+TerrainSeed: noise seed=1355200338 scale=100 octaves=2 persistance=0.4 lacunarity=3 blend=0.02 blendStrength=0
+TerrainSeed: meshArgument hash=D14E53CFABE4FEE2689CFDDF23F5C98E8A9653902DBDAC9A828B74B9CD04E9E0 cells=58081 read=buffer@multi ptr=0x73F9D000 min=0.0000 max=1.0000 mean=0.5262
 ```
 
 Unresolved questions:
 
-- Which objects or transforms cause the seeded Forest object-hash drift, and whether repeat captures within one generation vary; two observed values do not establish a binary RNG decision or bound future outcomes.
+- Which objects or transforms cause the seeded Forest object-hash drift, and whether repeat captures within one generation vary; three observed values do not establish a particular RNG cause or bound future outcomes.
 - Desert object-placement repeatability and why the root selection captures none of its props; a child-aware capture is needed before making an object-determinism claim.
-- Desert's effective terrain RNG seed and mesh repeatability; changing `mapSeed` and matching tile snapshots do not answer either question.
+- Final Desert vertex/index buffers, height-curve application, colliders, rendered terrain and cross-build repeatability remain unmeasured; a repeatable normalized mesh-input grid is not a complete terrain fingerprint.
