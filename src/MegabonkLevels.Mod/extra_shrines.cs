@@ -42,6 +42,16 @@ public static class ExtraShrines
 
     public static bool Enabled(LevelFile level) => level.ExtraShrines > 0 || level.ExtraShrinesMax > 0 || level.GuaranteedShrineKinds is { Count: > 0 } || level.ShrineKindRanges is { Count: > 0 };
 
+    public static List<ExtraShrineKind> Plan(LevelFile settings, IReadOnlyList<ExtraShrineKind> randomKinds, Random random)
+    {
+        var kinds = ParseKinds(settings.GuaranteedShrineKinds);
+        kinds.AddRange(RangedKinds(settings.ShrineKindRanges, random));
+        var requested = ShrineCount(settings.ExtraShrines, settings.ExtraShrinesMax, random);
+        for (var i = 0; i < requested && randomKinds.Count > 0; i++)
+            kinds.Add(randomKinds[random.Next(randomKinds.Count)]);
+        return Shuffled(kinds, random);
+    }
+
     // Each named kind repeated a uniform count in its own [min, max] each run.
     public static List<ExtraShrineKind> RangedKinds(IReadOnlyDictionary<string, IReadOnlyList<int>> ranges, Random random)
     {

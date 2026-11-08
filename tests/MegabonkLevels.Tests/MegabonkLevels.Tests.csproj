@@ -26,6 +26,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/boss_event_log.cs" Link="boss_event_log.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/enemy_kill_targets.cs" Link="enemy_kill_targets.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/spawn_seed.cs" Link="spawn_seed.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/custom_run_random.cs" Link="custom_run_random.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/interactable_randomization.cs" Link="interactable_randomization.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/extra_shrines.cs" Link="extra_shrines.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/ground_zones.cs" Link="ground_zones.cs" />

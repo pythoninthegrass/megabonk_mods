@@ -4,7 +4,7 @@ title: Curate a self-contained starter level for public downloads
 status: In Progress
 assignee: []
 created_date: '2026-11-07 01:56'
-updated_date: '2026-11-08T04:36:00Z'
+updated_date: '2026-11-08T04:48:00Z'
 labels:
   - onboarding
 dependencies:
@@ -34,9 +34,9 @@ Give the default player package a small polished level suitable for first play a
 - [x] #2 First play works with no optional packs or custom music installed and produces no missing-content placeholders.
 - [x] #3 The level supports a simple edit-save-replay tutorial and excludes scratch/regression maps from the default experience.
 - [ ] #4 A packaged runtime smoke test and starter-content documentation establish the expected first-play result.
-- [ ] #5 The generated starter preserves its authored grid, spiral/summit route and explicit prop transforms; regeneration is reproducible and the shipped JSON equals scripts/build_starter_level.py output.
+- [x] #5 The generated starter preserves its authored grid, spiral/summit route and explicit prop transforms; regeneration is reproducible and the shipped JSON equals scripts/build_starter_level.py output.
 - [ ] #6 Shrine counts use documented tighter bounds than the current 13–24 plan, with documented useful district guarantees that are verified on successfully placed shrines without blocking ramps or the spiral.
-- [ ] #7 Shrine planning and replacement boss/miniboss picks use independent level-seeded streams reset per run; identical seeds and controlled event sequences reproduce plans/picks, including seed 0, without making ordinary combat or loot deterministic.
+- [x] #7 Shrine planning and replacement boss/miniboss picks use independent level-seeded streams reset per run; identical seeds and controlled event sequences reproduce plans/picks, including seed 0, without making ordinary combat or loot deterministic.
 - [ ] #8 The summit boss and miniboss rosters are curated for introductory difficulty and arena suitability; repeat avoidance, shared pool state, curse copies and exhausted-pool fallback have explicit, tested behavior.
 - [ ] #9 Starter descriptions/documentation identify the five biomes as visual districts over Forest gameplay, explain what the seed does and does not pin, and do not imply biome materials change stock enemy rosters.
 - [ ] #10 The final regenerated layout passes offline plain-Wine repeated-seed checks and packaged first-play/edit-save-replay smoke checks, including ordinary-mobility routes, combat, boss, lava escape and Moai/merchant/coffin interactions; evidence and limitations are recorded.
@@ -46,7 +46,7 @@ Give the default player package a small polished level suitable for first play a
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
+- [x] #1 task check passes
 - [ ] #2 Tests written first for testable logic
 - [ ] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
@@ -80,6 +80,8 @@ Refinements from the completed measured-stage and terrain-seed investigation and
 16. Ordinary-mobility checks must explicitly verify zero added Feathers and no harness invulnerability grant; relaunch defaults to two Feathers and invulnerable also adds them. Use Calcium or another character without Tony's fall-damage immunity. Validate normal CanInteract access without force; teleports/forced interaction are diagnostics, not proof of walkability/accessibility. Keep normal combat/loot randomness.
 17. Use the current Go installer checks. The Python installer/parity tests were removed; historical parity failures are not current blockers without reproduction. Run task check afresh and record only present failures.
 18. Keep evidence claims tied to the measured layer: Desert's repeated terrain pin reproduced only a normalized mesh-input grid hash at four-decimal precision, obtained via buffer@multi with no independent cell validation. It did not measure final mesh/colliders/props and adds no validation of Bramblecrown's routes, accessibility or custom placements. Use the same discipline for starter reports: separate generated JSON equality, repeatable plans/picks, actual placed-instance comparisons and physical playability.
+
+Continuation on the authoring Mac: first implement and validate the existing plan's custom RNG milestone without changing shrine budgets, district policy or enemy rosters yet. Add pure per-generation state with phase-distinct shrine-count/plan, shrine-placement and boss-selection streams; reset it from A_PreGeneration (including native Retry), not from process lifetime or only PrepareRun. Preserve shared case-insensitive boss/miniboss used names and vanilla fallback on exhaustion, documenting that curse-copy SpawnBoss calls are individual draws. Write failing tests for seed 0, repeatability, cross-stream independence, reset, shared pools and exhaustion; wire both shrine GUID consumers and boss selection to the tested owner and log intended shrine plans separately from successful placements. Update the seed contract docs, run current checks, then measure fresh-process repeated-seed behavior locally under offline plain Wine if runtime ownership is available. Do not certify district guarantees, roster suitability, death-button behavior or physical accessibility from unit tests or prior-layout evidence.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -114,4 +116,12 @@ Later in the same redesign: the lava pool is a sunken basin with a ramp out and 
 Maintainer requested that the determinism recommendations become the current implementation plan and unchecked ACs/DoD. Planning update only: no gameplay implementation or new runtime validation performed. Reopened the existing runtime/documentation AC and completion-hygiene items for the changed final scope; retained historical notes and earlier completed packaging criteria. Correctness constraints: level seed 0 already enables forced seeding; shrine and boss replacement RNGs are independent mod-owned randomness; EnemyManager.SpawnBoss at 0x41A200 does call positional SpawnEnemy at 0x41A3F0, so the earlier claim that it spawns nothing must not guide implementation. Offline plain Wine with the Steam stub is the requested validation runtime.
 
 Planning-only update requested after completion of TASK-053. Incorporated established initial-stage-reset causality, kept the authored Forest baseline and both dev measurement switches off, and replaced stale bimodal Forest wording with three observed seeded object hashes of unresolved cause. Current code still has two GUID-seeded shrine RNGs and a process-lifetime boss Random; these are implementation targets, not completed fixes. Tightened direct consumer/stream-independence tests and per-instance placement evidence, without treating Desert normalized-grid repeatability as proof of starter terrain, props or playability. Shrine budgets and boss rosters still require design and playtesting. No gameplay implementation, new starter runtime validation, acceptance-criteria completion or status change is claimed; existing ACs and DoD remain unchanged.
+
+Implemented the custom RNG milestone on the authoring Mac. Test-first CustomRunRandom owns phase-101 shrine planning, phase-102 placement and phase-103 boss/miniboss selection, reset at A_PreGeneration with the shared case-insensitive used-name set. Both shrine GUID RNGs and the process-lifetime boss RNG are removed. Authored-spots counts/kinds/order are planned and logged before physics; shrine draws cannot perturb boss picks and placement retries cannot perturb plans. Retained original exhaustion semantics: unused replacement names are burned across both pools; each curse-copy call draws again; exhausted/empty pools retain vanilla picks, which may repeat. Added explicit fallback logs and corrected docs that previously promised no repeated enemy at all.
+
+Fresh task check is green twice, including current Go installer tests, 2184 C# tests, 1107 Python tests and lint. New focused RNG/shrine/boss group: 101 passed. Initial new-test run failed on the missing owner and Plan API before implementation. Separate regeneration produced byte-identical JSON and both artwork files; layout and budgets/rosters were not changed.
+
+Offline plain-Wine runtime with active Steam stub, no Steam client, development stage/terrain overrides off, Calcium, Feathers=0 and no harness invulnerability grant: two fresh-process seed-0 loads, actual death Confirm B_Continue -> summary Restart B_Retry, then a third process replaying an editor-saved copy all produced identical custom logs: ordered 16-kind plan, 16/16 successful shrine positions to F3 precision and golden outcomes, and first boss Ent1 -> Bush. Native Restart reset used-name state after Bush had been consumed and restored authored start (0,0,-240). Effective StageForest1/ParamForest1 metrics measured 40 horizontally/20 vertically. Saved copy retained baseline:none/map:1/stageIndex:0/tier:0/seed:0. Generated JSON SHA256 7a35e663f152722606f21101a2eb15879e73b1b4c40aae1c97de5245c9b1d6da; measured DLL SHA256 de66290af0f550827b9c81f1e56f40a615ae13e4ebedb6986873fdfedf09ab22. Evidence in gitignored .tools/evidence/bramblecrown-seeded/, including comparison/lifecycle/regeneration JSON, logs and state/stage/inventory reads. Three expected Confirm-not-active refusals preceded successful button press; no content-load failure was observed.
+
+Limitations/next work: these were paused, harness-assisted diagnostic checks, with the boss portal activated from a distance using CanInteract (not walking reach). Only the first stage-boss pick was compared live; miniboss/copy/exhaustion behavior has pure-test evidence only. Positions were compared at logged F3 precision, not full transforms or district guarantees. Saved replay contained no moved rock and does not certify the first-edit tutorial. Still required: tighter shrine budgets and successful district coverage, curated boss/miniboss rosters and arena playtesting, final full-transform/district evidence, ordinary-mobility ramp/spiral and enemy traversal, combat/lava/Moai/merchant/coffin access and packaged first-play/edit-save-replay. Task remains In Progress; old installer parity failures are not current blockers.
 <!-- SECTION:NOTES:END -->

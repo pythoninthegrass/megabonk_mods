@@ -22,8 +22,7 @@ public static class BossPools
         : (flags & (BossBit | SummonerMinibossBit)) != 0 ? BossPoolKind.Miniboss
         : BossPoolKind.None;
 
-    // A uniformly drawn name from those not yet in `used`, which is then added to it so the same enemy never spawns twice in a run;
-    // null for an absent, empty or used-up pool so the game's own pick stands.
+    // Burns a uniformly drawn unused name; null retains the game's pick, which may repeat.
     public static string Pick(IReadOnlyList<string> pool, Random random, ISet<string> used = null)
     {
         var fresh = pool?.Where(name => used == null || !used.Contains(name)).ToList();

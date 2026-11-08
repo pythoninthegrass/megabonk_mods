@@ -35,6 +35,7 @@ public static class LiveEditPatch
 
     // The settings of the level that is running, which the boss and lava hooks read.
     public static LevelFile CurrentSettings => _randomizationSettings;
+    public static CustomRunRandom RunRandom { get; } = new(0);
     private static Session _session;
     private static int _runGeneration;
 
@@ -133,6 +134,12 @@ public static class LiveEditPatch
     public static void Install(MelonLogger.Instance logger)
     {
         MapGenerationController.A_PreGeneration += (Il2CppSystem.Action)StartupCover.OnGenerationStarting;
+        MapGenerationController.A_PreGeneration += (Il2CppSystem.Action)(() =>
+        {
+            RunRandom.Reset(_randomizationSettings.Seed);
+            if (CustomLevelState.IsActive)
+                logger.Msg($"CustomRunRandom: reset seed={_randomizationSettings.Seed} phases=101,102,103");
+        });
         SpawnPlayerPortal.A_PortalClosed += (Il2CppSystem.Action)StartupCover.OnPortalClosed;
         SpawnPlayerPortal.A_PortalOpen += (Il2CppSystem.Action)StartupCover.OnPortalOpened;
         MapGenerationController.A_GenerationComplete += (Il2CppSystem.Action)(() => OnGenerationComplete(logger));

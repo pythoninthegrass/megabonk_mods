@@ -13,11 +13,7 @@ namespace MegabonkLevels;
 public static class BossPoolPatch
 {
     private static MelonLogger.Instance _logger;
-    private static readonly Random s_random = new();
     private static readonly HashSet<string> s_unknown = new();
-    // Names already summoned in this run, shared by both pools; cleared when a new run starts.
-    private static readonly HashSet<string> s_used = new(StringComparer.OrdinalIgnoreCase);
-    private static int _usedRun = -1;
 
     public static void Install(MelonLogger.Instance logger) => _logger = logger;
 
@@ -30,14 +26,13 @@ public static class BossPoolPatch
             var settings = LiveEditPatch.CurrentSettings;
             var kind = BossPools.Classify((int)enemyFlag);
             var pool = kind switch { BossPoolKind.Boss => settings.BossPool, BossPoolKind.Miniboss => settings.MinibossPool, _ => null };
-            if (_usedRun != LiveEditPatch.RunGeneration)
+            var name = LiveEditPatch.RunRandom.PickBoss(pool);
+            if (name == null)
             {
-                _usedRun = LiveEditPatch.RunGeneration;
-                s_used.Clear();
+                if (pool is { Count: > 0 })
+                    _logger?.Msg($"BossPool: {kind} pool exhausted; keeping {eEnemy} (flags {enemyFlag})");
+                return;
             }
-
-            var name = BossPools.Pick(pool, s_random, s_used);
-            if (name == null) return;
             if (!Enum.TryParse<EEnemy>(name, true, out var chosen))
             {
                 if (s_unknown.Add(name)) _logger?.Warning($"BossPool: unknown enemy '{name}' ignored");

@@ -1,6 +1,6 @@
 # Bramblecrown Hill
 
-Bramblecrown Hill is the starter level included by default in player packages. It is a handcrafted composite of the game's five biomes (Forest, Graveyard, Dungeon, Desert and Hell) using only the game's own props, ground materials, enemies and music, built around one tall hill with a ruined watchpost on its crown. It plays on Forest's stage rules, so enemies, music and the boss are Forest's. No level packs or custom music are needed.
+Bramblecrown Hill is the starter level included by default in player packages. Its five visual districts use Forest, Graveyard, Dungeon, Desert and Hell props and ground materials around a tall hill with a ruined watchpost. Gameplay uses Forest stage 0: foreign materials do not change stock enemy rosters or generation rules. The level's explicit boss/miniboss pools override eligible boss picks, not ordinary enemies. No level packs or custom music are needed.
 
 ## First play
 
@@ -24,9 +24,11 @@ Around the hill, a ring of districts each has its own biome, a chest and shrine 
 
 The routes form loops: the meadow, ridge and ruins connect around the back of the hill, and the pen connects to the highland and on to the ruins, so no district is a long dead end.
 
-Five Charge Shrines are guaranteed every run, along with two or three more shrines drawn from Charge, Magnet and Greed, three to eight Moai shrines and three to eight Shady Guy merchants. The counts are rolled each run and the shrines are placed on 27 authored, clear-ground locations, so their positions vary between runs. These are this level's authored rules, not a claim about vanilla shrine counts.
+The current plan requests five Charge Shrines, two or three extras drawn from Charge, Magnet and Greed, three to eight Moai shrines and three to eight Shady Guy merchants, using 27 authored candidate locations. These are planned counts, not verified successful-placement or district guarantees. Tighter budgets and useful district coverage still need curation and playtesting.
 
-The map uses the custom-level Tier 1 rules. It does not provide a chain of custom stages or a portal to a second custom map.
+The level seed fixes shrine count/kind/order planning and the custom placement draws. Boss/miniboss replacements use a separate seeded stream: identical controlled spawn-call sequences repeat picks until their shared unused-name pool is exhausted, after which vanilla picks stand. All streams reset at generation start, and seed 0 is valid. Physics clearance can still change successful shrine placements; ordinary enemies, loot, combat and boss spawn offsets remain random. The authored grid, spiral and explicit prop transforms do not reroll with this seed.
+
+The map uses the custom-level Tier 1 rules: survival continues after the boss, with no next-stage portal or chain of custom stages.
 
 ## Your first edit
 
@@ -87,3 +89,41 @@ Loading `levels/bramblecrown-hill.mblevel.json` through the development harness 
 Later checks in the same session: standing on the lava pool cost 3 hit points per half second; two boss portal spawns were rewritten by the pool (`Ent1` to `Ent2`, then `Ent1` to `Pharaoh2`, whose boss bar and model appeared normally behind the summit portal); a timeline miniboss spawn (`GhostGrave1`, flag `Boss`) became `MinibossGolem`; and the grass filter removed the blades on the lava, hell rock and desert sand while the Forest meadow kept its grass.
 
 These were harness-assisted checks. The following were not repeated for this layout and still need a pass using the smoke test above: walking each ramp with native input, a combat interval with spawns on, the boss interaction, the Moai and coffin interactions, the first-edit tutorial and the packaged selection screen.
+
+### Seeded-stream lifecycle smoke check
+
+Offline plain Wine with the Steam stub was used for two fresh-process loads
+with seed 0, the actual death-screen Confirm → summary Restart buttons, and a
+third fresh process loading an editor-saved copy. Both development stage/terrain
+overrides were off. Calcium had zero Feathers, no harness invulnerability grant,
+and spawns enabled; measurements were made paused in the editor. The effective
+assets were `StageForest1`/`ParamForest1`, with spacing 40 and height step 20.
+
+All four generations logged the same ordered 16-kind plan, all 16 successful
+placement positions (reported to three decimal places), golden outcomes and
+first boss replacement (`Ent1` → `Bush`). No placement failure or tight fallback
+was logged. Restart restored the authored start `(0, 0, -240)` and repeated the
+first boss replacement after it had already been used in the previous run.
+The saved copy retained seed 0, `baseline:none`, Forest stage 0 and Tier 1.
+
+Identity and local evidence:
+
+- Generated level SHA-256: `7a35e663f152722606f21101a2eb15879e73b1b4c40aae1c97de5245c9b1d6da`.
+- Measured DLL SHA-256: `de66290af0f550827b9c81f1e56f40a615ae13e4ebedb6986873fdfedf09ab22`.
+- Gitignored `.tools/evidence/bramblecrown-seeded/` holds fresh logs,
+  `comparison.json`, `lifecycle-comparison.json`, stage/inventory/state reads and
+  the saved diagnostic copy.
+
+Regenerating all three starter files into a separate directory produced
+byte-identical JSON and artwork. The death-button driver logged three expected
+Confirm refusals while its button was still inactive, then succeeded; these
+are recorded harness errors, not content-load failures.
+
+This establishes a bounded position-log comparison, not full-precision transform
+or district guarantees. The portal was activated through the harness from a
+distance with `CanInteract` true, not reached on foot. Only the first stage-boss
+pick was compared live; miniboss sequences, curse copies and pool exhaustion
+are covered by pure tests, not runtime evidence. The saved copy had no moved
+rock, so this is lifecycle replay evidence, not the first-edit tutorial. These
+checks do not establish roster suitability, ramp/enemy traversal, pack-free
+packaged selection, interaction accessibility or an unassisted survival clear.

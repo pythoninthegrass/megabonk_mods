@@ -83,14 +83,25 @@ playable positions. Compare the `InteractableRandomization` placement log or
 live transforms to verify variety. With all flags absent or false the
 relocation pass returns without consuming randomness or touching transforms.
 
-Extra shrines (`extraShrines`, `extraShrineKinds`) spawn after the relocation
-pass from a private RNG seeded from a fresh `Guid` per run, so they consume
-neither `UnityEngine.Random` nor the game's `ConsistentRandom`. The baseline —
-tiles, props, genIds and the reported hashes — reproduces identically across
-runs of a seed whether or not the field is set; the extra shrines themselves
-deliberately vary between runs of the same seed. They are added after the
-generation report captures its hashes, so the extras never appear in them.
-Compare the `ExtraShrines:` placement log or live scene objects to verify them.
+Extra shrines spawn after relocation using mod-owned, level-seeded streams.
+`CustomRunRandom` derives shrine planning, placement and boss selection seeds
+with `SpawnSeed.PhaseSeed(level.Seed, phase)` for phases 101, 102 and 103.
+`A_PreGeneration` resets all three streams and the shared boss used-name set,
+including when native Restart bypasses the level loader. Seed 0 is valid.
+These streams never reseed `UnityEngine.Random` or the game's `ConsistentRandom`.
+The authored-spots plan fixes ranged counts, extra kinds and shuffled order
+before physics placement; failed placement attempts cannot change that plan or
+boss picks. Boss/miniboss calls share the selection stream and used-name set.
+Replay requires identical settings, available prefabs and controlled boss-call
+order; ordinary combat timing and loot remain random.
+
+Compare `CustomRunRandom: reset`, `ExtraShrines: plan`, individual placement
+lines and `BossPool:` replacements/fallbacks, not the baseline generation hashes.
+Extras are added after the generation report captures its hashes. Seeded plans
+do not establish physics-identical successful placements: collider state,
+nudging, optional relocation and native prefab callbacks can still differ.
+Repeated-seed runtime comparisons and the actual death-button path remain
+separate verification requirements from the pure stream/reset tests.
 
 On the Windows build under Proton, Forest seed `20261008` has also produced
 different baseline `objectsHash` values across launches with relocation both
@@ -159,14 +170,14 @@ The sequencer hands the per-run `mapSeed` to `MapGenerator.GenerateMap(MapData, 
 
 ### What stays random in an authored from-scratch level
 
-A from-scratch level skips the maze, the heights, the prop placers and the `Spawn*` methods, so terrain and prop layout are fully determined by the level file, and `seed` is bookkeeping. Skipping `GenerateTileObjects.Generate` also skips the boss spawner and its random tile pick, so the level file's `bossSpawner` replaces it. These still vary every run and are not tied to level data:
+A from-scratch level skips the maze, heights, prop placers and stock `Spawn*` methods, so authored terrain and prop transforms are determined by the file. Its seed also controls the mod's extra-shrine planning/placement and boss-pool selection streams. Skipping `GenerateTileObjects.Generate` skips the boss spawner and its random tile pick, so the file's `bossSpawner` replaces it. These remain outside that custom seed contract:
 
 - Enemy pool picks, which use the Unity global stream (`StageSummoner.AddEnemyToPoolAndPickNewCard`, decompiled).
 - Card draws and miniboss rolls, which use `MyRandom.random`, seeded once per process (decompiled).
 - The stage boss position offset, `Random.insideUnitSphere` in `SummonerController.SpawnStageBoss` (decompiled).
 - The crypt layout: on a Graveyard map the room layout is re-rolled from the per-run `mapSeed` unless `RsgController.customSeed` is set, and `InteractableCrypt.Teleport` re-seeds `RsgController` from `mapSeed` when the player enters (decompiled).
 - Grass chunk placement, which draws from the Unity stream as chunks stream in (decompiled, 0x3352E0).
-- Extra shrines, placed by the mod's own `System.Random` seeded from a fresh `Guid` each run, including the counts rolled from `shrineKindRanges`.
+- Successful extra-shrine placement, which still depends on live physics clearance despite seeded plans and placement draws.
 - Interactable relocation, drawn from the mod's private random source.
 - Chest loot and any other consumer of `UnityEngine.Random` during play.
 

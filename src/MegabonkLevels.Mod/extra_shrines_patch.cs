@@ -45,8 +45,8 @@ public static class ExtraShrinesPatch
             allowed = new HashSet<ExtraShrineKind>();
         }
 
-        var ranged = ExtraShrines.RangedKinds(settings.ShrineKindRanges, new System.Random(System.Guid.NewGuid().GetHashCode()));
-        var poolKinds = allowed == null ? null : allowed.Concat(guaranteed).Concat(ranged).ToHashSet();
+        var rangedKinds = ExtraShrines.ParseKinds(settings.ShrineKindRanges?.Keys.ToList());
+        var poolKinds = allowed == null ? null : allowed.Concat(guaranteed).Concat(rangedKinds).ToHashSet();
         var pool = BuildPool(settings, controller, poolKinds, logger);
         if (pool.Count == 0) return;
 
@@ -56,18 +56,19 @@ public static class ExtraShrinesPatch
             : MapGenerationController.tileSpawnPosition;
         var (anchors, routes) = HotPathGeometry(controller, start);
         var existing = ExistingShrinePositions(index);
-        var random = new System.Random(System.Guid.NewGuid().GetHashCode());
-        var requested = ExtraShrines.ShrineCount(settings.ExtraShrines, settings.ExtraShrinesMax, random);
+        var random = LiveEditPatch.RunRandom.ShrinePlacement;
         if (onMesh)
         {
             var randomPool = pool.Where(entry => allowed == null || allowed.Contains(entry.Kind)).ToList();
-            var plan = ExtraShrines.Shuffled(guaranteed.Concat(ranged).Concat(Enumerable.Range(0, randomPool.Count == 0 ? 0 : requested).Select(_ => randomPool[random.Next(randomPool.Count)].Kind)).ToList(), random);
+            var plan = ExtraShrines.Plan(settings, randomPool.Select(entry => entry.Kind).ToList(), LiveEditPatch.RunRandom.ShrinePlan);
+            logger.Msg($"ExtraShrines: plan seed={settings.Seed} kinds=[{string.Join(",", plan)}]");
             var meshSpawned = SpawnAtAuthoredSpots(settings, index, pool, plan, random, logger);
-            logger.Msg($"ExtraShrines: spawned={meshSpawned} planned={plan.Count} guaranteed={guaranteed.Count} ranged={ranged.Count} spots={settings.ShrineSpots.Count} pool={pool.Count} path=spots");
+            logger.Msg($"ExtraShrines: spawned={meshSpawned} planned={plan.Count} guaranteed={guaranteed.Count} spots={settings.ShrineSpots.Count} pool={pool.Count} path=spots");
             return;
         }
 
-        if (ranged.Count > 0) logger.Warning("ExtraShrines: shrineKindRanges need shrineSpots and are ignored on the tile probe path");
+        var requested = ExtraShrines.ShrineCount(settings.ExtraShrines, settings.ExtraShrinesMax, LiveEditPatch.RunRandom.ShrinePlan);
+        if (rangedKinds.Count > 0) logger.Warning("ExtraShrines: shrineKindRanges need shrineSpots and are ignored on the tile probe path");
         var points = PlacementProbe.ReachablePoints(state, tiles, ground, start, logger, "ExtraShrines").Values.ToList();
         var spacing = tiles.currentMapParameters.scaledTileWidth / PlacementProbe.SamplesPerTile;
         var spawned = 0;
