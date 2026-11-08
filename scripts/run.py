@@ -114,7 +114,7 @@ import time
 import uuid
 from collections.abc import Callable, Mapping
 from decouple import Config, RepositoryEmpty, RepositoryEnv
-from game_paths import latest_log_path, resolve_game_dir as _resolve_game_dir, wine_bin, wine_prefix
+from game_paths import evidence_dir, latest_log_path, resolve_game_dir as _resolve_game_dir, to_game_path, wine_bin, wine_prefix
 from menu_input import request as menu_request, serve as serve_menu, validate_batch
 from pathlib import Path
 from typing import Literal, NamedTuple
@@ -365,14 +365,6 @@ def resolve_relaunch_diag(lookup: Lookup) -> bool:
 def launch_task(runtime: str, system: str | None = None) -> str:
     system = system or platform.system()
     return "crossover:run" if system == "Darwin" and runtime == "crossover" else "game:run"
-
-
-def to_game_path(path: Path, system: str | None = None) -> str:
-    """Path as the game process sees it; CrossOver's Wine exposes the host filesystem as Z:."""
-    system = system or platform.system()
-    if system == "Darwin":
-        return "Z:" + str(path).replace("/", "\\")
-    return str(path)
 
 
 def build_command(command: str, path: str | None = None) -> dict[str, str]:

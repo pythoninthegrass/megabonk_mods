@@ -49,7 +49,7 @@ from pydantic import Field, StrictBool
 TIMEOUT = 15.0
 MAX_QUERY_DEPTH = run.MAX_QUERY_DEPTH
 LAUNCH_MARKER = "DevHarness: enabled"
-DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parent.parent / ".tools" / "evidence"
+DEFAULT_SCREENSHOT_DIR = run.evidence_dir()
 LOG_POLL_INTERVAL = 0.2
 ENCODING_ENV = "MEGABONK_MCP_ENCODING"
 ENCODINGS = ("json", "json-min", "toon")

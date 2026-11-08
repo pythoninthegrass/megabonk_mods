@@ -198,3 +198,15 @@ def test_main_watch_strips_the_separator_and_watches(tmp_path) -> None:
 
 def test_main_watch_requires_a_log() -> None:
     assert lg.main(["watch", "--", "wine"]) == 2
+
+
+def test_spawn_env_defaults_the_evidence_dir_to_the_repo_as_the_game_sees_it(monkeypatch) -> None:
+    monkeypatch.delenv("MEGABONK_EVIDENCE_DIR", raising=False)
+    launch = lg.build_game_launch(WINE, PREFIX, GAME)
+    assert lg.spawn_env(launch)["MEGABONK_EVIDENCE_DIR"] == lg.gp.to_game_path(lg.gp.evidence_dir())
+
+
+def test_spawn_env_keeps_an_evidence_dir_the_caller_set(monkeypatch) -> None:
+    monkeypatch.setenv("MEGABONK_EVIDENCE_DIR", "/custom/evidence")
+    launch = lg.build_game_launch(WINE, PREFIX, GAME)
+    assert lg.spawn_env(launch)["MEGABONK_EVIDENCE_DIR"] == "/custom/evidence"

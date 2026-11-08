@@ -1058,6 +1058,8 @@ The in-game console (the tilde drop-down) turns a typed line into a harness comm
 
 The music verbs (`music.play/pause/next/prev/track/list/now`) bind to the `music` harness command; see [Music transport](#music-transport).
 
+- **`debug.screenshot <path>`** (gated) saves the rendered frame as a PNG. A relative path resolves under `MEGABONK_EVIDENCE_DIR`, which the launcher (`task game:run`, `run.py relaunch`) sets to the repo's gitignored `.tools/evidence` as the game sees it, the same folder the MCP `screenshot` tool defaults to; missing folders are created and an existing file is refused, so the console prints an error instead of overwriting. An absolute path is used as given, which is how `run.py` and the MCP tool send theirs (`Z:\...` under Wine on macOS). A game started outside the launcher has no `MEGABONK_EVIDENCE_DIR`, and a relative path then resolves against the game's working directory, the install folder. Quote a path with spaces.
+
 ## Console overlay
 
 `ConsoleOverlay` (`console_overlay.cs`) is the visible console: a Fallout-style drop-down that slides **up from the bottom** of the screen. It is driven from the mod's `OnUpdate` through `PerfMonitor.Timed(PerfTick.Console, …)`, following the same tick and perf-timer pattern as the other per-frame ticks; there is no injected MonoBehaviour. The Unity-free decisions behind it — whether a toggle may run, how the slide advances, and what pause and cursor state a close restores — live in `console_state.cs` (`ConsoleState`, `ConsoleSlide`, `ConsoleEntryState`, `ConsoleLinePlan`) and are unit tested in `tests/MegabonkLevels.Tests/console_state_tests.cs` like the command language. The overlay itself only reads input, builds UGUI, and applies those decisions.

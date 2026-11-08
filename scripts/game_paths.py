@@ -88,6 +88,19 @@ def game_dir(env_file_values: dict[str, str] | None = None) -> Path:
     return resolve_game_dir(_env_lookup(env_file_values))
 
 
+def to_game_path(path: Path, system: str | None = None) -> str:
+    """Path as the game process sees it; CrossOver's Wine exposes the host filesystem as Z:."""
+    system = system or platform.system()
+    if system == "Darwin":
+        return "Z:" + str(path).replace("/", "\\")
+    return str(path)
+
+
+def evidence_dir() -> Path:
+    """The repo's gitignored folder where screenshots land by default."""
+    return Path(__file__).resolve().parent.parent / ".tools" / "evidence"
+
+
 def macos_runtime(env_file_values: dict[str, str] | None = None) -> str:
     if env_file_values is None:
         env_file_values = _parse_env_file(ENV_FILE)

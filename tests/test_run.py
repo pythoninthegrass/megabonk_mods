@@ -137,6 +137,10 @@ def test_launch_task_is_crossover_only_for_the_crossover_runtime_on_macos() -> N
     assert run.launch_task("crossover", system="Linux") == "game:run"
 
 
+def test_evidence_dir_is_the_repo_tools_evidence_folder() -> None:
+    assert run.evidence_dir() == Path(run.__file__).resolve().parent.parent / ".tools" / "evidence"
+
+
 def test_to_game_path_maps_host_path_into_wine_z_drive_on_macos() -> None:
     assert run.to_game_path(Path("/tmp/a.png"), system="Darwin") == "Z:\\tmp\\a.png"
 

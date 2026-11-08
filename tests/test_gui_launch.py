@@ -184,3 +184,10 @@ def test_main_reports_handoff_failure_without_traceback(monkeypatch, tmp_path, c
     monkeypatch.setattr(lg, "spawn", fail)
     assert lg.main(["game"]) == 1
     assert capsys.readouterr().err == "launch: Log in to the desktop first\n"
+
+
+def test_gui_handoff_preserves_the_evidence_dir(monkeypatch, tmp_path):
+    calls = launchctl_stubs(monkeypatch, tmp_path)
+    lg.spawn_in_gui(lg.Launch(["/wine", "game.exe"], {}, None), {"MEGABONK_EVIDENCE_DIR": "Z:\\evidence"})
+    config = plistlib.loads(Path(calls[-1][3]).read_bytes())
+    assert config["EnvironmentVariables"]["MEGABONK_EVIDENCE_DIR"] == "Z:\\evidence"

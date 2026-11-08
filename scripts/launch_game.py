@@ -143,7 +143,7 @@ def gui_job_label(launch: Launch) -> str:
 GUI_ENV_NAMES = {
     "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "USER", "LOGNAME",
     "MEGABONK_DEV", "MEGABONK_KILL_FLOOR_HEARTBEAT", "MEGABONK_CELL_LOG", "MEGABONK_RING_DIAG",
-    "MEGABONK_DEV_STAGE_OVERRIDE", "MEGABONK_DEV_TERRAIN_SEED",
+    "MEGABONK_DEV_STAGE_OVERRIDE", "MEGABONK_DEV_TERRAIN_SEED", "MEGABONK_EVIDENCE_DIR",
 }
 GUI_ENV_PREFIXES = ("WINE", "DOTNET_", "DYLD_", "MVK_", "DXVK_", "Steam")
 
@@ -203,9 +203,14 @@ def spawn_in_gui(launch: Launch, env: dict[str, str]) -> None:
     print(f"launch: handed off to macOS GUI session ({service}); log: {output}")
 
 
+def spawn_env(launch: Launch) -> dict[str, str]:
+    """The environment the game starts with; the console's debug.screenshot resolves relative paths under MEGABONK_EVIDENCE_DIR."""
+    return {"MEGABONK_EVIDENCE_DIR": gp.to_game_path(gp.evidence_dir()), **os.environ, **launch.env}
+
+
 def spawn(launch: Launch) -> None:
     """Start the target detached; a logged game launch runs through a watcher process that can reap it and record its exit status."""
-    env = {**os.environ, **launch.env}
+    env = spawn_env(launch)
     if platform.system() == "Darwin" and not has_graphical_session():
         spawn_in_gui(launch, env)
         return

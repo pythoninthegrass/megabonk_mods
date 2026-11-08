@@ -141,9 +141,15 @@ public static class DevHarness
             case HarnessCommandKind.MaterialDump:
                 return MaterialDump.Build(command.Path);
             case HarnessCommandKind.Screenshot:
-                _logger.Msg($"DevHarness: screenshot '{command.Path}'.");
-                MelonCoroutines.Start(CaptureAtEndOfFrame(command.Path));
-                break;
+                var target = ScreenshotPath.Resolve(command.Path, Environment.GetEnvironmentVariable(ScreenshotPath.EvidenceVariable), File.Exists);
+                if (target.Error != null)
+                {
+                    throw new InvalidOperationException(target.Error);
+                }
+
+                _logger.Msg($"DevHarness: screenshot '{target.Path}'.");
+                MelonCoroutines.Start(CaptureAtEndOfFrame(target.Path));
+                return new JsonObject { ["message"] = $"screenshot: {target.Path}" };
             case HarnessCommandKind.Freeze:
                 MyTime.Pause();
                 _logger.Msg($"DevHarness: freeze, MyTime.paused={MyTime.paused}.");
@@ -963,6 +969,7 @@ public static class DevHarness
                 rgb[i * 3 + 2] = pixels[i].b;
             }
 
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
             File.WriteAllBytes(path, PngEncoder.EncodeRgb(texture.width, texture.height, rgb));
             UnityEngine.Object.Destroy(texture);
             _logger.Msg($"DevHarness: wrote screenshot '{path}'.");
