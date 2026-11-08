@@ -4,7 +4,7 @@ title: Record the generated Forest and Desert Tier 2 stage parameters and layout
 status: In Progress
 assignee: []
 created_date: '2026-11-07T23:07:00Z'
-updated_date: '2026-11-08T01:35:00Z'
+updated_date: '2026-11-08T01:55:00Z'
 labels:
   - research
   - generation
@@ -37,28 +37,18 @@ To audit how levels are generated, the Tier 2 stages of Forest and Desert need t
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-## Plan
-
-Measurement box: the Mac's plain-Wine install through the megabonk MCP harness (owns the running game). The level-test leg runs on the Linux player box over SSH with the same harness (venv python), as a cross-machine check of the generated hashes.
-
-1. Read-only harness extension for nested asset values (tests first).
-   - `tests/MegabonkLevels.Tests/asset_dump_tests.cs`: pure-logic tests for a new `AssetDump` walker (primitives, enums as ints, null, arrays with a cap and a truncation marker, depth cut naming nested objects, Unity-object-like nodes by `name`, member read failure recorded as an error string, reference cycle guard).
-   - `src/MegabonkLevels.Mod/asset_dump.cs`: reflection walker, System.Reflection + System.Text.Json only, no UnityEngine types, so the tests project compiles it.
-   - Extend `query-objects` with an optional integer `depth` (default 0 keeps today's ToString-for-objects behaviour) instead of adding a new command: `ObjectQuery.Read` gains a depth parameter and delegates value conversion to `AssetDump`; parse test in `harness_command_tests.cs`, pass-through tests in `tests/test_run.py` and `tests/test_mcp_server.py`.
-   - `scripts/run.py` builder + MCP `query_objects(depth=...)`; document `depth` in the "Querying live objects" section of docs/development.md.
-2. Stage-index finding: dump each `MapData` (Forest, Desert) with `stages` expanded, recording per-index asset name, `localizedName.cachedValue`, `mapEdgeFillType`, and per-stage identity, then read `MapController.currentStage`/`GetStageIndex()` equivalents from the loaded assets to say which index is the vanilla Tier 2 stage. Evidence: stage array order plus names, corroborated by generating that index and matching it to the Tier 2 stage the stock portal loads.
-3. Parameter capture from the running game for Forest and Desert at that index: `MapParameters` (size, scale, tileWidth/Height, scaled values, volatility, centerHeightTarget, slopeStrength, yOffset, flatMapBias, biasStrategy, heightGenerationStrategy), `mapEdgeFillType`, `grassPerChunk`, prop entries (`randomMapObjects`: amount/maxAmount/checkRadius/scale range/maxSlopeAngle/upOffset/prefab count), `MapData` multipliers (numShrines/Chests/ShrinesPotsAndOther), and for Desert `proceduralTerrainData` + `proceduralNoiseData` + `proceduralMapScale`.
-4. Generation runs with `levels/example-forest.mblevel.json` (generated baseline, edits empty), overriding map/stage/tier/seed: Forest stage N and Desert stage N, x2 with the same forced `--seed` and x2 with the seed varying, relaunching between runs. Capture each `A_GenerationComplete` line (seed, tiles/flat/fill, nodes, hash, objects, objectsHash) plus a screenshot per stage.
-5. Save raw logs, screenshots and the raw dumps under `.tools/evidence/` (gitignored); write the stage-index finding, the parameter tables and the repeat-versus-vary table as a new section of docs/runtime-map-structure.md, with at most one cross-reference line elsewhere.
-6. Validate: `~/.local/bin/mise exec -- task check` (includes markdownlint and the C#/Python suites); commit as atomic conventional commits with no attribution; leave the game unfrozen, spawns on, no camera override.
-
-Risks: the Desert seed is not controllable by the level-seed force (only `ProceduralTileGeneration.Generate` is patched), so the Desert forced-seed comparison may show the tile/mesh side varying - record what actually happens rather than assuming; the Wine game is shared with nothing else right now but a rebuild needs a relaunch to load.
+1. Establish native initial-stage selection and keep the existing tier cap unchanged.
+2. Add tests-first, default-off dev-only one-shot stage selection and a narrow read-only static MapController depth query; forward the switch through the macOS GUI launcher.
+3. Deploy and relaunch between every measurement. Verify Forest PTG stage/parameters and Desert MapController stage plus MapGenerator terrain/noise before accepting hashes. Immediately append each run and its full launch log to .tools/evidence/tier2-effective-runs.jsonl.
+4. Record two forced-seed requests and two unseeded runs per effective stage, keeping Desert hook/capture limitations explicit. Exclude unverified probes and the default-off control.
+5. Publish section 12 and development instructions; verify exact log lines against the journal, markdownlint and full task check; commit implementation and findings separately with conventional subjects and no attribution.
+6. Leave a normal default-off Forest run unfrozen, spawns on, editor off and camera cleared; finalize only after all criteria and DoD are verified.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -85,4 +75,20 @@ Validation before this final review: task check exited 0, including 2129 C# test
 Final review evidence correction: the published repeat table now excludes Linux files with inconsistent requested-map labels or incomplete generation records. It counts 12 surviving seeded Mac Forest records (6 hashes C0376874…, 6 hashes 92A74E52…), 2 unseeded Mac Forest records, and 6 Mac Desert records. Earlier 14/16-record and cross-machine claims are superseded. The stage-selection cause, object-hash cause, Desert capture coverage and terrain seed remain unresolved.
 
 After review of 280f45b and the subsequent shared-edit commit 549b542, task check was rerun successfully: 2129 C# tests, 1105 Python tests, markdownlint and Ruff passed. No new runtime validation was performed. Only TASK-053 changes staged; no commit made. AC3 and the commit DoD remain unchecked, and the task remains In Progress.
+
+Resumed with a clean worktree at 081ff9c. AC3 requires fresh effective-stage verification before any measurement hash is accepted; the earlier request-only rows remain excluded from Tier 2 evidence. The MCP server currently advertises older query/relaunch signatures without depth or unseeded; inspect the maintained CLI fallback rather than silently drop either control. Honcho recall failed with a server session-not-found error; proceeding without memory.
+
+REA namespace is unavailable in this tool catalog. Used read-only objdump of the installed GameAssembly.dll instead: StartNewMap writes -1 to MapController statics +0x8 at VA 0x180422485 and calls LoadNextStage at 0x1804224A0. LoadNextStage increments statics +0x8 at 0x180421FA4, reads currentMap +0x50 (stages), indexes by that value, and writes currentStage at 0x18042205A. Tier-cap causality is not supported; initial-stage reset is established directly.
+
+Tests-first gate implemented: eight pure C# cases failed to compile before InitialStageOverride existed, then passed; the GUI launcher whitelist dropped the new switch on the first attempted load, which was captured as unverified in .tools/evidence/tier2-effective-runs.jsonl. Added a failing GUI handoff test, then explicitly forwarded only the new switch; all 17 GUI tests pass. No tier-cap changes. The first three accepted Forest runs each report StageForest2/ParamForest2 in depth-2 dumps; both forced runs have 225/165/190 tiles, 415 nodes, hash 0BDEF92F…, objects=957 but differing object hashes CCCC82DA… and AF779C3A…. First unseeded run has debugSeed=1591920135, 225/171/410, 635 nodes, hash 634C6141…, objects=958. Every completed launch and dump is appended/fsynced to the journal before the next relaunch.
+
+Forest matrix complete: four verified effective StageForest2/ParamForest2 launches (two forced, two unseeded), all durably recorded. Desert first probe durably captured with null tile-generator currentStage/currentMapParameters, MGC test defaults MapForest/StageForest1, and live MapGenerator TerrainDesert/NoiseDesert1. Do not mistake serialized testStageData for effective stage. Need static MapController query for direct identity proof.
+
+Eight required runs now durably saved in .tools/evidence/tier2-effective-runs.jsonl: four Forest and four Desert, two forced-424242 and two unseeded per map, each after a fresh relaunch. Forest depth-2 PTG dumps verify StageForest2/ParamForest2 (scale22); Desert depth-2 MapController dumps verify index1/currentStage StageDesert2/proceduralMapScale1.1, and MapGenerator dumps match TerrainDesert (heightMultiplier11, uniformScale1, useFallofffalse) and NoiseDesert1 (scale100, octaves2, lacunarity3, persistance0.4, seed257). Desert PTG currentStage/currentMapParameters are null; MGC testStageData remains the serialized Forest default and is not evidence of its generated stage. Native coroutine MoveNext RVA0x4A26F0 reads MapController statics+0x18 into captured stageData+0x30 at VA0x1804A39C0 and passes it to MapGenerator.GenerateMap at VA0x1804A3BE0. Saved disassembly in .tools/evidence/tier2-generation-native.txt. Static MapController query added narrowly to harness with three tests written first (red then green); 21 focused C# cases pass. Desert mapSeeds1288405723/1439882283 (forced requests) and80866481/480924260 (unseeded); debugSeed1952838951 is unused and constant, tile snapshot400/292/417 nodes817 hash692987B2…, objects0 empty hash. No terrain/object determinism claim.
+
+Validation complete: markdownlint -c .markdownlint.jsonc docs passed; full mise task check exited successfully with 2140 C# tests and 1106 Python tests, repository markdownlint and Ruff. Exact eight accepted generation lines in docs/runtime-map-structure.md match the append-only journal; all four unseeded logs explicitly show mode -> Off. Three excluded records (GUI switch-loss attempt, Desert probe, default-off control) remain in the same journal. Final deployed-build default-off control requests stage1/tier1 but verifies index0 StageForest1/ParamForest1 and the original A2B9C891… tile hash, demonstrating normal behaviour remains unchanged. No environment-file changes or tier-cap changes were made.
+
+Implementation committed as 0cfa58a (feat(dev): add opt-in initial stage measurements), with no attribution. AC3 remains unchecked under its literal controlled-seed requirement: all eight runs have verified Tier 2 stage assets, and the two forced requests/two unseeded loads per map are recorded, but Desert does not reach the seed-force hook and its actual mapSeed differs between its two forced requests. The documentation explicitly reports that limitation rather than claiming a pinned Desert seed. Finishing that strict requirement needs an approved Desert terrain seed-control path and another verified matrix; this completion pass does not silently broaden the seed hook or reinterpret requests as successful pins. All DoD items are now met; task stays In Progress because AC3 is not genuinely met.
+
+Final game cleanup verified by state: default-off Forest control run left running, editor=false, frozen=false, spawnsOff=false, invulnerable=false; explicit camera clear sent. Fresh docs-only final wording passed markdownlint again. No new task created for Desert seed control.
 <!-- SECTION:NOTES:END -->
