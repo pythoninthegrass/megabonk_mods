@@ -3,9 +3,10 @@ id: TASK-054.06
 title: >-
   Console overlay renders no text: scrollback rows and input never generate TMP
   geometry
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-08T16:27:00Z'
+updated_date: '2026-11-08T16:33:00Z'
 labels: []
 dependencies: []
 references:
@@ -46,18 +47,38 @@ Note for verification: the running `megabonk` MCP server must be restarted to pi
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Typed text, the placeholder and command output are drawn in the console in the running game, verified with a harness screenshot after running help
-- [ ] #2 Scrollback rows report a real renderedWidth in query_objects while they hold text
-- [ ] #3 The root cause is identified and recorded in docs/development.md, not just masked
-- [ ] #4 A regression check exists where the logic is testable, or the cause is documented as only reproducible in the live game
-- [ ] #5 Block caret, light grey placeholder behaviour, ? alias, history listing, clear and cross-session persistence are each confirmed on screen
-- [ ] #6 The uncommitted overlay changes are committed with the fix
+- [x] #1 Typed text, the placeholder and command output are drawn in the console in the running game, verified with a harness screenshot after running help
+- [x] #2 Scrollback rows report a real renderedWidth in query_objects while they hold text
+- [x] #3 The root cause is identified and recorded in docs/development.md, not just masked
+- [x] #4 A regression check exists where the logic is testable, or the cause is documented as only reproducible in the live game
+- [x] #5 Block caret, light grey placeholder behaviour, ? alias, history listing, clear and cross-session persistence are each confirmed on screen
+- [x] #6 The uncommitted overlay changes are committed with the fix
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Root cause (confirmed live via query_objects): scrollback rows are LineHeight=20 px tall, the RobotoMono line at 16 pt is 21.1 px. With Ellipsis overflow and word wrap off, TMP finds no line fits (isTextOverflowing=true) and emits no glyphs, so renderedWidth/Height stay at the sentinel. Input label and placeholder draw because they use Overflow mode.
+2. Fix in console_overlay.cs: raise LineHeight to 22 and give scrollback labels Overflow mode so row height can never cull text. Drop the ForceMeshUpdate mitigation if the fix works without it.
+3. No unit-testable logic (font metrics exist only in the live game); document the cause and the live check in docs/development.md (AC4 alternative).
+4. Rebuild, relaunch, verify on screen: help output, placeholder, block caret, ? alias, history, clear, persistence across relaunch; check renderedWidth of Line rows.
+5. task check, commit (overlay changes already landed in 4d03861).
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Root cause: scrollback rows were 20 px tall (LineHeight) but the RobotoMono line at 16 pt is 21.1 px. With Ellipsis overflow and word wrap off, TMP reported isTextOverflowing=true and emitted no glyphs, so renderedWidth/Height stayed at the sentinel. The input line and placeholder drew because they use Overflow mode or taller rects; it was not an activation-order or ForceMeshUpdate problem.
+
+Fix (console_overlay.cs): LineHeight 22, scrollback labels use Overflow mode, ForceMeshUpdate workaround removed. docs/development.md records the cause, the live check, and updates the stale panel-look description.
+
+Verified live (relaunch, harness key/type/screenshot): help output, grey placeholder, block caret, ? alias, history listing, clear, and history restored after a relaunch all drawn; Line* rows report real renderedWidth. No unit test: font metrics exist only in the live game (documented). task check passes (1114 tests). The other overlay changes the task listed as uncommitted were already in 4d03861.
+<!-- SECTION:FINAL_SUMMARY:END -->
