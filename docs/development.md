@@ -359,6 +359,21 @@ With only Megabonk kept, a prefix of about 12 GB copies as about 4.5 GB. The cop
 
 This was verified on a second Apple silicon Mac (Wine 11.18, DXVK-macOS async, Rosetta): the game launched with MelonLoader, `relaunch` loaded the example Forest level into editor mode, and `screenshot` returned the editor overlay. The mod builds there with no extra setup, because the build reads the same prefix setting and default; see [modding-setup.md](modding-setup.md).
 
+## Running BepInEx under Wine
+
+BepInEx 6 (`BepInExPack_IL2CPP` 6.0.0-be.788) boots Megabonk under the same plain-Wine setup as MelonLoader: the repo launch path (`task game:run`, Wine 11.18, DXVK) runs `Megabonk.exe` with the doorstop loaded and the chainloader starts. Verified with a published community plugin loading (`Loading [...]`, `Loaded <Plugin>`, `Chainloader startup complete` in `BepInEx/LogOutput.log`, empty `ErrorLog.log`). The first start needs network: BepInEx downloads unity libs from `unity.bepinex.dev` and runs Cpp2IL and interop generation, about 20 seconds.
+
+BepInEx and MelonLoader cannot be active together. MelonLoader's `version.dll` proxy in the game directory blocks the doorstop's startup, so a BepInEx install replaces MelonLoader: `version.dll` must be removed or renamed out of the game directory (rename it back to go the other way). `winhttp.dll` (the doorstop proxy) and `doorstop_config.ini` then sit in the game directory beside `Megabonk.exe`, with `BepInEx/` and `dotnet/` under it.
+
+Two things a mod manager's Apply does not do, both fatal and silent (doorstop's `winhttp.dll` loads, but no `BepInEx/LogOutput.log` ever appears):
+
+- **The pack's `dotnet/` folder is not written.** BepInEx needs `dotnet/` (187 files, including `coreclr.dll`), `.doorstop_version` and `changelog.txt` beside `doorstop_config.ini`, which points at `dotnet\coreclr.dll`. A package or installer must copy them from the pack zip; a manager Apply alone leaves them out.
+- **The `winhttp` DLL override is not created.** Wine resolves `winhttp` to its builtin before the game directory's proxy, so the prefix needs `"winhttp"="native,builtin"` under `[Software\\Wine\\DllOverrides]`. `wine reg add` fails in a headless/SSH session, so the working edit is a line in the prefix's `user.reg` with no Wine process running (Wine rewrites the file while alive).
+
+A mod manager's own Play does not work for the Windows build under Wine: it routes through the CrossOver runner and the bottle's `steam.exe` and never plain Wine, and the game never comes up that way. CrossOver's launcher gates its runner on its license, so an expired trial puts up its dialog instead of starting anything — the bottle's `[Software\\CodeWeavers\\CrossOver\\cxoffice]` registry entries (`NagTime` and friends) only record that state, they do not control it. Launch through `task game:run` (or Steam) instead; the manager is for file management only.
+
+The manager's per-mod enable toggle works by file sync: disabling a mod removes its folder from `BepInEx/plugins/` in the game directory while keeping it in the manager's profile, and enabling or re-applying puts it back. The sync is bidirectional — files removed from the game directory out from under it are treated as uninstalled on the next sync, so they disappear from the manager's profile too.
+
 ## Launching under CrossOver
 
 Set `MEGABONK_MACOS_RUNTIME=crossover` to use CrossOver instead of plain Wine; `run.py relaunch` then starts the game through `task crossover:run`, and `task crossover:melonloader:install` installs MelonLoader with CrossOver's Wine. `task crossover:run` starts `Megabonk.exe` directly in the CrossOver Steam bottle with `cxstart`, with `SteamAppId` and `SteamGameId` set to 3405340. The Steam client must already be running in the bottle; start it from CrossOver first. Launching through the `steam://rungameid` URI is avoided because it can open only the CrossOver window without starting the game, especially from a script. The equivalent command:
