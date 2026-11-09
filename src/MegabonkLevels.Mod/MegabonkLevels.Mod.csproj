@@ -10,6 +10,9 @@
     <!-- Same bytes from any checkout path: the PDB path and module id no longer depend on where the repo lives. -->
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <PathMap>$(MSBuildProjectDirectory)=/_/MegabonkLevels.Mod</PathMap>
+    <!-- Keep git state (commit hash, origin URL, Source Link) out of the DLL so the bytes depend only on the source. -->
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <!-- Deploy package dependencies beside the plugin. -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>

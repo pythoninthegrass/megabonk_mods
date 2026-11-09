@@ -200,3 +200,5 @@ def test_mod_build_is_independent_of_the_checkout_path():
     project = ET.parse(ROOT / "src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj").getroot()
     assert project.findtext("PropertyGroup/ContinuousIntegrationBuild") == "true"
     assert "$(MSBuildProjectDirectory)=" in (project.findtext("PropertyGroup/PathMap") or "")
+    assert project.findtext("PropertyGroup/EnableSourceControlManagerQueries") == "false"
+    assert project.findtext("PropertyGroup/IncludeSourceRevisionInInformationalVersion") == "false"
