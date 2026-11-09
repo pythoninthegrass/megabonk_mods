@@ -6,13 +6,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Search the [open issues](https://github.com/pythoninthegrass/megabonk_mods/issues)
-        first, and keep one topic per issue.
+        Search the [open issues](https://github.com/pythoninthegrass/megabonk_mods/issues) first, and keep one topic per issue.
 
-        **Kind**, **Area** and **Summary** become the commit subject that fixes it, so
-        write the summary as a short imperative line you would be happy to read in a
-        changelog; the `fix(area):` prefix comes from the two dropdowns. Never post the
-        contents of a `.env` file or any token.
+        **Kind**, **Area** and **Summary** become the commit subject that fixes it. Write the summary as a short imperative line you would be happy to read in a changelog; the `fix(area):` prefix comes from the two dropdowns.
+
+        Never post the contents of a `.env` file or any token.
   - type: input
     id: summary
     attributes:

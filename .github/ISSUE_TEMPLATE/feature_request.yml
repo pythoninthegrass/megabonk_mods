@@ -6,17 +6,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        CONTRIBUTING asks for an issue before any change bigger than a typo, so the
-        design can be agreed before code is written. Keep one idea per issue, and check
-        the [open issues](https://github.com/pythoninthegrass/megabonk_mods/issues)
-        and the [wiki](https://docs.megabonkmod.party/) in case it exists already.
+        CONTRIBUTING asks for an issue before any change bigger than a typo, so the design can be agreed before code is written.
 
-        **Area** and **Summary** become the commit subject, so write the summary as a
-        short imperative line you would be happy to read in a changelog; the `feat(area):`
-        prefix comes from the dropdown.
+        Keep one idea per issue. Check the [open issues](https://github.com/pythoninthegrass/megabonk_mods/issues) and the [wiki](https://docs.megabonkmod.party/) first, in case it exists already.
 
-        A feature request does not need your OS, versions, or logs. Add those in a later
-        comment only if they explain the idea.
+        **Area** and **Summary** become the commit subject. Write the summary as a short imperative line you would be happy to read in a changelog; the `feat(area):` prefix comes from the dropdown.
+
+        A feature request does not need your OS, versions or logs. Add those in a later comment only if they explain the idea.
   - type: input
     id: summary
     attributes:
