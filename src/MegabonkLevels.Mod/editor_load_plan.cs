@@ -7,12 +7,12 @@ public enum EditorLoadAction
     Refuse,
 }
 
-// How the editor's Load applies a file: a from-scratch level builds its own grid, so it needs a fresh run and its seed is irrelevant.
+// Authored starts need the startup placement lifecycle; from-scratch grids also need a fresh run.
 public static class EditorLoadPlan
 {
     public static EditorLoadAction Decide(LevelFile? current, LevelFile target)
     {
-        if (target.IsFromScratch || current is { IsFromScratch: true })
+        if (target.PlayerStart != null || target.IsFromScratch || current is { IsFromScratch: true })
         {
             return EditorLoadAction.FreshRun;
         }

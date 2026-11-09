@@ -964,8 +964,6 @@ public static class EditorTileTools
         return true;
     }
 
-    // Load applies the selected file's edits in-place (resets live tiles/objects to baseline, then replays the file's edits) without relaunching.
-
     private static void RefreshLoadList(string selectName = null)
     {
         _levelFiles.Clear();
