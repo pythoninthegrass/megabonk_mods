@@ -3,10 +3,10 @@ id: TASK-027.03
 title: >-
   Keep authored player starts safe when loading a level from the editor or
   console
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-09 01:50'
-updated_date: '2026-11-09 01:54'
+updated_date: '2026-11-09 01:55'
 labels:
   - startup
   - editor
@@ -65,10 +65,20 @@ Real game after rebuild/relaunch: Forest -> temporary byte-identical legacy inst
 task mod:build passed with 0 warnings/errors; task check passed (2786 C# tests, 1160 Python tests, installer checks and lint). Existing test-project nullable/xUnit and pytest fixture-scope warnings remain. Full check log at .tools/evidence/authored-load-20261109/task-check.log; git diff --check clean. Main and reversible BepInEx/MelonLoader files untouched.
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed unsafe editor/console loading of authored-start levels in 7c85f23 on bepinex-port. A generated-baseline target with PlayerStart previously qualified for edit replay in place, which updated settings but never placed the player at the new start. EditorLoadPlan now routes any authored-start target through the existing fresh-run path, reusing startup cover/content/portal readiness and editor reentry rather than adding teleports or rewriting the harness. Same-start reloads also use that path. Compatible generated targets without a start still load in place; incompatible generated targets without a start still refuse. Updated developer load-policy/file-resolution docs and removed an obsolete comment.
+
+Preserved the exact original installed THPS file outside the selectable Levels folder at .tools/evidence/authored-load-20261109/thps-installed-original.mblevel.json (SHA256 b82246effd8dc22158037d598e072f4cb28f59732f9cf59ee461fae6404c8f18), then refreshed only installed THPS from repository schema 4. Real BepInEx game verification passed fresh current THPS, Forest -> byte-identical legacy THPS via editor console, and level.load thps to current THPS; each landed on the Warehouse starting ramp near [109,29.75,-111.18], with no fall-through death and one placement per authored load. Temporary legacy fixture removed after byte check, backup and screenshots/log retained. Game left in frozen editor, spawns off and invulnerability on.
+
+Test-first coverage produced four expected failures; all 13 load-policy cases now pass. task check passed (2786 C# tests, 1160 Python tests, installer checks and lint), mod build zero warnings/errors and git diff --check clean. Main and loader rollback unchanged. No packaging or broader harness refactor included.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
