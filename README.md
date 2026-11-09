@@ -32,9 +32,9 @@ On macOS with **r2modmac**, install BepInExPack IL2CPP and Apply the profile,
 then quit Megabonk and run this before the first modded launch:
 
 ```sh
-task wine:bepinex:repair -- --download --dry-run  # preview missing runtime files
-task wine:bepinex:repair -- --download           # repair and safely park MelonLoader
-task game:run                                  # use this, not r2modmac's Play button
+task wine:bepinex:repair -- --download --dry-run   # preview missing runtime files
+task wine:bepinex:repair -- --download             # repair and safely park MelonLoader
+task game:run                                      # use this, not r2modmac's Play button
 ```
 
 The repair uses your configured game paths, preserves plugins and user data,
