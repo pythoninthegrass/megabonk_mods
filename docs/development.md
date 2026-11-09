@@ -256,27 +256,25 @@ A walkthrough that exercises the whole chain (agent, MCP, harness files, mod, ga
 
 If a step fails, `log_tail(pattern="Harness|Error")` shows whether the mod saw the command. A rejected command carries the mod's error text in the tool error, which says which layer refused it.
 
-Requirements: uv 0.11.32 or newer in the 0.11 series (the version pinned in `.tool-versions`; the package builds with `uv_build>=0.11.32,<0.12`) and mise, verified with 2026.10.15, to install the rest of the pinned toolchain with `mise install`. Clone the repository once and install the command once; the client can then start it from any working directory:
-
-```sh
-uv tool install --editable /path/to/megabonk_mods
-```
-
-Register the installed command under `mcpServers` (the repository's `.mcp.json` ships the same entry next to unrelated servers; a machine that only drives the game needs just this):
+Requirements: uv 0.11.32 or newer in the 0.11 series (the version pinned in `.tool-versions`; the package builds with `uv_build>=0.11.32,<0.12`) and mise, verified with 2026.10.15, to install the rest of the pinned toolchain with `mise install`. Clone the repository once and register the server with `uvx`, which builds the `megabonk_harness` package from the repository on first use; nothing is installed by hand and the entry carries no machine-specific path (the repository's `.mcp.json` ships the same entry next to unrelated servers; a machine that only drives the game needs just this):
 
 ```json
 {
   "mcpServers": {
     "megabonk": {
-      "command": "megabonk-mcp"
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/pythoninthegrass/megabonk_mods", "megabonk-mcp"],
+      "env": { "MEGABONK_REPO": "${MEGABONK_REPO:-}" }
     }
   }
 }
 ```
 
-`megabonk-mcp` must be on the client's `PATH` (`uv tool update-shell` adds uv's tool directory). A checkout is mandatory because the server reads `.env`, `levels/`, `.tools/evidence` and `taskfile.yml` from it. It finds the checkout from `MEGABONK_REPO` (a path, set in the entry's `env` block), then from the working directory's ancestors, then from the tree an editable install was loaded from. The `--editable` install is what makes the last step work from an unrelated directory; a plain `uv tool install /path/to/megabonk_mods` copies the code into uv's tool cache, so that install needs `MEGABONK_REPO` in the entry. With no checkout found the command exits with an error naming `MEGABONK_REPO` instead of reading `.env` or writing evidence from the cache. `task` runs (the relaunch) use the checkout as their working directory.
+A checkout is mandatory because the server reads `.env`, `levels/`, `.tools/evidence` and `taskfile.yml` from it, while the server code itself runs from uv's cache. It finds the checkout from `MEGABONK_REPO`, then from the working directory's ancestors, then from the tree the code was loaded from (only a source-tree run, such as `uv run megabonk-mcp` in the clone or an editable install, ever reaches that step). The entry passes `MEGABONK_REPO` through from the client's environment: a client started inside the clone needs nothing, and any other client needs `export MEGABONK_REPO=/path/to/megabonk_mods` in the shell profile that starts it. The `${MEGABONK_REPO:-}` form expands to an empty string when the variable is unset, which falls through to the working-directory search; opencode's equivalent is `{env:MEGABONK_REPO}`. With no checkout found the command exits with an error naming `MEGABONK_REPO` instead of reading `.env` or writing evidence from the cache. `task` runs (the relaunch) use the checkout as their working directory.
 
-The server resolves the game directory from the environment and the nearest `.env` the same way `run.py` does, so the entry needs no `env` block unless a setting such as `MEGABONK_REPO` or `MEGABONK_MCP_ENCODING` is wanted (see [Result encoding](#result-encoding)). Confirm it with `/mcp`, which lists `megabonk` as connected.
+`uvx` resolves dependencies fresh from the package metadata (the checkout's `uv.lock` and `exclude-newer` do not apply to a git install) and caches the built commit, so after pulling a change to `src/megabonk_harness` run `uv cache clean megabonk-mods` or add `--refresh` to the entry's arguments. For development in the clone, `uv run megabonk-mcp` or `uv tool install --editable .` run the live tree instead.
+
+The server resolves the game directory from the environment and the nearest `.env` the same way `run.py` does, so the entry's `env` block only needs `MEGABONK_REPO` (above) unless a setting such as `MEGABONK_MCP_ENCODING` is wanted (see [Result encoding](#result-encoding)). Confirm it with `/mcp`, which lists `megabonk` as connected.
 
 ### Result encoding
 

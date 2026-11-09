@@ -58,7 +58,7 @@ uv run scripts/run.py relaunch levels/bramblecrown-hill.mblevel.json
 | `task check` | Build, installer tests, .NET/Python tests and lint |
 | `task scripts:test` | Python tests without a running game |
 | `task mod:test` | Unity-free .NET tests |
-| `megabonk-mcp` | Development MCP server; install once with `uv tool install --editable .` ([setup](docs/development.md#mcp-server)) |
+| `uv run megabonk-mcp` | Development MCP server from this clone; clients register it with `uvx` ([setup](docs/development.md#mcp-server)) |
 | `task package:thunderstore` | Runtime-only BepInEx package; no levels or packs |
 
 ## Explore

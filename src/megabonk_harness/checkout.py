@@ -31,7 +31,7 @@ def find_checkout(cwd: Path, module_file: Path, environ: Mapping[str, str]) -> P
     if found is None:
         raise CheckoutNotFound(
             f"no megabonk_mods checkout found from {cwd} or {module_file}; clone the repository and set {REPO_ENV} to it, "
-            "or install with `uv tool install --editable <checkout>`"
+            "or start the server from inside the clone"
         )
     return found
 

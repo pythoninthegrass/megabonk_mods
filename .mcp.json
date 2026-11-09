@@ -15,7 +15,15 @@
       ]
     },
     "megabonk": {
-      "command": "megabonk-mcp"
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/pythoninthegrass/megabonk_mods",
+        "megabonk-mcp"
+      ],
+      "env": {
+        "MEGABONK_REPO": "${MEGABONK_REPO:-}"
+      }
     },
     "osascript": {
       "command": "uvx",

@@ -4,7 +4,7 @@ title: Run the megabonk MCP server from any directory with one install command
 status: In Progress
 assignee: []
 created_date: '2026-11-09T17:53:00Z'
-updated_date: '2026-11-09T19:28:00Z'
+updated_date: '2026-11-09T19:34:00Z'
 labels: []
 dependencies: []
 references:
@@ -116,6 +116,8 @@ Dependency authority (AC5): pyproject.toml. The PEP 723 headers were removed fro
 Verified from an unrelated cwd with scratch UV_TOOL_DIR: editable install returned 45 tools and a paths call; non-editable install exits 1 with an error naming MEGABONK_REPO and works when it is set; env_file/evidence_dir/example_forest_level resolve into the checkout. NOT verified: a screenshot landing in the checkout evidence dir needs a running game (unit tests cover evidence_dir resolution); AC2 left unchecked for that. Remote boxes need `uv sync` so scripts/run.py's shim can import the package (noted in docs/gamepadui.md). No commit made.
 
 Live check (2026-11-09): from an unrelated cwd, the editable-installed megabonk-mcp ran `relaunch` (state: levelLoaded, killFloorArmed, editor true, 487 palette entries) and `screenshot`, which saved into the checkout's .tools/evidence. The first two frames were the Loading overlay, captured right after relaunch; a later capture showed the example forest in the editor. This corrects the earlier note that AC2 was unverified.
+
+Registration changed from a one-time `uv tool install --editable` to `uvx --from git+https://github.com/pythoninthegrass/megabonk_mods megabonk-mcp` with `env.MEGABONK_REPO` passed through (`${MEGABONK_REPO:-}` in .mcp.json, `{env:MEGABONK_REPO}` in opencode.jsonc) so the entry has no per-machine path. Under uvx the code runs from uv's cache, so the source-tree fallback never applies; the checkout comes from MEGABONK_REPO or the client's cwd ancestors. Verified with a git+file clone: empty var from an unrelated cwd exits naming the checkout, MEGABONK_REPO set returns 45 tools, cwd inside the repo with an empty var returns 45 tools. The git URL only works once the commit is pushed. uvx ignores the checkout's uv.lock and exclude-newer and caches the built commit (uv cache clean megabonk-mods after a pull).
 <!-- SECTION:NOTES:END -->
 
 ## Comments

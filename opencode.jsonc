@@ -76,8 +76,14 @@
       "megabonk": {
         "type": "local",
         "command": [
+          "uvx",
+          "--from",
+          "git+https://github.com/pythoninthegrass/megabonk_mods",
           "megabonk-mcp"
-        ]
+        ],
+        "environment": {
+          "MEGABONK_REPO": "{env:MEGABONK_REPO}"
+        }
       },
       "osascript": {
         "type": "local",

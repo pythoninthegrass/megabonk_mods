@@ -42,7 +42,7 @@ For the Windows build under Proton, see [Gamepadui and remote Steam hosts](docs/
 
 ## Verifying changes in the running game
 
-The mod has a development harness that loads a level, captures the game's rendered frame, drives the editor with injected key, mouse and text input, teleports the player, and quits, without OS-level input. Prefer it through the MCP server named `megabonk` (the `megabonk-mcp` command, see "MCP server" in `docs/development.md` for the one-time install): an agent calls typed tools (`relaunch`, `load`, `screenshot`, `state`, `key`, `mouse`, `type_text`, `teleport`, `dismiss_levelup`, and the rest) and gets screenshots back inline. See the "MCP server" section and its "End-to-end check" walkthrough in `docs/development.md`.
+The mod has a development harness that loads a level, captures the game's rendered frame, drives the editor with injected key, mouse and text input, teleports the player, and quits, without OS-level input. Prefer it through the MCP server named `megabonk` (the `megabonk-mcp` command, registered through `uvx`; see "MCP server" in `docs/development.md`): an agent calls typed tools (`relaunch`, `load`, `screenshot`, `state`, `key`, `mouse`, `type_text`, `teleport`, `dismiss_levelup`, and the rest) and gets screenshots back inline. See the "MCP server" section and its "End-to-end check" walkthrough in `docs/development.md`.
 
 The console replays its persisted history and scrollback after a relaunch, so after changing what a console verb prints, or anything else earlier console lines recorded, call the MCP `clear_console_log` tool (`run.py clear-console-log`) before `relaunch`; otherwise the old output still shows and looks like a stale DLL. See "Clearing the console log" in `docs/development.md`.
 
