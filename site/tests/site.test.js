@@ -34,7 +34,8 @@ test('contains truthful setup, formatted commands and non-scripted disclosures',
   assert.match(html, /<details>/);
   assert.match(html, /mcpServers/);
   assert.match(html, /level\.list/);
-  assert.match(html, /scripts\/mcp_server\.py/);
+  assert.match(html, /megabonk-mcp/);
+  assert.doesNotMatch(html, /scripts\/mcp_server\.py/);
   assert.match(
     html,
     /<a\b[^>]*href="https:\/\/thunderstore\.io\/c\/megabonk\/p\/BepInEx\/BepInExPack_IL2CPP\/"[^>]*>BepInEx 6 IL2CPP<\/a>/,
