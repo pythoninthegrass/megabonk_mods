@@ -4,7 +4,7 @@ title: Automate path-filtered Thunderstore package builds and releases
 status: In Progress
 assignee: []
 created_date: '2026-11-09 04:27'
-updated_date: '2026-11-09T20:08:00Z'
+updated_date: '2026-11-09T20:18:00Z'
 labels:
   - ci
   - release
@@ -79,3 +79,9 @@ TDD order: failing tests for gate logic and workflow/gate path parity first, the
 
 Needs the maintainer afterward (not done by me): create the `thunderstore` environment with required reviewers, add the `TCLI_AUTH_TOKEN` Actions secret, and set Actions fork-PR approval to "require approval for all outside collaborators".
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Live verification 2026-11-09: pushed to main. The push run (paths filter matched) and a manual workflow_dispatch of v0.1.0 with publish=false both passed gate and build on the self-hosted runner; publish was skipped. Artifacts thunderstore-package uploaded with 14-day (push) and 90-day (tagged dispatch) retention. First dispatch design flaw found and fixed: the tag predates the gate script, so tooling now comes from the workflow commit (ci-tools checkout, --root). Not yet exercised live: a release-published event through the gate, the publish job, the thunderstore environment approval, and a non-matching push being skipped.
+<!-- SECTION:NOTES:END -->
