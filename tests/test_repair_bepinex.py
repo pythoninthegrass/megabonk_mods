@@ -167,6 +167,7 @@ def test_cli_success_is_one_line_and_details_are_logged(game, pack, tmp_path, ca
     assert str(game) in log
     assert "winhttp=n,b" in log
     assert repair.main(args) == 0
+    assert capsys.readouterr().out == "BepInEx is already repaired; no changes needed.\n"
     assert repair.LOG_FILE.read_text().startswith(log)
     assert "Already repaired" in repair.LOG_FILE.read_text()
 

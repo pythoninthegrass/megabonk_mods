@@ -154,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Keep version.dll.bak for rollback; plugins, configuration and UserData were not changed.", file=output)
         if log is not None:
             log.flush()
-            print("BepInEx repair complete.")
+            print("BepInEx repair complete." if actions else "BepInEx is already repaired; no changes needed.")
         return 0
     except (ValueError, OSError, zipfile.BadZipFile, DownloadError, MissingAsset) as exc:
         if log is not None:
