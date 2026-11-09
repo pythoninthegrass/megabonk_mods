@@ -1,0 +1,56 @@
+{
+  "packages": {
+    ".": {
+      "changelog-path": "CHANGELOG.md",
+      "release-type": "python",
+      "release-as": "0.1.0",
+      "include-component-in-tag": false,
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name==\"megabonk-mods\" || @.name.value==\"megabonk-mods\")].version"
+        },
+        {
+          "type": "xml",
+          "path": "src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj",
+          "xpath": "/Project/PropertyGroup/Version"
+        },
+        {
+          "type": "generic",
+          "path": "src/MegabonkLevels.Mod/megabonk_levels_mod.cs"
+        },
+        {
+          "type": "toml",
+          "path": "thunderstore.toml",
+          "jsonpath": "$.package.versionNumber"
+        },
+        {
+          "type": "json",
+          "path": "pkg/manifest.json",
+          "jsonpath": "$.version_number"
+        },
+        {
+          "type": "json",
+          "path": "site/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "site/package-lock.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "site/package-lock.json",
+          "jsonpath": "$.packages[\"\"].version"
+        }
+      ],
+      "bump-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": false,
+      "draft": false,
+      "prerelease": false
+    }
+  },
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
+}

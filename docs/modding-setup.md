@@ -80,7 +80,7 @@ task mod:build   # deploys DLL, PDB and NLayer into BepInEx/plugins/MegabonkLeve
 task game:run     # launches Megabonk
 ```
 
-A successful load logs `Loading [Megabonk Level Editor 0.0.1]` and `MegabonkLevels mod initialized.` in `BepInEx/LogOutput.log`. Loader assemblies are never copied beside the plugin. F6 reads `megabonklevels-test-level.mblevel.json` beside the plugin DLL. Levels, packs, music and console history retain their existing game-root `UserData/` locations.
+A successful load logs `Loading [Megabonk Level Editor <version>]` and `MegabonkLevels mod initialized.` in `BepInEx/LogOutput.log`. Loader assemblies are never copied beside the plugin. F6 reads `megabonklevels-test-level.mblevel.json` beside the plugin DLL. Levels, packs, music and console history retain their existing game-root `UserData/` locations.
 
 `task game:log`, `run.py relaunch` and MCP log helpers use the BepInEx layout.
 Restart an already-connected MCP server after updating Python modules. For

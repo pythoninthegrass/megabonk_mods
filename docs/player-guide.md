@@ -36,7 +36,7 @@ Its package identifier is `Megabonk_Level_Editor`.
 2. Install **BepInExPack IL2CPP 6.0.788** and import the editor ZIP. Apply the
    profile to the game.
 3. Start the modded game. Check `BepInEx/LogOutput.log` for
-   `Loading [Megabonk Level Editor 0.0.1]` and `MegabonkLevels mod initialized.`.
+   `Megabonk Level Editor` and `MegabonkLevels mod initialized.`.
 4. Add a level as described below, then restart the game to see it on Map Selection.
 
 On macOS, the tested setup is r2modmac 1.1.0 for managing files and plain Wine

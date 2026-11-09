@@ -49,7 +49,7 @@ for a Proton Steam launch use `WINEDLLOVERRIDES="winhttp=n,b" %command%`.
 
 Do not run MelonLoader and BepInEx together: park the old `version.dll` before
 launching with BepInEx. Keep a backup rather than deleting your previous setup.
-See the [Wine setup and rollback guide](https://github.com/pythoninthegrass/megabonk_mods/blob/bepinex-port/docs/development.md#running-bepinex-under-wine).
+See the [Wine setup and rollback guide](https://github.com/pythoninthegrass/megabonk_mods/blob/main/docs/development.md#running-bepinex-under-wine).
 
 ## Configuration and troubleshooting
 
@@ -60,7 +60,7 @@ developer mode. Editing and cheat/debug commands require `MEGABONK_DEV=true` in
 the game's launch environment; use `editor on` in the console to enter the editor.
 
 If the mod does not appear, check `BepInEx/LogOutput.log` for
-`Loading [Megabonk Level Editor 0.0.1]` and `MegabonkLevels mod initialized.`. No log at
+`Megabonk Level Editor` and `MegabonkLevels mod initialized.`. No log at
 all usually means the loader/runtime or Wine override is missing. Duplicate
 MegabonkLevels DLLs can conflict: remove or park a manual development install
 before applying the manager profile. Test other plugins individually if a run
@@ -70,8 +70,8 @@ misbehaves; compatibility with all community mods has not been verified.
 
 [Showcase](https://megabonkmod.party) ·
 [Source and issues](https://github.com/pythoninthegrass/megabonk_mods) ·
-[Developer setup](https://github.com/pythoninthegrass/megabonk_mods/blob/bepinex-port/docs/modding-setup.md) ·
-[Console reference](https://github.com/pythoninthegrass/megabonk_mods/blob/bepinex-port/docs/development.md#console-command-language)
+[Developer setup](https://github.com/pythoninthegrass/megabonk_mods/blob/main/docs/modding-setup.md) ·
+[Console reference](https://github.com/pythoninthegrass/megabonk_mods/blob/main/docs/development.md#console-command-language)
 
 MP3 decoding uses [NLayer](https://github.com/naudio/NLayer), distributed under
 the MIT license; its license is included beside the plugin. The website source

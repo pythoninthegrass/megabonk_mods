@@ -4,7 +4,7 @@ schemaVersion = "0.0.1"
 [package]
 namespace = "pythoninthegrass"
 name = "Megabonk_Level_Editor"
-versionNumber = "0.0.1"
+versionNumber = "0.1.0"
 description = "Play and build custom Megabonk levels with an in-game map editor, custom music and a drop-down console."
 websiteUrl = "https://megabonkmod.party"
 containsNsfwContent = false

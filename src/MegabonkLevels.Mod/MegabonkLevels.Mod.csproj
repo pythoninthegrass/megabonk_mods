@@ -6,6 +6,7 @@
     <Nullable>disable</Nullable>
     <RootNamespace>MegabonkLevels</RootNamespace>
     <AssemblyName>MegabonkLevels.Mod</AssemblyName>
+    <Version>0.1.0</Version>
     <!-- Deploy package dependencies beside the plugin. -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>

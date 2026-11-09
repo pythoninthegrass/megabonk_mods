@@ -21,7 +21,7 @@ task package:thunderstore:check
 
 The build installs tcli 0.2.4 locally in `.tools/tcli/` if missing, builds the
 Release DLLs (with Task's `.env` loading), runs package tests, invokes `tcli build`
-and validates the resulting `.tools/thunderstore/<team>-Megabonk_Level_Editor-0.0.1.zip`.
+and validates the resulting `.tools/thunderstore/<team>-Megabonk_Level_Editor-<version>.zip`.
 It never publishes. After CLI installation and a Release build,
 `.tools/tcli/tcli build` also builds the ZIP directly.
 
@@ -52,6 +52,88 @@ the legacy MelonLoader installer format and are internal: Task hides them from
 listings and rejects direct CLI invocation. Do not expose a wrapper that combines
 them with this BepInEx DLL. Use a separate worktree at `melonloader-final` for
 legacy packages.
+
+## Shared release version
+
+`release-please-config.json` defines one root release, with Git tags such as
+`v0.1.0`. The Python release strategy updates `pyproject.toml`; targeted
+`extra-files` keep the other product-version fields synchronized:
+
+- the root project entry in `uv.lock`, selected by name rather than array index
+- the mod project's `<Version>` and the BepInPlugin display version
+- Thunderstore's `versionNumber` and the reference manifest's `version_number`
+- the site's `package.json` and both root version fields in `package-lock.json`
+
+The Go installer has no embedded product-version field: its source follows the
+same Git tag. Do not change the `go` toolchain directive to a product version.
+Dependencies, game builds, level/pack schemas and the standalone boot spike have
+their own versions and are not part of this synchronization.
+
+Keep the plugin's inline `x-release-please-version` annotation; the generic
+updater uses it to change only that line. The `uv.lock` selector accepts both
+plain names and the tagged-value objects used by Release Please's TOML parser,
+without updating third-party package versions. Two JSON updaters target the npm
+lockfile's top-level version and `packages[""].version`; no dependency entries
+are selected. Version examples in player documentation use placeholders so they
+do not become stale on the next release.
+
+### First release and subsequent bumps
+
+`.release-please-manifest.json` is Release Please's current/last-released version
+ledger, not the requested next version. It is bootstrapped at `0.1.0`; the
+temporary `"release-as": "0.1.0"` override ensures the first release PR targets
+exactly that version instead of deriving a higher one from existing commits.
+Remove the override after the first release PR is merged and the GitHub release
+exists. Otherwise later runs remain pinned at `0.1.0`. The option is supported
+but deprecated upstream; use it only for this bootstrap, not normal releases.
+
+After that, let conventional commits and Release Please advance the ledger and
+all version files together. Do not independently release the website or add
+separate language packages to the manifest unless their release lifecycles are
+intentionally being split.
+
+`.github/workflows/release-please.yml` runs on pushes to `main`. It reads the
+repository Actions secret `RELEASE_PLEASE_TOKEN` with contents and pull-request
+write permissions. The optional placeholder in `.env.example` is for local
+tooling only: Actions does not read `.env`. Keep the real token out of Git,
+command arguments and logs. This workflow creates release PRs and GitHub
+releases; it does **not** publish to Thunderstore, npm, NuGet or PyPI, build a
+player package, or deploy the website. A push that adds the workflow can start
+release automation, so review the configuration before pushing.
+
+Check current version consistency with:
+
+```sh
+uv run pytest tests/test_release_versions.py -n 0
+```
+
+For the optional offline future-bump integration test, install the upstream
+updaters locally first; this does not contact GitHub or create a release:
+
+```sh
+npm install --prefix .tools/release-please --no-save --ignore-scripts release-please@17.11.2
+uv run pytest tests/test_release_versions.py -n 0
+```
+
+The integration test applies Release Please's actual updaters and composite
+update handling to temporary copies at a different version, then checks that
+all product fields moved and dependency/toolchain versions did not.
+
+### Dependency updates
+
+`.github/renovate.json5` groups npm, NuGet, Go modules and Python dependencies.
+Python uses `pep621` for `pyproject.toml`/`uv.lock` and an explicit `pep723` file
+pattern for inline script metadata under `scripts/`. There is no Cargo project,
+so no Rust rule is configured. Other default Renovate managers are not disabled.
+
+The schedule permits new update branches during **Saturday 10–11 AM
+America/Chicago**, including lockfile maintenance. It is an allowed window, not
+a guarantee that the bot will run at exactly 10:00. Validate without running
+dependency updates:
+
+```sh
+npx --yes --package renovate@44.222.5 -- renovate-config-validator --strict .github/renovate.json5
+```
 
 ## Validate a manifest offline
 
@@ -129,7 +211,7 @@ adding a level or pack is a separate licensing and manager-layout review.
    one copy of `megabonklevels.runtime` can load. The manager may wrap or flatten
    the package's plugin subfolder; inspect the actual installed paths.
 5. Launch and check `BepInEx/LogOutput.log` for
-   `Loading [Megabonk Level Editor 0.0.1]`, `MegabonkLevels mod initialized.`
+   `Loading [Megabonk Level Editor <version>]`, `MegabonkLevels mod initialized.`
    and `Chainloader startup complete`. Check errors associated with this plugin,
    not just the chainloader's own `ErrorLog.log`.
 6. Confirm the console opens and a separately supplied, pack-free level appears
@@ -182,8 +264,8 @@ them from its profile at the next sync. Restore backups with the manager stopped
 do not delete an installed tree to simulate disabling a mod.
 
 With r2modmac 1.1.0, local ZIP imports appear as
-`Local-Megabonk_Level_Editor-0.0.1`. Apply preserves the plugin's nested folder:
-`BepInEx/plugins/Local-Megabonk_Level_Editor-0.0.1/MegabonkLevels/` contains the
+`Local-Megabonk_Level_Editor-<version>`. Apply preserves the plugin's nested folder:
+`BepInEx/plugins/Local-Megabonk_Level_Editor-<version>/MegabonkLevels/` contains the
 DLL, NLayer and its license. That layout loads correctly; do not flatten it by
 hand. A clean-profile install was verified under Wine 11.18 with the omitted
 runtime supplied from the dependency ZIP and relative Doorstop paths. Console,
@@ -218,7 +300,7 @@ task notes or logs. After approval, validate and publish the already tested ZIP:
 
 ```sh
 task package:thunderstore:check
-.tools/tcli/tcli publish --file .tools/thunderstore/<team>-Megabonk_Level_Editor-0.0.1.zip
+.tools/tcli/tcli publish --file .tools/thunderstore/<team>-Megabonk_Level_Editor-<version>.zip
 ```
 
 Do not use bare `tcli publish`: it rebuilds by default and could upload a ZIP that

@@ -40,7 +40,7 @@ tasks:
       and reports a name that exists under a different capitalization.
 
         task package:thunderstore:manifest
-        task package:thunderstore:manifest MANIFEST=.tools/thunderstore/pythoninthegrass-Megabonk_Level_Editor-0.0.1.zip
+        task package:thunderstore:manifest MANIFEST=.tools/thunderstore/<team>-Megabonk_Level_Editor-<version>.zip
         task package:thunderstore:manifest ONLINE=true
     vars:
       MANIFEST: '{{.MANIFEST | default "pkg/manifest.json"}}'
