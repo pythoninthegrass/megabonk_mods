@@ -54,10 +54,18 @@ tasks:
         uv run pytest
 
   lint:
-    desc: "markdownlint + ruff over the repo"
+    desc: "markdownlint, ruff, and the site's Deno checks over the repo"
     cmds:
       - markdownlint -c .markdownlint.jsonc .
-      - ruff check scripts/ tests/
+      - ruff check scripts/ tests/ tools/
+      - task: site:lint
+
+  site:lint:
+    desc: "Deno format check and lint over the site's JavaScript and TypeScript"
+    dir: site
+    cmds:
+      - deno fmt --check
+      - deno lint
 
   check:
     desc: "Build, test, and lint in sequence; non-zero exit on any failure"

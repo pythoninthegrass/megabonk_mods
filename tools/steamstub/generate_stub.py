@@ -18,7 +18,6 @@ import re
 import struct
 import sys
 
-
 # --- runtime entry points the game P/Invokes, hand-authored -----------------
 # These are not part of the SteamAPI_ISteamX_* wrapper family, so they are not
 # generated. Each mirrors the managed signature from the Il2Cpp dump.

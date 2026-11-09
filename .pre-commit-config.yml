@@ -1,0 +1,114 @@
+fail_fast: true
+
+exclude: >-
+  (?x)^(
+      \.agents/.*|
+      \.claude/.*|
+      backlog/.*|
+      site/\.astro/.*|
+      site/\.impeccable/.*|
+      site/dist/.*|
+      site/node_modules/.*|
+      site/package-lock\.json|
+      site/src/content/.*|
+      tests/fixtures/.*|
+      unity/.*|
+      uv\.lock
+  )$
+
+repos:
+  - repo: local
+    hooks:
+      - id: markdownlint
+        name: markdownlint
+        entry: markdownlint --fix -c .markdownlint.jsonc
+        language: system
+        types: [markdown]
+
+      - id: ruff
+        name: ruff check
+        entry: ruff check
+        language: system
+        files: ^(scripts|tests|tools)/.*\.py$
+
+      - id: gofmt
+        name: gofmt
+        entry: gofmt -l -w
+        language: system
+        types: [go]
+
+      - id: go-vet
+        name: go vet
+        entry: go -C go vet ./...
+        language: system
+        files: ^go/
+        pass_filenames: false
+
+      - id: deno-fmt
+        name: deno fmt
+        entry: deno fmt --config site/deno.jsonc
+        language: system
+        files: ^site/.*\.(js|mjs|cjs|ts|tsx|jsx)$
+
+      - id: deno-lint
+        name: deno lint
+        entry: deno lint --config site/deno.jsonc
+        language: system
+        files: ^site/.*\.(js|mjs|cjs|ts|tsx|jsx)$
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ['--maxkb=2048']
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      - id: detect-private-key
+        exclude: >-
+          (?x)^(
+              \.agents/.*|
+              \.claude/.*|
+              backlog/.*|
+              site/\.astro/.*|
+              site/\.impeccable/.*|
+              site/dist/.*|
+              site/node_modules/.*|
+              site/package-lock\.json|
+              site/src/content/.*|
+              tests/fixtures/.*|
+              unity/.*|
+              uv\.lock|
+              tests/test_notarize_macos\.py$
+          )$
+      - id: end-of-file-fixer
+        files: \.(py|cs|go|js|mjs|cjs|ts|astro|css|html|md|json|jsonc|yml|yaml|toml|sh)$
+      - id: fix-byte-order-marker
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+        files: \.(py|cs|go|js|mjs|cjs|ts|astro|css|html|md|json|jsonc|yml|yaml|toml|sh)$
+      - id: check-toml
+      - id: check-yaml
+        args: ['--unsafe']
+      - id: pretty-format-json
+        args: ['--autofix', '--indent=2', '--no-sort-keys']
+        files: \.json$
+        exclude: >-
+          (?x)^(
+              \.agents/.*|
+              \.claude/.*|
+              \.release-please-manifest\.json|
+              backlog/.*|
+              opencode\.jsonc|
+              release-please-config\.json|
+              site/\.astro/.*|
+              site/\.impeccable/.*|
+              site/dist/.*|
+              site/node_modules/.*|
+              site/package-lock\.json|
+              site/src/content/.*|
+              site/tsconfig\.json|
+              tests/fixtures/.*|
+              unity/.*|
+              uv\.lock
+          )$

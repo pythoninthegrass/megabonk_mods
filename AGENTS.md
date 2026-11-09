@@ -14,7 +14,7 @@ The site at `megabonkmod.party` is deployed by the icarus CLI (`ic`) from the `d
 
 ## Thunderstore API
 
-Interactive API docs: https://thunderstore.io/api/docs/. Fetch the machine-readable OpenAPI schema at https://thunderstore.io/api/docs/?format=openapi before choosing an endpoint. The schema is incomplete: README-only updates use authenticated `PATCH /api/cyberstorm/package/{namespace}/{name}/v/{version}/markdown/readme/update/` with JSON `{"content":"<markdown>"}`. This changes the displayed README without uploading a package or bumping its version; the downloadable ZIP stays unchanged. Keep `pkg/README.md` in sync for future releases. Use the team service-account token from `TCLI_AUTH_TOKEN` as a Bearer token, never in command arguments or logs. See [Thunderstore packaging](docs/thunderstore.md) for release guidance.
+Interactive API docs: <https://thunderstore.io/api/docs/>. Fetch the machine-readable OpenAPI schema at <https://thunderstore.io/api/docs/?format=openapi> before choosing an endpoint. The schema is incomplete: README-only updates use authenticated `PATCH /api/cyberstorm/package/{namespace}/{name}/v/{version}/markdown/readme/update/` with JSON `{"content":"<markdown>"}`. This changes the displayed README without uploading a package or bumping its version; the downloadable ZIP stays unchanged. Keep `pkg/README.md` in sync for future releases. Use the team service-account token from `TCLI_AUTH_TOKEN` as a Bearer token, never in command arguments or logs. See [Thunderstore packaging](docs/thunderstore.md) for release guidance.
 
 ## Linux and Flatpak Steam caveats
 
