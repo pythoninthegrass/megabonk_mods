@@ -91,7 +91,7 @@ tasks:
       - uv run scripts/launch_game.py steam
 
   log:
-    desc: "Tail MelonLoader's Latest.log from the resolved game directory"
+    desc: "Tail BepInEx/LogOutput.log from the resolved game directory"
     cmds:
       - tail -f "$(uv run scripts/game_paths.py | python3 -c 'import json, sys; print(json.load(sys.stdin)["latest_log_path"])')"
 

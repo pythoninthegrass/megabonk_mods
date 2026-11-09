@@ -7,7 +7,7 @@
 
 """
 Resolves the Megabonk install directory and the paths derived from it
-(MelonLoader dir, Mods dir, UserLibs dir, Latest.log).
+(BepInEx dir, plugins dir, plugin deploy dir, LogOutput.log, Wine log).
 
 Precedence: process env > .env file in the repo root > built-in default.
 The Wine prefix holds the Steam install: MEGABONK_WINE_PREFIX names it, MEGABONK_GAME_DIR overrides the game
@@ -139,7 +139,23 @@ def userlibs_dir(game: Path | None = None) -> Path:
 
 
 def latest_log_path(game: Path | None = None) -> Path:
-    return melonloader_dir(game) / "Latest.log"
+    return bepinex_dir(game) / "LogOutput.log"
+
+
+def bepinex_dir(game: Path | None = None) -> Path:
+    return (game or game_dir()) / "BepInEx"
+
+
+def plugins_dir(game: Path | None = None) -> Path:
+    return bepinex_dir(game) / "plugins"
+
+
+def plugin_dir(game: Path | None = None) -> Path:
+    return plugins_dir(game) / "MegabonkLevels"
+
+
+def wine_log_path(game: Path | None = None) -> Path:
+    return bepinex_dir(game) / "wine-latest.log"
 
 
 def resolved_paths() -> dict[str, str]:
@@ -148,10 +164,11 @@ def resolved_paths() -> dict[str, str]:
     return {
         "game_dir": str(game),
         "wine_prefix": str(prefix) if prefix else None,
-        "melonloader_dir": str(melonloader_dir(game)),
-        "mods_dir": str(mods_dir(game)),
-        "userlibs_dir": str(userlibs_dir(game)),
+        "bepinex_dir": str(bepinex_dir(game)),
+        "plugins_dir": str(plugins_dir(game)),
+        "plugin_dir": str(plugin_dir(game)),
         "latest_log_path": str(latest_log_path(game)),
+        "wine_log_path": str(wine_log_path(game)),
     }
 
 

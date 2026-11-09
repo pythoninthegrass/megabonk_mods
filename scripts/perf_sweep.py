@@ -271,7 +271,7 @@ class Sweeper:
         self.args = args
         self.game = hb.resolve_game_dir(hb.load_lookup())
         self.harness = self.game / "harness"
-        self.log = self.game / "MelonLoader" / "Latest.log"
+        self.log = hb.latest_log_path(self.game)
         self.menu_service_started = False
 
     def log_line(self, message: str) -> None:

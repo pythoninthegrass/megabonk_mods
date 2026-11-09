@@ -8,23 +8,23 @@ vars:
 
 tasks:
   build:
-    desc: "Build the mod; the csproj's AfterTargets=Build step deploys the DLL+PDB into the game's Mods folder"
+    desc: "Build and deploy the plugin, symbols and dependencies into BepInEx/plugins/MegabonkLevels"
     sources:
       - src/MegabonkLevels.Mod/**/*.cs
       - src/MegabonkLevels.Mod/*.csproj
-      - Directory.Build.props
+      - src/MegabonkLevels.Mod/*.props
     generates:
       - src/MegabonkLevels.Mod/bin/**/MegabonkLevels.Mod.dll
     cmds:
       - dotnet build {{.MOD_PROJECT}}
 
   test:
-    desc: "Run the xUnit test project (net10.0, no game/Unity/MelonLoader references)"
+    desc: "Run the xUnit test project (net10.0, no game/Unity/loader references)"
     cmds:
       - dotnet test {{.TEST_PROJECT}}
 
   deploy:
-    desc: "Deploy the built mod DLL into the game's Mods folder"
+    desc: "Deploy the plugin and dependencies into BepInEx/plugins/MegabonkLevels"
     summary: |
       Usage: task mod:deploy
 

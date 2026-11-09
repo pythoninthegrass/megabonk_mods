@@ -2,6 +2,14 @@
 
 import perf_sweep
 import pytest
+from argparse import Namespace
+
+
+def test_sweeper_uses_bepinex_log(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(perf_sweep.hb, "resolve_game_dir", lambda lookup: tmp_path)
+    sweeper = perf_sweep.Sweeper(Namespace())
+    assert sweeper.log == tmp_path / "BepInEx" / "LogOutput.log"
+    assert sweeper.harness == tmp_path / "harness"
 
 
 def report(**fields) -> dict:

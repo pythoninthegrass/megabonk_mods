@@ -317,9 +317,9 @@ async def test_screenshot_failures_are_actionable_and_leave_no_final_file(tmp_pa
 
 async def test_log_tail_returns_matching_lines(tmp_path, monkeypatch) -> None:
     harness = setup_harness(tmp_path, monkeypatch)
-    log = mcp_server.run.latest_log_path(harness.parent)
+    log = harness.parent / "BepInEx" / "LogOutput.log"
     log.parent.mkdir(parents=True, exist_ok=True)
-    log.write_text("boot\nDevHarness: enabled\nKillFloor: armed\nnoise\nKillFloor: disarmed\n")
+    log.write_text("[Info : BepInEx] boot\n[Info :MegabonkLevels] DevHarness: enabled\n[Info :MegabonkLevels] KillFloor: armed\nnoise\n[Info :MegabonkLevels] KillFloor: disarmed\n")
     stop = start_fake_mod(harness, lambda p: ok_result(p))
     try:
         async with Client(mcp_server.mcp) as client:
@@ -328,7 +328,7 @@ async def test_log_tail_returns_matching_lines(tmp_path, monkeypatch) -> None:
         stop.set()
     assert not result.is_error
     lines = [block.text for block in result.content]
-    assert lines == ["KillFloor: armed", "KillFloor: disarmed"]
+    assert lines == ["[Info :MegabonkLevels] KillFloor: armed", "[Info :MegabonkLevels] KillFloor: disarmed"]
 
 
 async def test_log_tail_since_launch_trims_to_the_last_session(tmp_path, monkeypatch) -> None:

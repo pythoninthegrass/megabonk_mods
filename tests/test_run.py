@@ -942,10 +942,12 @@ def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_verdict="ready", ki
     monkeypatch.setattr(run, "send", lambda h, payload, t: calls.append(("send", payload["command"])) or True)
 
     def wait_log(log, line, newer, timeout, alive=None):
+        assert log == Path("/g/BepInEx/LogOutput.log")
         calls.append(("log", line))
         return harness_ready
 
     def wait_any_log(log, lines, newer, timeout):
+        assert log == Path("/g/BepInEx/LogOutput.log")
         calls.append(("log", lines[0]))
         if unsupported:
             return run.EDITOR_UNSUPPORTED_LINE
@@ -1015,12 +1017,12 @@ def test_relaunch_reports_the_game_exiting_during_startup(monkeypatch) -> None:
     errors = []
     ok = run.relaunch(Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=errors.append, is_alive=lambda: False)
     assert ok is False
-    assert errors == ["relaunch: game exited during startup (see /g/MelonLoader/Latest.log)"]
+    assert errors == ["relaunch: game exited during startup (see /g/BepInEx/LogOutput.log)"]
 
 
 def test_game_exited_error_appends_the_wine_log_tail(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("MEGABONK_EVIDENCE_DIR", str(tmp_path / "evidence"))
-    log = tmp_path / "MelonLoader" / "wine-latest.log"
+    log = tmp_path / "BepInEx" / "wine-latest.log"
     log.parent.mkdir(parents=True)
     log.write_text(
         "0024:err:module:import_dll Library foo.dll not found\n"
@@ -1035,15 +1037,15 @@ def test_game_exited_error_appends_the_wine_log_tail(tmp_path, monkeypatch) -> N
 
 
 def test_game_exited_error_without_a_wine_log_is_unchanged(tmp_path) -> None:
-    assert run.game_exited_error(tmp_path) == f"relaunch: game exited during startup (see {tmp_path}/MelonLoader/Latest.log)"
+    assert run.game_exited_error(tmp_path) == f"relaunch: game exited during startup (see {tmp_path}/BepInEx/LogOutput.log)"
 
 
 def evidence_tree(tmp_path, monkeypatch):
     monkeypatch.setenv("MEGABONK_EVIDENCE_DIR", str(tmp_path / "evidence"))
     game = tmp_path / "game"
-    (game / "MelonLoader").mkdir(parents=True)
-    (game / "MelonLoader" / "wine-latest.log").write_text("wine log\n", encoding="utf-8")
-    (game / "MelonLoader" / "Latest.log").write_text("melon log\n", encoding="utf-8")
+    (game / "BepInEx").mkdir(parents=True)
+    (game / "BepInEx" / "wine-latest.log").write_text("wine log\n", encoding="utf-8")
+    (game / "BepInEx" / "LogOutput.log").write_text("plugin log\n", encoding="utf-8")
     players = tmp_path / "prefix" / "drive_c/users/crossover/AppData/LocalLow/Ved/Megabonk"
     players.mkdir(parents=True)
     (players / "Player.log").write_text("player log\n", encoding="utf-8")
@@ -1056,7 +1058,7 @@ def test_save_failure_evidence_copies_every_launch_log(tmp_path, monkeypatch) ->
     saved = run.save_failure_evidence(game)
     assert saved is not None
     assert saved.parent == tmp_path / "evidence"
-    assert sorted(path.name for path in saved.iterdir()) == ["Latest.log", "Player.log", "wine-latest.log"]
+    assert sorted(path.name for path in saved.iterdir()) == ["LogOutput.log", "Player.log", "wine-latest.log"]
     assert (saved / "wine-latest.log").read_text(encoding="utf-8") == "wine log\n"
 
 
@@ -1127,7 +1129,7 @@ def test_relaunch_reports_a_game_dying_while_steamworks_is_awaited(monkeypatch) 
     errors = []
     ok = run.relaunch(Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=errors.append)
     assert ok is False
-    assert errors == ["relaunch: game exited during startup (see /g/MelonLoader/Latest.log)"]
+    assert errors == ["relaunch: game exited during startup (see /g/BepInEx/LogOutput.log)"]
 
 
 def test_wait_for_any_log_line_gives_up_when_the_game_exits(tmp_path) -> None:

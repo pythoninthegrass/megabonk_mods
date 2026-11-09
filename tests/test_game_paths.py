@@ -108,10 +108,28 @@ def test_resolved_paths_report_the_wine_prefix() -> None:
 
 def test_derived_paths() -> None:
     game = Path("/tmp/fake_game")
+    assert gp.bepinex_dir(game) == game / "BepInEx"
+    assert gp.plugins_dir(game) == game / "BepInEx" / "plugins"
+    assert gp.plugin_dir(game) == game / "BepInEx" / "plugins" / "MegabonkLevels"
+    assert gp.wine_log_path(game) == game / "BepInEx" / "wine-latest.log"
     assert gp.melonloader_dir(game) == game / "MelonLoader"
     assert gp.mods_dir(game) == game / "Mods"
     assert gp.userlibs_dir(game) == game / "UserLibs"
-    assert gp.latest_log_path(game) == game / "MelonLoader" / "Latest.log"
+    assert gp.latest_log_path(game) == game / "BepInEx" / "LogOutput.log"
+
+
+def test_resolved_paths_report_bepinex_layout(monkeypatch) -> None:
+    game = Path("/tmp/fake_game")
+    monkeypatch.setenv("MEGABONK_GAME_DIR", str(game))
+    paths = gp.resolved_paths()
+    assert paths["bepinex_dir"] == str(game / "BepInEx")
+    assert paths["plugins_dir"] == str(game / "BepInEx/plugins")
+    assert paths["plugin_dir"] == str(game / "BepInEx/plugins/MegabonkLevels")
+    assert paths["latest_log_path"] == str(game / "BepInEx/LogOutput.log")
+    assert paths["wine_log_path"] == str(game / "BepInEx/wine-latest.log")
+    assert "melonloader_dir" not in paths
+    assert "mods_dir" not in paths
+    assert "userlibs_dir" not in paths
 
 
 def test_parse_env_file_skips_comments_and_blanks() -> None:

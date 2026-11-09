@@ -613,7 +613,7 @@ async def interact(type: str, max_distance: float | None = None, force: bool = F
 
 @mcp.tool()
 async def log_tail(pattern: str | None = None, since_launch: bool = True, max_lines: int = 50) -> list[str]:
-    """Read the game's Latest.log: filter to the current session, to lines matching a regex, and to the last N lines."""
+    """Read BepInEx/LogOutput.log: filter to the current session, to lines matching a regex, and to the last N lines."""
     regex = _compile_pattern("log_tail", pattern) if pattern is not None else None
     lines = _log_lines(run.latest_log_path(_game_dir()), since_launch)
     if regex is not None:
@@ -623,7 +623,7 @@ async def log_tail(pattern: str | None = None, since_launch: bool = True, max_li
 
 @mcp.tool()
 async def log_wait(pattern: str, timeout: float = 30.0, since_launch: bool = True) -> str:
-    """Block until Latest.log has a line matching the regex pattern, then return that line; a tool error on timeout. since_launch (default true) only considers lines after the last `DevHarness: enabled`. Use it after load or relaunch instead of sleeping, e.g. pattern `KillFloor: armed`."""
+    """Block until BepInEx/LogOutput.log has a line matching the regex pattern, then return that line; a tool error on timeout. since_launch (default true) only considers lines after the last `DevHarness: enabled`. Use it after load or relaunch instead of sleeping, e.g. pattern `KillFloor: armed`."""
     regex = _compile_pattern("log_wait", pattern)
     log = run.latest_log_path(_game_dir())
     deadline = time.monotonic() + timeout

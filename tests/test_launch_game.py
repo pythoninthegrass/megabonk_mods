@@ -21,7 +21,6 @@ def test_game_launch_argv_and_cwd() -> None:
     assert launch.argv == [
         str(WINE),
         r"C:\Program Files (x86)\Steam\steamapps\common\Megabonk\Megabonk.exe",
-        "--melonloader.agfoffline",
     ]
     assert launch.cwd == GAME
 
@@ -34,7 +33,7 @@ def test_game_launch_env_is_exact() -> None:
         "LOGNAME": "crossover",
         "SteamAppId": "3405340",
         "SteamGameId": "3405340",
-        "WINEDLLOVERRIDES": "version=n,b;d3d11,d3d10core=n,b",
+        "WINEDLLOVERRIDES": "winhttp=n,b;d3d11,d3d10core=n,b",
         "WINEDEBUG": "-all,err+seh,warn+seh,err+module,trace+loaddll",
         "MVK_CONFIG_LOG_LEVEL": "1",
         "DXVK_LOG_LEVEL": "error",
@@ -84,8 +83,8 @@ def test_watch_launch_writes_the_header_before_the_game_output(tmp_path, monkeyp
     assert text.rstrip().endswith("wine: game process exited with status 1")
 
 
-def test_game_launch_logs_under_melonloader_and_steam_does_not() -> None:
-    assert lg.build_game_launch(WINE, PREFIX, GAME).log == GAME / "MelonLoader" / "wine-latest.log"
+def test_game_launch_logs_under_bepinex_and_steam_does_not() -> None:
+    assert lg.build_game_launch(WINE, PREFIX, GAME).log == GAME / "BepInEx" / "wine-latest.log"
     assert lg.build_steam_launch(WINE, PREFIX).log is None
 
 

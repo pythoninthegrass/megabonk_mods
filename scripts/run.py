@@ -115,7 +115,15 @@ import time
 import uuid
 from collections.abc import Callable, Mapping
 from decouple import Config, RepositoryEmpty, RepositoryEnv
-from game_paths import evidence_dir, latest_log_path, resolve_game_dir as _resolve_game_dir, to_game_path, wine_bin, wine_prefix
+from game_paths import (
+    evidence_dir,
+    latest_log_path,
+    resolve_game_dir as _resolve_game_dir,
+    to_game_path,
+    wine_bin,
+    wine_log_path,
+    wine_prefix,
+)
 from menu_input import request as menu_request, serve as serve_menu, validate_batch
 from pathlib import Path
 from typing import Literal, NamedTuple
@@ -1899,7 +1907,7 @@ def prepare_frame(harness: Path, args: argparse.Namespace) -> bool:
 
 def wine_log_tail(game_dir: Path) -> str:
     """The exit-status line and last lines of the Wine launch log, appended to a startup failure so the reason reaches the terminal, not just the file."""
-    wine_log = game_dir / "MelonLoader" / "wine-latest.log"
+    wine_log = wine_log_path(game_dir)
     try:
         lines = [line for line in wine_log.read_text(errors="replace").splitlines() if line.strip()]
     except OSError:
@@ -1930,7 +1938,7 @@ def player_log_dir(game_dir: Path) -> Path | None:
 
 def save_failure_evidence(game_dir: Path) -> Path | None:
     """Copy the launch logs out of the game directory the moment a boot dies; every later launch rotates wine-latest.log over its only copy, so evidence must leave the tree to survive. Returns the saved folder, or None when nothing was there to save."""
-    sources = [game_dir / "MelonLoader" / "wine-latest.log", latest_log_path(game_dir)]
+    sources = [wine_log_path(game_dir), latest_log_path(game_dir)]
     if (players := player_log_dir(game_dir)) is not None:
         sources += [players / "Player.log", players / "Player-prev.log"]
     present = [path for path in sources if path.is_file()]

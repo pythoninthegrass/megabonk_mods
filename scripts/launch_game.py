@@ -37,9 +37,7 @@ APP_ID = "3405340"
 STEAM_DIR_WINDOWS = r"C:\Program Files (x86)\Steam"
 GAME_EXE_WINDOWS = STEAM_DIR_WINDOWS + r"\steamapps\common\Megabonk\Megabonk.exe"
 STEAM_ARGS = ["-silent", "-no-cef-sandbox", "-cef-disable-gpu", "-cef-disable-gpu-compositing"]
-GAME_DLL_OVERRIDES = "version=n,b;d3d11,d3d10core=n,b"
-# Keep assembly-generator version checks offline; unrelated to GUI-session access under SSH.
-GAME_ARGS = ["--melonloader.agfoffline"]
+GAME_DLL_OVERRIDES = "winhttp=n,b;d3d11,d3d10core=n,b"
 GAME_WINEDEBUG = "-all,err+seh,warn+seh,err+module,trace+loaddll"
 
 
@@ -72,7 +70,7 @@ def build_game_launch(wine: Path, prefix: Path, game: Path) -> Launch:
         "MVK_CONFIG_LOG_LEVEL": "1",
         "DXVK_LOG_LEVEL": "error",
     }
-    return Launch([str(wine), GAME_EXE_WINDOWS, *GAME_ARGS], env, game, game / "MelonLoader" / "wine-latest.log")
+    return Launch([str(wine), GAME_EXE_WINDOWS], env, game, gp.wine_log_path(game))
 
 
 def build_steam_launch(wine: Path, prefix: Path) -> Launch:
