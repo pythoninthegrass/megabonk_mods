@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import run as hb
 import shlex
 import shutil
 import subprocess
 import sys
 import time
+from megabonk_harness import run as hb
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]

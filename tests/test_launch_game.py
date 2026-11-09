@@ -2,8 +2,8 @@
 Self-test for scripts/launch_game.py.
 """
 
-import launch_game as lg
 import pytest
+from megabonk_harness import launch_game as lg
 from pathlib import Path
 
 WINE = Path("/w/Wine Devel.app/Contents/Resources/wine/bin/wine")
@@ -153,7 +153,7 @@ def test_spawn_with_a_log_starts_a_detached_watcher(tmp_path) -> None:
         subprocess.Popen = original
     ((args, kwargs),) = calls
     assert args[0][0] == sys.executable
-    assert args[0][2:] == ["watch", "--log", str(log), "--", "wine", "Megabonk.exe"]
+    assert args[0][1:] == ["-m", "megabonk_harness.launch_game", "watch", "--log", str(log), "--", "wine", "Megabonk.exe"]
     assert kwargs["start_new_session"] is True
     assert kwargs["env"]["WINEPREFIX"] == "/b/Steam"
     assert kwargs["stdout"] is subprocess.DEVNULL and kwargs["stderr"] is subprocess.DEVNULL

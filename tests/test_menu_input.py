@@ -1,9 +1,9 @@
 import json
-import menu_input
 import pytest
 import socket
 import tempfile
 import threading
+from megabonk_harness import menu_input
 from pathlib import Path
 from types import SimpleNamespace
 

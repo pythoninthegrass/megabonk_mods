@@ -10,9 +10,9 @@ import sys
 import zipfile
 from asset_download import DownloadError, MissingAsset, download
 from datetime import UTC, datetime, timezone
-from game_paths import game_dir
+from megabonk_harness.game_paths import game_dir
+from megabonk_harness.run import game_is_running
 from pathlib import Path, PurePosixPath
-from run import game_is_running
 
 PACK_NAME = "BepInEx-BepInExPack_IL2CPP-6.0.788.zip"
 PACK_URL = f"https://gcdn.thunderstore.io/live/repository/packages/{PACK_NAME}"

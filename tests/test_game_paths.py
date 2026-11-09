@@ -2,8 +2,8 @@
 Self-test for scripts/game_paths.py.
 """
 
-import game_paths as gp
 import os
+from megabonk_harness import game_paths as gp
 from pathlib import Path
 
 

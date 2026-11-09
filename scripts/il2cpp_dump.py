@@ -1,10 +1,3 @@
-#!/usr/bin/env -S uv run --script
-
-# /// script
-# requires-python = ">=3.13,<3.14"
-# dependencies = []
-# ///
-
 """
 Wraps the Il2CppDumper invocation proven manually against the Megabonk
 install: Il2CppDumper's net7 build run under the mise-managed dotnet 10 SDK
@@ -20,11 +13,8 @@ Usage: uv run scripts/il2cpp_dump.py
 import os
 import subprocess
 import sys
+from megabonk_harness import game_paths as gp
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-import game_paths as gp
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DUMPER_DLL = REPO_ROOT / ".tools" / "Il2CppDumper" / "Il2CppDumper.dll"

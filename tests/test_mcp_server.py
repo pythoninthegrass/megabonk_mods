@@ -2,16 +2,15 @@
 
 import base64
 import json
-import mcp_server
 import pytest
 import re
-import run
 import struct
 import threading
 import time
 import toon_format
 import zlib
 from mcp.client import Client
+from megabonk_harness import mcp_server, run
 from pathlib import Path
 
 pytestmark = pytest.mark.anyio
@@ -41,7 +40,7 @@ def setup_harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     for folder in ("commands", "done", "rejected", "results"):
         (harness / folder).mkdir(parents=True)
     monkeypatch.setenv("MEGABONK_GAME_DIR", str(game))
-    monkeypatch.setattr(mcp_server, "DEFAULT_SCREENSHOT_DIR", tmp_path / "evidence")
+    monkeypatch.setattr(mcp_server.run, "evidence_dir", lambda: tmp_path / "evidence")
     return harness
 
 

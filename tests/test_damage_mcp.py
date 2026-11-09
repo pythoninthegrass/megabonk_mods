@@ -1,7 +1,7 @@
 import json
-import mcp_server
 import pytest
 from mcp.client import Client
+from megabonk_harness import mcp_server
 from test_mcp_server import ok_result, setup_harness, start_fake_mod
 
 pytestmark = pytest.mark.anyio

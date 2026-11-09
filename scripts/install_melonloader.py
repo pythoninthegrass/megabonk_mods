@@ -1,10 +1,3 @@
-#!/usr/bin/env -S uv run --script
-
-# /// script
-# requires-python = ">=3.13,<3.14"
-# dependencies = ["python-decouple>=3.8"]
-# ///
-
 """
 Downloads a pinned MelonLoader release (the Linux build on Linux, the Windows
 build elsewhere), verifies its checksum, and extracts it into the resolved
@@ -22,6 +15,7 @@ Usage:
 """
 
 import argparse
+import asset_download
 import hashlib
 import io
 import os
@@ -30,12 +24,8 @@ import subprocess
 import sys
 import zipfile
 from decouple import config
+from megabonk_harness import game_paths as gp
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-import asset_download
-import game_paths as gp
 
 CROSSOVER_WINE_CANDIDATES = [
     Path("/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine"),

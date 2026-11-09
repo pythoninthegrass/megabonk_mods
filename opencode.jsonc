@@ -76,10 +76,7 @@
       "megabonk": {
         "type": "local",
         "command": [
-          "uv",
-          "run",
-          "--script",
-          "scripts/mcp_server.py"
+          "megabonk-mcp"
         ]
       },
       "osascript": {

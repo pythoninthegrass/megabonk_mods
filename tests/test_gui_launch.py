@@ -1,7 +1,7 @@
 import ctypes
-import launch_game as lg
 import plistlib
 import pytest
+from megabonk_harness import launch_game as lg
 from pathlib import Path
 from types import SimpleNamespace
 

@@ -1,9 +1,9 @@
 import io
 import json
 import pytest
-import run
 import shlex
 import subprocess
+from megabonk_harness import run
 from pathlib import Path
 
 

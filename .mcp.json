@@ -15,12 +15,7 @@
       ]
     },
     "megabonk": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--script",
-        "scripts/mcp_server.py"
-      ]
+      "command": "megabonk-mcp"
     },
     "osascript": {
       "command": "uvx",

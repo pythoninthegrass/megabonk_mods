@@ -5,13 +5,15 @@ Self-test for scripts/run.py.
 import json
 import os
 import pytest
-import run
 import signal
 import subprocess
 import tempfile
 import threading
 import time
+from megabonk_harness import run
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.parametrize("amount", [1, 5, 10, 37, 90, 99])
@@ -138,7 +140,7 @@ def test_launch_task_is_crossover_only_for_the_crossover_runtime_on_macos() -> N
 
 
 def test_evidence_dir_is_the_repo_tools_evidence_folder() -> None:
-    assert run.evidence_dir() == Path(run.__file__).resolve().parent.parent / ".tools" / "evidence"
+    assert run.evidence_dir() == ROOT / ".tools" / "evidence"
 
 
 def test_to_game_path_maps_host_path_into_wine_z_drive_on_macos() -> None:
@@ -690,7 +692,7 @@ def test_parse_args_cycle_accepts_invulnerable_flag() -> None:
 def test_parse_args_relaunch_defaults_to_the_test_forest_level() -> None:
     args = run.parse_args(["relaunch"])
     assert args.action == "relaunch"
-    assert args.level == run.TEST_FOREST_LEVEL
+    assert args.level == run.example_forest_level()
 
 
 def test_parse_args_relaunch_no_level_flag() -> None:
@@ -2589,3 +2591,12 @@ def test_clear_console_log_without_a_log_is_not_an_error(tmp_path) -> None:
 
 def test_clear_console_log_cli_parses() -> None:
     assert run.parse_args(["clear-console-log"]).action == "clear-console-log"
+
+
+def test_launch_game_runs_task_from_the_checkout(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls = []
+    monkeypatch.setenv("MEGABONK_REPO", str(ROOT))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(run.subprocess, "run", lambda *a, **k: calls.append((a, k)) or subprocess.CompletedProcess(a, 0))
+    assert run.launch_game("game:run") is True
+    assert calls == [((["task", "game:run"],), {"check": False, "cwd": ROOT})]

@@ -21,7 +21,10 @@ to generate local interop assemblies. Native Linux mod support is unverified.
 Install the toolchain in [modding setup](docs/modding-setup.md) and
 [development](docs/development.md), then:
 
+Requirements: [mise](https://mise.jdx.dev) (verified with 2026.10.15) installs the toolchain pinned in `.tool-versions`, including uv 0.11.32, Python 3.13, Task, .NET 10 and Go; run `mise install` once. uv 0.11.32 is the minimum: the package builds with `uv_build>=0.11.32,<0.12`, which needs a matching uv.
+
 ```sh
+mise install                         # pinned toolchain from .tool-versions
 cp .env.example .env                 # configure your local game paths
 uv sync
 task mod:build                       # builds and deploys into your game install
@@ -55,7 +58,7 @@ uv run scripts/run.py relaunch levels/bramblecrown-hill.mblevel.json
 | `task check` | Build, installer tests, .NET/Python tests and lint |
 | `task scripts:test` | Python tests without a running game |
 | `task mod:test` | Unity-free .NET tests |
-| `uv run --script scripts/mcp_server.py` | Development MCP server |
+| `megabonk-mcp` | Development MCP server; install once with `uv tool install --editable .` ([setup](docs/development.md#mcp-server)) |
 | `task package:thunderstore` | Runtime-only BepInEx package; no levels or packs |
 
 ## Explore

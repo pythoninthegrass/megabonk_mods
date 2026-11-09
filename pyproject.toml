@@ -1,3 +1,7 @@
+[build-system]
+requires = ["uv_build>=0.11.32,<0.12"]
+build-backend = "uv_build"
+
 [project]
 name = "megabonk-mods"
 version = "0.1.0"
@@ -17,6 +21,13 @@ dependencies = [
     "python-decouple>=3.8",
     "toon-format==1.2.0",
 ]
+
+[project.scripts]
+megabonk-mcp = "megabonk_harness.mcp_server:main"
+megabonk-harness = "megabonk_harness.run:run_main"
+
+[tool.uv.build-backend]
+module-name = "megabonk_harness"
 
 [dependency-groups]
 dev = [
@@ -40,7 +51,7 @@ prerelease = "allow"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["scripts"]
+pythonpath = ["scripts", "src"]
 python_files = "test_*.py"
 python_functions = "test_*"
 python_classes = "Test*"

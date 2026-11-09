@@ -20,11 +20,11 @@ GENERATED_ARTIFACTS = (
 
 @pytest.fixture(autouse=True)
 def isolated_megabonk_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    import game_paths
+    from megabonk_harness import game_paths
 
     for key in [key for key in os.environ if key.startswith("MEGABONK_")]:
         monkeypatch.delenv(key)
-    monkeypatch.setattr(game_paths, "ENV_FILE", Path("/nonexistent/.env"))
+    monkeypatch.setattr(game_paths, "env_file", lambda: Path("/nonexistent/.env"))
 
 
 @pytest.fixture

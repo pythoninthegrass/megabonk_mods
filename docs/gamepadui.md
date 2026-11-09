@@ -321,6 +321,8 @@ from mise, invoke through `mise exec -- uv run scripts/run.py …`, and give
 (`--remote-python /home/<user>/git/megabonk_mods/.venv/bin/python`). A literal
 `~/…` is passed through unexpanded and fails with "No such file or directory".
 
+`scripts/run.py` is a shim over the `megabonk_harness` package, so that venv must have the project installed: run `uv sync` in the remote checkout after pulling the packaging change, or the remote call fails with `No module named 'megabonk_harness'`.
+
 Run `task scripts:test` to exercise device validation and batch validation
 without opening physical devices, including controller and mouse paths.
 

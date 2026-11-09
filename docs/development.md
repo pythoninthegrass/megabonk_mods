@@ -206,7 +206,7 @@ Before moving a command file to `done/` or `rejected/`, the mod writes `harness/
 
 ## MCP server
 
-`scripts/mcp_server.py` exposes the harness as an MCP server named `megabonk`, so an agent can call typed tools instead of shelling out to `run.py`, and gets screenshots back as inline `image/png` content. It is a PEP 723 script (`uv run --script scripts/mcp_server.py`) that reuses `run.py`'s helpers rather than duplicating them, and resolves the game directory the same way `run.py` does.
+`megabonk_harness.mcp_server` (`src/megabonk_harness/mcp_server.py`) exposes the harness as an MCP server named `megabonk`, so an agent can call typed tools instead of shelling out to `run.py`, and gets screenshots back as inline `image/png` content. It ships as the `megabonk-mcp` command of the `megabonk_harness` package, which also holds `run.py`'s helpers (`megabonk-harness` is the same CLI as `scripts/run.py`), and resolves the game directory the same way `run.py` does. The files under `scripts/` that carry the old names (`run.py`, `game_paths.py`, `launch_game.py`, `mcp_server.py`) are shims over the package; the dependency list lives only in `pyproject.toml`.
 
 stdout is the MCP protocol channel, so the server writes nothing to stdout; everything reaches the client as tool results. Blocking waits (sending a command, waiting for the game to exit, the whole relaunch sequence) run off the event loop so one tool call never stalls the server.
 
@@ -256,24 +256,31 @@ A walkthrough that exercises the whole chain (agent, MCP, harness files, mod, ga
 
 If a step fails, `log_tail(pattern="Harness|Error")` shows whether the mod saw the command. A rejected command carries the mod's error text in the tool error, which says which layer refused it.
 
-Register it by adding the `megabonk` entry under `mcpServers` in a `.mcp.json` at the repository root; the repo ships it already. That one entry is the whole requirement: `uv` runs `scripts/mcp_server.py` as a PEP 723 script, so it installs its own pinned dependencies and needs nothing from the project environment. The repository's file also lists unrelated servers; a machine that only drives the game needs this:
+Requirements: uv 0.11.32 or newer in the 0.11 series (the version pinned in `.tool-versions`; the package builds with `uv_build>=0.11.32,<0.12`) and mise, verified with 2026.10.15, to install the rest of the pinned toolchain with `mise install`. Clone the repository once and install the command once; the client can then start it from any working directory:
+
+```sh
+uv tool install --editable /path/to/megabonk_mods
+```
+
+Register the installed command under `mcpServers` (the repository's `.mcp.json` ships the same entry next to unrelated servers; a machine that only drives the game needs just this):
 
 ```json
 {
   "mcpServers": {
     "megabonk": {
-      "command": "uv",
-      "args": ["run", "--script", "scripts/mcp_server.py"]
+      "command": "megabonk-mcp"
     }
   }
 }
 ```
 
-The server resolves the game directory from the environment and the nearest `.env` the same way `run.py` does, so the entry needs no `env` block unless a setting such as `MEGABONK_MCP_ENCODING` is wanted (see [Result encoding](#result-encoding)). Confirm it with `/mcp`, which lists `megabonk` as connected.
+`megabonk-mcp` must be on the client's `PATH` (`uv tool update-shell` adds uv's tool directory). A checkout is mandatory because the server reads `.env`, `levels/`, `.tools/evidence` and `taskfile.yml` from it. It finds the checkout from `MEGABONK_REPO` (a path, set in the entry's `env` block), then from the working directory's ancestors, then from the tree an editable install was loaded from. The `--editable` install is what makes the last step work from an unrelated directory; a plain `uv tool install /path/to/megabonk_mods` copies the code into uv's tool cache, so that install needs `MEGABONK_REPO` in the entry. With no checkout found the command exits with an error naming `MEGABONK_REPO` instead of reading `.env` or writing evidence from the cache. `task` runs (the relaunch) use the checkout as their working directory.
+
+The server resolves the game directory from the environment and the nearest `.env` the same way `run.py` does, so the entry needs no `env` block unless a setting such as `MEGABONK_REPO` or `MEGABONK_MCP_ENCODING` is wanted (see [Result encoding](#result-encoding)). Confirm it with `/mcp`, which lists `megabonk` as connected.
 
 ### Result encoding
 
-Structured tool results (every tool that returns the harness result, plus `paths`) pass through one function, `_encode` in `scripts/mcp_server.py`. The `MEGABONK_MCP_ENCODING` environment variable, read through python-decouple (process environment, then `.env`; the `megabonk` entry of `.mcp.json` can also set it), selects the format:
+Structured tool results (every tool that returns the harness result, plus `paths`) pass through one function, `_encode` in `megabonk_harness.mcp_server`. The `MEGABONK_MCP_ENCODING` environment variable, read through python-decouple (process environment, then `.env`; the `megabonk` entry of `.mcp.json` can also set it), selects the format:
 
 | Value | Text content | `structuredContent` |
 | --- | --- | --- |
@@ -1177,7 +1184,7 @@ The music verbs (`music.play/pause/next/prev/track/list/now`) bind to the `music
 
 **Toggle**: the backquote/tilde key opens and closes it. The toggle is read in `OnUpdate` before every mod hotkey and the console's own tick runs after the editor's, so the panel keeps rendering while the editor holds the run frozen. The character the backquote produces is dropped from the frame's text so the toggling key never lands in the input line. The toggle does nothing while the game's own F10 `DebugConsole` is active or the game's pause menu is up — those own the keyboard — so it neither opens over them nor closes them. While the console has focus the mod's F6–F9 hotkeys and the editor's hotkeys do not fire (the frame returns before reaching them), and a `PauseUi.Toggle` prefix consumes the game menu toggle, so Esc closes the console without opening the pause menu.
 
-**Keys while open** (all read through `EditorInput`, never `UnityEngine.Input`, so the harness `key`/`type` commands drive it): Enter runs the line and echoes `> <line>` plus the reply into scrollback; Up/Down walk history; Tab completes the verb or the `level.load` title at the caret, and a repeat Tab on the unedited line cycles the matches; PageUp/PageDown scroll the scrollback; Left/Right/Home/End/Delete edit the caret and Backspace deletes; Ctrl-R opens the history search; Ctrl-W deletes the whitespace-delimited word before the caret, Ctrl-U deletes everything before it, Ctrl-K deletes everything after it (`TextFieldModel.DeleteWordLeft`, `DeleteToStart` and `DeleteToEnd`), Ctrl-A and Ctrl-E move the caret to the start and end of the line, and Option (Alt) with Left or Right jumps a whitespace-delimited word (`CaretKeys.WordLeft` and `WordRight`, repeating while held; under Wine on macOS the prefix needs `LeftOptionIsAlt` and `RightOptionIsAlt` set to `y` under `HKCU\\Software\\Wine\\Mac Driver`, or Option reaches the game as a plain arrow and moves one character); Ctrl-L clears the scrollback, including the persisted scrollback in `console_log.jsonl`, exactly as typing `clear` does, but leaves the input line, caret and command history untouched and records nothing; the mouse wheel scrolls the scrollback (see "Console scrollbar"); Esc closes the console. BackQuote, PageUp, PageDown, Home and End were added to the harness key-name allow-list (`KeyNames`, mirrored in `scripts/mcp_server.py`) so `run.py key` and the MCP `key` tool can drive those keys.
+**Keys while open** (all read through `EditorInput`, never `UnityEngine.Input`, so the harness `key`/`type` commands drive it): Enter runs the line and echoes `> <line>` plus the reply into scrollback; Up/Down walk history; Tab completes the verb or the `level.load` title at the caret, and a repeat Tab on the unedited line cycles the matches; PageUp/PageDown scroll the scrollback; Left/Right/Home/End/Delete edit the caret and Backspace deletes; Ctrl-R opens the history search; Ctrl-W deletes the whitespace-delimited word before the caret, Ctrl-U deletes everything before it, Ctrl-K deletes everything after it (`TextFieldModel.DeleteWordLeft`, `DeleteToStart` and `DeleteToEnd`), Ctrl-A and Ctrl-E move the caret to the start and end of the line, and Option (Alt) with Left or Right jumps a whitespace-delimited word (`CaretKeys.WordLeft` and `WordRight`, repeating while held; under Wine on macOS the prefix needs `LeftOptionIsAlt` and `RightOptionIsAlt` set to `y` under `HKCU\\Software\\Wine\\Mac Driver`, or Option reaches the game as a plain arrow and moves one character); Ctrl-L clears the scrollback, including the persisted scrollback in `console_log.jsonl`, exactly as typing `clear` does, but leaves the input line, caret and command history untouched and records nothing; the mouse wheel scrolls the scrollback (see "Console scrollbar"); Esc closes the console. BackQuote, PageUp, PageDown, Home and End were added to the harness key-name allow-list (`KeyNames`, mirrored in `megabonk_harness.mcp_server`) so `run.py key` and the MCP `key` tool can drive those keys.
 
 **Console scrollbar**: a thin thumb on the right edge of the scrollback appears only while the mouse wheel scrolls it, and disappears 2 seconds after the last wheel event; each further event restarts the timer. One wheel notch up moves three lines toward older output, and wheel events count only while the pointer is over the panel (the bottom 40% of the screen) and the history search is closed. The bar stays hidden at rest, while PageUp/PageDown scroll, when the whole scrollback fits in the viewport, and while the history search is open; opening the console hides it. The thumb height is the visible fraction of the buffer (at least 16 px) and its position follows the scroll offset, with the bottom of the track meaning the newest lines. `ConsoleScrollbar` (`console_scrollbar.cs`) holds the Unity-free timer and thumb geometry and `ConsoleScrollback.ScrollBy` the wheel scroll, both unit tested in `console_scrollbar_tests.cs` and `console_scrollback_tests.cs`; the overlay only reads the wheel and places the thumb. Verified in the live game with `run.py mouse scroll 700 800 --delta 2` after opening the console and running `help` a few times: a screenshot half a second later shows the thumb and the scrolled lines, one 2.5 seconds later shows no thumb, and a PageUp shows neither.
 
