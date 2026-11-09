@@ -37,7 +37,7 @@ def test_all_legacy_paths_have_one_owner_per_subpath_and_no_short_segments():
     paths = [child for children in data["assets"].values() for child in children if child["hidden"]]
     assert {child["name"].split("/")[0] for child in paths} == {
         *[f"added-grind-mesh-{i}" for i in range(4)],
-        *[f"added-grind-coping-{i}" for i in range(28)],
+        *[f"added-grind-coping-{i}" for i in range(len(legacy.COPING_LIPS))],
     }
     assert len({child["name"] for child in paths}) == len(paths)
     for child in paths:

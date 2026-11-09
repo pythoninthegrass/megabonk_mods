@@ -20,8 +20,8 @@ def test_assembly_covers_geometry_once_and_snapshots_paths():
     expected = [piece["catalogAsset"] for piece in pieces["pieces"] if piece["module"] != "suppressed-post"]
     assert sorted(geometry) == sorted(expected)
     assert len(roots) < 600
-    assert len(children) == 58
-    assert sum(child["catalogId"] == "interactable/rail/0" for child in children) == 41
+    assert len(children) == 63
+    assert sum(child["catalogId"] == "interactable/rail/0" for child in children) == 46
     assert not any(asset.startswith("added-roof-quad-") for asset in geometry)
 
 
@@ -37,7 +37,7 @@ def test_recorded_transforms_and_monotonic_reserved_ids():
         assert list(root["rotation"].values()) == piece["rotation"]
         assert list(root["scale"].values()) == piece["scale"]
         next_id += 1 + len(root.get("attachments", []))
-    assert next_id == len(entries) + 58
+    assert next_id == len(entries) + 63
 
 
 @pytest.mark.parametrize("failure", ["duplicate", "missing_owner", "missing_support", "double_owner", "schema", "nonfinite", "child_scale", "suppressed_owner"])

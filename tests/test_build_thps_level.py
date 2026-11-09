@@ -658,6 +658,31 @@ def test_the_ledge_lips_are_coping_lips() -> None:
     assert set(b.LEDGE_LIPS) <= set(b.COPING_LIPS)
 
 
+def test_the_east_ledge_edge_runs_down_the_east_deck_past_the_totem_spot() -> None:
+    assert b.EAST_LEDGE_LIPS[0][0] == (170.75, 3.79, 46.76)
+    assert b.EAST_LEDGE_LIPS[-1][1] == (168.76, 3.79, 79.77)
+
+
+def test_the_east_ledge_lips_join_end_to_end_with_gentle_turns() -> None:
+    for (_, end), (start, _) in zip(b.EAST_LEDGE_LIPS, b.EAST_LEDGE_LIPS[1:], strict=False):
+        assert end == start
+    for (a, mid), (_, c) in zip(b.EAST_LEDGE_LIPS, b.EAST_LEDGE_LIPS[1:], strict=False):
+        before = math.atan2(mid[2] - a[2], mid[0] - a[0])
+        after = math.atan2(c[2] - mid[2], c[0] - mid[0])
+        assert abs((math.degrees(after - before) + 180) % 360 - 180) <= 50
+
+
+def test_the_east_ledge_lips_are_coping_lips_after_the_existing_ones() -> None:
+    assert set(b.EAST_LEDGE_LIPS) <= set(b.COPING_LIPS)
+    assert b.COPING_LIPS[-len(b.EAST_LEDGE_LIPS) :] == b.EAST_LEDGE_LIPS
+    assert b.COPING_LIPS[27] == b.START_PIPE_LIPS[0]
+
+
+def test_a_coping_rail_runs_along_the_ledge_beside_the_totem_spot() -> None:
+    near = [lip for lip in b.COPING_LIPS if lip[0][0] == lip[1][0] == 162.57 and lip[0][2] <= 65 <= lip[1][2]]
+    assert len(near) == 1
+
+
 def test_the_start_pipe_lip_runs_along_the_platform_edge_above_the_spawn() -> None:
     [(start, end)] = b.START_PIPE_LIPS
     assert (start, end) == ((80.34, 35.85, -120.84), (139.5, 35.85, -120.84))

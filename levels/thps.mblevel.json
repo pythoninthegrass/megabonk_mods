@@ -287,6 +287,31 @@
     {
       "opType": "object.place",
       "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":170.75,\"y\":3.341017857142857,\"z\":49.224999999999994},\"rotation\":{\"x\":0.0,\"y\":270.0,\"z\":0.0},\"scale\":{\"x\":0.17607142857142857,\"y\":0.17607142857142857,\"z\":0.17607142857142857},\"hidden\":true}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":166.66,\"y\":2.718933015032082,\"z\":55.915},\"rotation\":{\"x\":0.0,\"y\":225.9301564284929,\"z\":0.0},\"scale\":{\"x\":0.42002626861486986,\"y\":0.42002626861486986,\"z\":0.42002626861486986},\"hidden\":true}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":162.57,\"y\":3.0204464285714283,\"z\":64.36500000000001},\"rotation\":{\"x\":0.0,\"y\":270.0,\"z\":0.0},\"scale\":{\"x\":0.3017857142857144,\"y\":0.3017857142857144,\"z\":0.3017857142857144},\"hidden\":true}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":165.665,\"y\":2.9148675417313643,\"z\":72.265},\"rotation\":{\"x\":0.0,\"y\":310.10330797268506,\"z\":0.0},\"scale\":{\"x\":0.3431891993210336,\"y\":0.3431891993210336,\"z\":0.3431891993210336},\"hidden\":true}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
+      "payload": "{\"catalogId\":\"interactable/rail/0\",\"position\":{\"x\":168.76,\"y\":3.4411964285714287,\"z\":77.85499999999999},\"rotation\":{\"x\":0.0,\"y\":270.0,\"z\":0.0},\"scale\":{\"x\":0.13678571428571423,\"y\":0.13678571428571423,\"z\":0.13678571428571423},\"hidden\":true}"
+    },
+    {
+      "opType": "object.place",
+      "target": "",
       "payload": "{\"catalogId\":\"bundle:thps/Warehouse\",\"position\":{\"x\":100.0,\"y\":0.5,\"z\":0.0},\"rotation\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"scale\":{\"x\":79.2,\"y\":79.2,\"z\":79.2}}"
     },
     {

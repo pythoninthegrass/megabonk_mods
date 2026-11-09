@@ -106,7 +106,15 @@ LEDGE_LIPS = (
 )
 # The edge of the platform the player starts on, where it drops into the start half pipe.
 START_PIPE_LIPS = (((80.34, 35.85, -120.84), (139.5, 35.85, -120.84)),)
-COPING_LIPS = MAIN_PIPE_LIPS + WALL_PIPE_LIPS + LEDGE_LIPS + START_PIPE_LIPS
+# The top edge of the east deck's low ledge beside the totem spot near (162, 2, 65), the counterpart of the Shorty's ledge; it stops at the south corner, where the edge turns 90 degrees along the wall.
+EAST_LEDGE_LIPS = (
+    ((170.75, 3.79, 46.76), (170.75, 3.79, 51.69)),
+    ((170.75, 3.79, 51.69), (162.57, 3.79, 60.14)),
+    ((162.57, 3.79, 60.14), (162.57, 3.79, 68.59)),
+    ((162.57, 3.79, 68.59), (168.76, 3.79, 75.94)),
+    ((168.76, 3.79, 75.94), (168.76, 3.79, 79.77)),
+)
+COPING_LIPS = MAIN_PIPE_LIPS + WALL_PIPE_LIPS + LEDGE_LIPS + START_PIPE_LIPS + EAST_LEDGE_LIPS
 
 
 def rail_along(start: tuple[float, float, float], end: tuple[float, float, float]) -> tuple[tuple[float, float, float], float, float, float]:

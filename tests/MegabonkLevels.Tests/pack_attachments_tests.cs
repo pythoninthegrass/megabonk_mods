@@ -35,7 +35,7 @@ public class PackAttachmentsTests
         var data = PackAttachments.Parse(File.ReadAllText(Path.Combine(root, "unity/pack-authoring/packs/thps/attachments.json")));
         Assert.False(data.ContainsKey("Warehouse"));
         Assert.Equal(6, data["piece-rail-big-straight"].Count);
-        Assert.Equal(58, data.Values.Sum(children => children.Count));
+        Assert.Equal(63, data.Values.Sum(children => children.Count));
     }
 
     private static string FindRoot()

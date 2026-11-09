@@ -39,6 +39,11 @@ COPING_OWNERS = (
     ("piece-ledge-west",),
     ("piece-ledge-west",),
     ("piece-start-transition-west", "piece-start-transition-east"),
+    ("piece-ledge-east",),
+    ("piece-ledge-east",),
+    ("piece-ledge-east",),
+    ("piece-ledge-east",),
+    ("piece-ledge-east",),
 )
 SUPPORTS = {
     "piece-rail-big-straight": tuple(f"added-post-{i}" for i in range(5)),
