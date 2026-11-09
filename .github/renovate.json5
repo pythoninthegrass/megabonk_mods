@@ -1,0 +1,39 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Update Node, Python, .NET and Go dependencies during the Saturday 10-11 AM Central window",
+  "timezone": "America/Chicago",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["* 10 * * SAT"]
+  },
+  "pep723": {
+    "managerFilePatterns": ["/^scripts/.*\\.py$/"]
+  },
+  "packageRules": [
+    {
+      "matchManagers": ["npm"],
+      "enabled": true,
+      "groupName": "npm dependencies"
+    },
+    {
+      "matchManagers": ["pep621", "pep723"],
+      "enabled": true,
+      "groupName": "python dependencies"
+    },
+    {
+      "matchManagers": ["nuget"],
+      "enabled": true,
+      "groupName": "dotnet dependencies"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "enabled": true,
+      "groupName": "go dependencies"
+    }
+  ],
+  "schedule": [
+    "* 10 * * SAT"
+  ],
+  "prConcurrentLimit": 5,
+  "rangeStrategy": "update-lockfile"
+}
