@@ -405,6 +405,9 @@ It verifies the archive's pinned SHA-256 even when reusing the cache at
 `.tools/vendor-cache/`. Downloads require `--download`; to use a ZIP already
 downloaded from Thunderstore, pass `--pack-zip "/path/to/pack.zip"` instead.
 `--dry-run` validates and lists changes without writing files, including the cache.
+Normal runs print one success line and append the file list and launch guidance
+to `.tools/logs/bepinex-repair.log`. Failures remain visible on stderr and are
+also logged when the log is writable. Dry-run prints its preview without logging.
 
 An active MelonLoader `version.dll` is parked as `version.dll.bak`. The helper
 refuses an existing backup, an unknown proxy without a `MelonLoader/` folder,

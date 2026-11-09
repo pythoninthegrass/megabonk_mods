@@ -9,6 +9,7 @@ import stat
 import sys
 import zipfile
 from asset_download import DownloadError, MissingAsset, download
+from datetime import UTC, datetime, timezone
 from game_paths import game_dir
 from pathlib import Path, PurePosixPath
 from run import game_is_running
@@ -17,6 +18,7 @@ PACK_NAME = "BepInEx-BepInExPack_IL2CPP-6.0.788.zip"
 PACK_URL = f"https://gcdn.thunderstore.io/live/repository/packages/{PACK_NAME}"
 PACK_SHA256 = "ce25d925f9eaba817214f5d6b2083b8e135ed0592b5a61b9f75ea5d4c02f5300"
 CACHE = Path(__file__).resolve().parents[1] / ".tools/vendor-cache" / PACK_NAME
+LOG_FILE = Path(__file__).resolve().parents[1] / ".tools/logs/bepinex-repair.log"
 METADATA = (".doorstop_version", "changelog.txt")
 PREREQUISITES = (
     "Megabonk.exe", "winhttp.dll", "doorstop_config.ini",
@@ -117,10 +119,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--download", action="store_true", help="allow downloading the pinned pack if not cached")
     parser.add_argument("--dry-run", action="store_true", help="validate and list actions without writing files")
     args = parser.parse_args(argv)
+    log = None
     try:
+        if not args.dry_run:
+            LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            log = LOG_FILE.open("a", encoding="utf-8")
+            print(f"\nBepInEx repair: {datetime.now(UTC).isoformat()}", file=log)
         require_stopped()
         game = args.game_dir or game_dir()
         source = args.pack_zip.expanduser() if args.pack_zip else CACHE
+        output = log if log is not None else sys.stdout
+        print(f"Game folder: {game}", file=output)
+        print(f"Pack archive: {source}", file=output)
         fetched = False
         if source.is_file():
             body = source.read_bytes()
@@ -134,19 +144,30 @@ def main(argv: list[str] | None = None) -> int:
             CACHE.parent.mkdir(parents=True, exist_ok=True)
             with CACHE.open("xb") as output:
                 output.write(body)
-        print(f"Game folder: {game}")
-        print("Dry run; no files changed." if args.dry_run else "Repair complete.")
+        print("Dry run; no files changed." if args.dry_run else "Repair complete.", file=output)
         for action in actions:
-            print(f"  {action}")
+            print(f"  {action}", file=output)
         if not actions:
-            print("  Already repaired; no changes needed.")
-        print("Launch with task game:run (supplies winhttp=n,b).")
-        print("Other launchers need a winhttp native,builtin override; the registry was not changed.")
-        print("Keep version.dll.bak for rollback; plugins, configuration and UserData were not changed.")
+            print("  Already repaired; no changes needed.", file=output)
+        print("Launch with task game:run (supplies winhttp=n,b).", file=output)
+        print("Other launchers need a winhttp native,builtin override; the registry was not changed.", file=output)
+        print("Keep version.dll.bak for rollback; plugins, configuration and UserData were not changed.", file=output)
+        if log is not None:
+            log.flush()
+            print("BepInEx repair complete.")
         return 0
     except (ValueError, OSError, zipfile.BadZipFile, DownloadError, MissingAsset) as exc:
+        if log is not None:
+            try:
+                print(f"BepInEx repair failed: {exc}", file=log)
+                log.flush()
+            except OSError:
+                pass
         print(f"BepInEx repair failed: {exc}", file=sys.stderr)
         return 1
+    finally:
+        if log is not None:
+            log.close()
 
 
 if __name__ == "__main__":

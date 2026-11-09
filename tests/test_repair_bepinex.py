@@ -5,6 +5,11 @@ import repair_bepinex as repair
 import zipfile
 
 
+@pytest.fixture(autouse=True)
+def isolated_log(tmp_path, monkeypatch):
+    monkeypatch.setattr(repair, "LOG_FILE", tmp_path / "logs/repair.log")
+
+
 @pytest.fixture
 def game(tmp_path, monkeypatch):
     root = tmp_path / "game with spaces"
@@ -130,6 +135,7 @@ def test_cli_dry_run_download_does_not_cache(game, pack, monkeypatch, tmp_path, 
     monkeypatch.setattr(repair, "download", lambda url: pack)
     assert repair.main(["--game-dir", str(game), "--download", "--dry-run"]) == 0
     assert not repair.CACHE.exists()
+    assert not repair.LOG_FILE.exists()
     assert not (game / "dotnet").exists()
     assert "winhttp=n,b" in capsys.readouterr().out
 
@@ -146,3 +152,30 @@ def test_cli_uses_configured_game_folder(game, pack, tmp_path, monkeypatch):
     monkeypatch.setattr(repair, "game_dir", lambda: game)
     assert repair.main(["--pack-zip", str(archive)]) == 0
     assert (game / "dotnet/coreclr.dll").exists()
+
+
+def test_cli_success_is_one_line_and_details_are_logged(game, pack, tmp_path, capsys):
+    archive = tmp_path / "pack.zip"
+    archive.write_bytes(pack)
+    args = ["--game-dir", str(game), "--pack-zip", str(archive)]
+    assert repair.main(args) == 0
+    output = capsys.readouterr()
+    assert output.out == "BepInEx repair complete.\n"
+    assert output.err == ""
+    log = repair.LOG_FILE.read_text()
+    assert "copy dotnet/coreclr.dll" in log
+    assert str(game) in log
+    assert "winhttp=n,b" in log
+    assert repair.main(args) == 0
+    assert repair.LOG_FILE.read_text().startswith(log)
+    assert "Already repaired" in repair.LOG_FILE.read_text()
+
+
+def test_cli_failure_is_logged_and_visible_on_stderr(game, tmp_path, capsys):
+    archive = tmp_path / "bad.zip"
+    archive.write_bytes(b"not the pinned archive")
+    assert repair.main(["--game-dir", str(game), "--pack-zip", str(archive)]) == 1
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "checksum mismatch" in output.err
+    assert "checksum mismatch" in repair.LOG_FILE.read_text()

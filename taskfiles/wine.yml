@@ -19,6 +19,7 @@ vars:
 tasks:
   bepinex:repair:
     desc: "Restore BepInEx runtime files omitted by r2modmac Apply and park MelonLoader"
+    silent: true
     summary: |
       Usage: task wine:bepinex:repair -- [--dry-run] [--download] [--pack-zip path]
 
@@ -27,6 +28,7 @@ tasks:
       opt-in and pinned to BepInExPack IL2CPP 6.0.788 with SHA-256 validation.
       Never replaces differing files, existing backups, plugins or user data.
       Launch afterward with task game:run, which supplies winhttp=n,b.
+      Details are appended to .tools/logs/bepinex-repair.log; dry-run prints its preview.
     platforms: [darwin]
     cmds:
       - uv run scripts/repair_bepinex.py {{.CLI_ARGS}}
