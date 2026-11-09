@@ -1,0 +1,167 @@
+name: Thunderstore
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/MegabonkLevels.Mod/**"
+      - "thunderstore.toml"
+      - "pkg/**"
+      - "taskfiles/package.yml"
+      - "scripts/check_thunderstore_package.py"
+      - "scripts/validate_thunderstore_manifest.py"
+      - "scripts/asset_download.py"
+      - "scripts/thunderstore_release_gate.py"
+      - ".github/workflows/thunderstore.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable tag to build, such as v0.2.0
+        required: true
+        type: string
+      publish:
+        description: Submit the validated ZIP to Thunderstore after approval
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: thunderstore-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      package: ${{ steps.decide.outputs.package }}
+      ref: ${{ steps.decide.outputs.ref }}
+      tag: ${{ steps.decide.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          INPUT_TAG: ${{ inputs.tag }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            push)
+              echo "package=true" >> "$GITHUB_OUTPUT"
+              echo "ref=$SHA" >> "$GITHUB_OUTPUT"
+              echo "tag=" >> "$GITHUB_OUTPUT"
+              ;;
+            workflow_dispatch)
+              git rev-parse --verify --quiet "refs/tags/$INPUT_TAG" > /dev/null
+              echo "package=true" >> "$GITHUB_OUTPUT"
+              echo "ref=refs/tags/$INPUT_TAG" >> "$GITHUB_OUTPUT"
+              echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+              ;;
+            release)
+              if [ "$RELEASE_PRERELEASE" = "true" ]; then
+                echo "Prerelease $RELEASE_TAG is never built for Thunderstore."
+                echo "package=false" >> "$GITHUB_OUTPUT"
+              else
+                python3 scripts/thunderstore_release_gate.py gate --tag "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+              fi
+              echo "ref=refs/tags/$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+              echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+  # Self-hosted because the build needs the game's generated interop assemblies; never runs on pull requests.
+  build:
+    needs: gate
+    if: needs.gate.outputs.package == 'true'
+    runs-on: [self-hosted, megabonk-mod]
+    timeout-minutes: 30
+    outputs:
+      archive: ${{ steps.package.outputs.archive }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.gate.outputs.ref }}
+          persist-credentials: false
+      - run: python3 scripts/thunderstore_release_gate.py versions
+      - name: Build and validate the package
+        env:
+          ModInstanceFolder: ${{ runner.temp }}/plugin-install
+        run: mise exec -- task package:thunderstore
+      - id: package
+        run: |
+          set -euo pipefail
+          archive="$(ls .tools/thunderstore/*.zip)"
+          python3 scripts/thunderstore_release_gate.py record "$archive"
+          python3 scripts/thunderstore_release_gate.py checksum "$archive"
+          echo "archive=$(basename "$archive")" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: thunderstore-package
+          path: |
+            .tools/thunderstore/*.zip
+            .tools/thunderstore/*.zip.sha256
+          if-no-files-found: error
+          retention-days: ${{ needs.gate.outputs.tag != '' && 90 || 14 }}
+
+  # Hosted runner: the Thunderstore token never reaches the self-hosted machine.
+  publish:
+    needs: [gate, build]
+    if: >-
+      needs.gate.outputs.tag != '' &&
+      (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: thunderstore
+    concurrency:
+      group: thunderstore-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.gate.outputs.ref }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: thunderstore-package
+          path: package
+      - name: Verify the archive is the one that was validated
+        env:
+          ARCHIVE: ${{ needs.build.outputs.archive }}
+        run: |
+          set -euo pipefail
+          python3 scripts/thunderstore_release_gate.py checksum "package/$ARCHIVE"
+          python3 scripts/validate_thunderstore_manifest.py "package/$ARCHIVE"
+      - id: guard
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ needs.gate.outputs.tag }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          set -euo pipefail
+          flags=()
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+          python3 scripts/thunderstore_release_gate.py guard --event "$EVENT" --tag "$TAG" "${flags[@]}" >> "$GITHUB_OUTPUT"
+      - if: steps.guard.outputs.publish == 'true'
+        env:
+          ARCHIVE: ${{ needs.build.outputs.archive }}
+          TCLI_AUTH_TOKEN: ${{ secrets.TCLI_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          dotnet tool install tcli --version 0.2.4 --tool-path .tools/tcli
+          .tools/tcli/tcli publish --file "package/$ARCHIVE"
+      - if: steps.guard.outputs.publish != 'true'
+        run: echo "This version is already published; nothing was uploaded." >> "$GITHUB_STEP_SUMMARY"

@@ -98,7 +98,7 @@ write permissions. The optional placeholder in `.env.example` is for local
 tooling only: Actions does not read `.env`. Keep the real token out of Git,
 command arguments and logs. This workflow creates release PRs and GitHub
 releases; it does **not** publish to Thunderstore, npm, NuGet or PyPI, build a
-player package, or deploy the website. A push that adds the workflow can start
+player package, or deploy the website. Thunderstore submission is a separate workflow, described in [Automated builds and publishing](#automated-builds-and-publishing). A push that adds the workflow can start
 release automation, so review the configuration before pushing.
 
 Check current version consistency with:
@@ -323,6 +323,39 @@ but the schema does not currently include this Cyberstorm endpoint.
 Retain superseded releases; after a soak period and approval,
 **deprecate, never delete** an obsolete package. Do not automatically deprecate
 anything during the initial upload.
+
+## Automated builds and publishing
+
+`.github/workflows/thunderstore.yml` builds, validates and, for an approved release, submits the package. `scripts/thunderstore_release_gate.py` holds the decisions (path filtering, publication guards, checksums) so they are unit-tested in `tests/test_thunderstore_release_gate.py` without uploading anything.
+
+### Triggers
+
+- **Push to `main`** with a `paths:` filter: builds and validates the ZIP and keeps it as a 14-day artifact. It never publishes. The filter covers the ZIP's inputs (`src/MegabonkLevels.Mod/**`, `thunderstore.toml`, `pkg/**`) and the tooling that builds or validates it (`taskfiles/package.yml`, the package check, manifest validator, downloader and gate scripts, and the workflow itself). Website, documentation, backlog, `.agents`, `.claude`, level and unrelated script changes do not start it. A test keeps the workflow's list identical to `PACKAGE_PATHS` in the gate script.
+- **Release published** (Release Please creates it). `release` events do not support `paths:`, so a `gate` job compares the tag with the previous stable tag. Only the ZIP's inputs count there, and a file whose only changes are the shared-version lines (`versionNumber`, `version_number`, the csproj `<Version>`, the `x-release-please-version` line) does not, because Release Please rewrites those in every release. A release whose only changes are website, docs or tooling therefore builds nothing and publishes nothing. The first stable tag, with no earlier one to compare, always counts. Prereleases are never built.
+- **Manual run** (`workflow_dispatch`) with a `tag` input and a `publish` input that defaults to false. It rebuilds that exact tag and bypasses the gate, which is the recovery path when a release was skipped or a run failed. With `publish` false it is build-only.
+
+### Build
+
+The build needs the game's generated BepInEx interop assemblies, which cannot be committed or redistributed, so it runs on a self-hosted runner labelled `self-hosted`, `megabonk-mod` (and `megabonk`) on the Mac that holds the game, never on a hosted runner. The repository is public, so no job on that runner runs on `pull_request`; also set the repository's fork-pull-request approval to require approval for all outside collaborators. The runner is registered to this repository only, in its own directory with its own service, separate from any organisation runners on the same machine. Its `.env` sets `MEGABONK_WINE_PREFIX` to the Wine prefix that holds the game; the workflow sets `ModInstanceFolder` to a temporary directory so the build does not overwrite the developer's installed plugin.
+
+The job checks out the exact tag (or the pushed commit), runs `scripts/thunderstore_release_gate.py versions` to require every version source to agree, runs `task package:thunderstore` (which builds, runs the package tests and validates the ZIP and manifest), writes `<zip>.sha256`, re-verifies it and uploads both as the `thunderstore-package` artifact. Release and manual builds keep the artifact 90 days.
+
+### Publishing
+
+The `publish` job runs only for a release or a manual run with `publish` true. It runs on a hosted runner so the token never reaches the self-hosted machine, and in the `thunderstore` environment, which must be configured with required reviewers: that approval is the publication approval. It downloads the artifact, re-verifies the checksum and manifest, then runs the guards and submits with `tcli publish --file <zip>` (never a bare `tcli publish`, which would rebuild). The guards refuse when the event is not a release or manual run, the release is a prerelease, the tag is not `v<version>` of `thunderstore.toml`, or Thunderstore cannot say whether the version exists. A version Thunderstore already lists ends the run successfully with a summary note and uploads nothing, so a retry or a second run cannot duplicate or overwrite a submission. Publication jobs share one concurrency group with `cancel-in-progress: false`, so runs queue rather than race. The workflow never deletes releases or packages.
+
+### Secrets and setup
+
+- `TCLI_AUTH_TOKEN`: the team service-account token, as an Actions secret (preferably an environment secret on `thunderstore`). It is read only by the publish step. Never print it or pass it as an argument.
+- `RELEASE_PLEASE_TOKEN`: already required. It must be a token rather than `GITHUB_TOKEN`, otherwise the releases it creates would not start the workflow.
+- The `thunderstore` environment with required reviewers.
+
+### Manual recovery
+
+- A skipped or failed release: run the workflow manually with the release's tag, `publish` true, and approve it. The same guards apply.
+- A build that failed on the runner: check the runner service is online (repository Settings, Actions, Runners) and that the game's `BepInEx/interop` folder exists, then re-run.
+- Published with a defect: Thunderstore ZIPs are immutable. Release a higher version; do not delete or overwrite. See [Release gate and publishing](#release-gate-and-publishing).
+- A displayed-README-only change needs no workflow; use the README update call described above.
 
 ## Rollback
 

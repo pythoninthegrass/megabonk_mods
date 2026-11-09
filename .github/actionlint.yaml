@@ -1,3 +1,4 @@
+profile: correctness
 self-hosted-runner:
   labels:
     - megabonk
