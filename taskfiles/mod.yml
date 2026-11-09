@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+vars:
+  MOD_PROJECT: src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj
+  TEST_PROJECT: tests/MegabonkLevels.Tests/MegabonkLevels.Tests.csproj
+
+tasks:
+  build:
+    desc: "Build and deploy the plugin, symbols and dependencies into BepInEx/plugins/MegabonkLevels"
+    sources:
+      - src/MegabonkLevels.Mod/**/*.cs
+      - src/MegabonkLevels.Mod/*.csproj
+      - src/MegabonkLevels.Mod/*.props
+    generates:
+      - src/MegabonkLevels.Mod/bin/**/MegabonkLevels.Mod.dll
+    cmds:
+      - dotnet build {{.MOD_PROJECT}}
+
+  test:
+    desc: "Run the xUnit test project (net10.0, no game/Unity/loader references)"
+    cmds:
+      - dotnet test {{.TEST_PROJECT}}
+
+  deploy:
+    desc: "Deploy the plugin and dependencies into BepInEx/plugins/MegabonkLevels"
+    summary: |
+      Usage: task mod:deploy
+
+      The deploy step is the csproj's own AfterTargets="Build" MSBuild
+      target (see src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj), so
+      `dotnet build` already deploys on every build. This task is kept as
+      an explicit alias so `task mod:deploy` reads naturally in docs and
+      CI, without duplicating the copy logic outside MSBuild.
+    cmds:
+      - task: build

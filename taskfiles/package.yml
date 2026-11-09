@@ -1,0 +1,202 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+vars:
+  OUTPUT: '{{.OUTPUT | default ".tools/player-package"}}'
+  OUTPUT_WINDOWS: '{{.OUTPUT_WINDOWS | default ".tools/player-package-windows"}}'
+  OUTPUT_MACOS: '{{.OUTPUT_MACOS | default ".tools/player-package-macos"}}'
+  MOD_VERSION: '{{.MOD_VERSION | default "dev"}}'
+  LEVELS: '{{.LEVELS | default "bramblecrown-hill.mblevel.json"}}'
+  PACKS: '{{.PACKS | default ""}}'
+  ALLOW_DOWNLOAD: '{{.ALLOW_DOWNLOAD | default "false"}}'
+
+tasks:
+  thunderstore:setup:
+    desc: "Install the pinned local Thunderstore build/publish CLI"
+    status:
+      - test -x .tools/tcli/tcli
+    cmds:
+      - dotnet tool install tcli --version 0.2.4 --tool-path .tools/tcli
+
+  thunderstore:
+    desc: "Build and validate the Thunderstore ZIP (no publish)"
+    cmds:
+      - task: thunderstore:setup
+      - task: thunderstore:manifest
+      - dotnet build src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj -c Release
+      - uv run pytest tests/test_thunderstore_package.py -n 0 -q
+      - .tools/tcli/tcli build
+      - task: thunderstore:check
+
+  thunderstore:manifest:
+    desc: "Validate a manifest.json against Thunderstore's manifest rules (ONLINE=true adds the site's own checks)"
+    summary: |
+      Usage: task package:thunderstore:manifest [MANIFEST=path] [ONLINE=true]
+
+      Reimplements thunderstore.io/tools/manifest-v1-validator/ offline, so the team does not
+      have to be logged into the site to find a rejected manifest. ONLINE=true additionally
+      resolves each dependency against thunderstore.io, reports a version already published,
+      and reports a name that exists under a different capitalization.
+
+        task package:thunderstore:manifest
+        task package:thunderstore:manifest MANIFEST=.tools/thunderstore/<team>-Megabonk_Level_Editor-<version>.zip
+        task package:thunderstore:manifest ONLINE=true
+    vars:
+      MANIFEST: '{{.MANIFEST | default "pkg/manifest.json"}}'
+      ONLINE: '{{.ONLINE | default "false"}}'
+    cmds:
+      - uv run scripts/validate_thunderstore_manifest.py "{{.MANIFEST}}"{{if eq .ONLINE "true"}} --online{{end}}
+
+  thunderstore:check:
+    desc: "Validate the existing Thunderstore ZIP against its source and Release DLLs"
+    cmds:
+      - |-
+        uv run python - <<'PY'
+        import subprocess
+        import tomllib
+        from pathlib import Path
+
+        config = tomllib.loads(Path("thunderstore.toml").read_text())
+        package = config["package"]
+        name = f'{package["namespace"]}-{package["name"]}-{package["versionNumber"]}.zip'
+        path = Path(config["build"]["outdir"]) / name
+        subprocess.run(["uv", "run", "scripts/check_thunderstore_package.py", str(path)], check=True)
+        subprocess.run(["uv", "run", "scripts/validate_thunderstore_manifest.py", str(path)], check=True)
+        PY
+
+  linux:
+    internal: true
+    desc: "Build the Linux player package and its distributable zip into .tools/player-package"
+    summary: |
+      Usage: task package:linux [LEVELS=...] [PACKS=...] [MOD_VERSION=...] [OUTPUT=...]
+
+      Assembles the download a Linux player unzips and runs ./megabonk-installer from:
+      the mod DLL, the vendored Windows MelonLoader and .NET 6 archives, the linux/amd64
+      Go installer (built by installer:build) and, by default, Bramblecrown Hill and its
+      selection art. Explicit LEVELS and PACKS override the content selection;
+      development maps are not included by default.
+
+        task package:linux
+        task package:linux LEVELS="thps.mblevel.json" PACKS=thps
+        task package:linux MOD_VERSION=0.4.2
+
+      LEVELS are filenames under levels/ and PACKS are pack ids built by task pack:*.
+      Vendor archives are reused from .tools/vendor-cache; add ALLOW_DOWNLOAD=true to
+      fetch anything missing. Set SOURCE_DATE_EPOCH for a byte-identical zip.
+    cmds:
+      - dotnet build src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj -c Release
+      - task installer:build TARGETS=linux/amd64
+      - |-
+        set -eu
+        args=()
+        for level in {{.LEVELS}}; do args+=(--level "$level"); done
+        for pack in {{.PACKS}}; do args+=(--pack "$pack"); done
+        if [ "{{.ALLOW_DOWNLOAD}}" = "true" ]; then args+=(--allow-download); fi
+        uv run scripts/build_player_package.py \
+          --installer-binary .tools/installer/megabonk-installer-linux-amd64 \
+          --output "{{.OUTPUT}}" \
+          --mod-dir src/MegabonkLevels.Mod/bin/Release/net6.0 \
+          --mod-version "{{.MOD_VERSION}}" \
+          "${args[@]}"
+
+  windows:
+    internal: true
+    desc: "Build the Windows player package and its distributable zip into .tools/player-package-windows"
+    summary: |
+      Usage: task package:windows [LEVELS=...] [PACKS=...] [MOD_VERSION=...] [OUTPUT_WINDOWS=...]
+
+      Assembles the download a Windows player unzips and runs install.exe from: the
+      mod DLL, the vendored MelonLoader and .NET 6 archives, the windows/amd64 Go
+      installer (built by installer:build), and any levels or packs you name.
+      Arguments and vendor caching match package:linux.
+
+        task package:windows
+        task package:windows MOD_VERSION=0.4.2
+    cmds:
+      - dotnet build src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj -c Release
+      - task installer:build TARGETS=windows/amd64
+      - |-
+        set -eu
+        args=()
+        for level in {{.LEVELS}}; do args+=(--level "$level"); done
+        for pack in {{.PACKS}}; do args+=(--pack "$pack"); done
+        if [ "{{.ALLOW_DOWNLOAD}}" = "true" ]; then args+=(--allow-download); fi
+        uv run scripts/build_player_package.py \
+          --platform windows \
+          --installer-binary .tools/installer/megabonk-installer-windows-amd64.exe \
+          --output "{{.OUTPUT_WINDOWS}}" \
+          --mod-dir src/MegabonkLevels.Mod/bin/Release/net6.0 \
+          --mod-version "{{.MOD_VERSION}}" \
+          "${args[@]}"
+
+  macos:
+    internal: true
+    desc: "Build the macOS player package and its distributable zip into .tools/player-package-macos"
+    summary: |
+      Usage: task package:macos [LEVELS=...] [PACKS=...] [MOD_VERSION=...] [OUTPUT_MACOS=...]
+             [APPLE_SIGNING_IDENTITY=...] [NOTARY_PROFILE=... | APPLE_API_KEY=... APPLE_API_ISSUER=... APPLE_API_KEY_B64=...]
+
+      Assembles the download a Mac player unzips and runs megabonk-installer from: the
+      mod DLL, the vendored MelonLoader and .NET 6 archives (the game is the Windows
+      build under Wine), the darwin/arm64 Go installer (built by installer:build), and
+      any levels or packs you name. Arguments and vendor caching match package:linux.
+
+      Set APPLE_SIGNING_IDENTITY to a Developer ID Application identity name (see
+      `security find-identity -v -p codesigning`) to codesign the installer with the
+      hardened runtime before it is packed. Set NOTARY_PROFILE to a notarytool keychain
+      profile (`xcrun notarytool store-credentials`), or APPLE_API_KEY, APPLE_API_ISSUER
+      and APPLE_API_KEY_B64 (an App Store Connect API key, base64 of the .p8), to also
+      submit the zip to Apple and wait for the verdict. All are read from the
+      environment, never from the repo.
+
+        task package:macos
+        APPLE_SIGNING_IDENTITY="Developer ID Application: ..." NOTARY_PROFILE=<profile> task package:macos
+    cmds:
+      - dotnet build src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj -c Release
+      - task installer:build TARGETS=darwin/arm64
+      - |-
+        set -eu
+        if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+          codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" \
+            .tools/installer/megabonk-installer-darwin-arm64
+          codesign --verify --strict --verbose=2 .tools/installer/megabonk-installer-darwin-arm64
+        else
+          echo "APPLE_SIGNING_IDENTITY is not set: the installer is only ad-hoc signed" >&2
+        fi
+      - |-
+        set -eu
+        args=()
+        for level in {{.LEVELS}}; do args+=(--level "$level"); done
+        for pack in {{.PACKS}}; do args+=(--pack "$pack"); done
+        if [ "{{.ALLOW_DOWNLOAD}}" = "true" ]; then args+=(--allow-download); fi
+        uv run scripts/build_player_package.py \
+          --platform macos \
+          --installer-binary .tools/installer/megabonk-installer-darwin-arm64 \
+          --output "{{.OUTPUT_MACOS}}" \
+          --mod-dir src/MegabonkLevels.Mod/bin/Release/net6.0 \
+          --mod-version "{{.MOD_VERSION}}" \
+          "${args[@]}"
+      - |-
+        set -eu
+        if [ -n "${NOTARY_PROFILE:-}" ] || [ -n "${APPLE_API_KEY:-}" ]; then
+          zip="$(ls -t "$(dirname "{{.OUTPUT_MACOS}}")"/megabonk-levels-*-macos.zip | head -1)"
+          uv run scripts/notarize_macos.py "$zip"
+        fi
+
+  check:
+    desc: "Verify a built player package still matches its manifest"
+    vars:
+      OUTPUT: '{{.OUTPUT | default ".tools/player-package"}}'
+    cmds:
+      - |-
+        PYTHONPATH=scripts uv run python - <<'PY'
+        import sys
+        from pathlib import Path
+        from package_contract.manifest import verify_package
+
+        problems = verify_package(Path("{{.OUTPUT}}"))
+        for problem in problems:
+            print(f"  {problem}", file=sys.stderr)
+        raise SystemExit(1 if problems else 0)
+        PY

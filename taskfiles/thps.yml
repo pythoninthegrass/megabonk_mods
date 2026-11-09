@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+vars:
+  DISC: '{{.DISC | default "tools/thps1/Tony Hawk''s Pro Skater.bin"}}'
+  WAREHOUSE_OBJ: '{{.WAREHOUSE_OBJ | default ".tools/thps1/warehouse/warehouse.obj"}}'
+  LEVEL: '{{.LEVEL | default "levels/thps.mblevel.json"}}'
+
+tasks:
+  editable-level:
+    desc: "Regenerate the separate piece-assembled editable Warehouse"
+    sources:
+      - scripts/build_thps_editable_level.py
+      - scripts/build_thps_level.py
+      - scripts/thps_item_overrides.json
+      - unity/pack-authoring/packs/thps/pieces.json
+      - unity/pack-authoring/packs/thps/attachments.json
+      - unity/pack-authoring/packs/thps/manifest.json
+      - .tools/thps1/warehouse/**/*
+    generates:
+      - levels/thps-editable.mblevel.json
+    cmds:
+      - uv run scripts/build_thps_editable_level.py
+
+  editable-install:
+    desc: "Install the existing THPS pack and the separate editable Warehouse"
+    cmds:
+      - task: editable-level
+      - task: :pack:install
+        vars: {PACK: thps}
+      - |
+        dest="$(uv run scripts/game_paths.py | jq -r .game_dir)/UserData/Levels"
+        mkdir -p "$dest"
+        cp levels/thps-editable.mblevel.json "$dest/"
+
+  default:
+    desc: "Extract, build and install the THPS Warehouse level and its pack into the game"
+    summary: |
+      Usage: task thps
+
+      Runs extract, level, pack and install. Every step skips itself when its inputs are
+      unchanged, so rerunning is cheap. Needs the disc image in tools/thps1/, the soundtrack
+      mp3s in tools/ost/ and Unity 2023.2.22f1; see docs/development.md. A running game only
+      sees the pack and level after a relaunch.
+    cmds:
+      - task: extract
+      - task: level
+      - task: pack
+      - task: install
+
+  extract:
+    desc: "Extract the Warehouse mesh, textures and nodes from the disc image into .tools/thps1/warehouse"
+    summary: |
+      The pinned input disc checksum is checked even when warehouse.obj exists.
+      Extraction needs THPS2_TOOLS_DIR (in .env) pointing at
+      a checkout of JayFoxRox/thps2-tools; see docs/thps-warehouse.md.
+    deps:
+      - verify-disc
+    status:
+      - test -f {{.WAREHOUSE_OBJ}}
+    cmds:
+      - |
+        [ -f "{{.DISC}}" ] || { echo "missing disc image: {{.DISC}}" >&2; exit 1; }
+        [ -n "${THPS2_TOOLS_DIR:-}" ] || { echo "set THPS2_TOOLS_DIR in .env to a thps2-tools checkout" >&2; exit 1; }
+        uv run --with pillow scripts/thps1_extract.py --disc "{{.DISC}}" --converter-dir "$THPS2_TOOLS_DIR"
+
+  verify-disc:
+    desc: "Verify the locally supplied THPS1 disc against tools/thps1.sha256"
+    cmds:
+      - uv run scripts/thps1_extract.py --disc "{{.DISC}}" --verify-only
+
+  level:
+    desc: "Regenerate {{.LEVEL}} from scripts/build_thps_level.py"
+    sources:
+      - scripts/build_thps_level.py
+      - unity/pack-authoring/packs/thps/manifest.json
+      - .tools/thps1/warehouse/warehouse_nodes.json
+    generates:
+      - "{{.LEVEL}}"
+    cmds:
+      - uv run scripts/build_thps_level.py
+
+  pack:
+    desc: "Build the THPS pack bundles for Windows and Linux with Unity"
+    sources:
+      - unity/pack-authoring/Assets/Editor/*.cs
+      - unity/pack-authoring/packs/thps/**/*
+      - .tools/thps1/warehouse/**/*
+      - tools/ost/*.mp3
+    generates:
+      - .tools/bundles/windows/thps
+      - .tools/bundles/linux/thps
+    cmds:
+      - task: :pack:build
+        vars: {PACK_METHOD: ThpsPack.Build}
+
+  install:
+    desc: "Copy the THPS pack and level into the game's UserData"
+    cmds:
+      - task: :pack:install
+        vars: {PACK: thps}
+      - |
+        dest="$(uv run scripts/game_paths.py | jq -r .game_dir)/UserData/Levels"
+        mkdir -p "$dest"
+        cp "{{.LEVEL}}" "$dest/"
+        echo "installed {{.LEVEL}} into $dest"

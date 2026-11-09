@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+vars:
+  PACK_PROJECT: unity/pack-authoring
+  PACK_OUTPUT: .tools/bundles
+  PACK_METHOD: PackBuilder.BuildTestPack
+
+tasks:
+  build:
+    desc: "Build the test AssetBundle for Windows and Linux with Unity 2023.2.22f1 into .tools/bundles"
+    summary: |
+      Usage: task pack:build
+
+      Runs Assets/Editor/PackBuilder.cs in batch mode. Set UNITY_EDITOR in
+      .env to override the default Hub install path. See docs/asset-bundles.md.
+    cmds:
+      - >-
+        "${UNITY_EDITOR:-/Applications/Unity/Hub/Editor/2023.2.22f1/Unity.app/Contents/MacOS/Unity}"
+        -batchmode -nographics -quit
+        -projectPath {{.PACK_PROJECT}}
+        -executeMethod {{.PACK_METHOD}}
+        -packOutput "$PWD/{{.PACK_OUTPUT}}"
+        -logFile -
+
+  install:
+    desc: "Copy a built pack and its manifest into the game's UserData/LevelPacks (PACK=thps by default)"
+    summary: |
+      Usage: task pack:install [PACK=thps]
+
+      Copies .tools/bundles/<platform>/<PACK> and unity/pack-authoring/packs/<PACK>/manifest.json
+      into <game dir>/UserData/LevelPacks/<PACK>. The bundle platform is linux on Linux and
+      windows elsewhere (CrossOver and Wine). A running game only sees the pack after a relaunch.
+    vars:
+      PACK: '{{.PACK | default "thps"}}'
+    cmds:
+      - |
+        platform=windows
+        [ "$(uname)" = Linux ] && platform=linux
+        dest="$(uv run scripts/game_paths.py | jq -r .game_dir)/UserData/LevelPacks/{{.PACK}}"
+        mkdir -p "$dest"
+        cp ".tools/bundles/$platform/{{.PACK}}" "$dest/{{.PACK}}"
+        cp "{{.PACK_PROJECT}}/packs/{{.PACK}}/manifest.json" "$dest/manifest.json"
+        if [ -f "{{.PACK_PROJECT}}/packs/{{.PACK}}/attachments.json" ]; then
+          cp "{{.PACK_PROJECT}}/packs/{{.PACK}}/attachments.json" "$dest/attachments.json"
+        fi
+        echo "installed {{.PACK}} into $dest"
+
+  thps:
+    desc: "Build the THPS Warehouse pack and install it into the game"
+    cmds:
+      - task: build
+        vars: {PACK_METHOD: ThpsPack.Build}
+      - uv run scripts/build_thps_attachments.py
+      - task: install
+        vars: {PACK: thps}

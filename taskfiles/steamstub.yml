@@ -1,0 +1,108 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+vars:
+  STUB_DIR: tools/steamstub
+  STUB_SRC: tools/steamstub/steamstub.c
+  STUB_DLL: tools/steamstub/steam_api64.dll
+  LAUNCH_MARKER: .tools/steamstub-launch.marker
+  MINGW_CC: '{{.MINGW_CC | default "x86_64-w64-mingw32-gcc"}}'
+
+tasks:
+  generate:
+    desc: "Regenerate steamstub.c from the game's original steam_api64.dll shim"
+    summary: |
+      Usage: task steamstub:generate
+
+      Reads the original shim (the .steamstub.bak backup when the stub is
+      installed, otherwise the live file) and rewrites steamstub.c with the
+      same export set. Only generate_stub.py is tracked as a source, so
+      after a game update pass --force to regenerate.
+    sources:
+      - "{{.STUB_DIR}}/generate_stub.py"
+    generates:
+      - "{{.STUB_SRC}}"
+    cmds:
+      - |
+        game="$(uv run scripts/game_paths.py | jq -r .game_dir)"
+        shim="$game/Megabonk_Data/Plugins/x86_64/steam_api64.dll"
+        [ -f "$shim.steamstub.bak" ] && shim="$shim.steamstub.bak"
+        uv run {{.STUB_DIR}}/generate_stub.py "$shim" > {{.STUB_SRC}}.tmp
+        mv {{.STUB_SRC}}.tmp {{.STUB_SRC}}
+
+  build:
+    desc: "Build the offline Steamworks stub (PE32+ steam_api64.dll) with mingw-w64"
+    summary: |
+      Usage: task steamstub:build
+
+      Needs a mingw-w64 x86_64 GCC (task game:mingw:install). Override the
+      compiler with MINGW_CC=<path>; the ambient CC is ignored because
+      shells often point it at clang.
+    sources:
+      - "{{.STUB_SRC}}"
+    generates:
+      - "{{.STUB_DLL}}"
+    preconditions:
+      - sh: '{{.MINGW_CC}} --version 2>/dev/null | grep -qi mingw'
+        msg: "missing a mingw-w64 x86_64 GCC (run: task game:mingw:install)"
+    cmds:
+      - "{{.MINGW_CC}} -O2 -shared -fPIC -o {{.STUB_DLL}} {{.STUB_SRC}}"
+
+  status:
+    desc: "Report whether the game runs the stub or the original shim, and the backup"
+    cmds:
+      - uv run scripts/swap_steam_stub.py status
+
+  install:
+    desc: "Back up the game's shim and swap in the stub (quit the game first)"
+    deps: [build]
+    cmds:
+      - uv run scripts/swap_steam_stub.py install
+
+  restore:
+    desc: "Restore the original shim from the backup (quit the game first)"
+    cmds:
+      - uv run scripts/swap_steam_stub.py restore
+
+  mark-launch:
+    internal: true
+    cmds:
+      - mkdir -p {{dir .LAUNCH_MARKER}}
+      - touch {{.LAUNCH_MARKER}}
+
+  probe:
+    internal: true
+    cmds:
+      - |
+        log="$(uv run scripts/game_paths.py | jq -r .latest_log_path)"
+        for _ in $(seq 90); do
+          [ "$log" -nt {{.LAUNCH_MARKER}} ] && rg -q 'DevHarness: enabled' "$log" && exit 0
+          sleep 2
+        done
+        echo "no fresh 'DevHarness: enabled' in $log within 180s; the game likely exited" >&2
+        exit 1
+      - |
+        for _ in $(seq {{.READY_TRIES | default 30}}); do
+          uv run scripts/run.py steam-ready && exit 0
+          sleep 2
+        done
+        exit 1
+      - uv run scripts/run.py state
+
+  test:ok:
+    desc: "Launch with the stub's Init succeeding and probe Steamworks readiness (expect ready:true)"
+    cmds:
+      - uv run scripts/run.py quit || true
+      - task: mark-launch
+      - task: :game:run
+      - task: probe
+
+  test:fail:
+    desc: "Launch with MEGABONK_STEAM_FAIL_INIT=1 and probe Steamworks readiness (expect ready:false)"
+    cmds:
+      - uv run scripts/run.py quit || true
+      - task: mark-launch
+      - cmd: MEGABONK_STEAM_FAIL_INIT=1 task game:run
+      - task: probe
+        vars: {READY_TRIES: 1}

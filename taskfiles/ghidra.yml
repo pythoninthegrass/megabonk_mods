@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+vars:
+  GHIDRA_VERSION: "12.1.4"
+  GHIDRA_DATE: "20260921"
+  GHIDRA_ROOT: "$HOME/.local/opt/ghidra"
+  GHIDRA_DIR: "{{.GHIDRA_ROOT}}/ghidra_{{.GHIDRA_VERSION}}_PUBLIC"
+  GHIDRA_NATIVE_PLATFORM:
+    sh: echo "mac_$(uname -m | sed 's/arm64/arm_64/')"
+
+tasks:
+  install:
+    desc: "Download Ghidra, build native components if the release lacks them, and link current"
+    summary: |
+      Usage: task ghidra:install
+
+      Installs into $HOME/.local/opt/ghidra/ghidra_<version>_PUBLIC and points
+      $HOME/.local/opt/ghidra/current at it. Re-running is a no-op once the
+      install, the native build, and the link are in place.
+    cmds:
+      - task: download
+      - task: build-natives
+      - task: link
+
+  download:
+    desc: "Download and extract the Ghidra release"
+    internal: true
+    cmds:
+      - |
+        tmp="$(mktemp -d)"
+        trap 'rm -rf "$tmp"' EXIT
+        curl -fsSL -o "$tmp/ghidra.zip" "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_{{.GHIDRA_VERSION}}_build/ghidra_{{.GHIDRA_VERSION}}_PUBLIC_{{.GHIDRA_DATE}}.zip"
+        mkdir -p {{.GHIDRA_ROOT}}
+        unzip -q "$tmp/ghidra.zip" -d {{.GHIDRA_ROOT}}
+    status:
+      - test -x {{.GHIDRA_DIR}}/ghidraRun
+
+  build-natives:
+    desc: "Build the Ghidra native components (decompiler, sleigh) on macOS, which the release does not ship"
+    platforms: [darwin]
+    deps: [download, _install-java]
+    cmds:
+      - cd {{.GHIDRA_DIR}}/support/gradle && JAVA_HOME="$(mise where java)" ./gradlew buildNatives
+    status:
+      - test -x {{.GHIDRA_DIR}}/Ghidra/Features/Decompiler/build/os/{{.GHIDRA_NATIVE_PLATFORM}}/decompile
+
+  link:
+    desc: "Point the current symlink at the installed version"
+    internal: true
+    cmds:
+      - ln -sfn {{.GHIDRA_DIR}} {{.GHIDRA_ROOT}}/current
+    status:
+      - test "$(readlink {{.GHIDRA_ROOT}}/current)" = "{{.GHIDRA_DIR}}"
+
+  run:
+    desc: "Launch the Ghidra GUI"
+    deps: [install]
+    cmds:
+      - JAVA_HOME="$(mise where java)" PATH="$(mise where java)/bin:$PATH" {{.GHIDRA_ROOT}}/current/ghidraRun
+
+  _install-java:
+    internal: true
+    desc: "Install the mise-managed java from .tool-versions"
+    cmds:
+      - mise install java
+    status:
+      - mise where java >/dev/null 2>&1

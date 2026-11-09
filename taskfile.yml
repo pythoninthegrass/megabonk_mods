@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+set: ["e", "u", "pipefail"]
+shopt: ["globstar"]
+
+dotenv: [".env"]
+
+vars:
+  MISE_SHIMS: "{{.HOME}}/.local/share/mise/shims"
+
+env:
+  PATH: "{{.MISE_SHIMS}}:{{.PATH}}"
+
+includes:
+  mod: taskfiles/mod.yml
+  game: taskfiles/game.yml
+  steamstub: taskfiles/steamstub.yml
+  pack: taskfiles/pack.yml
+  package: taskfiles/package.yml
+  installer: taskfiles/installer.yml
+  thps: taskfiles/thps.yml
+  re: taskfiles/re.yml
+  ghidra: taskfiles/ghidra.yml
+  wine:
+    taskfile: taskfiles/wine.yml
+    platforms: [darwin]
+  crossover:
+    taskfile: taskfiles/crossover.yml
+    platforms: [darwin]
+
+tasks:
+  default:
+    desc: "List available tasks"
+    cmds:
+      - task --list
+
+  build:
+    desc: "Build the mod"
+    cmds:
+      - task: mod:build
+
+  test:
+    desc: "Run the mod's unit tests and the Python script self-tests"
+    cmds:
+      - task: mod:test
+      - task: scripts:test
+
+  scripts:test:
+    desc: "Run the Python tests under tests/ with pytest"
+    cmds:
+      - |-
+        uv run pytest
+
+  lint:
+    desc: "markdownlint + ruff over the repo"
+    cmds:
+      - markdownlint -c .markdownlint.jsonc .
+      - ruff check scripts/ tests/
+
+  check:
+    desc: "Build, test, and lint in sequence; non-zero exit on any failure"
+    cmds:
+      - task: build
+      - task: installer:test
+      - task: test
+      - task: lint
