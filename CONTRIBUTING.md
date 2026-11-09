@@ -21,7 +21,7 @@ agreed before code is written, and keep one topic per pull request.
 | `pkg/` | Thunderstore package contents |
 | `taskfile.yml`, `taskfiles/` | `task` entry points |
 
-## Set up
+## Setup
 
 [mise](https://mise.jdx.dev) pins the toolchain in `.tool-versions` (task, uv,
 Python 3.13, .NET 10, Go 1.27, Deno, ruff, bun, jq); `mise install` fetches them.
