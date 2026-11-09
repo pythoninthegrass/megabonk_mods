@@ -4,7 +4,7 @@ title: Run the megabonk MCP server from any directory with one install command
 status: In Progress
 assignee: []
 created_date: '2026-11-09T17:53:00Z'
-updated_date: '2026-11-09T19:34:00Z'
+updated_date: '2026-11-09T19:36:00Z'
 labels: []
 dependencies: []
 references:
@@ -79,7 +79,7 @@ Decision (2026-11-09): package the harness and register the installed command. R
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -118,6 +118,8 @@ Verified from an unrelated cwd with scratch UV_TOOL_DIR: editable install return
 Live check (2026-11-09): from an unrelated cwd, the editable-installed megabonk-mcp ran `relaunch` (state: levelLoaded, killFloorArmed, editor true, 487 palette entries) and `screenshot`, which saved into the checkout's .tools/evidence. The first two frames were the Loading overlay, captured right after relaunch; a later capture showed the example forest in the editor. This corrects the earlier note that AC2 was unverified.
 
 Registration changed from a one-time `uv tool install --editable` to `uvx --from git+https://github.com/pythoninthegrass/megabonk_mods megabonk-mcp` with `env.MEGABONK_REPO` passed through (`${MEGABONK_REPO:-}` in .mcp.json, `{env:MEGABONK_REPO}` in opencode.jsonc) so the entry has no per-machine path. Under uvx the code runs from uv's cache, so the source-tree fallback never applies; the checkout comes from MEGABONK_REPO or the client's cwd ancestors. Verified with a git+file clone: empty var from an unrelated cwd exits naming the checkout, MEGABONK_REPO set returns 45 tools, cwd inside the repo with an empty var returns 45 tools. The git URL only works once the commit is pushed. uvx ignores the checkout's uv.lock and exclude-newer and caches the built commit (uv cache clean megabonk-mods after a pull).
+
+Committed (7191421, 266bfab) and pushed to origin/main. The exact registration URL was checked after the push: uvx --from git+https://github.com/pythoninthegrass/megabonk_mods megabonk-mcp with MEGABONK_REPO set returns the tool list from an unrelated cwd. Left In Progress pending the owner's restart-and-test.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
