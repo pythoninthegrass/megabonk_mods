@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-11-09T19:52:00Z'
-updated_date: '2026-11-09T20:37:00Z'
+updated_date: '2026-11-09T20:53:00Z'
 labels: []
 dependencies:
   - TASK-056.06
@@ -67,4 +67,6 @@ Cause: the east deck ledge edge had no rails; EAST_LEDGE_LIPS (5 segments, owner
 In-game evidence (relaunch on regenerated level, slide held via grind_slide): east ledge 'GrindGate: slide held, grind started at (162.6, 7.7, 63.0) on the rail at (162.6, 3.7, 64.4)', then RailHandoff moved the grind onto the rail at (170.8, 3.8, 49.2) (sustained across the chain). West ledge: 'grind started at (25.8, 7.8, 38.0) on the rail at (25.8, 3.6, 37.5)' with sparks in the screenshot. Slide released at (162.6, 5.7, 66.0): 'grind start blocked ... by the StartRail hook', same as the west.
 
 Not done: the Unity pack bundle was not rebuilt (task thps:pack --force) so the piece-assembled editable level has not been checked in game; the chain stops at (168.76, 3.79, 79.77) because the next mesh edge turns 90 degrees. Release (AC #4, #5) is pending: a fix: commit gives a patch bump, so the minor bump needs a feat: type or release-as, and the pipeline from TASK-056.06 is still In Progress.
+
+Pack: with Unity Hub running (open -a 'Unity Hub'), task thps:pack --force built both bundles (log: 'built StandaloneWindows64' and 'built StandaloneLinux64'); the bundle files were byte-for-byte unchanged by timestamp since the new rails are attachments, which pack:install copies from attachments.json. Ran task pack:install and task thps:editable-level, relaunched on levels/thps-editable.mblevel.json (251 edits): slide held, 'grind started at (162.6, 7.7, 63.0) on the rail at (162.6, 3.7, 64.4)', so the piece-assembled Warehouse grinds on the east ledge too. Docs: east ledge check added to docs/thps-warehouse-layout.md; site synced, npm run check and build pass; npm run test:site has one failure that predates this change (tests/site.test.js:37 expects scripts/mcp_server.py on the showcase page, the server now lives in src/megabonk_harness).
 <!-- SECTION:NOTES:END -->
