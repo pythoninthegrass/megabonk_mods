@@ -24,7 +24,7 @@ test('all media and local assets resolve in the static output', async () => {
 });
 
 test('contains truthful setup, formatted commands and non-scripted disclosures', () => {
-  assert.match(html, /Public installer downloads aren’t available yet/);
+  assert.doesNotMatch(html, /Public installer downloads aren’t available yet|No public release download yet/);
   assert.match(html, /Windows build of Megabonk/);
   assert.match(html, /MEGABONK_DEV=true/);
   assert.match(html, /unofficial, fan-made mod/);
@@ -45,6 +45,15 @@ test('all fragment destinations exist', () => {
   for (const [, fragment] of html.matchAll(/href="#([^"]+)"/g)) {
     assert.ok(html.includes(`id="${fragment}"`), `missing #${fragment}`);
   }
+});
+
+test('start section links to the published player guide and Thunderstore release', () => {
+  const start = html.match(/<section\b[^>]*id="start"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(start, 'start section exists');
+  assert.match(start, /href="https:\/\/docs\.megabonkmod\.party\/docs\/player-guide\/"/);
+  assert.match(start, /href="https:\/\/thunderstore\.io\/c\/megabonk\/p\/pythoninthegrass\/Megabonk_Level_Editor\/"/);
+  assert.doesNotMatch(start, /href="[^"]*\/blob\/main\/docs\/player-guide\.md"/);
+  assert.doesNotMatch(start, /not.*available yet|No public release|development project/);
 });
 
 test('Docs uses the same navigation treatment as Source and links to the wiki', () => {
