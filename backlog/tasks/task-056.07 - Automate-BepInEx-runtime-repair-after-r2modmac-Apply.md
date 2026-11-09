@@ -1,10 +1,10 @@
 ---
 id: TASK-056.07
 title: Automate BepInEx runtime repair after r2modmac Apply
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-09 16:27'
-updated_date: '2026-11-09 16:32'
+updated_date: '2026-11-09T19:47:00Z'
 labels:
   - bepinex
   - wine
@@ -35,6 +35,14 @@ Provide a safe local Wine repair task after r2modmac applies BepInEx but omits d
 - [x] #5 Focused automated tests and usage documentation cover repair and refusal paths.
 <!-- AC:END -->
 
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
+<!-- DOD:END -->
+
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
@@ -49,10 +57,8 @@ Implementation and validation complete, pending commit and full task-check hygie
 Maintainer approved committing/pushing the helper and pulling it on the authoring Mac, but will run the repair manually. Remote checkout is clean on main. No remote repair or game launch is authorized for this step.
 <!-- SECTION:NOTES:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [x] #2 Tests written first for testable logic
-- [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
-<!-- DOD:END -->
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added `scripts/repair_bepinex.py` and the `wine:bepinex:repair` task. It restores the dotnet runtime and pack metadata r2modmac omits from a pinned, checksum-verified pack, parks the MelonLoader `version.dll` proxy, and reports the winhttp override requirement without editing plugins, configuration or UserData. Dry-run makes no changes, repeat runs are safe, existing backups are never overwritten, and it refuses to touch a running game. 16 focused tests and usage docs in `docs/development.md` and `docs/player-guide.md`. `task check` passes (1308 passed, 1 skipped). No remote host was modified; the repair is run manually by the maintainer.
+<!-- SECTION:FINAL_SUMMARY:END -->
