@@ -60,12 +60,12 @@ uv run scripts/run.py relaunch levels/bramblecrown-hill.mblevel.json
 
 ## Explore
 
-- [`src/`](src/) / [`tests/`](tests/) — C# plugin, pure logic and regression tests.
-- [`scripts/`](scripts/) — launch, harness, MCP, level generators and packaging.
-- [`levels/`](levels/) — Bramblecrown Hill, Warehouse placement data and Forest example.
-- [`unity/`](unity/) — optional local asset-pack authoring.
-- [`pkg/`](pkg/README.md) / [`go/`](go/) — package metadata and legacy standalone installer.
-- [`site/`](site/README.md) — the showcase website.
+- [`src/`](src/) / [`tests/`](tests/): C# plugin, pure logic and regression tests.
+- [`scripts/`](scripts/): launch, harness, MCP, level generators and packaging.
+- [`levels/`](levels/): Bramblecrown Hill, Warehouse placement data and Forest example.
+- [`unity/`](unity/): optional local asset-pack authoring.
+- [`pkg/`](pkg/README.md) / [`go/`](go/): package metadata and legacy standalone installer.
+- [`site/`](site/README.md): the showcase website.
 
 See [level format](docs/level-format.md), [development and console commands](docs/development.md),
 [asset packs](docs/asset-bundles.md), and [Thunderstore packaging](docs/thunderstore.md).
