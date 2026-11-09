@@ -1,0 +1,8 @@
+This directory vendors the Impeccable agent skill from
+https://github.com/pbakaus/impeccable, engine version 0.1.19
+(see scripts/VERSION), licensed under the Apache License, Version 2.0.
+Copyright 2025 Paul Bakaus. See LICENSE.
+
+scripts/modern-screenshot.umd.js is vendored separately from
+https://github.com/qq15725/modern-screenshot, licensed under the MIT
+License. Copyright (c) 2021-present wxm. See scripts/LICENSE.modern-screenshot.
