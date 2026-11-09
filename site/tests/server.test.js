@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 import { createApp } from '../server.mjs';
 import { runSmoke } from '../smoke.mjs';
+import { get } from 'node:http';
 
 const server = createApp({ root: new URL('../dist/', import.meta.url) });
 await new Promise((resolve, reject) => {
@@ -21,6 +22,31 @@ test('the home page and every referenced local CSS, script and image are served'
 
 test('unknown paths answer 404', async () => {
   assert.equal((await fetch(`${base}does-not-exist`)).status, 404);
+});
+
+test('docs hostname root redirects to the wiki, preserving queries', async () => {
+  const response = await new Promise((resolve, reject) => {
+    get(`${base}?from=home`, { headers: { host: 'docs.megabonkmod.party' } }, (res) => {
+      res.resume();
+      resolve(res);
+    }).on('error', reject);
+  });
+  assert.equal(response.statusCode, 308);
+  assert.equal(response.headers.location, '/docs/?from=home');
+});
+
+test('wiki routes, raw Markdown and search assets have correct content types', async () => {
+  for (const [path, type] of [
+    ['docs/', 'text/html'],
+    ['docs/player-guide.md', 'text/markdown'],
+    ['pagefind/pagefind.js', 'text/javascript'],
+    ['pagefind/wasm.en.pagefind', 'application/wasm'],
+  ]) {
+    const response = await fetch(new URL(path, base));
+    assert.equal(response.status, 200, path);
+    assert.ok(response.headers.get('content-type').startsWith(type), path);
+  }
+  assert.equal((await fetch(new URL('docs/player-guide', base), { redirect: 'manual' })).status, 308);
 });
 
 test('an encoded traversal never escapes the served root', async () => {

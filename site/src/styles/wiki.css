@@ -1,0 +1,22 @@
+@import '@fontsource/archivo/latin-700.css';
+@import '@fontsource-variable/public-sans';
+
+:root {
+  --sl-font: 'Public Sans Variable', sans-serif;
+  --sl-content-width: 72ch;
+  --sl-color-accent-low: #45251f;
+  --sl-color-accent: #e89579;
+  --sl-color-accent-high: #ffd9c9;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #f6e5df;
+  --sl-color-accent: #b83c29;
+  --sl-color-accent-high: #842b1d;
+  --sl-color-bg: #ffffff;
+  --sl-color-bg-nav: #dfeaf0;
+  --sl-color-bg-sidebar: #dfeaf0;
+}
+h1, h2, h3, .site-title { font-family: Archivo, sans-serif; }
+h1 { text-wrap: balance; }
+::selection { background: var(--sl-color-text-accent); color: var(--sl-color-bg); }
+:focus-visible { outline: 3px solid var(--sl-color-text-accent); outline-offset: 3px; }

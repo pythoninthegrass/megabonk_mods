@@ -44,7 +44,7 @@ npm exec astro dev stop
 
 ## Container serving
 
-Docker Engine with Docker Compose v2 is the only prerequisite: the image builds the site from source inside the container, so the host needs no Node, npm or game tooling for this workflow. The container tooling lives with the site: `site/Dockerfile`, `site/docker-compose.yml`, `site/.dockerignore`, plus the dependency-free static server `site/server.mjs` and the smoke check `site/smoke.mjs`. The multi-stage Dockerfile runs `npm ci` and `astro build` in a Node 22 Alpine build stage, then serves `dist/` from a slim stage that contains only `dist/`, `server.mjs` and `smoke.mjs` and runs as a non-root user. The build context is `site/`, so game and mod assets never enter it, and `site/.dockerignore` additionally keeps out `node_modules/`, `.astro/`, `dist/`, the `.impeccable/` design-review state, `.env*` files and logs.
+Docker Engine with Docker Compose v2 is the only prerequisite: the image builds the site from source inside the container, so the host needs no Node, npm or game tooling. The container tooling lives with the site: `site/Dockerfile`, `site/docker-compose.yml`, `site/Dockerfile.dockerignore`, `site/server.mjs` and `site/smoke.mjs`. The multi-stage Dockerfile runs `npm ci` and `npm run build` on Node 22 Alpine, then serves `dist/` from a non-root stage containing only the output, server and smoke check. The repository-root context allows the wiki sync to read `docs/`; the Dockerfile-specific ignore file permits only docs and site sources and excludes dependencies, generated output, `.impeccable/`, `.env*` and logs. Game and mod assets never enter the context.
 
 From the repository root:
 
@@ -80,7 +80,7 @@ Paths below are relative to the repository root.
 | `site/tests/` | Clipboard unit tests and assertions against the generated page |
 | `site/server.mjs` | Dependency-free static server used by the container and the built-output serve tests |
 | `site/smoke.mjs` | Smoke check of the home page and every local CSS, JavaScript and image it references |
-| `site/Dockerfile`, `site/docker-compose.yml`, `site/.dockerignore` | Multi-stage container build and local Compose serving, described under Container serving |
+| `site/Dockerfile`, `site/docker-compose.yml`, `site/Dockerfile.dockerignore` | Multi-stage container build and local Compose serving, described under Container serving |
 | `site/.env.example` | Template for the gitignored `site/.env`: Compose port plus the Dokploy CLI credentials |
 | `dokploy.yml` | Declarative Dokploy deployment config for the published site, applied with the `ic` CLI under Deployment |
 
@@ -134,7 +134,7 @@ Review desktop and mobile layouts in a real browser, including both screenshot e
 
 ## Deployment
 
-`npm run build` produces `site/dist/`, suitable for a static host at the domain root; the site is published at `https://megabonkmod.party/`. Deployment is declarative: `dokploy.yml` at the repository root describes the project, the single `site` app and its domain, and the [icarus](https://github.com/pythoninthegrass/icarus) CLI (`ic`) reconciles that file against a self-hosted Dokploy control plane through its API. The control plane's address, API key and SSH target are the only hosting details that live outside the repository, in a gitignored `site/.env` copied from [`site/.env.example`](../site/.env.example) (`DOKPLOY_URL`, `DOKPLOY_API_KEY`, `DOKPLOY_ENV`, `DOKPLOY_SSH_*`); `site/.dockerignore` keeps that file out of the image and the Compose build context, and the credentials configure the CLI only — `dokploy.yml` sets `create_env_file: false`, so nothing from it is pushed into the container. Icarus reads `.env` from the working directory and locates `dokploy.yml` by walking up, so run every `ic` command from `site/`:
+`npm run build` produces `site/dist/`: the showcase at `/` and the player wiki at `/docs/`. Deployment is declarative: `dokploy.yml` at the repository root describes the project, the single `site` app and its domains, and the [icarus](https://github.com/pythoninthegrass/icarus) CLI (`ic`) reconciles that file against a self-hosted Dokploy control plane through its API. The control plane's address, API key and SSH target live outside the repository in a gitignored `site/.env` copied from [`site/.env.example`](../site/.env.example) (`DOKPLOY_URL`, `DOKPLOY_API_KEY`, `DOKPLOY_ENV`, `DOKPLOY_SSH_*`). `site/Dockerfile.dockerignore` keeps that file out of the build context, and the credentials configure the CLI only — `dokploy.yml` sets `create_env_file: false`. Icarus reads `.env` from the working directory and locates `dokploy.yml` by walking up, so run every `ic` command from `site/`:
 
 ```sh
 cd site
@@ -147,13 +147,17 @@ ic --env prod logs site     # container logs, over SSH
 
 Install the CLI once from a checkout of icarus (`uv tool install <icarus checkout>`). What the config provisions:
 
+Credentials may instead live in the gitignored repository-root `.env`: set `DOTENV_FILE=../.env` when invoking Icarus from `site/`. No `env_targets` or per-app environment is configured, so deployment credentials and game settings are not pushed into the site container.
+
+Some Icarus versions have incomplete reconciliation for existing apps: `plan` and `apply` do not compare or save `dockerContextPath` or GitHub `watchPaths`. When changing those fields, explicitly reconcile them through `application.saveBuildType` and `application.saveGithubProvider` before triggering the deploy. Preserve the existing GitHub provider and verify the remote owner, repository and branch first. An import can also encounter a `project.all` application summary without `appName`; obtain it from `application.one` using the summary's `applicationId`, rather than creating a replacement project.
+
 | Piece | Value |
 | --- | --- |
 | Project | `megabonkmod-party`, containing the one `site` app |
-| Source | GitHub `main`; Dokploy clones the repository and builds `site/Dockerfile` with the `site/` build context, so the published image is the one the local Compose file builds |
-| Domain | `megabonkmod.party` routed to container port `8080`, HTTPS with a Let's Encrypt certificate; `www.megabonkmod.party` has its own router, certificate and a redirect to the apex |
+| Source | GitHub `main`; Dokploy builds `site/Dockerfile` with the repository-root context, restricted by `site/Dockerfile.dockerignore`; local Compose builds the same image |
+| Domain | Apex, `www` and `docs.megabonkmod.party` route to port `8080` with HTTPS; `www` redirects to the apex, and the docs hostname's root redirects to `/docs/` |
 | Health check | `node smoke.mjs` inside the container, the same check the Compose healthcheck runs |
-| Auto-deploy | a push to `main` that touches `site/**` |
+| Auto-deploy | a push to `main` that touches `site/**` or `docs/**` |
 
 Because Dokploy builds from the pushed commit, content reaches the site only after it is committed and pushed; `ic --env prod trigger` re-runs a deploy on demand. `.dokploy-state/prod.json` maps the config's names to Dokploy's resource ids and is gitignored: `ic --env prod import` regenerates it from an existing project, and it must be present before `apply`, which otherwise creates a duplicate project. Verify a deploy from anywhere with the container's own smoke check:
 
@@ -162,9 +166,21 @@ curl -sI https://megabonkmod.party/          # 200, text/html
 node smoke.mjs https://megabonkmod.party/    # exit 0 when every referenced asset serves
 ```
 
-Both hosts' DNS is managed by DNSControl in the infrastructure repo's `dns/records/dnsconfig.js`, not in this repository. The apex and `www` are A records under `CF_PROXY_DEFAULT_OFF`, so each resolves directly to the host with no CDN proxy — otherwise the Let's Encrypt HTTP-01 challenge cannot complete. `www.megabonkmod.party` has its own router and Let's Encrypt certificate in `dokploy.yml`, plus a Traefik `redirectRegex` that sends it to the apex at HTTP 308 with the path preserved. DNSControl changes follow the usual preview-then-push loop against the `cloudflare` provider: `dnscontrol preview --domains megabonkmod.party` reports `0 corrections` when the zone matches the config, which is the check to run before a `push`.
+DNS is managed by DNSControl in the infrastructure repo's `dns/records/dnsconfig.js`, not here. The apex, `www` and `docs` are A records under `CF_PROXY_DEFAULT_OFF`, resolving directly to the host so the Let's Encrypt HTTP-01 challenge can complete. `www.megabonkmod.party` has its own router and certificate plus a Traefik `redirectRegex` to the apex at HTTP 308 with the path preserved. DNSControl changes follow the usual preview-then-push loop: `dnscontrol preview --domains megabonkmod.party` reports `0 corrections` when the zone matches the config.
 
-The canonical URL appears in `site/astro.config.mjs` and the page's metadata, including social-image URLs. Keep those values consistent if the domain changes. Build and publish the static output; no Node server, game installation or harness endpoint is needed in production beyond the dependency-free static server in the image.
+Wiki canonical URLs use `https://docs.megabonkmod.party` from `site/astro.config.mjs`; the showcase retains explicit apex metadata. Build and publish the static output; no game installation or harness endpoint is needed in production beyond the static server in the image.
+
+## Wiki development
+
+The wiki follows the Starlight layout used by the reference docs site: a searchable sidebar, page contents, code-block copy controls and a page-level Markdown menu. It lives inside `site/`, alongside the showcase, rather than in a separate application.
+
+`docs/` remains authoritative. `site/scripts/sync-docs.mjs` publishes only `player-guide`, `player-installer`, `starter-level`, `music`, the three `thps-warehouse` guides and `thunderstore`. It reads each leading H1 into frontmatter and writes generated, gitignored copies under `site/src/content/docs/docs/`. Links between published guides become `/docs/<slug>/`; unpublished technical docs and other repository files link to GitHub with anchors preserved. Code samples are not rewritten. Unchanged pages retain their timestamps; orphan removal only touches marked generated pages. The wiki home is hand-authored in `site/src/content/docs/docs/index.md`.
+
+Run `npm run dev` from `site/` to sync once and watch authoritative docs with hot reload. `npm run check` also syncs before checking types. **Pagefind search requires `npm run build` and `npm run preview` or the production server**; the dev server does not build an index. The build explicitly sets production mode even if the invoking shell has `NODE_ENV=development`.
+
+`/docs/<slug>.md` returns standalone Markdown, with `/docs/index.md` for the home page. Copy page fetches the same endpoint as View as Markdown, checks the response status and falls back to a temporary textarea when clipboard access is unavailable or denied. The Markdown link works without JavaScript. The three `/llms*.txt` endpoints bundle only published wiki content.
+
+`npm test` covers sync/link rewriting and clipboard paths. `npm run test:site` checks built pages, production search markup and index files, canonical metadata, Markdown endpoints, local links, hostname redirects and the server smoke test. Use `node smoke.mjs https://docs.megabonkmod.party/` after deployment as well as the apex check; it verifies wiki routes, raw Markdown and the Pagefind JavaScript asset.
 
 ## Documentation references
 

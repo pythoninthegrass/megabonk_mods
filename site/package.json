@@ -4,22 +4,30 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev --host 127.0.0.1",
-    "build": "astro build",
+    "sync:docs": "node scripts/sync-docs.mjs",
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run sync:docs && NODE_ENV=production astro build",
     "preview": "astro preview --host 127.0.0.1",
-    "check": "astro check",
-    "test": "node --test tests/clipboard.test.js",
-    "test:site": "node --test tests/site.test.js tests/server.test.js"
+    "check": "npm run sync:docs && astro check",
+    "test": "node --test tests/clipboard.test.js tests/docs-sync.test.js tests/copy-page.test.js",
+    "test:site": "node --test tests/site.test.js tests/server.test.js tests/wiki.test.js"
   },
   "dependencies": {
-    "@fontsource/archivo": "^5.2.0",
+    "@astrojs/sitemap": "^3.7.4",
+    "@astrojs/starlight": "^0.42.10",
     "@fontsource-variable/public-sans": "^5.2.0",
+    "@fontsource/archivo": "^5.2.0",
     "@tailwindcss/vite": "^4.1.0",
     "alpinejs": "^3.15.0",
     "astro": "^7.4.7",
     "basecoat-css": "^1.1.0",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
     "sharp": "^0.35.5",
-    "tailwindcss": "^4.1.0"
+    "starlight-llms-txt": "^0.12.0",
+    "tailwindcss": "^4.1.0",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.2.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.0",

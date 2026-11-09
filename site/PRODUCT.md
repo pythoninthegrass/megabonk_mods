@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Single-page, static Astro site at megabonkmod.party. Prefer Markdown and vanilla JavaScript; use Alpine.js for stateful interactions and Basecoat UI for controls. Hosting is undecided.
+Static Astro showcase at megabonkmod.party with an integrated Starlight wiki at docs.megabonkmod.party/docs/. Prefer Markdown and vanilla JavaScript; the showcase uses Alpine.js and Basecoat UI, while the wiki keeps Starlight's documentation controls. Both build into one static image.
 
 ## Users
 
@@ -17,6 +17,8 @@ Megabonk players who want to create, playtest and share custom levels. Developer
 ## Product Purpose
 
 Explain what Megabonk Levels adds to the base game and help a visitor begin creating through the maintained repository guides.
+
+The wiki helps players install the mod, try and share levels, and find music, Warehouse and packaging references. Publish the eight selected guides from repository Markdown without duplicating their maintenance. Provide full-text search, per-page Markdown copying and raw Markdown links; keep internal technical docs in the source repository. The legacy player installer must remain clearly distinguished from the current BepInEx route.
 
 ## Capabilities and Constraints
 

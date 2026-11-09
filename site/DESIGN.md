@@ -150,6 +150,14 @@ Media plates and section bands are square-edged. Small control corners and sligh
 
 ## Do's and Don'ts
 
+### Wiki reading surface
+
+The `/docs/` routes extend this world through Starlight, without restyling the showcase. Keep the conventional masthead search, grouped left sidebar, central reading column and right-side section contents. Mobile uses Starlight's menu and page-contents disclosures. This is a Read surface: comprehension and familiar wayfinding take priority over display effects.
+
+In light mode, navigation uses the pale-blue table (`#dfeaf0`), the reading background is standard white (`#ffffff`), and the accent remains vermilion (`#b83c29`, with `#842b1d` for text accents). Dark mode retains Starlight's neutral surfaces with peach accents (`#e89579`, `#ffd9c9`) on a muted dark-red accent ground (`#45251f`). Archivo supplies headings; Public Sans supplies body text, navigation and controls. The content measure is `72ch`.
+
+Page tools sit directly below the title: a progressively enhanced Copy page button, a native Markdown options disclosure and a polite live status. The dropdown anchors to the full tools row so it stays inside narrow screens, including when Copy page is hidden without JavaScript. Controls retain a 44px minimum height, 5px corners and visible 3px focus outlines. View as Markdown remains a normal link; copying uses that same plain-text endpoint. Search keeps Starlight's modal, keyboard shortcut, section-level results and empty state.
+
 ### Do
 
 - **Do** keep the website system scoped to `site/`.

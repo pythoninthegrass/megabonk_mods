@@ -1,6 +1,6 @@
 # megabonkmod.party
 
-Single-page, static Astro showcase for Megabonk Levels, published at [megabonkmod.party](https://megabonkmod.party/) from the Dokploy configuration in [`dokploy.yml`](../dokploy.yml).
+Static Astro showcase for Megabonk Levels at [megabonkmod.party](https://megabonkmod.party/), with a Starlight player wiki at [docs.megabonkmod.party/docs/](https://docs.megabonkmod.party/docs/). Both ship in one image from [`dokploy.yml`](../dokploy.yml).
 
 See [Website development](../docs/website.md) for the full workflow. Website design context lives alongside this file in [`PRODUCT.md`](PRODUCT.md), [`DESIGN.md`](DESIGN.md) and `.impeccable/`; run Impeccable from `site/` or target the site explicitly from the repository root.
 
@@ -23,11 +23,19 @@ npm run test:site
 npm run preview
 ```
 
-The build produces `dist/`, suitable for a static host at the domain root. The canonical URL is set in `astro.config.mjs` and page metadata. Configure the custom domain and HTTPS at the chosen host before launch.
+The build produces `dist/` with the showcase at `/` and the wiki at `/docs/`. Wiki canonical URLs use the docs hostname; the showcase retains its apex canonical metadata. The production server redirects only the docs hostname's root to `/docs/`.
+
+## Wiki content
+
+Edit the authoritative Markdown in `../docs/`, not the generated copies in `src/content/docs/docs/`. `scripts/sync-docs.mjs` publishes an explicit eight-guide allowlist before `dev`, `check` and `build`; the dev wrapper watches `../docs/`. It turns the leading H1 into frontmatter, rewrites published-guide links to wiki URLs and other repository links to GitHub, and preserves unchanged file timestamps. Generated copies are gitignored. The wiki index is hand-authored at `src/content/docs/docs/index.md`; navigation is curated in `astro.config.mjs`.
+
+Starlight provides Pagefind search, sidebar navigation, section contents and code-block copying. **Search works only after a production build**, not in `npm run dev`. Use `npm run build` then `npm run preview` (or `node server.mjs`) to test search. The build explicitly sets `NODE_ENV=production` so an inherited development setting cannot disable the search UI.
+
+Each page has Copy page and View as Markdown controls. `/docs/<slug>.md` serves standalone Markdown with its title, and `/docs/index.md` serves the index. Copy uses that endpoint, with a textarea fallback for plain HTTP or denied clipboard permissions. `/llms.txt`, `/llms-full.txt` and `/llms-small.txt` provide the index and combined text. No-JavaScript readers can still follow View as Markdown.
 
 ## Serving with Docker
 
-With Docker Engine and Docker Compose v2 installed, the site builds and serves in a container without host Node or npm. The multi-stage `Dockerfile` builds `dist/` on Node 22 Alpine, then serves it with the dependency-free static server in `server.mjs`; the image contains only `dist/`, `server.mjs` and `smoke.mjs`, runs as a non-root user, and the `site/`-scoped build context with `.dockerignore` excludes `node_modules/`, `.astro/`, `dist/`, the `.impeccable/` design-review state and `.env*` files. From `site/`:
+With Docker Engine and Docker Compose v2 installed, the site builds and serves in a container without host Node or npm. The multi-stage `Dockerfile` builds on Node 22 Alpine, then serves with `server.mjs`; the non-root image contains only `dist/`, `server.mjs` and `smoke.mjs`. The build context is the repository root so the wiki can read `docs/`. The Dockerfile-specific `Dockerfile.dockerignore` allows only `docs/*.md` and site sources, excluding dependencies, output, design-review state, generated guides and `.env*` files. From `site/`:
 
 ```sh
 docker compose up -d --build   # build and start, then open http://127.0.0.1:8080/

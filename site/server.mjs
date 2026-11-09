@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,6 +11,7 @@ const TYPES = {
   '.jpg': 'image/jpeg',
   '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.md': 'text/markdown; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
@@ -18,6 +19,8 @@ const TYPES = {
   '.webp': 'image/webp',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
+  '.wasm': 'application/wasm',
+  '.xml': 'application/xml; charset=utf-8',
 };
 
 function reply(res, status, headers, body) {
@@ -33,14 +36,20 @@ export function createApp({ root }) {
       return;
     }
     let pathname;
+    let url;
     try {
-      pathname = decodeURIComponent(new URL(req.url, 'http://site.local').pathname);
+      url = new URL(req.url, 'http://site.local');
+      pathname = decodeURIComponent(url.pathname);
     } catch {
       reply(res, 400, { 'content-length': '0' });
       return;
     }
     if (pathname.includes('\0')) {
       reply(res, 400, { 'content-length': '0' });
+      return;
+    }
+    if (pathname === '/' && req.headers.host?.split(':')[0].toLowerCase() === 'docs.megabonkmod.party') {
+      reply(res, 308, { location: `/docs/${url.search}`, 'content-length': '0' });
       return;
     }
     if (pathname === '/' || pathname.endsWith('/')) pathname += 'index.html';
@@ -51,13 +60,19 @@ export function createApp({ root }) {
     }
     let body;
     try {
+      if (!pathname.endsWith('index.html') && (await stat(target)).isDirectory()) {
+        reply(res, 308, { location: `${url.pathname}/${url.search}`, 'content-length': '0' });
+        return;
+      }
       body = await readFile(target);
     } catch (error) {
       reply(res, error.code === 'ENOENT' || error.code === 'EISDIR' ? 404 : 500, { 'content-length': '0' });
       return;
     }
     const headers = {
-      'content-type': TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream',
+      'content-type': /\/wasm\.[\w-]+\.pagefind$/.test(target)
+        ? 'application/wasm'
+        : TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream',
       'content-length': String(body.byteLength),
       'cache-control': target.startsWith(join(rootDir, '_astro'))
         ? 'public, max-age=31536000, immutable'

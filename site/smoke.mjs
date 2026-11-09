@@ -9,6 +9,7 @@ const EXPECTED = {
   '.jpg': 'image/jpeg',
   '.js': 'text/javascript',
   '.json': 'application/json',
+  '.md': 'text/markdown',
   '.mjs': 'text/javascript',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
@@ -16,6 +17,7 @@ const EXPECTED = {
   '.webp': 'image/webp',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
+  '.xml': 'application/xml',
 };
 
 function fail(message) {
@@ -52,6 +54,14 @@ export async function runSmoke(baseUrl) {
   const html = await home.text();
   failIf(!html.includes('<h1'), 'home page has no <h1>');
   const refs = localReferences(html);
+  const wiki = await fetch(new URL('/docs/', baseUrl));
+  failIf(wiki.status !== 200, `wiki answered ${wiki.status}`);
+  const wikiHtml = await wiki.text();
+  failIf(!wikiHtml.includes('Megabonk Level Editor wiki'), 'wiki title is missing');
+  for (const ref of localReferences(wikiHtml)) refs.add(ref);
+  refs.add('/docs/player-guide.md');
+  refs.add('/pagefind/pagefind.js');
+  refs.add('/llms.txt');
   const kinds = { css: 0, js: 0, images: 0 };
   for (const ref of refs) countKind(ref, kinds);
   failIf(kinds.css < 1, 'the home page references no local CSS');
@@ -61,7 +71,7 @@ export async function runSmoke(baseUrl) {
     const response = await fetch(new URL(ref, baseUrl));
     failIf(response.status !== 200, `${ref} answered ${response.status}`);
     const extension = ref.slice(ref.lastIndexOf('.'));
-    const expected = EXPECTED[extension];
+    const expected = ref.endsWith('/') ? 'text/html' : EXPECTED[extension];
     failIf(!expected, `${ref} has the unexpected extension ${extension}`);
     const served = (response.headers.get('content-type') ?? '').split(';')[0];
     failIf(served !== expected, `${ref} served as ${served}, expected ${expected}`);

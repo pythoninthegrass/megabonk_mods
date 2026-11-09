@@ -1,0 +1,79 @@
+---
+import Default from '@astrojs/starlight/components/PageTitle.astro';
+
+const entry = Astro.locals.starlightRoute?.entry;
+const markdown = entry ? `/docs/${entry.id === 'docs' ? 'index' : entry.id.replace(/^docs\//, '')}.md` : undefined;
+---
+
+<Default><slot /></Default>
+{markdown && <div class="page-tools" data-page-md={markdown}>
+  <button type="button" data-copy-page hidden>
+    <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="4.5" y="4.5" width="8" height="9.5" rx="1.5"></rect>
+      <path d="M3.5 11.5h-.25A1.25 1.25 0 0 1 2 10.25v-7A1.25 1.25 0 0 1 3.25 2h6.5A1.25 1.25 0 0 1 11 3.25v.25"></path>
+    </svg>
+    <span>Copy page</span>
+  </button>
+  <details>
+    <summary>Markdown options</summary>
+    <div class="options">
+      <a href={markdown}>View as Markdown</a>
+      <a href="/llms.txt">llms.txt — docs index</a>
+      <a href="/llms-full.txt">llms-full.txt — all guides</a>
+      <a href="/llms-small.txt">llms-small.txt — compact</a>
+    </div>
+  </details>
+  <span class="copy-status" role="status" aria-live="polite"></span>
+</div>}
+
+<script>
+  import { copyPage } from '../scripts/copy-page.js';
+
+  function init() {
+    document.querySelectorAll<HTMLElement>('[data-page-md]').forEach((root) => {
+      if (root.dataset.initialized) return;
+      root.dataset.initialized = 'true';
+      const button = root.querySelector<HTMLButtonElement>('[data-copy-page]');
+      const status = root.querySelector<HTMLElement>('[role="status"]');
+      const details = root.querySelector('details');
+      if (!button || !status) return;
+      button.hidden = false;
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        status.textContent = 'Copying…';
+        try {
+          await copyPage(root.dataset.pageMd!, { clipboard: navigator.clipboard, document });
+          status.textContent = 'Copied!';
+        } catch {
+          status.textContent = 'Copy failed. Open View as Markdown to copy manually.';
+        } finally {
+          button.disabled = false;
+        }
+      });
+      root.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && details?.open) {
+          details.open = false;
+          details.querySelector('summary')?.focus();
+        }
+      });
+      document.addEventListener('click', (event) => {
+        if (details?.open && !root.contains(event.target as Node)) details.open = false;
+      });
+    });
+  }
+  init();
+  document.addEventListener('astro:page-load', init);
+</script>
+
+<style>
+  .page-tools { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 1rem; font-size: var(--sl-text-sm); }
+  button, summary { min-height: 44px; padding: 0.6rem 0.85rem; border: 1px solid var(--sl-color-gray-5); border-radius: 5px; background: var(--sl-color-bg); color: var(--sl-color-text); font: inherit; cursor: pointer; }
+  button { display: inline-flex; align-items: center; gap: 0.4rem; }
+  button[hidden] { display: none; }
+  button:disabled { opacity: 0.65; cursor: wait; }
+  button:hover, summary:hover { background: var(--sl-color-gray-6); }
+  .options { position: absolute; z-index: 10; top: calc(100% + 0.4rem); left: 0; width: min(18rem, 75vw); padding: 0.5rem; border: 1px solid var(--sl-color-gray-5); border-radius: 5px; background: var(--sl-color-bg); }
+  .options a { display: block; padding: 0.65rem; color: var(--sl-color-text); text-underline-offset: 0.2em; }
+  .options a:hover { background: var(--sl-color-gray-6); }
+  .copy-status { color: var(--sl-color-gray-2); }
+</style>

@@ -5,7 +5,7 @@ import test from 'node:test';
 const root = new URL('../dist/', import.meta.url);
 const html = await readFile(new URL('index.html', root), 'utf8');
 
-test('ships exactly one static page with the canonical domain', () => {
+test('preserves the static showcase with the canonical domain', () => {
   assert.equal((html.match(/<h1\b/g) ?? []).length, 1);
   assert.match(html, /rel="canonical" href="https:\/\/megabonkmod\.party\/"/);
   for (const id of ['editor', 'console', 'mcp', 'start', 'editor-view', 'play-view']) {

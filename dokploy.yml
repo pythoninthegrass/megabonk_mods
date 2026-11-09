@@ -1,12 +1,12 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/pythoninthegrass/icarus/main/schemas/dokploy.schema.json
 
-# Deploys the megabonkmod.party showcase (site/) to Dokploy.
-# Run from the repository root with the ic CLI, e.g. `ic --env prod apply`.
+# Deploys the showcase and wiki (site/) to Dokploy.
+# Run the ic CLI from site/, e.g. `ic --env prod apply`.
 
 project:
   name: megabonkmod-party
   description: |
-    Single-page static Astro showcase for Megabonk Levels, served by the
+    Static Astro showcase and player wiki for Megabonk Levels, served by the
     dependency-free Node static server defined in site/Dockerfile.
 
   deploy_order:
@@ -24,10 +24,23 @@ environments:
         domain:
           - host: megabonkmod.party
             port: 8080
+            path: /
+            internalPath: /
+            stripPath: false
             https: true
             certificateType: letsencrypt
           - host: www.megabonkmod.party
             port: 8080
+            path: /
+            internalPath: /
+            stripPath: false
+            https: true
+            certificateType: letsencrypt
+          - host: docs.megabonkmod.party
+            port: 8080
+            path: /
+            internalPath: /
+            stripPath: false
             https: true
             certificateType: letsencrypt
         # Traefik redirectRegex: the apex is canonical, so www redirects to it.
@@ -43,12 +56,13 @@ apps:
     source: github
     buildType: dockerfile
     dockerfile: site/Dockerfile
-    dockerContextPath: site
+    dockerContextPath: /
     buildPath: /
     triggerType: push
     autoDeploy: false
     watchPaths:
       - site/**
+      - docs/**
     create_env_file: false
     healthCheck:
       command: node smoke.mjs
