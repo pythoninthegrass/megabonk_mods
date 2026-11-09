@@ -87,6 +87,20 @@ If a level shows up but looks empty or as a placeholder, it needs an asset pack 
 
 A level can have a picture on the Map Selection screen: put an image with the same name as the level next to it, for example `thps.png` beside `thps.mblevel.json`.
 
+## Installing an asset pack
+
+A level that needs an asset pack, such as the Warehouse (`thps`), needs the pack's files in the game folder as well as the level. A pack is a folder under `UserData/LevelPacks/` named for the pack, and it holds three files: the bundle, which has the pack's name and no file extension, plus `manifest.json` and `attachments.json`.
+
+1. Close Megabonk.
+2. Open the game folder (see [Finding your levels folder](#finding-your-levels-folder)). Create `UserData/LevelPacks/` if it is missing.
+3. Copy the pack's folder into it, so the files end up at `UserData/LevelPacks/thps/thps`, `UserData/LevelPacks/thps/manifest.json` and `UserData/LevelPacks/thps/attachments.json`. The three files sit directly in the pack's folder, with no extra folder around them.
+4. Copy the level's `.mblevel.json` file into `UserData/Levels/`, replacing an older copy if you have one.
+5. Start Megabonk. Packs load once per session, so a pack copied while the game is running appears only after a restart.
+
+A bundle is built for one platform. Use the Windows bundle for the Windows build of Megabonk, and the Linux bundle for the native Linux build. The mod does not convert one into the other. If the level still looks empty or as a placeholder, `BepInEx/LogOutput.log` names the pack it could not find as `pack '<name>' is not installed`; check the folder name and that the files are not one folder too deep.
+
+The Warehouse also sets the level to start a grind only while the slide button is held, so hold slide as you drop onto a rail or ledge.
+
 ## Controls and console commands
 
 Press **backtick/tilde** to open the mod's console, then type a command and
