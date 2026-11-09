@@ -256,7 +256,20 @@ A walkthrough that exercises the whole chain (agent, MCP, harness files, mod, ga
 
 If a step fails, `log_tail(pattern="Harness|Error")` shows whether the mod saw the command. A rejected command carries the mod's error text in the tool error, which says which layer refused it.
 
-Register it by adding the `megabonk` entry under `mcpServers` in `.mcp.json` (command `uv`, args `["run", "--script", "scripts/mcp_server.py"]`); the repo ships it already. Confirm it with `/mcp`, which lists `megabonk` as connected.
+Register it by adding the `megabonk` entry under `mcpServers` in a `.mcp.json` at the repository root; the repo ships it already. That one entry is the whole requirement: `uv` runs `scripts/mcp_server.py` as a PEP 723 script, so it installs its own pinned dependencies and needs nothing from the project environment. The repository's file also lists unrelated servers; a machine that only drives the game needs this:
+
+```json
+{
+  "mcpServers": {
+    "megabonk": {
+      "command": "uv",
+      "args": ["run", "--script", "scripts/mcp_server.py"]
+    }
+  }
+}
+```
+
+The server resolves the game directory from the environment and the nearest `.env` the same way `run.py` does, so the entry needs no `env` block unless a setting such as `MEGABONK_MCP_ENCODING` is wanted (see [Result encoding](#result-encoding)). Confirm it with `/mcp`, which lists `megabonk` as connected.
 
 ### Result encoding
 
