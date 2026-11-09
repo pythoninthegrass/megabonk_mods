@@ -50,7 +50,10 @@ function countKind(ref, kinds) {
 export async function runSmoke(baseUrl) {
   const home = await fetch(new URL('/', baseUrl));
   failIf(home.status !== 200, `home page answered ${home.status}`);
-  failIf(!(home.headers.get('content-type') ?? '').startsWith('text/html'), 'home page is not text/html');
+  failIf(
+    !(home.headers.get('content-type') ?? '').startsWith('text/html'),
+    'home page is not text/html',
+  );
   const html = await home.text();
   failIf(!html.includes('<h1'), 'home page has no <h1>');
   const refs = localReferences(html);
@@ -85,7 +88,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const target = process.argv[2] ?? 'http://127.0.0.1:8080/';
   try {
     const { references, css, js, images } = await runSmoke(target);
-    console.log(`smoke ok: ${target} served ${references} local references (${css} css, ${js} js, ${images} images)`);
+    console.log(
+      `smoke ok: ${target} served ${references} local references (${css} css, ${js} js, ${images} images)`,
+    );
   } catch (error) {
     console.error(`smoke failed: ${error.message}`);
     process.exitCode = 1;

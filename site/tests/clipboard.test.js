@@ -5,7 +5,11 @@ import { copyCommand } from '../src/scripts/clipboard.js';
 test('copies the exact command without changing quotes or indentation', async () => {
   const command = 'console(line="help player")\nstate()';
   let actual;
-  const result = await copyCommand(command, { writeText: async (text) => { actual = text; } });
+  const result = await copyCommand(command, {
+    writeText: async (text) => {
+      actual = text;
+    },
+  });
   assert.equal(actual, command);
   assert.deepEqual(result, { ok: true, message: 'Copied' });
 });
@@ -18,7 +22,11 @@ test('an unavailable clipboard gives a recoverable manual-copy message', async (
 });
 
 test('a denied clipboard permission does not report success', async () => {
-  const result = await copyCommand('help', { writeText: async () => { throw new Error('denied'); } });
+  const result = await copyCommand('help', {
+    writeText: async () => {
+      throw new Error('denied');
+    },
+  });
   assert.equal(result.ok, false);
   assert.equal(result.message, 'Select the command to copy it manually.');
 });

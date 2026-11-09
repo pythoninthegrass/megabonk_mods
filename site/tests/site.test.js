@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile, access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const root = new URL('../dist/', import.meta.url);
@@ -24,7 +24,10 @@ test('all media and local assets resolve in the static output', async () => {
 });
 
 test('contains truthful setup, formatted commands and non-scripted disclosures', () => {
-  assert.doesNotMatch(html, /Public installer downloads aren’t available yet|No public release download yet/);
+  assert.doesNotMatch(
+    html,
+    /Public installer downloads aren’t available yet|No public release download yet/,
+  );
   assert.match(html, /Windows build of Megabonk/);
   assert.match(html, /MEGABONK_DEV=true/);
   assert.match(html, /unofficial, fan-made mod/);
@@ -32,7 +35,10 @@ test('contains truthful setup, formatted commands and non-scripted disclosures',
   assert.match(html, /mcpServers/);
   assert.match(html, /level\.list/);
   assert.match(html, /scripts\/mcp_server\.py/);
-  assert.match(html, /<a\b[^>]*href="https:\/\/thunderstore\.io\/c\/megabonk\/p\/BepInEx\/BepInExPack_IL2CPP\/"[^>]*>BepInEx 6 IL2CPP<\/a>/);
+  assert.match(
+    html,
+    /<a\b[^>]*href="https:\/\/thunderstore\.io\/c\/megabonk\/p\/BepInEx\/BepInExPack_IL2CPP\/"[^>]*>BepInEx 6 IL2CPP<\/a>/,
+  );
   assert.match(html, /Megabonk Level Editor/);
   assert.match(html, /Thunderstore package does not include levels/);
   assert.doesNotMatch(html, /melon-loader\.com|included in default player packages/);
@@ -51,13 +57,18 @@ test('start section links to the published player guide and Thunderstore release
   const start = html.match(/<section\b[^>]*id="start"[\s\S]*?<\/section>/)?.[0];
   assert.ok(start, 'start section exists');
   assert.match(start, /href="https:\/\/docs\.megabonkmod\.party\/docs\/player-guide\/"/);
-  assert.match(start, /href="https:\/\/thunderstore\.io\/c\/megabonk\/p\/pythoninthegrass\/Megabonk_Level_Editor\/"/);
+  assert.match(
+    start,
+    /href="https:\/\/thunderstore\.io\/c\/megabonk\/p\/pythoninthegrass\/Megabonk_Level_Editor\/"/,
+  );
   assert.doesNotMatch(start, /href="[^"]*\/blob\/main\/docs\/player-guide\.md"/);
   assert.doesNotMatch(start, /not.*available yet|No public release|development project/);
 });
 
 test('Docs uses the same navigation treatment as Source and links to the wiki', () => {
-  const docs = html.match(/<a\b[^>]*href="https:\/\/docs\.megabonkmod\.party\/home\/"[^>]*>[\s\S]*?<\/a>/)?.[0];
+  const docs = html.match(
+    /<a\b[^>]*href="https:\/\/docs\.megabonkmod\.party\/home\/"[^>]*>[\s\S]*?<\/a>/,
+  )?.[0];
   assert.ok(docs, 'Docs navigation link is present');
   assert.match(docs, /class="source-link"/);
   assert.match(docs, />Docs\s*<svg\b/);

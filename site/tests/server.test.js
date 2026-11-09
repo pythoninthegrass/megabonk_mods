@@ -36,9 +36,13 @@ test('docs hostname root redirects to the wiki, preserving queries', async () =>
 });
 
 test('legacy wiki home URLs redirect without affecting guide routes', async () => {
-  for (const [path, destination] of [
-    ['docs/', '/home/'], ['docs', '/home/'], ['docs/index.md', '/home.md'],
-  ]) {
+  for (
+    const [path, destination] of [
+      ['docs/', '/home/'],
+      ['docs', '/home/'],
+      ['docs/index.md', '/home.md'],
+    ]
+  ) {
     const response = await fetch(new URL(`${path}?legacy=1`, base), { redirect: 'manual' });
     assert.equal(response.status, 308, path);
     assert.equal(response.headers.get('location'), `${destination}?legacy=1`, path);
@@ -46,18 +50,23 @@ test('legacy wiki home URLs redirect without affecting guide routes', async () =
 });
 
 test('wiki routes, raw Markdown and search assets have correct content types', async () => {
-  for (const [path, type] of [
-    ['home/', 'text/html'],
-    ['home.md', 'text/markdown'],
-    ['docs/player-guide.md', 'text/markdown'],
-    ['pagefind/pagefind.js', 'text/javascript'],
-    ['pagefind/wasm.en.pagefind', 'application/wasm'],
-  ]) {
+  for (
+    const [path, type] of [
+      ['home/', 'text/html'],
+      ['home.md', 'text/markdown'],
+      ['docs/player-guide.md', 'text/markdown'],
+      ['pagefind/pagefind.js', 'text/javascript'],
+      ['pagefind/wasm.en.pagefind', 'application/wasm'],
+    ]
+  ) {
     const response = await fetch(new URL(path, base));
     assert.equal(response.status, 200, path);
     assert.ok(response.headers.get('content-type').startsWith(type), path);
   }
-  assert.equal((await fetch(new URL('docs/player-guide', base), { redirect: 'manual' })).status, 308);
+  assert.equal(
+    (await fetch(new URL('docs/player-guide', base), { redirect: 'manual' })).status,
+    308,
+  );
 });
 
 test('an encoded traversal never escapes the served root', async () => {

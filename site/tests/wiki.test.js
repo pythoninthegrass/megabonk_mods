@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, readFile, readdir } from 'node:fs/promises';
+import { access, readdir, readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { guides } from '../scripts/sync-docs.mjs';
 
@@ -7,7 +7,10 @@ const root = new URL('../dist/', import.meta.url);
 
 test('exactly the approved guides are published alongside the wiki index', async () => {
   const entries = await readdir(new URL('docs/', root), { withFileTypes: true });
-  assert.deepEqual(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort(), [...guides].sort());
+  assert.deepEqual(
+    entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort(),
+    [...guides].sort(),
+  );
   await access(new URL('home/index.html', root));
   await access(new URL('index.html', root));
 });
@@ -18,7 +21,10 @@ test('every guide has canonical metadata, copy controls, standalone Markdown and
     const page = `${path}/index.html`;
     const html = await readFile(new URL(page, root), 'utf8');
     const markdown = await readFile(new URL(`${path}.md`, root), 'utf8');
-    assert.ok(html.includes(`rel="canonical" href="https://docs.megabonkmod.party/${path}/"`), slug);
+    assert.ok(
+      html.includes(`rel="canonical" href="https://docs.megabonkmod.party/${path}/"`),
+      slug,
+    );
     assert.ok(html.includes(`data-page-md="/${path}.md"`), slug);
     assert.ok(html.includes('View as Markdown'), slug);
     assert.ok(html.includes('id="starlight__search"'), 'production search UI must render');
@@ -28,7 +34,10 @@ test('every guide has canonical metadata, copy controls, standalone Markdown and
     for (const [, href] of html.matchAll(/(?:href|src)="(\/[^"?#]*)/g)) {
       await access(new URL(href.slice(1) + (href.endsWith('/') ? 'index.html' : ''), root));
     }
-    assert.doesNotMatch(html, /(?:href|src)="(?:\.\.\/|\.\/)?(?:development|asset-bundles|level-format)\.md/);
+    assert.doesNotMatch(
+      html,
+      /(?:href|src)="(?:\.\.\/|\.\/)?(?:development|asset-bundles|level-format)\.md/,
+    );
   }
 });
 
@@ -44,10 +53,21 @@ test('search index and sitewide Markdown outputs exist and exclude unpublished d
 
 test('wiki home, player guide and Markdown bundles point to the public release', async () => {
   const release = 'https://thunderstore.io/c/megabonk/p/pythoninthegrass/Megabonk_Level_Editor/';
-  for (const path of ['home/index.html', 'home.md', 'docs/player-guide/index.html', 'docs/player-guide.md', 'llms-full.txt']) {
+  for (
+    const path of [
+      'home/index.html',
+      'home.md',
+      'docs/player-guide/index.html',
+      'docs/player-guide.md',
+      'llms-full.txt',
+    ]
+  ) {
     const content = await readFile(new URL(path, root), 'utf8');
     assert.ok(content.includes(release), `${path} links to the public release`);
-    assert.ok(!content.includes('The public Thunderstore release has not been published yet'), `${path} has no stale release notice`);
+    assert.ok(
+      !content.includes('The public Thunderstore release has not been published yet'),
+      `${path} has no stale release notice`,
+    );
   }
   const guide = await readFile(new URL('docs/player-guide.md', root), 'utf8');
   assert.ok(guide.includes('The manager should also install'));

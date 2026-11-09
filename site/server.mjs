@@ -48,7 +48,9 @@ export function createApp({ root }) {
       reply(res, 400, { 'content-length': '0' });
       return;
     }
-    if (pathname === '/' && req.headers.host?.split(':')[0].toLowerCase() === 'docs.megabonkmod.party') {
+    if (
+      pathname === '/' && req.headers.host?.split(':')[0].toLowerCase() === 'docs.megabonkmod.party'
+    ) {
       reply(res, 308, { location: `/home/${url.search}`, 'content-length': '0' });
       return;
     }
@@ -71,7 +73,9 @@ export function createApp({ root }) {
       }
       body = await readFile(target);
     } catch (error) {
-      reply(res, error.code === 'ENOENT' || error.code === 'EISDIR' ? 404 : 500, { 'content-length': '0' });
+      reply(res, error.code === 'ENOENT' || error.code === 'EISDIR' ? 404 : 500, {
+        'content-length': '0',
+      });
       return;
     }
     const headers = {
@@ -82,8 +86,8 @@ export function createApp({ root }) {
       'cache-control': target.startsWith(join(rootDir, '_astro'))
         ? 'public, max-age=31536000, immutable'
         : target === join(rootDir, 'index.html')
-          ? 'no-cache'
-          : 'public, max-age=3600',
+        ? 'no-cache'
+        : 'public, max-age=3600',
     };
     reply(res, 200, headers, req.method === 'HEAD' ? undefined : body);
   });
