@@ -6,7 +6,7 @@
     <Nullable>disable</Nullable>
     <RootNamespace>MegabonkLevels</RootNamespace>
     <AssemblyName>MegabonkLevels.Mod</AssemblyName>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <!-- Same bytes from any checkout path: the PDB path and module id no longer depend on where the repo lives. -->
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <PathMap>$(MSBuildProjectDirectory)=/_/MegabonkLevels.Mod</PathMap>
@@ -18,7 +18,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NLayer" Version="1.16.0" />
+    <PackageReference Include="NLayer" Version="1.16.0"/>
   </ItemGroup>
 
   <ItemGroup>
@@ -106,12 +106,12 @@
 
   <Target Name="CopyOutputToPluginsFolder" AfterTargets="Build">
     <ItemGroup>
-      <BuiltArtifacts Include="$(TargetPath)" />
-      <BuiltArtifacts Include="$(TargetDir)$(TargetName).pdb" />
-      <ModDependencyArtifacts Include="@(ReferenceCopyLocalPaths)" />
+      <BuiltArtifacts Include="$(TargetPath)"/>
+      <BuiltArtifacts Include="$(TargetDir)$(TargetName).pdb"/>
+      <ModDependencyArtifacts Include="@(ReferenceCopyLocalPaths)"/>
     </ItemGroup>
-    <Copy SourceFiles="@(BuiltArtifacts)" DestinationFolder="$(ModInstanceFolder)" />
-    <Copy SourceFiles="@(ModDependencyArtifacts)" DestinationFolder="$(ModInstanceFolder)" />
+    <Copy SourceFiles="@(BuiltArtifacts)" DestinationFolder="$(ModInstanceFolder)"/>
+    <Copy SourceFiles="@(ModDependencyArtifacts)" DestinationFolder="$(ModInstanceFolder)"/>
   </Target>
 
 </Project>
