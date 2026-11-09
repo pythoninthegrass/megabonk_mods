@@ -22,9 +22,9 @@ Install the toolchain in [modding setup](docs/modding-setup.md) and
 [development](docs/development.md), then:
 
 ```sh
-cp .env.example .env                # configure your local game paths
+cp .env.example .env                 # configure your local game paths
 uv sync
-task mod:build                          # builds and deploys into your game install
+task mod:build                       # builds and deploys into your game install
 task game:run
 ```
 
