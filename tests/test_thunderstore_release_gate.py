@@ -6,8 +6,8 @@ from pathlib import Path
 from thunderstore_release_gate import (
     PACKAGE_PATHS,
     affects_package,
-    main,
     blocking_problems,
+    main,
     path_matches,
     previous_stable_tag,
     release_affects_package,

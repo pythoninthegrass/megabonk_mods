@@ -192,3 +192,11 @@ def test_corrupt_zip_reported(tmp_path):
     path = tmp_path / "package.zip"
     path.write_bytes(b"not a zip")
     assert any("zip" in p.lower() for p in check_package(path, ROOT))
+
+
+def test_mod_build_is_independent_of_the_checkout_path():
+    import xml.etree.ElementTree as ET
+
+    project = ET.parse(ROOT / "src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj").getroot()
+    assert project.findtext("PropertyGroup/ContinuousIntegrationBuild") == "true"
+    assert "$(MSBuildProjectDirectory)=" in (project.findtext("PropertyGroup/PathMap") or "")
