@@ -75,6 +75,8 @@ tasks:
       the resolved prefix. The Steam client and the OS-level menu input service
       outlive a run on purpose, so they are only torn down with --stop-steam and
       --stop-menu. Works without the harness marker and with nothing running.
+    aliases:
+      - quit
     cmds:
       - uv run scripts/run.py teardown {{.CLI_ARGS}}
 
