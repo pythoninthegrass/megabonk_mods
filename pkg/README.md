@@ -15,10 +15,52 @@ release for the **Windows build** of the game (Wine/Proton on macOS/Linux).
 - **In-game editor:** place and transform objects, change terrain and biomes,
   and save levels as shareable `.mblevel.json` files.
 - **Custom music:** levels can select music from your own library or asset packs.
-- **Console:** press backquote/tilde, type `help`, and use Tab completion or
+- **Console:** press backtick/tilde, type `help`, and use Tab completion or
   Ctrl-R history search. Opening the console pauses a running game.
 
 ![The in-game map editor](https://megabonkmod.party/_astro/bramblecrown-editor.BtGI-w0w_12QAP4.webp)
+
+## Controls and console commands
+
+Press **backtick/tilde** to open the mod's console, then type a command and
+press **Enter**. Use this console, not the game's F10 debug console.
+
+Use these shortcuts during a run. Close the console before pressing F7 or F8.
+
+| Key | Action |
+| --- | --- |
+| **F7** | Toggle coordinates on a custom level (off by default), without pausing. |
+| **F8** | Toggle the paused, free-fly editor; press again to return to play. |
+| **Backtick/tilde** | Open or close the mod's console. Pauses a running game and restores its previous pause state on close. |
+| **Enter** | Run the typed console command. |
+| **Tab** | Complete commands or level titles; press again to cycle matches. |
+| **Up / Down** | Recall previous commands. |
+| **Ctrl-R** | Search command history; Enter selects a result, Enter again runs it. |
+| **Esc** | Close history search, or close the console if search is not open. |
+
+**Dev** commands need `MEGABONK_DEV=true` in the game's launch environment before
+starting it. Ordinary player commands and F7/F8 do not need developer mode.
+
+| Command | Action | Requires dev mode |
+| --- | --- | --- |
+| `help` / `help music` | List available commands, optionally filtered by name. | No |
+| `state` | Show the current run/editor state. | No |
+| `level.list` | List installed custom-level files. | No |
+| `ui.coordinates on` / `ui.coordinates off` | Show or hide coordinates on a custom level, like F7. | No |
+| `ui.hud on` / `ui.hud off` | Show or hide the game's HUD. | No |
+| `music.list` / `music.now` | List music tracks or show the current track. | No |
+| `music.pause` / `music.play` | Pause or resume the level's music. | No |
+| `music.next` / `music.prev` | Skip to the next or previous music track. | No |
+| `music.track 2` | Play a track by its number in `music.list`. | No |
+| `history` / `clear` | List command history or clear console output. | No |
+| `editor on` / `editor off` | Enter or leave the editor through the console. | Yes |
+| `level.load "Bramblecrown Hill"` | Load an installed level by title; quote titles containing spaces. | Yes |
+| `level.save "My Level"` | Save the editor's current level under a name. | Yes |
+| `level.new "My Level"` | Create a blank level and open it in the editor. | Yes |
+
+`help` lists only commands available in your current mode. See the
+[console reference](https://github.com/pythoninthegrass/megabonk_mods/blob/main/docs/development.md#console-command-language)
+for the full command language and advanced debug commands.
 
 ## Install
 
@@ -56,8 +98,10 @@ See the [Wine setup and rollback guide](https://github.com/pythoninthegrass/mega
 There is no mod-specific BepInEx configuration file. Levels, asset packs and music
 live in the game's `UserData/` folder and are not removed when you disable the mod.
 Music commands such as `music.pause`, `music.play` and `music.next` work without
-developer mode. Editing and cheat/debug commands require `MEGABONK_DEV=true` in
-the game's launch environment; use `editor on` in the console to enter the editor.
+developer mode. Editing through the console and cheat/debug commands require
+`MEGABONK_DEV=true` in the game's launch environment; F8 opens the editor without
+it. A repository `.env` is only read by the repository's development launch tools,
+not by mod managers.
 
 If the mod does not appear, check `BepInEx/LogOutput.log` for
 `Megabonk Level Editor` and `MegabonkLevels mod initialized.`. No log at

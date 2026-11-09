@@ -12,6 +12,10 @@ The Astro showcase and Starlight player wiki live in `site/`, alongside `PRODUCT
 
 The site at `megabonkmod.party` is deployed by the icarus CLI (`ic`) from the `dokploy.yml` at the repository root, which is reconciled against a self-hosted Dokploy control plane whose URL and API key live only in the gitignored `site/.env`. Run every `ic` command from `site/`, and see [Deployment](docs/website.md#deployment) before changing hosting or DNS.
 
+## Thunderstore API
+
+Interactive API docs: https://thunderstore.io/api/docs/. Fetch the machine-readable OpenAPI schema at https://thunderstore.io/api/docs/?format=openapi before choosing an endpoint. The schema is incomplete: README-only updates use authenticated `PATCH /api/cyberstorm/package/{namespace}/{name}/v/{version}/markdown/readme/update/` with JSON `{"content":"<markdown>"}`. This changes the displayed README without uploading a package or bumping its version; the downloadable ZIP stays unchanged. Keep `pkg/README.md` in sync for future releases. Use the team service-account token from `TCLI_AUTH_TOKEN` as a Bearer token, never in command arguments or logs. See [Thunderstore packaging](docs/thunderstore.md) for release guidance.
+
 ## Linux and Flatpak Steam caveats
 
 Megabonk ships a native Linux build (`Megabonk.x86_64`); when running that build there is no Proton or Wine prefix and the CrossOver `version.dll` override does not apply. `compatdata/3405340` can stay empty. The caveats below concern that native-build setup, not the Windows build under Proton.

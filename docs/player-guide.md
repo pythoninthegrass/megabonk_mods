@@ -82,6 +82,50 @@ If a level shows up but looks empty or as a placeholder, it needs an asset pack 
 
 A level can have a picture on the Map Selection screen: put an image with the same name as the level next to it, for example `thps.png` beside `thps.mblevel.json`.
 
+## Controls and console commands
+
+Press **backtick/tilde** to open the mod's console, then type a command and
+press **Enter**. Use this console, not the game's F10 debug console.
+
+These shortcuts work during a run. Close the console before using F7 or F8.
+
+| Key | Action |
+| --- | --- |
+| **F7** | Show or hide coordinates on a custom level. Off by default; does not pause the run. |
+| **F8** | Switch between playing and the editor's paused, free-fly view. Press again to return to play. |
+| **Backtick/tilde** | Open or close the mod's console. Opening it pauses a running game; closing it restores the previous pause state. |
+| **Enter** | Run the typed console command. |
+| **Tab** | Complete a command or level title; press again to cycle matches. |
+| **Up / Down** | Recall previous console commands. |
+| **Ctrl-R** | Search command history. Enter selects a result; Enter again runs it. |
+| **Esc** | Close history search, or close the console if search is not open. |
+
+**Dev** commands require `MEGABONK_DEV=true` in the game's launch
+environment before starting the game; ordinary player commands and F7/F8 do not.
+Putting this setting in a repository `.env` only works when launching through
+the repository's development tools, not when starting from a mod manager.
+
+| Command | Action | Requires dev mode |
+| --- | --- | --- |
+| `help` / `help music` | List available commands, optionally filtered by name. | No |
+| `state` | Show the current run/editor state. | No |
+| `level.list` | List installed custom-level files. | No |
+| `ui.coordinates on` / `ui.coordinates off` | Show or hide coordinates on a custom level, like F7. | No |
+| `ui.hud on` / `ui.hud off` | Show or hide the game's HUD. | No |
+| `music.list` / `music.now` | List music tracks or show the current track. | No |
+| `music.pause` / `music.play` | Pause or resume the level's music. | No |
+| `music.next` / `music.prev` | Skip to the next or previous music track. | No |
+| `music.track 2` | Play a track by its number in `music.list`. | No |
+| `history` / `clear` | List command history or clear console output. | No |
+| `editor on` / `editor off` | Enter or leave the editor through the console. | Yes |
+| `level.load "Bramblecrown Hill"` | Load an installed level by title; quote titles containing spaces. | Yes |
+| `level.save "My Level"` | Save the editor's current level under a name. | Yes |
+| `level.new "My Level"` | Create a blank level and open it in the editor. | Yes |
+
+`help` lists only commands available in your current mode. For the full command
+language and advanced debug commands, see the
+[console reference](development.md#console-command-language).
+
 ## Sharing a level
 
 Send the `.mblevel.json` file from your `UserData/Levels/` folder, as a Discord attachment, a forum upload or by any other way you would send a file. If it has a picture, send that too. If your level uses an asset pack, say which one, because the person receiving it needs it as well.

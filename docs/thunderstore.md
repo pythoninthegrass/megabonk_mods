@@ -308,8 +308,19 @@ After publishing, verify the page's title, icon, screenshots, dependency, catego
 and NSFW settings, then install the published version in another clean profile.
 That last download check cannot be performed before publication.
 
-Package versions are immutable. Updates require a higher version with the same
-team/name identity. Retain superseded releases; after a soak period and approval,
+Package ZIPs are immutable. Binary or archive updates require a higher version
+with the same team/name identity. A displayed README can be updated separately
+without rebuilding or publishing a version: send an authenticated
+`PATCH /api/cyberstorm/package/{namespace}/{name}/v/{version}/markdown/readme/update/`
+with JSON `{"content":"<updated Markdown>"}` and the team service-account Bearer
+token. Keep `pkg/README.md` in sync for future archives. This is a display override;
+the README inside the existing downloadable ZIP does not change. Verify the
+displayed README after saving and confirm the package version remains unchanged.
+The [API docs](https://thunderstore.io/api/docs/) expose a
+[machine-readable OpenAPI schema](https://thunderstore.io/api/docs/?format=openapi),
+but the schema does not currently include this Cyberstorm endpoint.
+
+Retain superseded releases; after a soak period and approval,
 **deprecate, never delete** an obsolete package. Do not automatically deprecate
 anything during the initial upload.
 
