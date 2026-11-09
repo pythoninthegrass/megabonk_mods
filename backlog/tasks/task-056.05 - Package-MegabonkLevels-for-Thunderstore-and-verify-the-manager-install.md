@@ -4,7 +4,7 @@ title: Package MegabonkLevels for Thunderstore and verify the manager install
 status: In Progress
 assignee: []
 created_date: '2026-11-08T23:31:00Z'
-updated_date: '2026-11-09 02:59'
+updated_date: '2026-11-09 03:11'
 labels:
   - bepinex
   - thunderstore
@@ -19,12 +19,21 @@ modified_files:
   - pkg/NLayer.LICENSE.txt
   - scripts/check_thunderstore_package.py
   - tests/test_thunderstore_package.py
+  - tests/test_build_player_package.py
   - taskfiles/package.yml
   - src/MegabonkLevels.Mod/megabonk_levels_mod.cs
   - README.md
   - docs/thunderstore.md
   - docs/development.md
   - docs/player-guide.md
+  - docs/modding-setup.md
+  - docs/player-installer.md
+  - docs/starter-level.md
+  - docs/website.md
+  - site/src/content/start.md
+  - site/src/content/level.md
+  - site/src/content/compatibility.md
+  - site/tests/site.test.js
 parent_task_id: TASK-056
 priority: medium
 ordinal: 4000
@@ -56,6 +65,10 @@ Approved implementation plan (including maintainer naming/layout corrections):
 5. Verify final ZIP in a new clean r2modmac profile. Maintainer will drive manager UI. Use a separately cloned clean base-game folder under .tools/thunderstore-smoke-game to keep Apply away from the development install; preserve manager settings/profile backups and baseline file inventory. Import ZIP, Apply, verify installed hashes, then launch under Wine and test in game. Account for manager's missing runtime/override without rebundling loader.
 6. Run task check, package checks and docs/lint; commit conventionally after verification. Confirm final MelonLoader-only tag name/target before creating it.
 7. Publishing is a separate explicit approval checkpoint. Use only a team service-account token through an untracked environment, publish the exact tested ZIP with tcli --file, and never delete superseded releases. No automatic deprecation or cutover merge.
+
+Maintainer approved pre-merge cutover cleanup and pushing the existing melonloader-final tag. Add test-first guards that disable legacy package:windows/linux/macos outputs on the BepInEx branch, refresh stale setup/player/site entry-point instructions without deploying the website, verify applicable checks, commit the cleanup and push only the approved rollback tag. Do not merge main, publish to Thunderstore or change repository visibility. Preserve the already tested package ZIP; packaged asset changes would require rebuilding and repeating the ZIP test.
+
+Maintainer clarified the legacy packaging change: mark only package:linux, package:windows and package:macos internal rather than deleting their implementation. Context7 /websites/taskfile_dev confirms internal tasks are hidden from both listings and reject direct CLI invocation. Preserve their contract tests through a temporary test-only wrapper; do not expose any production wrapper.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -86,6 +99,16 @@ Maintainer explicitly approved local annotated tag melonloader-final at d35acdc 
 Final full task check passed: 2786 C# tests, 1267 Python tests, mod build, installer checks and lint. Existing warnings remain unchanged. Both ZIP/source and local manifest validation pass on the exact tested ZIP, whose SHA-256 remains 9eaea05259abbe8878f15aa8c7643ee781311cfce9e267a04849b01e1062f464. Docs now include the verified manager nesting and explicit-executable/relative-Doorstop caveats. Implementation commit pending; task remains In Progress because publication has not been approved/performed. Before publish: explicit approval, team service-account token, public documentation access, remote legacy tag availability and final release-terms confirmation. Do not rebuild the tested ZIP or deprecate anything automatically.
 
 Implementation committed as 91e25a2 (feat(thunderstore): package Megabonk Level Editor for mod managers), preserving the maintainer's shared taskfile/docs wiring for d7cb135. Final task lint and git diff --check passed after the last documentation edits. Local annotated melonloader-final resolves to d35acdc; no branch or tag was pushed. AC1-4 and all DoD items are satisfied. AC5 remains open: no publication approved/performed. Keep status In Progress and final summary unset until publication/release gates are satisfied. Manager settings still point at the isolated test copy selected by the maintainer; original metadata backups are preserved if the maintainer wants to restore the development target.
+
+Pre-merge cleanup implemented and verified. Added internal:true to the three legacy platform package tasks. Four new CLI/listing tests failed before the flags and now pass. Existing legacy-helper command tests now use a temporary test-only wrapper, retaining coverage without exposing the tasks publicly. No legacy package was built.
+
+Refreshed modding setup and player guide around BepInEx/current Thunderstore packaging; corrected log helper/name references; marked the standalone installer contract as legacy and clarified Bramblecrown Hill is supplied separately. Website setup, compatibility and level prose now match BepInEx and runtime-only packaging. Preserved existing styling, interactions and unpublished-release messaging. A built-copy assertion failed against the existing live page and passes against the new build.
+
+Pushed only the explicitly approved annotated melonloader-final tag; remote peeled target verified as d35acdc. No main merge or feature-branch push performed during cleanup.
+
+Checks: full task check passes with 2786 C# tests and 1271 Python tests, plus installer checks/build/lint; focused packaging tests 70 passed. Site npm ci used the lockfile (0 vulnerabilities), npm run build, npm run check (0 diagnostics), npm test (3) and npm run test:site (10) pass. Mechanical UI detector returned no findings. Viewed the rendered setup copy at 1440x1000 and 390x844 with no horizontal overflow; screenshots .tools/evidence/cutover-site-{desktop,mobile}.png. Local preview stopped afterward. No site deployment performed. Existing design sidecar drift was noted but intentionally not repaired.
+
+The previously tested Thunderstore ZIP is unchanged and both package checkers still pass. Publication remains gated; this cleanup addresses merge-readiness issues without publishing or changing repository visibility.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

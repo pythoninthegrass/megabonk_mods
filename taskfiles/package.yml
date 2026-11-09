@@ -66,6 +66,7 @@ tasks:
         PY
 
   linux:
+    internal: true
     desc: "Build the Linux player package and its distributable zip into .tools/player-package"
     summary: |
       Usage: task package:linux [LEVELS=...] [PACKS=...] [MOD_VERSION=...] [OUTPUT=...]
@@ -100,6 +101,7 @@ tasks:
           "${args[@]}"
 
   windows:
+    internal: true
     desc: "Build the Windows player package and its distributable zip into .tools/player-package-windows"
     summary: |
       Usage: task package:windows [LEVELS=...] [PACKS=...] [MOD_VERSION=...] [OUTPUT_WINDOWS=...]
@@ -129,6 +131,7 @@ tasks:
           "${args[@]}"
 
   macos:
+    internal: true
     desc: "Build the macOS player package and its distributable zip into .tools/player-package-macos"
     summary: |
       Usage: task package:macos [LEVELS=...] [PACKS=...] [MOD_VERSION=...] [OUTPUT_MACOS=...]

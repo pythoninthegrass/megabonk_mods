@@ -3,6 +3,7 @@ import json
 import pytest
 import re
 import shutil
+import subprocess
 import tomllib
 import zipfile
 from check_thunderstore_package import check_package
@@ -12,6 +13,32 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = "BepInEx/plugins/MegabonkLevels/"
 BIN = "src/MegabonkLevels.Mod/bin/Release/net6.0/"
+
+
+@pytest.mark.skipif(shutil.which("task") is None, reason="Task CLI is not installed")
+@pytest.mark.parametrize("platform", ["linux", "windows", "macos"])
+def test_legacy_package_tasks_reject_direct_invocation(platform):
+    result = subprocess.run(
+        ["task", "--dry", f"package:{platform}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    output = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "internal" in output.lower()
+    assert "dotnet build" not in output
+
+
+@pytest.mark.skipif(shutil.which("task") is None, reason="Task CLI is not installed")
+def test_only_current_package_build_is_listed():
+    result = subprocess.run(
+        ["task", "--list-all"], cwd=ROOT, capture_output=True, text=True, check=True,
+    )
+    assert "package:thunderstore:" in result.stdout
+    for platform in ("linux", "windows", "macos"):
+        assert f"package:{platform}:" not in result.stdout
 
 
 def test_package_metadata_matches_plugin():

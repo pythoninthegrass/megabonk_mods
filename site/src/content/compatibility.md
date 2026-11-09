@@ -6,8 +6,8 @@ The first modded launch needs an internet connection and can spend about half a 
 
 ### Playing, creating, automating
 
-Normal installation and editing follow the player guides. Cheat/debug console commands require `MEGABONK_DEV=true`. MCP additionally needs the development harness enabled; setting the dev flag alone does not enable it.
+Installation uses BepInEx 6 IL2CPP; do not activate it alongside MelonLoader. Editing and cheat/debug console commands require `MEGABONK_DEV=true`. MCP additionally needs the development harness enabled; setting the dev flag alone does not enable it. The player guide covers the extra runtime setup and launch limitations when using r2modmac with Wine.
 
 ### Not official. Still your game.
 
-Megabonk Levels is an unofficial, fan-made mod. It is not made, endorsed or supported by Megabonk’s developer. It is not a Steam Workshop integration. Install third-party mods only from a source you trust.
+Megabonk Level Editor is an unofficial, fan-made mod. It is not made, endorsed or supported by Megabonk’s developer. It is not a Steam Workshop integration. Install third-party mods only from a source you trust.

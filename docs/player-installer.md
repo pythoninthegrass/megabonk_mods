@@ -1,5 +1,11 @@
 # Player installer
 
+**Legacy reference:** this format belongs to the MelonLoader-only
+`melonloader-final` tag. It cannot install the current BepInEx DLL. Use the
+[player guide](player-guide.md) and [Thunderstore package](thunderstore.md) for
+Megabonk Level Editor; the old platform package tasks are internal in current
+source and reject direct CLI invocation.
+
 The player-facing download: a folder a Linux player unzips and runs `./megabonk-installer` in, which installs MelonLoader, the MegabonkLevels mod, the .NET 6 runtime it needs, and any levels or packs the package carries. This doc is the contract between the two halves — the **package** the build produces and the **installer** that consumes it — plus the Linux-specific behaviour that contract cannot express.
 
 The installer is one static Go binary per platform, built from `go/` by `task installer:build` and shipped inside the package, so a player needs nothing else: no Python, no uv, no repo checkout, no .NET SDK, no Wine installation. The package builder and verifier (`scripts/build_player_package.py`, `task package:check`) are Python and share a small contract module with the installer, `scripts/package_contract/`: the manifest schema in `manifest.py` and the pack checks in `packs.py`. The installer parses the same manifest in `go/internal/manifest`.

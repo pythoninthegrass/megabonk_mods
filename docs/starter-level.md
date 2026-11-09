@@ -1,8 +1,19 @@
 # Bramblecrown Hill
 
-Bramblecrown Hill is the starter level included by default in player packages. Its five visual districts use Forest, Graveyard, Dungeon, Desert and Hell props and ground materials around a tall hill with a ruined watchpost. Gameplay uses Forest stage 0: foreign materials do not change stock enemy rosters or generation rules. The level's explicit boss/miniboss pools override eligible boss picks, not ordinary enemies. No level packs or custom music are needed.
+Bramblecrown Hill is an original example level, supplied separately from the
+Megabonk Level Editor package. Its five visual districts use Forest, Graveyard,
+Dungeon, Desert and Hell props and ground materials around a tall hill with a
+ruined watchpost. Gameplay uses Forest stage 0: foreign materials do not change
+stock enemy rosters or generation rules. The level's explicit boss/miniboss pools
+override eligible boss picks, not ordinary enemies. No level packs or custom
+music are needed.
 
 ## First play
+
+Copy `levels/bramblecrown-hill.mblevel.json` from the source repository into the
+game's `UserData/Levels/`. For its selection illustration, copy
+`levels/bramblecrown-hill.png` alongside it. The Thunderstore package contains the
+editor runtime only; see the [player guide](player-guide.md) for installation.
 
 Choose **Play**, choose a character, then select **Bramblecrown Hill** on Map Selection and confirm Tier 1. The entry has a green hill illustration; the illustration is not an in-game screenshot.
 
@@ -37,7 +48,7 @@ The map uses the custom-level Tier 1 rules: survival continues after the boss, w
 1. Start Bramblecrown Hill and press **F8** to enter the editor. The run pauses.
 2. Find the rock just ahead and to the right of the starting point. Use the **Select** tool (6), then click the rock.
 3. Drag it a short distance across the flat meadow, keeping it away from the spawn, the fence line and chests. Leave the terrain and boss spawner alone for this first edit.
-4. Change the save-name field to **my-bramblecrown** and click **Save**. This writes `my-bramblecrown.mblevel.json` without overwriting the packaged starter.
+4. Change the save-name field to **my-bramblecrown** and click **Save**. This writes `my-bramblecrown.mblevel.json` without overwriting the original level.
 5. Select that saved file in the editor's Load list and click **Load**. Leave the editor with F8 to play the saved copy. The rock should remain where you moved it, while the original Bramblecrown Hill remains unchanged.
 
 The copy retains the level title. The editor's filename distinguishes it from the original; do not expect the selection illustration to be copied automatically. You can share the saved `.mblevel.json` without an asset pack.

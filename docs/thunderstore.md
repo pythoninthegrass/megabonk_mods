@@ -47,9 +47,11 @@ redistribute BepInEx, its .NET runtime, Harmony, generated game/Unity interop,
 game assets, PDBs, installers or developer test data. The ZIP checker,
 `scripts/check_thunderstore_package.py`, rejects unexpected files and DLLs that
 differ from the current Release output.
-The older `package:windows`, `package:linux` and `package:macos` tasks still build
-the legacy MelonLoader installer format; do not distribute those with this
-BepInEx DLL. Use the pre-cutover branch for legacy packages.
+The older `package:windows`, `package:linux` and `package:macos` tasks describe
+the legacy MelonLoader installer format and are internal: Task hides them from
+listings and rejects direct CLI invocation. Do not expose a wrapper that combines
+them with this BepInEx DLL. Use a separate worktree at `melonloader-final` for
+legacy packages.
 
 ## Validate a manifest offline
 

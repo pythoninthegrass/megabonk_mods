@@ -1,8 +1,10 @@
 # Modding setup
 
-The runtime on this branch targets **BepInEx 6 IL2CPP** (`BepInExPack_IL2CPP` 6.0.0-be.788). Install that pack and launch the game once to generate `BepInEx/interop/` before building. See [running BepInEx under Wine](development.md#running-bepinex-under-wine) for the required files, DLL override and reversible loader switch. Do not activate MelonLoader and BepInEx together.
+**Megabonk Level Editor** targets **BepInEx 6 IL2CPP** (`BepInExPack_IL2CPP` 6.0.788). Install that pack and launch the game once to generate `BepInEx/interop/` before building. See [running BepInEx under Wine](development.md#running-bepinex-under-wine) for the required files, DLL override and reversible loader switch. Do not activate MelonLoader and BepInEx together.
 
-The existing player installers described below still package the older MelonLoader runtime; they are not an installation path for this branch's DLL. Keep using the matching released package until the BepInEx packaging cutover.
+For playing rather than developing, use the [package README](../pkg/README.md)
+and [player guide](player-guide.md). The standalone MelonLoader installers belong
+to the `melonloader-final` tag, not the current DLL.
 
 ## File naming convention
 
@@ -11,13 +13,13 @@ Inside `src/MegabonkLevels.Mod/`:
 - Pure-logic files (no Unity/Harmony/loader dependency) use a plain snake_case name, e.g. `edit_stack.cs`. These are unit-testable and get compile-linked into `tests/MegabonkLevels.Tests/`.
 - Harmony patches generally use a `_patch` suffix, e.g. `generation_patch.cs`. Unity and loader integration files cannot be unit-tested without the runtime and are not compile-linked into the test project.
 
-## Legacy MelonLoader installation
+## Install the loader first
 
-```sh
-task game:melonloader:install
-```
-
-This downloads the pinned MelonLoader release, verifies its checksum, and extracts it into your resolved Megabonk game directory (see below). The task is idempotent: it's a no-op if the pinned version is already installed. On macOS it also applies the Wine DLL override (`version.dll` -> `native,builtin`) that IL2Cpp hooking needs under Wine, through plain Wine by default or CrossOver's Wine when `MEGABONK_MACOS_RUNTIME=crossover` (`task crossover:melonloader:install` sets that for you). Run `task wine:install` first on a new macOS setup; see [development.md](development.md#launching-under-wine-macos).
+Install [BepInExPack IL2CPP 6.0.788](https://thunderstore.io/c/megabonk/p/BepInEx/BepInExPack_IL2CPP/)
+with a compatible manager, or follow the manual steps below. Use the Windows
+game build on every platform: native Windows, Proton on Linux or Wine on macOS.
+Native Linux mod support is not verified. On a new Mac setup, run
+`task wine:install` first; see [launching under Wine](development.md#launching-under-wine-macos).
 
 ## Pointing a build at your own Megabonk install
 
@@ -30,48 +32,46 @@ To compile without deploying into the game's plugins folder, pass `-p:ModInstanc
 
 Run `uv run scripts/game_paths.py` at any point to see the paths actually resolved.
 
-## Installing for players on Linux
+## Build a player package
 
-MelonLoader's native Linux support does not work yet: 0.7.3 segfaults `Megabonk.x86_64` while generating the Il2Cpp assemblies, and the upstream fix is not in a release. The supported Linux route is the **Windows** build of Megabonk under Steam Play/Proton, with the Windows MelonLoader and a Windows .NET 6 runtime — which is what the player installer does for them.
-
-```sh
-task package:linux LEVELS="example-forest.mblevel.json thps.mblevel.json" PACKS=thps MOD_VERSION=0.4.2
-```
-
-That produces `.tools/player-package/` and a distributable zip beside it. A player unzips it and runs `./megabonk-installer`, a static Go binary that needs nothing else — no Python, no uv, no repo, no Wine install. It finds the Steam install (native or Flatpak) and the game directory, refuses a native-Linux game directory with instructions for switching to the Windows build, installs MelonLoader, the mod, and the .NET runtime, sets the `version.dll` override in the Proton prefix, and writes a record that makes `--check` and `--uninstall` exact. When the .NET runtime cannot go inside the prefix it prints a `DOTNET_ROOT=... %command%` launch option for the player to paste — it never edits Steam's `localconfig.vdf`, which Steam rewrites while it runs.
-
-The package format, the manifest contract, and the Linux behaviour are documented in [player-installer.md](player-installer.md), including what has been verified offline and what still needs a real Linux desktop.
-
-For developing on Linux rather than installing for a player, the mod and its harness work under Proton the same way; the caveats for the native build (no Proton prefix, `LD_PRELOAD` MelonLoader, the .NET 6 runtime Flatpak Steam can actually read) are in [development.md](development.md).
-
-## Installing for players on Windows
+The supported distributable is the runtime-only Thunderstore ZIP:
 
 ```sh
-task package:windows LEVELS="example-forest.mblevel.json" MOD_VERSION=0.4.2
+task package:thunderstore
+task package:thunderstore:check
 ```
 
-A player unzips the result and runs `install.exe`. It finds the game through Steam's registry key and `libraryfolders.vdf` (including libraries on other drives), installs the pinned MelonLoader, the mod and a user-scope .NET 6 runtime inside the game directory, shows a progress window and needs no administrator rights. Run it again to repair or `install.exe --uninstall` to restore a vanilla game. Details, including why the runtime goes in `MelonLoader/Dependencies/dotnet`, are in [player-installer.md](player-installer.md#windows-package).
-
-## Installing for players on macOS
-
-```sh
-task package:macos LEVELS="example-forest.mblevel.json" MOD_VERSION=0.4.2
-```
-
-Megabonk has no macOS build, so a Mac player runs the Windows build under Wine with Steam installed in the same prefix. A player unzips the result and runs `./megabonk-installer` from that folder; it needs no repo, no uv and no .NET SDK. It finds the game in a plain-Wine prefix first (`~/.local/share/megabonk/wine`, `~/.wine`) and in a CrossOver bottle only when no plain-Wine prefix holds it, and `--prefix <folder holding drive_c>` points it anywhere else. It installs the pinned MelonLoader, the mod, a .NET 6 runtime under `MelonLoader/Dependencies/dotnet` and the `version.dll` override in the prefix, shows a progress window, and `--uninstall` restores a vanilla game. The first launch downloads the Il2Cpp assembly generator's tools and takes a while under Wine; see [player-installer.md](player-installer.md#macos-package).
+Import the ZIP from `.tools/thunderstore/` through the manager's local/custom-mod
+import. It does not include levels, packs or music. See
+[Thunderstore packaging](thunderstore.md) for the package contract, clean-profile
+checks, Wine caveats and publication gates. There is no public release download
+yet; building or locally testing a ZIP does not publish it.
 
 ## Installing by hand (for players)
 
-This is the fallback for when the player installer cannot run; the installers in the sections above do exactly these steps and are the recommended route. Use the Windows build of the game on every platform.
+Prefer a compatible mod manager. For a manual BepInEx install, quit the game first:
 
-1. Download the MelonLoader archive at the version the package names, from the [MelonLoader releases](https://github.com/LavaGang/MelonLoader/releases) (`MelonLoader.x64.zip`, currently 0.7.3), and extract it into the game folder, the one holding `Megabonk.exe`. A package carries the exact archive in its `vendor/` folder with its checksum in `manifest.json`.
-2. Copy the mod files from the package into the game folder: `MegabonkLevels.Mod.dll` into `Mods/` and `NLayer.dll` into `UserLibs/`.
-3. Create `UserData/Levels/` in the game folder, and copy any `.mblevel.json` files into it.
-4. On Linux (Proton) or macOS (Wine), the game folder's `version.dll` must be loaded in preference to the system one: set the DLL override `version` = `native,builtin` in the Wine or Proton prefix, for example with `winecfg` (Libraries tab). Native Windows needs no override.
-5. Start the game from Steam. On native Windows MelonLoader installs the .NET 6 runtime itself on first launch, machine-wide under Program Files; on Linux and macOS install a Windows .NET 6 runtime into the prefix first. The first launch downloads tools and takes about half a minute.
-6. Open `MelonLoader/Latest.log` in the game folder and look for `1 Mod loaded.` and `MegabonkLevels mod initialized.`.
+1. Download BepInExPack IL2CPP **6.0.788** and extract the **contents** of its
+   `BepInExPack/` folder beside `Megabonk.exe`, including `dotnet/`, `winhttp.dll`
+   and `doorstop_config.ini`.
+2. Park an existing MelonLoader `version.dll` as a backup, rather than activating
+   both loaders. Keep its files for [rollback](thunderstore.md#rollback).
+3. Copy the mod ZIP's `BepInEx/` contents into the game's `BepInEx/` folder.
+   The plugin, NLayer and its license belong together under
+   `BepInEx/plugins/MegabonkLevels/`. Never copy game interop or loader assemblies
+   beside the plugin.
+4. Under Wine or Proton, set `winhttp=native,builtin`. A Proton Steam launch can
+   use `WINEDLLOVERRIDES="winhttp=n,b" %command%`. Native Windows needs no override.
+   r2modmac's runtime omission and Wine launch limitations are documented in the
+   [package README](../pkg/README.md#macos--wine-and-linux--proton).
+5. Create `UserData/Levels/` in the game folder and add separately supplied
+   `.mblevel.json` files. The package itself contains no levels.
+6. Launch the game. The first BepInEx start needs internet and takes roughly half
+   a minute to generate interop. Check `BepInEx/LogOutput.log` for the plugin's
+   loading and initialization lines below.
 
-To undo it, delete `MelonLoader/`, `Mods/MegabonkLevels.Mod.dll` and `UserLibs/NLayer.dll` from the game folder, plus `version.dll` (MelonLoader's loader stub).
+To remove the mod, disable it in the manager and Apply, or park its plugin folder
+while the game is stopped. Preserve user-authored content under `UserData/`.
 
 ## Running and verifying the mod
 
@@ -80,8 +80,19 @@ task mod:build   # deploys DLL, PDB and NLayer into BepInEx/plugins/MegabonkLeve
 task game:run     # launches Megabonk
 ```
 
-A successful load logs `Loading [MegabonkLevels 0.0.1]` and `MegabonkLevels mod initialized.` in `BepInEx/LogOutput.log`. Loader assemblies are never copied beside the plugin. F6 reads `megabonklevels-test-level.mblevel.json` beside the plugin DLL. Levels, packs, music and console history retain their existing game-root `UserData/` locations.
+A successful load logs `Loading [Megabonk Level Editor 0.0.1]` and `MegabonkLevels mod initialized.` in `BepInEx/LogOutput.log`. Loader assemblies are never copied beside the plugin. F6 reads `megabonklevels-test-level.mblevel.json` beside the plugin DLL. Levels, packs, music and console history retain their existing game-root `UserData/` locations.
 
-The script log helpers still select the legacy log until their migration; inspect `BepInEx/LogOutput.log` directly rather than trusting `task game:log` or `run.py relaunch` on this branch.
+`task game:log`, `run.py relaunch` and MCP log helpers use the BepInEx layout.
+Restart an already-connected MCP server after updating Python modules. For
+nonstandard game locations, note the launcher's explicit-executable caveat in
+[Thunderstore packaging](thunderstore.md#test-the-final-zip-not-the-build-folder).
 
 To exercise a level without driving the game with key presses, see [development.md](development.md).
+
+## Legacy MelonLoader tooling
+
+The standalone installers and their [format reference](player-installer.md) are
+retained for historical use with `melonloader-final`. The old platform package
+tasks are internal: they are hidden from task listings and cannot be run directly.
+Do not add a public wrapper that combines those installers with the BepInEx DLL.
+Use a separate worktree at the legacy tag when rebuilding a MelonLoader package.

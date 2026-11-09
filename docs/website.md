@@ -91,7 +91,7 @@ Keep `site/package.json` and `site/package-lock.json` together when changing dep
 All off-site anchors use `target="_blank"` and `rel="noopener noreferrer"`; internal section links stay in the current tab. In `index.astro`, spread the shared `external` attributes onto external anchors. Markdown has no standard target attribute, so use an HTML anchor for an off-site link:
 
 ```html
-<a href="https://melon-loader.com/" target="_blank" rel="noopener noreferrer">MelonLoader</a>
+<a href="https://thunderstore.io/c/megabonk/p/BepInEx/BepInExPack_IL2CPP/" target="_blank" rel="noopener noreferrer">BepInEx 6 IL2CPP</a>
 ```
 
 The built-page link test covers both Astro and Markdown content. Inline prose links are underlined.

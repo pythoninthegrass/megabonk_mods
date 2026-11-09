@@ -1,6 +1,7 @@
 import build_player_package as module
 import hashlib
 import io
+import json
 import os
 import pytest
 import shutil
@@ -83,14 +84,21 @@ def workspace(tmp_path, monkeypatch):
     }
 
 
-def _dry_run(*variables: str) -> str:
-    """The commands `task package:linux` would run, with the given task variables."""
+def _dry_run(tmp_path: Path, *variables: str) -> str:
+    """Inspect the retained internal legacy helper through a test-only wrapper."""
+    root = Path(__file__).resolve().parent.parent
+    taskfile = tmp_path / "Taskfile.yml"
+    source = json.dumps(str(root / "taskfiles/package.yml"))
+    taskfile.write_text(
+        f'version: "3"\nincludes:\n  package: {source}\n'
+        'tasks:\n  inspect:\n    cmds:\n      - task: package:linux\n'
+    )
     result = subprocess.run(
-        ["task", "--dry", "package:linux", *variables],
+        ["task", "--taskfile", str(taskfile), "--dry", "inspect", *variables],
         capture_output=True,
         text=True,
-        cwd=Path(__file__).resolve().parent.parent,
-        check=False,
+        cwd=root,
+        check=True,
     )
     return result.stdout + result.stderr
 
@@ -169,10 +177,10 @@ class TestLayout:
         assert dests["content/levels/example-forest.mblevel.json"] == "UserData/Levels/example-forest.mblevel.json"
         assert dests["content/packs/thps/thps"] == "UserData/LevelPacks/thps/thps"
 
-    def test_default_task_bundles_only_the_starter_level(self):
+    def test_default_legacy_helper_bundles_only_the_starter_level(self, tmp_path):
         if shutil.which("task") is None:
             pytest.skip("task is not installed")
-        commands = _dry_run()
+        commands = _dry_run(tmp_path)
         assert "for level in bramblecrown-hill.mblevel.json;" in commands
         assert "example-forest.mblevel.json" not in commands
         assert "thps.mblevel.json" not in commands
@@ -278,11 +286,11 @@ class TestVendorHandling:
         assert seen[DOTNET_WINDOWS_ASSET] == hashlib.sha256(workspace["dotnet"]).hexdigest()
         assert (workspace["cache"] / DOTNET_WINDOWS_ASSET).read_bytes() == workspace["dotnet"]
 
-    def test_the_package_task_forwards_allow_download_to_the_script(self):
+    def test_the_legacy_helper_forwards_allow_download_to_the_script(self, tmp_path):
         if shutil.which("task") is None:
             pytest.skip("task is not installed")
-        assert 'if [ "true" = "true" ]; then args+=(--allow-download); fi' in _dry_run("ALLOW_DOWNLOAD=true")
-        assert 'if [ "false" = "true" ]; then args+=(--allow-download); fi' in _dry_run()
+        assert 'if [ "true" = "true" ]; then args+=(--allow-download); fi' in _dry_run(tmp_path, "ALLOW_DOWNLOAD=true")
+        assert 'if [ "false" = "true" ]; then args+=(--allow-download); fi' in _dry_run(tmp_path)
 
 
 class TestLinuxPackage:

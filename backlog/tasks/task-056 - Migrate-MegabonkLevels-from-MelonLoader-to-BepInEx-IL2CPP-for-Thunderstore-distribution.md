@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-11-08T23:31:00Z'
-updated_date: '2026-11-09 02:59'
+updated_date: '2026-11-09 03:12'
 labels:
   - bepinex
   - thunderstore
@@ -62,6 +62,8 @@ Approved continuation after both GO spikes: TASK-056.03 ports the runtime on bep
 Harness/script migration completed on bepinex-port in 6d78839. Paths, relaunch/log scraping, Wine doorstop override, failure evidence and MCP tools verified against the running BepInEx game. task check passed (2781 C#, 1160 Python tests plus installer checks/lint); main untouched and legacy proxy parked. Existing MCP connections require restart to reload changed Python modules. Packaging/manager install verification remains the next subtask; no cutover or publish performed.
 
 Packaging and clean-profile manager verification implemented in 91e25a2, building on maintainer manifest-validator commit d7cb135. Public product is Megabonk Level Editor; package assets under pkg/, repository name unchanged. Final ZIP installed through r2modmac into an isolated clean game copy and verified under Wine: plugin/dependency hashes, level gameplay, editor edit/undo/save-copy and rendered console all pass. Full task check passed (2786 C#, 1267 Python tests plus build/installer/lint). Local annotated melonloader-final preserves main at d35acdc, without push/merge. Subtask 056.05 remains In Progress solely for release/publication gates: explicit approval, team token, public documentation access, remote tag availability and release-terms confirmation. Main and the reversible loader setup remain intact; nothing published or deprecated.
+
+Maintainer-approved pre-merge cleanup is complete: legacy package:linux/windows/macos tasks are internal (hidden and directly non-invokable), setup/player/legacy-reference docs and site entry-point copy now describe the BepInEx/runtime-only route, and the approved melonloader-final tag is pushed with remote target d35acdc verified. Full task check passes (2786 C#, 1271 Python tests); website build/check plus 13 site tests and desktop/mobile rendered-copy review pass. No main merge, feature-branch push, website deployment or Thunderstore publication performed during cleanup. Merge blockers identified in the readiness check are resolved; publication gates remain separately tracked on 056.05.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
