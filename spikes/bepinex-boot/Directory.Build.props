@@ -1,0 +1,20 @@
+<Project>
+  <!-- Same settings and precedence as scripts/game_paths.py; mirrors src/MegabonkLevels.Mod/Directory.Build.props -->
+  <PropertyGroup>
+    <GameDirSetting>$([System.Text.RegularExpressions.Regex]::Replace('$(MEGABONK_GAME_DIR)', '^~(?=/|$)', '$(HOME)'))</GameDirSetting>
+    <WinePrefixSetting>$([System.Text.RegularExpressions.Regex]::Replace('$(MEGABONK_WINE_PREFIX)', '^~(?=/|$)', '$(HOME)'))</WinePrefixSetting>
+    <BottleSetting>$([System.Text.RegularExpressions.Regex]::Replace('$(MEGABONK_BOTTLE)', '^~(?=/|$)', '$(HOME)'))</BottleSetting>
+  </PropertyGroup>
+  <PropertyGroup>
+    <BottleFolder Condition="'$(BottleFolder)' == '' And '$(WinePrefixSetting)' != ''">$(WinePrefixSetting)/drive_c</BottleFolder>
+    <BottleFolder Condition="'$(BottleFolder)' == '' And '$(BottleSetting)' != ''">$(BottleSetting)</BottleFolder>
+    <BottleFolder Condition="'$(BottleFolder)' == ''">$(HOME)/.local/share/megabonk/wine/drive_c</BottleFolder>
+    <GameFolder Condition="'$(GameFolder)' == '' And '$(GameDirSetting)' != ''">$(GameDirSetting)</GameFolder>
+    <GameFolder Condition="'$(GameFolder)' == ''">$(BottleFolder)/Program Files (x86)/Steam/steamapps/common/Megabonk</GameFolder>
+  </PropertyGroup>
+  <PropertyGroup>
+    <BepInExCoreFolder>$(GameFolder)/BepInEx/core</BepInExCoreFolder>
+    <BepInExInteropFolder>$(GameFolder)/BepInEx/interop</BepInExInteropFolder>
+    <PluginInstallFolder>$(GameFolder)/BepInEx/plugins/BepInExBootSpike</PluginInstallFolder>
+  </PropertyGroup>
+</Project>

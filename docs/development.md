@@ -374,6 +374,16 @@ A mod manager's own Play does not work for the Windows build under Wine: it rout
 
 The manager's per-mod enable toggle works by file sync: disabling a mod removes its folder from `BepInEx/plugins/` in the game directory while keeping it in the manager's profile, and enabling or re-applying puts it back. The sync is bidirectional — files removed from the game directory out from under it are treated as uninstalled on the next sync, so they disappear from the manager's profile too.
 
+### Developing a BepInEx plugin
+
+`spikes/bepinex-boot/` is a minimal working plugin (chainloader load, per-frame tick component, one Harmony patch); build it with `dotnet build spikes/bepinex-boot/BepInExBootSpike.csproj` under the same environment the game paths resolve from, and it deploys itself. The details that matter for any BepInEx port:
+
+- **References** come from the game directory, one loader only: `BepInEx/core/` (`BepInEx.Core.dll`, `BepInEx.Unity.IL2CPP.dll`, `0Harmony.dll`, `Il2CppInterop.Runtime.dll`) and `BepInEx/interop/` (the BepInEx-generated game interop, e.g. `Assembly-CSharp.dll`, `Il2Cppmscorlib.dll`, `UnityEngine.CoreModule.dll`), all `Private=False`. Never mix in MelonLoader's `Il2CppAssemblies` or its Il2CppInterop copy.
+- **Plugin shape**: a `[BepInPlugin]` class extending `BepInEx.Unity.IL2CPP.BasePlugin`, with `Load()` called once by the chainloader. `BasePlugin.AddComponent<T>()` registers the injected type in the IL2CPP domain on the fly and adds the component; for that simple case an injected `MonoBehaviour` only needs an `IntPtr` constructor passing through to base.
+- **Harmony** is plain HarmonyX against the interop types: `[HarmonyPatch(typeof(MainMenu), "Awake")]` plus `Harmony.CreateAndPatchAll` applies and fires; global-namespace game classes keep their names.
+- **Deploy target** is one folder per mod under `BepInEx/plugins/<PluginName>/`, matching how the mod manager syncs plugins.
+- **Verification without the harness**: the harness is MelonLoader-only, so a BepInEx run takes no harness commands (`run.py quit` still works, ending in a force-kill); read `BepInEx/LogOutput.log` (`ErrorLog.log` should stay empty) and capture OS-level screenshots. The game reaches the menu and can enter a run even when Steam is down and `SteamAPI_Init()` fails — Steamworks.NET logs that as a Unity error line which is unrelated to any mod.
+
 ## Launching under CrossOver
 
 Set `MEGABONK_MACOS_RUNTIME=crossover` to use CrossOver instead of plain Wine; `run.py relaunch` then starts the game through `task crossover:run`, and `task crossover:melonloader:install` installs MelonLoader with CrossOver's Wine. `task crossover:run` starts `Megabonk.exe` directly in the CrossOver Steam bottle with `cxstart`, with `SteamAppId` and `SteamGameId` set to 3405340. The Steam client must already be running in the bottle; start it from CrossOver first. Launching through the `steam://rungameid` URI is avoided because it can open only the CrossOver window without starting the game, especially from a script. The equivalent command:
