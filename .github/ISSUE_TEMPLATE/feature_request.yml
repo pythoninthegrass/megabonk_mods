@@ -1,0 +1,63 @@
+name: Feature request
+description: Propose new behaviour for the mod, editor, console, site or tooling
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        CONTRIBUTING asks for an issue before any change bigger than a typo, so the
+        design can be agreed before code is written. Keep one idea per issue, and check
+        the [open issues](https://github.com/pythoninthegrass/megabonk_mods/issues)
+        and the [wiki](https://docs.megabonkmod.party/) in case it exists already.
+
+        **Area** and **Summary** become the commit subject, so write the summary as a
+        short imperative line you would be happy to read in a changelog; the `feat(area):`
+        prefix comes from the dropdown.
+
+        A feature request does not need your OS, versions, or logs. Add those in a later
+        comment only if they explain the idea.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One imperative line, at most 72 characters. Use the same wording for the issue title.
+      placeholder: Add a console command to list placed objects by category
+    validations:
+      required: true
+      maxlength: 72
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the repository would this change? This is the commit scope.
+      options:
+        - editor - level editor, tiles, objects, palette, toolbar
+        - console - the tilde console and its commands
+        - harness - development harness, run.py, MCP tools
+        - mod - plugin internals (loading, patches, saves, kill floor)
+        - installer - the legacy player installer
+        - site - megabonkmod.party showcase or the wiki
+        - docs - files under docs/
+        - thunderstore - package contents or the release process
+        - wine - launching under Wine, Proton or CrossOver
+        - scripts - Python helpers, tests and tooling
+        - levels - shipped level files
+        - other - none of the above, say more below
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what gets in the way today? Who else hits this?
+      placeholder: |
+        I place hundreds of props and there is no way to see how many of each the
+        level holds, so I count them off screenshots.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: Optional. What should happen instead? Rough edges are fine; alternatives you considered and screenshots help.

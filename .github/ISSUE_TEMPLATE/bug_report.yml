@@ -1,0 +1,144 @@
+name: Bug report
+description: Something in the mod, editor, console, harness, site or tooling does not work as expected
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search the [open issues](https://github.com/pythoninthegrass/megabonk_mods/issues)
+        first, and keep one topic per issue.
+
+        **Kind**, **Area** and **Summary** become the commit subject that fixes it, so
+        write the summary as a short imperative line you would be happy to read in a
+        changelog; the `fix(area):` prefix comes from the two dropdowns. Never post the
+        contents of a `.env` file or any token.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One imperative line, at most 72 characters. Use the same wording for the issue title.
+      placeholder: Placing an object on a slope throws and the editor stops responding
+    validations:
+      required: true
+      maxlength: 72
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      description: What kind of change is needed? This is the commit type.
+      options:
+        - fix - wrong, missing or crashing behaviour
+        - perf - slow, stuttering, or a hitch
+        - docs - documentation is wrong, missing or misleading
+        - build - a task, lint, test or packaging step is broken
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the repository is affected? This is the commit scope.
+      options:
+        - editor - level editor, tiles, objects, palette, toolbar
+        - console - the tilde console and its commands
+        - harness - development harness, run.py, MCP tools
+        - mod - plugin internals (loading, patches, saves, kill floor)
+        - installer - the legacy player installer
+        - site - megabonkmod.party showcase or the wiki
+        - docs - files under docs/
+        - thunderstore - package contents or the release process
+        - wine - launching under Wine, Proton or CrossOver
+        - scripts - Python helpers, tests and tooling
+        - levels - shipped level files
+        - other - none of the above, say more below
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: OS and runtime
+      description: The mod targets the Windows game build on every platform.
+      options:
+        - Windows (native)
+        - Linux with Proton (Steam Play)
+        - macOS with plain Wine
+        - macOS with CrossOver
+        - Linux native build (mod support unverified)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How the mod is installed
+      options:
+        - Mod manager (Thunderstore)
+        - Manual copy into BepInEx
+        - Built from source (task mod:build)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: game_version
+    attributes:
+      label: Megabonk version
+      description: Steam > Megabonk > Properties > Updates also shows the Build ID.
+      placeholder: 1.0.69
+    validations:
+      required: true
+  - type: input
+    id: mod_version
+    attributes:
+      label: Mod and loader version
+      description: The `Loading [Megabonk Level Editor <version>]` line near the top of `BepInEx/LogOutput.log`, and the BepInEx pack you installed.
+      placeholder: Megabonk Level Editor 0.1.0, BepInExPack IL2CPP 6.0.788
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The shortest path that shows it every time. Name the level file, the map/stage/tier, and any console or harness commands used.
+      placeholder: |
+        1. Load `levels/example-forest.mblevel.json`
+        2. Press F8 to enter the editor, then press 5 and pick a palette entry
+        3. Click a sloped tile
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you thought should happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead, including any on-screen message, and how often it happens.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Drag files into this box instead of pasting them whole; short excerpts are fine inline. Redact private paths, and never post a `.env` file or any token.
+      value: |
+        Attach the files; do not paste them whole.
+
+        - `BepInEx/LogOutput.log` in the game folder: the loader log. The mod's own lines say `Megabonk Level Editor` and `MegabonkLevels`.
+        - If the game never starts, also `BepInEx/wine-latest.log`, and Unity's `Player.log` and `Player-prev.log` from `%USERPROFILE%\AppData\LocalLow\Ved\Megabonk\` on Windows, or `<prefix>/drive_c/users/<user>/AppData/LocalLow/Ved/Megabonk/` under Wine or Proton.
+        - If `LogOutput.log` has no `MegabonkLevels` line at all, say so: that usually means the loader's `dotnet/` runtime or the Wine `winhttp` override is missing.
+
+        ```
+        the ~50 lines around the first error
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshots or level file
+      description: Optional. Attach PNGs, and the `.mblevel.json` or level pack the report depends on.

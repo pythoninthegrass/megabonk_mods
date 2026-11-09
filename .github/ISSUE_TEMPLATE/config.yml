@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Player guide and wiki
+    url: https://docs.megabonkmod.party/docs/player-guide/
+    about: Installing the mod, adding levels and packs, controls, and the console basics.
+  - name: Showcase
+    url: https://megabonkmod.party/
+    about: What the level editor, console and harness look like in the running game.
+  - name: Contributor docs
+    url: https://github.com/pythoninthegrass/megabonk_mods/blob/main/CONTRIBUTING.md
+    about: Setup, checks, commit conventions and licensing before you open a pull request.
