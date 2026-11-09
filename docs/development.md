@@ -383,6 +383,44 @@ Two things a mod manager's Apply does not do, both fatal and silent (doorstop's 
 
 A mod manager's own Play does not work for the Windows build under Wine: it routes through the CrossOver runner and the bottle's `steam.exe` and never plain Wine, and the game never comes up that way. CrossOver's launcher gates its runner on its license, so an expired trial puts up its dialog instead of starting anything — the bottle's `[Software\\CodeWeavers\\CrossOver\\cxoffice]` registry entries (`NagTime` and friends) only record that state, they do not control it. Launch through `task game:run` (or Steam) instead; the manager is for file management only.
 
+### Repairing an r2modmac Apply
+
+From a source checkout on the Mac holding the game, quit Megabonk, install the
+BepInEx pack and editor in r2modmac, and Apply the profile. Then run:
+
+```sh
+task wine:bepinex:repair -- --download --dry-run
+task wine:bepinex:repair -- --download
+task game:run
+```
+
+The repair uses `scripts/game_paths.py` to resolve the game folder, including
+`MEGABONK_GAME_DIR` and `MEGABONK_WINE_PREFIX` overrides. To select another folder,
+pass `--game-dir "/path/to/Megabonk"` after `--`. Paths inside CrossOver bottles
+are supported too; this does not change which Wine runtime launches the game.
+
+`scripts/repair_bepinex.py` restores only missing `dotnet/` files,
+`.doorstop_version` and `changelog.txt` from BepInExPack IL2CPP **6.0.788**.
+It verifies the archive's pinned SHA-256 even when reusing the cache at
+`.tools/vendor-cache/`. Downloads require `--download`; to use a ZIP already
+downloaded from Thunderstore, pass `--pack-zip "/path/to/pack.zip"` instead.
+`--dry-run` validates and lists changes without writing files, including the cache.
+
+An active MelonLoader `version.dll` is parked as `version.dll.bak`. The helper
+refuses an existing backup, an unknown proxy without a `MelonLoader/` folder,
+symlink destinations, a running Megabonk process, missing manager-installed
+BepInEx files, or existing runtime files that differ from the pinned pack.
+Resolve a refusal rather than deleting a backup or replacing another runtime.
+Repeated runs leave matching files alone. Plugins, configuration, other
+MelonLoader files, and `UserData/` are not changed. Quit the game before running
+the helper and keep it closed until repair finishes; it never stops processes.
+
+The helper does not edit the Wine registry. `task game:run` already supplies
+`WINEDLLOVERRIDES="winhttp=n,b;d3d11,d3d10core=n,b"`; another launch method still
+needs the `winhttp` native,builtin override described above. Check
+`BepInEx/LogOutput.log` after launching. Keep `version.dll.bak` for the loader
+rollback described below. No mod build or new Thunderstore release is needed.
+
 The manager's per-mod enable toggle works by file sync: disabling a mod removes its folder from `BepInEx/plugins/` in the game directory while keeping it in the manager's profile, and enabling or re-applying puts it back. The sync is bidirectional — files removed from the game directory out from under it are treated as uninstalled on the next sync, so they disappear from the manager's profile too.
 
 ### Developing a BepInEx plugin

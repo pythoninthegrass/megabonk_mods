@@ -48,6 +48,11 @@ Play button did not launch the Wine-hosted game. Follow the
 for the runtime and `winhttp` override. For manual installation, see
 [Installing by hand](modding-setup.md#installing-by-hand-for-players).
 
+If you have a source checkout on the Mac, the optional
+[r2modmac repair helper](development.md#repairing-an-r2modmac-apply) automates
+copying the missing runtime files and safely disabling the old MelonLoader proxy.
+It does not replace installing and applying the profile in r2modmac.
+
 Disable the editor in the manager and Apply to remove it. Keep your levels,
 packs and music under `UserData/`; disabling the mod does not remove them.
 

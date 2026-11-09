@@ -17,6 +17,20 @@ vars:
     sh: uv run scripts/game_paths.py | jq -r '.wine_prefix // "(none, set MEGABONK_WINE_PREFIX)"'
 
 tasks:
+  bepinex:repair:
+    desc: "Restore BepInEx runtime files omitted by r2modmac Apply and park MelonLoader"
+    summary: |
+      Usage: task wine:bepinex:repair -- [--dry-run] [--download] [--pack-zip path]
+
+      Quit Megabonk and Apply the BepInEx profile in r2modmac first.
+      Uses the configured game folder; --game-dir overrides it. Downloads are
+      opt-in and pinned to BepInExPack IL2CPP 6.0.788 with SHA-256 validation.
+      Never replaces differing files, existing backups, plugins or user data.
+      Launch afterward with task game:run, which supplies winhttp=n,b.
+    platforms: [darwin]
+    cmds:
+      - uv run scripts/repair_bepinex.py {{.CLI_ARGS}}
+
   install:
     desc: "Install the pinned Wine build and DXVK DLLs (macOS)"
     summary: |
