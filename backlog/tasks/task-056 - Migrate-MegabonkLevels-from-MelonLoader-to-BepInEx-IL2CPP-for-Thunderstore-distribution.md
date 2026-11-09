@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-11-08T23:31:00Z'
-updated_date: '2026-11-09 01:15'
+updated_date: '2026-11-09 01:26'
 labels:
   - bepinex
   - thunderstore
@@ -58,6 +58,8 @@ Approved continuation after both GO spikes: TASK-056.03 ports the runtime on bep
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-11-08 Spike TASK-056.01 closed GO for BepInEx as the loader. Findings the sure-thing subtasks must carry: (1) r2modmac Apply structurally omits the pack's dotnet/, .doorstop_version and changelog.txt - the Thunderstore package or install docs must supply them or BepInEx silently never starts; (2) the winhttp=n,b DllOverrides line must be added manually to the target prefix's user.reg with no wine process running (wine reg is unusable over SSH), and the override is per-prefix; (3) the port replaces MelonLoader - version.dll and the doorstop cannot be active together; (4) r2modmac Play is unusable for the Windows-under-Wine build (CrossOver runner only, and CrossOver's expired-trial dialog gates that runner) - the manager is for file management only, launch stays task game:run/scripts/launch_game.py; (5) the manager's per-mod disable is file-level sync and bidirectional (files wiped from the game dir vanish from the profile on next sync); (6) the dev harness is resident in the MelonLoader mod and is inert in BepInEx-only runs - port it with the mod (TASK-056.04); (7) community plugin quality varies (the Noelle skin pack throws NullReferenceException on hover-preview, spams lilToon shader errors and builds physics points on the main thread) - verify packages individually, disable-by-compare. Full evidence in TASK-056.01 notes; working launch method and conditions documented in docs/development.md under 'Running BepInEx under Wine'. Scope note: all positive results are Wine 11.18 against the CrossOver bottle prefix; the plain-Wine prefix was never tested end to end.
+
+Harness/script migration completed on bepinex-port in 6d78839. Paths, relaunch/log scraping, Wine doorstop override, failure evidence and MCP tools verified against the running BepInEx game. task check passed (2781 C#, 1160 Python tests plus installer checks/lint); main untouched and legacy proxy parked. Existing MCP connections require restart to reload changed Python modules. Packaging/manager install verification remains the next subtask; no cutover or publish performed.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

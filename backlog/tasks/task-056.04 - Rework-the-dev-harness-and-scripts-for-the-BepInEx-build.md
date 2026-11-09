@@ -1,7 +1,7 @@
 ---
 id: TASK-056.04
 title: Rework the dev harness and scripts for the BepInEx build
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-08T23:31:00Z'
 updated_date: '2026-11-09 01:26'
@@ -71,10 +71,18 @@ Full task check passed: mod build, installer checks, 2781 C# tests, 1160 Python 
 Real-game fresh MCP smoke also verified severity-prefixed DevHarness/KillFloor/editor log reads, BackQuote opening/closing the rendered console, mouse move/clear, state and full-frame screenshots. Evidence: .tools/evidence/bepinex-harness-console.png and bepinex-harness-editor.png (gitignored). Console help created persisted history; fresh MCP clear_console_log returned removed=true. Final state: editor/frozen/invulnerable true, spawnsOff true, edits count 0. winhttp.dll/doorstop_config.ini active, version.dll absent and version.dll.bak preserved. Existing connected MCP server needs restart to reload changed modules; documented and verified via fresh Client.
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Migrated the development harness script layer to BepInEx on bepinex-port (implementation commit 6d78839), leaving main and the reversible legacy loader installation untouched. game_paths reports BepInEx/plugins/MegabonkLevels, LogOutput.log and the Wine launch log; relaunch/readiness checks, failure-evidence collection, MCP log helpers and performance sweeps follow these paths. Plain Wine now requests the winhttp doorstop override instead of version, and both macOS launch routes omit the legacy loader flag. Existing plugin/PDB/NLayer deployment was verified; build task descriptions and props tracking were corrected. Legacy installer helper functions and shared UserData/harness paths remain compatible. Developer and agent instructions document current paths and restarting an already-connected MCP server.
+
+Verification: tests updated first produced 11 expected failures, then all 1160 Python tests passed. task check passed, including build, installer checks, 2781 C# tests and lint; final task lint and git diff --check passed. The mod build has zero warnings/errors; pre-existing test warnings remain. Fresh MCP handlers against the real Wine-hosted game passed relaunch/load/editor, BepInEx-prefixed log reads, state, key, mouse, screenshot and console-log deletion. Screenshots are in gitignored .tools/evidence/bepinex-harness-{console,editor}.png. Final game state is frozen editor with spawns off and invulnerability enabled; version.dll.bak remains parked and doorstop active. Packaging and manager verification remain the next subtask.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
