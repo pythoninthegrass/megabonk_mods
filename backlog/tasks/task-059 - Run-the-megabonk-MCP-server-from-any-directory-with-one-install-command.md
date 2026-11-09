@@ -1,10 +1,10 @@
 ---
 id: TASK-059
 title: Run the megabonk MCP server from any directory with one install command
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-09T17:53:00Z'
-updated_date: '2026-11-09T19:36:00Z'
+updated_date: '2026-11-09T19:42:00Z'
 labels: []
 dependencies: []
 references:
@@ -24,6 +24,7 @@ modified_files:
   - pyproject.toml
   - uv.lock
   - taskfile.yml
+  - .env.example
   - src/megabonk_harness/
   - scripts/run.py
   - scripts/game_paths.py
@@ -65,7 +66,7 @@ Decision (2026-11-09): package the harness and register the installed command. R
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [x] #1 A machine with only uv installed can install the megabonk MCP server with one documented `uv tool install` command against the cloned repository, and start it with one command that succeeds regardless of the client's working directory; verified by an initialize + tools/list handshake returning the full tool set from an unrelated directory
+- [x] #1 A machine with only uv installed can run the megabonk MCP server with one documented `uvx` registration entry against the repository, with no per-machine path in the entry, and start it regardless of the client's working directory; verified by an initialize + tools/list handshake returning the full tool set from an unrelated directory
 - [x] #2 When started as an installed copy, the server resolves the game directory and `.env`, the default screenshot/evidence directory, and level files from the user's checkout rather than the tool cache; verified by the `paths` tool output and a screenshot landing in the checkout's evidence directory
 - [x] #3 Harness actions that shell out to `task` (relaunch) still work when the server process was started outside the checkout
 - [x] #4 Started where no checkout can be found, the server fails with an error naming the missing checkout instead of silently reading `.env` or writing evidence into an install cache
@@ -85,41 +86,29 @@ Decision (2026-11-09): package the harness and register the installed command. R
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-Decisions (approved 2026-11-09): package `src/megabonk_harness/`; console scripts `megabonk-mcp` (server) and `megabonk-harness` (run.py CLI); move game_paths, menu_input, launch_game, run and mcp_server into the package, leave scripts/*.py as thin shims so Taskfiles, docs and `uv run scripts/run.py` keep working.
+Package the harness as `src/megabonk_harness/` built with uv_build (`[tool.uv.build-backend] module-name = "megabonk_harness"`), with console scripts `megabonk-mcp` and `megabonk-harness`.
 
-1. Tests first: new tests/test_checkout.py for discovery (env override MEGABONK_REPO, then cwd walk-up, then repo containing the source tree for editable/dev copies; error naming the missing checkout otherwise), including an installed-copy case (module located outside any checkout).
-2. Add pyproject build-system (hatchling), `[tool.hatch.build.targets.wheel] packages`, `[project.scripts]`, pytest `pythonpath = ["scripts", "src"]`.
-3. `git mv` the five modules into the package with absolute imports; replace `Path(__file__)` repo anchors (ENV_FILE, evidence_dir, TEST_FOREST_LEVEL, self-relaunch argv of run.py and launch_game.py) with checkout discovery or `-m` invocations; run `task` with cwd=checkout.
-4. scripts/{run,game_paths,launch_game,menu_input,mcp_server}.py become shims; update sibling scripts and tests to package imports.
-5. Remove the PEP 723 pin list from the server entry so pyproject.toml is the single authority (the shim carries no deps; `uv run scripts/run.py` shim stays working via the project environment).
-6. Update docs/development.md, site/src/content/mcp-config.md and AGENTS.md to `uv tool install` registration; verify handshake + paths + screenshot from an unrelated cwd.
-
-Build backend changed from hatchling to uv_build (`requires = ["uv_build>=0.11.32,<0.12"]`, `[tool.uv.build-backend] module-name = "megabonk_harness"` because the project name megabonk-mods would otherwise default to module megabonk_mods; src layout is the uv_build default). Verified with uv build --wheel, a fresh editable tool install (45 tools from an unrelated cwd) and task check.
+1. Tests first: tests/test_checkout.py covers checkout discovery, including the cache-installed case.
+2. Move game_paths, menu_input, launch_game, run and mcp_server into the package with absolute imports; replace `Path(__file__)` repo anchors with checkout discovery or `-m` invocations; run `task` with cwd set to the checkout.
+3. Leave scripts/{run,game_paths,launch_game,mcp_server}.py as shims; move other scripts and tests to package imports; drop PEP 723 headers from scripts that now import the package.
+4. Register the server with `uvx --from git+<repo> megabonk-mcp` and pass MEGABONK_REPO through, in .mcp.json, opencode.jsonc, docs/development.md and site/src/content/mcp-config.md.
+5. Document uv and mise requirements in README.md and docs/development.md; document the new and previously missing variables in .env.example.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Reference implementation: `osascript-mcp` (github.com/pythoninthegrass/osascript-mcp), the macOS desktop-automation MCP server. Worth lifting from it:
+Reference implementation: osascript-mcp (packaging shape only; its SDK surface and self-containedness were deliberately not copied, so checkout discovery is original work).
 
-- Layout: `src/osascript_mcp/{__init__,__main__,server,executor}.py`, absolute imports between modules, single `main()` that both `__main__.py` and the console script call.
-- Packaging: `[build-system] requires = ["hatchling"]` / `build-backend = "hatchling.build"`, `[tool.hatch.build.targets.wheel] packages = ["src/osascript_mcp"]`, `[project.scripts] osascript-mcp = "osascript_mcp.server:main"`.
-- Registration copy in its README: `claude mcp add osascript -- uvx --from git+https://github.com/pythoninthegrass/osascript-mcp osascript-mcp`, plus `"command": "uv", "args": ["run", "--directory", "/path/to/osascript-mcp", "osascript-mcp"]` for source development. That `--directory` form is the development fallback this task replaces for registration.
-- It shares dependency shape with this harness (`python-decouple`, a pinned `toon-format`), so the dependency-set move from script header to package metadata has a working example.
+Layout: src/megabonk_harness/{checkout,game_paths,launch_game,menu_input,run,mcp_server}.py; scripts/{run,game_paths,launch_game,mcp_server}.py are shims. Checkout discovery order: MEGABONK_REPO, the working directory's ancestors, then the tree the module was loaded from (marker: taskfile.yml + src/megabonk_harness). Under uvx the code runs from uv's cache, so the third step never applies and the checkout comes from MEGABONK_REPO or the client's cwd.
 
-Deliberately not copied: its SDK surface (`mcp>=1.7.1`, `mcp.server.lowlevel.Server` + `stdio_server`) — this server is on `mcp>=2.3,<3`; and its self-containedness — it has no checkout to discover, so criteria 2-4 (runtime checkout discovery, failing loudly when absent) stay original work here.
+Dependency authority (AC5): pyproject.toml. The PEP 723 headers were removed from the moved modules and from install_melonloader.py and il2cpp_dump.py, which now run in the project environment. pyproject was kept because the package build reads it and it already carries exclude-newer. A uvx install ignores the checkout's uv.lock and exclude-newer, so dependencies resolve fresh from the declared ranges.
 
-Layout: src/megabonk_harness/{checkout,game_paths,launch_game,menu_input,run,mcp_server}.py; scripts/{run,game_paths,launch_game,mcp_server}.py are shims. Console scripts megabonk-mcp and megabonk-harness. Checkout discovery: MEGABONK_REPO, then cwd ancestors, then the tree the module loaded from (marker: taskfile.yml + src/megabonk_harness). `uv tool install --editable <checkout>` is the one-command install; a non-editable install needs MEGABONK_REPO.
+Build backend: uv_build>=0.11.32,<0.12 (the pinned uv is 0.11.32); module-name is set because the project name would otherwise default to megabonk_mods.
 
-Dependency authority (AC5): pyproject.toml. The PEP 723 headers were removed from the moved modules and from install_melonloader.py and il2cpp_dump.py (they import the package, so they now run in the project environment). Kept pyproject because uv tool install builds from it and it already carries exclude-newer; the old script pin list was a subset duplicate.
+Registration: uvx --from git+https://github.com/pythoninthegrass/megabonk_mods megabonk-mcp with env.MEGABONK_REPO (`${MEGABONK_REPO:-}` in .mcp.json, `{env:MEGABONK_REPO}` in opencode.jsonc). MEGABONK_REPO is process-environment only because it is needed to find .env. A built commit is cached; run `uv cache clean megabonk-mods` after a pull. Remote boxes need `uv sync` so scripts/run.py's shim can import the package (noted in docs/gamepadui.md).
 
-Verified from an unrelated cwd with scratch UV_TOOL_DIR: editable install returned 45 tools and a paths call; non-editable install exits 1 with an error naming MEGABONK_REPO and works when it is set; env_file/evidence_dir/example_forest_level resolve into the checkout. NOT verified: a screenshot landing in the checkout evidence dir needs a running game (unit tests cover evidence_dir resolution); AC2 left unchecked for that. Remote boxes need `uv sync` so scripts/run.py's shim can import the package (noted in docs/gamepadui.md). No commit made.
-
-Live check (2026-11-09): from an unrelated cwd, the editable-installed megabonk-mcp ran `relaunch` (state: levelLoaded, killFloorArmed, editor true, 487 palette entries) and `screenshot`, which saved into the checkout's .tools/evidence. The first two frames were the Loading overlay, captured right after relaunch; a later capture showed the example forest in the editor. This corrects the earlier note that AC2 was unverified.
-
-Registration changed from a one-time `uv tool install --editable` to `uvx --from git+https://github.com/pythoninthegrass/megabonk_mods megabonk-mcp` with `env.MEGABONK_REPO` passed through (`${MEGABONK_REPO:-}` in .mcp.json, `{env:MEGABONK_REPO}` in opencode.jsonc) so the entry has no per-machine path. Under uvx the code runs from uv's cache, so the source-tree fallback never applies; the checkout comes from MEGABONK_REPO or the client's cwd ancestors. Verified with a git+file clone: empty var from an unrelated cwd exits naming the checkout, MEGABONK_REPO set returns 45 tools, cwd inside the repo with an empty var returns 45 tools. The git URL only works once the commit is pushed. uvx ignores the checkout's uv.lock and exclude-newer and caches the built commit (uv cache clean megabonk-mods after a pull).
-
-Committed (7191421, 266bfab) and pushed to origin/main. The exact registration URL was checked after the push: uvx --from git+https://github.com/pythoninthegrass/megabonk_mods megabonk-mcp with MEGABONK_REPO set returns the tool list from an unrelated cwd. Left In Progress pending the owner's restart-and-test.
+Verification: task check passes. From an unrelated cwd, an editable install, a non-editable install (fails naming MEGABONK_REPO when unset, works when set) and a git+file uvx run all returned 45 tools. A live relaunch plus screenshot through the installed command landed in the checkout's .tools/evidence. After a session restart the pushed uvx registration served `paths`, `relaunch` and `screenshot` end to end. A capture taken immediately after relaunch shows the Loading overlay; a later one shows the editor.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
@@ -133,3 +122,9 @@ Reference implementation set to the sibling `osascript-mcp` MCP server (packagin
 
 ---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Packaged the dev harness as `src/megabonk_harness/` (built with uv_build; commands `megabonk-mcp` and `megabonk-harness`) and registered the MCP server with `uvx --from git+<repo> megabonk-mcp`, so one entry with no per-machine path works from any client directory. The `scripts/*.py` entry points remain as shims, so Taskfiles and docs keep working.\n\nA new checkout discovery step (MEGABONK_REPO, then the working directory's ancestors, then the source tree) anchors `.env`, the evidence folder, levels and `task` runs to the user's clone, and fails with an error naming the missing checkout when none is found. pyproject.toml is the only dependency declaration. README.md, docs/development.md, the site MCP page and .env.example were updated, including uv/mise requirements and the previously undocumented MEGABONK_* variables.\n\nVerification: `task check` passes (1308 Python tests, 2780 .NET tests, lint). A handshake from an unrelated directory returned 45 tools for editable, non-editable and git+file uvx runs; the no-checkout case exits naming MEGABONK_REPO. After a session restart, the pushed uvx registration served `paths`, `relaunch` and `screenshot` against the live game, with the screenshot saved in the checkout's .tools/evidence.\n\nRisks and follow-ups: uvx caches the built commit and ignores the checkout's uv.lock and exclude-newer, so run `uv cache clean megabonk-mods` after pulling harness changes and expect dependencies to resolve fresh. Remote boxes need `uv sync` so the `scripts/run.py` shim can import the package. A client that cannot expand `${MEGABONK_REPO:-}` needs the variable set a different way.
+<!-- SECTION:FINAL_SUMMARY:END -->
