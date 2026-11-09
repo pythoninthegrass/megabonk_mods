@@ -1,16 +1,14 @@
 using HarmonyLib;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Managers;
-using MelonLoader;
+using Assets.Scripts.Managers;
 
 namespace MegabonkLevels;
 
 // Shows the death screen's own retry button for custom runs and keeps the level's edits across the game's native restart; see docs/development.md.
 public static class DeathRestartPatch
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

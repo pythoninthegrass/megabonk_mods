@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../../src/MegabonkLevels.Mod/mod_content_paths.cs" Link="mod_content_paths.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/menu_backout.cs" Link="menu_backout.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/level_thumbnail_sidecar.cs" Link="level_thumbnail_sidecar.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/custom_tier_selection.cs" Link="custom_tier_selection.cs" />

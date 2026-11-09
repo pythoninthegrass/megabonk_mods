@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
 using System.Text.Json.Nodes;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.Inventory__Items__Pickups;
-using Il2CppAssets.Scripts.Inventory__Items__Pickups.Items;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.Inventory__Items__Pickups;
+using Assets.Scripts.Inventory__Items__Pickups.Items;
 
 namespace MegabonkLevels;
 

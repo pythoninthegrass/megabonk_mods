@@ -3,11 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json.Nodes;
 using HarmonyLib;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Audio.Music;
+using Assets.Scripts.Audio.Music;
 using Il2CppInterop.Runtime;
-using MelonLoader;
-using MelonLoader.Utils;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -16,7 +13,7 @@ namespace MegabonkLevels;
 public static class LevelMusic
 {
     private static MusicTrack _track;
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static string _pack;
     private static RadioPlaylist _radio;
     private static IntPtr _radioTrack;
@@ -27,10 +24,10 @@ public static class LevelMusic
     private static MusicTrack _bundleRadioTrack;
     private static bool _runtimeNeedsReload;
 
-    public static void Initialize(MelonLogger.Instance logger)
+    public static void Initialize(ModLogger logger)
     {
         _logger = logger;
-        _library = CustomMusicLibrary.Discover(Path.Combine(MelonEnvironment.UserDataDirectory, "CustomMusic"), message => logger.Warning(message));
+        _library = CustomMusicLibrary.Discover(Path.Combine(ModPaths.UserDataDirectory, "CustomMusic"), message => logger.Warning(message));
         logger.Msg($"Music: discovered {_library.Names.Count} custom tracks.");
     }
 
@@ -87,7 +84,7 @@ public static class LevelMusic
     internal static bool RuntimeActive => _runtime != null;
 
     // Resolves the level's clip and builds the replacement track; any failure warns and leaves the stock music.
-    public static void Prepare(string reference, MelonLogger.Instance logger)
+    public static void Prepare(string reference, ModLogger logger)
     {
         ReleasePlayback();
         Reference = reference;

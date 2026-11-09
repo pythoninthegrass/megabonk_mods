@@ -1,7 +1,5 @@
 using System.Collections.Generic;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
-using MelonLoader;
+using Assets.Scripts.Actors.Player;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -11,11 +9,11 @@ public static class LavaWatcher
 {
     private const string DamageSource = "Lava";
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static readonly Dictionary<int, float> s_nextHurt = new();
     private static bool _loggedFirstHurt;
 
-    public static void Install(MelonLogger.Instance logger) => _logger = logger;
+    public static void Install(ModLogger logger) => _logger = logger;
 
     public static void Tick()
     {

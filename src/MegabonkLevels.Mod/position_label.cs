@@ -1,11 +1,9 @@
 using System.Collections.Generic;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Enemies;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.Managers;
-using Il2CppAssets.Scripts.UI.Debug;
-using Il2CppTMPro;
-using MelonLoader;
+using Assets.Scripts.Actors.Enemies;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.Managers;
+using Assets.Scripts.UI.Debug;
+using TMPro;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -25,7 +23,7 @@ public static class PositionLabel
     private const int MaxEnemyLines = 3;
     private const string CellLogVariable = "MEGABONK_CELL_LOG";
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static bool _armed;
     private static int _gridWidth;
     private static int _gridDepth;
@@ -46,7 +44,7 @@ public static class PositionLabel
     public static bool Enabled => Visibility.Enabled;
     public static bool Visible => _label != null && _label.gameObject.activeInHierarchy && (UiManager.Instance?.hudGroup?.alpha ?? 0f) > 0f;
 
-    public static void Arm(int gridWidth, int gridDepth, float spacing, float tileHeight, float floorY, MelonLogger.Instance logger)
+    public static void Arm(int gridWidth, int gridDepth, float spacing, float tileHeight, float floorY, ModLogger logger)
     {
         _logger = logger;
         _gridWidth = gridWidth;
@@ -71,14 +69,14 @@ public static class PositionLabel
         Hide();
     }
 
-    public static void SetCellLog(bool enabled, MelonLogger.Instance logger)
+    public static void SetCellLog(bool enabled, ModLogger logger)
     {
         _cellLogEnabled = enabled;
         CellLog.Reset();
         logger.Msg($"PositionLabel: cell log {(enabled ? "on" : "off")}");
     }
 
-    public static void SetVisible(bool enabled, MelonLogger.Instance logger)
+    public static void SetVisible(bool enabled, ModLogger logger)
     {
         Visibility.Set(enabled);
         _nextUpdate = 0f;

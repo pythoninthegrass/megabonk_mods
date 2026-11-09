@@ -1,8 +1,6 @@
 using System.Collections.Generic;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.Utility;
-using MelonLoader;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.Utility;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -15,10 +13,10 @@ public static class GrindAssistWatcher
     // A catch is one event per grind, but the search runs every frame, so the line is kept to this rate.
     private const int LogIntervalFrames = 60;
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static int _lastCatchLogFrame = -LogIntervalFrames;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

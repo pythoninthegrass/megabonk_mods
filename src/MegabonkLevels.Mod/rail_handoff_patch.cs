@@ -1,8 +1,6 @@
 using System.Collections.Generic;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
+using Assets.Scripts.Actors.Player;
 using HarmonyLib;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -10,9 +8,9 @@ namespace MegabonkLevels;
 // On a custom level, a grind that runs off the end of a rail starts the nearest other rail, so rails meeting at an angle chain in both directions.
 public static class RailHandoffPatch
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

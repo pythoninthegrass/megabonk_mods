@@ -1,8 +1,6 @@
 using System.Collections.Generic;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
+using Assets.Scripts.Actors.Player;
 using HarmonyLib;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -11,9 +9,9 @@ namespace MegabonkLevels;
 // instead of being launched along the rail's tangent into it. Sibling of RailHandoffPatch, which covers the other case: a rail to chain onto.
 public static class RailWallEndPatch
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

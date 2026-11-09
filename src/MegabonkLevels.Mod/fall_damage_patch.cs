@@ -1,11 +1,9 @@
 using System.Collections.Generic;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.Inventory__Items__Pickups;
-using Il2CppAssets.Scripts.Inventory__Items__Pickups.Stats;
-using Il2CppAssets.Scripts.Menu.Shop;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.Inventory__Items__Pickups;
+using Assets.Scripts.Inventory__Items__Pickups.Stats;
+using Assets.Scripts.Menu.Shop;
 using HarmonyLib;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -19,7 +17,7 @@ public static class FallDamagePatch
 {
     private const EStat Stat = EStat.FallDamageReduction;
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static int _swapCount;
     private static float _lastPlayerValue = float.NaN;
     private static float _lastReferenceValue = float.NaN;
@@ -34,7 +32,7 @@ public static class FallDamagePatch
     public static float? LastHpBefore { get; private set; }
     public static float? LastHpAfter { get; private set; }
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

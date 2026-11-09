@@ -1,10 +1,9 @@
 using System;
 using System.Text.Json.Nodes;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.Inventory__Items__Pickups;
-using Il2CppAssets.Scripts.Inventory__Items__Pickups.Stats;
-using Il2CppAssets.Scripts.Menu.Shop;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.Inventory__Items__Pickups;
+using Assets.Scripts.Inventory__Items__Pickups.Stats;
+using Assets.Scripts.Menu.Shop;
 using UnityEngine;
 
 namespace MegabonkLevels;

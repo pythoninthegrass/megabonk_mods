@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
 using HarmonyLib;
-using Il2CppAssets.Scripts.Inventory__Items__Pickups.Items;
-using MelonLoader;
+using Assets.Scripts.Inventory__Items__Pickups.Items;
 
 namespace MegabonkLevels;
 
@@ -10,15 +9,15 @@ namespace MegabonkLevels;
 public static class ChestLuckPatch
 {
     private static float _shift;
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }
 
     // Draws this run's shift; called once per generation, so a restart of the run draws it again.
-    public static void Roll(IReadOnlyList<float> range, MelonLogger.Instance logger)
+    public static void Roll(IReadOnlyList<float> range, ModLogger logger)
     {
         _shift = ChestLuck.Roll(range, new Random(Guid.NewGuid().GetHashCode()));
         if (range != null) logger.Msg($"ChestLuck: this run's chest luck shift is {_shift:F2} (range {range[0]:F2} to {range[1]:F2})");

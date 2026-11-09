@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using System.Text.Json.Nodes;
-using MelonLoader;
 
 namespace MegabonkLevels;
 
@@ -12,12 +11,12 @@ namespace MegabonkLevels;
 // never touch it. Enabled once, kept on, snapshotted per window; the cost is two events per GC.
 public static class PerfGc
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static GcPauseListener _listener;
     private static long _pauseStartTicks;
     private static int _collectionsStart;
 
-    public static void Install(MelonLogger.Instance logger) => _logger = logger;
+    public static void Install(ModLogger logger) => _logger = logger;
 
     public static void ClearWindow()
     {

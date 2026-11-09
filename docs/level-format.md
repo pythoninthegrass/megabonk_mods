@@ -370,7 +370,7 @@ A tile's `Height` is the game's `ProceduralTile.posY`, and a slope is a separate
 
 `MapController.StartNewMap(RunConfig)` is confirmed live to be the right entry point: a `SceneTransitionProbe` Harmony postfix on it fired when a normal, manual map-select-and-confirm playthrough started a Forest run, immediately followed by `A_GenerationComplete`. The original hypothesis, `MapController.TestMap(RunConfig)`, does *not* start a run — calling it only sets `MapController.currentMap`/`currentStage`/`runConfig`; `MapController.IsMainMenu()` stays `true` before and after the call, and no generation follows. `TestMap` is exposed for a different purpose than reusing the normal in-run flow and must not be used here.
 
-A hardcoded hotkey (F6, `MegabonkLevelsMod.OnUpdate`) loads a fixed file name (`megabonklevels-test-level.mblevel.json`) from MelonLoader's `Mods` directory (`MelonEnvironment.ModsDirectory`) — a manually-placed test file is sufficient; loading an arbitrary user-chosen path is not implemented. F10 was tried first and rejected: it collides with the game's own built-in debug console, which also toggles on F10 independently of mod code. `levels/example-forest.mblevel.json` in this repo is that test file's content (Forest, stage 0, tier 0, `debugSeed=20261007` — confirmed reproducible across three separate Forest generations — no edits); copy it into the game's `Mods` folder under the hotkey's expected name to use it.
+A hardcoded hotkey (F6, `MegabonkLevelsMod.Tick`) loads `megabonklevels-test-level.mblevel.json` beside the plugin DLL in `BepInEx/plugins/MegabonkLevels/`. F10 collides with the game's built-in debug console. Copy `levels/example-forest.mblevel.json` there under the hotkey's expected name to test Forest, stage 0, tier 0, seed 20261007, with no edits. Arbitrary paths are available through the harness rather than this hotkey.
 
 **Reproducibility check (no new code needed):** `GenerationPatch` already logs a SHA-256 hash of every spawned tile/object's transform on every `A_GenerationComplete`, regardless of what triggered generation. Pressing F6 from the main menu, waiting for generation to finish, and repeating a couple more times and diffing the `hash=` values in `Latest.log` is the verification that the forced seed actually reproduces the same map — confirmed live across three separate loads, all producing the identical hash despite each run's irrelevant random `mapSeed` differing.
 
@@ -442,7 +442,7 @@ uv run scripts/run.py enable   # once; relaunch the game after
 uv run scripts/run.py load levels/task-004-05-regression.mblevel.json
 ```
 
-Then check `MelonLoader/Latest.log` for:
+Then check `BepInEx/LogOutput.log` for:
 
 - `LiveEdit: applied 9 edit(s)` with no `WARNING` lines about the edits themselves, immediately followed by `FillRegeneration`, `CollisionRebuild` and `KillFloor: armed` with no errors.
 - No `error`/`exception` lines for the rest of the session.

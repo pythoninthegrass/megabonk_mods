@@ -1,9 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Managers;
-using Il2CppTMPro;
-using MelonLoader;
+using Assets.Scripts.Managers;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using static MegabonkLevels.EditorUi;
@@ -64,7 +62,7 @@ public static class EditorPalette
     private static TextMeshProUGUI _emptyLabel;
     private static EditorTooltip _tooltip;
     private static readonly HoverDelay _tooltipDelay = EditorTooltip.NewHoverDelay();
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static GameObject _root;
     private static RectTransform _panel;
     private static RectTransform _tabColumn;
@@ -134,7 +132,7 @@ public static class EditorPalette
         public string Label;
     }
 
-    public static void OnEditorEntered(MelonLogger.Instance logger)
+    public static void OnEditorEntered(ModLogger logger)
     {
         _logger = logger;
         Rebuild();

@@ -1,9 +1,7 @@
 using System;
 using HarmonyLib;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppTMPro;
-using MelonLoader;
+using Assets.Scripts.Actors.Player;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -73,7 +71,7 @@ public static class StartupCover
 
     public static StartupGatePhase Phase => Gate.Phase;
 
-    public static void Tick(MelonLogger.Instance logger)
+    public static void Tick(ModLogger logger)
     {
         var now = Time.realtimeSinceStartup;
         PollGenerationProgress(now);
@@ -106,7 +104,7 @@ public static class StartupCover
 
     private const float InPlaceTolerance = 0.5f;
 
-    private static void AttemptPlace(MelonLogger.Instance logger, float now)
+    private static void AttemptPlace(ModLogger logger, float now)
     {
         var start = LiveEditPatch.PlayerStart;
         var player = MyPlayer.Instance;
@@ -156,7 +154,7 @@ public static class StartupCover
         body.velocity = Vector3.zero;
     }
 
-    private static void Drain(MelonLogger.Instance logger)
+    private static void Drain(ModLogger logger)
     {
         var commands = Gate.Drain();
         for (var i = 0; i < commands.Count; i++)

@@ -5,8 +5,6 @@ using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using System.Threading;
 using Il2CppInterop.Runtime;
-using Il2Cpp;
-using MelonLoader;
 
 namespace MegabonkLevels;
 
@@ -20,10 +18,10 @@ internal static class MusicNativeProbe
         (path, audio) => new RuntimeMusicTrack(path == Tone ? "runtime-native-tone" : Path.GetFileNameWithoutExtension(path), audio),
         track => track.Dispose());
 
-    internal static JsonObject PlayTone(MelonLogger.Instance logger)
+    internal static JsonObject PlayTone(ModLogger logger)
         => Play(Tone, logger);
 
-    internal static JsonObject PlayFile(string path, MelonLogger.Instance logger)
+    internal static JsonObject PlayFile(string path, ModLogger logger)
         => Play(path, logger);
 
     private static PcmAudio CreateTone(CancellationToken cancellation)
@@ -45,7 +43,7 @@ internal static class MusicNativeProbe
         }, cancellation);
     }
 
-    private static JsonObject Play(string path, MelonLogger.Instance logger)
+    private static JsonObject Play(string path, ModLogger logger)
     {
         try
         {

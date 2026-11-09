@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using HarmonyLib;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Game.Other;
-using Il2CppAssets.Scripts.Managers;
-using MelonLoader;
+using Assets.Scripts.Game.Other;
+using Assets.Scripts.Managers;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -24,7 +22,7 @@ public static class LevelLoaderPatch
     // Levels whose MapData isn't loaded yet wait here and are retried each frame by Pump() until the
     // main scene provides the map, so a load-level issued during startup doesn't fail with
     // "no MapData found". Each entry is removed once the run starts or the load is fatally rejected.
-    private static readonly List<(LevelFile Level, MelonLogger.Instance Logger, string Path, float QueuedAt, string Character, bool Unseeded)> _pending = new();
+    private static readonly List<(LevelFile Level, ModLogger Logger, string Path, float QueuedAt, string Character, bool Unseeded)> _pending = new();
 
     // The level's allowedCharacters as loaded, kept so an editor save writes them back.
     public static IReadOnlyList<string> AllowedCharacters { get; private set; }
@@ -38,7 +36,7 @@ public static class LevelLoaderPatch
         MapDescription = level.MapDescription;
     }
 
-    private static bool TryRead(string path, MelonLogger.Instance logger, LoadOverrides overrides, out LevelFile level)
+    private static bool TryRead(string path, ModLogger logger, LoadOverrides overrides, out LevelFile level)
     {
         level = default;
         try
@@ -79,7 +77,7 @@ public static class LevelLoaderPatch
     }
 
     // Holds the level for the very next MapController.StartNewMap, which the Map Selection Confirm calls at once; the caller has already checked the character.
-    public static bool HoldForNextStart(string path, MelonLogger.Instance logger)
+    public static bool HoldForNextStart(string path, ModLogger logger)
     {
         if (!TryRead(path, logger, default, out var level))
         {
@@ -93,7 +91,7 @@ public static class LevelLoaderPatch
     // Reads a .mblevel.json from disk and registers the matching run. MapData may not exist yet when
     // this is called (e.g. a load-level issued right after launch), so the load is queued and Pump()
     // attempts it each frame until the map is available. Read/parse failures return false at once.
-    public static bool LoadAndStart(string path, MelonLogger.Instance logger, LoadOverrides overrides = default)
+    public static bool LoadAndStart(string path, ModLogger logger, LoadOverrides overrides = default)
     {
         if (!TryRead(path, logger, overrides, out var level))
         {
@@ -126,7 +124,7 @@ public static class LevelLoaderPatch
     // Starts a run from an in-memory level file, reusing the same seed forcing, pending-edit and
     // custom-run marking as a disk load. Returns false when the MapData isn't loaded yet (Pump
     // retries); returns true once the run starts or the load is fatally rejected.
-    private static bool StartOnce(LevelFile level, MelonLogger.Instance logger, string characterName, bool unseeded)
+    private static bool StartOnce(LevelFile level, ModLogger logger, string characterName, bool unseeded)
     {
         var mapData = FindMapData(level.Map);
         if (mapData == null)
@@ -195,7 +193,7 @@ public static class LevelLoaderPatch
     }
 
     // A from-scratch grid larger than the stage's stock generator size cannot be built; the refusal is logged and no run starts.
-    private static bool RefuseOversizedGrid(LevelFile level, MapData mapData, MelonLogger.Instance logger)
+    private static bool RefuseOversizedGrid(LevelFile level, MapData mapData, ModLogger logger)
     {
         if (level.Grid is not { } grid)
         {
@@ -215,7 +213,7 @@ public static class LevelLoaderPatch
 
     // Seed, edits, music, title and custom-run marking for a run about to start; returns the config the run starts with.
     // An unseeded load hands seeding back to the game so the run shows what an unforced generation looks like.
-    private static RunConfig PrepareRun(LevelFile level, MelonLogger.Instance logger, MapData mapData, bool unseeded)
+    private static RunConfig PrepareRun(LevelFile level, ModLogger logger, MapData mapData, bool unseeded)
     {
         if (unseeded)
         {
@@ -266,13 +264,13 @@ public static class LevelLoaderPatch
             if (InitialStage.TakeBeforeAdvance(MapController.index) is int previousIndex)
             {
                 MapController.index = previousIndex;
-                MelonLogger.Msg($"LevelLoader: development initial stage override -> {previousIndex + 1}");
+                ModLogger.Default.Msg($"LevelLoader: development initial stage override -> {previousIndex + 1}");
             }
         }
     }
 
     // A load held back until the player confirms a character on the restricted character screen.
-    private static (LevelFile Level, MelonLogger.Instance Logger, bool RestrictsScreen, bool Unseeded)? _awaitingCharacter;
+    private static (LevelFile Level, ModLogger Logger, bool RestrictsScreen, bool Unseeded)? _awaitingCharacter;
 
     public static bool HasAwaitingCharacter => _awaitingCharacter != null;
 
@@ -340,7 +338,7 @@ public static class LevelLoaderPatch
     // How long a load waits for its MapData before it is rejected as a permanent failure.
     private const float MapDataWaitSeconds = 20f;
 
-    private static void RejectMissingMap(EMap map, MelonLogger.Instance logger)
+    private static void RejectMissingMap(EMap map, ModLogger logger)
     {
         var available = new List<string>();
         foreach (var candidate in Resources.FindObjectsOfTypeAll<MapData>())

@@ -1,7 +1,5 @@
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
+using Assets.Scripts.Actors.Player;
 using HarmonyLib;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -18,11 +16,11 @@ public static class GrindGatePatch
     // be re-attempted as soon as it is pressed again, so either line comes out at most this often.
     private const int LogIntervalFrames = 60;
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static int _lastBlockLogFrame = -LogIntervalFrames;
     private static int _lastStartLogFrame = -LogIntervalFrames;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

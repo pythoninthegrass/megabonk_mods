@@ -1,10 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Enemies;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.Managers;
-using MelonLoader;
+using Assets.Scripts.Actors.Enemies;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.Managers;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -20,7 +18,7 @@ public static class KillFloorWatcher
     private const string HeartbeatVariable = "MEGABONK_KILL_FLOOR_HEARTBEAT";
     private const string DamageSource = "KillFloor";
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static bool _armed;
     private static float _floorY;
     private static float _nextCheck;
@@ -37,7 +35,7 @@ public static class KillFloorWatcher
 
     public static float FloorY => _armed ? _floorY : float.NegativeInfinity;
 
-    public static void Arm(ProceduralTileGeneration tileGen, MelonLogger.Instance logger, float? killFloorY = null)
+    public static void Arm(ProceduralTileGeneration tileGen, ModLogger logger, float? killFloorY = null)
     {
         var mapParameters = tileGen.currentMapParameters ?? tileGen.currentStage?.mapParameters;
         var catchFloorY = CatchFloorY();
@@ -69,7 +67,7 @@ public static class KillFloorWatcher
     }
 
     // A ProceduralMesh map has no tile grid, so the floor comes from the lowest point of the terrain collider.
-    public static void ArmTerrain(float lowestTerrainY, MelonLogger.Instance logger)
+    public static void ArmTerrain(float lowestTerrainY, ModLogger logger)
     {
         var catchFloorY = CatchFloorY();
         _floorY = KillFloor.FloorYForTerrain(lowestTerrainY, MarginBelowLowestTile, catchFloorY);
@@ -81,7 +79,7 @@ public static class KillFloorWatcher
     }
 
     // The environment variable sets the starting state; the harness commands change it while the game runs.
-    public static void SetHeartbeat(bool enabled, MelonLogger.Instance logger)
+    public static void SetHeartbeat(bool enabled, ModLogger logger)
     {
         _heartbeatEnabled = enabled;
         _nextHeartbeat = 0f;

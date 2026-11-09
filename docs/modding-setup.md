@@ -1,15 +1,17 @@
 # Modding setup
 
-Megabonk mods in this repo are built on [MelonLoader](https://melonwiki.xyz/), since Megabonk is a Unity IL2CPP game with no bundled mod loader. If you only want to play levels, read the [player guide](player-guide.md) instead. This doc covers installing MelonLoader, pointing a local build at your own Megabonk install, and verifying the mod loaded.
+The runtime on this branch targets **BepInEx 6 IL2CPP** (`BepInExPack_IL2CPP` 6.0.0-be.788). Install that pack and launch the game once to generate `BepInEx/interop/` before building. See [running BepInEx under Wine](development.md#running-bepinex-under-wine) for the required files, DLL override and reversible loader switch. Do not activate MelonLoader and BepInEx together.
+
+The existing player installers described below still package the older MelonLoader runtime; they are not an installation path for this branch's DLL. Keep using the matching released package until the BepInEx packaging cutover.
 
 ## File naming convention
 
 Inside `src/MegabonkLevels.Mod/`:
 
-- Pure-logic files (no Unity/Harmony/MelonLoader dependency) use a plain snake_case name, e.g. `edit_stack.cs`. These are unit-testable and get compile-linked into `tests/MegabonkLevels.Tests/`.
-- Unity/Harmony-dependent files (Harmony patches, `MelonMod` subclasses, anything touching IL2Cpp types) use a `_patch` suffix, e.g. `generation_patch.cs`. These cannot be unit-tested without Unity loaded and are never compile-linked into the test project.
+- Pure-logic files (no Unity/Harmony/loader dependency) use a plain snake_case name, e.g. `edit_stack.cs`. These are unit-testable and get compile-linked into `tests/MegabonkLevels.Tests/`.
+- Harmony patches generally use a `_patch` suffix, e.g. `generation_patch.cs`. Unity and loader integration files cannot be unit-tested without the runtime and are not compile-linked into the test project.
 
-## Installing MelonLoader
+## Legacy MelonLoader installation
 
 ```sh
 task game:melonloader:install
@@ -22,9 +24,9 @@ This downloads the pinned MelonLoader release, verifies its checksum, and extrac
 Path resolution precedence (see `scripts/game_paths.py`): process environment variable > `.env` file > built-in default.
 
 1. Copy `.env.example` to `.env` and set `MEGABONK_WINE_PREFIX` (the macOS Wine prefix that holds Steam, the directory containing `drive_c`) or `MEGABONK_GAME_DIR` (direct game directory override, any platform) if your install isn't at the default location. On macOS, `MEGABONK_MACOS_RUNTIME` (`wine` by default, or `crossover`) selects the runtime and `MEGABONK_WINE` overrides the plain Wine binary.
-2. The mod build reads the same three settings with the same precedence from the environment (`Directory.Build.props`): `MEGABONK_GAME_DIR`, then `MEGABONK_WINE_PREFIX`, then the older `MEGABONK_BOTTLE` (the prefix's `drive_c`), then the default prefix. A leading `~` is expanded. `task mod:build` loads `.env` into the environment, so it follows your `.env`; a bare `dotnet build` or an IDE build sees only the process environment, so export the setting there. For anything the settings do not cover, copy the properties you need from `src/MegabonkLevels.Mod/Directory.Build.props` into a `src/MegabonkLevels.Mod/Directory.Build.local.props` file (gitignored) and override `BottleFolder`/`GameFolder`/`ModInstanceFolder` there; it wins over the environment. `BottleFolder` is the prefix's `drive_c`; `GameFolder`, the MelonLoader folders and `ModInstanceFolder` derive from it.
+2. The mod build reads the same three settings with the same precedence from the environment (`Directory.Build.props`): `MEGABONK_GAME_DIR`, then `MEGABONK_WINE_PREFIX`, then the older `MEGABONK_BOTTLE` (the prefix's `drive_c`), then the default prefix. A leading `~` is expanded. `task mod:build` loads `.env` into the environment; a bare `dotnet build` or IDE build sees only the process environment. For local overrides use the gitignored `src/MegabonkLevels.Mod/Directory.Build.local.props`. `GameFolder` determines `BepInExCoreFolder` (`BepInEx/core`), `Il2CppAssembliesFolder` (`BepInEx/interop`) and `ModInstanceFolder` (`BepInEx/plugins/MegabonkLevels`). Remove obsolete MelonLoader interop overrides rather than mixing loaders' assemblies.
 
-To compile without copying the DLL into the game's `Mods` folder, pass `-p:ModInstanceFolder=<temp dir>/` to `dotnet build`. `dotnet msbuild src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj -getProperty:GameFolder` prints the game folder the build resolved.
+To compile without deploying into the game's plugins folder, pass `-p:ModInstanceFolder=<temp dir>/` to `dotnet build`. `dotnet msbuild src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj -getProperty:GameFolder` prints the game folder the build resolved.
 
 Run `uv run scripts/game_paths.py` at any point to see the paths actually resolved.
 
@@ -74,11 +76,12 @@ To undo it, delete `MelonLoader/`, `Mods/MegabonkLevels.Mod.dll` and `UserLibs/N
 ## Running and verifying the mod
 
 ```sh
-task mod:build   # builds the mod; the csproj's AfterTargets=Build step deploys the DLL+PDB into the game's Mods folder
+task mod:build   # deploys DLL, PDB and NLayer into BepInEx/plugins/MegabonkLevels
 task game:run     # launches Megabonk
-task game:log     # tails MelonLoader's Latest.log
 ```
 
-A successful load logs an `OnInitializeMelon` message from `MegabonkLevelsMod` in `Latest.log`.
+A successful load logs `Loading [MegabonkLevels 0.0.1]` and `MegabonkLevels mod initialized.` in `BepInEx/LogOutput.log`. Loader assemblies are never copied beside the plugin. F6 reads `megabonklevels-test-level.mblevel.json` beside the plugin DLL. Levels, packs, music and console history retain their existing game-root `UserData/` locations.
+
+The script log helpers still select the legacy log until their migration; inspect `BepInEx/LogOutput.log` directly rather than trusting `task game:log` or `run.py relaunch` on this branch.
 
 To exercise a level without driving the game with key presses, see [development.md](development.md).

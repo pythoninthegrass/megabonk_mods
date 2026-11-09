@@ -1,6 +1,5 @@
 using System;
-using Il2CppRewired;
-using MelonLoader;
+using Rewired;
 
 namespace MegabonkLevels;
 
@@ -8,18 +7,18 @@ namespace MegabonkLevels;
 // so an override stands in for the keyboard while the grind gate is checked in game.
 public static class GrindInput
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static bool? _forced;
     private static Player _player;
     private static bool _failureReported;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }
 
     // true holds the button down, false releases it, null hands the read back to the real device.
-    public static void Force(bool? held, MelonLogger.Instance logger = null)
+    public static void Force(bool? held, ModLogger logger = null)
     {
         _forced = held;
         (logger ?? _logger)?.Msg($"GrindInput: slide button {(held == null ? "back on the real device" : held.Value ? "held" : "released")}.");

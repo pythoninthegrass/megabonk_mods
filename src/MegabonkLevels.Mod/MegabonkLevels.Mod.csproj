@@ -6,7 +6,7 @@
     <Nullable>disable</Nullable>
     <RootNamespace>MegabonkLevels</RootNamespace>
     <AssemblyName>MegabonkLevels.Mod</AssemblyName>
-    <!-- Library builds keep package assemblies out of the output; MelonLoader loads the mod from the game's Mods folder, so NLayer has to land beside it. -->
+    <!-- Deploy package dependencies beside the plugin. -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
@@ -15,16 +15,20 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="MelonLoader">
-      <HintPath>$(MelonLoaderFolder)/MelonLoader.dll</HintPath>
+    <Reference Include="BepInEx.Core">
+      <HintPath>$(BepInExCoreFolder)/BepInEx.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.IL2CPP">
+      <HintPath>$(BepInExCoreFolder)/BepInEx.Unity.IL2CPP.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>$(MelonLoaderFolder)/0Harmony.dll</HintPath>
+      <HintPath>$(BepInExCoreFolder)/0Harmony.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Il2CppInterop.Runtime">
-      <HintPath>$(MelonLoaderFolder)/Il2CppInterop.Runtime.dll</HintPath>
+      <HintPath>$(BepInExCoreFolder)/Il2CppInterop.Runtime.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
@@ -83,26 +87,23 @@
       <HintPath>$(Il2CppAssembliesFolder)/Unity.AI.Navigation.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="Il2Cppcom.rlabrecque.steamworks.net">
-      <HintPath>$(Il2CppAssembliesFolder)/Il2Cppcom.rlabrecque.steamworks.net.dll</HintPath>
+    <Reference Include="com.rlabrecque.steamworks.net">
+      <HintPath>$(Il2CppAssembliesFolder)/com.rlabrecque.steamworks.net.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="Il2CppRewired_Core">
-      <HintPath>$(Il2CppAssembliesFolder)/Il2CppRewired_Core.dll</HintPath>
+    <Reference Include="Rewired_Core">
+      <HintPath>$(Il2CppAssembliesFolder)/Rewired_Core.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
 
-  <!-- Deploy the built DLL + PDB into the game's Mods folder on every build -->
-  <Target Name="CopyOutputToModsFolder" AfterTargets="Build">
+  <Target Name="CopyOutputToPluginsFolder" AfterTargets="Build">
     <ItemGroup>
       <BuiltArtifacts Include="$(TargetPath)" />
       <BuiltArtifacts Include="$(TargetDir)$(TargetName).pdb" />
-      <!-- MelonLoader resolves third-party managed dependencies from UserLibs, and Mods as a fallback probe path. -->
-      <ModDependencyArtifacts Include="$(TargetDir)NLayer.dll" />
+      <ModDependencyArtifacts Include="@(ReferenceCopyLocalPaths)" />
     </ItemGroup>
     <Copy SourceFiles="@(BuiltArtifacts)" DestinationFolder="$(ModInstanceFolder)" />
-    <Copy SourceFiles="@(ModDependencyArtifacts)" DestinationFolder="$(GameFolder)/UserLibs" />
     <Copy SourceFiles="@(ModDependencyArtifacts)" DestinationFolder="$(ModInstanceFolder)" />
   </Target>
 

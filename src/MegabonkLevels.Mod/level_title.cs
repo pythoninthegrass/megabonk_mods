@@ -1,20 +1,18 @@
 using System;
 using HarmonyLib;
-using Il2Cpp;
-using MelonLoader;
 
 namespace MegabonkLevels;
 
 // Replaces the stage name and description on the run-start banner and run-config panel for custom runs; see docs/level-format.md.
 public static class LevelTitle
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
     // The level's title and description as loaded, kept so an editor save writes them back.
     public static string Title { get; private set; }
     public static string Description { get; private set; }
 
-    public static void Prepare(string title, string description, MelonLogger.Instance logger)
+    public static void Prepare(string title, string description, ModLogger logger)
     {
         _logger = logger;
         Title = title;

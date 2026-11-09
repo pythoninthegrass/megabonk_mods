@@ -1,7 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using Il2Cpp;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -29,7 +27,7 @@ public static class EditorObjectTools
     private static readonly Color GridColor = new(1f, 1f, 1f, 0.6f);
     private static readonly Color MarkerColor = new(1f, 0.4f, 0.2f, 1f);
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static LineRenderer _selectionOutline;
     private static LineRenderer _gridLines;
     private static LineRenderer _placeMarker;
@@ -62,7 +60,7 @@ public static class EditorObjectTools
 
     public static ObjectTarget? Selected => _selected;
 
-    public static void OnEditorEntered(MelonLogger.Instance logger)
+    public static void OnEditorEntered(ModLogger logger)
     {
         _logger = logger;
         _selected = null;

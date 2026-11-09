@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Il2Cpp;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -15,16 +13,16 @@ public static class GenerationPatch
     private const string CloneSuffix = "(Clone)";
     private const string TileObjectsParentName = "TileObjectsParent";
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         MapGenerationController.A_GenerationComplete += (Il2CppSystem.Action)(() => OnGenerationComplete(logger));
     }
 
-    private static void OnGenerationComplete(MelonLogger.Instance logger)
+    private static void OnGenerationComplete(ModLogger logger)
     {
         var controller = UnityEngine.Object.FindObjectOfType<MapGenerationController>();
         var tiles = controller?.proceduralTileGeneration;
-        var currentMap = Il2CppAssets.Scripts.Managers.MapController.currentMap;
+        var currentMap = Assets.Scripts.Managers.MapController.currentMap;
 
         var seen = new HashSet<int>();
         var records = new List<SpawnRecord>();

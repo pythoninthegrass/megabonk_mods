@@ -10,9 +10,7 @@ public readonly record struct TileState(int Height, SlopeDirection Slope);
 public readonly record struct ObjectState(bool Removed, string CatalogId, TransformData? Transform,
     ObjectTarget? Owner = null, TransformData? LocalTransform = null, bool Hidden = false);
 
-// Pure data: a tile grid plus placed/removed/moved object overrides, built by replaying EditOps
-// (TASK-003.02) through an EditStack. Has no Unity or MelonLoader dependency so it can be unit tested
-// and reused outside the running game.
+// Pure tile and object state built by replaying EditOps, independent of Unity and the loader.
 public sealed class LevelState
 {
     private readonly Dictionary<(int X, int Z), TileState> _tiles = new();

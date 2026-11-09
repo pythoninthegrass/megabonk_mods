@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-11-08T23:31:00Z'
-updated_date: '2026-11-09 00:45'
+updated_date: '2026-11-09 01:15'
 labels:
   - bepinex
   - thunderstore
@@ -47,6 +47,12 @@ Rollback strategy (binding for every subtask):
 - [ ] #5 Docs describe the BepInEx install, the supported managers, and how a user or developer reverts to the MelonLoader setup
 - [ ] #6 If either spike no-gos, this parent is closed with findings and the sure-thing subtasks are archived without main-branch changes
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Approved continuation after both GO spikes: TASK-056.03 ports the runtime on bepinex-port (off bepinex-spike), then TASK-056.04 migrates script paths/log scraping/relaunch and MCP integration, then TASK-056.05 handles Thunderstore packaging and manager install verification. Runtime smoke tests use the unchanged harness queue and direct BepInEx log reads until the script migration. Keep assignees empty; main remains MelonLoader until cutover.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 

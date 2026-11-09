@@ -3,14 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json.Nodes;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Enemies;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.Inventory__Items__Pickups;
-using Il2CppAssets.Scripts.Inventory__Items__Pickups.Weapons;
-using Il2CppAssets.Scripts.Managers;
-using Il2CppAssets.Scripts.Utility;
-using MelonLoader;
+using Assets.Scripts.Actors.Enemies;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.Inventory__Items__Pickups;
+using Assets.Scripts.Inventory__Items__Pickups.Weapons;
+using Assets.Scripts.Managers;
+using Assets.Scripts.Utility;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -69,7 +67,7 @@ public static class PerfMonitor
         "AlwaysManager.Update",
     };
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static int _windowId;
     private static int _enemiesMin;
     private static int _enemiesMax;
@@ -94,14 +92,14 @@ public static class PerfMonitor
         public bool Enabled = true;
     }
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }
 
     public static bool Active => DevHarness.Enabled;
 
-    // Called from MegabonkLevelsMod.OnUpdate: one unscaled frame delta per frame plus the held time scale.
+    // One unscaled frame delta per frame plus the held time scale.
     public static void Tick()
     {
         if (!DevHarness.Enabled)

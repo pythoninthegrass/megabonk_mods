@@ -1,9 +1,7 @@
 using System;
 using System.Globalization;
 using HarmonyLib;
-using Il2Cpp;
 using Il2CppInterop.Runtime.InteropTypes;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -11,9 +9,9 @@ namespace MegabonkLevels;
 // Opt-in development measurement of the terrain seed, noise call and mesh-input grid.
 public static class TerrainSeedPatch
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
         if (TerrainSeedMeasurement.IsEnabled)
@@ -83,7 +81,7 @@ public static class TerrainSeedPatch
     }
 
     // Capture the actual mesh input; generator fields are only corroborating reads.
-    [HarmonyPatch(typeof(Il2Cpp.MeshGenerator), nameof(Il2Cpp.MeshGenerator.GenerateTerrainMesh))]
+    [HarmonyPatch(typeof(global::MeshGenerator), nameof(global::MeshGenerator.GenerateTerrainMesh))]
     private static class HashesTheTerrainGrid
     {
         private static void Prefix(Il2CppObjectBase heightMap)

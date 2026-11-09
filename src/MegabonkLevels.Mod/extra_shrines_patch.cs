@@ -1,7 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using Il2Cpp;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -27,7 +25,7 @@ public static class ExtraShrinesPatch
     }
 
     public static void Spawn(LevelFile settings, IReadOnlyDictionary<string, GameObject> index, LevelState state,
-        ProceduralTileGeneration tiles, MeshCollider ground, MapGenerationController controller, MelonLogger.Instance logger)
+        ProceduralTileGeneration tiles, MeshCollider ground, MapGenerationController controller, ModLogger logger)
     {
         if (!ExtraShrines.Enabled(settings)) return;
         var onMesh = settings.ShrineSpots != null;
@@ -113,7 +111,7 @@ public static class ExtraShrinesPatch
     // The level authors where its shrines may stand, so no probing is needed: each spot is drawn with a preference for ones far
     // from the shrines already placed, and kept where a shrine fits, looking outward from it in rings until one does.
     private static int SpawnAtAuthoredSpots(LevelFile settings, IReadOnlyDictionary<string, GameObject> index, List<PoolEntry> pool,
-        IReadOnlyList<ExtraShrineKind> plan, System.Random random, MelonLogger.Instance logger)
+        IReadOnlyList<ExtraShrineKind> plan, System.Random random, ModLogger logger)
     {
         var offsets = ExtraShrines.NudgeOffsets(ExtraShrines.NudgeStep, ExtraShrines.NudgeRings, ExtraShrines.NudgeDirections);
         var remaining = settings.ShrineSpots.Select(spot => new Vector3Data(spot[0], spot[1], spot[2])).ToList();
@@ -179,7 +177,7 @@ public static class ExtraShrinesPatch
 
     // Looks for a place for the shrine at an authored spot: the spot itself and then rings around it, each needing clear space, and failing that the nearest floor regardless.
     private static bool TryPlaceAtSpot(PoolEntry entry, Vector3Data spot, IReadOnlyList<(float X, float Z)> offsets,
-        IReadOnlyDictionary<string, GameObject> index, System.Random random, MelonLogger.Instance logger,
+        IReadOnlyDictionary<string, GameObject> index, System.Random random, ModLogger logger,
         System.Func<Vector3Data, bool> spacingClear, out Vector3 placedAt)
     {
         placedAt = default;
@@ -273,7 +271,7 @@ public static class ExtraShrinesPatch
     private static readonly IReadOnlySet<ExtraShrineKind> s_skipPass = new HashSet<ExtraShrineKind>();
 
     // null means the full pool; the sentinel reference means names were given but none were valid.
-    private static IReadOnlySet<ExtraShrineKind> AllowedKindsFromSettings(LevelFile settings, MelonLogger.Instance logger)
+    private static IReadOnlySet<ExtraShrineKind> AllowedKindsFromSettings(LevelFile settings, ModLogger logger)
     {
         var names = settings.ExtraShrineKinds;
         if (names == null || names.Count == 0) return null;
@@ -296,7 +294,7 @@ public static class ExtraShrinesPatch
 
     // The map's own shrine prefabs plus the dedicated charge and greed channels on the object placer.
     private static List<PoolEntry> BuildPool(LevelFile settings, MapGenerationController controller,
-        IReadOnlySet<ExtraShrineKind> allowed, MelonLogger.Instance logger)
+        IReadOnlySet<ExtraShrineKind> allowed, ModLogger logger)
     {
         var prefabs = new List<GameObject>();
         var mapData = CatalogPrefabs.TryFindMap(settings.Map);

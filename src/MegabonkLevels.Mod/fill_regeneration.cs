@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Il2Cpp;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -16,7 +14,7 @@ public static class FillRegeneration
     private static readonly MethodInfo FillEdge = typeof(ProceduralTileGeneration).GetMethod(
         "FillEdge", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
-    public static void Regenerate(ProceduralTileGeneration tileGen, float tileWidth, IEnumerable<(int X, int Z)> touched, MelonLogger.Instance logger, bool includeExterior = false)
+    public static void Regenerate(ProceduralTileGeneration tileGen, float tileWidth, IEnumerable<(int X, int Z)> touched, ModLogger logger, bool includeExterior = false)
     {
         if (FillHole == null || FillEdge == null)
         {
@@ -110,7 +108,7 @@ public static class FillRegeneration
         return stale.Count;
     }
 
-    private static void Build(ProceduralTileGeneration tileGen, Vector2Int from, Vector2Int to, MelonLogger.Instance logger)
+    private static void Build(ProceduralTileGeneration tileGen, Vector2Int from, Vector2Int to, ModLogger logger)
     {
         try
         {

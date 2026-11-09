@@ -13,8 +13,8 @@
     <BottleFolder Condition="'$(BottleFolder)' == ''">$(HOME)/.local/share/megabonk/wine/drive_c</BottleFolder>
     <GameFolder Condition="'$(GameFolder)' == '' And '$(GameDirSetting)' != ''">$(GameDirSetting)</GameFolder>
     <GameFolder Condition="'$(GameFolder)' == ''">$(BottleFolder)/Program Files (x86)/Steam/steamapps/common/Megabonk</GameFolder>
-    <MelonLoaderFolder Condition="'$(MelonLoaderFolder)' == ''">$(GameFolder)/MelonLoader/net6</MelonLoaderFolder>
-    <Il2CppAssembliesFolder Condition="'$(Il2CppAssembliesFolder)' == ''">$(GameFolder)/MelonLoader/Il2CppAssemblies</Il2CppAssembliesFolder>
-    <ModInstanceFolder Condition="'$(ModInstanceFolder)' == ''">$(GameFolder)/Mods</ModInstanceFolder>
+    <BepInExCoreFolder Condition="'$(BepInExCoreFolder)' == ''">$(GameFolder)/BepInEx/core</BepInExCoreFolder>
+    <Il2CppAssembliesFolder Condition="'$(Il2CppAssembliesFolder)' == ''">$(GameFolder)/BepInEx/interop</Il2CppAssembliesFolder>
+    <ModInstanceFolder Condition="'$(ModInstanceFolder)' == ''">$(GameFolder)/BepInEx/plugins/MegabonkLevels</ModInstanceFolder>
   </PropertyGroup>
 </Project>

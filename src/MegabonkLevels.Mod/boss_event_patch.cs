@@ -1,6 +1,4 @@
-using Il2Cpp;
-using Il2CppAssets.Scripts.Managers;
-using MelonLoader;
+using Assets.Scripts.Managers;
 
 namespace MegabonkLevels;
 
@@ -8,7 +6,7 @@ namespace MegabonkLevels;
 // so a level reload or a vanilla run never adds a second handler.
 public static class BossEventPatch
 {
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         InteractableBossSpawner.A_BossSpawned += (Il2CppSystem.Action)(() => logger.Msg(BossEventLog.Format("A_BossSpawned")));
         InteractableBossSpawner.A_BossDefeated += (Il2CppSystem.Action<bool>)(flag => logger.Msg(BossEventLog.Format("A_BossDefeated", flag)));

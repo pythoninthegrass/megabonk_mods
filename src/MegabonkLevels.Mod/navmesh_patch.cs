@@ -1,5 +1,4 @@
 using HarmonyLib;
-using MelonLoader;
 using Unity.AI.Navigation;
 
 namespace MegabonkLevels;
@@ -18,9 +17,9 @@ namespace MegabonkLevels;
 // AC#3, so it's left as the sole hook here rather than chasing the crypt crash further.
 public static class NavMeshPatch
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

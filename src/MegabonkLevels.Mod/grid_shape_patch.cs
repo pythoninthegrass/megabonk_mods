@@ -1,9 +1,7 @@
 using System;
 using System.Linq;
-using Il2Cpp;
-using Il2CppAssets.Scripts.MapGeneration.ProceduralTiles;
+using Assets.Scripts.MapGeneration.ProceduralTiles;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -16,12 +14,12 @@ namespace MegabonkLevels;
 // accessible - no reflection needed.
 public static class GridShapePatch
 {
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         MapGenerationController.A_GenerationComplete += (Il2CppSystem.Action)(() => OnGenerationComplete(logger));
     }
 
-    private static void OnGenerationComplete(MelonLogger.Instance logger)
+    private static void OnGenerationComplete(ModLogger logger)
     {
         var controller = UnityEngine.Object.FindObjectOfType<MapGenerationController>();
         var tileGen = controller?.proceduralTileGeneration;
@@ -35,7 +33,7 @@ public static class GridShapePatch
         LogSpacing(logger, tileGen);
     }
 
-    private static void LogGridShape(MelonLogger.Instance logger, ProceduralTileGeneration tileGen)
+    private static void LogGridShape(ModLogger logger, ProceduralTileGeneration tileGen)
     {
         Il2CppReferenceArray<Il2CppReferenceArray<ProceduralTile>> grid = tileGen.proceduralTiles;
         if (grid == null)
@@ -66,7 +64,7 @@ public static class GridShapePatch
         logger.Msg($"GridShape: proceduralTiles.Length={grid.Length} rowLengths=[{string.Join(",", rowLengths.Distinct())}] occupiedCells={occupied}");
     }
 
-    private static void LogSpacing(MelonLogger.Instance logger, ProceduralTileGeneration tileGen)
+    private static void LogSpacing(ModLogger logger, ProceduralTileGeneration tileGen)
     {
         var mapParameters = tileGen.currentMapParameters ?? tileGen.currentStage?.mapParameters;
 

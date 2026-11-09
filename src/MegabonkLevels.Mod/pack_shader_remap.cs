@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -10,7 +9,7 @@ public static class PackShaderRemap
     private static readonly Dictionary<int, Material> Remapped = new();
     private static readonly HashSet<string> Warned = new();
 
-    public static void Apply(GameObject prefab, MelonLogger.Instance logger)
+    public static void Apply(GameObject prefab, ModLogger logger)
     {
         foreach (var renderer in prefab.GetComponentsInChildren<Renderer>(true))
         {
@@ -33,7 +32,7 @@ public static class PackShaderRemap
         }
     }
 
-    private static Material Remap(Material source, string prefabName, MelonLogger.Instance logger)
+    private static Material Remap(Material source, string prefabName, ModLogger logger)
     {
         var shaderName = source != null && source.shader != null ? source.shader.name : null;
         var plan = ShaderRemap.PlanFor(shaderName);

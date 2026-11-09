@@ -1,7 +1,5 @@
 using HarmonyLib;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Steam;
-using MelonLoader;
+using Assets.Scripts.Steam;
 
 namespace MegabonkLevels;
 
@@ -18,9 +16,9 @@ namespace MegabonkLevels;
 //   game's own local progression (MyStats/RunStats) untouched and only suppresses the Steam-bound copy.
 public static class SteamWriteGuard
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

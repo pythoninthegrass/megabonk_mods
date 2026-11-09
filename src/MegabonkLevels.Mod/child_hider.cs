@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -8,7 +7,7 @@ namespace MegabonkLevels;
 // Switches off the renderers and colliders of every child whose name is listed, so the object keeps its other parts.
 public static class ChildHider
 {
-    public static void Hide(GameObject go, IReadOnlyList<string> names, MelonLogger.Instance logger)
+    public static void Hide(GameObject go, IReadOnlyList<string> names, ModLogger logger)
     {
         if (names == null || names.Count == 0)
         {

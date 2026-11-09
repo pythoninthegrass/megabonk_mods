@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Nodes;
-using Il2CppAssets.Scripts.Actors.Enemies;
-using Il2CppAssets.Scripts.Managers;
-using MelonLoader;
+using Assets.Scripts.Actors.Enemies;
+using Assets.Scripts.Managers;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -14,7 +13,7 @@ namespace MegabonkLevels;
 public static class EnemyRenderCull
 {
     private static readonly Dictionary<int, Renderer> Tracked = new();
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static bool _armed;
     private static int _lastSeenEnemies = -1;
     private static float _lastScanAt = float.NegativeInfinity;
@@ -25,7 +24,7 @@ public static class EnemyRenderCull
 
     // The perf `render` verb: enabled=false is "stop rendering enemies", so it arms the cull and sweeps the swarm now;
     // enabled=true restores what it hid and disarms. The response reports what the cull does, not the caller's wording.
-    public static JsonObject Set(bool renderEnabled, MelonLogger.Instance logger)
+    public static JsonObject Set(bool renderEnabled, ModLogger logger)
     {
         _logger = logger;
         var enemies = LiveEnemies();

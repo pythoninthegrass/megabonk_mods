@@ -1,8 +1,6 @@
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.UI.Debug;
-using Il2CppAssets.Scripts.Utility;
-using MelonLoader;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.UI.Debug;
+using Assets.Scripts.Utility;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -28,7 +26,7 @@ public static class EditorMode
 
     public static bool Active => _session.Active;
 
-    public static void Tick(MelonLogger.Instance logger)
+    public static void Tick(ModLogger logger)
     {
         if (_session.Active && !RunInProgress())
         {
@@ -56,7 +54,7 @@ public static class EditorMode
         }
     }
 
-    public static void Set(bool enabled, MelonLogger.Instance logger)
+    public static void Set(bool enabled, ModLogger logger)
     {
         _reenterRequested = false;
         if (enabled)
@@ -69,13 +67,13 @@ public static class EditorMode
         }
     }
 
-    public static void RequestReenter(MelonLogger.Instance logger)
+    public static void RequestReenter(ModLogger logger)
     {
         _reenterRequested = true;
         logger.Msg("EditorMode: re-enter requested after level load.");
     }
 
-    private static void Enter(MelonLogger.Instance logger)
+    private static void Enter(ModLogger logger)
     {
         var camera = PlayerCamera.Instance?.camera;
         if (!RunInProgress() || camera == null)
@@ -110,13 +108,13 @@ public static class EditorMode
 
     public static EditorMapSupportResult CurrentMapSupport()
     {
-        var map = Il2CppAssets.Scripts.Managers.MapController.currentMap;
+        var map = Assets.Scripts.Managers.MapController.currentMap;
         return map == null
             ? new EditorMapSupportResult(true, true, "")
             : EditorMapSupport.Check(map.name, (int)map.mapType);
     }
 
-    private static void Exit(MelonLogger.Instance logger)
+    private static void Exit(ModLogger logger)
     {
         if (!_session.TryExit(out var shouldUnpause))
         {

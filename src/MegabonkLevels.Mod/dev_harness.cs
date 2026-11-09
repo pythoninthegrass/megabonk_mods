@@ -6,15 +6,12 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.Managers;
-using Il2CppAssets.Scripts.UI.InGame.Levelup;
-using Il2CppAssets.Scripts.UI.InGame.Rewards;
-using Il2CppAssets.Scripts.Utility;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.Managers;
+using Assets.Scripts.UI.InGame.Levelup;
+using Assets.Scripts.UI.InGame.Rewards;
+using Assets.Scripts.Utility;
 using Il2CppInterop.Runtime;
-using MelonLoader;
-using MelonLoader.Utils;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -27,7 +24,7 @@ public static class DevHarness
     private const float PlayerBodyOffsetY = TeleportTarget.PlayerBodyOffsetY;
     private const float TeleportCameraPitch = 20f;
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static string _commandsDir;
     private static string _processingDir;
     private static string _doneDir;
@@ -38,10 +35,10 @@ public static class DevHarness
 
     public static bool Enabled => _enabled;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
-        var root = Path.Combine(MelonEnvironment.GameRootDirectory, "harness");
+        var root = ModPaths.HarnessDirectory;
         if (!File.Exists(Path.Combine(root, "enabled")))
         {
             return;
@@ -160,7 +157,7 @@ public static class DevHarness
                 }
 
                 _logger.Msg($"DevHarness: screenshot '{target.Path}'.");
-                MelonCoroutines.Start(CaptureAtEndOfFrame(target.Path));
+                ModTick.Run(CaptureAtEndOfFrame(target.Path));
                 return new JsonObject { ["message"] = $"screenshot: {target.Path}" };
             case HarnessCommandKind.Freeze:
                 MyTime.Pause();
@@ -854,7 +851,7 @@ public static class DevHarness
     // Runs the game's own restart, the death screen's Retry button, without OS-level input on the Rewired menu.
     private static void RestartRun()
     {
-        Il2CppAssets.Scripts.Managers.MapController.RestartRun();
+        Assets.Scripts.Managers.MapController.RestartRun();
         _logger.Msg("DevHarness: restart-run requested.");
     }
 

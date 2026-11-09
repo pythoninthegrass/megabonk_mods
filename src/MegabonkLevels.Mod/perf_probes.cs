@@ -2,11 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json.Nodes;
 using HarmonyLib;
-using Il2Cpp;
-using Il2CppActors.Enemies;
-using Il2CppAssets.Scripts.Actors.Enemies;
-using Il2CppAssets.Scripts.Managers;
-using MelonLoader;
+using Actors.Enemies;
+using Assets.Scripts.Actors.Enemies;
+using Assets.Scripts.Managers;
 
 namespace MegabonkLevels;
 
@@ -16,7 +14,7 @@ namespace MegabonkLevels;
 // was checked for a unique RVA in .tools/il2cpp_dump/dump.cs first — a folded address would crash the game.
 public static class PerfProbes
 {
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
     }
 

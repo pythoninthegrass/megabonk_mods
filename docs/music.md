@@ -115,7 +115,7 @@ The development harness can decode mp3 files and audition either native `AudioCl
 
 ### Decoder and output decision
 
-NLayer 1.16.0 decodes mp3 files as managed float PCM under MelonLoader's .NET 6. The mod build copies `NLayer.dll` into both `Mods` and `UserLibs`; `CopyLocalLockFileAssemblies` is needed to get the dependency into the build output. A complete in-game decode of `01 Police Truck.mp3` produced 44,100 Hz stereo, 12,789,504 samples (6,394,752 frames), and peak 1.0414, matching the host decode. The 14 source files include both 44.1 and 48 kHz material and decoded successfully on the host; decoder peaks can exceed 1.0.
+NLayer 1.16.0 decodes mp3 files as managed float PCM under .NET 6. The BepInEx mod build copies `NLayer.dll` beside the plugin in `BepInEx/plugins/MegabonkLevels/`; `CopyLocalLockFileAssemblies` is needed to get the dependency into the build output. A complete in-game decode of `01 Police Truck.mp3` produced 44,100 Hz stereo, 12,789,504 samples (6,394,752 frames), and peak 1.0414, matching the host decode and the earlier MelonLoader run. The 14 source files include both 44.1 and 48 kHz material and decoded successfully on the host; decoder peaks can exceed 1.0.
 
 **Prefer a real native `AudioClip`**, populated with NLayer PCM and passed to the existing `MusicTrack` path. The native probe created a two-second 44.1 kHz tone and then a 145.005-second stereo clip from the relative file `01 Police Truck.mp3`. Native `GetData_Injected` returned an exact match for the checked PCM prefix (up to 4,096 frames). Lance heard the tone and the song, and verified the modulation behavior below in THPS. No crash occurred in the corrected native attempts. The OS-audio fallback was not needed.
 

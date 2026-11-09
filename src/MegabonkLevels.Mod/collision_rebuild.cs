@@ -1,7 +1,5 @@
 using System.Collections.Generic;
-using Il2Cpp;
-using Il2CppAssets.Scripts.MapGeneration.ProceduralTiles;
-using MelonLoader;
+using Assets.Scripts.MapGeneration.ProceduralTiles;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -12,7 +10,7 @@ namespace MegabonkLevels;
 public static class CollisionRebuild
 {
     // Replaces tileGen.collider with a collision mesh built from the live pieces.
-    public static void Replace(ProceduralTileGeneration tileGen, MelonLogger.Instance logger)
+    public static void Replace(ProceduralTileGeneration tileGen, ModLogger logger)
     {
         var previous = tileGen.collider;
         var combined = Build(tileGen, logger);
@@ -29,7 +27,7 @@ public static class CollisionRebuild
         }
     }
 
-    private static GameObject Build(ProceduralTileGeneration tileGen, MelonLogger.Instance logger)
+    private static GameObject Build(ProceduralTileGeneration tileGen, ModLogger logger)
     {
         var meshes = PrefabColliderMeshes(tileGen);
         var pieces = new Il2CppSystem.Collections.Generic.List<GameObject>();

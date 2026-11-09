@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
-using Il2Cpp;
-using Il2CppTMPro;
-using MelonLoader;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using static MegabonkLevels.EditorUi;
@@ -45,7 +43,7 @@ public static class EditorTileTools
     private static readonly Color WarnColor = new(1f, 0.7f, 0.2f, 1f);
     private static readonly Color ErrorColor = new(1f, 0.4f, 0.4f, 1f);
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static GameObject _root;
     private static readonly List<ToolSlot> _toolSlots = new();
     private static TextMeshProUGUI _status;
@@ -128,7 +126,7 @@ public static class EditorTileTools
 
     public static void ClearSaveInput() => _saveField.Clear();
 
-    public static void OnEditorEntered(MelonLogger.Instance logger)
+    public static void OnEditorEntered(ModLogger logger)
     {
         _logger = logger;
         _tool = EditorTools.Default;

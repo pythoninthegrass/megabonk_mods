@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -22,7 +21,7 @@ public static class GroundSkin
         s_generatedSurfaces.Clear();
     }
 
-    public static void Apply(GameObject tile, int x, int z, IReadOnlyList<GroundZone> zones, MelonLogger.Instance logger)
+    public static void Apply(GameObject tile, int x, int z, IReadOnlyList<GroundZone> zones, ModLogger logger)
     {
         var name = GroundZones.MaterialAt(zones, x, z);
         if (name == null) return;
@@ -43,7 +42,7 @@ public static class GroundSkin
         }
     }
 
-    private static bool ApplyNativeLava(MeshRenderer target, MelonLogger.Instance logger)
+    private static bool ApplyNativeLava(MeshRenderer target, ModLogger logger)
     {
         var targetFilter = target.GetComponent<MeshFilter>();
         if (targetFilter == null) return false;

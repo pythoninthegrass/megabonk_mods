@@ -1,6 +1,4 @@
 using HarmonyLib;
-using Il2Cpp;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -14,7 +12,7 @@ public static class EditorPauseInputPatch
         {
             if (ConsoleOverlay.Focused)
             {
-                MelonLogger.Msg("Console: consumed game menu toggle while the console has focus");
+                ModLogger.Default.Msg("Console: consumed game menu toggle while the console has focus");
                 return false;
             }
 
@@ -23,7 +21,7 @@ public static class EditorPauseInputPatch
                 return true;
             }
 
-            MelonLogger.Msg("EditorTextInput: consumed game menu toggle for form Escape sequence");
+            ModLogger.Default.Msg("EditorTextInput: consumed game menu toggle for form Escape sequence");
             return false;
         }
     }

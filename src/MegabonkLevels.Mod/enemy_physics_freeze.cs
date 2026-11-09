@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Nodes;
-using Il2CppAssets.Scripts.Actors.Enemies;
-using Il2CppAssets.Scripts.Managers;
-using MelonLoader;
+using Assets.Scripts.Actors.Enemies;
+using Assets.Scripts.Managers;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -13,7 +12,7 @@ namespace MegabonkLevels;
 public static class EnemyPhysicsFreeze
 {
     private static readonly Dictionary<int, (Rigidbody Body, bool WasKinematic)> Tracked = new();
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static bool _armed;
     private static int _lastSeenEnemies = -1;
     private static int _bodiesFound;
@@ -29,7 +28,7 @@ public static class EnemyPhysicsFreeze
 
     // The perf `physics` verb: enabled=false means the enemy's physics is not wanted, so the freeze arms and sweeps now;
     // enabled=true restores every body it froze and disarms.
-    public static JsonObject Set(bool physicsEnabled, MelonLogger.Instance logger)
+    public static JsonObject Set(bool physicsEnabled, ModLogger logger)
     {
         _logger = logger;
         var enemies = LiveEnemies();

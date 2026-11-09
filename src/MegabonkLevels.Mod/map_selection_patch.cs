@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using HarmonyLib;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Managers;
-using MelonLoader;
+using Assets.Scripts.Managers;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -15,7 +13,7 @@ public static class MapSelectionPatch
 {
     private static readonly Color PlaceholderColor = new(0.35f, 0.2f, 0.55f, 1f);
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static Texture2D _placeholder;
     private static readonly List<GameObject> _spawned = new();
     private static readonly List<Texture2D> _thumbnails = new();
@@ -24,7 +22,7 @@ public static class MapSelectionPatch
     private static CustomMapEntry? _selectedEntry;
     private static readonly Dictionary<int, (Selectable Button, Navigation Navigation)> _navigation = new();
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

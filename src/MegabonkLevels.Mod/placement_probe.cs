@@ -1,8 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
-using MelonLoader;
+using Assets.Scripts.Actors.Player;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -17,7 +15,7 @@ internal static class PlacementProbe
     public const float WalkableNormalY = 0.8f;
 
     public static Dictionary<(int X, int Z), Vector3> ReachablePoints(LevelState state, ProceduralTileGeneration tiles, MeshCollider ground,
-        Vector3 start, MelonLogger.Instance logger, string logPrefix = "InteractableRandomization")
+        Vector3 start, ModLogger logger, string logPrefix = "InteractableRandomization")
     {
         var centers = state.Tiles.Keys.ToDictionary(cell => cell,
             cell => tiles.TilePositionToWorldPosition(new Vector2Int(cell.X, cell.Z)));

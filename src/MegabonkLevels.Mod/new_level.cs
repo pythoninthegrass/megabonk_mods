@@ -2,14 +2,13 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
-using MelonLoader;
 
 namespace MegabonkLevels;
 
 // Writes a blank from-scratch level into the levels folder and starts it through the normal level load; the live map is not touched.
 public static class NewLevel
 {
-    public static JsonObject Create(string requestedName, NewLevelArgs args, MelonLogger.Instance logger)
+    public static JsonObject Create(string requestedName, NewLevelArgs args, ModLogger logger)
     {
         var map = (EMap)args.Map;
         var mapData = LevelLoaderPatch.FindMapData(map) ?? throw new InvalidOperationException($"no MapData for map {map}");

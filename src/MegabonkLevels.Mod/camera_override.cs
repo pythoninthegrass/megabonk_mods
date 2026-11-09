@@ -1,9 +1,8 @@
-using Il2Cpp;
 using UnityEngine;
 
 namespace MegabonkLevels;
 
-// Re-applies a requested camera pose after the game's own PlayerCamera update; driven from MelonMod.OnLateUpdate.
+// Re-applies a requested camera pose after the game's own PlayerCamera update.
 // The game never rewrites the camera's own transform, so Clear restores the pose saved before the first override.
 public static class CameraOverride
 {

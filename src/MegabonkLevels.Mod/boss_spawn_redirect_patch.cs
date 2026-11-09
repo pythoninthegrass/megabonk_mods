@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Enemies;
-using Il2CppAssets.Scripts.Managers;
+using Assets.Scripts.Actors.Enemies;
+using Assets.Scripts.Managers;
 using HarmonyLib;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -23,7 +21,7 @@ public static class BossSpawnRedirectPatch
     // Large prime multiplier so each copy of a curse summon samples its own ring instead of the shared candidate order.
     private const int SeedPerCopy = 7919;
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static int? _armedFrame;
     private static int _expectedMoves;
     private static int _moveCount;
@@ -34,7 +32,7 @@ public static class BossSpawnRedirectPatch
     // outer call from moving an enemy the inner call already placed.
     private static readonly HashSet<IntPtr> _movedBosses = new();
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

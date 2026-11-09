@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.Inventory__Items__Pickups.Chests;
-using MelonLoader;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.Inventory__Items__Pickups.Chests;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -12,7 +10,7 @@ namespace MegabonkLevels;
 public static class InteractableRandomizationPatch
 {
     public static void Apply(LevelFile settings, IReadOnlyDictionary<string, GameObject> index, IReadOnlyList<EditOp> edits,
-        LevelState state, ProceduralTileGeneration tiles, MeshCollider ground, IReadOnlyList<float> playerStart, MelonLogger.Instance logger)
+        LevelState state, ProceduralTileGeneration tiles, MeshCollider ground, IReadOnlyList<float> playerStart, ModLogger logger)
     {
         if (!InteractableRandomization.Enabled(settings)) return;
         if (tiles == null || ground == null || state.Tiles.Count == 0)

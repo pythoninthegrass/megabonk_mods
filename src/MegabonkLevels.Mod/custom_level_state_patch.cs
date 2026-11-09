@@ -1,6 +1,5 @@
 using HarmonyLib;
-using Il2CppAssets.Scripts.Managers;
-using MelonLoader;
+using Assets.Scripts.Managers;
 
 namespace MegabonkLevels;
 
@@ -9,9 +8,9 @@ namespace MegabonkLevels;
 // resulting arm/disarm so SteamWriteGuard's suppressions are auditable against a reason.
 public static class CustomLevelStatePatch
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

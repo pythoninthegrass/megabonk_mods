@@ -1,10 +1,8 @@
 using System;
 using System.Linq;
 using HarmonyLib;
-using Il2Cpp;
-using Il2CppAssets.Scripts.MapGeneration.ProceduralTiles;
+using Assets.Scripts.MapGeneration.ProceduralTiles;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -13,10 +11,10 @@ namespace MegabonkLevels;
 // phase. The load path is described in docs/runtime-map-structure.md ("Replacing generation for from-scratch levels").
 public static class FromScratchGenerationPatch
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static LevelFile? _level;
 
-    public static void Install(MelonLogger.Instance logger) => _logger = logger;
+    public static void Install(ModLogger logger) => _logger = logger;
 
     // Set by LevelLoaderPatch for every custom load so a generated-baseline load clears an earlier from-scratch level.
     public static void Arm(LevelFile level) => _level = level.IsFromScratch ? level : null;

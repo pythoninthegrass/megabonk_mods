@@ -1,22 +1,15 @@
 using System;
-using System.IO;
-using MelonLoader;
-using MelonLoader.Utils;
+using BepInEx;
+using BepInEx.Unity.IL2CPP;
+using HarmonyLib;
 using UnityEngine;
-
-[assembly: MelonInfo(typeof(MegabonkLevels.MegabonkLevelsMod), "MegabonkLevels", "0.0.1", "pythoninthegrass")]
-[assembly: MelonGame("", "Megabonk")]
 
 namespace MegabonkLevels;
 
-public class MegabonkLevelsMod : MelonMod
+[BepInPlugin("megabonklevels.runtime", "MegabonkLevels", "0.0.1")]
+public class MegabonkLevelsMod : BasePlugin
 {
-    // Hardcoded test level file, manually placed in the Mods folder alongside the mod DLL — see
-    // docs/level-format.md for the sample and how to deploy it. Loading an arbitrary, user-chosen path
-    // is not implemented.
-    private const string TestLevelFileName = "megabonklevels-test-level.mblevel.json";
-
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
     // Cached so the per-frame perf timers cost no delegate allocations; see PerfMonitor.Timed.
     private static readonly Action _pollHarness = DevHarness.Poll;
@@ -31,53 +24,50 @@ public class MegabonkLevelsMod : MelonMod
     private static readonly Action _tickEditorMode = () => EditorMode.Tick(_logger);
     private static readonly Action _tickConsole = ConsoleOverlay.Tick;
 
-    public override void OnInitializeMelon()
+    public override void Load()
     {
-        _logger = LoggerInstance;
-        LoggerInstance.Msg("MegabonkLevels mod initialized.");
-        GenerationPatch.Install(LoggerInstance);
-        SeedForcePatch.Install(LoggerInstance);
-        TerrainSeedPatch.Install(LoggerInstance);
-        GridShapePatch.Install(LoggerInstance);
-        NavMeshPatch.Install(LoggerInstance);
-        LiveEditPatch.Install(LoggerInstance);
-        RailHandoffPatch.Install(LoggerInstance);
-        RailWallEndPatch.Install(LoggerInstance);
-        GrindInput.Install(LoggerInstance);
-        GrindGatePatch.Install(LoggerInstance);
-        GrindAssistWatcher.Install(LoggerInstance);
-        FallDamagePatch.Install(LoggerInstance);
-        BossSpawnRedirectPatch.Install(LoggerInstance);
-        BossPoolPatch.Install(LoggerInstance);
-        LavaWatcher.Install(LoggerInstance);
-        GrassMask.Install(LoggerInstance);
-        BossEventPatch.Install(LoggerInstance);
-        FromScratchGenerationPatch.Install(LoggerInstance);
-        ChestLuckPatch.Install(LoggerInstance);
-        PackPrefabs.Initialize(LoggerInstance);
-        LevelMusic.Initialize(LoggerInstance);
-        SceneTransitionProbe.Install(LoggerInstance);
-        CustomLevelStatePatch.Install(LoggerInstance);
-        DeathRestartPatch.Install(LoggerInstance);
-        DeathScreenPress.Install(LoggerInstance);
-        CharacterScreenPatch.Install(LoggerInstance);
-        MapSelectionPatch.Install(LoggerInstance);
-        SteamWriteGuard.Install(LoggerInstance);
-        ConsoleOverlay.Install(LoggerInstance);
-        DevHarness.Install(LoggerInstance);
-        PerfProbes.Install(LoggerInstance);
-        PerfMonitor.Install(LoggerInstance);
-        PerfGc.Install(LoggerInstance);
+        var logger = new ModLogger(Log);
+        _logger = logger;
+        ModLogger.Default = _logger;
+        ModTick.Instance = AddComponent<ModTick>();
+        logger.Msg("MegabonkLevels mod initialized.");
+        GenerationPatch.Install(logger);
+        SeedForcePatch.Install(logger);
+        TerrainSeedPatch.Install(logger);
+        GridShapePatch.Install(logger);
+        NavMeshPatch.Install(logger);
+        LiveEditPatch.Install(logger);
+        RailHandoffPatch.Install(logger);
+        RailWallEndPatch.Install(logger);
+        GrindInput.Install(logger);
+        GrindGatePatch.Install(logger);
+        GrindAssistWatcher.Install(logger);
+        FallDamagePatch.Install(logger);
+        BossSpawnRedirectPatch.Install(logger);
+        BossPoolPatch.Install(logger);
+        LavaWatcher.Install(logger);
+        GrassMask.Install(logger);
+        BossEventPatch.Install(logger);
+        FromScratchGenerationPatch.Install(logger);
+        ChestLuckPatch.Install(logger);
+        PackPrefabs.Initialize(logger);
+        LevelMusic.Initialize(logger);
+        SceneTransitionProbe.Install(logger);
+        CustomLevelStatePatch.Install(logger);
+        DeathRestartPatch.Install(logger);
+        DeathScreenPress.Install(logger);
+        CharacterScreenPatch.Install(logger);
+        MapSelectionPatch.Install(logger);
+        SteamWriteGuard.Install(logger);
+        ConsoleOverlay.Install(logger);
+        DevHarness.Install(logger);
+        PerfProbes.Install(logger);
+        PerfMonitor.Install(logger);
+        PerfGc.Install(logger);
+        Harmony.CreateAndPatchAll(typeof(MegabonkLevelsMod).Assembly, "megabonklevels.runtime");
     }
 
-    public override void OnLateUpdate()
-    {
-        CameraOverride.Apply();
-    }
-
-    public override void OnDeinitializeMelon() => LevelMusic.Clear();
-
-    public override void OnUpdate()
+    internal static void Tick()
     {
         PerfMonitor.Tick();
         EditorInput.Queue.BeginFrame(Time.frameCount, Time.unscaledTime, (Input.mousePosition.x, Input.mousePosition.y));
@@ -122,8 +112,7 @@ public class MegabonkLevelsMod : MelonMod
         // F6, not F10: F10 is already bound to the game's own built-in debug console.
         if (EditorInput.GetKeyDown(KeyCode.F6))
         {
-            var path = Path.Combine(MelonEnvironment.ModsDirectory, TestLevelFileName);
-            LevelLoaderPatch.LoadAndStart(path, _logger);
+            LevelLoaderPatch.LoadAndStart(ModPaths.TestLevel, _logger);
         }
     }
 }

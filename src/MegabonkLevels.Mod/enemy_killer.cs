@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Nodes;
-using Il2CppAssets.Scripts.Actors;
-using Il2CppAssets.Scripts.Actors.Enemies;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.Managers;
+using Assets.Scripts.Actors;
+using Assets.Scripts.Actors.Enemies;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.Managers;
 using UnityEngine;
 
 namespace MegabonkLevels;

@@ -2,13 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.UI.Debug;
-using Il2CppAssets.Scripts.Utility;
-using Il2CppTMPro;
-using MelonLoader;
-using MelonLoader.Utils;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.UI.Debug;
+using Assets.Scripts.Utility;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -44,9 +41,9 @@ public static class ConsoleOverlay
     private static readonly EditorCaretInput _caret = new();
     private static readonly ConsoleScrollbar _scrollbar = new();
 
-    private static readonly ConsoleLogStore _store = new(Path.Combine(MelonEnvironment.GameRootDirectory, "UserData", LogFileName));
+    private static readonly ConsoleLogStore _store = new(Path.Combine(ModPaths.GameRootDirectory, "UserData", LogFileName));
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static GameObject _root;
     private static RectTransform _panel;
     private static RectTransform _scrollRect;
@@ -76,9 +73,9 @@ public static class ConsoleOverlay
 
     public static bool CapturesKeyboard => Open;
 
-    public static void Install(MelonLogger.Instance logger) => _logger = logger;
+    public static void Install(ModLogger logger) => _logger = logger;
 
-    public static void Toggle(MelonLogger.Instance logger)
+    public static void Toggle(ModLogger logger)
     {
         _logger = logger;
         var decision = ConsoleState.Toggle(Open, DebugConsoleActive(), GameMenuOpen());
@@ -92,7 +89,7 @@ public static class ConsoleOverlay
         }
     }
 
-    // Called from the mod's OnUpdate every frame, whether or not the panel is open, so the toggle key and the slide run.
+    // Ticked every frame, whether or not the panel is open, so the toggle key and the slide run.
     public static void Tick()
     {
         _slide = ConsoleState.StepSlide(_slide, Open, Time.unscaledDeltaTime);

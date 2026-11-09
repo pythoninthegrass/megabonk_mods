@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -46,7 +45,7 @@ public static class EditorInput
     }
 
     // Logs the real keyboard only, bypassing Queue, so a keypress that the game never receives shows up as a missing line.
-    public static void LogRealTextInput(MelonLogger.Instance logger, bool fieldFocused)
+    public static void LogRealTextInput(ModLogger logger, bool fieldFocused)
     {
         var line = RealInputDiagnostic.Describe(
             Input.inputString,

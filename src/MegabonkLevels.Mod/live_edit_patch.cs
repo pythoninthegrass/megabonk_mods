@@ -2,11 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.Managers;
-using Il2CppAssets.Scripts.MapGeneration.ProceduralTiles;
-using MelonLoader;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.Managers;
+using Assets.Scripts.MapGeneration.ProceduralTiles;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -73,7 +71,7 @@ public static class LiveEditPatch
         _randomizationSettings = randomizationSettings;
     }
 
-    public static void ApplySettings(LevelFile settings, MelonLogger.Instance logger)
+    public static void ApplySettings(LevelFile settings, ModLogger logger)
     {
         LevelSettings.Validate(settings);
         _noGrass = settings.NoGrass;
@@ -103,7 +101,7 @@ public static class LiveEditPatch
     }
 
     // Apply pending edits immediately to the current session if present. Returns the number of edits applied.
-    public static int ApplyPendingEdits(MelonLogger.Instance logger)
+    public static int ApplyPendingEdits(ModLogger logger)
     {
         if (_pendingEdits == null || _pendingEdits.Count == 0)
         {
@@ -131,7 +129,7 @@ public static class LiveEditPatch
         }
     }
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         MapGenerationController.A_PreGeneration += (Il2CppSystem.Action)StartupCover.OnGenerationStarting;
         MapGenerationController.A_PreGeneration += (Il2CppSystem.Action)(() =>
@@ -396,7 +394,7 @@ public static class LiveEditPatch
 
     public static string LevelsDirectoryPath()
     {
-        var path = Path.Combine(MelonLoader.Utils.MelonEnvironment.GameRootDirectory, "UserData", "Levels");
+        var path = Path.Combine(ModPaths.GameRootDirectory, "UserData", "Levels");
         Directory.CreateDirectory(path);
         return path;
     }
@@ -499,7 +497,7 @@ public static class LiveEditPatch
     // relaunching the game. Tile differences are computed and applied via InPlaceLoadTileReset;
     // gen-id objects are restored from a pre-edit transform snapshot; placed objects are destroyed.
     // Returns false when there is no active session (no level is running).
-    public static bool ResetAndApplyEdits(IReadOnlyList<EditOp> newEdits, MelonLogger.Instance logger)
+    public static bool ResetAndApplyEdits(IReadOnlyList<EditOp> newEdits, ModLogger logger)
     {
         var session = _session;
         if (session == null)
@@ -536,7 +534,7 @@ public static class LiveEditPatch
         return true;
     }
 
-    private static void OnGenerationComplete(MelonLogger.Instance logger)
+    private static void OnGenerationComplete(ModLogger logger)
     {
         StartupCover.OnProgress();
         var edits = _pendingEdits;
@@ -581,7 +579,7 @@ public static class LiveEditPatch
         _session = session;
         if (edits != null && (InteractableRandomization.Enabled(_randomizationSettings) || ExtraShrines.Enabled(_randomizationSettings)))
         {
-            MelonCoroutines.Start(FinishRandomizedGeneration(session, index, edits, _randomizationSettings));
+            ModTick.Run(FinishRandomizedGeneration(session, index, edits, _randomizationSettings));
             return;
         }
         StartupCover.OnContentReady();
@@ -611,7 +609,7 @@ public static class LiveEditPatch
     }
 
     // The grass manager raycasts onto the ground layer, so it would grow through a level's placed floor meshes.
-    private static void DisableGrassIfRequested(MapGenerationController controller, MelonLogger.Instance logger)
+    private static void DisableGrassIfRequested(MapGenerationController controller, ModLogger logger)
     {
         if (!_noGrass || controller.grassRenderer == null)
         {
@@ -628,7 +626,7 @@ public static class LiveEditPatch
     private static float? _defaultMaxSlopeAngle;
 
     // Raises the player's slope limit for the length of a custom level run and puts the game's value back afterwards, so vanilla runs keep their movement.
-    public static void TickMaxSlopeAngle(MelonLogger.Instance logger)
+    public static void TickMaxSlopeAngle(ModLogger logger)
     {
         var player = MyPlayer.Instance;
         if (player == null || player.playerMovement == null)
@@ -659,7 +657,7 @@ public static class LiveEditPatch
     }
 
     // A ProceduralMesh map: the session holds only objects, over an empty tile baseline.
-    private static void OnTerrainGenerationComplete(MelonLogger.Instance logger, MapGenerationController controller, Dictionary<string, GameObject> index, IReadOnlyList<EditOp> edits)
+    private static void OnTerrainGenerationComplete(ModLogger logger, MapGenerationController controller, Dictionary<string, GameObject> index, IReadOnlyList<EditOp> edits)
     {
         var baseline = LevelState.FromTiles(new Dictionary<(int X, int Z), TileState>());
         var session = new Session(logger, controller, index, baseline, edits != null ? edits.ToList() : new List<EditOp>());
@@ -833,7 +831,7 @@ public static class LiveEditPatch
     // Everything needed to keep editing the level generated last: the planner holds the generated grid plus every edit.
     private sealed class Session
     {
-        public readonly MelonLogger.Instance Logger;
+        public readonly ModLogger Logger;
         public readonly MapGenerationController Controller;
         // Both are null on a ProceduralMesh map.
         public readonly ProceduralTileGeneration TileGen;
@@ -844,7 +842,7 @@ public static class LiveEditPatch
         // Generation baseline before any edits; used by ResetAndApplyEdits for in-place load.
         public readonly LevelState Baseline;
 
-        public Session(MelonLogger.Instance logger, MapGenerationController controller, Dictionary<string, GameObject> index, LevelState baseline, IReadOnlyList<EditOp> seedEdits)
+        public Session(ModLogger logger, MapGenerationController controller, Dictionary<string, GameObject> index, LevelState baseline, IReadOnlyList<EditOp> seedEdits)
         {
             Logger = logger;
             Controller = controller;
@@ -872,7 +870,7 @@ public static class LiveEditPatch
 
     private sealed class Applier
     {
-        private readonly MelonLogger.Instance _logger;
+        private readonly ModLogger _logger;
         private readonly MapGenerationController _controller;
         private readonly ProceduralTileGeneration _tileGen;
         private readonly MapParameters _mapParameters;
@@ -883,7 +881,7 @@ public static class LiveEditPatch
         // Snapshots of generator object transforms taken before any edits, keyed by genId.
         private readonly Dictionary<string, TransformData> _genIdBaselineTransforms = new();
 
-        public Applier(MelonLogger.Instance logger, MapGenerationController controller, Dictionary<string, GameObject> index)
+        public Applier(ModLogger logger, MapGenerationController controller, Dictionary<string, GameObject> index)
         {
             _logger = logger;
             _controller = controller;

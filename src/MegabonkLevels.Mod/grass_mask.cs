@@ -1,6 +1,4 @@
 using HarmonyLib;
-using Il2Cpp;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -9,10 +7,10 @@ namespace MegabonkLevels;
 // has planted a chunk, the blades standing on a ground zone are dropped before the chunk is drawn.
 public static class GrassMask
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static bool _loggedFirst;
 
-    public static void Install(MelonLogger.Instance logger) => _logger = logger;
+    public static void Install(ModLogger logger) => _logger = logger;
 
     [HarmonyPatch(typeof(GrassChunkManager), "GenerateGrassForChunk")]
     private static class DropGrassOnRepaintedGround

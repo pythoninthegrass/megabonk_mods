@@ -1,6 +1,4 @@
 using System.Collections.Generic;
-using Il2Cpp;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -11,7 +9,7 @@ public static class HudControl
     private static readonly HudVisibility Visibility = new();
     private static readonly Dictionary<int, HudVisibility> FollowBars = new();
 
-    public static void Set(bool visible, MelonLogger.Instance logger)
+    public static void Set(bool visible, ModLogger logger)
     {
         var group = UiManager.Instance?.hudGroup;
         if (group == null)

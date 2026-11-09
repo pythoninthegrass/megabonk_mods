@@ -1,10 +1,8 @@
 using System;
 using System.Linq;
 using System.Text.Json.Nodes;
-using Il2Cpp;
 using Il2CppInterop.Runtime;
-using Il2CppTMPro;
-using MelonLoader;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,9 +11,9 @@ namespace MegabonkLevels;
 // Presses the death screen's Confirm and the run summary's Restart through the buttons' own onClick; see docs/development.md.
 public static class DeathScreenPress
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

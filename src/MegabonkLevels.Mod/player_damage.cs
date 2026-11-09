@@ -2,9 +2,9 @@ using System;
 using System.Linq;
 using System.Text.Json.Nodes;
 using HarmonyLib;
-using Il2CppAssets.Scripts.Actors;
-using Il2CppAssets.Scripts.Actors.Player;
-using Il2CppAssets.Scripts.Inventory__Items__Pickups;
+using Assets.Scripts.Actors;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.Inventory__Items__Pickups;
 using UnityEngine;
 
 namespace MegabonkLevels;

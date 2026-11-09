@@ -1,8 +1,6 @@
 using System.Collections.Generic;
 using HarmonyLib;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Saves___Serialization.SaveFiles.Configs;
-using MelonLoader;
+using Assets.Scripts.Saves___Serialization.SaveFiles.Configs;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -13,13 +11,13 @@ public static class CharacterScreenPatch
 {
     private const int PlaceholderId = -1;
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static readonly Dictionary<int, ButtonSnapshot> _stock = new();
 
     // True while the character screen should show the custom-run restriction.
     public static bool Restricted { get; private set; }
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

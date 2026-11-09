@@ -1,5 +1,4 @@
-using Il2CppAssets.Scripts.Managers;
-using MelonLoader;
+using Assets.Scripts.Managers;
 
 namespace MegabonkLevels;
 
@@ -10,7 +9,7 @@ public static class EnemySpawns
 
     public static bool Off => _disabledManager != null && ReferenceEquals(_disabledManager, EnemyManager.Instance) && !_disabledManager.enabledWaves;
 
-    public static void Set(bool enabled, MelonLogger.Instance logger)
+    public static void Set(bool enabled, ModLogger logger)
     {
         var manager = EnemyManager.Instance;
         if (manager == null)

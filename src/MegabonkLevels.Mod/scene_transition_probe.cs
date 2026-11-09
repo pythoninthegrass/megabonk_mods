@@ -1,8 +1,6 @@
 using HarmonyLib;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Game.Other;
-using Il2CppAssets.Scripts.Managers;
-using MelonLoader;
+using Assets.Scripts.Game.Other;
+using Assets.Scripts.Managers;
 
 namespace MegabonkLevels;
 
@@ -23,9 +21,9 @@ namespace MegabonkLevels;
 // first (`grep -c "RVA: 0x<addr> "`) — a count greater than 1 means it is unsafe to patch.
 public static class SceneTransitionProbe
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }

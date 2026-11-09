@@ -5,11 +5,8 @@ using System.IO;
 using System.Text.Json.Nodes;
 using System.Threading;
 using HarmonyLib;
-using Il2Cpp;
 using Il2CppInterop.Runtime.Injection;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
-using MelonLoader;
-using MelonLoader.Utils;
 using NLayer;
 using UnityEngine;
 
@@ -40,7 +37,7 @@ public static class MusicProbe
     private static float? _heldPitch;
     private static float? _heldCutoff;
 
-    public static JsonObject Run(string action, string path, string variant, float? value, MelonLogger.Instance logger)
+    public static JsonObject Run(string action, string path, string variant, float? value, ModLogger logger)
     {
         _useStructArray = variant != "managed";
         switch (action)
@@ -109,7 +106,7 @@ public static class MusicProbe
     }
 
     // Reads the whole file to float PCM on the calling thread and reports what the decoder saw.
-    private static JsonObject Decode(string path, MelonLogger.Instance logger)
+    private static JsonObject Decode(string path, ModLogger logger)
     {
         var file = Resolve(path);
         if (file == null)
@@ -164,7 +161,7 @@ public static class MusicProbe
         }
     }
 
-    private static JsonObject Play(string path, MelonLogger.Instance logger, bool native = false)
+    private static JsonObject Play(string path, ModLogger logger, bool native = false)
     {
         var file = Resolve(path ?? _loaded);
         if (file == null)
@@ -252,7 +249,7 @@ public static class MusicProbe
     }
 
     // Forces the game's own duck value, which MusicPauseZone drives, to see whether it reaches the injected samples.
-    private static JsonObject SetDuck(MelonLogger.Instance logger, float? value = null)
+    private static JsonObject SetDuck(ModLogger logger, float? value = null)
     {
         var controller = MusicController.Instance;
         if (controller == null)
@@ -274,7 +271,7 @@ public static class MusicProbe
         return Status();
     }
 
-    private static JsonObject SetSourcePaused(bool paused, MelonLogger.Instance logger)
+    private static JsonObject SetSourcePaused(bool paused, ModLogger logger)
     {
         var source = MusicController.Instance?.musicSource;
         if (source == null)
@@ -303,7 +300,7 @@ public static class MusicProbe
     }
 
     // Restarts the stock clip for comparison; attaching the filter does not require a restart.
-    private static JsonObject Restart(string path, MelonLogger.Instance logger)
+    private static JsonObject Restart(string path, ModLogger logger)
     {
         if (path != null)
         {
@@ -345,7 +342,7 @@ public static class MusicProbe
         return Status();
     }
 
-    private static JsonObject SetStockMuted(bool muted, MelonLogger.Instance logger)
+    private static JsonObject SetStockMuted(bool muted, ModLogger logger)
     {
         var source = MusicController.Instance?.musicSource;
         if (source == null)
@@ -366,7 +363,7 @@ public static class MusicProbe
         return Status();
     }
 
-    private static JsonObject ClearStockClip(MelonLogger.Instance logger)
+    private static JsonObject ClearStockClip(ModLogger logger)
     {
         var source = MusicController.Instance?.musicSource;
         if (source == null)
@@ -388,7 +385,7 @@ public static class MusicProbe
     }
 
     // Holds the requested pitch after the game's update; omit the value to release the override.
-    private static JsonObject SetSourcePitch(float? pitch, MelonLogger.Instance logger)
+    private static JsonObject SetSourcePitch(float? pitch, ModLogger logger)
     {
         var source = MusicController.Instance?.musicSource;
         if (source == null)
@@ -412,7 +409,7 @@ public static class MusicProbe
     }
 
     // Holds the source filter independently of the mixer's low-pass parameter; omit the value to release it.
-    private static JsonObject SetLowpass(float? cutoff, MelonLogger.Instance logger)
+    private static JsonObject SetLowpass(float? cutoff, ModLogger logger)
     {
         var source = MusicController.Instance?.musicSource;
         if (source == null)
@@ -450,7 +447,7 @@ public static class MusicProbe
         return Status();
     }
 
-    private static bool Attach(MelonLogger.Instance logger)
+    private static bool Attach(ModLogger logger)
     {
         if (_attached && _filter != null)
         {
@@ -492,7 +489,7 @@ public static class MusicProbe
         return _attached;
     }
 
-    private static JsonObject Detach(MelonLogger.Instance logger)
+    private static JsonObject Detach(ModLogger logger)
     {
         _playing = false;
         _heldPitch = null;
@@ -676,8 +673,8 @@ public static class MusicProbe
 
         foreach (var candidate in new[]
                  {
-                     Path.Combine(MelonEnvironment.GameRootDirectory, path),
-                     Path.Combine(MelonEnvironment.GameRootDirectory, "UserData", "CustomMusic", path),
+                     Path.Combine(ModPaths.GameRootDirectory, path),
+                     Path.Combine(ModPaths.GameRootDirectory, "UserData", "CustomMusic", path),
                  })
         {
             if (File.Exists(candidate))
@@ -699,7 +696,7 @@ public static class MusicProbe
         }
 
         // Proves Il2CppInterop dispatches Unity messages to this injected type at all; the filter runs on the audio thread.
-        public void Start() => MelonLogger.Msg($"MusicProbe: MusicFilter.Start on {name} ({GetInstanceID()}).");
+        public void Start() => ModLogger.Default.Msg($"MusicProbe: MusicFilter.Start on {name} ({GetInstanceID()}).");
 
         public void OnAudioFilterRead(float[] data, int channels) => MusicProbe.Fill(data, channels);
     }
@@ -711,7 +708,7 @@ public static class MusicProbe
         {
         }
 
-        public void Start() => MelonLogger.Msg($"MusicProbe: MusicFilterStruct.Start on {name} ({GetInstanceID()}).");
+        public void Start() => ModLogger.Default.Msg($"MusicProbe: MusicFilterStruct.Start on {name} ({GetInstanceID()}).");
 
         public void OnAudioFilterRead(Il2CppStructArray<float> data, int channels) => MusicProbe.Fill(data, channels);
     }

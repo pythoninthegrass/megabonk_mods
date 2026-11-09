@@ -1,21 +1,19 @@
 using System;
 using System.Collections.Generic;
 using HarmonyLib;
-using Il2Cpp;
-using Il2CppAssets.Scripts.Actors.Enemies;
-using Il2CppActors.Enemies;
-using Il2CppAssets.Scripts.Managers;
-using MelonLoader;
+using Assets.Scripts.Actors.Enemies;
+using Actors.Enemies;
+using Assets.Scripts.Managers;
 
 namespace MegabonkLevels;
 
 // Swaps the enemy a stage-boss or miniboss spawn would summon for one drawn from the level's bossPool or minibossPool, so a level can mix bosses from every map.
 public static class BossPoolPatch
 {
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static readonly HashSet<string> s_unknown = new();
 
-    public static void Install(MelonLogger.Instance logger) => _logger = logger;
+    public static void Install(ModLogger logger) => _logger = logger;
 
     [HarmonyPatch(typeof(EnemyManager), "SpawnBoss")]
     private static class SpawnBossDrawsFromThePool

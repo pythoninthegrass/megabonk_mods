@@ -1,6 +1,4 @@
 using HarmonyLib;
-using Il2Cpp;
-using MelonLoader;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -17,9 +15,9 @@ public static class SeedForcePatch
 
     public static int LevelSeedValue { get; private set; }
 
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
-    public static void Install(MelonLogger.Instance logger)
+    public static void Install(ModLogger logger)
     {
         _logger = logger;
     }
@@ -62,7 +60,7 @@ public static class SeedForcePatch
 
         var phaseSeed = SpawnSeed.PhaseSeed(baseSeed.Value, phase);
         Random.InitState(phaseSeed);
-        Il2CppUtility.MyRandom.random = new Il2Cpp.ConsistentRandom(phaseSeed);
+        Utility.MyRandom.random = new global::ConsistentRandom(phaseSeed);
     }
 
     [HarmonyPatch(typeof(ProceduralTileGeneration), nameof(ProceduralTileGeneration.Generate))]

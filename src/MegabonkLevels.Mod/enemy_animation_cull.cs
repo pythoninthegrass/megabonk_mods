@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Nodes;
-using Il2Cpp;
-using Il2CppActors.Enemies;
-using Il2CppAssets.Scripts.Actors.Enemies;
-using Il2CppAssets.Scripts.Managers;
-using MelonLoader;
+using Actors.Enemies;
+using Assets.Scripts.Actors.Enemies;
+using Assets.Scripts.Managers;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -16,7 +14,7 @@ namespace MegabonkLevels;
 public static class EnemyAnimationCull
 {
     private static readonly Dictionary<int, (Behaviour Body, bool WasEnabled, string TypeName)> Tracked = new();
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
     private static bool _armed;
     private static int _lastSeenEnemies = -1;
     private static int _componentsFound;
@@ -54,7 +52,7 @@ public static class EnemyAnimationCull
     }
 
     // The perf `animation` verb: enabled=false stops the enemies' animation updates, enabled=true restores them.
-    public static JsonObject Set(bool animationEnabled, MelonLogger.Instance logger)
+    public static JsonObject Set(bool animationEnabled, ModLogger logger)
     {
         _logger = logger;
         var enemies = LiveEnemies();

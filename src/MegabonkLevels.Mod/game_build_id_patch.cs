@@ -6,5 +6,5 @@ namespace MegabonkLevels;
 // around the pure comparison in game_build_id_check.cs.
 public static class GameBuildIdPatch
 {
-    public static string CurrentBuildId() => Il2CppSteamworks.SteamApps.GetAppBuildId().ToString();
+    public static string CurrentBuildId() => Steamworks.SteamApps.GetAppBuildId().ToString();
 }

@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Il2Cpp;
-using Il2CppTMPro;
-using MelonLoader;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -25,7 +23,7 @@ public static class EditorSettingsPanel
     private static int _generation = -1;
     private static int _index;
     private static int _capturedFrame = -1;
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
     public static bool Focused { get; private set; }
     public static bool CapturedThisFrame => _capturedFrame == Time.frameCount;
@@ -45,7 +43,7 @@ public static class EditorSettingsPanel
     public static LevelFile ForSave(LevelFile level) => _history == null ? level : LevelSettings.CopyTo(_history.Current, level);
     public static void MarkSaved() => _history?.MarkSaved();
 
-    public static void Enter(MelonLogger.Instance logger)
+    public static void Enter(ModLogger logger)
     {
         _logger = logger;
         _root = EditorUi.NewCanvas("MegabonkLevelsSettings");

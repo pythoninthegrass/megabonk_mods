@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Il2CppInterop.Runtime;
-using MelonLoader;
-using MelonLoader.Utils;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -20,9 +18,9 @@ public static class PackPrefabs
     private static readonly Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<ObjectAttachmentSpec>>> Attachments = new();
     private static readonly HashSet<string> Warned = new();
     private static GameObject _hiddenRoot;
-    private static MelonLogger.Instance _logger;
+    private static ModLogger _logger;
 
-    public static void Initialize(MelonLogger.Instance logger) => _logger = logger;
+    public static void Initialize(ModLogger logger) => _logger = logger;
 
     public static IReadOnlyList<ObjectAttachmentSpec> AttachmentsFor(CatalogId id)
     {
@@ -72,7 +70,7 @@ public static class PackPrefabs
     // The Packs palette entries for every pack directory; manifest-listed assets absent from the bundle are warned about once and not listed.
     public static IReadOnlyList<PaletteEntry> ListEntries()
     {
-        var root = Path.Combine(MelonEnvironment.GameRootDirectory, "UserData", PacksDirectoryName);
+        var root = Path.Combine(ModPaths.GameRootDirectory, "UserData", PacksDirectoryName);
         if (!Directory.Exists(root))
         {
             return Array.Empty<PaletteEntry>();
@@ -162,7 +160,7 @@ public static class PackPrefabs
     }
 
     private static string PackDirectory(string pack) =>
-        Path.Combine(MelonEnvironment.GameRootDirectory, "UserData", PacksDirectoryName, pack);
+        Path.Combine(ModPaths.GameRootDirectory, "UserData", PacksDirectoryName, pack);
 
     // Bundles stay loaded for the session because instantiated prefabs depend on their data, and the assets are pinned so the game's unused-asset unload leaves them. The async API is used because the synchronous loaders fail in the Il2Cpp interop.
     private static void LoadBundleInto(string path, Dictionary<string, GameObject> assets, Dictionary<string, AudioClip> clips)
