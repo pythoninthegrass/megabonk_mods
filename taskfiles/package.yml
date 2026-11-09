@@ -12,6 +12,59 @@ vars:
   ALLOW_DOWNLOAD: '{{.ALLOW_DOWNLOAD | default "false"}}'
 
 tasks:
+  thunderstore:setup:
+    desc: "Install the pinned local Thunderstore build/publish CLI"
+    status:
+      - test -x .tools/tcli/tcli
+    cmds:
+      - dotnet tool install tcli --version 0.2.4 --tool-path .tools/tcli
+
+  thunderstore:
+    desc: "Build and validate the Thunderstore ZIP (no publish)"
+    cmds:
+      - task: thunderstore:setup
+      - task: thunderstore:manifest
+      - dotnet build src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj -c Release
+      - uv run pytest tests/test_thunderstore_package.py -n 0 -q
+      - .tools/tcli/tcli build
+      - task: thunderstore:check
+
+  thunderstore:manifest:
+    desc: "Validate a manifest.json against Thunderstore's manifest rules (ONLINE=true adds the site's own checks)"
+    summary: |
+      Usage: task package:thunderstore:manifest [MANIFEST=path] [ONLINE=true]
+
+      Reimplements thunderstore.io/tools/manifest-v1-validator/ offline, so the team does not
+      have to be logged into the site to find a rejected manifest. ONLINE=true additionally
+      resolves each dependency against thunderstore.io, reports a version already published,
+      and reports a name that exists under a different capitalization.
+
+        task package:thunderstore:manifest
+        task package:thunderstore:manifest MANIFEST=.tools/thunderstore/pythoninthegrass-Megabonk_Level_Editor-0.0.1.zip
+        task package:thunderstore:manifest ONLINE=true
+    vars:
+      MANIFEST: '{{.MANIFEST | default "pkg/manifest.json"}}'
+      ONLINE: '{{.ONLINE | default "false"}}'
+    cmds:
+      - uv run scripts/validate_thunderstore_manifest.py "{{.MANIFEST}}"{{if eq .ONLINE "true"}} --online{{end}}
+
+  thunderstore:check:
+    desc: "Validate the existing Thunderstore ZIP against its source and Release DLLs"
+    cmds:
+      - |-
+        uv run python - <<'PY'
+        import subprocess
+        import tomllib
+        from pathlib import Path
+
+        config = tomllib.loads(Path("thunderstore.toml").read_text())
+        package = config["package"]
+        name = f'{package["namespace"]}-{package["name"]}-{package["versionNumber"]}.zip'
+        path = Path(config["build"]["outdir"]) / name
+        subprocess.run(["uv", "run", "scripts/check_thunderstore_package.py", str(path)], check=True)
+        subprocess.run(["uv", "run", "scripts/validate_thunderstore_manifest.py", str(path)], check=True)
+        PY
+
   linux:
     desc: "Build the Linux player package and its distributable zip into .tools/player-package"
     summary: |

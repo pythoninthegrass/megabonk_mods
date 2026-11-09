@@ -1,0 +1,9 @@
+{
+  "name": "Megabonk_Level_Editor",
+  "version_number": "0.0.1",
+  "website_url": "https://megabonkmod.party",
+  "description": "Play and build custom Megabonk levels with an in-game map editor, custom music and a drop-down console.",
+  "dependencies": [
+    "BepInEx-BepInExPack_IL2CPP-6.0.788"
+  ]
+}

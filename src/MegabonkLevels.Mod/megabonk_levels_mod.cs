@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace MegabonkLevels;
 
-[BepInPlugin("megabonklevels.runtime", "MegabonkLevels", "0.0.1")]
+[BepInPlugin("megabonklevels.runtime", "Megabonk Level Editor", "0.0.1")]
 public class MegabonkLevelsMod : BasePlugin
 {
     private static ModLogger _logger;

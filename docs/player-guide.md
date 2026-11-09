@@ -2,6 +2,11 @@
 
 How to install the Megabonk Levels mod and play levels other people have made. If you want to build or change the mod itself, read [modding-setup.md](modding-setup.md) instead.
 
+**BepInEx / Thunderstore port:** the package is named **Megabonk Level Editor**.
+See its [package README](../pkg/README.md) for manager installation and Wine caveats.
+The standalone installer instructions below describe the legacy MelonLoader
+distribution, not the BepInEx package; do not combine the two loaders.
+
 ## What this is
 
 Megabonk Levels is an unofficial, fan-made mod. It is not made, endorsed or supported by the developer of Megabonk, and it is not part of Steam Workshop: there is no Subscribe button in Steam, and levels are shared as plain files you copy into the game's folder. The mod loads through [MelonLoader](https://melonwiki.xyz/), a third-party mod loader, and adds custom levels to the game's Map Selection screen beside the built-in maps.

@@ -369,6 +369,9 @@ This was verified on a second Apple silicon Mac (Wine 11.18, DXVK-macOS async, R
 
 ## Running BepInEx under Wine
 
+The **Megabonk Level Editor** Thunderstore package, clean-profile verification and
+release/rollback procedure are documented in [Thunderstore packaging](thunderstore.md).
+
 BepInEx 6 (`BepInExPack_IL2CPP` 6.0.0-be.788) boots Megabonk under the same plain-Wine setup as MelonLoader: the repo launch path (`task game:run`, Wine 11.18, DXVK) runs `Megabonk.exe` with the doorstop loaded and the chainloader starts. Verified with a published community plugin loading (`Loading [...]`, `Loaded <Plugin>`, `Chainloader startup complete` in `BepInEx/LogOutput.log`, empty `ErrorLog.log`). The first start needs network: BepInEx downloads unity libs from `unity.bepinex.dev` and runs Cpp2IL and interop generation, about 20 seconds.
 
 BepInEx and MelonLoader cannot be active together. MelonLoader's `version.dll` proxy in the game directory blocks the doorstop's startup, so a BepInEx install replaces MelonLoader: `version.dll` must be removed or renamed out of the game directory (rename it back to go the other way). `winhttp.dll` (the doorstop proxy) and `doorstop_config.ini` then sit in the game directory beside `Megabonk.exe`, with `BepInEx/` and `dotnet/` under it.

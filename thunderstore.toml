@@ -1,0 +1,37 @@
+[config]
+schemaVersion = "0.0.1"
+
+[package]
+namespace = "pythoninthegrass"
+name = "Megabonk_Level_Editor"
+versionNumber = "0.0.1"
+description = "Play and build custom Megabonk levels with an in-game map editor, custom music and a drop-down console."
+websiteUrl = "https://megabonkmod.party"
+containsNsfwContent = false
+
+[package.dependencies]
+BepInEx-BepInExPack_IL2CPP = "6.0.788"
+
+[build]
+icon = "pkg/icon.png"
+readme = "pkg/README.md"
+outdir = ".tools/thunderstore"
+
+[[build.copy]]
+source = "src/MegabonkLevels.Mod/bin/Release/net6.0/MegabonkLevels.Mod.dll"
+target = "BepInEx/plugins/MegabonkLevels/"
+
+[[build.copy]]
+source = "src/MegabonkLevels.Mod/bin/Release/net6.0/NLayer.dll"
+target = "BepInEx/plugins/MegabonkLevels/"
+
+[[build.copy]]
+source = "pkg/NLayer.LICENSE.txt"
+target = "BepInEx/plugins/MegabonkLevels/"
+
+[publish]
+repository = "https://thunderstore.io"
+communities = ["megabonk"]
+
+[publish.categories]
+megabonk = ["mods", "tools"]
