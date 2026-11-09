@@ -4,8 +4,14 @@ An unofficial [Megabonk](https://store.steampowered.com/app/3405340/Megabonk/)
 mod for creating and playtesting custom levels: an **in-game editor**, a
 **console**, and a **development harness with MCP tools**.
 
-[Showcase](https://megabonkmod.party) · [Player guide](docs/player-guide.md) ·
-[Build setup](docs/modding-setup.md)
+[Showcase](https://megabonkmod.party) · [Player guide](docs/player-guide.md) · [Build setup](docs/modding-setup.md)
+
+> [!NOTE]
+> This codebase extensively uses AI-assisted tooling (e.g., Claude Code, OpenCode, vLLM, etc.)
+> 
+> If that bothers you, please feel free to bounce off the repo. I wish you the best in your endeavors!
+>
+> For those who stick around, I *assure* you that there's a lot of care and attention with (at the time of writing) over 2780 C#, 1280 python, and dozens of less important regression tests. This is a highly methodical, spec-driven repo that is older than its git history.
 
 ## Develop
 
@@ -18,7 +24,7 @@ Install the toolchain in [modding setup](docs/modding-setup.md) and
 ```sh
 cp .env.example .env                # configure your local game paths
 uv sync
-task mod:build                     # builds and deploys into your game install
+task mod:build                          # builds and deploys into your game install
 task game:run
 ```
 
