@@ -189,8 +189,8 @@ def _cmd_gate(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_versions(_: argparse.Namespace) -> int:
-    versions = synchronized_versions()
+def _cmd_versions(args: argparse.Namespace) -> int:
+    versions = synchronized_versions(args.root)
     if len(set(versions.values())) == 1:
         print(f"versions synchronized: {next(iter(versions.values()))}")
         return 0
@@ -201,7 +201,7 @@ def _cmd_versions(_: argparse.Namespace) -> int:
 def _cmd_guard(args: argparse.Namespace) -> int:
     import validate_thunderstore_manifest as site
 
-    config = tomllib.loads((ROOT / "thunderstore.toml").read_text(encoding="utf-8"))["package"]
+    config = tomllib.loads((args.root / "thunderstore.toml").read_text(encoding="utf-8"))["package"]
     version = config["versionNumber"]
     published = site.package_exists(config["namespace"], config["name"], version)
     problems = release_problems(event=args.event, tag=args.tag, prerelease=args.prerelease, version=version, published=published)
@@ -227,8 +227,9 @@ def _cmd_checksum(args: argparse.Namespace) -> int:
     return int(bool(problems))
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--root", type=Path, default=ROOT, help="checkout whose package files are read (versions, guard)")
     commands = parser.add_subparsers(dest="command", required=True)
     gate = commands.add_parser("gate")
     gate.add_argument("--tag", required=True)
@@ -243,7 +244,7 @@ def main() -> int:
         sub = commands.add_parser(name)
         sub.add_argument("archive", type=Path)
         sub.set_defaults(run=run)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     return args.run(args)
 
 

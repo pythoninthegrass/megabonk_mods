@@ -6,6 +6,7 @@ from pathlib import Path
 from thunderstore_release_gate import (
     PACKAGE_PATHS,
     affects_package,
+    main,
     blocking_problems,
     path_matches,
     previous_stable_tag,
@@ -229,3 +230,18 @@ def test_synchronized_versions_report_a_mismatch(tmp_path):
     manifest = tmp_path / "pkg/manifest.json"
     manifest.write_text(manifest.read_text().replace('"version_number": "0.1.0"', '"version_number": "9.9.9"'))
     assert len(set(synchronized_versions(tmp_path).values())) > 1
+
+
+def copy_version_sources(tmp_path):
+    for relative in ("thunderstore.toml", "pyproject.toml", "pkg/manifest.json", "src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj", "src/MegabonkLevels.Mod/megabonk_levels_mod.cs"):
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((ROOT / relative).read_bytes())
+
+
+def test_versions_command_reads_the_given_root(tmp_path, capsys):
+    copy_version_sources(tmp_path)
+    assert main(["--root", str(tmp_path), "versions"]) == 0
+    manifest = tmp_path / "pkg/manifest.json"
+    manifest.write_text(manifest.read_text().replace('"version_number": "0.1.0"', '"version_number": "9.9.9"'))
+    assert main(["--root", str(tmp_path), "versions"]) == 1

@@ -96,7 +96,12 @@ jobs:
         with:
           ref: ${{ needs.gate.outputs.ref }}
           persist-credentials: false
-      - run: python3 scripts/thunderstore_release_gate.py versions
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: ci-tools
+          persist-credentials: false
+      - run: python3 ci-tools/scripts/thunderstore_release_gate.py --root . versions
       - name: Build and validate the package
         env:
           ModInstanceFolder: ${{ runner.temp }}/plugin-install
@@ -105,8 +110,8 @@ jobs:
         run: |
           set -euo pipefail
           archive="$(ls .tools/thunderstore/*.zip)"
-          python3 scripts/thunderstore_release_gate.py record "$archive"
-          python3 scripts/thunderstore_release_gate.py checksum "$archive"
+          python3 ci-tools/scripts/thunderstore_release_gate.py record "$archive"
+          python3 ci-tools/scripts/thunderstore_release_gate.py checksum "$archive"
           echo "archive=$(basename "$archive")" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
@@ -134,6 +139,11 @@ jobs:
         with:
           ref: ${{ needs.gate.outputs.ref }}
           persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: ci-tools
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           name: thunderstore-package
@@ -143,8 +153,8 @@ jobs:
           ARCHIVE: ${{ needs.build.outputs.archive }}
         run: |
           set -euo pipefail
-          python3 scripts/thunderstore_release_gate.py checksum "package/$ARCHIVE"
-          python3 scripts/validate_thunderstore_manifest.py "package/$ARCHIVE"
+          python3 ci-tools/scripts/thunderstore_release_gate.py checksum "package/$ARCHIVE"
+          python3 ci-tools/scripts/validate_thunderstore_manifest.py "package/$ARCHIVE"
       - id: guard
         env:
           EVENT: ${{ github.event_name }}
@@ -154,7 +164,7 @@ jobs:
           set -euo pipefail
           flags=()
           if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
-          python3 scripts/thunderstore_release_gate.py guard --event "$EVENT" --tag "$TAG" "${flags[@]}" >> "$GITHUB_OUTPUT"
+          python3 ci-tools/scripts/thunderstore_release_gate.py --root . guard --event "$EVENT" --tag "$TAG" "${flags[@]}" >> "$GITHUB_OUTPUT"
       - if: steps.guard.outputs.publish == 'true'
         env:
           ARCHIVE: ${{ needs.build.outputs.archive }}
