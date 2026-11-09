@@ -41,3 +41,17 @@ test('search index and sitewide Markdown outputs exist and exclude unpublished d
   assert.match(full, /Bramblecrown Hill/);
   assert.doesNotMatch(index, /\]\([^)]*\/docs\/(?:development|website|gamepadui)\//);
 });
+
+test('wiki home, player guide and Markdown bundles point to the public release', async () => {
+  const release = 'https://thunderstore.io/c/megabonk/p/pythoninthegrass/Megabonk_Level_Editor/';
+  for (const path of ['home/index.html', 'home.md', 'docs/player-guide/index.html', 'docs/player-guide.md', 'llms-full.txt']) {
+    const content = await readFile(new URL(path, root), 'utf8');
+    assert.ok(content.includes(release), `${path} links to the public release`);
+    assert.ok(!content.includes('The public Thunderstore release has not been published yet'), `${path} has no stale release notice`);
+  }
+  const guide = await readFile(new URL('docs/player-guide.md', root), 'utf8');
+  assert.ok(guide.includes('The manager should also install'));
+  const legacy = await readFile(new URL('docs/player-installer.md', root), 'utf8');
+  assert.ok(legacy.includes('Legacy reference:'));
+  assert.ok(legacy.includes('cannot install the current BepInEx DLL'));
+});

@@ -22,7 +22,7 @@ The wiki helps players install the mod, try and share levels, and find music, Wa
 
 ## Capabilities and Constraints
 
-The unofficial mod provides an in-game level editor, console and development MCP server. Editing and playing remain in the game; the website is a showcase, not a web editor. Public release downloads are not yet available. The supported player route uses the Windows game build, including through Proton or Wine.
+The unofficial mod provides an in-game level editor, console and development MCP server. Editing and playing remain in the game; the website is a showcase, not a web editor. The public release is available on [Thunderstore](https://thunderstore.io/c/megabonk/p/pythoninthegrass/Megabonk_Level_Editor/). Levels are supplied separately. The supported player route uses the Windows game build, including through Proton or Wine.
 
 ## Evidence on Hand
 

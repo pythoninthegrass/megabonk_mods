@@ -27,17 +27,19 @@ The editor package contains no levels, third-party asset packs or music.
 
 ## Installing
 
-The public Thunderstore release has not been published yet. For local testing,
-the package is built from source with `task package:thunderstore`; get that ZIP
-from its builder and import it through your manager's local/custom-mod option.
+The public release is available on
+[Thunderstore](https://thunderstore.io/c/megabonk/p/pythoninthegrass/Megabonk_Level_Editor/).
 Its package identifier is `Megabonk_Level_Editor`.
 
 1. Select **Megabonk** in a compatible mod manager and create a clean profile.
-2. Install **BepInExPack IL2CPP 6.0.788** and import the editor ZIP. Apply the
-   profile to the game.
+2. Install **Megabonk Level Editor** from its Thunderstore page. The manager should also install
+   **BepInExPack IL2CPP 6.0.788**. Apply the profile to the game.
 3. Start the modded game. Check `BepInEx/LogOutput.log` for
    `Megabonk Level Editor` and `MegabonkLevels mod initialized.`.
 4. Add a level as described below, then restart the game to see it on Map Selection.
+
+For local testing, build the package from source with `task package:thunderstore`
+and import the resulting ZIP through your manager's local/custom-mod option instead.
 
 On macOS, the tested setup is r2modmac 1.1.0 for managing files and plain Wine
 11.18 for launching. Apply omits the BepInEx pack's `dotnet/` runtime, and its

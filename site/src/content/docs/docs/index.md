@@ -6,7 +6,7 @@ description: Install the mod, play custom levels and explore level-building refe
 
 Guides for the unofficial Megabonk Level Editor. Start with installation, then try a custom level or explore how the Warehouse is built.
 
-The public Thunderstore release has not been published yet. The current mod uses **BepInEx 6 IL2CPP** and the **Windows build** of Megabonk, including through Proton or Wine.
+Get the public release of [Megabonk Level Editor on Thunderstore](https://thunderstore.io/c/megabonk/p/pythoninthegrass/Megabonk_Level_Editor/), then follow the [player guide](/docs/player-guide/) to install it. The mod uses **BepInEx 6 IL2CPP** and the **Windows build** of Megabonk, including through Proton or Wine.
 
 ## Start playing
 
