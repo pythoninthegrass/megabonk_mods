@@ -1,9 +1,10 @@
 ---
 id: TASK-056.06
 title: Automate path-filtered Thunderstore package builds and releases
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-09 04:27'
+updated_date: '2026-11-09T19:52:00Z'
 labels:
   - ci
   - release
