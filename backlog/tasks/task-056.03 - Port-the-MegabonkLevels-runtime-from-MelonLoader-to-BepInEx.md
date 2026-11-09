@@ -1,7 +1,7 @@
 ---
 id: TASK-056.03
 title: Port the MegabonkLevels runtime from MelonLoader to BepInEx
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-08T23:31:00Z'
 updated_date: '2026-11-09 01:16'
@@ -57,10 +57,17 @@ Runtime verification: clean BepInEx boots under plain Wine using existing bottle
 Rollback verified during this task: quit, park winhttp.dll/doorstop_config.ini as .bak and restore version.dll, then existing MelonLoader DLL completed run.py relaunch/load/editor smoke. Its screenshot also shows the lingering startup cover seen on the no-playerStart example fixture under BepInEx; not a new port regression. No unrelated startup-gate changes made. Final state restored to BepInEx: winhttp.dll and doorstop_config.ini active, version.dll.bak parked; original MelonLoader DLL and configuration retained. Game left in example-forest editor with spawns off and invulnerability enabled for safe review. F6 example fixture intentionally remains beside plugin. Script log scraping/relaunch and packaging remain subsequent tasks, per approved scope.
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Ported MegabonkLevels from MelonLoader to BepInEx 6 IL2CPP on isolated branch bepinex-port (runtime commit bf84dc4); main remains unchanged. BasePlugin.Load initializes the mod and explicitly installs all assembly Harmony patches. AddComponent<ModTick> preserves per-frame update order, late camera override and quit cleanup; BepInEx's coroutine adapter preserves Unity yield semantics. Logging and content paths are loader-independent wrappers; content/harness locations remain compatible, while F6 now reads beside the plugin. References use BepInEx/core and BepInEx/interop only; build deploys plugin/PDB and copy-local NLayer into BepInEx/plugins/MegabonkLevels. Updated developer/build, F6 and music documentation and added a test-first content-path regression test.
+Verification: task check passed (2781 C# tests, 1158 Python tests, installer checks and lint); mod builds with zero warnings/errors. In-game verified plugin boot, generation patches/example-forest/editor, palette, end-of-frame screenshots, F6, console render/help/music commands and real MP3 decode/NLayer resolution. Restored and successfully relaunched MelonLoader as a rollback check, then restored BepInEx. The example fixture's lingering startup cover also reproduces on the unmodified MelonLoader DLL; no unrelated fix included. Final game state is BepInEx-active in editor with spawns off/invulnerability for safe review. Script log/relaunch migration remains TASK-056.04, per explicit approval; packaging remains TASK-056.05.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
