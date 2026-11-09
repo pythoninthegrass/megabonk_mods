@@ -1,0 +1,13 @@
+---
+interface Props { name: 'arrow' | 'cube' | 'copy' | 'code' | 'plus' | 'external'; }
+const { name } = Astro.props;
+const paths = {
+  arrow: 'M5 12h14m-6-6 6 6-6 6',
+  cube: 'm12 3 9 5v8l-9 5-9-5V8l9-5Zm0 10v8M3 8l9 5 9-5M7.5 5.5l9 5',
+  copy: 'M9 9h11v11H9zM15 9V4H4v11h5',
+  code: 'm8 7-5 5 5 5m8-10 5 5-5 5m-3-14-2 18',
+  plus: 'M12 5v14M5 12h14',
+  external: 'M14 4h6v6m0-6L10 14M10 4H4v16h16v-6',
+};
+---
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>

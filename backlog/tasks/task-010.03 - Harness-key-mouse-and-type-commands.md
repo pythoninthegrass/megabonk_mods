@@ -1,0 +1,93 @@
+---
+id: TASK-010.03
+title: 'Harness key, mouse and type commands'
+status: Done
+assignee:
+  - claude
+created_date: '2026-10-22 03:42'
+updated_date: '2026-10-23T01:13:00Z'
+labels:
+  - dev-harness
+  - tooling
+dependencies:
+  - TASK-010.01
+  - TASK-010.02
+references:
+  - scripts/run.py
+  - tests/test_run.py
+  - src/MegabonkLevels.Mod/dev_harness.cs
+  - src/MegabonkLevels.Mod/harness_command.cs
+  - src/MegabonkLevels.Mod/editor_input.cs
+  - src/MegabonkLevels.Mod/injected_input.cs
+  - tests/MegabonkLevels.Tests/harness_command_tests.cs
+documentation:
+  - docs/development.md
+  - AGENTS.md
+parent_task_id: TASK-010
+priority: medium
+ordinal: 56000
+---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+Read parent TASK-010 first. Depends on TASK-010.01 (provides harness/results/<name> result files, the `Execute` return value and `read_result` in run.py) and TASK-010.02 (provides `InjectedInputQueue` and `EditorInput.Queue` with `EnqueueTap`, `EnqueueKeyDown`, `EnqueueKeyUp`, `EnqueueMouseMove`, `EnqueueClick`, `EnqueueMouseDown`, `EnqueueMouseUp`, `EnqueueText`, `ClearMouse`). Do not start until both are merged. Can run in parallel with TASK-010.05 and TASK-010.06.
+
+Goal: let a shell script or agent press keys, move and click the mouse, and type text in the running game by feeding the injected-input queue, so editor features (palette search, tool hotkeys, object rotation, clicking objects) can be exercised without OS input or window focus.
+
+Wire formats (decided):
+- `{"command":"key","action":"tap","key":"R","modifiers":["LeftShift"]}`; `action` is `tap`, `down` or `up`; `modifiers` is optional and only valid for `tap`. `key` is a `UnityEngine.KeyCode` member name, matched case-sensitively.
+- `{"command":"mouse","action":"move","x":960,"y":540}`; `action` is `move`, `click`, `down`, `up` or `clear`. `x` and `y` are required for `move`; `click`, `down` and `up` take an optional `button` (0 left, 1 right, 2 middle; default 0) and an optional `x`/`y` that moves first. `clear` drops the injected mouse position so the real mouse is used again.
+- `{"command":"type","text":"chest"}`; max 200 characters; `\b` is backspace and `\n` is return.
+- Coordinates are screenshot pixels with the origin at the top left (what an agent sees in a harness screenshot). The mod converts to Unity's bottom-left origin using `Screen.height`; keep the conversion as a pure function `ScreenPoint.ToUnity(float x, float y, int screenHeight)` in a Unity-free file linked into the tests.
+- An unknown key name, an unknown action, a missing required field or an out-of-range button is rejected at parse time with a clear error, which TASK-010.01's result file reports as `ok:false`. Validation of key names must not need Unity: keep a Unity-free list of valid names (copy the member names of `UnityEngine.KeyCode` for the keys the editor uses plus all letters, digits as `Alpha0`-`Alpha9`, `Keypad0`-`Keypad9`, F1-F12, arrows, Escape, Return, Backspace, Delete, Space, Tab, LeftShift, RightShift, LeftControl, RightControl, LeftAlt, RightAlt) in `src/MegabonkLevels.Mod/key_names.cs`, and add a Unity-side test-less sanity check at startup that logs any listed name `Enum.TryParse<KeyCode>` rejects.
+
+Steps (TDD): 1) failing xUnit tests in harness_command_tests.cs for `TryParse` of each new command (valid forms, every rejection case above) and for `ScreenPoint.ToUnity`; 2) failing Python tests in tests/test_run.py for the new subcommands building the exact payloads; 3) add `Key`, `Mouse` and `Type` to `HarnessCommandKind` and `TryParse`; carry the extra fields on `HarnessCommand` without breaking existing positional constructions (add new optional members, or a nested `InputArgs` record); 4) `Execute` forwards to `EditorInput.Queue`; the result for each is null; 5) run.py: `key <name> [--mod LeftShift ...]`, `key --down <name>`, `key --up <name>`, `mouse move X Y`, `mouse click [--button N] [X Y]`, `mouse down|up`, `mouse clear`, `type <text>`; update the docstring usage; 6) `task check`; 7) in the game: relaunch; send `mouse move` + `mouse click` on a palette entry and `type "chest"` into the palette, then `key tap R` with an object selected; take a screenshot after each and read it to confirm the effect; 8) document the commands, wire formats, coordinate convention and the valid key names in docs/development.md.
+
+Do not: simulate input through the OS, touch Rewired, or accept key names that are not in the valid list.
+<!-- SECTION:DESCRIPTION:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [x] #1 key, mouse and type commands parse and validate as specified, with unknown keys, unknown actions, missing fields and bad buttons rejected with a clear error
+- [x] #2 Mouse coordinates are interpreted as screenshot pixels with a top-left origin and converted to Unity's bottom-left origin by a tested pure function
+- [x] #3 Execute feeds the commands into EditorInput.Queue, and the injected input reaches the editor with the game window unfocused
+- [x] #4 run.py has key, mouse and type subcommands that build the documented payloads
+- [x] #5 Confirmed in the running game with screenshots: a click selects a palette entry, typed text appears in the palette search or the focused text field, and a key tap triggers an editor hotkey
+- [x] #6 Parsing, validation, coordinate conversion and run.py payloads have tests written first
+- [x] #7 docs/development.md documents the commands, wire formats, coordinate convention and valid key names
+<!-- AC:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
+<!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. C# tests first (harness_command_tests.cs): TryParse for key (tap/down/up, modifiers, rejections), mouse (move/click/down/up/clear, button range, missing x/y), type (length cap, missing text); ScreenPoint.ToUnity; KeyNames validity.
+2. Python tests first (tests/test_run.py): payload builders and main() routing for key, mouse, type.
+3. Add screen_point.cs and key_names.cs (Unity-free, linked into the test csproj); extend HarnessCommandKind, HarnessCommand (optional InputArgs member) and TryParse.
+4. DevHarness.Execute forwards to EditorInput.Queue (converting y with Screen.height); startup sanity check logs KeyNames entries that Enum.TryParse<KeyCode> rejects.
+5. run.py: key, mouse and type subcommands plus docstring usage.
+6. task check, then relaunch and verify in the game with screenshots (palette click, type, key tap).
+7. Document commands, wire formats, coordinate convention and valid key names in docs/development.md.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Parsing uses a plain InputArgs class (not a record): the mod's Nullable=disable build lacks NullableAttribute..ctor, which a reference-type record's synthesized members need. The mod compiles as C# 10, so no collection expressions in non-test files.
+
+In-game check (CrossOver, 1512x982): mouse click on palette entry Log0 -> 'selected: Log0'; click level field + type chest -> text shown, then backspaces cleared it; click rock -> state selected gen:object:rock_medium_01:0020; key R -> log 'rotate ... clockwise -> object.move', save status dirty (1 edits). Not separately proven with the game window defocused; input never touches the OS.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added key, mouse and type harness commands that feed EditorInput.Queue. New Unity-free files screen_point.cs (top-left to bottom-left conversion) and key_names.cs (valid KeyCode names); HarnessCommand gains an InputArgs member and parse-time validation (unknown key/action, missing x/y, button outside 0-2, modifiers on down/up, text over 200 chars). DevHarness.Execute queues the input and warns at startup about listed names Enum.TryParse<KeyCode> rejects. run.py gains key, mouse and type subcommands. docs/development.md documents the wire formats, coordinate convention and key names. Verified with task check (606 C# tests, 129 Python tests, lint) and in the running game: palette click, typed text in the level field, and R rotating a selected object. Risk: the defocused-window claim rests on the input path bypassing the OS rather than a test with the window unfocused.
+<!-- SECTION:FINAL_SUMMARY:END -->

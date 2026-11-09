@@ -1,0 +1,169 @@
+---
+import { Image } from 'astro:assets';
+import '@fontsource/archivo/latin-700.css';
+import '@fontsource/archivo/latin-800.css';
+import '@fontsource-variable/public-sans';
+import '../styles/global.css';
+import Icon from '../components/Icon.astro';
+import CommandBlock from '../components/CommandBlock.astro';
+import VideoPlaceholder from '../components/VideoPlaceholder.astro';
+import { Content as Intro } from '../content/intro.md';
+import { Content as Editor } from '../content/editor.md';
+import { Content as Level } from '../content/level.md';
+import { Content as Console } from '../content/console.md';
+import { Content as ConsoleCommands } from '../content/console-commands.md';
+import { Content as Mcp } from '../content/mcp.md';
+import { Content as McpCommands } from '../content/mcp-commands.md';
+import { Content as McpConfig } from '../content/mcp-config.md';
+import { Content as Start } from '../content/start.md';
+import { Content as Compatibility } from '../content/compatibility.md';
+import editor from '../assets/bramblecrown-editor.png';
+import gameplay from '../assets/bramblecrown-gameplay.png';
+import consoleImage from '../assets/bramblecrown-console.png';
+
+const repo = 'https://github.com/pythoninthegrass/megabonk_mods';
+const guide = `${repo}/blob/main/docs`;
+const external = { target: '_blank', rel: 'noopener noreferrer' };
+const description = 'Make Megabonk your playground. An unofficial in-game level editor, console and MCP tools for creating, playtesting and sharing custom levels.';
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Megabonk Mod Party — Make a level. Make it yours.</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#dfeaf0" />
+    <link rel="canonical" href="https://megabonkmod.party/" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Megabonk Mod Party" />
+    <meta property="og:title" content="Make a level. Make it yours." />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content="https://megabonkmod.party/" />
+    <meta property="og:image" content="https://megabonkmod.party/social.jpg" />
+    <meta property="og:image:alt" content="Bramblecrown Hill, an original custom Megabonk level" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header wrap">
+      <a class="wordmark" href="#" aria-label="Megabonk Mod Party home"><span class="brand-mark"><Icon name="cube" /></span><span>megabonk<span class="wordmark-bottom">mod.party</span></span></a>
+      <nav aria-label="Main navigation">
+        <a href="#editor">Editor</a><a href="#console">Console</a><a href="#mcp">MCP</a>
+        <a class="source-link" href={repo} {...external}>Source <Icon name="external" /></a>
+      </nav>
+      <a class="btn header-action" href="#start">Start creating <Icon name="arrow" /></a>
+    </header>
+
+    <main id="main">
+      <section class="hero wrap" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <h1 id="hero-title">Make a level.<br />Make it <span>yours.</span></h1>
+          <div class="hero-intro prose"><Intro /><p class="hero-note">Unofficial mod. Real possibilities.</p><a class="text-link" href="#editor">See what you can make <Icon name="arrow" /></a></div>
+        </div>
+
+        <div class="build-table" x-data="{ view: 'editor' }">
+          <div class="table-topline"><span class="table-label">On the workbench / Bramblecrown Hill</span><span class="table-caption">Built in Megabonk. Changed by you.</span></div>
+          <div class="comparison-controls" x-cloak role="group" aria-label="Emphasize an editor or game view">
+            <button class="btn" data-variant="outline" type="button" @click="view = 'editor'" :aria-pressed="view === 'editor'" aria-controls="editor-view">In the editor</button>
+            <button class="btn" data-variant="outline" type="button" @click="view = 'play'" :aria-pressed="view === 'play'" aria-controls="play-view">In the game</button>
+          </div>
+          <div class="table-media">
+            <aside class="table-annotation"><Icon name="plus" /><p>Pick it.<br />Place it.<br /><strong>Play it.</strong></p><span>F8 switches<br />edit / play</span></aside>
+            <div class="image-stack">
+              <figure id="editor-view" :class="view === 'editor' ? 'is-primary' : 'is-secondary'" class="screenshot-plate">
+                <Image src={editor} alt="Bramblecrown Hill open in the Megabonk level editor, with the object palette, terrain tools and save controls visible" widths={[600, 960, 1512]} sizes="(max-width: 700px) 94vw, 76vw" format="webp" loading="eager" fetchpriority="high" />
+                <figcaption><span>Editor view</span><span>Bramblecrown Hill / summit</span></figcaption>
+              </figure>
+              <figure id="play-view" :class="view === 'play' ? 'is-primary' : 'is-secondary'" class="screenshot-plate">
+                <Image src={gameplay} alt="In-game view from Bramblecrown Hill’s meadow toward the terraced hill and ruined watchpost" widths={[600, 960, 1512]} sizes="(max-width: 700px) 94vw, 76vw" format="webp" loading="lazy" />
+                <figcaption><span>In-game view</span><span>Original starter level</span></figcaption>
+              </figure>
+            </div>
+            <aside class="table-edge" aria-hidden="true"><span>IDEA</span><span class="edge-rule"></span><span>IN GAME</span></aside>
+          </div>
+          <div class="table-bottomline"><span><kbd>F8</kbd> Leave the editor. Try your changes.</span><a href={`${guide}/starter-level.md`} {...external}>Meet the starter level <Icon name="arrow" /></a></div>
+        </div>
+      </section>
+
+      <div class="capability-index wrap" aria-label="What the mod adds">
+        <a href="#editor"><strong>A level editor</strong><span>Build in the game you play.</span><Icon name="arrow" /></a>
+        <a href="#console"><strong>An in-game console</strong><span>Find the command. Keep the history.</span><Icon name="arrow" /></a>
+        <a href="#mcp"><strong>A bridge to your tools</strong><span>Inspect, automate, check.</span><Icon name="arrow" /></a>
+      </div>
+
+      <section id="editor" class="feature-section wrap">
+        <div class="section-layout">
+          <div class="prose feature-copy"><Editor /><a class="text-link" href={`${guide}/development.md#editor-mode`} {...external}>Explore the editor controls <Icon name="arrow" /></a></div>
+          <div class="media-column"><VideoPlaceholder title="From first edit to first playtest" description="A walkthrough of shaping terrain, placing props and jumping back into the run. Recording coming soon." poster={editor} alt="Still image of the actual level editor, used as the poster for the future editor walkthrough" /><p class="margin-note"><kbd>Ctrl</kbd> + <kbd>Z</kbd> is for second thoughts.</p></div>
+        </div>
+      </section>
+
+      <section id="levels" class="level-section">
+        <div class="wrap section-layout">
+          <div class="level-copy prose"><Level /><a class="text-link" href={`${guide}/starter-level.md#your-first-edit`} {...external}>Try your first edit <Icon name="arrow" /></a></div>
+          <div class="level-showcase"><VideoPlaceholder title="One hill. Plenty of detours." description="A tour of Bramblecrown Hill’s districts and spiral route. Gameplay video coming soon; this poster is an actual in-game capture." poster={gameplay} alt="Bramblecrown Hill’s meadow and raised central hill, captured inside Megabonk" /><div class="file-label"><Icon name="code" /><code>my-bramblecrown.mblevel.json</code><span>Your next version.</span></div></div>
+        </div>
+      </section>
+
+      <section id="console" class="console-section">
+        <div class="wrap">
+          <div class="console-layout">
+            <div class="prose"><Console /><div class="shortcut-line"><kbd>~</kbd><span>Open console</span><kbd>Tab</kbd><span>Complete</span><kbd>Ctrl-R</kbd><span>Search</span></div></div>
+            <div class="console-commands"><CommandBlock label="In-game console · no dev flag needed"><ConsoleCommands /></CommandBlock><p class="command-note">Music controls are available to everyone. Cheat/debug commands require <code>MEGABONK_DEV=true</code>.</p></div>
+          </div>
+          <figure class="console-capture"><Image src={consoleImage} alt="The real Megabonk console showing help commands over the custom level" widths={[600, 1000, 1512]} sizes="(max-width: 700px) 94vw, 86vw" format="webp" loading="lazy" /><figcaption>Real console. Real game. A shorter path to the thing you wanted to do.</figcaption></figure>
+          <a class="text-link" href={`${guide}/development.md#console-command-language`} {...external}>Read the console guide <Icon name="arrow" /></a>
+        </div>
+      </section>
+
+      <section id="mcp" class="mcp-section wrap">
+        <div class="section-layout">
+          <div class="prose"><Mcp /><a class="text-link" href={`${guide}/development.md#mcp-server`} {...external}>Explore the MCP tools <Icon name="arrow" /></a></div>
+          <div class="mcp-workbench">
+            <div class="connection-map" aria-label="Your MCP client connects to the local MCP server, which connects to the running Megabonk mod"><span>Your MCP client</span><Icon name="arrow" /><span>Local server</span><Icon name="arrow" /><strong>Megabonk</strong></div>
+            <CommandBlock label="MCP tool calls · illustrative sequence"><McpCommands /></CommandBlock>
+            <div class="accordion"><details><summary>Connect your development setup</summary><div class="prose"><McpConfig /></div></details></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="start" class="start-section">
+        <div class="wrap">
+          <div class="start-layout"><div class="prose"><Start /></div><div class="start-actions"><a class="btn" href={`${guide}/player-guide.md`} {...external}>Open the player guide <Icon name="arrow" /></a><a class="btn" data-variant="outline" href={`${guide}/modding-setup.md`} {...external}>Build from source <Icon name="code" /></a><a class="text-link" href={repo} {...external}>Browse the repository <Icon name="external" /></a><p>No public release download yet.<br />The guides are the starting point.</p></div></div>
+          <div class="compatibility prose"><Compatibility /></div>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer wrap"><a class="wordmark" href="#"><Icon name="cube" /><span>megabonkmod.party</span></a><p>Built for the fun of making something.</p><a href={repo} {...external}>Source & documentation <Icon name="external" /></a></footer>
+
+    <script>
+      import Alpine from 'alpinejs';
+      import { copyCommand } from '../scripts/clipboard.js';
+
+      Alpine.start();
+
+      document.querySelectorAll<HTMLElement>('[data-command-block]').forEach((block) => {
+        const code = block.querySelector('pre code');
+        const heading = block.querySelector('.command-heading');
+        const feedback = block.querySelector('.copy-feedback');
+        if (!code || !heading || !feedback) return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn copy-button';
+        button.dataset.variant = 'ghost';
+        button.textContent = 'Copy';
+        button.setAttribute('aria-label', `Copy ${heading.textContent?.trim()}`);
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          const result = await copyCommand(code.textContent ?? '', navigator.clipboard);
+          feedback.textContent = result.ok ? 'Command copied.' : result.message;
+          button.textContent = result.ok ? 'Copied' : 'Copy';
+          button.disabled = false;
+        });
+        heading.append(button);
+      });
+    </script>
+  </body>
+</html>

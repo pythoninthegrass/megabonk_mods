@@ -1,0 +1,6 @@
+{
+  "env": {
+    "GHIDRA_HEADLESS_MAXMEM": "6G",
+    "REA_GHIDRA_STARTUP_TIMEOUT_MS": "3600000"
+  }
+}

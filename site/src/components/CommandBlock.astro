@@ -1,0 +1,9 @@
+---
+interface Props { label: string; }
+const { label } = Astro.props;
+---
+<div class="command-block" data-command-block>
+  <div class="command-heading"><span>{label}</span></div>
+  <div class="command-content"><slot /></div>
+  <p class="copy-feedback" aria-live="polite" aria-atomic="true"></p>
+</div>
