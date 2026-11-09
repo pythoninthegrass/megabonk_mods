@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Static Astro showcase at megabonkmod.party with an integrated Starlight wiki at docs.megabonkmod.party/docs/. Prefer Markdown and vanilla JavaScript; the showcase uses Alpine.js and Basecoat UI, while the wiki keeps Starlight's documentation controls. Both build into one static image.
+Static Astro showcase at megabonkmod.party with an integrated Starlight wiki at docs.megabonkmod.party/home/. Prefer Markdown and vanilla JavaScript; the showcase uses Alpine.js and Basecoat UI, while the wiki keeps Starlight's documentation controls. Both build into one static image.
 
 ## Users
 

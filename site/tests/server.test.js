@@ -32,12 +32,23 @@ test('docs hostname root redirects to the wiki, preserving queries', async () =>
     }).on('error', reject);
   });
   assert.equal(response.statusCode, 308);
-  assert.equal(response.headers.location, '/docs/?from=home');
+  assert.equal(response.headers.location, '/home/?from=home');
+});
+
+test('legacy wiki home URLs redirect without affecting guide routes', async () => {
+  for (const [path, destination] of [
+    ['docs/', '/home/'], ['docs', '/home/'], ['docs/index.md', '/home.md'],
+  ]) {
+    const response = await fetch(new URL(`${path}?legacy=1`, base), { redirect: 'manual' });
+    assert.equal(response.status, 308, path);
+    assert.equal(response.headers.get('location'), `${destination}?legacy=1`, path);
+  }
 });
 
 test('wiki routes, raw Markdown and search assets have correct content types', async () => {
   for (const [path, type] of [
-    ['docs/', 'text/html'],
+    ['home/', 'text/html'],
+    ['home.md', 'text/markdown'],
     ['docs/player-guide.md', 'text/markdown'],
     ['pagefind/pagefind.js', 'text/javascript'],
     ['pagefind/wasm.en.pagefind', 'application/wasm'],

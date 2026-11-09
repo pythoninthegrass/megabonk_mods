@@ -8,17 +8,18 @@ const root = new URL('../dist/', import.meta.url);
 test('exactly the approved guides are published alongside the wiki index', async () => {
   const entries = await readdir(new URL('docs/', root), { withFileTypes: true });
   assert.deepEqual(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort(), [...guides].sort());
-  await access(new URL('docs/index.html', root));
+  await access(new URL('home/index.html', root));
   await access(new URL('index.html', root));
 });
 
 test('every guide has canonical metadata, copy controls, standalone Markdown and working local links', async () => {
-  for (const slug of ['index', ...guides]) {
-    const page = `docs/${slug === 'index' ? '' : `${slug}/`}index.html`;
+  for (const slug of ['home', ...guides]) {
+    const path = slug === 'home' ? 'home' : `docs/${slug}`;
+    const page = `${path}/index.html`;
     const html = await readFile(new URL(page, root), 'utf8');
-    const markdown = await readFile(new URL(`docs/${slug}.md`, root), 'utf8');
-    assert.match(html, /rel="canonical" href="https:\/\/docs\.megabonkmod\.party\/docs\//, slug);
-    assert.ok(html.includes(`data-page-md="/docs/${slug}.md"`), slug);
+    const markdown = await readFile(new URL(`${path}.md`, root), 'utf8');
+    assert.ok(html.includes(`rel="canonical" href="https://docs.megabonkmod.party/${path}/"`), slug);
+    assert.ok(html.includes(`data-page-md="/${path}.md"`), slug);
     assert.ok(html.includes('View as Markdown'), slug);
     assert.ok(html.includes('id="starlight__search"'), 'production search UI must render');
     assert.doesNotMatch(html, /Search is only available in production builds/);

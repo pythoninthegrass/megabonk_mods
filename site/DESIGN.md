@@ -152,7 +152,7 @@ Media plates and section bands are square-edged. Small control corners and sligh
 
 ### Wiki reading surface
 
-The `/docs/` routes extend this world through Starlight, without restyling the showcase. Keep the conventional masthead search, grouped left sidebar, central reading column and right-side section contents. Mobile uses Starlight's menu and page-contents disclosures. This is a Read surface: comprehension and familiar wayfinding take priority over display effects.
+The wiki home at `/home/` and guides under `/docs/` extend this world through Starlight, without restyling the showcase. Keep the conventional masthead search, grouped left sidebar, central reading column and right-side section contents. Mobile uses Starlight's menu and page-contents disclosures. This is a Read surface: comprehension and familiar wayfinding take priority over display effects.
 
 In light mode, navigation uses the pale-blue table (`#dfeaf0`), the reading background is standard white (`#ffffff`), and the accent remains vermilion (`#b83c29`, with `#842b1d` for text accents). Dark mode retains Starlight's neutral surfaces with peach accents (`#e89579`, `#ffd9c9`) on a muted dark-red accent ground (`#45251f`). Archivo supplies headings; Public Sans supplies body text, navigation and controls. The content measure is `72ch`.
 

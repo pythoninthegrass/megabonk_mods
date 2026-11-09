@@ -7,7 +7,7 @@ related_targets: ["src/components/WikiPageTitle.astro", "src/components/WikiSite
 
 # Player wiki
 
-Mode: Read. Routes: /docs/ and /docs/<guide>/. Players need installation, level and music guidance; Warehouse builders need reference tables. The repository Markdown remains authoritative.
+Mode: Read. Routes: /home/ and /docs/<guide>/. Players need installation, level and music guidance; Warehouse builders need reference tables. The repository Markdown remains authoritative.
 
 ## Direction contract
 

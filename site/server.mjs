@@ -49,7 +49,12 @@ export function createApp({ root }) {
       return;
     }
     if (pathname === '/' && req.headers.host?.split(':')[0].toLowerCase() === 'docs.megabonkmod.party') {
-      reply(res, 308, { location: `/docs/${url.search}`, 'content-length': '0' });
+      reply(res, 308, { location: `/home/${url.search}`, 'content-length': '0' });
+      return;
+    }
+    if (pathname === '/docs' || pathname === '/docs/' || pathname === '/docs/index.md') {
+      const destination = pathname.endsWith('.md') ? '/home.md' : '/home/';
+      reply(res, 308, { location: destination + url.search, 'content-length': '0' });
       return;
     }
     if (pathname === '/' || pathname.endsWith('/')) pathname += 'index.html';

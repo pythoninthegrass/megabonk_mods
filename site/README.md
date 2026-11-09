@@ -1,6 +1,6 @@
 # megabonkmod.party
 
-Static Astro showcase for Megabonk Levels at [megabonkmod.party](https://megabonkmod.party/), with a Starlight player wiki at [docs.megabonkmod.party/docs/](https://docs.megabonkmod.party/docs/). Both ship in one image from [`dokploy.yml`](../dokploy.yml).
+Static Astro showcase for Megabonk Levels at [megabonkmod.party](https://megabonkmod.party/), with a Starlight player wiki at [docs.megabonkmod.party/home/](https://docs.megabonkmod.party/home/). Both ship in one image from [`dokploy.yml`](../dokploy.yml).
 
 See [Website development](../docs/website.md) for the full workflow. Website design context lives alongside this file in [`PRODUCT.md`](PRODUCT.md), [`DESIGN.md`](DESIGN.md) and `.impeccable/`; run Impeccable from `site/` or target the site explicitly from the repository root.
 
@@ -23,7 +23,7 @@ npm run test:site
 npm run preview
 ```
 
-The build produces `dist/` with the showcase at `/` and the wiki at `/docs/`. Wiki canonical URLs use the docs hostname; the showcase retains its apex canonical metadata. The production server redirects only the docs hostname's root to `/docs/`.
+The build produces `dist/` with the showcase at `/`, the wiki home at `/home/` and guides under `/docs/`. Wiki canonical URLs use the docs hostname; the showcase retains its apex canonical metadata. The production server redirects the docs hostname's root and the legacy `/docs/` homepage to `/home/`.
 
 ## Wiki content
 
@@ -31,7 +31,7 @@ Edit the authoritative Markdown in `../docs/`, not the generated copies in `src/
 
 Starlight provides Pagefind search, sidebar navigation, section contents and code-block copying. **Search works only after a production build**, not in `npm run dev`. Use `npm run build` then `npm run preview` (or `node server.mjs`) to test search. The build explicitly sets `NODE_ENV=production` so an inherited development setting cannot disable the search UI.
 
-Each page has Copy page and View as Markdown controls. `/docs/<slug>.md` serves standalone Markdown with its title, and `/docs/index.md` serves the index. Copy uses that endpoint, with a textarea fallback for plain HTTP or denied clipboard permissions. `/llms.txt`, `/llms-full.txt` and `/llms-small.txt` provide the index and combined text. No-JavaScript readers can still follow View as Markdown.
+Each page has Copy page and View as Markdown controls. `/docs/<slug>.md` serves standalone guide Markdown with its title, and `/home.md` serves the index. The legacy `/docs/index.md` redirects to `/home.md`. Copy uses the raw endpoint, with a textarea fallback for plain HTTP or denied clipboard permissions. `/llms.txt`, `/llms-full.txt` and `/llms-small.txt` provide the index and combined text. No-JavaScript readers can still follow View as Markdown.
 
 ## Serving with Docker
 

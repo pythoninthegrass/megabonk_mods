@@ -1,5 +1,6 @@
 ---
 title: Megabonk Level Editor wiki
+slug: home
 description: Install the mod, play custom levels and explore level-building references.
 ---
 

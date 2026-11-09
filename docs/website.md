@@ -134,7 +134,7 @@ Review desktop and mobile layouts in a real browser, including both screenshot e
 
 ## Deployment
 
-`npm run build` produces `site/dist/`: the showcase at `/` and the player wiki at `/docs/`. Deployment is declarative: `dokploy.yml` at the repository root describes the project, the single `site` app and its domains, and the [icarus](https://github.com/pythoninthegrass/icarus) CLI (`ic`) reconciles that file against a self-hosted Dokploy control plane through its API. The control plane's address, API key and SSH target live outside the repository in a gitignored `site/.env` copied from [`site/.env.example`](../site/.env.example) (`DOKPLOY_URL`, `DOKPLOY_API_KEY`, `DOKPLOY_ENV`, `DOKPLOY_SSH_*`). `site/Dockerfile.dockerignore` keeps that file out of the build context, and the credentials configure the CLI only — `dokploy.yml` sets `create_env_file: false`. Icarus reads `.env` from the working directory and locates `dokploy.yml` by walking up, so run every `ic` command from `site/`:
+`npm run build` produces `site/dist/`: the showcase at `/`, wiki home at `/home/` and guides under `/docs/`. Deployment is declarative: `dokploy.yml` at the repository root describes the project, the single `site` app and its domains, and the [icarus](https://github.com/pythoninthegrass/icarus) CLI (`ic`) reconciles that file against a self-hosted Dokploy control plane through its API. The control plane's address, API key and SSH target live outside the repository in a gitignored `site/.env` copied from [`site/.env.example`](../site/.env.example) (`DOKPLOY_URL`, `DOKPLOY_API_KEY`, `DOKPLOY_ENV`, `DOKPLOY_SSH_*`). `site/Dockerfile.dockerignore` keeps that file out of the build context, and the credentials configure the CLI only — `dokploy.yml` sets `create_env_file: false`. Icarus reads `.env` from the working directory and locates `dokploy.yml` by walking up, so run every `ic` command from `site/`:
 
 ```sh
 cd site
@@ -155,7 +155,7 @@ Some Icarus versions have incomplete reconciliation for existing apps: `plan` an
 | --- | --- |
 | Project | `megabonkmod-party`, containing the one `site` app |
 | Source | GitHub `main`; Dokploy builds `site/Dockerfile` with the repository-root context, restricted by `site/Dockerfile.dockerignore`; local Compose builds the same image |
-| Domain | Apex, `www` and `docs.megabonkmod.party` route to port `8080` with HTTPS; `www` redirects to the apex, and the docs hostname's root redirects to `/docs/` |
+| Domain | Apex, `www` and `docs.megabonkmod.party` route to port `8080` with HTTPS; `www` redirects to the apex, and the docs hostname's root redirects to `/home/` |
 | Health check | `node smoke.mjs` inside the container, the same check the Compose healthcheck runs |
 | Auto-deploy | a push to `main` that touches `site/**` or `docs/**` |
 
@@ -178,7 +178,7 @@ The wiki follows the Starlight layout used by the reference docs site: a searcha
 
 Run `npm run dev` from `site/` to sync once and watch authoritative docs with hot reload. `npm run check` also syncs before checking types. **Pagefind search requires `npm run build` and `npm run preview` or the production server**; the dev server does not build an index. The build explicitly sets production mode even if the invoking shell has `NODE_ENV=development`.
 
-`/docs/<slug>.md` returns standalone Markdown, with `/docs/index.md` for the home page. Copy page fetches the same endpoint as View as Markdown, checks the response status and falls back to a temporary textarea when clipboard access is unavailable or denied. The Markdown link works without JavaScript. The three `/llms*.txt` endpoints bundle only published wiki content.
+The hand-authored index uses `slug: home`, serving at `/home/` with raw Markdown at `/home.md`. Guides retain `/docs/<slug>/` and `/docs/<slug>.md`. The production server redirects the old `/docs/` homepage to `/home/` and `/docs/index.md` to `/home.md`, preserving queries. Copy page fetches the same endpoint as View as Markdown, checks the response status and falls back to a temporary textarea when clipboard access is unavailable or denied. The Markdown link works without JavaScript. The three `/llms*.txt` endpoints bundle only published wiki content.
 
 `npm test` covers sync/link rewriting and clipboard paths. `npm run test:site` checks built pages, production search markup and index files, canonical metadata, Markdown endpoints, local links, hostname redirects and the server smoke test. Use `node smoke.mjs https://docs.megabonkmod.party/` after deployment as well as the apex check; it verifies wiki routes, raw Markdown and the Pagefind JavaScript asset.
 

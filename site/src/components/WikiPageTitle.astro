@@ -2,7 +2,7 @@
 import Default from '@astrojs/starlight/components/PageTitle.astro';
 
 const entry = Astro.locals.starlightRoute?.entry;
-const markdown = entry ? `/docs/${entry.id === 'docs' ? 'index' : entry.id.replace(/^docs\//, '')}.md` : undefined;
+const markdown = entry ? `/${entry.id}.md` : undefined;
 ---
 
 <Default><slot /></Default>

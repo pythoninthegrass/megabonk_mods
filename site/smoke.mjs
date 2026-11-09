@@ -54,7 +54,7 @@ export async function runSmoke(baseUrl) {
   const html = await home.text();
   failIf(!html.includes('<h1'), 'home page has no <h1>');
   const refs = localReferences(html);
-  const wiki = await fetch(new URL('/docs/', baseUrl));
+  const wiki = await fetch(new URL('/home/', baseUrl));
   failIf(wiki.status !== 200, `wiki answered ${wiki.status}`);
   const wikiHtml = await wiki.text();
   failIf(!wikiHtml.includes('Megabonk Level Editor wiki'), 'wiki title is missing');

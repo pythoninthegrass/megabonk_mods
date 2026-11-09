@@ -48,7 +48,7 @@ test('all fragment destinations exist', () => {
 });
 
 test('Docs uses the same navigation treatment as Source and links to the wiki', () => {
-  const docs = html.match(/<a\b[^>]*href="https:\/\/docs\.megabonkmod\.party\/docs\/"[^>]*>[\s\S]*?<\/a>/)?.[0];
+  const docs = html.match(/<a\b[^>]*href="https:\/\/docs\.megabonkmod\.party\/home\/"[^>]*>[\s\S]*?<\/a>/)?.[0];
   assert.ok(docs, 'Docs navigation link is present');
   assert.match(docs, /class="source-link"/);
   assert.match(docs, />Docs\s*<svg\b/);
