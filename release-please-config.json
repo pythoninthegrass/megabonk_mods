@@ -1,6 +1,7 @@
 {
   "packages": {
     ".": {
+      "exclude-paths": [".agents", ".claude"],
       "changelog-path": "CHANGELOG.md",
       "release-type": "python",
       "include-component-in-tag": false,
