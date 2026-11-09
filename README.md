@@ -28,7 +28,21 @@ task mod:build                       # builds and deploys into your game install
 task game:run
 ```
 
-Press **F8** to edit/play; **backquote/tilde** opens the console (`help`, Tab
+On macOS with **r2modmac**, install BepInExPack IL2CPP and Apply the profile,
+then quit Megabonk and run this before the first modded launch:
+
+```sh
+task wine:bepinex:repair -- --download --dry-run  # preview missing runtime files
+task wine:bepinex:repair -- --download           # repair and safely park MelonLoader
+task game:run                                  # use this, not r2modmac's Play button
+```
+
+The repair uses your configured game paths, preserves plugins and user data,
+and logs details to `.tools/logs/bepinex-repair.log`. See the
+[r2modmac repair guide](docs/development.md#repairing-an-r2modmac-apply)
+for local ZIPs, safety checks and rollback.
+
+Press **F8** to edit/play; **backtick/tilde** opens the console (`help`, Tab
 completion, Ctrl-R history). Enable `MEGABONK_DEV=true` in your local `.env` for
 debug commands and automated starts. After rebuilding, restart to load the new DLL:
 
