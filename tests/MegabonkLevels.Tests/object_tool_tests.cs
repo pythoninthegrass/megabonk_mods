@@ -1,0 +1,505 @@
+namespace MegabonkLevels.Tests;
+
+public class ObjectToolTests
+{
+    private const string Chest = "interactable/chest";
+    private static readonly ObjectTarget Generated = ObjectTarget.FromGenId("object:Tree0:0003");
+    private static readonly TransformData Current = new(new Vector3Data(1, 2, 3), new Vector3Data(10, 90, 20), new Vector3Data(2, 2, 2));
+
+    [Theory]
+    [InlineData("object:Tree0:0003", true)]
+    [InlineData("object:Chest:0000", true)]
+    [InlineData("tileObject:0001", false)]
+    [InlineData("tile:0042", false)]
+    [InlineData("flatTile:0017", false)]
+    [InlineData("fillTile:0203", false)]
+    public void IsPickableGenId_OnlyCoversSpawnedObjects(string genId, bool expected)
+    {
+        Assert.Equal(expected, ObjectTools.IsPickableGenId(genId));
+    }
+
+    [Theory]
+    [InlineData("Chest(Clone)", true, false, true)]
+    [InlineData("AltarIcon", true, false, true)]
+    [InlineData("MinimapIcon", true, false, false)]
+    [InlineData("ChargeShrine(Clone)", false, false, false)]
+    [InlineData("Dust", true, true, false)]
+    public void IsModelRenderer_ExcludesDisabledParticleAndMinimapRenderers(string name, bool enabled, bool isParticle, bool expected)
+    {
+        Assert.Equal(expected, ObjectTools.IsModelRenderer(name, enabled, isParticle));
+    }
+
+    [Theory]
+    [InlineData(0f, 0f, 0f)]
+    [InlineData(-0.64f, 0f, 0f)]
+    [InlineData(-8.48f, 0f, 0f)]
+    [InlineData(8.18f, 0f, 8.18f)]
+    [InlineData(1f, 3f, 3f)]
+    public void RingBaseY_NeverSinksBelowTheTileSurface(float boundsMinY, float surfaceY, float expected)
+    {
+        Assert.Equal(expected, ObjectTools.RingBaseY(null, boundsMinY, 0f, surfaceY), 3);
+    }
+
+    [Theory]
+    [InlineData(5.38f, 7.83f, 10.45f)]
+    [InlineData(1.55f, 1.55f, 2.41f)]
+    [InlineData(1.27f, 1.42f, 2.1f)]
+    [InlineData(0.1f, 0.2f, 0.5f)]
+    public void RingRadius_EnclosesTheBaseFootprint(float extentX, float extentZ, float expected)
+    {
+        Assert.Equal(expected, ObjectTools.RingRadius(extentX, extentZ), 2);
+    }
+
+    [Theory]
+    [InlineData(0f, -8.48f, 0f, 0f, 0f)]
+    [InlineData(0f, 4.23f, 0f, 0f, 0f)]
+    [InlineData(1.9f, -0.85f, 0f, 0f, 1.9f)]
+    [InlineData(2f, 1f, 5f, null, 2f)]
+    [InlineData(0f, 9f, 10f, 0f, 9f)]
+    [InlineData(15.64f, 13.3f, 13.35f, -20f, 13.3f)]
+    [InlineData(30f, 20.6f, 20.6f, -20f, 20.6f)]
+    public void RingBaseY_SitsOnTheGroundButFloatsWithElevatedObjects(
+        float groundY, float boundsMinY, float originY, float? surfaceY, float expected)
+    {
+        Assert.Equal(expected, ObjectTools.RingBaseY(groundY, boundsMinY, originY, surfaceY), 3);
+    }
+
+    [Fact]
+    public void SupportY_PicksTheGroundNearestTheObjectsOwnBase()
+    {
+        // A chest under an overhang: the ray hits overhanging ground above the floor the chest rests on.
+        Assert.Equal(0f, ObjectTools.SupportY(new[] { 6.3f, 0f }, 0f));
+        Assert.Equal(-0.2f, ObjectTools.SupportY(new[] { 6.3f, -0.2f }, 0f));
+        Assert.Equal(2f, ObjectTools.SupportY(new[] { 10f, 2f, 0f }, 2f));
+        Assert.Null(ObjectTools.SupportY(Array.Empty<float>(), 0f));
+    }
+
+    [Fact]
+    public void Ring_PlacesEveryPointOnTheCircleAtTheGivenHeight()
+    {
+        var ring = ObjectTools.Ring(10f, 5f, -3f, 4f, 8);
+
+        Assert.Equal(8, ring.Count);
+        Assert.All(ring, p =>
+        {
+            Assert.Equal(5f, p.Y);
+            Assert.Equal(4f, MathF.Sqrt((p.X - 10f) * (p.X - 10f) + (p.Z + 3f) * (p.Z + 3f)), 3);
+        });
+    }
+
+    [Fact]
+    public void Ring_StartsOnTheEastAxis()
+    {
+        var ring = ObjectTools.Ring(0f, 0f, 0f, 2f, 4);
+
+        Assert.Equal(2f, ring[0].X, 3);
+        Assert.Equal(0f, ring[0].Z, 3);
+    }
+
+    [Fact]
+    public void DragY_ObjectOnTheSurface_FollowsTheNewSurface()
+    {
+        Assert.Equal(60f, ObjectTools.DragY(tileSurfaceY: 60f, lift: 0f, floatingY: 0f, nearbySurfaceYs: System.Array.Empty<float>()));
+    }
+
+    [Fact]
+    public void DragY_ObjectSlightlyAboveTheSurface_KeepsItsLiftOverTheNewSurface()
+    {
+        Assert.Equal(61f, ObjectTools.DragY(tileSurfaceY: 60f, lift: 1f, floatingY: 1f, nearbySurfaceYs: System.Array.Empty<float>()));
+    }
+
+    [Fact]
+    public void DragY_FloatingObject_KeepsItsHeightOverATallerTile()
+    {
+        Assert.Equal(15.6f, ObjectTools.DragY(tileSurfaceY: 40f, lift: 35.6f, floatingY: 15.6f, nearbySurfaceYs: System.Array.Empty<float>()));
+    }
+
+    [Fact]
+    public void DragY_FloatingObject_OnASurface_RestsOnIt()
+    {
+        Assert.Equal(17f, ObjectTools.DragY(tileSurfaceY: -20f, lift: 36f, floatingY: 17f, nearbySurfaceYs: new[] { 17f }));
+    }
+
+    [Fact]
+    public void DragY_FloatingObject_NearATileSurface_IsPulledTowardsIt()
+    {
+        var y = ObjectTools.DragY(tileSurfaceY: 16f, lift: 3f, floatingY: 15.2f, nearbySurfaceYs: System.Array.Empty<float>());
+
+        Assert.InRange(y, 15.2f, 16f);
+        Assert.NotEqual(15.2f, y);
+    }
+
+    [Fact]
+    public void SnapY_NearASurface_IsPulledTowardsItWithoutReachingIt()
+    {
+        var y = ObjectTools.SnapY(10f, new[] { 10.8f });
+
+        Assert.InRange(y, 10f, 10.8f);
+        Assert.NotEqual(10.8f, y);
+    }
+
+    [Fact]
+    public void SnapY_AtTheSurface_StaysOnIt()
+    {
+        Assert.Equal(11f, ObjectTools.SnapY(11f, new[] { 11f }));
+    }
+
+    [Fact]
+    public void SnapY_PullGrowsAsTheHeightApproachesTheSurface()
+    {
+        var far = ObjectTools.SnapY(10f, new[] { 11f }) - 10f;
+        var near = ObjectTools.SnapY(10.6f, new[] { 11f }) - 10.6f;
+
+        Assert.True(near / 0.4f > far / 1f);
+    }
+
+    [Fact]
+    public void SnapY_ReleasesOnceTheHeightLeavesSnapRange()
+    {
+        Assert.Equal(10f, ObjectTools.SnapY(10f, new[] { 10f + ObjectTools.SnapDistance }));
+        Assert.Equal(10f, ObjectTools.SnapY(10f, new[] { 14f }));
+    }
+
+    [Fact]
+    public void SnapY_UsesTheNearestSurface()
+    {
+        var y = ObjectTools.SnapY(10f, new[] { 12.5f, 10.5f, 8.5f });
+
+        Assert.InRange(y, 10f, 10.5f);
+    }
+
+    [Fact]
+    public void SnapY_MovesContinuouslyAsTheHeightChanges()
+    {
+        var previous = ObjectTools.SnapY(9f, new[] { 11f });
+        for (var y = 9.01f; y < 13f; y += 0.01f)
+        {
+            var snapped = ObjectTools.SnapY(y, new[] { 11f });
+            Assert.True(MathF.Abs(snapped - previous) < 0.05f);
+            previous = snapped;
+        }
+    }
+
+    [Fact]
+    public void RayPlaneXZ_AngledRay_HitsTheHorizontalPlane()
+    {
+        var hit = ObjectTools.RayPlaneXZ(new Vector3Data(0, 20, 0), new Vector3Data(1, -1, 2), 10f);
+
+        Assert.NotNull(hit);
+        Assert.Equal(10f, hit.Value.X, 3);
+        Assert.Equal(20f, hit.Value.Z, 3);
+    }
+
+    [Fact]
+    public void RayPlaneXZ_RayPointingAwayFromThePlane_HasNoHit()
+    {
+        Assert.Null(ObjectTools.RayPlaneXZ(new Vector3Data(0, 20, 0), new Vector3Data(0, 1, 1), 10f));
+    }
+
+    [Fact]
+    public void RayPlaneXZ_RayParallelToThePlane_HasNoHit()
+    {
+        Assert.Null(ObjectTools.RayPlaneXZ(new Vector3Data(0, 20, 0), new Vector3Data(1, 0, 1), 10f));
+    }
+
+    [Fact]
+    public void IsFloating_OnlyBeyondTheFloatingLift()
+    {
+        Assert.False(ObjectTools.IsFloating(2f));
+        Assert.True(ObjectTools.IsFloating(2.1f));
+    }
+
+    [Fact]
+    public void RaiseBy_MovingTheMouseUpRaisesTheObject()
+    {
+        Assert.True(ObjectTools.RaiseBy(10f, 40f) > 10f);
+        Assert.True(ObjectTools.RaiseBy(10f, -40f) < 10f);
+        Assert.Equal(10f, ObjectTools.RaiseBy(10f, 0f));
+    }
+
+    [Fact]
+    public void PositionAt_FlatTile_AtTheCellCentre_IsTheCentreAtTheTileSurface()
+    {
+        var position = ObjectTools.PositionAt(9, 7, new TileState(2, SlopeDirection.None), 15, 15, 40f, 20f, 80f, 0f);
+
+        Assert.Equal(new Vector3Data(80f, 40f, 0f), position);
+    }
+
+    [Fact]
+    public void PositionAt_KeepsTheCursorPointInsideTheCell()
+    {
+        var position = ObjectTools.PositionAt(7, 7, new TileState(0, SlopeDirection.None), 15, 15, 40f, 20f, 13f, -4f);
+
+        Assert.Equal(new Vector3Data(13f, 0f, -4f), position);
+    }
+
+    [Fact]
+    public void PositionAt_ClampsToTheCell()
+    {
+        var position = ObjectTools.PositionAt(7, 7, new TileState(0, SlopeDirection.None), 15, 15, 40f, 20f, 25f, -30f);
+
+        Assert.Equal(new Vector3Data(20f, 0f, -20f), position);
+    }
+
+    [Theory]
+    [InlineData(0f, 30f)]
+    [InlineData(20f, 40f)]
+    [InlineData(-20f, 20f)]
+    [InlineData(10f, 35f)]
+    [InlineData(13f, 36.5f)]
+    public void PositionAt_Ramp_FollowsTheSurfaceAlongTheUphillAxis(float pointX, float expectedY)
+    {
+        var position = ObjectTools.PositionAt(7, 7, new TileState(1, SlopeDirection.East), 15, 15, 40f, 20f, pointX, 0f);
+
+        Assert.Equal(expectedY, position.Y);
+    }
+
+    [Fact]
+    public void IsStacked_SamePrefabAtTheSamePosition_IsTrue()
+    {
+        var others = new[] { ("Tree0", new Vector3Data(10f, 0f, 20f)) };
+
+        Assert.True(ObjectTools.IsStacked("Tree0", new Vector3Data(10f, 0f, 20f), others));
+    }
+
+    [Fact]
+    public void IsStacked_DifferentPrefab_IsFalse()
+    {
+        var others = new[] { ("Tree0", new Vector3Data(10f, 0f, 20f)) };
+
+        Assert.False(ObjectTools.IsStacked("Log0", new Vector3Data(10f, 0f, 20f), others));
+    }
+
+    [Fact]
+    public void IsStacked_DifferentPosition_IsFalse()
+    {
+        var others = new[] { ("Tree0", new Vector3Data(10f, 0f, 20f)) };
+
+        Assert.False(ObjectTools.IsStacked("Tree0", new Vector3Data(20f, 0f, 20f), others));
+    }
+
+    [Theory]
+    [InlineData(0f, false)]
+    [InlineData(0.1f, false)]
+    [InlineData(0.2f, true)]
+    [InlineData(1f, true)]
+    public void DragStarted_OnlyAfterTheButtonHasBeenHeldForTheThreshold(float heldSeconds, bool expected)
+    {
+        Assert.Equal(expected, ObjectTools.DragStarted(heldSeconds));
+    }
+
+    [Fact]
+    public void HasMoved_SamePosition_IsFalse()
+    {
+        Assert.False(ObjectTools.HasMoved(new Vector3Data(1f, 2f, 3f), new Vector3Data(1f, 2f, 3f)));
+    }
+
+    [Theory]
+    [InlineData(1.5f, 2f, 3f)]
+    [InlineData(1f, 2.5f, 3f)]
+    [InlineData(1f, 2f, 3.5f)]
+    public void HasMoved_AnyAxisDiffers_IsTrue(float x, float y, float z)
+    {
+        Assert.True(ObjectTools.HasMoved(new Vector3Data(1f, 2f, 3f), new Vector3Data(x, y, z)));
+    }
+
+    [Fact]
+    public void GridLines_CoversTheCellWithQuarterTileLines()
+    {
+        var lines = ObjectTools.GridLines(7, 7, new TileState(1, SlopeDirection.None), 15, 15, 40f, 20f, 0.5f);
+
+        Assert.All(lines, p => Assert.InRange(p.X, -20f, 20f));
+        Assert.All(lines, p => Assert.InRange(p.Z, -20f, 20f));
+        Assert.All(lines, p => Assert.Equal(20.5f, p.Y));
+        Assert.Equal(new[] { -20f, -10f, 0f, 10f, 20f }, lines.Select(p => p.X).Distinct().OrderBy(v => v));
+        Assert.Equal(new[] { -20f, -10f, 0f, 10f, 20f }, lines.Select(p => p.Z).Distinct().OrderBy(v => v));
+    }
+
+    [Fact]
+    public void GridLines_EverySegmentIsAxisAligned()
+    {
+        var lines = ObjectTools.GridLines(7, 7, new TileState(0, SlopeDirection.None), 15, 15, 40f, 20f, 0f);
+
+        for (var i = 1; i < lines.Count; i++)
+        {
+            Assert.True(lines[i].X == lines[i - 1].X || lines[i].Z == lines[i - 1].Z);
+        }
+    }
+
+    [Theory]
+    [InlineData(0f, 180f)]
+    [InlineData(40f, 180f)]
+    [InlineData(50f, 270f)]
+    [InlineData(90f, 270f)]
+    [InlineData(180f, 0f)]
+    [InlineData(270f, 90f)]
+    [InlineData(359f, 180f)]
+    [InlineData(-90f, 90f)]
+    public void FacingYaw_IsCameraYawPlus180RoundedToNinety(float cameraYaw, float expected)
+    {
+        Assert.Equal(expected, ObjectTools.FacingYaw(cameraYaw));
+    }
+
+    [Fact]
+    public void Place_KeepsThePrefabPitchRollAndScaleWithTheFacingYaw()
+    {
+        var op = ObjectTools.Place(CatalogId.Parse(Chest), new Vector3Data(80f, 40f, 0f), new Vector3Data(5f, 33f, 7f), new Vector3Data(2f, 2f, 2f), 90f);
+
+        var expected = new PlaceObject(Chest, new Vector3Data(80f, 40f, 0f), new Vector3Data(5f, 270f, 7f), new Vector3Data(2f, 2f, 2f));
+        Assert.Equal(expected.ToEditOp(), op);
+    }
+
+    [Fact]
+    public void PlaceWithRotation_UsesTheGivenRotationInsteadOfFacingTheCamera()
+    {
+        var op = ObjectTools.PlaceWithRotation(CatalogId.Parse(Chest), new Vector3Data(80f, 40f, 0f), new Vector3Data(5f, 33f, 7f), new Vector3Data(2f, 2f, 2f));
+
+        var expected = new PlaceObject(Chest, new Vector3Data(80f, 40f, 0f), new Vector3Data(5f, 33f, 7f), new Vector3Data(2f, 2f, 2f));
+        Assert.Equal(expected.ToEditOp(), op);
+    }
+
+    // The ghost and the click must agree: the previewed rotation places exactly what was shown.
+    [Fact]
+    public void PlaceWithRotation_MatchesPlaceOnceTheYawFacesTheCamera()
+    {
+        var position = new Vector3Data(80f, 40f, 0f);
+        var scale = new Vector3Data(2f, 2f, 2f);
+        var id = CatalogId.Parse(Chest);
+
+        var previewed = ObjectTools.PlaceWithRotation(id, position, new Vector3Data(5f, ObjectTools.FacingYaw(90f), 7f), scale);
+        Assert.Equal(previewed, ObjectTools.Place(id, position, new Vector3Data(5f, 33f, 7f), scale, 90f));
+    }
+
+    [Fact]
+    public void Move_ChangesOnlyThePosition()
+    {
+        var op = ObjectTools.Move(Generated, Current, new Vector3Data(80f, 40f, 0f));
+
+        var expected = new MoveObject(Generated, new TransformData(new Vector3Data(80f, 40f, 0f), Current.Rotation, Current.Scale));
+        Assert.Equal(expected.ToEditOp(), op);
+    }
+
+    [Theory]
+    [InlineData(true, 180f)]
+    [InlineData(false, 0f)]
+    public void Rotate_StepsYawNinetyDegreesKeepingPitchRollAndPosition(bool clockwise, float expectedYaw)
+    {
+        var op = ObjectTools.Rotate(Generated, Current, RotationAxis.Yaw, clockwise);
+
+        var expected = new MoveObject(Generated, new TransformData(Current.Position, new Vector3Data(10, expectedYaw, 20), Current.Scale));
+        Assert.Equal(expected.ToEditOp(), op);
+    }
+
+    [Theory]
+    [InlineData(270f, true, 0f)]
+    [InlineData(0f, false, 270f)]
+    public void Rotate_WrapsYawIntoZeroToThreeSixty(float yaw, bool clockwise, float expectedYaw)
+    {
+        var start = Current with { Rotation = new Vector3Data(0, yaw, 0) };
+
+        var op = ObjectTools.Rotate(Generated, start, RotationAxis.Yaw, clockwise);
+
+        Assert.Equal(expectedYaw, MoveObject.FromEditOp(op).NewTransform.Rotation.Y);
+    }
+
+    [Theory]
+    [InlineData(RotationAxis.Pitch, true, 90f, 0f, 0f)]
+    [InlineData(RotationAxis.Pitch, false, 270f, 0f, 0f)]
+    [InlineData(RotationAxis.Roll, true, 0f, 0f, 90f)]
+    [InlineData(RotationAxis.Roll, false, 0f, 0f, 270f)]
+    public void Rotate_PitchAndRollStepNinetyDegreesFromAnUpright(RotationAxis axis, bool positive, float x, float y, float z)
+    {
+        var start = Current with { Rotation = new Vector3Data(0, 0, 0) };
+
+        var op = ObjectTools.Rotate(Generated, start, axis, positive);
+
+        var expected = new MoveObject(Generated, new TransformData(Current.Position, new Vector3Data(x, y, z), Current.Scale));
+        Assert.Equal(expected.ToEditOp(), op);
+    }
+
+    [Fact]
+    public void Rotate_PitchTwiceTurnsAnObjectUpsideDown()
+    {
+        var upright = Current with { Rotation = new Vector3Data(0, 0, 0) };
+
+        var once = MoveObject.FromEditOp(ObjectTools.Rotate(Generated, upright, RotationAxis.Pitch, true)).NewTransform;
+        var twice = MoveObject.FromEditOp(ObjectTools.Rotate(Generated, once, RotationAxis.Pitch, true)).NewTransform;
+
+        // Same rotation as (180, 0, 0), in Unity's canonical form with pitch limited to 0-90 and 270-360.
+        Assert.Equal(new Vector3Data(0f, 180f, 180f), twice.Rotation);
+    }
+
+    [Fact]
+    public void Rotate_PitchAboutTheWorldXAxisAfterAYawTurn()
+    {
+        var yawed = Current with { Rotation = new Vector3Data(0, 90, 0) };
+
+        var op = ObjectTools.Rotate(Generated, yawed, RotationAxis.Pitch, true);
+
+        Assert.Equal(new Vector3Data(0f, 90f, 90f), MoveObject.FromEditOp(op).NewTransform.Rotation);
+    }
+
+    [Theory]
+    [InlineData(RotationAxis.Pitch)]
+    [InlineData(RotationAxis.Roll)]
+    public void Rotate_FourStepsReturnToTheStartingRotation(RotationAxis axis)
+    {
+        var transform = Current;
+        for (var i = 0; i < 4; i++)
+        {
+            transform = MoveObject.FromEditOp(ObjectTools.Rotate(Generated, transform, axis, true)).NewTransform;
+        }
+
+        Assert.Equal(Current.Rotation.X, transform.Rotation.X, 2);
+        Assert.Equal(Current.Rotation.Y, transform.Rotation.Y, 2);
+        Assert.Equal(Current.Rotation.Z, transform.Rotation.Z, 2);
+    }
+
+    [Theory]
+    [InlineData(RotationAxis.Pitch)]
+    [InlineData(RotationAxis.Roll)]
+    [InlineData(RotationAxis.Yaw)]
+    public void Rotate_KeepsPositionAndScale(RotationAxis axis)
+    {
+        var transform = MoveObject.FromEditOp(ObjectTools.Rotate(Generated, Current, axis, true)).NewTransform;
+
+        Assert.Equal(Current.Position, transform.Position);
+        Assert.Equal(Current.Scale, transform.Scale);
+    }
+
+    [Theory]
+    [InlineData(RotationAxis.Pitch, true)]
+    [InlineData(RotationAxis.Yaw, true)]
+    [InlineData(RotationAxis.Roll, false)]
+    public void StepRotation_StepsLikeTheRotateKeyWithoutAnEditOp(RotationAxis axis, bool positive)
+    {
+        var op = ObjectTools.Rotate(Generated, Current, axis, positive);
+
+        Assert.Equal(MoveObject.FromEditOp(op).NewTransform.Rotation, ObjectTools.StepRotation(Current.Rotation, axis, positive));
+    }
+
+    [Fact]
+    public void Remove_RemovesTheTarget()
+    {
+        Assert.Equal(new RemoveObject(Generated).ToEditOp(), ObjectTools.Remove(Generated));
+    }
+
+    [Fact]
+    public void PlannerRoundTrip_PlacementIdsAllocateInOrderAndMovesTargetThem()
+    {
+        var planner = new LiveEditPlanner(LevelState.FromTiles(new Dictionary<(int X, int Z), TileState>()));
+        var place = ObjectTools.Place(CatalogId.Parse(Chest), new Vector3Data(0, 0, 0), new Vector3Data(0, 0, 0), new Vector3Data(1, 1, 1), 0f);
+
+        var first = planner.Apply(place);
+        var second = planner.Apply(place);
+        var move = planner.Apply(ObjectTools.Move(second.Target, new TransformData(new Vector3Data(0, 0, 0), new Vector3Data(0, 180, 0), new Vector3Data(1, 1, 1)), new Vector3Data(5, 0, 5)));
+        var remove = planner.Apply(ObjectTools.Remove(first.Target));
+
+        Assert.Equal(ObjectTarget.FromPlacementId(0), first.Target);
+        Assert.Equal(ObjectTarget.FromPlacementId(1), second.Target);
+        Assert.Equal(LiveActionKind.MoveObject, move.Kind);
+        Assert.Equal(second.Target, move.Target);
+        Assert.Equal(LiveActionKind.RemoveObject, remove.Kind);
+        Assert.Equal(first.Target, remove.Target);
+    }
+}

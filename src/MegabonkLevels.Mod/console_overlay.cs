@@ -1,0 +1,623 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Assets.Scripts.Actors.Player;
+using Assets.Scripts.UI.Debug;
+using Assets.Scripts.Utility;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace MegabonkLevels;
+
+// The Fallout-style console: a dark translucent panel that slides up from the bottom on the backquote key, pauses the
+// run, and runs typed lines through the in-process harness. Input is read only through EditorInput; the slide advances
+// on unscaled time so it animates while paused. See "In-game console" in docs/development.md.
+public static class ConsoleOverlay
+{
+    private const float PanelHeightFraction = 0.4f;
+    private const float SideMargin = 16f;
+    private const float Padding = 10f;
+    private const float LineHeight = 22f;
+    private const float FontSize = 16f;
+    private const int MaxScrollbackLines = 400;
+    private const int WheelLinesPerNotch = 3;
+    private const float ScrollbarWidth = 6f;
+    private const float ScrollbarMinThumb = 16f;
+    private const string PromptText = ">";
+    private const int InputMaxLength = 512;
+    private const int HistoryLimit = 200;
+    private const string LogFileName = "console_log.jsonl";
+    private const KeyCode ToggleKey = KeyCode.BackQuote;
+    private static readonly Color PanelFill = new(0.08f, 0.08f, 0.08f, 0.72f);
+    private static readonly Color ScrollbarColor = new(0.85f, 0.85f, 0.85f, 0.55f);
+    private static readonly Color PlaceholderColor = new(0.65f, 0.65f, 0.65f, 1f);
+    private const string PlaceholderText = "type a command, ~ to close";
+
+    private static readonly TextFieldModel _field = new(InputMaxLength);
+    private static readonly ConsoleHistory _history = new(HistoryLimit);
+    private static ConsoleScrollback _scrollback = new(MaxScrollbackLines, 1);
+    private static readonly EditorCaretInput _caret = new();
+    private static readonly ConsoleScrollbar _scrollbar = new();
+
+    private static readonly ConsoleLogStore _store = new(Path.Combine(ModPaths.GameRootDirectory, "UserData", LogFileName));
+
+    private static ModLogger _logger;
+    private static GameObject _root;
+    private static RectTransform _panel;
+    private static RectTransform _scrollRect;
+    private static RectTransform _inputRect;
+    private static RectTransform _thumb;
+    private static TextMeshProUGUI[] _scrollLabels = Array.Empty<TextMeshProUGUI>();
+    private static TextFieldView _inputView;
+    private static int _wrapColumns = int.MaxValue;
+    private static float _promptWidth;
+    private static TextMeshProUGUI _placeholder;
+    // Set by the first typed character and cleared on open, so the placeholder stays hidden until the console is reopened.
+    private static bool _placeholderDismissed;
+    private static ConsoleSlide _slide = ConsoleSlide.Parked;
+    private static ConsoleEntryState? _entry;
+    private static ConsoleFinder _finder;
+
+    private static readonly ConsoleCompleter _completer = new(ConsoleCommandRegistry.Default);
+    private static string _finderSavedText = "";
+    private static int _finderSavedCaret;
+    private static int _viewportLines = 1;
+    private static bool _logLoaded;
+
+    public static bool Open { get; private set; }
+
+    // True while the console owns the keyboard, so the mod's hotkeys and the game menu leave it alone.
+    public static bool Focused => Open;
+
+    public static bool CapturesKeyboard => Open;
+
+    public static void Install(ModLogger logger) => _logger = logger;
+
+    public static void Toggle(ModLogger logger)
+    {
+        _logger = logger;
+        var decision = ConsoleState.Toggle(Open, DebugConsoleActive(), GameMenuOpen());
+        if (decision == ConsoleToggle.Open)
+        {
+            OpenConsole();
+        }
+        else if (decision == ConsoleToggle.Close)
+        {
+            CloseConsole();
+        }
+    }
+
+    // Ticked every frame, whether or not the panel is open, so the toggle key and the slide run.
+    public static void Tick()
+    {
+        _slide = ConsoleState.StepSlide(_slide, Open, Time.unscaledDeltaTime);
+
+        if (!Open)
+        {
+            if (_root != null && !_slide.Moving)
+            {
+                _root.SetActive(false);
+            }
+
+            return;
+        }
+
+        _root.SetActive(true);
+        ApplySlide();
+        ReadInput();
+        Render();
+    }
+
+    private static void OpenConsole()
+    {
+        var runActive = RunInProgress();
+        _entry = new ConsoleEntryState(
+            RunActive: runActive,
+            Paused: MyTime.paused,
+            CursorVisible: Cursor.visible,
+            CursorLocked: Cursor.lockState != CursorLockMode.None);
+
+        if (ConsoleState.ShouldPauseOnOpen(runActive))
+        {
+            MyTime.Pause();
+        }
+
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        Build();
+        _field.Clear();
+        _placeholderDismissed = false;
+        _history.Reset();
+        _scrollback.Follow();
+        _scrollbar.Hide();
+        Open = true;
+        _slide = ConsoleState.StepSlide(_slide, true, 0f);
+        _logger.Msg($"Console: opened, MyTime.paused={MyTime.paused}.");
+    }
+
+    private static void CloseConsole()
+    {
+        if (ConsoleState.ShouldUnpauseOnClose(_entry))
+        {
+            MyTime.Unpause();
+        }
+
+        if (ConsoleState.ShouldRestoreCursor(_entry) && _entry is { } state)
+        {
+            Cursor.visible = state.CursorVisible;
+            Cursor.lockState = state.CursorLocked ? CursorLockMode.Locked : CursorLockMode.None;
+        }
+
+        if (_finder != null)
+        {
+            CancelFinder();
+        }
+
+        _entry = null;
+        Open = false;
+        _logger.Msg($"Console: closed, MyTime.paused={MyTime.paused}.");
+    }
+
+    private static void ReadInput()
+    {
+        if (EditorInput.GetKeyDown(KeyCode.Escape))
+        {
+            if (_finder != null)
+            {
+                CancelFinder();
+            }
+            else
+            {
+                CloseConsole();
+            }
+
+            return;
+        }
+
+        var input = EditorInput.InputString;
+        // The backquote that opened the console arrives as text on the same frame; drop it so it never lands in the line.
+        if (input.Length > 0 && (input[0] == '`' || input[0] == '~'))
+        {
+            input = input.Substring(1);
+        }
+
+        // A held Ctrl turns letter keys into chords, but key-down text rebuilding would still type them.
+        if (CtrlHeld())
+        {
+            input = "";
+        }
+
+        ReadWheel();
+        _field.Navigate(_caret.Read());
+        _placeholderDismissed |= input.Length > 0;
+
+        if (_finder != null)
+        {
+            ReadFinderInput(input);
+        }
+        else if (CtrlHeld() && EditorInput.GetKeyDown(KeyCode.R))
+        {
+            OpenFinder();
+        }
+        else if (CtrlHeld() && EditorInput.GetKeyDown(KeyCode.L))
+        {
+            ClearScrollbackChord();
+        }
+        else if (LineEditChordDown())
+        {
+            ReadLineEditChords();
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.UpArrow))
+        {
+            _field.Set(_history.Previous());
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.DownArrow))
+        {
+            _field.Set(_history.Next());
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.Tab))
+        {
+            Complete();
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.PageUp))
+        {
+            _scrollback.PageUp();
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.PageDown))
+        {
+            _scrollback.PageDown();
+        }
+        else if (_field.Type(input))
+        {
+            Submit();
+        }
+    }
+
+    // A wheel notch up scrolls toward older lines. Only the scrollback scrolls, so the finder's list is left alone.
+    private static void ReadWheel()
+    {
+        var notches = EditorInput.MouseScrollDelta.y;
+        if (_finder != null || notches == 0f || EditorInput.MousePosition.y > Screen.height * PanelHeightFraction)
+        {
+            return;
+        }
+
+        _scrollback.ScrollBy(Mathf.RoundToInt(notches * WheelLinesPerNotch));
+        _scrollbar.OnWheel(Time.unscaledTimeAsDouble);
+    }
+
+    private static bool CtrlHeld() => EditorInput.GetKey(KeyCode.LeftControl) || EditorInput.GetKey(KeyCode.RightControl);
+
+    private static void OpenFinder()
+    {
+        _finder = new ConsoleFinder(_history.Entries);
+        _finderSavedText = _field.Text;
+        _finderSavedCaret = _field.Caret;
+        _placeholderDismissed = true;
+        _field.Clear();
+    }
+
+    private static void CancelFinder()
+    {
+        _finder = null;
+        _field.Set(_finderSavedText, _finderSavedCaret);
+    }
+
+    private static void ReadFinderInput(string input)
+    {
+        if (EditorInput.GetKeyDown(KeyCode.UpArrow) || (CtrlHeld() && EditorInput.GetKeyDown(KeyCode.P)))
+        {
+            _finder.Move(1);
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.DownArrow) || (CtrlHeld() && EditorInput.GetKeyDown(KeyCode.N)))
+        {
+            _finder.Move(-1);
+        }
+
+        if (LineEditChordDown())
+        {
+            ReadLineEditChords();
+        }
+
+        var accepted = _field.Type(input);
+        _finder.SetQuery(_field.Text);
+        if (!accepted || _finder.SelectedEntry is not { } entry)
+        {
+            return;
+        }
+
+        // Like fzf, Enter drops the entry into the line without running it; a second Enter submits.
+        _finder = null;
+        _field.Set(entry);
+    }
+
+    private static bool LineEditChordDown() =>
+        CtrlHeld() && (EditorInput.GetKeyDown(KeyCode.W) || EditorInput.GetKeyDown(KeyCode.U) || EditorInput.GetKeyDown(KeyCode.K) || EditorInput.GetKeyDown(KeyCode.A) || EditorInput.GetKeyDown(KeyCode.E));
+
+    // Ctrl-W, Ctrl-U, Ctrl-K, Ctrl-A and Ctrl-E edit or move within the line, or the finder's query while it is open.
+    private static void ReadLineEditChords()
+    {
+        if (EditorInput.GetKeyDown(KeyCode.W))
+        {
+            _field.DeleteWordLeft();
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.U))
+        {
+            _field.DeleteToStart();
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.K))
+        {
+            _field.DeleteToEnd();
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.A))
+        {
+            _field.Navigate(new CaretKeys(Home: true));
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.E))
+        {
+            _field.Navigate(new CaretKeys(End: true));
+        }
+    }
+
+    private static void Complete()
+    {
+        var completed = _completer.Tab(_field.Text, _field.Caret, SafeLevelList());
+        if (completed != null)
+        {
+            _field.Set(completed);
+        }
+    }
+
+    private static ConsoleLinePlan PlanLine(string line)
+    {
+        RestorePersistedLog();
+        var dev = ConsoleState.DevState(Environment.GetEnvironmentVariable);
+        return ConsoleState.Execute(line, dev, CurrentToggles(), DevHarness.Run, _history.Entries, SafeLevelList());
+    }
+
+    private static void ClearScrollbackAndStore()
+    {
+        _scrollback.Clear();
+        _store.AppendClear();
+    }
+
+    // Ctrl-L: runs the `clear` verb's plan without touching the input line or history.
+    private static void ClearScrollbackChord()
+    {
+        if (PlanLine("clear").ClearScrollback)
+        {
+            ClearScrollbackAndStore();
+        }
+    }
+
+    private static void Submit()
+    {
+        SubmitLine(_field.Text);
+        _field.Clear();
+    }
+
+    public static ConsoleLinePlan SubmitLine(string line)
+    {
+        var plan = PlanLine(line);
+
+        if (plan.ClearScrollback)
+        {
+            ClearScrollbackAndStore();
+        }
+
+        foreach (var printed in plan.PrintLines)
+        {
+            _scrollback.Append(printed);
+            foreach (var printedLine in ConsoleScrollback.Split(printed))
+            {
+                _store.AppendOutput(printedLine);
+            }
+        }
+
+        if (plan.RememberHistory)
+        {
+            _history.Add(line);
+            _store.AppendInput(line.Trim());
+        }
+
+        _scrollback.ScrollToBottom();
+        return plan;
+    }
+
+    private static void Build()
+    {
+        if (_root != null)
+        {
+            return;
+        }
+
+        _root = EditorUi.NewCanvas("MegabonkLevelsConsole");
+        var font = PositionLabel.FindFontAsset(EditorUi.FontName);
+        _panel = EditorUi.NewRect("Console", _root.transform);
+        _panel.gameObject.AddComponent<Image>().color = PanelFill;
+        _panel.anchorMin = new Vector2(0f, 0f);
+        _panel.anchorMax = new Vector2(1f, 0f);
+        _panel.pivot = new Vector2(0.5f, 0f);
+        _scrollRect = EditorUi.NewRect("Scrollback", _panel);
+
+        Layout();
+
+        var scrollFont = font;
+        _scrollLabels = new TextMeshProUGUI[_viewportLines];
+        for (var i = 0; i < _viewportLines; i++)
+        {
+            var row = EditorUi.NewRect($"Line{i}", _scrollRect);
+            EditorUi.PlaceTopLeft(row, Padding, i * LineHeight, PanelWidth() - Padding * 2f, LineHeight);
+            _scrollLabels[i] = EditorUi.NewLabel(row, scrollFont, TextAlignmentOptions.MidlineLeft, FontSize);
+            // Replies and history contain literal Windows paths, not TMP backslash escapes.
+            _scrollLabels[i].parseCtrlCharacters = false;
+            // Ellipsis culls every glyph when the row is shorter than the font's line, so rows overflow instead.
+            _scrollLabels[i].overflowMode = TextOverflowModes.Overflow;
+        }
+
+        var charWidth = _scrollLabels[0].GetPreferredValues("0000000000").x / 10f;
+        if (charWidth > 0f)
+        {
+            _wrapColumns = Math.Max(1, Mathf.FloorToInt((PanelWidth() - Padding * 2f - ScrollbarWidth) / charWidth));
+        }
+
+        _promptWidth = charWidth > 0f ? charWidth * (PromptText.Length + 1) : 18f;
+        _thumb = EditorUi.NewRect("ScrollbarThumb", _scrollRect);
+        _thumb.gameObject.AddComponent<Image>().color = ScrollbarColor;
+        _thumb.gameObject.SetActive(false);
+
+        _inputRect = EditorUi.NewRect("Input", _scrollRect);
+        var prompt = EditorUi.NewRect("Prompt", _inputRect);
+        prompt.anchorMin = Vector2.zero;
+        prompt.anchorMax = new Vector2(0f, 1f);
+        prompt.offsetMin = Vector2.zero;
+        prompt.offsetMax = new Vector2(_promptWidth, 0f);
+        var promptLabel = EditorUi.NewLabel(prompt, font, TextAlignmentOptions.MidlineLeft, FontSize);
+        EditorUi.FixInputBaseline(promptLabel);
+        promptLabel.text = PromptText;
+        var inputText = EditorUi.NewRect("Text", _inputRect);
+        inputText.anchorMin = Vector2.zero;
+        inputText.anchorMax = Vector2.one;
+        inputText.offsetMin = new Vector2(_promptWidth, 0f);
+        inputText.offsetMax = new Vector2(-8f, 0f);
+        var label = EditorUi.NewLabel(inputText, font, TextAlignmentOptions.MidlineLeft, FontSize);
+        label.parseCtrlCharacters = false;
+        EditorUi.FixInputBaseline(label);
+        _inputView = new TextFieldView(label, blockCaret: true);
+
+        var placeholderRect = EditorUi.NewRect("Placeholder", _inputRect);
+        placeholderRect.anchorMin = Vector2.zero;
+        placeholderRect.anchorMax = Vector2.one;
+        placeholderRect.offsetMin = new Vector2(_promptWidth, 0f);
+        placeholderRect.offsetMax = new Vector2(-8f, 0f);
+        _placeholder = EditorUi.NewLabel(placeholderRect, font, TextAlignmentOptions.MidlineLeft, FontSize);
+        EditorUi.FixInputBaseline(_placeholder);
+        _placeholder.color = PlaceholderColor;
+        _placeholder.text = PlaceholderText;
+
+        RestorePersistedLog();
+        var previousLines = _scrollback.Lines;
+        _scrollback = new ConsoleScrollback(MaxScrollbackLines, Math.Max(1, _viewportLines - 1), _wrapColumns);
+        foreach (var line in previousLines)
+        {
+            _scrollback.Append(line);
+        }
+    }
+
+    // Brings the previous sessions' history and scrollback back, trimming the file as it goes.
+    private static void RestorePersistedLog()
+    {
+        if (_logLoaded)
+        {
+            return;
+        }
+
+        _logLoaded = true;
+        _store.Compact(HistoryLimit, MaxScrollbackLines);
+        var snapshot = _store.Load(HistoryLimit, MaxScrollbackLines);
+        foreach (var line in snapshot.History)
+        {
+            _history.Add(line);
+        }
+
+        foreach (var line in snapshot.Scrollback)
+        {
+            _scrollback.Append(line);
+        }
+    }
+
+    // Panel height and the scrollback/input rects depend on the screen, so re-measured each time the panel is shown.
+    private static void Layout()
+    {
+        var height = Screen.height * PanelHeightFraction;
+        _panel.sizeDelta = new Vector2(-SideMargin * 2f, height);
+        _panel.anchoredPosition = new Vector2(0f, 0f);
+        _viewportLines = Math.Max(1, Mathf.FloorToInt((height - Padding * 2f) / LineHeight));
+        EditorUi.PlaceTopLeft(_scrollRect, 0f, Padding, PanelWidth(), height - Padding * 2f);
+    }
+
+    private static float PanelWidth() => Screen.width - SideMargin * 2f;
+
+    private static void ApplySlide()
+    {
+        var height = Screen.height * PanelHeightFraction;
+        _panel.anchoredPosition = new Vector2(0f, -(1f - _slide.Progress) * height);
+    }
+
+    private static void RenderFinder()
+    {
+        var top = _finder.Window(ConsoleLayout.FinderListRows(_viewportLines));
+        var infoRow = ConsoleLayout.FinderInfoRow(_viewportLines);
+        for (var row = 0; row < _viewportLines; row++)
+        {
+            var text = row == infoRow ? $"  {_finder.Info}" : "";
+            var index = ConsoleLayout.FinderIndex(row, _viewportLines, top);
+            if (index >= 0 && index < _finder.Rows.Count)
+            {
+                text = ConsoleFinder.RowMarkup(_finder.RowText(index), _finder.Rows[index].Positions, index == _finder.Selected);
+            }
+
+            SetScrollLabel(row, text);
+        }
+    }
+
+    private static void SetScrollLabel(int row, string text)
+    {
+        if (_scrollLabels[row].text != text)
+        {
+            _scrollLabels[row].text = text;
+        }
+    }
+
+    private static void Render()
+    {
+        if (_finder != null)
+        {
+            RenderFinder();
+            RenderInput(_viewportLines - 1);
+            _thumb.gameObject.SetActive(false);
+            return;
+        }
+
+        var visible = _scrollback.VisibleLines;
+        for (var i = 0; i < _viewportLines; i++)
+        {
+            SetScrollLabel(i, i < visible.Count ? visible[i] : "");
+        }
+
+        RenderInput(ConsoleLayout.PromptRow(visible.Count, _viewportLines, _scrollback.Offset));
+        RenderScrollbar();
+    }
+
+    private static void RenderScrollbar()
+    {
+        var show = _scrollbar.Visible(Time.unscaledTimeAsDouble, _scrollback.Count, _scrollback.Viewport);
+        _thumb.gameObject.SetActive(show);
+        if (!show)
+        {
+            return;
+        }
+
+        var track = _scrollRect.sizeDelta.y;
+        var thumb = ConsoleScrollbar.Thumb(_scrollback.Offset, _scrollback.Count, _scrollback.Viewport, track, ScrollbarMinThumb);
+        EditorUi.PlaceTopLeft(_thumb, PanelWidth() - Padding / 2f - ScrollbarWidth, thumb.Top, ScrollbarWidth, thumb.Height);
+    }
+
+    private static void RenderInput(int row)
+    {
+        EditorUi.PlaceTopLeft(_inputRect, Padding, row * LineHeight, PanelWidth() - Padding * 2f, LineHeight);
+        _inputView.Render(_field, true, null);
+        _placeholder.gameObject.SetActive(!_placeholderDismissed && _field.Text.Length == 0);
+    }
+
+    public static IEnumerable<UiWidget> ListWidgets()
+    {
+        if (_root == null || !_root.activeInHierarchy)
+        {
+            return Enumerable.Empty<UiWidget>();
+        }
+
+        var widgets = new List<UiWidget?>
+        {
+            EditorUi.ToWidget("ConsoleInput", _inputRect),
+            EditorUi.ToWidget("ConsoleScrollback", _scrollRect),
+            EditorUi.ToWidget("ConsolePanel", _panel),
+        };
+        return widgets.Where(widget => widget.HasValue).Select(widget => widget.Value);
+    }
+
+    private static ConsoleToggleState CurrentToggles() =>
+        ConsoleState.Toggles(
+            () => PlayerInvulnerability.Active,
+            () => EditorMode.Active,
+            () => HudVisible(),
+            () => PositionLabel.Enabled);
+
+    private static bool HudVisible() => UiManager.Instance == null || (UiManager.Instance.hudGroup?.alpha ?? 0f) > 0f;
+
+    private static IReadOnlyList<string> SafeLevelList()
+    {
+        try
+        {
+            return LiveEditPatch.ListLevelFiles();
+        }
+        catch (Exception)
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    private static bool DebugConsoleActive() => DebugConsole.Instance != null && DebugConsole.Instance.IsActive();
+
+    // The game's own pause menu, distinct from MyTime.paused: while it is up it owns input the way DebugConsole does.
+    private static bool GameMenuOpen()
+    {
+        var pause = UnityEngine.Object.FindObjectOfType<PauseUi>();
+        return pause != null && pause.isActiveAndEnabled && pause.main != null && pause.main.activeInHierarchy;
+    }
+
+    private static bool RunInProgress() => MyPlayer.Instance != null && PlayerCamera.Instance != null;
+}

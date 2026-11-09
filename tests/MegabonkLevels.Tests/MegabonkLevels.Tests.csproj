@@ -1,0 +1,180 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="NLayer" Version="1.16.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/MegabonkLevels.Mod/mod_content_paths.cs" Link="mod_content_paths.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/menu_backout.cs" Link="menu_backout.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/level_thumbnail_sidecar.cs" Link="level_thumbnail_sidecar.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/custom_tier_selection.cs" Link="custom_tier_selection.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/custom_tier_cap.cs" Link="custom_tier_cap.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/initial_stage_override.cs" Link="initial_stage_override.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/placeholder_logic.cs" Link="placeholder_logic.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/generation_report.cs" Link="generation_report.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/generation_hash.cs" Link="generation_hash.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/boss_event_log.cs" Link="boss_event_log.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/enemy_kill_targets.cs" Link="enemy_kill_targets.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/music_transport.cs" Link="music_transport.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/spawn_seed.cs" Link="spawn_seed.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/custom_run_random.cs" Link="custom_run_random.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/interactable_randomization.cs" Link="interactable_randomization.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/extra_shrines.cs" Link="extra_shrines.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/ground_zones.cs" Link="ground_zones.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/native_lava_geometry.cs" Link="native_lava_geometry.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/shrine_guarantees.cs" Link="shrine_guarantees.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/boss_pools.cs" Link="boss_pools.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/lava_zones.cs" Link="lava_zones.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/maximin.cs" Link="maximin.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/chest_luck.cs" Link="chest_luck.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/level_file.cs" Link="level_file.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/level_settings.cs" Link="level_settings.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/level_file_migration.cs" Link="level_file_migration.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/level_file_serialization.cs" Link="level_file_serialization.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/level_file_validation.cs" Link="level_file_validation.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/level_grid.cs" Link="level_grid.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/from_scratch_layout.cs" Link="from_scratch_layout.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/level_music_reference.cs" Link="level_music_reference.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/radio_playlist.cs" Link="radio_playlist.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/track_file_name.cs" Link="track_file_name.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/custom_music_library.cs" Link="custom_music_library.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/pcm_audio.cs" Link="pcm_audio.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/mp3_decoder.cs" Link="mp3_decoder.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/runtime_music_owner.cs" Link="runtime_music_owner.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/runtime_music_session.cs" Link="runtime_music_session.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/catalog_id.cs" Link="catalog_id.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/edit_operations.cs" Link="edit_operations.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/object_attachments.cs" Link="object_attachments.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/pack_attachments.cs" Link="pack_attachments.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/level_state.cs" Link="level_state.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/edit_stack.cs" Link="edit_stack.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/reachability_validator.cs" Link="reachability_validator.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/game_build_id_check.cs" Link="game_build_id_check.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/gen_id_assigner.cs" Link="gen_id_assigner.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/scene_root_category.cs" Link="scene_root_category.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/catalog_route.cs" Link="catalog_route.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/pack_catalog.cs" Link="pack_catalog.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/pack_manifest.cs" Link="pack_manifest.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/pack_palette_entries.cs" Link="pack_palette_entries.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_map_support.cs" Link="editor_map_support.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/shader_remap.cs" Link="shader_remap.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/game_pack_version_check.cs" Link="game_pack_version_check.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/live_edit_plan.cs" Link="live_edit_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/tile_placement.cs" Link="tile_placement.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/kill_floor.cs" Link="kill_floor.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/boss_spawn_redirect.cs" Link="boss_spawn_redirect.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/rail_handoff.cs" Link="rail_handoff.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/rail_wall_end.cs" Link="rail_wall_end.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/grind_gate.cs" Link="grind_gate.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/startup_gate.cs" Link="startup_gate.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/grind_assist.cs" Link="grind_assist.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/terrain_edits.cs" Link="terrain_edits.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/terrain_hash.cs" Link="terrain_hash.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/terrain_grid_layout.cs" Link="terrain_grid_layout.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/terrain_seed_measurement.cs" Link="terrain_seed_measurement.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/kill_tracker.cs" Link="kill_tracker.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/env_flag.cs" Link="env_flag.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/fill_edge_plan.cs" Link="fill_edge_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/harness_command.cs" Link="harness_command.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/perf_stats.cs" Link="perf_stats.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/perf_gc_plan.cs" Link="perf_gc_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/perf_probe_plan.cs" Link="perf_probe_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/enemy_render_cull_plan.cs" Link="enemy_render_cull_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/enemy_control_plan.cs" Link="enemy_control_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/enemy_physics_freeze_plan.cs" Link="enemy_physics_freeze_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/enemy_animation_cull_plan.cs" Link="enemy_animation_cull_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/player_damage_policy.cs" Link="player_damage_policy.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/fall_damage_policy.cs" Link="fall_damage_policy.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/load_overrides.cs" Link="load_overrides.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/harness_result.cs" Link="harness_result.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/harness_runner.cs" Link="harness_runner.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/steam_readiness.cs" Link="steam_readiness.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/png_encoder.cs" Link="png_encoder.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/character_override.cs" Link="character_override.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/position_readout.cs" Link="position_readout.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/nearby_enemy_selector.cs" Link="nearby_enemy_selector.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/actor_kind.cs" Link="actor_kind.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/cell_change_tracker.cs" Link="cell_change_tracker.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/hud_visibility.cs" Link="hud_visibility.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/custom_level_state.cs" Link="custom_level_state.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/free_fly_camera.cs" Link="free_fly_camera.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_session_state.cs" Link="editor_session_state.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/palette_entry.cs" Link="palette_entry.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/palette_catalog_builder.cs" Link="palette_catalog_builder.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/palette_selection.cs" Link="palette_selection.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/palette_filter.cs" Link="palette_filter.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/palette_search_input.cs" Link="palette_search_input.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_text_input_policy.cs" Link="editor_text_input_policy.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_escape_sequence.cs" Link="editor_escape_sequence.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/tile_tool.cs" Link="tile_tool.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_tool.cs" Link="editor_tool.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/object_tool.cs" Link="object_tool.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/place_preview.cs" Link="place_preview.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/object_picker.cs" Link="object_picker.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/palette_pick.cs" Link="palette_pick.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/palette_thumbnail_queue.cs" Link="palette_thumbnail_queue.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/tile_outline.cs" Link="tile_outline.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/palette_pager.cs" Link="palette_pager.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/palette_layout.cs" Link="palette_layout.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/magnifier_icon.cs" Link="magnifier_icon.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/text_field_model.cs" Link="text_field_model.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/text_window.cs" Link="text_window.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/key_repeater.cs" Link="key_repeater.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/thumbnail_cache.cs" Link="thumbnail_cache.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_editing_support.cs" Link="editor_editing_support.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/validation_targets.cs" Link="validation_targets.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/blank_level.cs" Link="blank_level.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_load_plan.cs" Link="editor_load_plan.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/from_scratch_snapshot.cs" Link="from_scratch_snapshot.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_edit_session.cs" Link="editor_edit_session.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_reenter_policy.cs" Link="editor_reenter_policy.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/editor_session_pick.cs" Link="editor_session_pick.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/injected_input.cs" Link="injected_input.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/screen_point.cs" Link="screen_point.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/ui_widgets.cs" Link="ui_widgets.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/toast_stack.cs" Link="toast_stack.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/hover_delay.cs" Link="hover_delay.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/real_input_diagnostic.cs" Link="real_input_diagnostic.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/key_names.cs" Link="key_names.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/key_text_mapper.cs" Link="key_text_mapper.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/overview_target.cs" Link="overview_target.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/teleport_target.cs" Link="teleport_target.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/object_query.cs" Link="object_query.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/asset_dump.cs" Link="asset_dump.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/custom_map_entries.cs" Link="custom_map_entries.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/character_policy.cs" Link="character_policy.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/death_screen_press_gate.cs" Link="death_screen_press_gate.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_command_tokenizer.cs" Link="console_command_tokenizer.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_command_registry.cs" Link="console_command_registry.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_completer.cs" Link="console_completer.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/screenshot_path.cs" Link="screenshot_path.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_history.cs" Link="console_history.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_fuzzy.cs" Link="console_fuzzy.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_finder.cs" Link="console_finder.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_scrollbar.cs" Link="console_scrollbar.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_layout.cs" Link="console_layout.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_scrollback.cs" Link="console_scrollback.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_log_store.cs" Link="console_log_store.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/console_state.cs" Link="console_state.cs" />
+    <Compile Include="../../unity/pack-authoring/Assets/Editor/CoplanarLayering.cs" Link="CoplanarLayering.cs" />
+    <Compile Include="../../unity/pack-authoring/Assets/Editor/WarehouseRoof.cs" Link="WarehouseRoof.cs" />
+    <Compile Include="../../unity/pack-authoring/Assets/Editor/WarehousePieces.cs" Link="WarehousePieces.cs" />
+    <Compile Include="../../unity/pack-authoring/Assets/Editor/WarehouseKit.cs" Link="WarehouseKit.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

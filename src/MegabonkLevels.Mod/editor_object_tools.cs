@@ -1,0 +1,960 @@
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+namespace MegabonkLevels;
+
+// See "Object tools" in docs/development.md.
+public static class EditorObjectTools
+{
+    private const float RayLength = 5000f;
+    private const float OutlineLift = 0.5f;
+    private const float NearestPickTiles = 0.125f;
+    private const float TerrainPickRadius = 2f;
+    private const float HorizontalNormalY = 0.7f;
+    private const float TerrainProbeHeight = 1000f;
+    private const int OnTopRenderQueue = 4000;
+    private const float FlatDecalEpsilon = 0.01f;
+    private const float OutlineWidth = 0.8f;
+    private const string CloneSuffix = "(Clone)";
+
+    private const float GridWidth = 0.25f;
+    private const float MarkerWidth = 0.6f;
+    private const float MarkerRadius = 1.5f;
+    private const int RingSegments = 48;
+
+    private static readonly Color SelectionColor = new(1f, 0.15f, 0.15f, 1f);
+    private static readonly Color GridColor = new(1f, 1f, 1f, 0.6f);
+    private static readonly Color MarkerColor = new(1f, 0.4f, 0.2f, 1f);
+
+    private static ModLogger _logger;
+    private static LineRenderer _selectionOutline;
+    private static LineRenderer _gridLines;
+    private static LineRenderer _placeMarker;
+    private static ObjectTarget? _selected;
+    private static ObjectTarget? _hovered;
+    private static ObjectTarget? _dragging;
+    private static TransformData _dragOrigin;
+    private static float _dragLift;
+    private static float _dragY;
+    private static float _dragMouseY;
+    private static bool _dragFloating;
+    private static (float X, float Z) _dragPlaneGrab;
+    private static bool _dragActive;
+    private static float _dragPressedAt;
+    private static (float X, float Z) _dragGrab;
+    private static bool _onTerrain;
+
+    private const string PreviewName = "MegabonkLevelsPlacePreview";
+    private static readonly Color PreviewColor = new(0.4f, 1f, 0.5f, 0.45f);
+    private static readonly Color PreviewBlockedColor = new(1f, 0.4f, 0.4f, 0.45f);
+
+    private static GameObject _preview;
+    private static CatalogId? _previewId;
+    private static bool _previewMissing;
+    private static CatalogId? _previewRotatedFor;
+    private static Vector3Data? _previewRotation;
+    private static Color? _previewColor;
+    private static Material _previewMaterial;
+    private static (CatalogId Id, Vector3Data Position, bool Blocked)? _previewStacked;
+
+    public static ObjectTarget? Selected => _selected;
+
+    public static void OnEditorEntered(ModLogger logger)
+    {
+        _logger = logger;
+        _selected = null;
+        _hovered = null;
+        _previewRotation = null;
+        DestroyPreview();
+        _selectionOutline = BuildOutline(SelectionColor, OutlineWidth, RingSegments, loop: true, onTop: true);
+        _gridLines = BuildOutline(GridColor, GridWidth, 0, loop: false);
+        _placeMarker = BuildOutline(MarkerColor, MarkerWidth, RingSegments, loop: true);
+    }
+
+    public static void OnEditorExited()
+    {
+        CancelDrag();
+        DestroyLine(ref _selectionOutline);
+        DestroyLine(ref _gridLines);
+        DestroyLine(ref _placeMarker);
+        DestroyPreview();
+        _previewRotation = null;
+        _selected = null;
+        _hovered = null;
+    }
+
+    public static void OnToolChanged(EditorTool tool)
+    {
+        CancelDrag();
+        DestroyPreview();
+        _previewRotation = null;
+        _selected = null;
+        _hovered = null;
+    }
+
+    // Handles clicks and keys for the Place and Select tools; returns the tool to switch to after a pick-block click.
+    public static EditorTool? Tick(EditorTool tool, (int X, int Z, TileState State)? target, bool terrainHit, Vector3 point)
+    {
+        _onTerrain = terrainHit;
+        EditorTool? switchTo = null;
+        var pointerFree = !EditorPalette.PointerOverPanel;
+        pointerFree = pointerFree && !EditorTileTools.PointerOverEditorOverlay;
+
+        _hovered = tool == EditorTool.Select && pointerFree ? PickAt()?.Target : null;
+
+        if (pointerFree && EditorInput.GetMouseButtonDown(2))
+        {
+            switchTo = PickBlock();
+        }
+
+        if (pointerFree && EditorInput.GetMouseButtonDown(0))
+        {
+            if (tool == EditorTool.Place)
+            {
+                Place(target, point);
+            }
+            else if (tool == EditorTool.Select)
+            {
+                BeginDrag(target, point);
+            }
+        }
+
+        if (_dragging != null)
+        {
+            if (EditorInput.GetMouseButtonUp(0))
+            {
+                EndDrag(target, point, pointerFree);
+            }
+            else if (EditorInput.GetMouseButton(0))
+            {
+                _dragActive = _dragActive || ObjectTools.DragStarted(Time.unscaledTime - _dragPressedAt);
+                if (_dragActive)
+                {
+                    UpdateDrag(target, point);
+                }
+            }
+        }
+
+        if (tool == EditorTool.Select && _selected != null)
+        {
+            HandleSelectionKeys();
+        }
+
+        RefreshOutline(tool);
+        RefreshGrid(tool, target, point);
+        RefreshPreview(tool, pointerFree, target, point);
+        return switchTo;
+    }
+
+    public static string Detail(EditorTool tool, (int X, int Z, TileState State)? target)
+    {
+        var cell = target is { } t ? (t.X, t.Z) : ((int X, int Z)?)null;
+        if (tool == EditorTool.Place)
+        {
+            return EditorTools.PlaceDetail(cell, SelectedPaletteName());
+        }
+
+        return EditorTools.SelectDetail(NameOf(_selected), NameOf(_hovered), cell);
+    }
+
+    private static string SelectedPaletteName()
+    {
+        var current = EditorPalette.Selection.Current;
+        foreach (var entry in EditorPalette.Selection.Entries)
+        {
+            if (current.HasValue && entry.Id.Equals(current.Value))
+            {
+                return entry.DisplayName;
+            }
+        }
+
+        return null;
+    }
+
+    private static string NameOf(ObjectTarget? target)
+    {
+        var go = target is { } t ? LiveEditPatch.ObjectFor(t) : null;
+        return go == null ? null : PrefabNameOf(go);
+    }
+
+    private static string PrefabNameOf(GameObject go)
+    {
+        var name = go.name;
+        return name.EndsWith(CloneSuffix, System.StringComparison.Ordinal) ? name.Substring(0, name.Length - CloneSuffix.Length) : name;
+    }
+
+    private static bool IsStacked(string prefabName, Vector3Data position, GameObject ignore)
+    {
+        var others = new List<(string PrefabName, Vector3Data Position)>();
+        foreach (var candidate in LiveEditPatch.PickableObjects())
+        {
+            if (candidate.Object != ignore)
+            {
+                others.Add((PrefabNameOf(candidate.Object), ToData(candidate.Object.transform.position)));
+            }
+        }
+
+        return ObjectTools.IsStacked(prefabName, position, others);
+    }
+
+    private static void Place((int X, int Z, TileState State)? target, Vector3 point)
+    {
+        if (CursorPosition(target, point, (0f, 0f)) is not { } position)
+        {
+            return;
+        }
+
+        if (EditorPalette.Selection.Current is not { } id)
+        {
+            _logger.Msg("EditorObjectTools: place ignored, no palette item selected");
+            return;
+        }
+
+        var prefab = LiveEditPatch.PrefabFor(id);
+        var camera = PlayerCamera.Instance?.camera;
+        if (prefab == null || camera == null)
+        {
+            _logger.Warning($"EditorObjectTools: place ignored, no prefab or camera for '{id.Serialize()}'");
+            return;
+        }
+
+        if (IsStacked(prefab.name, position, null))
+        {
+            _logger.Msg($"EditorObjectTools: place ignored, '{prefab.name}' already stands at ({position.X:0.##}, {position.Y:0.##}, {position.Z:0.##})");
+            return;
+        }
+
+        var attachments = PackPrefabs.AttachmentsFor(id);
+        var scale = ToData(prefab.transform.localScale);
+        var op = _previewRotation is { } rotation
+            ? ObjectTools.PlaceWithRotation(id, position, rotation, scale, attachments)
+            : ObjectTools.Place(id, position, ToData(prefab.transform.eulerAngles), scale, camera.transform.eulerAngles.y, attachments);
+        Apply(op, $"place '{id.Serialize()}' at ({position.X:0.##}, {position.Z:0.##}) {(target is { } cell ? $" in cell ({cell.X},{cell.Z})" : "")}");
+    }
+
+    // Pressing on an object selects it; holding picks it up. Pressing on nothing deselects.
+    private static void BeginDrag((int X, int Z, TileState State)? target, Vector3 point)
+    {
+        if (PickAt() is not { } hit)
+        {
+            _selected = null;
+            _logger.Msg("EditorObjectTools: deselected, nothing under the cursor");
+            return;
+        }
+
+        _selected = hit.Target;
+        _dragging = hit.Target;
+        _dragOrigin = CurrentTransform(hit.Object);
+        _dragActive = false;
+        _dragPressedAt = Time.unscaledTime;
+        _dragGrab = target != null || _onTerrain ? (_dragOrigin.Position.X - point.x, _dragOrigin.Position.Z - point.z) : (0f, 0f);
+        _dragLift = SurfaceYAt(_dragOrigin.Position) is { } surface ? _dragOrigin.Position.Y - surface : 0f;
+        _dragY = _dragOrigin.Position.Y;
+        _dragMouseY = EditorInput.MousePosition.y;
+        _dragFloating = ObjectTools.IsFloating(_dragLift);
+        _dragPlaneGrab = _dragFloating && CursorOnPlane(_dragY) is { } onPlane ? (_dragOrigin.Position.X - onPlane.X, _dragOrigin.Position.Z - onPlane.Z) : (0f, 0f);
+        _logger.Msg($"EditorObjectTools: selected {hit.Target.Serialize()} '{hit.Object.name}' via {hit.Path}");
+    }
+
+    // The object follows the cursor as a preview; holding Shift moves it vertically instead, and a floating object settles onto a surface within snap range.
+    private static void UpdateDrag((int X, int Z, TileState State)? target, Vector3 point)
+    {
+        if (_dragging is not { } dragged || LiveEditPatch.ObjectFor(dragged) is not { } go)
+        {
+            return;
+        }
+
+        var mouseY = EditorInput.MousePosition.y;
+        var shift = EditorInput.GetKey(KeyCode.LeftShift) || EditorInput.GetKey(KeyCode.RightShift);
+        var current = go.transform.position;
+        if (shift)
+        {
+            _dragFloating = true;
+            _dragY = ObjectTools.RaiseBy(_dragY, mouseY - _dragMouseY);
+        }
+
+        _dragMouseY = mouseY;
+
+        Vector3Data cursor;
+        if (shift)
+        {
+            cursor = new Vector3Data(current.x, SurfaceYAt(ToData(current)) ?? float.NegativeInfinity, current.z);
+        }
+        else if (_dragFloating)
+        {
+            if (CursorOnPlane(_dragY) is not { } onPlane)
+            {
+                return;
+            }
+
+            cursor = new Vector3Data(onPlane.X + _dragPlaneGrab.X, SurfaceYAt(new Vector3Data(onPlane.X + _dragPlaneGrab.X, _dragY, onPlane.Z + _dragPlaneGrab.Z)) ?? float.NegativeInfinity, onPlane.Z + _dragPlaneGrab.Z);
+        }
+        else if (CursorPosition(target, point, _dragGrab) is { } position)
+        {
+            cursor = position;
+        }
+        else
+        {
+            return;
+        }
+
+        var lift = _dragFloating ? float.PositiveInfinity : _dragLift;
+        var y = ObjectTools.DragY(cursor.Y, lift, _dragY, SurfacesNear(new Vector3(cursor.X, _dragY, cursor.Z), go));
+        go.transform.position = new Vector3(cursor.X, y, cursor.Z);
+    }
+
+    // The cursor ray crossing the horizontal plane at the given height.
+    private static (float X, float Z)? CursorOnPlane(float planeY)
+    {
+        var camera = PlayerCamera.Instance?.camera;
+        if (camera == null)
+        {
+            return null;
+        }
+
+        var ray = camera.ScreenPointToRay(EditorInput.MousePosition);
+        return ObjectTools.RayPlaneXZ(ToData(ray.origin), ToData(ray.direction), planeY);
+    }
+
+    // Heights of the mostly horizontal solid surfaces within snap range of the point, ignoring the object's own colliders.
+    private static IReadOnlyList<float> SurfacesNear(Vector3 at, GameObject go)
+    {
+        var self = go.GetComponentsInChildren<Collider>();
+        var hits = Physics.RaycastAll(new Vector3(at.x, at.y + ObjectTools.SnapDistance, at.z), Vector3.down, 2f * ObjectTools.SnapDistance);
+        var heights = new List<float>();
+        for (var i = 0; i < hits.Length; i++)
+        {
+            var hit = hits[i];
+            if (hit.collider.isTrigger || hit.normal.y < HorizontalNormalY || System.Array.IndexOf(self, hit.collider) >= 0)
+            {
+                continue;
+            }
+
+            heights.Add(hit.point.y);
+        }
+
+        return heights;
+    }
+
+    private static void EndDrag((int X, int Z, TileState State)? target, Vector3 point, bool pointerFree)
+    {
+        var dragged = _dragging.Value;
+        _dragging = null;
+        if (!_dragActive)
+        {
+            return;
+        }
+
+        _dragActive = false;
+        if (LiveEditPatch.ObjectFor(dragged) is not { } go)
+        {
+            return;
+        }
+
+        var final = ToData(go.transform.position);
+        go.transform.position = new Vector3(_dragOrigin.Position.X, _dragOrigin.Position.Y, _dragOrigin.Position.Z);
+        if (!pointerFree || (!_dragFloating && target == null && !_onTerrain) || !ObjectTools.HasMoved(_dragOrigin.Position, final))
+        {
+            return;
+        }
+
+        if (IsStacked(PrefabNameOf(go), final, go))
+        {
+            _logger.Msg($"EditorObjectTools: move ignored, '{PrefabNameOf(go)}' already stands at ({final.X:0.##}, {final.Y:0.##}, {final.Z:0.##})");
+            return;
+        }
+
+        Apply(ObjectTools.Move(dragged, _dragOrigin, final), $"move {dragged.Serialize()} to ({final.X:0.##}, {final.Z:0.##})");
+    }
+
+    private static void CancelDrag()
+    {
+        if (_dragging is { } dragged && LiveEditPatch.ObjectFor(dragged) is { } go)
+        {
+            go.transform.position = new Vector3(_dragOrigin.Position.X, _dragOrigin.Position.Y, _dragOrigin.Position.Z);
+        }
+
+        _dragging = null;
+        _dragActive = false;
+    }
+
+    // The cursor point plus the offset at which the object was grabbed, so it does not jump to the cursor.
+    private static Vector3Data? CursorPosition((int X, int Z, TileState State)? target, Vector3 point, (float X, float Z) grab)
+    {
+        if (LiveEditPatch.Grid is not { } grid)
+        {
+            return _onTerrain ? new Vector3Data(point.x + grab.X, point.y, point.z + grab.Z) : null;
+        }
+
+        return target is { } cell
+            ? ObjectTools.PositionAt(cell.X, cell.Z, cell.State, grid.Width, grid.Depth, grid.Spacing, grid.TileHeight, point.x + grab.X, point.z + grab.Z)
+            : null;
+    }
+
+    private static float? TerrainSurfaceY(Vector3Data world) =>
+        LiveEditPatch.GroundCollider() is { } ground
+        && ground.Raycast(new Ray(new Vector3(world.X, world.Y + TerrainProbeHeight, world.Z), Vector3.down), out var hit, 2f * TerrainProbeHeight)
+            ? hit.point.y
+            : null;
+
+    private static float? SurfaceYAt(Vector3Data world)
+    {
+        if (LiveEditPatch.Grid is not { } grid)
+        {
+            return LiveEditPatch.IsTerrainMap ? TerrainSurfaceY(world) : null;
+        }
+
+        var cell = PositionReadout.CellOf(world.X, world.Z, grid.Width, grid.Depth, grid.Spacing);
+        if (!cell.InGrid || LiveEditPatch.TileAt(cell.X, cell.Z) is not { } state)
+        {
+            return null;
+        }
+
+        var (centreX, centreZ) = PositionReadout.CellCentre(cell.X, cell.Z, grid.Width, grid.Depth, grid.Spacing);
+        return ObjectTools.SurfaceY(state, world.X - centreX, world.Z - centreZ, grid.Spacing, grid.TileHeight);
+    }
+
+    private static void HandleSelectionKeys()
+    {
+        if (_selected is not { } selected || LiveEditPatch.ObjectFor(selected) is not { } go)
+        {
+            _selected = null;
+            return;
+        }
+
+        if (RotationKeyPressed() is { } axis)
+        {
+            var shift = EditorInput.GetKey(KeyCode.LeftShift) || EditorInput.GetKey(KeyCode.RightShift);
+            Apply(ObjectTools.Rotate(selected, CurrentTransform(go), axis, !shift), $"rotate {selected.Serialize()} {axis} {(shift ? "negative" : "positive")}");
+        }
+        else if (EditorInput.GetKeyDown(KeyCode.Delete) || EditorInput.GetKeyDown(KeyCode.Backspace))
+        {
+            Apply(ObjectTools.Remove(selected), $"remove {selected.Serialize()}");
+            _selected = null;
+        }
+    }
+
+    private static RotationAxis? RotationKeyPressed()
+    {
+        if (EditorInput.GetKeyDown(KeyCode.R))
+        {
+            return RotationAxis.Yaw;
+        }
+
+        if (EditorInput.GetKeyDown(KeyCode.F))
+        {
+            return RotationAxis.Pitch;
+        }
+
+        return EditorInput.GetKeyDown(KeyCode.G) ? RotationAxis.Roll : null;
+    }
+
+    private static void Apply(EditOp op, string what)
+    {
+        var applied = EditorTileTools.ApplyFromObjectTools(op, what);
+        _previewStacked = null;
+        _logger.Msg($"EditorObjectTools: {what} -> {op.OpType}{(applied ? "" : " not applied")}");
+    }
+
+    private static EditorTool? PickBlock()
+    {
+        if (PickAt() is not { } hit)
+        {
+            return null;
+        }
+
+        var entries = EditorPalette.Selection.Entries;
+        var entry = LiveEditPatch.CatalogIdOf(hit.Target) is { } placedId
+            ? PalettePick.FindByCatalogId(entries, placedId)
+            : PalettePick.PrefabNameOf(hit.Target.GenId) is { } name
+                ? PalettePick.FindByPrefabName(entries, name, LiveEditPatch.CurrentStageIndex(), EditorPalette.LoadedMap)
+                : null;
+
+        if (entry is not { } found)
+        {
+            _logger.Msg($"EditorObjectTools: pick block found no palette entry for {hit.Target.Serialize()} '{hit.Object.name}'");
+            return null;
+        }
+
+        EditorPalette.Selection.Select(found.Id);
+        _logger.Msg($"EditorObjectTools: pick block {hit.Target.Serialize()} -> '{found.Id.Serialize()}' ({found.DisplayName})");
+        return EditorTool.Place;
+    }
+
+    // The nearest object the ray selects; see ObjectPicker.NearestHit for which colliders count.
+    private static (ObjectTarget Target, GameObject Object)? RaycastObject(Ray ray)
+    {
+        var raw = Physics.RaycastAll(ray, RayLength, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+        var hits = new List<RayHit>(raw.Length);
+        var objects = new List<(ObjectTarget Target, GameObject Object)?>(raw.Length);
+        for (var i = 0; i < raw.Length; i++)
+        {
+            var hit = raw[i];
+            var target = LiveEditPatch.TargetOf(hit.transform);
+            if (target is { } attachment)
+            {
+                target = LiveEditPatch.SelectionTarget(attachment, SelectHiddenAttachment());
+            }
+            var go = target is { } t ? LiveEditPatch.ObjectFor(t) : null;
+            objects.Add(target is { } found && go != null ? (found, go) : null);
+            hits.Add(new RayHit(hit.distance, hit.collider.isTrigger, go != null, go != null && CrossesModel(ray, go)));
+        }
+
+        var index = ObjectPicker.NearestHit(hits);
+        return index < 0 ? null : objects[index];
+    }
+
+    private static bool CrossesModel(Ray ray, GameObject go)
+    {
+        foreach (var renderer in LiveEditPatch.ModelRenderers(go))
+        {
+            if (renderer.bounds.IntersectRay(ray))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // A physics hit on an object wins; otherwise the object nearest the cursor's ground point within an eighth of a tile.
+    private static (ObjectTarget Target, GameObject Object, string Path)? PickAt()
+    {
+        var camera = PlayerCamera.Instance?.camera;
+        if (camera == null)
+        {
+            return null;
+        }
+
+        var ray = camera.ScreenPointToRay(EditorInput.MousePosition);
+        if (RaycastObject(ray) is { } picked)
+        {
+            return (picked.Target, picked.Object, "raycast");
+        }
+
+        var ground = LiveEditPatch.GroundCollider();
+        if (ground == null || !ground.Raycast(ray, out var groundHit, RayLength))
+        {
+            return null;
+        }
+
+        var candidates = LiveEditPatch.PickableObjects()
+            .Where(candidate => LiveEditPatch.SelectionTarget(candidate.Target, SelectHiddenAttachment()) == candidate.Target).ToList();
+        var positions = new List<(float X, float Z)>(candidates.Count);
+        foreach (var candidate in candidates)
+        {
+            var p = candidate.Object.transform.position;
+            positions.Add((p.x, p.z));
+        }
+
+        var nearest = ObjectPicker.NearestIndex(positions, groundHit.point.x, groundHit.point.z, LiveEditPatch.Grid is { } grid ? grid.Spacing * NearestPickTiles : TerrainPickRadius);
+        return nearest < 0 ? null : (candidates[nearest].Target, candidates[nearest].Object, "nearest");
+    }
+
+    private static TransformData CurrentTransform(GameObject go) =>
+        new(ToData(go.transform.position), ToData(go.transform.eulerAngles), ToData(go.transform.localScale));
+
+    private static bool SelectHiddenAttachment() => EditorInput.GetKey(KeyCode.LeftControl) || EditorInput.GetKey(KeyCode.RightControl);
+
+    private static Vector3Data ToData(Vector3 v) => new(v.x, v.y, v.z);
+
+    private static void RefreshOutline(EditorTool tool)
+    {
+        if (_selectionOutline == null)
+        {
+            return;
+        }
+
+        var go = tool == EditorTool.Select && _selected is { } selected ? LiveEditPatch.ObjectFor(selected) : null;
+        if (go == null)
+        {
+            _diagLogged = null;
+        }
+
+        Bounds? bounds = null;
+        Bounds? flatBounds = null;
+        foreach (var renderer in go != null ? LiveEditPatch.ModelRenderers(go) : new Renderer[0])
+        {
+            // A zero-thickness quad is a shadow or indicator decal, not model geometry; it must not stretch the ring.
+            var b = renderer.bounds;
+            if (b.size.y > FlatDecalEpsilon)
+            {
+                bounds = bounds is { } combined ? Encapsulate(combined, b) : b;
+            }
+            else
+            {
+                flatBounds = flatBounds is { } flatCombined ? Encapsulate(flatCombined, b) : b;
+            }
+        }
+
+        bounds ??= flatBounds;
+        if (bounds is not { } box)
+        {
+            _selectionOutline.enabled = false;
+            return;
+        }
+
+        var origin = go.transform.position;
+        var footprint = Footprint(go, box);
+        var groundY = GroundYAt(footprint.Centre, box.max.y, go);
+        var baseY = ObjectTools.RingBaseY(groundY, box.min.y, origin.y, SurfaceYAt(ToData(origin)));
+        var radius = ObjectTools.RingRadius(footprint.ExtentX, footprint.ExtentZ);
+        LogRingDiagnostics(go, box, origin, footprint, groundY, baseY, radius);
+        SetRing(_selectionOutline, footprint.Centre.x, baseY + OutlineLift, footprint.Centre.z, radius);
+        _selectionOutline.enabled = true;
+    }
+
+    private static ObjectTarget? _diagLogged;
+
+    // The union of enabled colliders is the object's physical footprint — solid colliders, then triggers (an
+    // interactable's small body collider is often a trigger) — with renderer bounds as the last resort.
+    private static (Vector3 Centre, float ExtentX, float ExtentZ) Footprint(GameObject go, Bounds fallback)
+    {
+        Bounds? solid = null;
+        Bounds? trigger = null;
+        foreach (var collider in go.GetComponentsInChildren<Collider>())
+        {
+            if (!collider.enabled)
+            {
+                continue;
+            }
+
+            if (collider.isTrigger)
+            {
+                trigger = trigger is { } combinedTrigger ? Encapsulate(combinedTrigger, collider.bounds) : collider.bounds;
+            }
+            else
+            {
+                solid = solid is { } combinedSolid ? Encapsulate(combinedSolid, collider.bounds) : collider.bounds;
+            }
+        }
+
+        var footprint = solid ?? trigger;
+        if (footprint is not { } chosen)
+        {
+            return (fallback.center, fallback.extents.x, fallback.extents.z);
+        }
+
+        return (chosen.center, chosen.extents.x, chosen.extents.z);
+    }
+
+    private static Bounds Encapsulate(Bounds combined, Bounds other)
+    {
+        combined.Encapsulate(other);
+        return combined;
+    }
+
+    // Ground heights below the footprint centre, ignoring the object's own colliders; triggers and effects are not ground.
+    private static float? GroundYAt(Vector3 centre, float topY, GameObject go)
+    {
+        var self = go.GetComponentsInChildren<Collider>();
+        var from = new Vector3(centre.x, topY + 5f, centre.z);
+        var length = topY + 55f;
+        var hits = Physics.RaycastAll(from, Vector3.down, length);
+        var groundYs = new List<float>();
+        for (var i = 0; i < hits.Length; i++)
+        {
+            var hit = hits[i];
+            if (hit.collider.isTrigger)
+            {
+                continue;
+            }
+
+            var belongs = false;
+            for (var j = 0; j < self.Length; j++)
+            {
+                belongs |= hit.collider == self[j];
+            }
+
+            if (!belongs)
+            {
+                groundYs.Add(hit.point.y);
+            }
+        }
+
+        return ObjectTools.SupportY(groundYs.ToArray(), go.transform.position.y);
+    }
+
+    // Temporary MEGABONK_RING_DIAG output: once per selection, renderers, colliders, ring numbers, shader availability.
+    private static void LogRingDiagnostics(
+        GameObject go, Bounds box, Vector3 origin, (Vector3 Centre, float ExtentX, float ExtentZ) footprint,
+        float? groundY, float baseY, float radius)
+    {
+        if (!EnvFlag.IsSet("MEGABONK_RING_DIAG") || _selected is not { } target || _diagLogged == target)
+        {
+            return;
+        }
+
+        _diagLogged = target;
+        _logger.Warning($"[ring-diag] name={PrefabNameOf(go)} origin=({origin.x:F2},{origin.y:F2},{origin.z:F2}) bounds=({box.min.x:F2},{box.min.y:F2},{box.max.x:F2},{box.max.y:F2}) footprintCentre=({footprint.Centre.x:F2},{footprint.Centre.z:F2}) extents=({footprint.ExtentX:F2},{footprint.ExtentZ:F2}) groundY={groundY?.ToString("F2") ?? "none"} surfaceY={SurfaceYAt(ToData(origin))?.ToString("F2") ?? "none"} baseY={baseY:F2} radius={radius:F2}");
+        var renderers = go.GetComponentsInChildren<Renderer>();
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            var r = renderers[i];
+            var b = r.bounds;
+            _logger.Warning($"[ring-diag]   renderer={r.name} type={r.GetType().Name} enabled={r.enabled} min=({b.min.x:F2},{b.min.y:F2},{b.min.z:F2}) max=({b.max.x:F2},{b.max.y:F2},{b.max.z:F2})");
+        }
+
+        var colliders = go.GetComponentsInChildren<Collider>();
+        for (var i = 0; i < colliders.Length; i++)
+        {
+            var c = colliders[i];
+            var b = c.bounds;
+            _logger.Warning($"[ring-diag]   collider={c.name} type={c.GetType().Name} enabled={c.enabled} trigger={c.isTrigger} min=({b.min.x:F2},{b.min.y:F2},{b.min.z:F2}) max=({b.max.x:F2},{b.max.y:F2},{b.max.z:F2})");
+        }
+
+        _logger.Warning($"[ring-diag]   ground-probe y={groundY?.ToString("F2") ?? "none"}");
+        _logger.Warning($"[ring-diag]   shaders Sprites/Default={Shader.Find("Sprites/Default") != null} UI/Default={Shader.Find("UI/Default") != null} Hidden/Internal-Colored={Shader.Find("Hidden/Internal-Colored") != null} material={_selectionOutline.sharedMaterial?.name} queue={_selectionOutline.sharedMaterial?.renderQueue}");
+    }
+
+    private static void DestroyLine(ref LineRenderer line)
+    {
+        if (line != null)
+        {
+            Object.Destroy(line.gameObject);
+        }
+
+        line = null;
+    }
+
+    // The quarter-tile grid of the targeted cell and a marker at the placement point, while Place or a selected Select can use them.
+    private static void RefreshGrid(EditorTool tool, (int X, int Z, TileState State)? target, Vector3 point)
+    {
+        var active = tool == EditorTool.Place || (tool == EditorTool.Select && _selected != null);
+        if (_gridLines != null && _placeMarker != null && active && _onTerrain)
+        {
+            SetEnabled(_gridLines, false);
+            SetRing(_placeMarker, point.x, point.y + OutlineLift, point.z, MarkerRadius);
+            _placeMarker.enabled = tool == EditorTool.Place;
+            return;
+        }
+
+        if (_gridLines == null || _placeMarker == null || !active || target is not { } cell || LiveEditPatch.Grid is not { } grid)
+        {
+            SetEnabled(_gridLines, false);
+            SetEnabled(_placeMarker, false);
+            return;
+        }
+
+        var lines = ObjectTools.GridLines(cell.X, cell.Z, cell.State, grid.Width, grid.Depth, grid.Spacing, grid.TileHeight, OutlineLift);
+        _gridLines.positionCount = lines.Count;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            _gridLines.SetPosition(i, new Vector3(lines[i].X, lines[i].Y, lines[i].Z));
+        }
+
+        var marker = ObjectTools.PositionAt(cell.X, cell.Z, cell.State, grid.Width, grid.Depth, grid.Spacing, grid.TileHeight, point.x, point.z);
+        SetRing(_placeMarker, marker.X, marker.Y + OutlineLift, marker.Z, MarkerRadius);
+        _gridLines.enabled = true;
+        _placeMarker.enabled = tool == EditorTool.Place;
+    }
+
+    // The object a click would create, drawn at the cursor so it can be seen and rotated before it is placed.
+    private static void RefreshPreview(EditorTool tool, bool pointerFree, (int X, int Z, TileState State)? target, Vector3 point)
+    {
+        var id = EditorPalette.Selection.Current;
+        if (_previewRotatedFor != id)
+        {
+            _previewRotatedFor = id;
+            _previewRotation = null;
+        }
+
+        var camera = PlayerCamera.Instance?.camera;
+        GameObject prefab = null;
+        Vector3Data? position = null;
+        if (tool == EditorTool.Place && pointerFree && id is { } chosen && camera != null)
+        {
+            prefab = LiveEditPatch.PrefabFor(chosen);
+            position = prefab == null ? null : CursorPosition(target, point, (0f, 0f));
+        }
+
+        if (!PlacePreview.IsVisible(tool == EditorTool.Place, !pointerFree, id.HasValue, prefab != null, camera != null, position.HasValue))
+        {
+            HidePlacePreview();
+            return;
+        }
+
+        ShowPreview(prefab, id.Value, position.Value, StepPreviewRotation(prefab, id.Value, camera.transform.eulerAngles.y));
+    }
+
+    // The rotation the ghost and the placed object share: camera-facing until R/F/G steps it.
+    private static Vector3Data StepPreviewRotation(GameObject prefab, CatalogId id, float cameraYaw)
+    {
+        var axis = RotationKeyPressed();
+        var negative = EditorInput.GetKey(KeyCode.LeftShift) || EditorInput.GetKey(KeyCode.RightShift);
+        var rotation = PlacePreview.Rotation(_previewRotation, ToData(prefab.transform.eulerAngles), cameraYaw, axis, !negative);
+        if (axis is { } pressed)
+        {
+            _previewRotation = rotation;
+            _logger.Msg($"EditorObjectTools: preview '{id.Serialize()}' {pressed} {(negative ? "negative" : "positive")} to ({rotation.X:0.#}, {rotation.Y:0.#}, {rotation.Z:0.#})");
+        }
+
+        return rotation;
+    }
+
+    private static void ShowPreview(GameObject prefab, CatalogId id, Vector3Data position, Vector3Data rotation)
+    {
+        // A scene reload takes the ghost with it, so a proxy that has gone is rebuilt rather than left missing.
+        if (_previewId != id || (_preview == null && !_previewMissing))
+        {
+            DestroyPreview();
+            _previewId = id;
+            _preview = PrefabThumbnails.BuildProxy(prefab, PrefabThumbnails.SceneLayer);
+            if (_preview == null)
+            {
+                _previewMissing = true;
+                _logger.Warning($"EditorObjectTools: no placement preview for '{id.Serialize()}', the prefab has no mesh");
+                return;
+            }
+
+            _preview.name = PreviewName;
+            var scale = prefab.transform.localScale;
+            _preview.transform.localScale = new Vector3(scale.x, scale.y, scale.z);
+            _previewColor = null;
+        }
+
+        if (_preview == null)
+        {
+            return;
+        }
+
+        _preview.transform.position = new Vector3(position.X, position.Y, position.Z);
+        _preview.transform.rotation = Quaternion.Euler(rotation.X, rotation.Y, rotation.Z);
+        if (!_preview.activeSelf)
+        {
+            _preview.SetActive(true);
+        }
+
+        var color = StandsAt(id, prefab.name, position) ? PreviewBlockedColor : PreviewColor;
+        if (_previewColor != color)
+        {
+            PaintPreview(color);
+            _previewColor = color;
+        }
+    }
+
+    // Whether a click here would be refused as a duplicate of an identical object, cached while the ghost stands still.
+    private static bool StandsAt(CatalogId id, string prefabName, Vector3Data position)
+    {
+        if (_previewStacked is { } cached && cached.Id.Equals(id) && cached.Position.Equals(position))
+        {
+            return cached.Blocked;
+        }
+
+        var blocked = IsStacked(prefabName, position, null);
+        _previewStacked = (id, position, blocked);
+        return blocked;
+    }
+
+    private static void PaintPreview(Color color)
+    {
+        var material = PreviewMaterial(color);
+        foreach (var renderer in _preview.GetComponentsInChildren<Renderer>())
+        {
+            if (material != null)
+            {
+                renderer.sharedMaterial = material;
+            }
+
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+        }
+    }
+
+    // One shared translucent material, so a prefab's own materials are never touched; with no shader the proxy keeps them.
+    private static Material PreviewMaterial(Color color)
+    {
+        var shader = Shader.Find("UI/Default") ?? Shader.Find("Sprites/Default") ?? Shader.Find("Hidden/Internal-Colored");
+        if (shader == null)
+        {
+            _logger.Warning("EditorObjectTools: no shader found for the placement preview, it shows the prefab's own materials");
+            return null;
+        }
+
+        _previewMaterial ??= new Material(shader)
+        {
+            name = PreviewName,
+            hideFlags = HideFlags.HideAndDontSave,
+            renderQueue = 3000,
+        };
+        _previewMaterial.color = color;
+        return _previewMaterial;
+    }
+
+    // The ghost follows the cursor, so it disappears whenever a click there would not place.
+    public static void HidePlacePreview()
+    {
+        if (_preview != null && _preview.activeSelf)
+        {
+            _preview.SetActive(false);
+        }
+
+        _previewStacked = null;
+    }
+
+    private static void DestroyPreview()
+    {
+        if (_preview != null)
+        {
+            Object.Destroy(_preview);
+            _preview = null;
+        }
+
+        _previewId = null;
+        _previewMissing = false;
+        _previewColor = null;
+        _previewStacked = null;
+    }
+
+    private static void SetRing(LineRenderer line, float x, float y, float z, float radius)
+    {
+        var ring = ObjectTools.Ring(x, y, z, radius, RingSegments);
+        for (var i = 0; i < ring.Count; i++)
+        {
+            line.SetPosition(i, new Vector3(ring[i].X, ring[i].Y, ring[i].Z));
+        }
+    }
+
+    private static void SetEnabled(LineRenderer line, bool enabled)
+    {
+        if (line != null)
+        {
+            line.enabled = enabled;
+        }
+    }
+
+    // onTop draws over the scene's depth, so a ring inside or behind a large mesh stays visible.
+    private static LineRenderer BuildOutline(Color color, float width, int positionCount, bool loop, bool onTop = false)
+    {
+        var go = new GameObject("MegabonkLevelsObjectOverlay");
+        Object.DontDestroyOnLoad(go);
+        var line = go.AddComponent<LineRenderer>();
+        line.loop = loop;
+        line.useWorldSpace = true;
+        line.positionCount = positionCount;
+        line.startWidth = width;
+        line.endWidth = width;
+        line.startColor = color;
+        line.endColor = color;
+        line.enabled = false;
+
+        // UI/Default honours unity_GUIZTestMode, so an onTop ring draws over the scene's depth; Sprites/Default would
+        // silently keep its less-equal depth test and hide a ring buried in terrain or a large mesh.
+        var shader = (onTop ? Shader.Find("UI/Default") : null)
+                     ?? Shader.Find("Sprites/Default")
+                     ?? Shader.Find("Hidden/Internal-Colored");
+        if (shader != null)
+        {
+            line.material = new Material(shader) { color = color };
+            if (onTop)
+            {
+                line.material.SetInt("unity_GUIZTestMode", (int)UnityEngine.Rendering.CompareFunction.Always);
+                line.material.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+                line.material.renderQueue = OnTopRenderQueue;
+            }
+        }
+
+        return line;
+    }
+}

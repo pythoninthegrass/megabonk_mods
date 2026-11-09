@@ -1,0 +1,29 @@
+using HarmonyLib;
+using Assets.Scripts.Managers;
+
+namespace MegabonkLevels;
+
+// Drives CustomLevelState.OnRunStarting() from the one method both the game's own menu flow and
+// LevelLoaderPatch call to start a run (confirmed by TASK-004.01's SceneTransitionProbe), and logs the
+// resulting arm/disarm so SteamWriteGuard's suppressions are auditable against a reason.
+public static class CustomLevelStatePatch
+{
+    private static ModLogger _logger;
+
+    public static void Install(ModLogger logger)
+    {
+        _logger = logger;
+    }
+
+    [HarmonyPatch(typeof(MapController), nameof(MapController.StartNewMap))]
+    private static class StartNewMapPrefix
+    {
+        private static void Prefix()
+        {
+            CustomLevelState.OnRunStarting();
+            StartupCover.OnRunStarting(CustomLevelState.IsActive);
+            if (!CustomLevelState.IsActive) LevelMusic.Clear();
+            _logger?.Msg($"CustomLevelState: run starting, IsActive={CustomLevelState.IsActive}");
+        }
+    }
+}
