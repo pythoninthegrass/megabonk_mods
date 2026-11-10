@@ -17,7 +17,7 @@ test('title conversion and link rewriting preserve code and external URLs', () =
   );
   assert.ok(output.includes('title: "A title: \\"quoted\\""'));
   assert.doesNotMatch(output, /^# A title/m);
-  assert.match(output, /\[Play\]\(\/docs\/player-guide\/#installing\)/);
+  assert.match(output, /\[Play\]\(\/player-guide\/#installing\)/);
   assert.match(
     output,
     /github.com\/pythoninthegrass\/megabonk_mods\/blob\/main\/docs\/development.md#tools/,
@@ -31,7 +31,7 @@ test('title conversion and link rewriting preserve code and external URLs', () =
 test('reference-style links are rewritten and missing H1 fails loudly', () => {
   assert.match(
     transformDoc('# Guide\n\n[Read][guide]\n\n[guide]: music.md#playback\n'),
-    /\[guide\]: \/docs\/music\/#playback/,
+    /\[guide\]: \/music\/#playback/,
   );
   assert.throws(() => transformDoc('No title'), /leading H1/);
 });

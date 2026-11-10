@@ -14,7 +14,7 @@ export default defineConfig({
     sitemap({
       filter: (page) => {
         const path = new URL(page).pathname;
-        return path === '/home/' || path.startsWith('/docs/');
+        return path === '/home/' || guides.some((slug) => path === `/${slug}/`);
       },
     }),
     starlight({
@@ -34,28 +34,28 @@ export default defineConfig({
       plugins: [starlightLlmsTxt({
         projectName: 'Megabonk Level Editor wiki',
         details: guides.map((slug) =>
-          `- [${slug.replaceAll('-', ' ')}](https://docs.megabonkmod.party/docs/${slug}.md)`
+          `- [${slug.replaceAll('-', ' ')}](https://docs.megabonkmod.party/${slug}.md)`
         ).join('\n'),
       })],
       sidebar: [
         { label: 'Wiki home', slug: 'home' },
         {
           label: 'Start playing',
-          items: ['docs/player-guide', 'docs/starter-level', 'docs/music'],
+          items: ['player-guide', 'starter-level', 'music'],
         },
         {
           label: 'Warehouse',
           items: [
-            'docs/thps-warehouse',
-            'docs/thps-warehouse-layout',
-            'docs/thps-warehouse-pieces',
+            'thps-warehouse',
+            'thps-warehouse-layout',
+            'thps-warehouse-pieces',
           ],
         },
         {
           label: 'Packages & compatibility',
           items: [
-            'docs/thunderstore',
-            { label: 'Legacy player installer', slug: 'docs/player-installer' },
+            'thunderstore',
+            { label: 'Legacy player installer', slug: 'player-installer' },
           ],
         },
         { label: 'Showcase', link: 'https://megabonkmod.party/' },

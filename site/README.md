@@ -27,11 +27,11 @@ The build produces `dist/` with the showcase at `/`, the wiki home at `/home/` a
 
 ## Wiki content
 
-Edit the authoritative Markdown in `../docs/`, not the generated copies in `src/content/docs/docs/`. `scripts/sync-docs.mjs` publishes an explicit eight-guide allowlist before `dev`, `check` and `build`; the dev wrapper watches `../docs/`. It turns the leading H1 into frontmatter, rewrites published-guide links to wiki URLs and other repository links to GitHub, and preserves unchanged file timestamps. Generated copies are gitignored. The wiki index is hand-authored at `src/content/docs/docs/index.md`; navigation is curated in `astro.config.mjs`.
+Edit the authoritative Markdown in `../docs/`, not the generated copies in `src/content/docs/`. `scripts/sync-docs.mjs` publishes an explicit eight-guide allowlist before `dev`, `check` and `build`; the dev wrapper watches `../docs/`. It turns the leading H1 into frontmatter, rewrites published-guide links to wiki URLs and other repository links to GitHub, and preserves unchanged file timestamps. Generated copies are gitignored. The wiki index is hand-authored at `src/content/docs/home.md`; navigation is curated in `astro.config.mjs`.
 
 Starlight provides Pagefind search, sidebar navigation, section contents and code-block copying. **Search works only after a production build**, not in `npm run dev`. Use `npm run build` then `npm run preview` (or `node server.mjs`) to test search. The build explicitly sets `NODE_ENV=production` so an inherited development setting cannot disable the search UI.
 
-Each page has Copy page and View as Markdown controls. `/docs/<slug>.md` serves standalone guide Markdown with its title, and `/home.md` serves the index. The legacy `/docs/index.md` redirects to `/home.md`. Copy uses the raw endpoint, with a textarea fallback for plain HTTP or denied clipboard permissions. `/llms.txt`, `/llms-full.txt` and `/llms-small.txt` provide the index and combined text. No-JavaScript readers can still follow View as Markdown.
+Each page has Copy page and View as Markdown controls. `/<slug>.md` serves standalone guide Markdown with its title, and `/home.md` serves the index. The legacy `/docs/index.md` redirects to `/home.md`. Copy uses the raw endpoint, with a textarea fallback for plain HTTP or denied clipboard permissions. `/llms.txt`, `/llms-full.txt` and `/llms-small.txt` provide the index and combined text. No-JavaScript readers can still follow View as Markdown.
 
 ## Serving with Docker
 

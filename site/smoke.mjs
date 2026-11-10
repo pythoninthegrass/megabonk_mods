@@ -62,7 +62,7 @@ export async function runSmoke(baseUrl) {
   const wikiHtml = await wiki.text();
   failIf(!wikiHtml.includes('Megabonk Level Editor wiki'), 'wiki title is missing');
   for (const ref of localReferences(wikiHtml)) refs.add(ref);
-  refs.add('/docs/player-guide.md');
+  refs.add('/player-guide.md');
   refs.add('/pagefind/pagefind.js');
   refs.add('/llms.txt');
   const kinds = { css: 0, js: 0, images: 0 };

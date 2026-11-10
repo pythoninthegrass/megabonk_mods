@@ -41,6 +41,8 @@ test('legacy wiki home URLs redirect without affecting guide routes', async () =
       ['docs/', '/home/'],
       ['docs', '/home/'],
       ['docs/index.md', '/home.md'],
+      ['docs/player-guide/', '/player-guide/'],
+      ['docs/player-guide.md', '/player-guide.md'],
     ]
   ) {
     const response = await fetch(new URL(`${path}?legacy=1`, base), { redirect: 'manual' });
@@ -54,7 +56,7 @@ test('wiki routes, raw Markdown and search assets have correct content types', a
     const [path, type] of [
       ['home/', 'text/html'],
       ['home.md', 'text/markdown'],
-      ['docs/player-guide.md', 'text/markdown'],
+      ['player-guide.md', 'text/markdown'],
       ['pagefind/pagefind.js', 'text/javascript'],
       ['pagefind/wasm.en.pagefind', 'application/wasm'],
     ]
@@ -64,7 +66,7 @@ test('wiki routes, raw Markdown and search assets have correct content types', a
     assert.ok(response.headers.get('content-type').startsWith(type), path);
   }
   assert.equal(
-    (await fetch(new URL('docs/player-guide', base), { redirect: 'manual' })).status,
+    (await fetch(new URL('player-guide', base), { redirect: 'manual' })).status,
     308,
   );
 });

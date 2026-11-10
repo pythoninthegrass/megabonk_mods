@@ -7,7 +7,7 @@ const fetcher = async () => new Response(markdown);
 
 test('copy fetches the exact raw Markdown endpoint', async () => {
   let copied;
-  await copyPage('/docs/player-guide.md', {
+  await copyPage('/player-guide.md', {
     document: {},
     clipboard: {
       writeText: async (text) => {
@@ -15,7 +15,7 @@ test('copy fetches the exact raw Markdown endpoint', async () => {
       },
     },
     fetcher: async (url) => {
-      assert.equal(url, '/docs/player-guide.md');
+      assert.equal(url, '/player-guide.md');
       return new Response(markdown);
     },
   });
@@ -64,7 +64,7 @@ for (const denied of [false, true]) {
         return true;
       },
     };
-    await copyPage('/docs/player-guide.md', {
+    await copyPage('/player-guide.md', {
       document,
       fetcher,
       clipboard: denied
@@ -78,7 +78,7 @@ for (const denied of [false, true]) {
     assert.ok(removed && focused);
     document.execCommand = () => false;
     await assert.rejects(
-      copyPage('/docs/player-guide.md', { document, fetcher }),
+      copyPage('/player-guide.md', { document, fetcher }),
       /Clipboard unavailable/,
     );
   });

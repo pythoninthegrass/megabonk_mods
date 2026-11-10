@@ -6,18 +6,17 @@ import { guides } from '../scripts/sync-docs.mjs';
 const root = new URL('../dist/', import.meta.url);
 
 test('exactly the approved guides are published alongside the wiki index', async () => {
-  const entries = await readdir(new URL('docs/', root), { withFileTypes: true });
-  assert.deepEqual(
-    entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort(),
-    [...guides].sort(),
-  );
+  const entries = await readdir(root, { withFileTypes: true });
+  const published = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  for (const slug of guides) assert.ok(published.includes(slug), slug);
+  assert.ok(!published.includes('docs'), 'guides are not nested under /docs/');
   await access(new URL('home/index.html', root));
   await access(new URL('index.html', root));
 });
 
 test('every guide has canonical metadata, copy controls, standalone Markdown and working local links', async () => {
   for (const slug of ['home', ...guides]) {
-    const path = slug === 'home' ? 'home' : `docs/${slug}`;
+    const path = slug;
     const page = `${path}/index.html`;
     const html = await readFile(new URL(page, root), 'utf8');
     const markdown = await readFile(new URL(`${path}.md`, root), 'utf8');
@@ -45,10 +44,12 @@ test('search index and sitewide Markdown outputs exist and exclude unpublished d
   await access(new URL('pagefind/pagefind.js', root));
   await access(new URL('pagefind/pagefind-entry.json', root));
   const index = await readFile(new URL('llms.txt', root), 'utf8');
-  for (const slug of guides) assert.ok(index.includes(`/docs/${slug}`), slug);
+  for (const slug of guides) {
+    assert.ok(index.includes(`https://docs.megabonkmod.party/${slug}.md`), slug);
+  }
   const full = await readFile(new URL('llms-full.txt', root), 'utf8');
   assert.match(full, /Bramblecrown Hill/);
-  assert.doesNotMatch(index, /\]\([^)]*\/docs\/(?:development|website|gamepadui)\//);
+  assert.doesNotMatch(index, /\]\([^)]*\/(?:development|website|gamepadui)\//);
 });
 
 test('wiki home, player guide and Markdown bundles point to the public release', async () => {
@@ -57,8 +58,8 @@ test('wiki home, player guide and Markdown bundles point to the public release',
     const path of [
       'home/index.html',
       'home.md',
-      'docs/player-guide/index.html',
-      'docs/player-guide.md',
+      'player-guide/index.html',
+      'player-guide.md',
       'llms-full.txt',
     ]
   ) {
@@ -69,9 +70,9 @@ test('wiki home, player guide and Markdown bundles point to the public release',
       `${path} has no stale release notice`,
     );
   }
-  const guide = await readFile(new URL('docs/player-guide.md', root), 'utf8');
+  const guide = await readFile(new URL('player-guide.md', root), 'utf8');
   assert.ok(guide.includes('The manager should also install'));
-  const legacy = await readFile(new URL('docs/player-installer.md', root), 'utf8');
+  const legacy = await readFile(new URL('player-installer.md', root), 'utf8');
   assert.ok(legacy.includes('Legacy reference:'));
   assert.ok(legacy.includes('cannot install the current BepInEx DLL'));
 });

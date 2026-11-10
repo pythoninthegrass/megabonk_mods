@@ -25,7 +25,7 @@ function rewriteUrl(url) {
   if (!path) return url;
   const normalized = posix.normalize(posix.join('docs', path));
   const slug = normalized.replace(/^docs\//, '').replace(/\.md$/, '');
-  if (normalized.startsWith('docs/') && guides.includes(slug)) return `/docs/${slug}/${suffix}`;
+  if (normalized.startsWith('docs/') && guides.includes(slug)) return `/${slug}/${suffix}`;
   return repository + normalized + suffix;
 }
 
@@ -44,7 +44,7 @@ export function transformDoc(source) {
 
 export async function syncDocs({
   source = fileURLToPath(new URL('../../docs/', import.meta.url)),
-  target = fileURLToPath(new URL('../src/content/docs/docs/', import.meta.url)),
+  target = fileURLToPath(new URL('../src/content/docs/', import.meta.url)),
 } = {}) {
   const pages = await Promise.all(guides.map(async (slug) => [
     `${slug}.md`,

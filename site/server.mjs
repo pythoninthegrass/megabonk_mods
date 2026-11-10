@@ -59,6 +59,13 @@ export function createApp({ root }) {
       reply(res, 308, { location: destination + url.search, 'content-length': '0' });
       return;
     }
+    if (pathname.startsWith('/docs/')) {
+      reply(res, 308, {
+        location: pathname.slice('/docs'.length) + url.search,
+        'content-length': '0',
+      });
+      return;
+    }
     if (pathname === '/' || pathname.endsWith('/')) pathname += 'index.html';
     const target = resolve(join(rootDir, pathname));
     if (target !== rootDir && !target.startsWith(rootDir + sep)) {

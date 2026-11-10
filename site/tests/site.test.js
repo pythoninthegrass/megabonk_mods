@@ -57,7 +57,7 @@ test('all fragment destinations exist', () => {
 test('start section links to the published player guide and Thunderstore release', () => {
   const start = html.match(/<section\b[^>]*id="start"[\s\S]*?<\/section>/)?.[0];
   assert.ok(start, 'start section exists');
-  assert.match(start, /href="https:\/\/docs\.megabonkmod\.party\/docs\/player-guide\/"/);
+  assert.match(start, /href="https:\/\/docs\.megabonkmod\.party\/player-guide\/"/);
   assert.match(
     start,
     /href="https:\/\/thunderstore\.io\/c\/megabonk\/p\/pythoninthegrass\/Megabonk_Level_Editor\/"/,
