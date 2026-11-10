@@ -53,8 +53,8 @@ tasks:
     desc: "Extract the Warehouse mesh, textures and nodes from the disc image into .tools/thps1/warehouse"
     summary: |
       The pinned input disc checksum is checked even when warehouse.obj exists.
-      Extraction needs THPS2_TOOLS_DIR (in .env) pointing at
-      a checkout of JayFoxRox/thps2-tools; see docs/thps-warehouse.md.
+      Extraction uses the thps2-tools submodule in tools/thps2-tools (git submodule
+      update --init), or the checkout THPS2_TOOLS_DIR points at; see docs/thps-warehouse.md.
     deps:
       - verify-disc
     status:
@@ -62,8 +62,8 @@ tasks:
     cmds:
       - |
         [ -f "{{.DISC}}" ] || { echo "missing disc image: {{.DISC}}" >&2; exit 1; }
-        [ -n "${THPS2_TOOLS_DIR:-}" ] || { echo "set THPS2_TOOLS_DIR in .env to a thps2-tools checkout" >&2; exit 1; }
-        uv run --with pillow scripts/thps1_extract.py --disc "{{.DISC}}" --converter-dir "$THPS2_TOOLS_DIR"
+        [ -f "${THPS2_TOOLS_DIR:-tools/thps2-tools}/common.py" ] || { echo "thps2-tools not found: run 'git submodule update --init' or set THPS2_TOOLS_DIR in .env" >&2; exit 1; }
+        uv run --with pillow scripts/thps1_extract.py --disc "{{.DISC}}" --converter-dir "${THPS2_TOOLS_DIR:-tools/thps2-tools}"
 
   verify-disc:
     desc: "Verify the locally supplied THPS1 disc against tools/thps1.sha256"

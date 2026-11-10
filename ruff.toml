@@ -34,6 +34,7 @@ exclude = [
     "build",
     "dist",
     "node_modules",
+    "tools/thps2-tools",
     "venv",
 ]
 

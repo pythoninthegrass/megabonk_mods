@@ -7,21 +7,20 @@ Build the Tony Hawk's Pro Skater Warehouse level for Megabonk from your own copy
 It's a bit on the technical side, but the gist is:
 
 1. **Install [git](https://git-scm.com/downloads)** so you can clone the repo.
-2. **Clone the repo** and run `mise install` ([mise](https://mise.jdx.dev) sets up Python, uv and Task):
+2. **Clone the repo** (with its submodules) and run `mise install` ([mise](https://mise.jdx.dev) sets up Python, uv and Task):
 
    ```sh
-   git clone https://github.com/pythoninthegrass/megabonk_mods.git
+   git clone --recurse-submodules https://github.com/pythoninthegrass/megabonk_mods.git
    cd megabonk_mods
    mise install
    ```
 
 3. **Install Unity 2023.2.22f1** (exact version, free Personal license) from [Unity Hub](https://docs.unity.com/en-us/hub/install-hub-win-mac)'s download archive, with the Windows and Linux Build Support (Mono) modules. Sign in to Hub so a license is active.
 4. **Get your disc image:** google the USA *Tony Hawk's Pro Skater* (SLUS_008.60). Save it as `tools/thps1/Tony Hawk's Pro Skater.bin` inside the cloned repo. The build rejects other revisions.
-5. **Clone [thps2-tools](https://github.com/JayFoxRox/thps2-tools)** and set `THPS2_TOOLS_DIR` to it in an `.env` file (copy `.env.example` to start one).
-6. **Optional music:** drop your own mp3s in `tools/ost/` (e.g. `04 Superman.mp3`).
-7. **Quit Megabonk, then run `task thps`.** It extracts the map from the disc, builds the pack in Unity, and installs it into your Megabonk folder. Every step skips itself when its inputs are unchanged, so running it again is cheap.
-8. **Install [Megabonk Level Editor](https://thunderstore.io/c/megabonk/p/pythoninthegrass/Megabonk_Level_Editor/) from Thunderstore** with your mod manager.
-9. **Launch the modded game from the mod manager.** The Warehouse shows up in Map Selection.
+5. **Optional music:** drop your own mp3s in `tools/ost/` (e.g. `04 Superman.mp3`).
+6. **Quit Megabonk, then run `task thps`.** It extracts the map from the disc, builds the pack in Unity, and installs it into your Megabonk folder. Every step skips itself when its inputs are unchanged, so running it again is cheap.
+7. **Install [Megabonk Level Editor](https://thunderstore.io/c/megabonk/p/pythoninthegrass/Megabonk_Level_Editor/) from Thunderstore** with your mod manager.
+8. **Launch the modded game from the mod manager.** The Warehouse shows up in Map Selection.
 
 This is mostly untested outside of macOS, so there be dragons...
 
@@ -39,6 +38,7 @@ Run `task thps:verify-disc` (or set `DISC="path/to/disc.bin"`) to check your ima
 
 ## Troubleshooting
 
+- **`thps2-tools not found`.** The repo was cloned without its submodules. Run `git submodule update --init` inside it.
 - **The disc check fails.** The image's sha256 does not match the pin above. Re-rip as a raw MODE2/2352 `.bin` of the USA release; other revisions and dump formats are not supported.
 - **Unity is not found.** The build looks for the Hub's default macOS install path. On Windows or Linux, set `UNITY_EDITOR` in `.env` to the editor executable.
 - **The build stops with `No valid Unity Editor license found`.** Sign in to Unity Hub, keep a Personal license active and open any project once, which writes the license file the command line needs.
@@ -358,10 +358,10 @@ The mesh, textures and collectible positions come from the USA PS1 disc (SLUS-00
 
 ### Rerunning the extraction
 
-`task thps:extract` runs these steps for you once `THPS2_TOOLS_DIR` is set; the manual form is:
+`task thps:extract` runs these steps for you; the manual form is:
 
-1. Download JayFoxRox/thps2-tools (MIT) into its own directory. The scripts used were `common.py` (sha256 `4932af48...`), `convert-psx.py` (`059ba8c7...`) and `disassemble-trg.py` (`566db4a8...`); the download was not a git checkout, so these hashes are the pin.
-2. Run `uv run --with pillow scripts/thps1_extract.py --disc "tools/thps1/Tony Hawk's Pro Skater.bin" --converter-dir <thps2-tools dir>`. Pillow 13.0.0 and Python 3.13 were used.
+1. The converters come from JayFoxRox/thps2-tools (MIT), the `tools/thps2-tools` submodule, pinned at commit `e78065a`. The scripts used are `common.py` (sha256 `4932af48...`), `convert-psx.py` (`059ba8c7...`) and `disassemble-trg.py` (`566db4a8...`). Set `THPS2_TOOLS_DIR` in `.env` to use a different checkout.
+2. Run `uv run --with pillow scripts/thps1_extract.py --disc "tools/thps1/Tony Hawk's Pro Skater.bin" --converter-dir tools/thps2-tools`. Pillow 13.0.0 and Python 3.13 were used.
 3. The script reads `CD.HED` and `CD.WAD` from the ISO, cuts out `skware.psx` (mesh), `skware_l.psx` (textures) and `skware_t.trg` (nodes), converts them with a patched copy of `convert-psx.py`, and writes `.tools/thps1/warehouse/`: `warehouse.obj`, `warehouse.mtl`, 99 texture PNGs and `warehouse_nodes.json`.
 
 `scripts/thps1_extract.py` is covered by `tests/test_thps1_extract.py`; run it through `task scripts:test`.
