@@ -1,17 +1,33 @@
 # THPS Warehouse reference
 
-What the Tony Hawk's Pro Skater Warehouse level physically contains, read from a 100% playthrough video. The only 3D view of the level is that video, so this doc records what it shows and what it cannot show, so the level does not have to be re-watched to rebuild it.
+Build the Tony Hawk's Pro Skater Warehouse level for Megabonk from your own copy of the PS1 game. The Quickstart gets it running in the game; the sections after it cover what you need to supply, what to do when a step fails, and then a reference for what the level contains.
 
-## Source
+## Quickstart
 
-### Local-only assets
+It's a bit on the technical side, but the gist is:
 
-The optional Warehouse workflow requires your own lawfully obtained PS1 THPS1 USA
-raw MODE2/2352 disc image. Megabonk itself requires a separate Steam copy. No ROM,
-extracted mesh, texture, soundtrack or generated pack bundle is distributed in
-this source tree. Extraction outputs remain under gitignored `.tools/`; soundtrack
-files must also be supplied locally with appropriate rights. Owning a game does
-not grant permission to redistribute its assets or derivative bundles.
+1. **Install [git](https://git-scm.com/downloads)** so you can clone the repo.
+2. **Clone the repo** and run `mise install` ([mise](https://mise.jdx.dev) sets up Python, uv and Task):
+
+   ```sh
+   git clone https://github.com/pythoninthegrass/megabonk_mods.git
+   cd megabonk_mods
+   mise install
+   ```
+
+3. **Install Unity 2023.2.22f1** (exact version, free Personal license) from Unity Hub's download archive, with the Windows and Linux Build Support (Mono) modules. Sign in to Hub so a license is active.
+4. **Get your disc image:** google the USA *Tony Hawk's Pro Skater* (SLUS_008.60). Save it as `tools/thps1/Tony Hawk's Pro Skater.bin` inside the cloned repo. The build rejects other revisions.
+5. **Clone [thps2-tools](https://github.com/JayFoxRox/thps2-tools)** and set `THPS2_TOOLS_DIR` to it in an `.env` file (copy `.env.example` to start one).
+6. **Optional music:** drop your own mp3s in `tools/ost/` (e.g. `04 Superman.mp3`).
+7. **Quit Megabonk, then run `task thps`.** It extracts the map from the disc, builds the pack in Unity, and installs it into your Megabonk folder. Every step skips itself when its inputs are unchanged, so running it again is cheap.
+8. **Install [Megabonk Level Editor](https://thunderstore.io/c/megabonk/p/pythoninthegrass/Megabonk_Level_Editor/) from Thunderstore** with your mod manager.
+9. **Launch the modded game from the mod manager.** The Warehouse shows up in Map Selection.
+
+This is mostly untested outside of macOS, so there be dragons...
+
+## Local-only assets
+
+The Warehouse workflow requires your own lawfully obtained PS1 THPS1 USA raw MODE2/2352 disc image. Megabonk itself requires a separate Steam copy. No ROM, extracted mesh, texture, soundtrack or generated pack bundle is distributed in this source tree. Extraction outputs remain under gitignored `.tools/`; soundtrack files must also be supplied locally with appropriate rights. Owning a game does not grant permission to redistribute its assets or derivative bundles.
 
 `tools/thps1.sha256` pins the locally verified input image, not a generated pack:
 
@@ -19,11 +35,23 @@ not grant permission to redistribute its assets or derivative bundles.
 f1398cd15138a947fb3d49e1d31c7fe2aae9436ec09e32df917c658ccac30da9
 ```
 
-Run `task thps:verify-disc` (or set `DISC="path/to/disc.bin"`). Both `task thps:extract`
-and direct `thps1_extract.py` builds reject a different digest before extraction;
-the task verifies even when it reuses existing output. Other revisions or dump
-formats are not supported by this pin. It identifies the tested local input, not
-ownership, licensing status or independently verified archival provenance.
+Run `task thps:verify-disc` (or set `DISC="path/to/disc.bin"`) to check your image before a long build. Both `task thps:extract` and direct `thps1_extract.py` builds reject a different digest before extraction; the task verifies even when it reuses existing output. Other revisions or dump formats are not supported by this pin. It identifies the tested local input, not ownership, licensing status or independently verified archival provenance.
+
+## Troubleshooting
+
+- **The disc check fails.** The image's sha256 does not match the pin above. Re-rip as a raw MODE2/2352 `.bin` of the USA release; other revisions and dump formats are not supported.
+- **Unity is not found.** The build looks for the Hub's default macOS install path. On Windows or Linux, set `UNITY_EDITOR` in `.env` to the editor executable.
+- **The build stops with `No valid Unity Editor license found`.** Sign in to Unity Hub, keep a Personal license active and open any project once, which writes the license file the command line needs.
+- **The pack installs into the wrong folder, or nowhere.** Run `uv run scripts/game_paths.py` to see which Megabonk folder the tasks resolved, and set `MEGABONK_GAME_DIR` in `.env` if it is wrong. The pack lands in `UserData/LevelPacks/thps` and the level in `UserData/Levels`.
+- **The Warehouse is a placeholder box, or `pack 'thps' is not installed` is in the log.** The pack loads once per session, so quit Megabonk completely and launch it again after installing.
+- **There is no music.** The pack builds without music when `tools/ost/` holds no mp3s. Add them and run `task thps` again.
+- **You play on a different machine than you build on.** Copy the built pack, manifest and level across instead of rebuilding; see [Loading the THPS level](development.md#loading-the-thps-level). Use the Windows bundle for a Windows game, including under Proton.
+
+## Reference material
+
+Everything below is for people editing or rebuilding the level. It records what the Warehouse physically contains, read from a 100% playthrough video. The only 3D view of the level is that video, so this reference records what it shows and what it cannot show, so the level does not have to be re-watched to rebuild it.
+
+## Source
 
 - 219 frames at 1 fps, `tools/thps_warehouse_frames/frame_0001.jpg` to `frame_0219.jpg`, 1920x1080, from video time 00:39 to 04:18 of `tools/thps1_100_playthrough.mkv`.
 - Both the frames and the video are gitignored. Regenerate the frames with `ffmpeg -ss 00:39 -to 04:18 -i tools/thps1_100_playthrough.mkv -vf fps=1 -q:v 2 tools/thps_warehouse_frames/frame_%04d.jpg`.
@@ -329,6 +357,8 @@ additive; the shipped monolithic Warehouse remains unchanged.
 The mesh, textures and collectible positions come from the USA PS1 disc (SLUS-00860, raw MODE2/2352 `.bin`, sha256 `f1398cd1...`). Nothing ripped is committed: the disc image lives in `tools/thps1/` and every output in `.tools/thps1/`, both gitignored.
 
 ### Rerunning the extraction
+
+`task thps:extract` runs these steps for you once `THPS2_TOOLS_DIR` is set; the manual form is:
 
 1. Download JayFoxRox/thps2-tools (MIT) into its own directory. The scripts used were `common.py` (sha256 `4932af48...`), `convert-psx.py` (`059ba8c7...`) and `disassemble-trg.py` (`566db4a8...`); the download was not a git checkout, so these hashes are the pin.
 2. Run `uv run --with pillow scripts/thps1_extract.py --disc "tools/thps1/Tony Hawk's Pro Skater.bin" --converter-dir <thps2-tools dir>`. Pillow 13.0.0 and Python 3.13 were used.
