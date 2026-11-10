@@ -12,6 +12,7 @@ exclude: >-
       site/package-lock\.json|
       site/src/content/.*|
       tests/fixtures/.*|
+      tools/thps2-tools/.*|
       unity/.*|
       uv\.lock
   )$

@@ -7,7 +7,8 @@ Build the Tony Hawk's Pro Skater Warehouse level for Megabonk from your own copy
 It's a bit on the technical side, but the gist is:
 
 1. **Install [git](https://git-scm.com/downloads)** so you can clone the repo.
-2. **Clone the repo** (with its submodules) and run `mise install` ([mise](https://mise.jdx.dev) sets up Python, uv and Task):
+2. **Install [mise](https://mise.jdx.dev/getting-started.html)**, a tool that sets up Python, uv and Task for you. Follow its install and shell-activation steps so `task` and `uv` are on your `PATH`; on macOS and Linux the one-liner is `curl -fsSL https://mise.run | sh` (Windows has its own steps on that page). Restart your terminal afterwards.
+3. **Clone the repo** (with its submodules) and run `mise install`:
 
    ```sh
    git clone --recurse-submodules https://github.com/pythoninthegrass/megabonk_mods.git
@@ -15,12 +16,12 @@ It's a bit on the technical side, but the gist is:
    mise install
    ```
 
-3. **Install Unity 2023.2.22f1** (exact version, free Personal license) from [Unity Hub](https://docs.unity.com/en-us/hub/install-hub-win-mac)'s download archive, with the Windows and Linux Build Support (Mono) modules. Sign in to Hub so a license is active.
-4. **Get your disc image:** google the USA *Tony Hawk's Pro Skater* (SLUS_008.60). Save it as `tools/thps1/Tony Hawk's Pro Skater.bin` inside the cloned repo. The build rejects other revisions.
-5. **Optional music:** drop your own mp3s in `tools/ost/` (e.g. `04 Superman.mp3`).
-6. **Quit Megabonk, then run `task thps`.** It extracts the map from the disc, builds the pack in Unity, and installs it into your Megabonk folder. Every step skips itself when its inputs are unchanged, so running it again is cheap.
-7. **Install [Megabonk Level Editor](https://thunderstore.io/c/megabonk/p/pythoninthegrass/Megabonk_Level_Editor/) from Thunderstore** with your mod manager.
-8. **Launch the modded game from the mod manager.** The Warehouse shows up in Map Selection.
+4. **Install Unity 2023.2.22f1** (exact version, free Personal license) from [Unity Hub](https://docs.unity.com/en-us/hub/install-hub-win-mac)'s download archive, with the Windows and Linux Build Support (Mono) modules. Sign in to Hub so a license is active.
+5. **Get your disc image:** google the USA *Tony Hawk's Pro Skater* (SLUS_008.60). Save it as `tools/thps1/Tony Hawk's Pro Skater.bin` inside the cloned repo. The build rejects other revisions.
+6. **Optional music:** drop your own mp3s in `tools/ost/` (e.g. `04 Superman.mp3`).
+7. **Quit Megabonk, then run `task thps`.** It extracts the map from the disc, builds the pack in Unity, and installs it into your Megabonk folder. Every step skips itself when its inputs are unchanged, so running it again is cheap.
+8. **Install [Megabonk Level Editor](https://thunderstore.io/c/megabonk/p/pythoninthegrass/Megabonk_Level_Editor/) from Thunderstore** with your mod manager.
+9. **Launch the modded game from the mod manager.** The Warehouse shows up in Map Selection.
 
 This is mostly untested outside of macOS, so there be dragons...
 

@@ -10,6 +10,9 @@ indent-width = 4
 # Black (default: 88)
 line-length = 130
 
+# Apply exclude even to explicitly passed paths, so hooks never lint the thps2-tools submodule.
+force-exclude = true
+
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".bzr",
