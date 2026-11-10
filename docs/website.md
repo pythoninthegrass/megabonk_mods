@@ -44,7 +44,7 @@ npm exec astro dev stop
 
 ## Container serving
 
-Docker Engine with Docker Compose v2 is the only prerequisite: the image builds the site from source inside the container, so the host needs no Node, npm or game tooling. The container tooling lives with the site: `site/Dockerfile`, `site/docker-compose.yml`, `site/Dockerfile.dockerignore`, `site/server.mjs` and `site/smoke.mjs`. The multi-stage Dockerfile runs `npm ci` and `npm run build` on Node 22 Alpine, then serves `dist/` from a non-root stage containing only the output, server and smoke check. The repository-root context allows the wiki sync to read `docs/`; the Dockerfile-specific ignore file permits only docs and site sources and excludes dependencies, generated output, `.impeccable/`, `.env*` and logs. Game and mod assets never enter the context.
+Docker Engine with Docker Compose v2 is the only prerequisite: the image builds the site from source inside the container, so the host needs no Node, npm or game tooling. The container tooling lives with the site: `site/Dockerfile`, `site/docker-compose.yml`, `site/Dockerfile.dockerignore`, `site/server.mjs` and `site/smoke.mjs`. The multi-stage Dockerfile runs `bun install --frozen-lockfile` (Bun reads `package-lock.json`, so no second lockfile exists) and `astro build` on the `oven/bun` Alpine image, then serves `dist/` with Bun from a non-root stage containing only the output, server and smoke check. That stage links `node` to Bun so a health check still written as `node smoke.mjs` keeps passing. The repository-root context allows the wiki sync to read `docs/`; the Dockerfile-specific ignore file permits only docs and site sources and excludes dependencies, generated output, `.impeccable/`, `.env*` and logs. Game and mod assets never enter the context.
 
 From the repository root:
 
@@ -55,10 +55,10 @@ docker compose -f site/docker-compose.yml logs site       # server logs
 docker compose -f site/docker-compose.yml down            # stop
 ```
 
-Open `http://127.0.0.1:8080/`. The published host port defaults to `8080` and is configurable through `SITE_PORT`, either per command (`SITE_PORT=8123 docker compose -f site/docker-compose.yml up -d`) or in a gitignored `site/.env` file that Compose reads automatically; [`site/.env.example`](../site/.env.example) is the template for both that variable and the deployment settings below. Rebuild after editing content, the server or the image itself with `up -d --build`. The service publishes on `127.0.0.1` only, serves the static files with content types and cache headers (immutable for hashed `_astro/` assets, revalidation for `index.html`), and runs `node smoke.mjs` as its health check; `ps` reports `healthy` once it passes. To run that smoke check by hand, which fetches the home page and every local CSS, JavaScript and image it references and asserts status and content type:
+Open `http://127.0.0.1:8080/`. The published host port defaults to `8080` and is configurable through `SITE_PORT`, either per command (`SITE_PORT=8123 docker compose -f site/docker-compose.yml up -d`) or in a gitignored `site/.env` file that Compose reads automatically; [`site/.env.example`](../site/.env.example) is the template for both that variable and the deployment settings below. Rebuild after editing content, the server or the image itself with `up -d --build`. The service publishes on `127.0.0.1` only, serves the static files with content types and cache headers (immutable for hashed `_astro/` assets, revalidation for `index.html`), and runs `bun smoke.mjs` as its health check; `ps` reports `healthy` once it passes. To run that smoke check by hand, which fetches the home page and every local CSS, JavaScript and image it references and asserts status and content type:
 
 ```sh
-docker compose -f site/docker-compose.yml exec site node smoke.mjs
+docker compose -f site/docker-compose.yml exec site bun smoke.mjs
 ```
 
 The same checks run on the host as part of `npm run test:site`. Compose is the local preview path; the published site is deployed by Dokploy under Deployment.
@@ -156,7 +156,7 @@ Some Icarus versions have incomplete reconciliation for existing apps: `plan` an
 | Project | `megabonkmod-party`, containing the one `site` app |
 | Source | GitHub `main`; Dokploy builds `site/Dockerfile` with the repository-root context, restricted by `site/Dockerfile.dockerignore`; local Compose builds the same image |
 | Domain | Apex, `www` and `docs.megabonkmod.party` route to port `8080` with HTTPS; `www` redirects to the apex, and the docs hostname's root redirects to `/home/` |
-| Health check | `node smoke.mjs` inside the container, the same check the Compose healthcheck runs |
+| Health check | `bun smoke.mjs` inside the container, the same check the Compose healthcheck runs |
 | Auto-deploy | a push to `main` that touches `site/**` or `docs/**`, delivered by the Dokploy GitHub app |
 
 Because Dokploy builds from the pushed commit, content reaches the site only after it is committed and pushed. Use `ic --env prod trigger` to re-run a deploy without a new commit, and `ic --env prod apply` only when `dokploy.yml` changes. `.dokploy-state/prod.json` maps the config's names to Dokploy's resource ids and is gitignored: `ic --env prod import` regenerates it from an existing project, and it must be present before `apply`, which otherwise creates a duplicate project. Verify a deploy from anywhere with the container's own smoke check:

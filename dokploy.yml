@@ -7,7 +7,7 @@ project:
   name: megabonkmod-party
   description: |
     Static Astro showcase and player wiki for Megabonk Levels, served by the
-    dependency-free Node static server defined in site/Dockerfile.
+    dependency-free static server, run by Bun, defined in site/Dockerfile.
 
   deploy_order:
     - [site]
@@ -65,7 +65,7 @@ apps:
       - docs/**
     create_env_file: false
     healthCheck:
-      command: node smoke.mjs
+      command: bun smoke.mjs
       interval: 30s
       timeout: 10s
       startPeriod: 15s

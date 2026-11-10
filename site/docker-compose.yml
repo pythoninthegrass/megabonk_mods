@@ -9,7 +9,7 @@ services:
     ports:
       - "127.0.0.1:${SITE_PORT:-8080}:8080"
     healthcheck:
-      test: ["CMD", "node", "smoke.mjs"]
+      test: ["CMD", "bun", "smoke.mjs"]
       interval: 30s
       timeout: 5s
       retries: 3

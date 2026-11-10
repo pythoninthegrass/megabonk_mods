@@ -1,18 +1,20 @@
 # syntax=docker/dockerfile:1
-FROM node:22-alpine AS build
+FROM oven/bun:1.4.4-alpine AS build
 ENV ASTRO_TELEMETRY_DISABLED=1
 WORKDIR /app/site
 COPY site/package.json site/package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci
+RUN --mount=type=cache,target=/root/.bun/install/cache bun install --frozen-lockfile
 COPY docs/ /app/docs/
 COPY site/ ./
-RUN --mount=type=cache,target=/app/site/node_modules/.astro,sharing=locked npm run build
+RUN --mount=type=cache,target=/app/site/node_modules/.astro,sharing=locked bun run scripts/sync-docs.mjs && NODE_ENV=production bunx --bun astro build
 
-FROM node:22-alpine
+FROM oven/bun:1.4.4-alpine
 WORKDIR /app
-COPY --from=build --chown=node:node /app/site/dist ./dist
-COPY --chown=node:node site/server.mjs site/smoke.mjs ./
+# Keeps the Dokploy health check `node smoke.mjs` working until dokploy.yml is applied.
+RUN ln -s /usr/local/bin/bun /usr/local/bin/node
+COPY --from=build --chown=bun:bun /app/site/dist ./dist
+COPY --chown=bun:bun site/server.mjs site/smoke.mjs ./
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080
-USER node
+USER bun
 EXPOSE 8080
-CMD ["node", "server.mjs"]
+CMD ["bun", "server.mjs"]
