@@ -4,8 +4,6 @@ Build the Tony Hawk's Pro Skater Warehouse level for Megabonk from your own copy
 
 ## Quickstart
 
-It's a bit on the technical side, but the gist is:
-
 1. **Install [git](https://git-scm.com/downloads)** so you can clone the repo. On macOS, this command installs Apple's command line tools, which include git:
 
    ```sh
