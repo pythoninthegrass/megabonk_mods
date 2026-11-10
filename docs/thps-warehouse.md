@@ -15,7 +15,7 @@ It's a bit on the technical side, but the gist is:
    mise install
    ```
 
-3. **Install Unity 2023.2.22f1** (exact version, free Personal license) from Unity Hub's download archive, with the Windows and Linux Build Support (Mono) modules. Sign in to Hub so a license is active.
+3. **Install Unity 2023.2.22f1** (exact version, free Personal license) from [Unity Hub](https://docs.unity.com/en-us/hub/install-hub-win-mac)'s download archive, with the Windows and Linux Build Support (Mono) modules. Sign in to Hub so a license is active.
 4. **Get your disc image:** google the USA *Tony Hawk's Pro Skater* (SLUS_008.60). Save it as `tools/thps1/Tony Hawk's Pro Skater.bin` inside the cloned repo. The build rejects other revisions.
 5. **Clone [thps2-tools](https://github.com/JayFoxRox/thps2-tools)** and set `THPS2_TOOLS_DIR` to it in an `.env` file (copy `.env.example` to start one).
 6. **Optional music:** drop your own mp3s in `tools/ost/` (e.g. `04 Superman.mp3`).
