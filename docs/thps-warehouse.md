@@ -6,7 +6,12 @@ Build the Tony Hawk's Pro Skater Warehouse level for Megabonk from your own copy
 
 It's a bit on the technical side, but the gist is:
 
-1. **Install [git](https://git-scm.com/downloads)** so you can clone the repo.
+1. **Install [git](https://git-scm.com/downloads)** so you can clone the repo. On macOS, this command installs Apple's command line tools, which include git:
+
+   ```sh
+   xcode-select --install
+   ```
+
 2. **Install [mise](https://mise.jdx.dev/installing-mise.html)**, a tool that sets up Python, uv and Task for you. Then restart your terminal and follow mise's [shell-activation steps](https://mise.jdx.dev/getting-started.html) so `task` and `uv` are on your `PATH`.
 
    macOS and Linux:
