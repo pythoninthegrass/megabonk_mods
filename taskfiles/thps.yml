@@ -103,5 +103,10 @@ tasks:
       - |
         dest="$(uv run scripts/game_paths.py | jq -r .game_dir)/UserData/Levels"
         mkdir -p "$dest"
-        cp "{{.LEVEL}}" "$dest/"
-        echo "installed {{.LEVEL}} into $dest"
+        level="{{.LEVEL}}"
+        stem="${level%.mblevel.json}"
+        cp "$level" "$dest/"
+        for ext in png jpg jpeg biome.png biome.jpg biome.jpeg; do
+          if [ -f "$stem.$ext" ]; then cp "$stem.$ext" "$dest/"; fi
+        done
+        echo "installed $level and its sidecar images into $dest"
