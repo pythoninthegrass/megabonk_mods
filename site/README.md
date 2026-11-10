@@ -35,7 +35,7 @@ Each page has Copy page and View as Markdown controls. `/<slug>.md` serves stand
 
 ## Serving with Docker
 
-With Docker Engine and Docker Compose v2 installed, the site builds and serves in a container without host Node or npm. The multi-stage `Dockerfile` builds on Node 22 Alpine, then serves with `server.mjs`; the non-root image contains only `dist/`, `server.mjs` and `smoke.mjs`. The build context is the repository root so the wiki can read `docs/`. The Dockerfile-specific `Dockerfile.dockerignore` allows only `docs/*.md` and site sources, excluding dependencies, output, design-review state, generated guides and `.env*` files. From `site/`:
+With Docker Engine and Docker Compose v2 installed, the site builds and serves in a container without host Node or npm. The multi-stage `Dockerfile` builds on Node 22 Alpine, then serves with `server.mjs`; the non-root image contains only `dist/`, `server.mjs` and `smoke.mjs`. The build context is the repository root so the wiki can read `docs/`. The Dockerfile-specific `Dockerfile.dockerignore` allows only `docs/*.md` and site sources, excluding dependencies, output, design-review state, generated guides and `.env*` files. The `npm ci` and `astro build` steps use BuildKit cache mounts for npm's download cache and Astro's `node_modules/.astro` cache (optimized images and content), which persist on the Docker host between builds, so a rebuild reuses them instead of re-encoding the screenshots. From `site/`:
 
 ```sh
 docker compose up -d --build   # build and start, then open http://127.0.0.1:8080/
