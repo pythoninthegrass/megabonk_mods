@@ -85,7 +85,7 @@ A level is a single file ending in `.mblevel.json`.
 
 If a level shows up but looks empty or as a placeholder, it needs an asset pack you do not have. The mod logs the missing pack's name in `BepInEx/LogOutput.log` in the game folder as `pack '<name>' is not installed`. Ask the author for the pack, which is a folder to place in `UserData/LevelPacks/`.
 
-A level can have a picture on the Map Selection screen: put an image with the same name as the level next to it, for example `thps.png` beside `thps.mblevel.json`.
+A level can have a picture on the Map Selection screen: put an image with the same name as the level next to it, for example `thps.png` beside `thps.mblevel.json`. A second image named `thps.biome.png` replaces the icon beside the map name on the right of the screen, which otherwise shows the Forest icon.
 
 ## Installing an asset pack
 
@@ -94,7 +94,7 @@ A level that needs an asset pack, such as the Warehouse (`thps`), needs the pack
 1. Close Megabonk.
 2. Open the game folder (see [Finding your levels folder](#finding-your-levels-folder)). Create `UserData/LevelPacks/` if it is missing.
 3. Copy the pack's folder into it, so the files end up at `UserData/LevelPacks/thps/thps`, `UserData/LevelPacks/thps/manifest.json` and `UserData/LevelPacks/thps/attachments.json`. The three files sit directly in the pack's folder, with no extra folder around them.
-4. Copy the level's `.mblevel.json` file into `UserData/Levels/`, replacing an older copy if you have one.
+4. Copy the level's `.mblevel.json` file into `UserData/Levels/`, replacing an older copy if you have one. Copy its picture files beside it (`thps.png` and `thps.biome.png` for the Warehouse); without them Map Selection shows a purple tile and the Forest icon.
 5. Start Megabonk. Packs load once per session, so a pack copied while the game is running appears only after a restart.
 
 A bundle is built for one platform. Use the Windows bundle for the Windows build of Megabonk, and the Linux bundle for the native Linux build. The mod does not convert one into the other. If the level still looks empty or as a placeholder, `BepInEx/LogOutput.log` names the pack it could not find as `pack '<name>' is not installed`; check the folder name and that the files are not one folder too deep.

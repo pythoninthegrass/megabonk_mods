@@ -212,6 +212,8 @@ ssh game-host 'cd ~/mb-player &&
     --packs "$HOME/mb-player/content/packs" --thps-bundle thps-source/thps'
 ```
 
+The levels directory must hold `thps.mblevel.json` with `thps.png` and `thps.biome.png` beside it; the installer carries sidecar images with their level, and without them Map Selection shows a purple tile and the Forest icon. When copying by hand rather than through the installer, send both images to `UserData/Levels` next to the level.
+
 Restart the game and test Warehouse, Piece Editor and Map Editor. The mod logs
 the resolved content roots under `[ContentPaths]`; inspect it before concluding
 the content is missing.
