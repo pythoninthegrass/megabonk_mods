@@ -1,0 +1,85 @@
+---
+import GalleryLayout from '../../../layouts/GalleryLayout.astro';
+import Icon from '../../../components/Icon.astro';
+---
+<GalleryLayout title="Share a level · Megabonk Mod Party" description="Sign in and upload a custom Megabonk level to share with other players." path="/levels/upload/">
+  <section class="gallery-page wrap" x-data="upload" aria-labelledby="upload-title">
+    <div class="gallery-heading">
+      <h1 id="upload-title">Share a level</h1>
+      <p>Upload the <code>.mblevel.json</code> file from your <code>UserData/Levels/</code> folder with a cover picture. You get a share code anyone can use.</p>
+    </div>
+
+    <noscript>
+      <p class="gallery-note">Uploading needs JavaScript. Without it you can still share a level by hand: see <a href="https://docs.megabonkmod.party/player-guide/#sharing-a-level">Sharing a level</a> in the player guide.</p>
+    </noscript>
+
+    <div class="signin-prompt" x-show="!$store.session.signedIn" x-cloak>
+      <h2>Sign in first</h2>
+      <p>Your level is listed under your account name. Pick a provider to sign in.</p>
+      <div class="providers">
+        <template x-for="provider in $store.session.providers" :key="provider.id">
+          <button class="btn" type="button" :disabled="$store.session.busy" @click="$store.session.signIn(provider.id)" x-text="`Sign in with ${provider.label}`"></button>
+        </template>
+      </div>
+      <p class="error" x-show="$store.session.error" x-text="$store.session.error" role="alert"></p>
+    </div>
+
+    <div x-show="$store.session.signedIn" x-cloak>
+      <p class="signed-in">Signed in as <strong x-text="$store.session.user?.name || 'your account'"></strong>. <button class="text-button" type="button" @click="$store.session.signOut()">Sign out</button></p>
+
+      <form x-ref="form" class="upload-form" @submit.prevent="submit()">
+        <h2 x-ref="heading" tabindex="-1" x-text="editing ? `Edit ${editing.title}` : 'New level'"></h2>
+        <label class="field"><span>Level file <small x-text="editing ? '(leave empty to keep the current file)' : '(.mblevel.json, required)'"></small></span><input x-ref="level" name="level" type="file" accept=".json,application/json" :required="!editing" aria-describedby="help-level" /><small id="help-level" class="help">The file from your <code>UserData/Levels/</code> folder, up to 1 MB. Titles, maps and packs are read from it.</small></label>
+        <label class="field"><span>Cover picture <small x-text="editing ? '(leave empty to keep the current one)' : '(PNG or JPEG, required)'"></small></span><input x-ref="cover" name="cover" type="file" accept="image/png,image/jpeg" :required="!editing" aria-describedby="help-cover" /><small id="help-cover" class="help">Up to 8 MB. Shown at 3:2 and cropped to fit, so 1080 by 720 pixels works well.</small></label>
+        <label class="field"><span>Biome picture <small>(PNG or JPEG, optional)</small></span><input x-ref="biome" name="biome" type="file" accept="image/png,image/jpeg" aria-describedby="help-biome" /><small id="help-biome" class="help">The small icon beside the map name on Map Selection. Up to 8 MB.</small></label>
+        <label class="field"><span>Description</span><textarea name="description" x-model="description" maxlength="2000" rows="5"></textarea></label>
+        <fieldset class="tag-set"><legend>Tags</legend>
+          <template x-for="name in tags" :key="name"><label class="tag-option"><input type="checkbox" name="tags" :value="name" x-model="chosen" /><span x-text="name"></span></label></template>
+        </fieldset>
+
+        <div class="error-list" x-show="errors.length" role="alert">
+          <p>The level was not saved:</p>
+          <ul><template x-for="message in errors" :key="message"><li x-text="message"></li></template></ul>
+        </div>
+
+        <div class="actions">
+          <button class="btn" type="submit" :disabled="busy" x-text="busy ? 'Saving…' : (editing ? 'Save changes' : 'Upload level')"></button>
+          <button class="btn" data-variant="outline" type="button" x-show="editing" @click="resetForm()">Cancel edit</button>
+        </div>
+      </form>
+
+      <div class="mine">
+        <h2>Your levels</h2>
+        <p class="gallery-status" x-show="mineState === 'loading'">Loading your levels…</p>
+        <p x-show="mineState === 'ready' && mine.length === 0">You have not shared a level yet.</p>
+        <ul class="mine-list">
+          <template x-for="level in mine" :key="level.id">
+            <li class="mine-item">
+              <img :src="cover(level)" alt="" width="120" height="80" loading="lazy" />
+              <div>
+                <h3><a :href="`/l/${level.code}`" x-text="level.title"></a></h3>
+                <p class="small"><code x-text="level.code"></code> · <span x-text="relativeDate(level.created)"></span> · <span x-text="plural(level.likes, 'like')"></span> · <span x-text="plural(level.downloads, 'download')"></span></p>
+              </div>
+              <div class="actions" x-show="confirmDelete !== level.id">
+                <button class="btn" data-variant="outline" type="button" @click="edit(level)">Edit</button>
+                <button class="btn danger" data-variant="outline" type="button" @click="confirmDelete = level.id">Delete</button>
+              </div>
+              <div class="actions confirm" x-show="confirmDelete === level.id" role="alertdialog" :aria-label="`Delete ${level.title}?`">
+                <span>Delete this level for good?</span>
+                <button class="btn danger-solid" type="button" @click="remove(level)">Yes, delete</button>
+                <button class="btn" data-variant="outline" type="button" @click="confirmDelete = null">Cancel</button>
+              </div>
+            </li>
+          </template>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    import { startGallery } from '../../../scripts/gallery-app.js';
+    import upload from '../../../scripts/upload.js';
+
+    startGallery({ upload });
+  </script>
+</GalleryLayout>

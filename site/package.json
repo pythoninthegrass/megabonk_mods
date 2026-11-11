@@ -12,7 +12,7 @@
     "lint": "deno lint",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
-    "test": "node --test tests/clipboard.test.js tests/docs-sync.test.js tests/copy-page.test.js tests/levels.test.js tests/level-route.test.js",
+    "test": "node --test tests/clipboard.test.js tests/docs-sync.test.js tests/copy-page.test.js tests/levels.test.js tests/gallery.test.js tests/level-route.test.js",
     "test:site": "node --test tests/site.test.js tests/server.test.js tests/wiki.test.js"
   },
   "dependencies": {
@@ -24,6 +24,7 @@
     "alpinejs": "^3.15.0",
     "astro": "^7.4.7",
     "basecoat-css": "^1.1.0",
+    "pocketbase": "^0.28.2",
     "remark-parse": "^11.0.0",
     "remark-stringify": "^11.0.0",
     "sharp": "^0.35.5",

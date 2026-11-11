@@ -1,0 +1,77 @@
+---
+import GalleryLayout from '../../layouts/GalleryLayout.astro';
+import Icon from '../../components/Icon.astro';
+---
+<GalleryLayout title="Levels · Megabonk Mod Party" description="Browse custom Megabonk levels shared by the community, and download them with a share code." path="/levels/">
+  <section class="gallery-page wrap" x-data="browse" aria-labelledby="browse-title">
+    <div class="gallery-heading">
+      <h1 id="browse-title">Levels</h1>
+      <p>Custom Megabonk levels from other players. Download one, drop it in <code>UserData/Levels/</code>, and play.</p>
+    </div>
+
+    <noscript>
+      <p class="gallery-note">The level gallery needs JavaScript. Without it you can still share levels by hand: see <a href="https://docs.megabonkmod.party/player-guide/#sharing-a-level">Sharing a level</a> in the player guide.</p>
+    </noscript>
+
+    <form class="gallery-filters" role="search" @submit.prevent="refilter()" x-cloak>
+      <label class="field grow"><span>Search</span><input type="search" name="q" x-model="search" @input="queueSearch()" placeholder="Title, description or share code" autocomplete="off" /></label>
+      <label class="field"><span>Tag</span>
+        <select name="tag" x-model="tag" @change="refilter()"><option value="">All tags</option><template x-for="name in tags" :key="name"><option :value="name" x-text="name"></option></template></select>
+      </label>
+      <label class="field"><span>Sort by</span>
+        <select name="sort" x-model="sort" @change="refilter()"><template x-for="[key, label] in sorts" :key="key"><option :value="key" x-text="label"></option></template></select>
+      </label>
+      <button class="btn" type="submit">Search</button>
+    </form>
+
+    <div id="results" class="gallery-results" aria-live="polite" x-cloak>
+      <p class="gallery-status" x-show="state === 'loading'">Loading levels…</p>
+
+      <div class="gallery-message" x-show="state === 'error'" role="alert">
+        <h2>The gallery is unreachable</h2>
+        <p>The level server did not answer, so no levels can be shown right now. Try again in a moment.</p>
+        <p class="detail" x-text="message"></p>
+        <button class="btn" data-variant="outline" type="button" @click="load()">Try again</button>
+      </div>
+
+      <div class="gallery-message" x-show="state === 'empty'">
+        <h2 x-text="filtered ? 'No levels match' : 'No levels yet'"></h2>
+        <p x-show="filtered">Nothing matches that search. Try fewer words or another tag.</p>
+        <p x-show="!filtered">Nobody has shared a level yet. Be the first.</p>
+        <button class="btn" data-variant="outline" type="button" x-show="filtered" @click="clearFilters()">Clear filters</button>
+        <a class="btn" href="/levels/upload/" x-show="!filtered">Share a level <Icon name="arrow" /></a>
+      </div>
+
+      <ul class="level-grid" x-show="state === 'ready'">
+        <template x-for="item in items" :key="item.id">
+          <li class="level-card">
+            <a class="card-link" :href="`/l/${item.code}`">
+              <figure class="cover-plate">
+                <img :src="cover(item, '640x0')" :srcset="`${cover(item, '320x0')} 320w, ${cover(item, '640x0')} 640w`" sizes="(max-width: 700px) 90vw, 320px" :alt="`Cover picture for ${item.title}`" loading="lazy" width="320" height="213" />
+                <figcaption x-text="item.code"></figcaption>
+              </figure>
+              <h2 x-text="item.title"></h2>
+            </a>
+            <p class="byline"><span x-text="author(item)"></span> · <time :datetime="item.created" x-text="relativeDate(item.created)"></time></p>
+            <p class="excerpt" x-show="item.description" x-text="excerpt(item.description)"></p>
+            <ul class="chips" x-show="item.tags?.length"><template x-for="name in item.tags" :key="name"><li x-text="name"></li></template></ul>
+            <p class="counts"><span x-text="plural(item.likes, 'like')"></span><span x-text="plural(item.downloads, 'download')"></span></p>
+          </li>
+        </template>
+      </ul>
+
+      <nav class="pager" aria-label="Pages of levels" x-show="state === 'ready' && totalPages > 1">
+        <button class="btn" data-variant="outline" type="button" :disabled="page <= 1" @click="goTo(page - 1)">Previous</button>
+        <span>Page <span x-text="page"></span> of <span x-text="totalPages"></span></span>
+        <button class="btn" data-variant="outline" type="button" :disabled="page >= totalPages" @click="goTo(page + 1)">Next</button>
+      </nav>
+    </div>
+  </section>
+
+  <script>
+    import { startGallery } from '../../scripts/gallery-app.js';
+    import browse from '../../scripts/browse.js';
+
+    startGallery({ browse });
+  </script>
+</GalleryLayout>

@@ -1,0 +1,111 @@
+---
+import GalleryLayout from '../../../layouts/GalleryLayout.astro';
+import Icon from '../../../components/Icon.astro';
+---
+<GalleryLayout title="Level · Megabonk Mod Party" description="A custom Megabonk level shared on megabonkmod.party." path="/levels/view/">
+  <section class="gallery-page wrap" x-data="levelView" aria-live="polite">
+    <noscript>
+      <p class="gallery-note">The level gallery needs JavaScript. Without it you can still share levels by hand: see <a href="https://docs.megabonkmod.party/player-guide/#sharing-a-level">Sharing a level</a> in the player guide.</p>
+    </noscript>
+
+    <p class="gallery-status" x-show="state === 'loading'" x-cloak>Loading level…</p>
+
+    <div class="gallery-message" x-show="state === 'notfound'" x-cloak>
+      <h1>Level not found</h1>
+      <p>There is no level with that share code. Check the code, or browse the gallery.</p>
+      <a class="btn" href="/levels/">Browse levels <Icon name="arrow" /></a>
+    </div>
+
+    <div class="gallery-message" x-show="state === 'error'" x-cloak role="alert">
+      <h1>The gallery is unreachable</h1>
+      <p>The level server did not answer. Try again in a moment.</p>
+      <button class="btn" data-variant="outline" type="button" @click="location.reload()">Try again</button>
+    </div>
+
+    <article class="level-page" x-show="state === 'ready'" x-cloak>
+      <p class="crumb"><a href="/levels/">Levels</a></p>
+      <div class="level-layout">
+        <figure class="cover-plate large">
+          <img :src="cover" :alt="`Cover picture for ${level?.title}`" width="1080" height="720" />
+          <figcaption x-text="code"></figcaption>
+        </figure>
+        <div class="level-info">
+          <h1 x-text="level?.title"></h1>
+          <p class="byline">by <span x-text="author"></span> · <span x-text="plural(level?.likes, 'like')"></span> · <span x-text="plural(level?.downloads, 'download')"></span></p>
+          <div class="share-code"><code x-text="code" aria-label="Share code"></code><button class="btn" data-variant="outline" type="button" @click="copyCode()"><span x-text="copied ? 'Copied' : 'Copy code'"></span></button></div>
+          <ul class="chips" x-show="level?.tags?.length"><template x-for="name in level?.tags" :key="name"><li x-text="name"></li></template></ul>
+          <p class="description" x-show="level?.description" x-text="level?.description"></p>
+          <div class="actions">
+            <a class="btn" :href="download">Download level <Icon name="arrow" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="level-details">
+        <table class="meta-table">
+          <caption class="sr-only">Level details</caption>
+          <tbody>
+            <tr><th scope="row">Share code</th><td><code x-text="code"></code></td></tr>
+            <tr><th scope="row">Maker</th><td x-text="author"></td></tr>
+            <tr><th scope="row">Uploaded</th><td x-text="uploaded"></td></tr>
+            <tr><th scope="row">Map</th><td x-text="mapName(level?.map)"></td></tr>
+            <tr><th scope="row">Schema</th><td x-text="level?.schemaVersion"></td></tr>
+            <tr :class="packs.length ? 'needs-packs' : ''"><th scope="row">Required packs</th><td>
+              <span x-show="packs.length === 0">None</span>
+              <ul class="pack-list" x-show="packs.length"><template x-for="pack in packs" :key="pack.id"><li><code x-text="pack.id"></code> <span x-text="pack.version"></span></li></template></ul>
+              <p class="small" x-show="packs.length">This level looks empty without these packs. <a href="https://docs.megabonkmod.party/player-guide/#installing-an-asset-pack">How to install an asset pack</a>. Pack files are not offered here.</p>
+            </td></tr>
+            <tr><th scope="row">Likes</th><td x-text="level?.likes"></td></tr>
+            <tr><th scope="row">Downloads</th><td x-text="level?.downloads"></td></tr>
+          </tbody>
+        </table>
+
+        <div class="install">
+          <h2>Install it</h2>
+          <ol>
+            <li>Download the level. It saves as a <code>.mblevel.json</code> file.</li>
+            <li>Copy it into <code>UserData/Levels/</code> in the Megabonk game folder.</li>
+            <li>Optional: save the cover picture beside it with the same name, such as <code>my-level.png</code>, so Map Selection shows it.</li>
+            <li>Start Megabonk. The level appears on Map Selection under its title.</li>
+          </ol>
+          <p class="small"><a href="https://docs.megabonkmod.party/player-guide/#finding-your-levels-folder">Where is my levels folder?</a></p>
+        </div>
+      </div>
+
+      <div class="social">
+        <h2>Like or report</h2>
+        <div x-show="!$store.session.signedIn" class="signin-prompt">
+          <p>Sign in to like or report this level.</p>
+          <div class="providers">
+            <template x-for="provider in $store.session.providers" :key="provider.id">
+              <button class="btn" data-variant="outline" type="button" :disabled="$store.session.busy" @click="$store.session.signIn(provider.id)" x-text="`Sign in with ${provider.label}`"></button>
+            </template>
+          </div>
+          <p class="error" x-show="$store.session.error" x-text="$store.session.error" role="alert"></p>
+        </div>
+        <div x-show="$store.session.signedIn" class="actions">
+          <button class="btn" type="button" :aria-pressed="Boolean(liked)" :disabled="busy" @click="toggleLike()" x-text="liked ? 'Unlike' : 'Like'"></button>
+          <button class="btn" data-variant="outline" type="button" :aria-expanded="reporting" aria-controls="report-form" @click="reporting = !reporting">Report</button>
+        </div>
+        <form id="report-form" class="report-form" x-show="reporting" @submit.prevent="sendReport()">
+          <label class="field"><span>What is wrong with this level?</span><textarea name="reason" x-model="reason" required maxlength="1000" rows="3"></textarea></label>
+          <button class="btn" type="submit" :disabled="busy || !reason.trim()">Send report</button>
+        </form>
+        <p class="notice" x-show="notice" x-text="notice" role="status"></p>
+      </div>
+
+      <div class="comments">
+        <h2>Comments</h2>
+        <div x-ref="comments"></div>
+        <p class="small" x-show="!commentsConfigured">Comments are not switched on yet.</p>
+      </div>
+    </article>
+  </section>
+
+  <script>
+    import { startGallery } from '../../../scripts/gallery-app.js';
+    import levelView from '../../../scripts/level-view.js';
+
+    startGallery({ levelView });
+  </script>
+</GalleryLayout>

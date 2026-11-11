@@ -1,0 +1,47 @@
+---
+import '@fontsource/archivo/latin-700.css';
+import '@fontsource/archivo/latin-800.css';
+import '@fontsource-variable/public-sans';
+import '../styles/global.css';
+import '../styles/gallery.css';
+import Icon from '../components/Icon.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  path: string;
+}
+
+const { title, description, path } = Astro.props;
+const repo = 'https://github.com/pythoninthegrass/megabonk_mods';
+const external = { target: '_blank', rel: 'noopener noreferrer' };
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#dfeaf0" />
+    <link rel="canonical" href={`https://megabonkmod.party${path}`} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="gallery">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header wrap">
+      <a class="wordmark" href="/" aria-label="Megabonk Mod Party home"><span class="brand-mark"><Icon name="cube" /></span><span>megabonk<span class="wordmark-bottom">mod.party</span></span></a>
+      <nav aria-label="Main navigation">
+        <a href="/#editor">Editor</a><a href="/#console">Console</a><a href="/#mcp">MCP</a>
+        <a href="/levels/" aria-current={path === '/levels/' ? 'page' : undefined}>Levels</a>
+        <a class="source-link" href="https://docs.megabonkmod.party/home/" {...external}>Docs <Icon name="external" /></a>
+        <a class="source-link" href={repo} {...external}>Source <Icon name="external" /></a>
+      </nav>
+      <a class="btn header-action" href="/levels/upload/">Share a level <Icon name="arrow" /></a>
+    </header>
+    <main id="main">
+      <slot />
+    </main>
+    <footer class="site-footer wrap"><a class="wordmark" href="/"><Icon name="cube" /><span>megabonkmod.party</span></a><p>Built for the fun of making something.</p><a href={repo} {...external}>Source & documentation <Icon name="external" /></a></footer>
+  </body>
+</html>
