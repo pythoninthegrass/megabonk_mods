@@ -227,9 +227,16 @@ def test_synchronized_versions_report_a_mismatch(tmp_path):
         target = tmp_path / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes((ROOT / relative).read_bytes())
-    manifest = tmp_path / "pkg/manifest.json"
-    manifest.write_text(manifest.read_text().replace('"version_number": "0.1.0"', '"version_number": "9.9.9"'))
+    set_manifest_version(tmp_path, "9.9.9")
     assert len(set(synchronized_versions(tmp_path).values())) > 1
+
+
+def set_manifest_version(root, version):
+    manifest = root / "pkg/manifest.json"
+    data = json.loads(manifest.read_text())
+    assert data["version_number"] != version
+    data["version_number"] = version
+    manifest.write_text(json.dumps(data, indent=2) + "\n")
 
 
 def copy_version_sources(tmp_path):
@@ -242,6 +249,5 @@ def copy_version_sources(tmp_path):
 def test_versions_command_reads_the_given_root(tmp_path, capsys):
     copy_version_sources(tmp_path)
     assert main(["--root", str(tmp_path), "versions"]) == 0
-    manifest = tmp_path / "pkg/manifest.json"
-    manifest.write_text(manifest.read_text().replace('"version_number": "0.1.0"', '"version_number": "9.9.9"'))
+    set_manifest_version(tmp_path, "9.9.9")
     assert main(["--root", str(tmp_path), "versions"]) == 1
