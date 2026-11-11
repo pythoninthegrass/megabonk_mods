@@ -10,8 +10,6 @@ RUN --mount=type=cache,target=/app/site/node_modules/.astro,sharing=locked bun r
 
 FROM oven/bun:1.4.4-alpine
 WORKDIR /app
-# Keeps the Dokploy health check `node smoke.mjs` working until dokploy.yml is applied.
-RUN ln -s /usr/local/bin/bun /usr/local/bin/node
 COPY --from=build --chown=bun:bun /app/site/dist ./dist
 COPY --chown=bun:bun site/server.mjs site/smoke.mjs ./
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080
