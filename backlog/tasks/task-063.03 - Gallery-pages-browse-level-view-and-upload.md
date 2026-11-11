@@ -1,9 +1,10 @@
 ---
 id: TASK-063.03
 title: 'Gallery pages: browse, level view and upload'
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-11 04:49'
+updated_date: '2026-11-11 05:48'
 labels:
   - website
   - sharing
@@ -58,6 +59,19 @@ Design and product constraints:
 - [ ] #11 A Levels link and a share call to action are added to the showcase page; docs/player-guide.md 'Sharing a level' points to the gallery and explains installing a downloaded level; site/PRODUCT.md records the JavaScript exception and the changed stack
 - [ ] #12 Pure logic is unit-tested in site/tests with node --test; an end-to-end check against a local PocketBase uploads levels/bramblecrown-hill.mblevel.json with its cover, finds it by search, downloads it byte-identical, and likes it, with screenshots captured
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Tests first (site/tests, node --test) for pure helpers in site/src/scripts/gallery.js: relativeDate, excerpt, coverUrl, downloadUrl, codeFromPath, page math, pbErrorMessages; plus a buildFilter test that hostile search text stays inside a quoted literal. Add the new test files to the npm test script.
+2. Add the pocketbase SDK with npm (lockfile stays package-lock.json; the container builds with Bun from it, verify the image build still resolves it). Add PUBLIC_PB_URL (local default) and giscus values to site/.env.example.
+3. Pages sharing the showcase head, fonts and tokens: /levels/ (browse), /levels/view/ (served at /l/<code>; reads code from location.pathname), /levels/upload/ (OAuth sign-in, upload form, own levels with edit/delete). Alpine components in src/scripts, styles in global.css per DESIGN.md. noscript message links to the player guide.
+4. Showcase Levels nav link and share CTA; docs/player-guide.md 'Sharing a level'; site/PRODUCT.md JavaScript exception and stack line; docs/website.md.
+5. Verify: npm test, check, build, test:site; end-to-end against local PocketBase in Docker with a seeded test user standing in for OAuth (upload bramblecrown-hill, search, byte-identical download, like, screenshots); Impeccable critique of the three pages and fixes; task check.
+6. Conventional commits, no attribution; tick AC and DoD as met.
+
+Approved by Lance: test user stands in for OAuth locally; PocketBase runs in Docker.
+<!-- SECTION:PLAN:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
