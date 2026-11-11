@@ -4,7 +4,7 @@ title: 'Gallery pages: browse, level view and upload'
 status: In Progress
 assignee: []
 created_date: '2026-11-11 04:49'
-updated_date: '2026-11-11 07:29'
+updated_date: '2026-11-11 07:33'
 labels:
   - website
   - sharing
@@ -69,8 +69,8 @@ Design and product constraints:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The browse page at /levels/ lists levels as cards with cover, title, author, relative date, likes, downloads, tags, a description excerpt and the share code, and pages through results
-- [ ] #2 Browse supports a search box over title and description, a tag filter limited to the fixed tag set, and sort by newest, most liked and most downloaded; search text cannot alter the filter beyond matching
+- [x] #1 The browse page at /levels/ lists levels as cards with cover, title, author, relative date, likes, downloads, tags, a description excerpt and the share code, and pages through results
+- [x] #2 Browse supports a search box over title and description, a tag filter limited to the fixed tag set, and sort by newest, most liked and most downloaded; search text cannot alter the filter beyond matching
 - [x] #3 An empty result and an unreachable API each show a clear message instead of a blank page
 - [x] #4 The level page at /l/<code> shows the cover, a metadata table (code, maker, upload date, map, schema, required packs with versions, likes, downloads), description and tags, a Download button that uses the download route, a Copy code button, and install instructions for UserData/Levels/
 - [x] #5 An unknown or malformed code on the level page shows a not-found state
@@ -108,6 +108,10 @@ Impeccable critique run twice (27 then 28 out of 40). Fixed: share-code block an
 Still open on the ACs: #1 paging and #2 tag filter and sort were wired through tested helpers but not exercised in a browser with more than one page of levels; #7 the giscus embed itself was not rendered (attributes are unit tested, the unconfigured note was verified); #8 real OAuth sign-in untested; #10 waits on P3. Production needs PUBLIC_PB_URL (https://api host) and the giscus values passed as build arguments in site/Dockerfile, which belongs with the deployment task.
 
 Production API URL wired: site/Dockerfile takes PUBLIC_PB_URL as a build argument defaulting to https://api.megabonkmod.party (verified by building the image and finding the host in the bundle), and Compose passes the local address. The api A record is live and resolves to the VPS; HTTPS answers only once the PocketBase app is deployed. Upload page sign-in buttons are now outline (P3 closed). #10 can be ticked after a final critique pass.
+
+AC #10 skipped by decision: the Impeccable critique ran twice (27 then 28 out of 40) and the P1, P2 and P3 findings were fixed, but no final critique pass was run after the last fixes, so the criterion is left unticked. Remaining minor findings are in the critique snapshots under site/.impeccable/critique.
+
+AC #1 and #2 verified in a browser with chrome-devtools-axi against 14 seeded levels: 12 cards on page 1 and 2 on page 2 with a working Previous and Next and a ?page= URL; the tag filter returned only matching levels (Puzzle 2, Speedrun 3); sort by most liked put the levels with 3 and 2 likes first, and sort by most downloaded put the levels with 4 and 2 downloads first, newest first within ties. Deep links restore tag, sort, search and page, and a hostile tag value, an unknown sort and a negative page are ignored.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
