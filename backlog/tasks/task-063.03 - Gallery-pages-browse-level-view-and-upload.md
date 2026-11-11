@@ -4,7 +4,7 @@ title: 'Gallery pages: browse, level view and upload'
 status: In Progress
 assignee: []
 created_date: '2026-11-11 04:49'
-updated_date: '2026-11-11 07:51'
+updated_date: '2026-11-11 07:55'
 labels:
   - website
   - sharing
@@ -43,6 +43,8 @@ modified_files:
   - site/package-lock.json
   - site/.env.example
   - site/PRODUCT.md
+  - site/Dockerfile
+  - site/docker-compose.yml
   - docs/player-guide.md
   - docs/website.md
   - pocketbase/pb_hooks/level_lib.js
@@ -99,23 +101,17 @@ Approved by Lance: test user stands in for OAuth locally; PocketBase runs in Doc
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Built and verified against a local PocketBase image in Docker. A seeded test session stood in for OAuth, so the real authWithOAuth2 flow is untested locally. Verified in a browser: empty and unreachable states, upload with server validation errors, redirect to /l/<code>, search (including hostile text), pasted share-code jump, byte-identical download with the slugged filename and counted download, like/unlike, report, signed-out prompt, edit (description and cover) and delete with confirm, not-found for unknown and malformed codes, and 390px layouts without overflow.
+Status: implemented and committed locally; one commit pushed. The multipart-update hook fix (a545f43) is on main; the other commits are held until the PocketBase API is deployed, because pushing them deploys the site with a gallery that would show its unreachable message until the API answers.
 
-Found and fixed during verification: PocketBase wraps the upload hook's error payload so field detail messages are objects (client now falls back to the response message); the level page getter read the record before it loaded; multipart updates with no level file returned a generic 400 (hook fixed in level_lib.js, two regression tests added).
+Verified in a browser against a local PocketBase image in Docker (a seeded test session stood in for OAuth): empty and unreachable states, upload with server validation errors, redirect to /l/<code>, search including hostile text, pasted share-code jump, byte-identical download with the slugged filename and a counted download, like and unlike, report, signed-out prompt, edit (description and cover) and delete with confirm, not-found for unknown and malformed codes, 390px layouts without overflow, paging across 14 seeded levels, the tag filter, both sorts, URL state restore with hostile or invalid params ignored, the giscus embed rendering from localhost (0 reactions, 0 comments, GitHub sign-in box; no comment posted), and provider-aware sign-in buttons with no providers, only GitHub, and the API down.
 
-Impeccable critique run twice (27 then 28 out of 40). Fixed: share-code block and code-paste jump, level page action ranking, upload form help and textarea height, delete confirm with focus handling, edit-mode cover preview and row marker, mobile header grid and filter layout. Open: P3 (three equal vermilion sign-in buttons) and minor items recorded in site/.impeccable/critique snapshots.
+Found and fixed during verification: PocketBase wraps the upload hook's error payload so field detail messages are objects (client falls back to the response message); the level page getter read the record before it loaded; multipart updates with no level file returned a generic 400 (hook fixed in level_lib.js with two regression tests).
 
-Still open on the ACs: #1 paging and #2 tag filter and sort were wired through tested helpers but not exercised in a browser with more than one page of levels; #7 the giscus embed itself was not rendered (attributes are unit tested, the unconfigured note was verified); #8 real OAuth sign-in untested; #10 waits on P3. Production needs PUBLIC_PB_URL (https://api host) and the giscus values passed as build arguments in site/Dockerfile, which belongs with the deployment task.
+Plan deviations: no page-math helper (the SDK's totalPages is used); helpers added beyond the plan are codeFromSearch, availableProviders, giscusAttrs, mapName and plural. Sign-in buttons come from the API's auth-methods list, so unconfigured providers are not offered. Production wiring: site/Dockerfile takes PUBLIC_PB_URL (default https://api.megabonkmod.party) and the four giscus ids (the repository's public values) as build arguments, and Compose passes the local API address. The api A record is live; the API app itself is not deployed yet.
 
-Production API URL wired: site/Dockerfile takes PUBLIC_PB_URL as a build argument defaulting to https://api.megabonkmod.party (verified by building the image and finding the host in the bundle), and Compose passes the local address. The api A record is live and resolves to the VPS; HTTPS answers only once the PocketBase app is deployed. Upload page sign-in buttons are now outline (P3 closed). #10 can be ticked after a final critique pass.
+Impeccable critique ran twice (27 then 28 out of 40); P1, P2 and P3 findings were fixed (share-code block, action ranking, delete focus, upload help, edit-mode cover and row marker, mobile header and filters, outline sign-in buttons). Remaining minor findings are in site/.impeccable/critique.
 
-AC #10 skipped by decision: the Impeccable critique ran twice (27 then 28 out of 40) and the P1, P2 and P3 findings were fixed, but no final critique pass was run after the last fixes, so the criterion is left unticked. Remaining minor findings are in the critique snapshots under site/.impeccable/critique.
-
-AC #1 and #2 verified in a browser with chrome-devtools-axi against 14 seeded levels: 12 cards on page 1 and 2 on page 2 with a working Previous and Next and a ?page= URL; the tag filter returned only matching levels (Puzzle 2, Speedrun 3); sort by most liked put the levels with 3 and 2 likes first, and sort by most downloaded put the levels with 4 and 2 downloads first, newest first within ties. Deep links restore tag, sort, search and page, and a hostile tag value, an unknown sort and a negative page are ignored.
-
-AC #7 verified locally: with the four PUBLIC_GISCUS values set, the level page appends the giscus script with data-mapping=specific, data-strict=1 and data-term set to the share code, giscus creates its iframe with term=<code>, and the widget renders 0 reactions, 0 comments and a GitHub sign-in comment box, so the repository, Announcements category and installed app resolve. No comment was posted, because that would create a real discussion. With the values unset the page shows the short note instead. The giscus values default in site/Dockerfile to the repository's public ids.
-
-Sign-in buttons now come from the API's auth-methods list, filtered to GitHub, Google and Discord, so a provider that is not configured yet is not offered. Verified locally with no OAuth credentials (message, no buttons), with only GitHub configured (one button) and with the API down (check-failed message). AC #8 stays open: the real provider round trip is untested locally and is covered by sign-in verification in production.
+Open ACs: #8 real OAuth sign-in is untested locally and is covered by the production sign-in check in the deployment task; #10 skipped by decision because no critique pass was run after the last fixes. Both left unticked.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
