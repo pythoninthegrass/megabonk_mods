@@ -62,12 +62,12 @@ import Icon from '../../../components/Icon.astro';
               </div>
               <div class="actions" x-show="confirmDelete !== level.id">
                 <button class="btn" data-variant="outline" type="button" @click="edit(level)">Edit</button>
-                <button class="btn danger" data-variant="outline" type="button" @click="confirmDelete = level.id">Delete</button>
+                <button class="btn danger" data-variant="outline" type="button" :data-delete="level.id" @click="askDelete(level)">Delete</button>
               </div>
               <div class="actions confirm" x-show="confirmDelete === level.id" role="alertdialog" :aria-label="`Delete ${level.title}?`">
                 <span>Delete this level for good?</span>
                 <button class="btn danger-solid" type="button" @click="remove(level)">Yes, delete</button>
-                <button class="btn" data-variant="outline" type="button" @click="confirmDelete = null">Cancel</button>
+                <button class="btn" data-variant="outline" type="button" :data-cancel="level.id" @click="cancelDelete(level)">Cancel</button>
               </div>
             </li>
           </template>

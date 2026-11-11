@@ -87,6 +87,16 @@ export default () => ({
     }
   },
 
+  askDelete(level) {
+    this.confirmDelete = level.id;
+    this.$nextTick(() => this.$root.querySelector(`[data-cancel="${level.id}"]`)?.focus());
+  },
+
+  cancelDelete(level) {
+    this.confirmDelete = null;
+    setTimeout(() => this.$root.querySelector(`[data-delete="${level.id}"]`)?.focus(), 0);
+  },
+
   async remove(level) {
     try {
       await pb.collection('levels').delete(level.id);

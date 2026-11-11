@@ -45,7 +45,7 @@
 .level-info .byline { margin: 0.75rem 0 1rem; }
 .share-code { display: inline-flex; align-items: stretch; margin: 0.25rem 0 1rem; background: var(--paper); border: 1px solid var(--muted-ink); border-radius: 5px; }
 .share-code code { display: flex; align-items: center; padding: 0.4rem 1rem; font-size: clamp(1.2rem, 2.2vw, 1.7rem); font-weight: 650; letter-spacing: 0.08em; }
-.share-code .btn { display: inline-flex; align-items: center; align-self: stretch; min-height: 44px; padding-inline: 1.15rem; border: 0; border-left: 1px solid var(--muted-ink); border-radius: 0 4px 4px 0; }
+.share-code .btn { background: var(--paper); display: inline-flex; align-items: center; align-self: stretch; min-height: 44px; padding-inline: 1.15rem; border: 0; border-left: 1px solid var(--muted-ink); border-radius: 0 4px 4px 0; }
 .meta-table .needs-packs th, .meta-table .needs-packs td { background: var(--paper); border-left: 4px solid var(--accent); padding-left: 0.75rem; }
 .meta-table .needs-packs th { color: var(--ink); }
 .description { margin: 1.25rem 0 0; white-space: pre-line; overflow-wrap: anywhere; }
@@ -58,9 +58,12 @@
 .pack-list { list-style: none; padding: 0; margin: 0; }
 .small { margin: 0.5rem 0 0; color: var(--muted-ink); font-size: 0.8rem; }
 .small a, .install a { text-decoration: underline; }
-.install h2, .social h2, .comments h2, .mine h2, .upload-form h2, .signin-prompt h2 { margin: 0 0 1rem; font-size: 1.5rem; }
+.install h2, .comments h2, .mine h2, .upload-form h2, .signin-prompt h2 { margin: 0 0 1rem; font-size: 1.5rem; }
 .install ol { padding-left: 1.3rem; margin: 0; list-style: decimal; }
 .install li { margin-bottom: 0.6rem; }
+.meta-table .echo th, .meta-table .echo td { color: var(--muted-ink); font-size: 0.8rem; }
+.social .btn[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.quiet-heading { margin: 0 0 1rem; font-size: 1rem; font-weight: 700; }
 .social, .comments { margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--line); max-width: 56rem; }
 .providers { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
 .report-form { display: grid; gap: 1rem; max-width: 36rem; margin-top: 1.25rem; }

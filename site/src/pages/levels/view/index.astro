@@ -45,7 +45,7 @@ import Icon from '../../../components/Icon.astro';
         <table class="meta-table">
           <caption class="sr-only">Level details</caption>
           <tbody>
-            <tr><th scope="row">Share code</th><td><code x-text="code"></code></td></tr>
+            <tr class="echo"><th scope="row">Share code</th><td><code x-text="code"></code></td></tr>
             <tr><th scope="row">Maker</th><td x-text="author"></td></tr>
             <tr><th scope="row">Uploaded</th><td x-text="uploaded"></td></tr>
             <tr><th scope="row">Map</th><td x-text="mapName(level?.map)"></td></tr>
@@ -55,8 +55,8 @@ import Icon from '../../../components/Icon.astro';
               <ul class="pack-list" x-show="packs.length"><template x-for="pack in packs" :key="pack.id"><li><code x-text="pack.id"></code> <span x-text="pack.version"></span></li></template></ul>
               <p class="small" x-show="packs.length">This level looks empty without these packs. <a href="https://docs.megabonkmod.party/player-guide/#installing-an-asset-pack">How to install an asset pack</a>. Pack files are not offered here.</p>
             </td></tr>
-            <tr><th scope="row">Likes</th><td x-text="level?.likes"></td></tr>
-            <tr><th scope="row">Downloads</th><td x-text="level?.downloads"></td></tr>
+            <tr class="echo"><th scope="row">Likes</th><td x-text="level?.likes"></td></tr>
+            <tr class="echo"><th scope="row">Downloads</th><td x-text="level?.downloads"></td></tr>
           </tbody>
         </table>
 
@@ -73,7 +73,7 @@ import Icon from '../../../components/Icon.astro';
       </div>
 
       <div class="social">
-        <h2>Like or report</h2>
+        <h2 class="quiet-heading">Like or report</h2>
         <div x-show="!$store.session.signedIn" class="signin-prompt">
           <p>Sign in to like or report this level.</p>
           <div class="providers">
@@ -84,7 +84,7 @@ import Icon from '../../../components/Icon.astro';
           <p class="error" x-show="$store.session.error" x-text="$store.session.error" role="alert"></p>
         </div>
         <div x-show="$store.session.signedIn" class="actions">
-          <button class="btn" type="button" :aria-pressed="Boolean(liked)" :disabled="busy" @click="toggleLike()" x-text="liked ? 'Unlike' : 'Like'"></button>
+          <button class="btn" data-variant="outline" type="button" :aria-pressed="Boolean(liked)" :disabled="busy" @click="toggleLike()" x-text="`${liked ? 'Unlike' : 'Like'} · ${level?.likes ?? 0}`"></button>
           <button class="btn" data-variant="outline" type="button" :aria-expanded="reporting" aria-controls="report-form" @click="reporting = !reporting">Report</button>
         </div>
         <form id="report-form" class="report-form" x-show="reporting" @submit.prevent="sendReport()">
@@ -95,7 +95,7 @@ import Icon from '../../../components/Icon.astro';
       </div>
 
       <div class="comments">
-        <h2>Comments</h2>
+        <h2 x-show="commentsConfigured">Comments</h2>
         <div x-ref="comments"></div>
         <p class="small" x-show="!commentsConfigured">Comments are not switched on yet.</p>
       </div>
