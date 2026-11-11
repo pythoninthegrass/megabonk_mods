@@ -90,3 +90,18 @@ test('off-site links open safely in a new tab while local links stay in-page', (
   }
   assert.ok(externalCount >= 10, 'checks Astro links and the Markdown setup link');
 });
+
+test('level cards put a heart before the like count and a download icon before the download count', async () => {
+  const page = await readFile(new URL('levels/index.html', root), 'utf8');
+  const counts = /<p class="counts">(.*?)<\/p>/s.exec(page)?.[1] ?? '';
+  assert.match(counts, /data-icon="heart"[\s\S]*plural\(item\.likes, 'like'\)/);
+  assert.match(counts, /data-icon="download"[\s\S]*plural\(item\.downloads, 'download'\)/);
+  assert.ok(counts.indexOf('data-icon="heart"') < counts.indexOf('data-icon="download"'));
+});
+
+test('the level page byline puts the same icons before its counts', async () => {
+  const page = await readFile(new URL('levels/view/index.html', root), 'utf8');
+  const counts = /<p class="byline">(.*?)<\/p>/s.exec(page)?.[1] ?? '';
+  assert.match(counts, /data-icon="heart"[\s\S]*plural\(level\?\.likes, 'like'\)/);
+  assert.match(counts, /data-icon="download"[\s\S]*plural\(level\?\.downloads, 'download'\)/);
+});

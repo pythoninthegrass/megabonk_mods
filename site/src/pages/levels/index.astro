@@ -55,7 +55,7 @@ import Icon from '../../components/Icon.astro';
             <p class="byline"><span x-text="author(item)"></span> · <time :datetime="item.created" x-text="relativeDate(item.created)"></time></p>
             <p class="excerpt" x-show="item.description" x-text="excerpt(item.description)"></p>
             <ul class="chips" x-show="item.tags?.length"><template x-for="name in item.tags" :key="name"><li x-text="name"></li></template></ul>
-            <p class="counts"><span x-text="plural(item.likes, 'like')"></span><span x-text="plural(item.downloads, 'download')"></span></p>
+            <p class="counts"><span><Icon name="heart" /><span x-text="plural(item.likes, 'like')"></span></span><span><Icon name="download" /><span x-text="plural(item.downloads, 'download')"></span></span></p>
           </li>
         </template>
       </ul>
