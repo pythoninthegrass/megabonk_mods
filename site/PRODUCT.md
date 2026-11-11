@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Static Astro showcase at megabonkmod.party with an integrated Starlight wiki at docs.megabonkmod.party/home/. Prefer Markdown and vanilla JavaScript; the showcase uses Alpine.js and Basecoat UI, while the wiki keeps Starlight's documentation controls. Both build into one static image.
+Static Astro showcase at megabonkmod.party with an integrated Starlight wiki at docs.megabonkmod.party/home/. Prefer Markdown and vanilla JavaScript; the showcase uses Alpine.js and Basecoat UI, while the wiki keeps Starlight's documentation controls. Both build into one static image. The community level gallery (`/levels/`, `/l/<code>`, `/levels/upload/`) is static pages that fetch from a separate PocketBase API at runtime with the `pocketbase` JavaScript SDK.
 
 ## Users
 
@@ -33,7 +33,7 @@ Repository guides describe the shipped behavior. Bramblecrown Hill is the primar
 - Demonstrate actual capabilities rather than inventing claims.
 - Put creators first without obscuring console and MCP workflows.
 - Keep commands copyable and distinguish shell, console and MCP examples.
-- Preserve readable content without JavaScript.
+- Preserve readable content without JavaScript. The one deliberate exception is the level gallery, which lists, uploads and likes levels through a live API and cannot work without scripting; its pages show a `<noscript>` message that links to the manual sharing steps in the player guide.
 
 ## Accessibility & Inclusion
 

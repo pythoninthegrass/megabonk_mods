@@ -147,6 +147,10 @@ language and advanced debug commands, see the
 
 ## Sharing a level
 
-Send the `.mblevel.json` file from your `UserData/Levels/` folder, as a Discord attachment, a forum upload or by any other way you would send a file. If it has a picture, send that too. If your level uses an asset pack, say which one, because the person receiving it needs it as well.
+The easiest way is the level gallery at [megabonkmod.party/levels](https://megabonkmod.party/levels/). Sign in with GitHub, Google or Discord on the [upload page](https://megabonkmod.party/levels/upload/), then upload the `.mblevel.json` file from your `UserData/Levels/` folder with a cover picture (and a biome picture if you made one). The gallery gives the level a share code such as `7N1-MVB-WKF`, and the level's page is at `megabonkmod.party/l/<code>`. Send that link or code to anyone.
+
+To play a level from the gallery, press Download Level on its page and follow [Playing a level someone shared](#playing-a-level-someone-shared). If the level lists required packs, install them first; the gallery never offers pack files, so see [Installing an asset pack](#installing-an-asset-pack) and ask the author where to get them. Save the level's cover picture next to the level file with the same name, such as `my-level.png`, so Map Selection shows it.
+
+You can also share a level by hand. Send the `.mblevel.json` file from your `UserData/Levels/` folder, as a Discord attachment, a forum upload or by any other way you would send a file. If it has a picture, send that too. If your level uses an asset pack, say which one, because the person receiving it needs it as well.
 
 Levels from other people are data files the game reads, not programs, but the mod itself is code from a third party. Install the mod only from someone you trust.

@@ -74,6 +74,9 @@ Paths below are relative to the repository root.
 | `site/src/components/` | Shared command blocks, video placeholders and SVG icons |
 | `site/src/styles/global.css` | Basecoat imports and overrides, site tokens, layout, responsive rules and reduced-motion fallback |
 | `site/src/scripts/clipboard.js` | Testable clipboard behavior |
+| `site/src/pages/levels/`, `site/src/layouts/GalleryLayout.astro` | Gallery pages (browse, level view, upload) and their shared header and footer |
+| `site/src/scripts/gallery.js`, `levels.js` | Pure, unit-tested gallery helpers: share codes, filters, dates, URLs, error text |
+| `site/src/scripts/browse.js`, `level-view.js`, `upload.js`, `gallery-app.js`, `pb.js` | Alpine components, the shared sign-in store and the PocketBase client |
 | `site/src/assets/` | Original game captures that Astro turns into responsive WebP variants |
 | `site/public/` | Unprocessed public files, including the favicon, social image and robots rules |
 | `site/astro.config.mjs` | Canonical site URL, static output, Tailwind integration and Markdown highlighting |
@@ -233,6 +236,18 @@ Open the dashboard at `/_/` and sign in as an admin. To remove a level from the 
 ### Backups
 
 All state is under `PB_DATA_DIR`: `data.db`, `auxiliary.db` and `storage/` (uploads). Create a backup from the dashboard under Settings, Backups, or with a `POST /api/backups` as an admin, and download the zip. To restore, stop the server, empty the data directory, unzip the backup into it and start the server again. Scheduled backups and off-box copies are configured with the deployment.
+
+## Level gallery pages
+
+`/levels/` (browse), `/l/<code>` (level) and `/levels/upload/` (share) are static pages that fetch from the PocketBase API in the browser with the `pocketbase` SDK. They are the one part of the site that needs JavaScript, so each page carries a `<noscript>` message that links to the manual sharing steps in the player guide.
+
+- `site/server.mjs` serves `/l/<code>` from `levels/view/index.html`, so the level page reads the share code from `location.pathname` and shows a not-found state when it is missing or malformed. The dev server has no such rewrite: open `/levels/view/` there and the page shows not-found.
+- `PUBLIC_PB_URL` is read at build time, with `http://127.0.0.1:8090` as the default, so a production build has to set it. `PUBLIC_GISCUS_REPO`, `PUBLIC_GISCUS_REPO_ID`, `PUBLIC_GISCUS_CATEGORY` and `PUBLIC_GISCUS_CATEGORY_ID` configure the giscus comment thread, which is keyed by the share code with `data-mapping="specific"`; while any is empty the level page shows a short note instead of the embed. All five are listed in `site/.env.example`.
+- Sign-in uses `authWithOAuth2` for GitHub, Google and Discord, and the SDK keeps the session in `localStorage`. Likes, reports and uploads go through the collection rules, so the pages hold no secrets.
+- The level file keeps its name through `/api/l/<code>/download`, which counts the download. Pack bundles are never offered; the level page lists the required packs and links to the player guide's asset pack steps.
+- Search text reaches the API only through `buildFilter` in `site/src/scripts/levels.js`, which quotes it as one literal, and the tag filter accepts only the fixed tag set.
+
+To try the pages against a local API, build the image with `task pocketbase:image`, run it on `127.0.0.1:8090`, create a superuser with `pocketbase superuser upsert`, then serve a build of the site (`node server.mjs` in `site/`, on a port in the API's allowed origins, such as 8080). Password sign-in is off, so a local test session comes from a superuser `POST /api/collections/users/impersonate/<id>` token stored in `localStorage` under `pocketbase_auth`.
 
 ## Wiki development
 
