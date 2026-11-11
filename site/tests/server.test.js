@@ -24,6 +24,37 @@ test('unknown paths answer 404', async () => {
   assert.equal((await fetch(`${base}does-not-exist`)).status, 404);
 });
 
+test('an unknown page answers 404 with the branded not-found page', async () => {
+  const response = await fetch(`${base}does-not-exist`);
+  assert.equal(response.status, 404);
+  assert.match(response.headers.get('content-type'), /^text\/html/);
+  assert.equal(response.headers.get('cache-control'), 'no-cache');
+  const html = await response.text();
+  assert.match(html, /<h1[^>]*>[\s\S]*Page[\s\S]*not found/);
+  assert.match(html, /href="\/levels\/"/);
+  assert.match(html, /<meta name="robots" content="noindex"/);
+  assert.doesNotMatch(html, /<link rel="canonical"/);
+});
+
+test('a HEAD request for an unknown page answers 404 with html headers and no body', async () => {
+  const response = await fetch(`${base}does-not-exist`, { method: 'HEAD' });
+  assert.equal(response.status, 404);
+  assert.match(response.headers.get('content-type'), /^text\/html/);
+  assert.equal(await response.text(), '');
+});
+
+test('a missing asset answers 404 without the html page', async () => {
+  const response = await fetch(`${base}missing.png`);
+  assert.equal(response.status, 404);
+  assert.equal(response.headers.get('content-length'), '0');
+});
+
+test('a malformed share code path answers the branded 404', async () => {
+  const response = await fetch(`${base}l/not-a-code`);
+  assert.equal(response.status, 404);
+  assert.match(await response.text(), /Page not/);
+});
+
 test('docs hostname root redirects to the wiki, preserving queries', async () => {
   const response = await new Promise((resolve, reject) => {
     get(`${base}?from=home`, { headers: { host: 'docs.megabonkmod.party' } }, (res) => {

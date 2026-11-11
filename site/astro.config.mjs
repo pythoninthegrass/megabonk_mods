@@ -18,6 +18,7 @@ export default defineConfig({
       },
     }),
     starlight({
+      disable404Route: true,
       title: 'Megabonk Level Editor',
       description:
         'Player guides and level-building references for the unofficial Megabonk Level Editor.',

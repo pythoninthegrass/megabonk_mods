@@ -1,0 +1,21 @@
+---
+import GalleryLayout from '../layouts/GalleryLayout.astro';
+import Icon from '../components/Icon.astro';
+---
+<GalleryLayout title="Page not found · Megabonk Mod Party" description="This address does not lead to a page on megabonkmod.party." path="/404/" noindex>
+  <section class="gallery-page wrap not-found" aria-labelledby="not-found-title">
+    <div class="gallery-heading">
+      <h1 id="not-found-title">Page <span>not found</span></h1>
+      <p>Nothing lives at <code id="missing-path">this address</code>. The page may have moved, or the link may be mistyped.</p>
+    </div>
+    <div class="actions">
+      <a class="btn" href="/">Back to home <Icon name="arrow" /></a>
+      <a class="btn" data-variant="outline" href="/levels/">Browse levels</a>
+      <a class="btn" data-variant="outline" href="https://docs.megabonkmod.party/home/">Read the docs</a>
+    </div>
+  </section>
+  <script>
+    const target = document.getElementById('missing-path');
+    if (target && location.pathname !== '/404.html') target.textContent = location.pathname;
+  </script>
+</GalleryLayout>

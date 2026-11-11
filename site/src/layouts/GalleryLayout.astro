@@ -10,9 +10,10 @@ interface Props {
   title: string;
   description: string;
   path: string;
+  noindex?: boolean;
 }
 
-const { title, description, path } = Astro.props;
+const { title, description, path, noindex = false } = Astro.props;
 const repo = 'https://github.com/pythoninthegrass/megabonk_mods';
 const external = { target: '_blank', rel: 'noopener noreferrer' };
 ---
@@ -24,7 +25,7 @@ const external = { target: '_blank', rel: 'noopener noreferrer' };
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="theme-color" content="#dfeaf0" />
-    <link rel="canonical" href={`https://megabonkmod.party${path}`} />
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={`https://megabonkmod.party${path}`} />}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body class="gallery">

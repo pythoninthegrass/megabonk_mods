@@ -30,6 +30,32 @@ function reply(res, status, headers, body) {
   res.end(body);
 }
 
+async function notFound(req, res, rootDir, pathname) {
+  const extension = extname(pathname).toLowerCase();
+  let page;
+  if (extension === '' || extension === '.html') {
+    try {
+      page = await readFile(join(rootDir, '404.html'));
+    } catch {
+      page = undefined;
+    }
+  }
+  if (!page) {
+    reply(res, 404, { 'content-length': '0' });
+    return;
+  }
+  reply(
+    res,
+    404,
+    {
+      'content-type': TYPES['.html'],
+      'content-length': String(page.byteLength),
+      'cache-control': 'no-cache',
+    },
+    req.method === 'HEAD' ? undefined : page,
+  );
+}
+
 export function createApp({ root }) {
   const rootDir = resolve(typeof root === 'string' ? root : fileURLToPath(root));
   return createServer(async (req, res) => {
@@ -72,7 +98,7 @@ export function createApp({ root }) {
     if (pathname === '/' || pathname.endsWith('/')) pathname += 'index.html';
     const target = resolve(join(rootDir, pathname));
     if (target !== rootDir && !target.startsWith(rootDir + sep)) {
-      reply(res, 404, { 'content-length': '0' });
+      await notFound(req, res, rootDir, pathname);
       return;
     }
     let body;
@@ -83,9 +109,11 @@ export function createApp({ root }) {
       }
       body = await readFile(target);
     } catch (error) {
-      reply(res, error.code === 'ENOENT' || error.code === 'EISDIR' ? 404 : 500, {
-        'content-length': '0',
-      });
+      if (error.code === 'ENOENT' || error.code === 'EISDIR') {
+        await notFound(req, res, rootDir, pathname);
+        return;
+      }
+      reply(res, 500, { 'content-length': '0' });
       return;
     }
     const headers = {
