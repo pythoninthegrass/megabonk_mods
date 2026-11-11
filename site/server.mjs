@@ -23,6 +23,8 @@ const TYPES = {
   '.xml': 'application/xml; charset=utf-8',
 };
 
+const LEVEL_ROUTE = /^\/l\/[0-9A-HJKMNP-TV-Z]{3}-[0-9A-HJKMNP-TV-Z]{3}-[0-9A-HJKMNP-TV-Z]{3}\/?$/;
+
 function reply(res, status, headers, body) {
   res.writeHead(status, headers);
   res.end(body);
@@ -66,6 +68,7 @@ export function createApp({ root }) {
       });
       return;
     }
+    if (LEVEL_ROUTE.test(pathname)) pathname = '/levels/view/index.html';
     if (pathname === '/' || pathname.endsWith('/')) pathname += 'index.html';
     const target = resolve(join(rootDir, pathname));
     if (target !== rootDir && !target.startsWith(rootDir + sep)) {
