@@ -574,3 +574,36 @@ def test_oauth_credentials_are_resynced_from_the_environment_on_each_start(tmp_p
         assert oauth_client_ids(client) == {"github": "rotated-id", "google": "google-id", "discord": "discord-id"}
     finally:
         stop_service(process)
+
+
+def backup_settings(client: Api) -> dict:
+    return client.request("GET", "/api/settings", admin_token(client))[2]["backups"]
+
+
+def test_scheduled_backups_default_to_daily_keeping_seven(tmp_path):
+    process, client = start_service(tmp_path, free_port())
+    try:
+        settings = backup_settings(client)
+        assert settings["cron"] == "0 3 * * *"
+        assert settings["cronMaxKeep"] == 7
+    finally:
+        stop_service(process)
+
+
+def test_backup_schedule_and_retention_come_from_the_environment(tmp_path):
+    process, client = start_service(tmp_path, free_port(), {"PB_BACKUP_CRON": "*/30 * * * *", "PB_BACKUP_KEEP": "3"})
+    try:
+        settings = backup_settings(client)
+        assert settings["cron"] == "*/30 * * * *"
+        assert settings["cronMaxKeep"] == 3
+    finally:
+        stop_service(process)
+
+
+def test_a_backup_is_written_under_the_data_directory(tmp_path):
+    process, client = start_service(tmp_path, free_port())
+    try:
+        assert client.request("POST", "/api/backups", admin_token(client))[0] == 204
+        assert list((tmp_path / "backups").glob("*.zip"))
+    finally:
+        stop_service(process)
