@@ -1,8 +1,0 @@
-node_modules
-.astro
-dist
-.impeccable
-.env
-.env.*
-*.log
-.DS_Store

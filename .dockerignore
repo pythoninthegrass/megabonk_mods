@@ -11,5 +11,5 @@ site/.env
 site/.env.*
 site/**/*.log
 site/**/.DS_Store
-site/src/content/docs/docs/*.md
-!site/src/content/docs/docs/index.md
+site/src/content/docs/*.md
+!site/src/content/docs/home.md

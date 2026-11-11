@@ -44,7 +44,7 @@ npm exec astro dev stop
 
 ## Container serving
 
-Docker Engine with Docker Compose v2 is the only prerequisite: the image builds the site from source inside the container, so the host needs no Node, npm or game tooling. The container tooling lives with the site: `site/Dockerfile`, `site/docker-compose.yml`, `site/Dockerfile.dockerignore`, `site/server.mjs` and `site/smoke.mjs`. The multi-stage Dockerfile runs `bun install --frozen-lockfile` (Bun reads `package-lock.json`, so no second lockfile exists) and `astro build` on the `oven/bun` Alpine image, then serves `dist/` with Bun from a non-root stage containing only the output, server and smoke check. The repository-root context allows the wiki sync to read `docs/`; the Dockerfile-specific ignore file permits only docs and site sources and excludes dependencies, generated output, `.impeccable/`, `.env*` and logs. Game and mod assets never enter the context.
+Docker Engine with Docker Compose v2 is the only prerequisite: the image builds the site from source inside the container, so the host needs no Node, npm or game tooling. The container tooling lives with the site: `site/Dockerfile`, `site/docker-compose.yml`, `site/server.mjs` and `site/smoke.mjs`, plus the repository-root `.dockerignore`. The multi-stage Dockerfile runs `bun install --frozen-lockfile` (Bun reads `package-lock.json`, so no second lockfile exists) and `astro build` on the `oven/bun` Alpine image, then serves `dist/` with Bun from a non-root stage containing only the output, server and smoke check. The repository-root context allows the wiki sync to read `docs/`; the root `.dockerignore` (Docker reads a plain `.dockerignore` only from the context root, so it cannot live under `site/`) permits only docs and site sources and excludes dependencies, generated output, `.impeccable/`, `.env*` and logs. Game and mod assets never enter the context.
 
 From the repository root:
 
@@ -80,7 +80,7 @@ Paths below are relative to the repository root.
 | `site/tests/` | Clipboard unit tests and assertions against the generated page |
 | `site/server.mjs` | Dependency-free static server used by the container and the built-output serve tests |
 | `site/smoke.mjs` | Smoke check of the home page and every local CSS, JavaScript and image it references |
-| `site/Dockerfile`, `site/docker-compose.yml`, `site/Dockerfile.dockerignore` | Multi-stage container build and local Compose serving, described under Container serving |
+| `site/Dockerfile`, `site/docker-compose.yml`, `.dockerignore` | Multi-stage container build and local Compose serving, described under Container serving |
 | `site/.env.example` | Template for the gitignored `site/.env`: Compose port plus the Dokploy CLI credentials |
 | `dokploy.yml` | Declarative Dokploy deployment config for the published site, applied with the `ic` CLI under Deployment |
 
@@ -134,7 +134,7 @@ Review desktop and mobile layouts in a real browser, including both screenshot e
 
 ## Deployment
 
-`npm run build` produces `site/dist/`: the showcase at `/`, wiki home at `/home/` and guides at `/<slug>/`. **Content deploys on push:** Dokploy is connected to the repository through a GitHub app, and a push to `main` that touches `site/**` or `docs/**` makes it rebuild `site/Dockerfile` from the pushed commit and redeploy. Editing a guide or the site needs a commit and a push, and nothing else. The wiki pages are regenerated from `docs/` during that build, so a change to an allowlisted guide reaches the site without touching `site/`. The rest of this section covers how the Dokploy project itself is created and changed. That setup is declarative: `dokploy.yml` at the repository root describes the project, the single `site` app and its domains, and the [icarus](https://github.com/pythoninthegrass/icarus) CLI (`ic`) reconciles that file against a self-hosted Dokploy control plane through its API. The control plane's address, API key and SSH target live outside the repository in a gitignored `site/.env` copied from [`site/.env.example`](../site/.env.example) (`DOKPLOY_URL`, `DOKPLOY_API_KEY`, `DOKPLOY_ENV`, `DOKPLOY_SSH_*`). `site/Dockerfile.dockerignore` keeps that file out of the build context, and the credentials configure the CLI only — `dokploy.yml` sets `create_env_file: false`. Icarus reads `.env` from the working directory and locates `dokploy.yml` by walking up, so run every `ic` command from `site/`:
+`npm run build` produces `site/dist/`: the showcase at `/`, wiki home at `/home/` and guides at `/<slug>/`. **Content deploys on push:** Dokploy is connected to the repository through a GitHub app, and a push to `main` that touches `site/**` or `docs/**` makes it rebuild `site/Dockerfile` from the pushed commit and redeploy. Editing a guide or the site needs a commit and a push, and nothing else. The wiki pages are regenerated from `docs/` during that build, so a change to an allowlisted guide reaches the site without touching `site/`. The rest of this section covers how the Dokploy project itself is created and changed. That setup is declarative: `dokploy.yml` at the repository root describes the project, the single `site` app and its domains, and the [icarus](https://github.com/pythoninthegrass/icarus) CLI (`ic`) reconciles that file against a self-hosted Dokploy control plane through its API. The control plane's address, API key and SSH target live outside the repository in a gitignored `site/.env` copied from [`site/.env.example`](../site/.env.example) (`DOKPLOY_URL`, `DOKPLOY_API_KEY`, `DOKPLOY_ENV`, `DOKPLOY_SSH_*`). The root `.dockerignore` keeps that file out of the build context, and the credentials configure the CLI only — `dokploy.yml` sets `create_env_file: false`. Icarus reads `.env` from the working directory and locates `dokploy.yml` by walking up, so run every `ic` command from `site/`:
 
 ```sh
 cd site
@@ -154,7 +154,7 @@ Some Icarus versions have incomplete reconciliation for existing apps: `plan` an
 | Piece | Value |
 | --- | --- |
 | Project | `megabonkmod-party`, containing the one `site` app |
-| Source | GitHub `main`; Dokploy builds `site/Dockerfile` with the repository-root context, restricted by `site/Dockerfile.dockerignore`; local Compose builds the same image |
+| Source | GitHub `main`; Dokploy builds `site/Dockerfile` with the repository-root context, restricted by the root `.dockerignore`; local Compose builds the same image |
 | Domain | Apex, `www` and `docs.megabonkmod.party` route to port `8080` with HTTPS; `www` redirects to the apex, and the docs hostname's root redirects to `/home/` |
 | Health check | `bun smoke.mjs` inside the container, the same check the Compose healthcheck runs |
 | Auto-deploy | a push to `main` that touches `site/**` or `docs/**`, delivered by the Dokploy GitHub app |
