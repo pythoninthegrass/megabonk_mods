@@ -2,7 +2,9 @@ import {
   codeFromPath,
   coverUrl,
   downloadUrl,
+  editUrl,
   giscusAttrs,
+  isOwner,
   mapName,
   pbErrorMessages,
   plural,
@@ -146,6 +148,8 @@ export default () => ({
       relativeDate(this.level.created)
     })`;
   },
+  editUrl,
+  isOwner,
   mapName,
   plural,
 });

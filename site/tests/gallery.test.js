@@ -8,8 +8,10 @@ import {
   downloadUrl,
   editCodeFromSearch,
   editFormState,
+  editUrl,
   excerpt,
   giscusAttrs,
+  isOwner,
   levelFormData,
   mapName,
   pbErrorMessages,
@@ -247,7 +249,14 @@ test('availableProviders is empty when sign-in is off or the response is unusabl
   assert.deepEqual(availableProviders(undefined, KNOWN), []);
 });
 
+test('editUrl links to the upload page with the share code to edit', () => {
+  assert.equal(editUrl('7N1-MVB-WKF'), '/levels/upload/?edit=7N1-MVB-WKF');
+});
 
+test('editUrl refuses anything that is not a share code', () => {
+  assert.equal(editUrl('not-a-code'), null);
+  assert.equal(editUrl(undefined), null);
+});
 
 test('editCodeFromSearch reads a share code from the edit parameter', () => {
   assert.equal(editCodeFromSearch('?edit=7n1-mvb-wkf'), '7N1-MVB-WKF');
@@ -260,6 +269,13 @@ test('editCodeFromSearch ignores a missing or malformed edit parameter', () => {
   assert.equal(editCodeFromSearch('?edit=../../x'), null);
 });
 
+test('isOwner is true only when a signed-in user authored the level', () => {
+  assert.equal(isOwner({ id: 'u1' }, { author: 'u1' }), true);
+  assert.equal(isOwner({ id: 'u1' }, { author: 'u2' }), false);
+  assert.equal(isOwner(null, { author: 'u1' }), false);
+  assert.equal(isOwner({ id: 'u1' }, null), false);
+  assert.equal(isOwner({ id: undefined }, { author: undefined }), false);
+});
 
 test('editFormState carries the existing description and tags into the form', () => {
   const level = { description: 'A hill of brambles.', tags: ['Platforming', 'Short'] };

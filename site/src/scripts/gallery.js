@@ -96,8 +96,16 @@ export function availableProviders(methods, known) {
   return known.filter((provider) => configured.has(provider.id));
 }
 
+export function editUrl(code) {
+  return isShareCode(code) ? `/levels/upload/?edit=${code}` : null;
+}
+
 export function editCodeFromSearch(search) {
   return codeFromSearch(new URLSearchParams(search ?? '').get('edit'));
+}
+
+export function isOwner(user, level) {
+  return Boolean(user?.id) && user.id === level?.author;
 }
 
 export function editFormState(level) {

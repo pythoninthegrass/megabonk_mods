@@ -45,13 +45,13 @@ import Icon from '../../components/Icon.astro';
       <ul class="level-grid" x-show="state === 'ready'">
         <template x-for="item in items" :key="item.id">
           <li class="level-card">
-            <a class="card-link" :href="`/l/${item.code}`">
-              <figure class="cover-plate">
+            <figure class="cover-plate">
+              <a class="plate-link" :href="`/l/${item.code}`" tabindex="-1" aria-hidden="true">
                 <img :src="cover(item, '640x0')" :srcset="`${cover(item, '320x0')} 320w, ${cover(item, '640x0')} 640w`" sizes="(max-width: 700px) 90vw, 320px" :alt="`Cover picture for ${item.title}`" loading="lazy" width="320" height="213" />
-                <figcaption x-text="item.code"></figcaption>
-              </figure>
-              <h2 x-text="item.title"></h2>
-            </a>
+              </a>
+              <figcaption><span x-text="item.code"></span><a class="edit-link" x-show="isOwner($store.session.user, item)" :href="editUrl(item.code)" :aria-label="`Edit ${item.title}`" title="Edit this level"><Icon name="pencil" /></a></figcaption>
+            </figure>
+            <a class="card-link" :href="`/l/${item.code}`"><h2 x-text="item.title"></h2></a>
             <p class="byline"><span x-text="author(item)"></span> · <time :datetime="item.created" x-text="relativeDate(item.created)"></time></p>
             <p class="excerpt" x-show="item.description" x-text="excerpt(item.description)"></p>
             <ul class="chips" x-show="item.tags?.length"><template x-for="name in item.tags" :key="name"><li x-text="name"></li></template></ul>

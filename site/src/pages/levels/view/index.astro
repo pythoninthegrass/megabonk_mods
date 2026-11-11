@@ -27,7 +27,7 @@ import Icon from '../../../components/Icon.astro';
       <div class="level-layout">
         <figure class="cover-plate large">
           <img :src="cover" :alt="`Cover picture for ${level?.title}`" width="1080" height="720" />
-          <figcaption x-text="code"></figcaption>
+          <figcaption><span x-text="code"></span><a class="edit-link" x-show="isOwner($store.session.user, level)" :href="editUrl(code)" :aria-label="`Edit ${level?.title}`" title="Edit this level"><Icon name="pencil" /></a></figcaption>
         </figure>
         <div class="level-info">
           <h1 x-text="level?.title"></h1>

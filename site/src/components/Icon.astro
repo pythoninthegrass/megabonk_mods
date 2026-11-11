@@ -1,5 +1,5 @@
 ---
-interface Props { name: 'arrow' | 'cube' | 'copy' | 'code' | 'plus' | 'external'; }
+interface Props { name: 'arrow' | 'cube' | 'copy' | 'code' | 'plus' | 'external' | 'pencil'; }
 const { name } = Astro.props;
 const paths = {
   arrow: 'M5 12h14m-6-6 6 6-6 6',
@@ -8,6 +8,7 @@ const paths = {
   code: 'm8 7-5 5 5 5m8-10 5 5-5 5m-3-14-2 18',
   plus: 'M12 5v14M5 12h14',
   external: 'M14 4h6v6m0-6L10 14M10 4H4v16h16v-6',
+  pencil: 'M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497zM15 5l4 4',
 };
 ---
 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>

@@ -32,11 +32,15 @@ body.gallery main { flex: 1; }
 .level-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); gap: 2.25rem 1.75rem; list-style: none; padding: 0; margin: 0; }
 .level-card { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
 .card-link { text-decoration: none; }
-.card-link:hover h2 { color: var(--accent); }
+.card-link:hover h2, .level-card:has(.plate-link:hover) h2 { color: var(--accent); }
 .level-card h2 { margin: 0.75rem 0 0; font-family: 'Public Sans Variable', sans-serif; font-size: 1.1rem; font-weight: 700; letter-spacing: 0; line-height: 1.3; overflow-wrap: anywhere; }
 .cover-plate { position: relative; margin: 0; padding: 9px 9px 0; background: var(--paper); box-shadow: 0 13px 32px -15px #26333a55; }
 .cover-plate img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; background: #162b31; }
-.cover-plate figcaption { padding: 8px 3px 9px; color: var(--muted-ink); font: 650 0.7rem ui-monospace, SFMono-Regular, Consolas, monospace; text-align: right; }
+.cover-plate .plate-link { display: block; }
+.cover-plate figcaption { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-height: 36px; padding: 0 3px; color: var(--muted-ink); font: 650 0.7rem ui-monospace, SFMono-Regular, Consolas, monospace; }
+.edit-link { display: grid; place-items: center; flex: none; width: 36px; height: 36px; margin-right: -6px; color: var(--muted-ink); border-radius: 5px; }
+.edit-link:hover { color: var(--accent); }
+.edit-link svg { width: 17px; height: 17px; }
 .byline { margin: 0; color: var(--muted-ink); font-size: 0.8rem; }
 .excerpt { margin: 0; font-size: 0.85rem; overflow-wrap: anywhere; }
 .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; padding: 0; margin: 0; }

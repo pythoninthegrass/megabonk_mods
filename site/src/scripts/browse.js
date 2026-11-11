@@ -1,7 +1,9 @@
 import {
   codeFromSearch,
   coverUrl,
+  editUrl,
   excerpt,
+  isOwner,
   pbErrorMessages,
   plural,
   relativeDate,
@@ -101,7 +103,9 @@ export default () => ({
   },
 
   cover: (item, thumb) => coverUrl(PB_URL, item, thumb),
+  editUrl,
   excerpt,
+  isOwner,
   plural,
   relativeDate,
   author: (item) => item.expand?.author?.name || 'Unknown maker',
