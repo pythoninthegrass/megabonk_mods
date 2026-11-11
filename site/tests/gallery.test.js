@@ -144,6 +144,7 @@ test('giscusAttrs keys the thread by the share code with specific mapping', () =
     'data-category-id': 'DIC_1',
     'data-mapping': 'specific',
     'data-term': '7N1-MVB-WKF',
+    'data-strict': '1',
     'data-reactions-enabled': '1',
     'data-input-position': 'top',
     'data-theme': 'light',

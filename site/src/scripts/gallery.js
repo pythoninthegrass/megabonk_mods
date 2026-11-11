@@ -64,6 +64,7 @@ export function giscusAttrs({ repo, repoId, category, categoryId } = {}, code) {
     'data-category-id': categoryId,
     'data-mapping': 'specific',
     'data-term': code,
+    'data-strict': '1',
     'data-reactions-enabled': '1',
     'data-input-position': 'top',
     'data-theme': 'light',
