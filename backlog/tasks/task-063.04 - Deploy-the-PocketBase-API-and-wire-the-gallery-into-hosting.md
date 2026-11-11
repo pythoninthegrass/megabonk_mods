@@ -4,7 +4,7 @@ title: Deploy the PocketBase API and wire the gallery into hosting
 status: In Progress
 assignee: []
 created_date: '2026-11-11 04:49'
-updated_date: '2026-11-11 21:15'
+updated_date: '2026-11-11 21:41'
 labels:
   - website
   - sharing
@@ -45,7 +45,7 @@ Requirements:
 - [x] #1 dokploy.yml declares the PocketBase app with its domain, port, certificate, deploy order before the site, and a persistent data volume, and passes the ic validation or dry-run used for the existing app
 - [x] #2 No secret, personal identifier, address or host-specific path appears in dokploy.yml, docs, compose files, commits or backlog tasks
 - [x] #3 After `ic --env prod apply` and DNS propagation, https://api.megabonkmod.party/api/health answers 200 with a valid certificate
-- [ ] #4 Data written to PocketBase persists across a redeploy of the app
+- [x] #4 Data written to PocketBase persists across a redeploy of the app
 - [ ] #5 Scheduled backups run and a restore of a backup into a throwaway instance has been tried and documented
 - [ ] #6 OAuth sign-in works in production for each enabled provider, or the provider that is not yet set up is documented as pending
 - [x] #7 site/docker-compose.yml starts PocketBase for local development and site/.env.example documents PUBLIC_PB_URL and the giscus values
@@ -82,6 +82,10 @@ icarus patched in its own checkout (uncommitted there): cmd_add_missing_apps cre
 Applied to production with the patched ic: pocketbase app created, GitHub OAuth credentials pushed from the root .env (2 vars), deployed before site. https://api.megabonkmod.party/api/health answers 200 with a Let's Encrypt certificate; auth-methods lists github only with password sign-in off; CORS allows the site origin; levels list is empty; site still 200. Google and Discord are pending (no credentials yet).
 
 Still open: AC 4 (persistence across redeploy) and the production half of AC 5 need a superuser created in the container, which needs DOKPLOY_SSH_* for ic exec; AC 6 needs a browser GitHub sign-in; AC 9 needs the gallery pages deployed and a signed-in session.
+
+Production checks over HTTPS with a throwaway test user (impersonated, then deleted along with its level, like and backup): uploaded bramblecrown-hill, redeployed with ic trigger, and the level record, its uploaded file and the download route all survived (AC 4). A like through the likes collection raised the count to 1 and the download route counted a download. A manual POST /api/backups created a zip; downloading it and starting a local instance on it served /api/health 200 with the level and like present (restore verified).
+
+Scheduled backups are NOT running in production: /api/settings reports an empty backups.cron and cronMaxKeep 3 (the defaults), because the deployed image was built from origin/main, which does not yet contain backups.pb.js (the three commits are local and unpushed). AC 5 stays open until the commits are pushed, the app redeploys, and settings show the cron. AC 6: a users record created before the test user exists in production, probably a GitHub sign-in; awaiting confirmation. AC 9: API-level upload, download and like verified; the gallery pages path in the browser is untested.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
