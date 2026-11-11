@@ -88,3 +88,10 @@ export function codeFromSearch(text) {
   const code = String(text ?? '').trim().toUpperCase();
   return isShareCode(code) ? code : null;
 }
+
+export function availableProviders(methods, known) {
+  const oauth = methods?.oauth2;
+  if (!oauth?.enabled || !Array.isArray(oauth.providers)) return [];
+  const configured = new Set(oauth.providers.map((provider) => provider.name));
+  return known.filter((provider) => configured.has(provider.id));
+}

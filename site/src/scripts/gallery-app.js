@@ -1,8 +1,8 @@
 import Alpine from 'alpinejs';
-import { pbErrorMessages } from './gallery.js';
+import { availableProviders, pbErrorMessages } from './gallery.js';
 import { pb } from './pb.js';
 
-const PROVIDERS = [
+const KNOWN_PROVIDERS = [
   { id: 'github', label: 'GitHub' },
   { id: 'google', label: 'Google' },
   { id: 'discord', label: 'Discord' },
@@ -10,10 +10,27 @@ const PROVIDERS = [
 
 function sessionStore() {
   return {
-    providers: PROVIDERS,
+    providers: [],
+    providersState: 'idle',
     user: pb.authStore.record,
     busy: false,
     error: '',
+    async loadProviders() {
+      if (this.providersState !== 'idle') return;
+      this.providersState = 'loading';
+      try {
+        this.providers = availableProviders(
+          await pb.collection('users').listAuthMethods(),
+          KNOWN_PROVIDERS,
+        );
+        this.providersState = 'ready';
+      } catch {
+        this.providersState = 'error';
+      }
+    },
+    get signInUnavailable() {
+      return this.providersState === 'ready' && this.providers.length === 0;
+    },
     get signedIn() {
       return Boolean(this.user);
     },

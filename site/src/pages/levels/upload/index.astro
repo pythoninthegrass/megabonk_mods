@@ -21,6 +21,8 @@ import Icon from '../../../components/Icon.astro';
           <button class="btn" data-variant="outline" type="button" :disabled="$store.session.busy" @click="$store.session.signIn(provider.id)" x-text="`Sign in with ${provider.label}`"></button>
         </template>
       </div>
+      <p class="small" x-show="$store.session.signInUnavailable">Sign-in is not available yet.</p>
+      <p class="small" x-show="$store.session.providersState === 'error'">Could not check the sign-in options. Reload the page to try again.</p>
       <p class="error" x-show="$store.session.error" x-text="$store.session.error" role="alert"></p>
     </div>
 

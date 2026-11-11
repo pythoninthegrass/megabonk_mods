@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  availableProviders,
   codeFromPath,
   codeFromSearch,
   coverUrl,
@@ -212,4 +213,33 @@ test('codeFromSearch ignores ordinary search text, even nine letters long', () =
   assert.equal(codeFromSearch('7N1MVBWKF'), null);
   assert.equal(codeFromSearch(''), null);
   assert.equal(codeFromSearch(undefined), null);
+});
+
+const KNOWN = [
+  { id: 'github', label: 'GitHub' },
+  { id: 'google', label: 'Google' },
+  { id: 'discord', label: 'Discord' },
+];
+
+test('availableProviders keeps the known providers the server has configured', () => {
+  const methods = {
+    oauth2: { enabled: true, providers: [{ name: 'discord' }, { name: 'github' }] },
+  };
+  assert.deepEqual(availableProviders(methods, KNOWN).map((p) => p.id), ['github', 'discord']);
+});
+
+test('availableProviders ignores providers the site has no button for', () => {
+  const methods = {
+    oauth2: { enabled: true, providers: [{ name: 'gitlab' }, { name: 'google' }] },
+  };
+  assert.deepEqual(availableProviders(methods, KNOWN).map((p) => p.id), ['google']);
+});
+
+test('availableProviders is empty when sign-in is off or the response is unusable', () => {
+  assert.deepEqual(
+    availableProviders({ oauth2: { enabled: false, providers: [{ name: 'github' }] } }, KNOWN),
+    [],
+  );
+  assert.deepEqual(availableProviders({}, KNOWN), []);
+  assert.deepEqual(availableProviders(undefined, KNOWN), []);
 });

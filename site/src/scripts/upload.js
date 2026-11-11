@@ -14,6 +14,7 @@ export default () => ({
   confirmDelete: null,
 
   async init() {
+    this.$store.session.loadProviders();
     await this.loadMine();
     this.$watch('$store.session.user', () => {
       this.resetForm();

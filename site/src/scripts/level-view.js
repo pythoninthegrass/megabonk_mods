@@ -23,6 +23,7 @@ export default () => ({
   reason: '',
 
   async init() {
+    this.$store.session.loadProviders();
     this.code = codeFromPath(location.pathname);
     if (!this.code) {
       this.state = 'notfound';
