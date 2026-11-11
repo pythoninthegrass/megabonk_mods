@@ -88,6 +88,6 @@ Adds pocketbase/: a JSVM-only PocketBase 0.40.6 service (migrations for users, l
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 - [x] #5 Container image ships no OpenSSH package (build fails if any openssh package is present) and is based on an Alpine release at or after the 2026-11-05 OpenSSH password-bypass fix (3.24.4 or later), upgraded with apk at build time
 <!-- DOD:END -->
