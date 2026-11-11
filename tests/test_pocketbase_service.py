@@ -424,6 +424,24 @@ def test_replacing_the_file_rederives_metadata_and_keeps_the_code(api, alice):
     assert (updated["title"], updated["packs"], updated["code"]) == ("Warehouse", {"thps": "2.0.21"}, level["code"])
 
 
+def test_a_multipart_update_without_a_level_file_keeps_the_file_and_metadata(api, alice):
+    level = create_level(api, alice)
+    path = f"/api/collections/levels/records/{level['id']}"
+    status, _, updated = api.multipart("PATCH", path, [("description", "edited")], [], alice["token"])
+    assert status == 200, updated
+    assert (updated["description"], updated["title"], updated["code"]) == ("edited", level["title"], level["code"])
+    assert updated["level"] == level["level"]
+
+
+def test_a_multipart_update_can_replace_only_the_cover(api, alice):
+    level = create_level(api, alice)
+    path = f"/api/collections/levels/records/{level['id']}"
+    files = [("cover", "new-cover.png", image("bramblecrown-hill.png"), "image/png")]
+    status, _, updated = api.multipart("PATCH", path, [], files, alice["token"])
+    assert status == 200, updated
+    assert updated["cover"] != level["cover"] and updated["level"] == level["level"]
+
+
 def test_replacing_the_file_with_an_invalid_one_is_rejected(api, alice):
     level = create_level(api, alice)
     files = [("level", "level.mblevel.json", level_bytes(schemaVersion=9), "application/json")]

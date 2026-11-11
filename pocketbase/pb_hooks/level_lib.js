@@ -124,7 +124,13 @@ function newCode() {
 // Reads the uploaded level file, rejects an invalid one and copies the derived fields onto the record.
 function applyUploadedLevel(e) {
   if (String(e.requestInfo().headers["content_type"] || "").indexOf("multipart/form-data") !== 0) return
-  const uploads = e.findUploadedFiles("level")
+  // findUploadedFiles throws, rather than returning an empty list, when the request has no such file.
+  let uploads
+  try {
+    uploads = e.findUploadedFiles("level")
+  } catch (_) {
+    return
+  }
   if (uploads.length === 0) return
   const reader = uploads[0].reader.open()
   let text
