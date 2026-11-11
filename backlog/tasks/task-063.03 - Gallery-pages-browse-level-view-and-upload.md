@@ -4,7 +4,7 @@ title: 'Gallery pages: browse, level view and upload'
 status: In Progress
 assignee: []
 created_date: '2026-11-11 04:49'
-updated_date: '2026-11-11 07:25'
+updated_date: '2026-11-11 07:29'
 labels:
   - website
   - sharing
@@ -106,6 +106,8 @@ Found and fixed during verification: PocketBase wraps the upload hook's error pa
 Impeccable critique run twice (27 then 28 out of 40). Fixed: share-code block and code-paste jump, level page action ranking, upload form help and textarea height, delete confirm with focus handling, edit-mode cover preview and row marker, mobile header grid and filter layout. Open: P3 (three equal vermilion sign-in buttons) and minor items recorded in site/.impeccable/critique snapshots.
 
 Still open on the ACs: #1 paging and #2 tag filter and sort were wired through tested helpers but not exercised in a browser with more than one page of levels; #7 the giscus embed itself was not rendered (attributes are unit tested, the unconfigured note was verified); #8 real OAuth sign-in untested; #10 waits on P3. Production needs PUBLIC_PB_URL (https://api host) and the giscus values passed as build arguments in site/Dockerfile, which belongs with the deployment task.
+
+Production API URL wired: site/Dockerfile takes PUBLIC_PB_URL as a build argument defaulting to https://api.megabonkmod.party (verified by building the image and finding the host in the bundle), and Compose passes the local address. The api A record is live and resolves to the VPS; HTTPS answers only once the PocketBase app is deployed. Upload page sign-in buttons are now outline (P3 closed). #10 can be ticked after a final critique pass.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
