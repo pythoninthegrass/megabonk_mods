@@ -23,6 +23,7 @@ includes:
   thps: taskfiles/thps.yml
   re: taskfiles/re.yml
   ghidra: taskfiles/ghidra.yml
+  pocketbase: taskfiles/pocketbase.yml
   wine:
     taskfile: taskfiles/wine.yml
     platforms: [darwin]

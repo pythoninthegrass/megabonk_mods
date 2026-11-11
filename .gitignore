@@ -328,3 +328,5 @@ unity/*/Assets/Thps.meta
 *.flac
 *.mp3
 *.mov
+
+pocketbase/pb_data/

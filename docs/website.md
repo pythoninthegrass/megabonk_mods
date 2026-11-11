@@ -170,6 +170,70 @@ DNS is managed by DNSControl in the infrastructure repo's `dns/records/dnsconfig
 
 Wiki canonical URLs use `https://docs.megabonkmod.party` from `site/astro.config.mjs`; the showcase retains explicit apex metadata. Build and publish the static output; no game installation or harness endpoint is needed in production beyond the static server in the image.
 
+## Gallery API (PocketBase)
+
+`pocketbase/` holds the backend for the community level gallery: a PocketBase 0.40 instance configured entirely from code, so a fresh data directory comes up with every collection, rule and hook in place. Nothing is built from Go; the stock release binary loads the JavaScript in `pb_migrations/` and `pb_hooks/`.
+
+| Path | Purpose |
+| --- | --- |
+| `pocketbase/pb_migrations/` | Creates the `levels`, `likes` and `reports` collections and configures `users` |
+| `pocketbase/pb_hooks/level_lib.js` | Level file validation, metadata derivation, share codes and filename slugs |
+| `pocketbase/pb_hooks/levels.pb.js` | Upload validation, the download route and the download filename |
+| `pocketbase/pb_hooks/likes.pb.js` | Recomputes `levels.likes` from the like records |
+| `pocketbase/pb_hooks/oauth.pb.js` | Copies OAuth credentials from the environment on every start |
+| `pocketbase/entrypoint.sh` | Starts the server; maps the environment variables below to flags |
+| `pocketbase/Dockerfile` | Alpine image with a checksum-verified PocketBase release |
+
+### API contract
+
+- **`levels`**: `title`, `description` (at most 2000 characters), `code`, `author`, `level` (one `.json` file, at most 1 MiB), `cover` (png or jpg, at most 8 MiB, required), `biome` (optional, same limits), `packs`, `schemaVersion`, `gameBuildId`, `map`, `tags` (`Speedrun`, `Platforming`, `Survival`, `Puzzle`, `Showcase`, `Short`), `downloads`, `likes`, `hidden`, plus `created` and `updated`.
+- **`likes`**: `user`, `level`; one like per pair. A client sends its own id as `user`.
+- **`reports`**: `user`, `level`, `reason` (at most 1000 characters). Only an admin can read them.
+- **`users`**: OAuth2 only, with GitHub, Google and Discord. Password sign-in and plain registration are off, so an account exists only after an OAuth sign-in. The user list and view rules are public so a level can expand its author; email addresses stay hidden unless a user opts in.
+- **`GET /api/l/{code}/download`**: increments `downloads`, then answers `302` to `/api/files/levels/<id>/<file>?download=1`. That file URL carries `Content-Disposition: attachment; filename="<slug-of-title>.mblevel.json"`. An unknown or hidden code answers `404`. The code is matched case-insensitively.
+
+Anyone can list and view levels where `hidden` is false. A signed-in user can create a level; only its author can update or delete it. A client can never send `code`, `downloads`, `likes`, `hidden` or `author`: the request is refused. `title`, `packs`, `schemaVersion`, `gameBuildId` and `map` are always taken from the uploaded file, whatever the client sends, so the gallery cannot disagree with what the game shows. The `code` is `XXX-XXX-XXX` in the Crockford base32 alphabet, generated on create and never changed.
+
+A level file is accepted when it is a JSON object, `schemaVersion` is an integer from 1 to 4, `title` is non-empty (a level without one is not listed on Map Selection) and at most 200 characters, `packs` maps pack ids to version strings, and `baseline` is absent, `generated` or `none`. `edits` must be a list of objects with a non-empty `opType` and string `target` and `payload`. A from-scratch level (`baseline: none`) needs a `grid` with `width` and `depth` of at least 1 and unique cells inside it, plus a `spawn` and `bossSpawner` with a three-number `position`, and cannot carry tile edits or `gen:` targets; a generated-baseline level cannot carry a `grid`. Failures return `400` with the reasons in `data.level.message`. The checks mirror `LevelFileValidator`; see [level-format.md](level-format.md).
+
+Pack bundles are never stored or offered. `packs` is metadata only. A hidden level's file stays reachable by its exact file URL, which contains a random suffix; the flag removes the level from listings and from the download route.
+
+### Environment variables
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PB_OAUTH_GITHUB_CLIENT_ID`, `PB_OAUTH_GITHUB_CLIENT_SECRET` | unset | GitHub OAuth app credentials |
+| `PB_OAUTH_GOOGLE_CLIENT_ID`, `PB_OAUTH_GOOGLE_CLIENT_SECRET` | unset | Google OAuth client credentials |
+| `PB_OAUTH_DISCORD_CLIENT_ID`, `PB_OAUTH_DISCORD_CLIENT_SECRET` | unset | Discord OAuth application credentials |
+| `PB_ORIGINS` | the site origin plus `localhost` and `127.0.0.1` on ports 8080 and 4321 | Comma-separated CORS origins |
+| `PB_HTTP` | `0.0.0.0:8090` | Listen address |
+| `PB_DATA_DIR` | `/pb_data` | Database, uploads and backups; the image's one declared volume |
+| `PB_HOOKS_DIR`, `PB_MIGRATIONS_DIR` | `/pb/pb_hooks`, `/pb/pb_migrations` | Code locations |
+| `PB_BIN` | `/usr/local/bin/pocketbase` | Binary to run |
+
+A provider is enabled only when both its id and secret are set; PocketBase rejects an empty credential. The migration applies them on first start and `oauth.pb.js` re-applies them on every start, so a secret that is set or rotated later takes effect on the next restart. Each OAuth app's redirect URL is `<api origin>/api/oauth2-redirect`. Credentials belong in the environment or an untracked `.env`, never in the repository.
+
+### Running locally
+
+```sh
+task pocketbase:install                                # once; installs the pinned binary through mise, not .tool-versions
+task pocketbase:superuser -- admin@example.test 'a-long-password'
+task pocketbase:run                                    # http://127.0.0.1:8090, dashboard at /_/
+task pocketbase:image                                  # builds the container image
+```
+
+Data lives in the gitignored `pocketbase/pb_data/`. `task pocketbase:test` runs `tests/test_pocketbase_service.py` and fails when the binary is missing. The same tests run under `task test` and `uv run pytest`, where they skip with the install hint instead. Set `POCKETBASE_BIN` to use a binary from elsewhere. The tests start the real `entrypoint.sh` against a temporary data directory and the real files in `levels/`, sign in as test users through superuser impersonation (password sign-in is off), and cover the validation rejections, derived fields, access rules, like counts, the download route, reports, OAuth configuration and CORS.
+
+The image build context is `pocketbase/`: `docker build -t megabonk-levels-api pocketbase`. It builds on a pinned Alpine release and runs `apk upgrade`, downloads the PocketBase zip for the build architecture and verifies its SHA-256, runs as a non-root user and exposes port 8090 with a health check on `/api/health`. The build fails if any `openssh` package is present: the image never runs `sshd`, and the Alpine OpenSSH password-bypass advisory of 2026-11-05 is fixed in 3.24.4 and later, so keep the base tag at or above that. When bumping PocketBase, update `PB_VERSION` and both checksums from the release's `checksums.txt`, and `POCKETBASE_VERSION` in `taskfiles/pocketbase.yml` and the test file.
+
+### Moderation
+
+Open the dashboard at `/_/` and sign in as an admin. To remove a level from the gallery without deleting it, open `levels`, edit the record and set `hidden`; it disappears from listings and the download route at once and its author keeps their record. Review reports under `reports`, which only an admin can read; each names the reporting user, the level and a reason. Deleting a level or a user also deletes their likes and reports.
+
+### Backups
+
+All state is under `PB_DATA_DIR`: `data.db`, `auxiliary.db` and `storage/` (uploads). Create a backup from the dashboard under Settings, Backups, or with a `POST /api/backups` as an admin, and download the zip. To restore, stop the server, empty the data directory, unzip the backup into it and start the server again. Scheduled backups and off-box copies are configured with the deployment.
+
 ## Wiki development
 
 The wiki follows the Starlight layout used by the reference docs site: a searchable sidebar, page contents, code-block copy controls and a page-level Markdown menu. It lives inside `site/`, alongside the showcase, rather than in a separate application.

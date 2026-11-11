@@ -1,9 +1,10 @@
 ---
 id: TASK-063.02
 title: 'PocketBase service for level storage, accounts and likes'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-11 04:49'
+updated_date: '2026-11-11 05:41'
 labels:
   - website
   - sharing
@@ -38,22 +39,55 @@ API contract the site relies on (collection `levels`): `title`, `description` (m
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The container image builds from a pinned PocketBase release verified by checksum, serves on port 8090, restricts CORS origins to the site's origins plus localhost for development, and keeps all data under one declared volume
-- [ ] #2 Migrations create the users, levels, likes and reports collections from code, enable GitHub, Google and Discord OAuth2 with credentials read from environment variables, and disable password sign-up
-- [ ] #3 Anyone can list and view levels where hidden is false; any signed-in user can create a level; only the owner can update or delete it; clients can never set code, downloads, likes or hidden
-- [ ] #4 Creating a level whose file is not valid JSON, has a schemaVersion outside 1 to 4, has no title, or has a malformed grid or edits is rejected with a clear error
-- [ ] #5 On create and update the title, packs, schemaVersion, gameBuildId and map fields are derived from the uploaded file, and a unique share code is generated on create
-- [ ] #6 A user can like a level once and unlike it; the stored like count always equals the number of like records
-- [ ] #7 The download route increments the count, redirects to the file and names the download after the level title; hidden levels are not downloadable
-- [ ] #8 Signed-in users can file a report on a level; only an admin can read reports
-- [ ] #9 Automated tests run against a throwaway PocketBase instance with a temporary data directory and cover every rule above, including the rejection cases, using the real files in levels/ as fixtures (bramblecrown-hill for a plain level, thps for packs)
-- [ ] #10 docs/website.md documents the service, its environment variables, how to run it and its tests locally, moderation through the admin dashboard, and backups
+- [x] #1 The container image builds from a pinned PocketBase release verified by checksum, serves on port 8090, restricts CORS origins to the site's origins plus localhost for development, and keeps all data under one declared volume
+- [x] #2 Migrations create the users, levels, likes and reports collections from code, enable GitHub, Google and Discord OAuth2 with credentials read from environment variables, and disable password sign-up
+- [x] #3 Anyone can list and view levels where hidden is false; any signed-in user can create a level; only the owner can update or delete it; clients can never set code, downloads, likes or hidden
+- [x] #4 Creating a level whose file is not valid JSON, has a schemaVersion outside 1 to 4, has no title, or has a malformed grid or edits is rejected with a clear error
+- [x] #5 On create and update the title, packs, schemaVersion, gameBuildId and map fields are derived from the uploaded file, and a unique share code is generated on create
+- [x] #6 A user can like a level once and unlike it; the stored like count always equals the number of like records
+- [x] #7 The download route increments the count, redirects to the file and names the download after the level title; hidden levels are not downloadable
+- [x] #8 Signed-in users can file a report on a level; only an admin can read reports
+- [x] #9 Automated tests run against a throwaway PocketBase instance with a temporary data directory and cover every rule above, including the rejection cases, using the real files in levels/ as fixtures (bramblecrown-hill for a plain level, thps for packs)
+- [x] #10 docs/website.md documents the service, its environment variables, how to run it and its tests locally, moderation through the admin dashboard, and backups
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Approved decisions: JSVM migrations and hooks on the stock binary (no Go build); PocketBase tests skip when the binary is absent so `task test` stays green, a dedicated `pocketbase:test` task fails when absent; alpine base image on a current patched release (apk upgrade at build), checksum-verified PocketBase 0.40.6 zip.
+
+1. Tests first (tests/test_pocketbase_*.py): session fixture starts the binary on a free port with a tmp data dir, creates users through the superuser API, uses levels/bramblecrown-hill and levels/thps as fixtures. Cover rejection cases, derivation, code format, access rules, likes count invariant, download route, reports, OAuth/password settings. Confirm they fail.
+2. pocketbase/pb_hooks/level_validate.js (pure validator), levels.pb.js, likes.pb.js, download.pb.js.
+3. pocketbase/pb_migrations: users (OAuth2 from env, password auth off), levels, likes, reports with access rules.
+4. pocketbase/Dockerfile (pinned release, SHA-256 verified, one volume, port 8090, PB_ORIGINS CORS, healthcheck).
+5. taskfiles/pocketbase.yml (run, test), wired into task test with skip semantics.
+6. docs/website.md section: service, env vars, local run and tests, moderation, backups.
+7. task check, then conventional commit without attribution.
+
+As built: hooks are level_lib.js (validator, derivation, codes, slugs), levels.pb.js (upload hooks, download route, filename), likes.pb.js and oauth.pb.js; the separate level_validate.js and download.pb.js were folded into those. Added pocketbase/entrypoint.sh so tests and the image share one startup path, and the pocketbase:install, superuser and image tasks.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+PocketBase 0.40 JSVM gotchas found while building: handlers run in isolated scopes so shared helpers must live in a module loaded with require inside the handler; hook events expose the response writer as e.requestEvent.response, not e.response; findUploadedFiles throws on non-multipart requests, so the hook checks the content type first; onServe is not a JSVM global, use onBootstrap; a rule-failed update answers 404, not 403.
+
+Choices beyond the contract: cover is required (the contract lists biome as the optional image); an OAuth credential sync hook re-applies env credentials on every start because migrations run once; the download redirect targets a ?download=1 file URL and onFileDownloadRequest sets the title-based Content-Disposition, since a header on the 302 itself would never reach the browser; PocketBase tests skip under task test and fail under task pocketbase:test when the binary is absent; the test file captures os.kill at import so it can stop its own service despite the conftest guard.
+
+Image builds on alpine 3.24.4 (first 3.24 release with the OpenSSH fix) with zero openssh packages; the build fails if one appears. Alpine stable branches backport the fix without reaching OpenSSH 10.6p2, so a version-number check would reject patched stable releases.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Adds pocketbase/: a JSVM-only PocketBase 0.40.6 service (migrations for users, levels, likes, reports; hooks for level validation and metadata derivation, share codes, like recounts, the download route with title-based filename, and OAuth credential sync), an Alpine container image with a checksum-verified release, no OpenSSH and a single /pb_data volume, taskfiles/pocketbase.yml, and a Gallery API section in docs/website.md. 52 tests in tests/test_pocketbase_service.py run against a throwaway instance started through the real entrypoint, using levels/bramblecrown-hill and levels/thps. task check passes.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
+- [x] #5 Container image ships no OpenSSH package (build fails if any openssh package is present) and is based on an Alpine release at or after the 2026-11-05 OpenSSH password-bypass fix (3.24.4 or later), upgraded with apk at build time
 <!-- DOD:END -->

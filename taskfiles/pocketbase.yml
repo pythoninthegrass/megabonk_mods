@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+vars:
+  POCKETBASE_VERSION: "0.40.6"
+  MISE_BIN: '$HOME/.local/bin/mise'
+
+tasks:
+  install:
+    desc: "Install the pinned PocketBase binary through mise, outside .tool-versions"
+    cmds:
+      - '{{.MISE_BIN}} install github:pocketbase/pocketbase@{{.POCKETBASE_VERSION}}'
+
+  run:
+    desc: "Serve the gallery API on 127.0.0.1:8090 with data in the gitignored pocketbase/pb_data"
+    summary: |
+      Usage: task pocketbase:run
+
+      Create the first admin once with:
+        task pocketbase:superuser -- you@example.com 'a-long-password'
+      OAuth credentials are read from the PB_OAUTH_* variables (see docs/website.md).
+    cmds:
+      - |-
+        PB_BIN="$({{.MISE_BIN}} where github:pocketbase/pocketbase@{{.POCKETBASE_VERSION}})/pocketbase" \
+        PB_HTTP=127.0.0.1:8090 \
+        PB_DATA_DIR=pocketbase/pb_data \
+        PB_HOOKS_DIR=pocketbase/pb_hooks \
+        PB_MIGRATIONS_DIR=pocketbase/pb_migrations \
+        sh pocketbase/entrypoint.sh
+
+  superuser:
+    desc: "Create or update an admin for the local instance: task pocketbase:superuser -- <email> <password>"
+    cmds:
+      - |-
+        "$({{.MISE_BIN}} where github:pocketbase/pocketbase@{{.POCKETBASE_VERSION}})/pocketbase" \
+        superuser upsert {{.CLI_ARGS}} --dir=pocketbase/pb_data
+
+  test:
+    desc: "Run the PocketBase service tests; fails when the binary is not installed"
+    cmds:
+      - POCKETBASE_REQUIRED=1 uv run pytest tests/test_pocketbase_service.py
+
+  image:
+    desc: "Build the container image"
+    cmds:
+      - docker build -t megabonk-levels-api:local pocketbase
