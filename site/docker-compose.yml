@@ -1,6 +1,23 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json
 
 services:
+  pocketbase:
+    build:
+      context: ../pocketbase
+    image: megabonk-levels-api:local
+    ports:
+      - "127.0.0.1:8090:8090"
+    environment:
+      PB_OAUTH_GITHUB_CLIENT_ID: ${PB_OAUTH_GITHUB_CLIENT_ID:-}
+      PB_OAUTH_GITHUB_CLIENT_SECRET: ${PB_OAUTH_GITHUB_CLIENT_SECRET:-}
+      PB_OAUTH_GOOGLE_CLIENT_ID: ${PB_OAUTH_GOOGLE_CLIENT_ID:-}
+      PB_OAUTH_GOOGLE_CLIENT_SECRET: ${PB_OAUTH_GOOGLE_CLIENT_SECRET:-}
+      PB_OAUTH_DISCORD_CLIENT_ID: ${PB_OAUTH_DISCORD_CLIENT_ID:-}
+      PB_OAUTH_DISCORD_CLIENT_SECRET: ${PB_OAUTH_DISCORD_CLIENT_SECRET:-}
+    volumes:
+      - pocketbase-data:/pb_data
+    init: true
+
   site:
     build:
       context: ..
@@ -17,3 +34,6 @@ services:
       retries: 3
       start_period: 5s
     init: true
+
+volumes:
+  pocketbase-data:

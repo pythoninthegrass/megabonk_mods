@@ -84,7 +84,7 @@ Paths below are relative to the repository root.
 | `site/server.mjs` | Dependency-free static server used by the container and the built-output serve tests |
 | `site/smoke.mjs` | Smoke check of the home page and every local CSS, JavaScript and image it references |
 | `site/Dockerfile`, `site/docker-compose.yml`, `.dockerignore` | Multi-stage container build and local Compose serving, described under Container serving |
-| `site/.env.example` | Template for the gitignored `site/.env`: Compose port plus the Dokploy CLI credentials |
+| `site/.env.example` | Template for the gitignored `site/.env`: Compose port, gallery API URL and giscus values |
 | `dokploy.yml` | Declarative Dokploy deployment config for the published site, applied with the `ic` CLI under Deployment |
 
 Keep `site/package.json` and `site/package-lock.json` together when changing dependencies. `site/node_modules/`, `site/.astro/` and `site/dist/` are generated and ignored by Git.
@@ -137,10 +137,9 @@ Review desktop and mobile layouts in a real browser, including both screenshot e
 
 ## Deployment
 
-`npm run build` produces `site/dist/`: the showcase at `/`, wiki home at `/home/` and guides at `/<slug>/`. **Content deploys on push:** Dokploy is connected to the repository through a GitHub app, and a push to `main` that touches `site/**` or `docs/**` makes it rebuild `site/Dockerfile` from the pushed commit and redeploy. Editing a guide or the site needs a commit and a push, and nothing else. The wiki pages are regenerated from `docs/` during that build, so a change to an allowlisted guide reaches the site without touching `site/`. The rest of this section covers how the Dokploy project itself is created and changed. That setup is declarative: `dokploy.yml` at the repository root describes the project, the single `site` app and its domains, and the [icarus](https://github.com/pythoninthegrass/icarus) CLI (`ic`) reconciles that file against a self-hosted Dokploy control plane through its API. The control plane's address, API key and SSH target live outside the repository in a gitignored `site/.env` copied from [`site/.env.example`](../site/.env.example) (`DOKPLOY_URL`, `DOKPLOY_API_KEY`, `DOKPLOY_ENV`, `DOKPLOY_SSH_*`). The root `.dockerignore` keeps that file out of the build context, and the credentials configure the CLI only — `dokploy.yml` sets `create_env_file: false`. Icarus reads `.env` from the working directory and locates `dokploy.yml` by walking up, so run every `ic` command from `site/`:
+`npm run build` produces `site/dist/`: the showcase at `/`, wiki home at `/home/` and guides at `/<slug>/`. **Content deploys on push:** Dokploy is connected to the repository through a GitHub app, and a push to `main` that touches `site/**` or `docs/**` makes it rebuild `site/Dockerfile` from the pushed commit and redeploy. Editing a guide or the site needs a commit and a push, and nothing else. The wiki pages are regenerated from `docs/` during that build, so a change to an allowlisted guide reaches the site without touching `site/`. The rest of this section covers how the Dokploy project itself is created and changed. That setup is declarative: `dokploy.yml` at the repository root describes the project, the `site` and `pocketbase` apps and their domains, and the [icarus](https://github.com/pythoninthegrass/icarus) CLI (`ic`) reconciles that file against a self-hosted Dokploy control plane through its API. The control plane's address, API key and SSH target live outside the repository in the gitignored repository-root `.env`, with the template in [`.env.example`](../.env.example) (`DOKPLOY_URL`, `DOKPLOY_API_KEY`, `DOKPLOY_ENV`, `DOKPLOY_SSH_*`). The root `.dockerignore` keeps that file out of the build context, and the credentials configure the CLI only — `dokploy.yml` sets `create_env_file: false`. Icarus reads `.env` from the working directory, so run every `ic` command from the repository root:
 
 ```sh
-cd site
 ic --env prod check         # credentials, reachability and config validity
 ic --env prod plan          # diff against the server without writing
 ic --env prod apply         # check, setup, push env, deploy in wave order
@@ -150,17 +149,18 @@ ic --env prod logs site     # container logs, over SSH
 
 Install the CLI once from a checkout of icarus (`uv tool install <icarus checkout>`). What the config provisions:
 
-Credentials may instead live in the gitignored repository-root `.env`: set `DOTENV_FILE=../.env` when invoking Icarus from `site/`. No `env_targets` or per-app environment is configured, so deployment credentials and game settings are not pushed into the site container.
+`dokploy.yml` sets `env_targets: [pocketbase]`, so `ic env` and `ic apply` push the root `.env` to the `pocketbase` app and to no other app. Icarus pushes every key that its exclusion list does not match. The list is the built-in prefixes (including `DOKPLOY_`) plus the comma-separated `ENV_EXCLUDES` key in the same `.env`, where a trailing `_` or `*` makes a prefix match and anything else an exact match. Keep `ENV_EXCLUDES` covering every unrelated secret in the file (see `.env.example`), and check what would be pushed before an apply: with it set as in the template the only pushed keys are the `PB_OAUTH_*` values. The `site` app has no `env_targets` entry and `create_env_file: false`, so nothing from `.env` reaches it.
 
 Some Icarus versions have incomplete reconciliation for existing apps: `plan` and `apply` do not compare or save `dockerContextPath` or GitHub `watchPaths`. When changing those fields, explicitly reconcile them through `application.saveBuildType` and `application.saveGithubProvider` before triggering the deploy. Preserve the existing GitHub provider and verify the remote owner, repository and branch first. An import can also encounter a `project.all` application summary without `appName`; obtain it from `application.one` using the summary's `applicationId`, rather than creating a replacement project.
 
 | Piece | Value |
 | --- | --- |
-| Project | `megabonkmod-party`, containing the one `site` app |
+| Project | `megabonkmod-party`, containing the `site` and `pocketbase` apps; `pocketbase` deploys first |
 | Source | GitHub `main`; Dokploy builds `site/Dockerfile` with the repository-root context, restricted by the root `.dockerignore`; local Compose builds the same image |
 | Domain | Apex, `www` and `docs.megabonkmod.party` route to port `8080` with HTTPS; `www` redirects to the apex, and the docs hostname's root redirects to `/home/` |
 | Health check | `bun smoke.mjs` inside the container, the same check the Compose healthcheck runs |
 | Auto-deploy | a push to `main` that touches `site/**` or `docs/**`, delivered by the Dokploy GitHub app |
+| API app | `pocketbase`: builds `pocketbase/Dockerfile` with `pocketbase/` as the context (the root `.dockerignore` excludes everything but `docs/` and `site/`), serves `api.megabonkmod.party` on port `8090` with HTTPS, redeploys on pushes touching `pocketbase/**`, and mounts the `pocketbase-data` volume at `/pb_data` |
 
 Because Dokploy builds from the pushed commit, content reaches the site only after it is committed and pushed. Use `ic --env prod trigger` to re-run a deploy without a new commit, and `ic --env prod apply` only when `dokploy.yml` changes. `.dokploy-state/prod.json` maps the config's names to Dokploy's resource ids and is gitignored: `ic --env prod import` regenerates it from an existing project, and it must be present before `apply`, which otherwise creates a duplicate project. Verify a deploy from anywhere with the container's own smoke check:
 
@@ -169,7 +169,7 @@ curl -sI https://megabonkmod.party/          # 200, text/html
 node smoke.mjs https://megabonkmod.party/    # exit 0 when every referenced asset serves
 ```
 
-DNS is managed by DNSControl in the infrastructure repo's `dns/records/dnsconfig.js`, not here. The apex, `www` and `docs` are A records under `CF_PROXY_DEFAULT_OFF`, resolving directly to the host so the Let's Encrypt HTTP-01 challenge can complete. `www.megabonkmod.party` has its own router and certificate plus a Traefik `redirectRegex` to the apex at HTTP 308 with the path preserved. DNSControl changes follow the usual preview-then-push loop: `dnscontrol preview --domains megabonkmod.party` reports `0 corrections` when the zone matches the config.
+DNS is managed by DNSControl in the infrastructure repo's `dns/records/dnsconfig.js`, not here. The apex, `www`, `docs` and `api` are A records under `CF_PROXY_DEFAULT_OFF`, resolving directly to the host so the Let's Encrypt HTTP-01 challenge can complete. `www.megabonkmod.party` has its own router and certificate plus a Traefik `redirectRegex` to the apex at HTTP 308 with the path preserved. DNSControl changes follow the usual preview-then-push loop: `dnscontrol preview --domains megabonkmod.party` reports `0 corrections` when the zone matches the config.
 
 Wiki canonical URLs use `https://docs.megabonkmod.party` from `site/astro.config.mjs`; the showcase retains explicit apex metadata. Build and publish the static output; no game installation or harness endpoint is needed in production beyond the static server in the image.
 
@@ -213,6 +213,8 @@ Pack bundles are never stored or offered. `packs` is metadata only. A hidden lev
 | `PB_DATA_DIR` | `/pb_data` | Database, uploads and backups; the image's one declared volume |
 | `PB_HOOKS_DIR`, `PB_MIGRATIONS_DIR` | `/pb/pb_hooks`, `/pb/pb_migrations` | Code locations |
 | `PB_BIN` | `/usr/local/bin/pocketbase` | Binary to run |
+| `PB_BACKUP_CRON` | `0 3 * * *` | Scheduled backup cron expression |
+| `PB_BACKUP_KEEP` | `7` | Number of scheduled backups kept |
 
 A provider is enabled only when both its id and secret are set; PocketBase rejects an empty credential. The migration applies them on first start and `oauth.pb.js` re-applies them on every start, so a secret that is set or rotated later takes effect on the next restart. Each OAuth app's redirect URL is `<api origin>/api/oauth2-redirect`. Credentials belong in the environment or an untracked `.env`, never in the repository.
 
@@ -235,7 +237,35 @@ Open the dashboard at `/_/` and sign in as an admin. To remove a level from the 
 
 ### Backups
 
-All state is under `PB_DATA_DIR`: `data.db`, `auxiliary.db` and `storage/` (uploads). Create a backup from the dashboard under Settings, Backups, or with a `POST /api/backups` as an admin, and download the zip. To restore, stop the server, empty the data directory, unzip the backup into it and start the server again. Scheduled backups and off-box copies are configured with the deployment.
+All state is under `PB_DATA_DIR`: `data.db`, `auxiliary.db` and `storage/` (uploads). `pb_hooks/backups.pb.js` sets the backup schedule from `PB_BACKUP_CRON` and `PB_BACKUP_KEEP` on every start, so the schedule is code rather than dashboard state. Backups are zip files in `<PB_DATA_DIR>/backups`, which is on the volume; there is no off-box copy yet. Create one on demand from the dashboard under Settings, Backups, or with an admin `POST /api/backups`, and download the zip.
+
+To restore, stop the server, empty the data directory, unzip the backup into it and start the server again. To rehearse a restore without touching production, unzip a backup into an empty directory and start a second instance against it:
+
+```sh
+unzip pb_backup_<name>.zip -d /tmp/pb_restore
+PB_DATA_DIR=/tmp/pb_restore PB_HTTP=127.0.0.1:8091 sh pocketbase/entrypoint.sh
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8091/api/health   # 200
+```
+
+### Production deployment
+
+- **DNS.** Add an `api` A record to the same host as the apex, DNS-only so the Let's Encrypt HTTP-01 challenge resolves, in the DNSControl config.
+- **Order.** `dokploy.yml` deploys `pocketbase` before `site`. Run `ic --env prod apply` from the repository root, never before `.dokploy-state/prod.json` is present.
+- **Volume.** `pocketbase-data` is a Docker-managed volume at `/pb_data`, so levels, uploads, accounts and backups survive redeploys. Do not delete the volume when recreating the app.
+- **Environment.** Put the `PB_OAUTH_*` values in the root `.env` and run `ic --env prod env`, then redeploy the app. They reach Dokploy through `env_targets`, never through the repository.
+- **OAuth apps.** Register one OAuth app per provider (GitHub, Google, Discord) with the redirect URL `https://api.megabonkmod.party/api/oauth2-redirect`. A provider whose id and secret are unset is simply not offered on the sign-in buttons.
+- **First admin.** Create the superuser inside the running container with `pocketbase superuser upsert <email> <password> --dir=/pb_data`, using `ic exec`.
+- **Check.** `curl -sI https://api.megabonkmod.party/api/health` answers 200 once the certificate is issued.
+
+### giscus setup
+
+These are manual steps on the GitHub repository, since giscus reads Discussions through its GitHub app:
+
+1. Enable Discussions in the repository settings.
+2. Create a Discussions category named `Levels` (type Announcement, so only maintainers and giscus open threads).
+3. Install the [giscus app](https://github.com/apps/giscus) on the repository.
+4. Open <https://giscus.app/>, enter the repository and the `Levels` category, and copy the generated `data-repo-id` and `data-category-id`.
+5. Put the four public values (`PUBLIC_GISCUS_REPO`, `PUBLIC_GISCUS_REPO_ID`, `PUBLIC_GISCUS_CATEGORY`, `PUBLIC_GISCUS_CATEGORY_ID`) into the build-argument defaults in `site/Dockerfile`, which currently point at the Announcements category.
 
 ## Level gallery pages
 
