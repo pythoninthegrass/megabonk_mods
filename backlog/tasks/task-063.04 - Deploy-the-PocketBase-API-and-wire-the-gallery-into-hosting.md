@@ -4,7 +4,7 @@ title: Deploy the PocketBase API and wire the gallery into hosting
 status: In Progress
 assignee: []
 created_date: '2026-11-11 04:49'
-updated_date: '2026-11-11 21:41'
+updated_date: '2026-11-11 22:09'
 labels:
   - website
   - sharing
@@ -46,8 +46,8 @@ Requirements:
 - [x] #2 No secret, personal identifier, address or host-specific path appears in dokploy.yml, docs, compose files, commits or backlog tasks
 - [x] #3 After `ic --env prod apply` and DNS propagation, https://api.megabonkmod.party/api/health answers 200 with a valid certificate
 - [x] #4 Data written to PocketBase persists across a redeploy of the app
-- [ ] #5 Scheduled backups run and a restore of a backup into a throwaway instance has been tried and documented
-- [ ] #6 OAuth sign-in works in production for each enabled provider, or the provider that is not yet set up is documented as pending
+- [x] #5 Scheduled backups run and a restore of a backup into a throwaway instance has been tried and documented
+- [x] #6 OAuth sign-in works in production for each enabled provider, or the provider that is not yet set up is documented as pending
 - [x] #7 site/docker-compose.yml starts PocketBase for local development and site/.env.example documents PUBLIC_PB_URL and the giscus values
 - [x] #8 docs/website.md Deployment section covers the PocketBase app, DNS, environment variables, OAuth app setup, backups and restore, and the giscus setup steps
 - [ ] #9 One production upload, download and like completes end to end once the gallery pages (TASK-063.03) are deployed
@@ -86,6 +86,8 @@ Still open: AC 4 (persistence across redeploy) and the production half of AC 5 n
 Production checks over HTTPS with a throwaway test user (impersonated, then deleted along with its level, like and backup): uploaded bramblecrown-hill, redeployed with ic trigger, and the level record, its uploaded file and the download route all survived (AC 4). A like through the likes collection raised the count to 1 and the download route counted a download. A manual POST /api/backups created a zip; downloading it and starting a local instance on it served /api/health 200 with the level and like present (restore verified).
 
 Scheduled backups are NOT running in production: /api/settings reports an empty backups.cron and cronMaxKeep 3 (the defaults), because the deployed image was built from origin/main, which does not yet contain backups.pb.js (the three commits are local and unpushed). AC 5 stays open until the commits are pushed, the app redeploys, and settings show the cron. AC 6: a users record created before the test user exists in production, probably a GitHub sign-in; awaiting confirmation. AC 9: API-level upload, download and like verified; the gallery pages path in the browser is untested.
+
+Pushed to main; Dokploy autodeployed pocketbase and site. Production /api/settings now reports backups.cron '0 3 * * *' and cronMaxKeep 7, so scheduled backups are configured from code (AC 5; restore of a production backup was verified earlier). GitHub sign-in confirmed working by the maintainer; Google and Discord remain pending without credentials (AC 6). The new 404 page serves with status 404 in production. AC 9 browser path through the gallery pages remains for the maintainer to try.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
