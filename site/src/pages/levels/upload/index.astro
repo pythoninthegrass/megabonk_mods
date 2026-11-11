@@ -30,7 +30,7 @@ import Icon from '../../../components/Icon.astro';
       <form x-ref="form" class="upload-form" @submit.prevent="submit()">
         <h2 x-ref="heading" tabindex="-1" x-text="editing ? `Edit ${editing.title}` : 'New level'"></h2>
         <label class="field"><span>Level file <small x-text="editing ? '(leave empty to keep the current file)' : '(.mblevel.json, required)'"></small></span><input x-ref="level" name="level" type="file" accept=".json,application/json" :required="!editing" aria-describedby="help-level" /><small id="help-level" class="help">The file from your <code>UserData/Levels/</code> folder, up to 1 MB. Titles, maps and packs are read from it.</small></label>
-        <label class="field"><span>Cover picture <small x-text="editing ? '(leave empty to keep the current one)' : '(PNG or JPEG, required)'"></small></span><input x-ref="cover" name="cover" type="file" accept="image/png,image/jpeg" :required="!editing" aria-describedby="help-cover" /><small id="help-cover" class="help">Up to 8 MB. Shown at 3:2 and cropped to fit, so 1080 by 720 pixels works well.</small></label>
+        <label class="field"><span>Cover picture <small x-text="editing ? '(leave empty to keep the current one)' : '(PNG or JPEG, required)'"></small></span><input x-ref="cover" name="cover" type="file" accept="image/png,image/jpeg" :required="!editing" aria-describedby="help-cover" /><small id="help-cover" class="help">Up to 8 MB. Shown at 3:2 and cropped to fit, so 1080 by 720 pixels works well.</small><span class="current-cover" x-show="editing"><img :src="cover(editing)" alt="" width="120" height="80" /><span>Current cover</span></span></label>
         <label class="field"><span>Biome picture <small>(PNG or JPEG, optional)</small></span><input x-ref="biome" name="biome" type="file" accept="image/png,image/jpeg" aria-describedby="help-biome" /><small id="help-biome" class="help">The small icon beside the map name on Map Selection. Up to 8 MB.</small></label>
         <label class="field"><span>Description</span><textarea name="description" x-model="description" maxlength="2000" rows="5"></textarea></label>
         <fieldset class="tag-set"><legend>Tags</legend>
@@ -54,10 +54,10 @@ import Icon from '../../../components/Icon.astro';
         <p x-show="mineState === 'ready' && mine.length === 0">You have not shared a level yet.</p>
         <ul class="mine-list">
           <template x-for="level in mine" :key="level.id">
-            <li class="mine-item">
+            <li class="mine-item" :class="editing?.id === level.id ? 'is-editing' : ''">
               <img :src="cover(level)" alt="" width="120" height="80" loading="lazy" />
               <div>
-                <h3><a :href="`/l/${level.code}`" x-text="level.title"></a></h3>
+                <h3><a :href="`/l/${level.code}`" x-text="level.title"></a> <span class="editing-tag" x-show="editing?.id === level.id">Editing</span></h3>
                 <p class="small"><code x-text="level.code"></code> · <span x-text="relativeDate(level.created)"></span> · <span x-text="plural(level.likes, 'like')"></span> · <span x-text="plural(level.downloads, 'download')"></span></p>
               </div>
               <div class="actions" x-show="confirmDelete !== level.id">
