@@ -4,7 +4,7 @@ title: 'Gallery pages: browse, level view and upload'
 status: In Progress
 assignee: []
 created_date: '2026-11-11 04:49'
-updated_date: '2026-11-11 07:44'
+updated_date: '2026-11-11 07:51'
 labels:
   - website
   - sharing
@@ -114,6 +114,8 @@ AC #10 skipped by decision: the Impeccable critique ran twice (27 then 28 out of
 AC #1 and #2 verified in a browser with chrome-devtools-axi against 14 seeded levels: 12 cards on page 1 and 2 on page 2 with a working Previous and Next and a ?page= URL; the tag filter returned only matching levels (Puzzle 2, Speedrun 3); sort by most liked put the levels with 3 and 2 likes first, and sort by most downloaded put the levels with 4 and 2 downloads first, newest first within ties. Deep links restore tag, sort, search and page, and a hostile tag value, an unknown sort and a negative page are ignored.
 
 AC #7 verified locally: with the four PUBLIC_GISCUS values set, the level page appends the giscus script with data-mapping=specific, data-strict=1 and data-term set to the share code, giscus creates its iframe with term=<code>, and the widget renders 0 reactions, 0 comments and a GitHub sign-in comment box, so the repository, Announcements category and installed app resolve. No comment was posted, because that would create a real discussion. With the values unset the page shows the short note instead. The giscus values default in site/Dockerfile to the repository's public ids.
+
+Sign-in buttons now come from the API's auth-methods list, filtered to GitHub, Google and Discord, so a provider that is not configured yet is not offered. Verified locally with no OAuth credentials (message, no buttons), with only GitHub configured (one button) and with the API down (check-failed message). AC #8 stays open: the real provider round trip is untested locally and is covered by sign-in verification in production.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
