@@ -95,3 +95,22 @@ export function availableProviders(methods, known) {
   const configured = new Set(oauth.providers.map((provider) => provider.name));
   return known.filter((provider) => configured.has(provider.id));
 }
+
+export function editCodeFromSearch(search) {
+  return codeFromSearch(new URLSearchParams(search ?? '').get('edit'));
+}
+
+export function editFormState(level) {
+  return { description: level?.description ?? '', chosen: [...(level?.tags ?? [])] };
+}
+
+export function levelFormData({ description, chosen }, files) {
+  const form = new FormData();
+  form.set('description', description);
+  if (chosen.length === 0) form.set('tags', '');
+  for (const tag of chosen) form.append('tags', tag);
+  for (const [field, file] of Object.entries(files)) {
+    if (file) form.set(field, file);
+  }
+  return form;
+}

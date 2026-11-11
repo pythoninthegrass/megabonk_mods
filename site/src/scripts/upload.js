@@ -1,4 +1,13 @@
-import { coverUrl, mapName, pbErrorMessages, plural, relativeDate } from './gallery.js';
+import {
+  coverUrl,
+  editCodeFromSearch,
+  editFormState,
+  levelFormData,
+  mapName,
+  pbErrorMessages,
+  plural,
+  relativeDate,
+} from './gallery.js';
 import { TAGS } from './levels.js';
 import { pb, PB_URL } from './pb.js';
 
@@ -12,14 +21,34 @@ export default () => ({
   errors: [],
   busy: false,
   confirmDelete: null,
+  pendingEdit: null,
 
   async init() {
     this.$store.session.loadProviders();
+    this.pendingEdit = editCodeFromSearch(location.search);
     await this.loadMine();
-    this.$watch('$store.session.user', () => {
+    this.openRequestedEdit();
+    this.$watch('$store.session.user', async () => {
       this.resetForm();
-      return this.loadMine();
+      await this.loadMine();
+      this.openRequestedEdit();
     });
+  },
+
+  openRequestedEdit() {
+    if (!this.pendingEdit || this.mineState !== 'ready') return;
+    const level = this.mine.find((item) => item.code === this.pendingEdit);
+    if (level) {
+      this.edit(level);
+    } else {
+      this.errors = [
+        `No level ${this.pendingEdit} was found in your account, so it cannot be edited here.`,
+      ];
+    }
+    this.pendingEdit = null;
+    const url = new URL(location.href);
+    url.searchParams.delete('edit');
+    history.replaceState(null, '', url);
   },
 
   async loadMine() {
@@ -53,8 +82,7 @@ export default () => ({
 
   edit(level) {
     this.editing = level;
-    this.description = level.description ?? '';
-    this.chosen = [...(level.tags ?? [])];
+    Object.assign(this, editFormState(level));
     this.errors = [];
     this.$refs.heading.scrollIntoView();
     this.$refs.heading.focus();
@@ -62,14 +90,11 @@ export default () => ({
 
   async submit() {
     this.errors = [];
-    const form = new FormData();
-    form.set('description', this.description);
-    if (this.chosen.length === 0) form.set('tags', '');
-    for (const tag of this.chosen) form.append('tags', tag);
-    for (const field of ['level', 'cover', 'biome']) {
-      const file = this.$refs[field].files[0];
-      if (file) form.set(field, file);
-    }
+    const form = levelFormData(this, {
+      level: this.$refs.level.files[0],
+      cover: this.$refs.cover.files[0],
+      biome: this.$refs.biome.files[0],
+    });
     this.busy = true;
     try {
       const collection = pb.collection('levels');

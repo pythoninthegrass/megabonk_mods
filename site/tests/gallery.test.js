@@ -6,8 +6,11 @@ import {
   codeFromSearch,
   coverUrl,
   downloadUrl,
+  editCodeFromSearch,
+  editFormState,
   excerpt,
   giscusAttrs,
+  levelFormData,
   mapName,
   pbErrorMessages,
   plural,
@@ -242,4 +245,47 @@ test('availableProviders is empty when sign-in is off or the response is unusabl
   );
   assert.deepEqual(availableProviders({}, KNOWN), []);
   assert.deepEqual(availableProviders(undefined, KNOWN), []);
+});
+
+
+
+test('editCodeFromSearch reads a share code from the edit parameter', () => {
+  assert.equal(editCodeFromSearch('?edit=7n1-mvb-wkf'), '7N1-MVB-WKF');
+  assert.equal(editCodeFromSearch('?q=x&edit=7N1-MVB-WKF'), '7N1-MVB-WKF');
+});
+
+test('editCodeFromSearch ignores a missing or malformed edit parameter', () => {
+  assert.equal(editCodeFromSearch(''), null);
+  assert.equal(editCodeFromSearch('?edit='), null);
+  assert.equal(editCodeFromSearch('?edit=../../x'), null);
+});
+
+
+test('editFormState carries the existing description and tags into the form', () => {
+  const level = { description: 'A hill of brambles.', tags: ['Platforming', 'Short'] };
+  const state = editFormState(level);
+  assert.deepEqual(state, { description: 'A hill of brambles.', chosen: ['Platforming', 'Short'] });
+  state.chosen.push('Puzzle');
+  assert.deepEqual(level.tags, ['Platforming', 'Short'], 'the level record is not mutated');
+});
+
+test('editFormState defaults a level without a description or tags', () => {
+  assert.deepEqual(editFormState({}), { description: '', chosen: [] });
+});
+
+test('levelFormData resends the existing description and tags unchanged on save', () => {
+  const form = levelFormData(
+    editFormState({ description: 'Keep me.', tags: ['Speedrun', 'Short'] }),
+    {},
+  );
+  assert.equal(form.get('description'), 'Keep me.');
+  assert.deepEqual(form.getAll('tags'), ['Speedrun', 'Short']);
+});
+
+test('levelFormData clears the tags when none are chosen and adds only chosen files', () => {
+  const cover = new Blob(['x'], { type: 'image/png' });
+  const form = levelFormData({ description: '', chosen: [] }, { cover, level: undefined });
+  assert.equal(form.get('tags'), '');
+  assert.ok(form.get('cover') instanceof Blob);
+  assert.equal(form.has('level'), false);
 });
