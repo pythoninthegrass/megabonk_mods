@@ -7,6 +7,9 @@ backlog/**
 # Symlink to AGENTS.md; scanning both reports every issue twice
 CLAUDE.md
 
+# Rewritten by release-please on every release, so hand formatting is lost
+CHANGELOG.md
+
 # Website dependencies and generated files
 site/node_modules/**
 site/.astro/**
