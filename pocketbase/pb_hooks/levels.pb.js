@@ -19,6 +19,15 @@ onRecordUpdateRequest((e) => {
   e.next()
 }, "levels")
 
+// The visibility lists are moderation data, shown only to site owners.
+onRecordEnrich((e) => {
+  const info = e.requestInfo
+  if (!info || !(info.hasSuperuserAuth() || (info.auth && info.auth.getBool("admin")))) {
+    e.record.hide("viewers", "blocked")
+  }
+  e.next()
+}, "levels")
+
 // Names a downloaded level file after its title.
 onFileDownloadRequest((e) => {
   if (e.fileField.name === "level" && e.requestInfo().query["download"]) {
@@ -33,8 +42,11 @@ routerAdd("GET", "/api/l/{code}/download", (e) => {
   const code = e.request.pathValue("code").toUpperCase()
   let level
   try {
-    level = $app.findFirstRecordByFilter("levels", "code = {:code} && hidden = false", { code })
+    level = $app.findFirstRecordByFilter("levels", "code = {:code}", { code })
   } catch (_) {
+    throw new NotFoundError("Level not found.")
+  }
+  if (!$app.canAccessRecord(level, e.requestInfo(), $app.findCollectionByNameOrId("levels").viewRule)) {
     throw new NotFoundError("Level not found.")
   }
   $app.db().newQuery("UPDATE levels SET downloads = downloads + 1 WHERE id = {:id}").bind({ id: level.id }).execute()

@@ -31,6 +31,7 @@ OAUTH_ENV = {
     "PB_OAUTH_DISCORD_CLIENT_SECRET": "discord-secret",
 }
 SITE_ORIGIN = "https://megabonkmod.party"
+OWNER_EMAIL = "owner@example.test"
 
 
 def find_pocketbase() -> Path | None:
@@ -148,7 +149,7 @@ def stop_service(process: subprocess.Popen) -> None:
 
 @pytest.fixture(scope="module")
 def api(tmp_path_factory):
-    process, client = start_service(tmp_path_factory.mktemp("pb_data"), free_port())
+    process, client = start_service(tmp_path_factory.mktemp("pb_data"), free_port(), {"PB_ADMIN_EMAILS": OWNER_EMAIL})
     yield client
     stop_service(process)
 
@@ -166,8 +167,8 @@ def admin(api):
     return admin_token(api)
 
 
-def make_user(api, admin, name: str) -> dict:
-    email = f"{name}-{uuid.uuid4().hex[:6]}@example.test"
+def make_user(api, admin, name: str, email: str | None = None) -> dict:
+    email = email or f"{name}-{uuid.uuid4().hex[:6]}@example.test"
     status, _, user = api.json(
         "POST",
         "/api/collections/users/records",
@@ -188,6 +189,16 @@ def alice(api, admin):
 @pytest.fixture(scope="module")
 def bob(api, admin):
     return make_user(api, admin, "bob")
+
+
+@pytest.fixture(scope="module")
+def carol(api, admin):
+    return make_user(api, admin, "carol")
+
+
+@pytest.fixture(scope="module")
+def owner(api, admin):
+    return make_user(api, admin, "owner", OWNER_EMAIL)
 
 
 def level_bytes(name: str = "bramblecrown-hill", **changes) -> bytes:
@@ -415,6 +426,139 @@ def test_only_the_owner_can_update_or_delete(api, alice, bob):
     status, _, updated = api.json("PATCH", path, {"description": "mine"}, alice["token"])
     assert status == 200 and updated["description"] == "mine"
     assert api.request("DELETE", path, alice["token"])[0] == 204
+
+
+def level_path(level: dict) -> str:
+    return f"/api/collections/levels/records/{level['id']}"
+
+
+def patch_level(api, level: dict, payload: dict, token: str):
+    return api.json("PATCH", level_path(level), payload, token)
+
+
+def can_view(api, level: dict, user: dict | None = None) -> bool:
+    return api.request("GET", level_path(level), user["token"] if user else None)[0] == 200
+
+
+def listed(api, level: dict, user: dict | None = None) -> bool:
+    _, _, listing = api.request("GET", "/api/collections/levels/records?perPage=500", user["token"] if user else None)
+    return level["id"] in {item["id"] for item in listing["items"]}
+
+
+def test_only_allowlisted_emails_are_site_owners(api, admin, owner, alice):
+    fetch = lambda user: api.request("GET", f"/api/collections/users/records/{user['id']}")[2]["admin"]
+    assert fetch(owner) is True
+    assert fetch(alice) is False
+
+
+def test_a_user_cannot_promote_themselves(api, alice):
+    status, _, _ = api.json("PATCH", f"/api/collections/users/records/{alice['id']}", {"admin": True}, alice["token"])
+    assert status in (400, 403, 404)
+    assert api.request("GET", f"/api/collections/users/records/{alice['id']}")[2]["admin"] is False
+
+
+def test_a_new_account_cannot_claim_admin_through_its_create_body(api, admin):
+    status, _, user = api.json(
+        "POST",
+        "/api/collections/users/records",
+        {"email": f"sneaky-{uuid.uuid4().hex[:6]}@example.test", "password": "user-password-1", "passwordConfirm": "user-password-1", "admin": True},
+        admin,
+    )
+    assert status == 200 and user["admin"] is False
+
+
+def test_the_allowlist_is_reapplied_on_each_start(tmp_path):
+    process, client = start_service(tmp_path, free_port(), {"PB_ADMIN_EMAILS": ""})
+    try:
+        user = make_user(client, admin_token(client), "later", "later@example.test")
+        assert client.request("GET", f"/api/collections/users/records/{user['id']}")[2]["admin"] is False
+    finally:
+        stop_service(process)
+    process, client = start_service(tmp_path, free_port(), {"PB_ADMIN_EMAILS": " Later@Example.test , other@example.test"})
+    try:
+        assert client.request("GET", f"/api/collections/users/records/{user['id']}")[2]["admin"] is True
+    finally:
+        stop_service(process)
+    process, client = start_service(tmp_path, free_port(), {"PB_ADMIN_EMAILS": ""})
+    try:
+        assert client.request("GET", f"/api/collections/users/records/{user['id']}")[2]["admin"] is False
+    finally:
+        stop_service(process)
+
+
+def test_the_owner_can_hide_and_unhide_any_level(api, alice, owner):
+    level = create_level(api, alice)
+    assert patch_level(api, level, {"hidden": True}, owner["token"])[0] == 200
+    assert not listed(api, level) and not can_view(api, level)
+    assert patch_level(api, level, {"hidden": False}, owner["token"])[0] == 200
+    assert listed(api, level) and can_view(api, level)
+
+
+def test_the_owner_can_delete_any_level_but_other_users_cannot(api, alice, bob, owner):
+    level = create_level(api, alice)
+    assert api.request("DELETE", level_path(level), bob["token"])[0] in (403, 404)
+    assert api.request("DELETE", level_path(level), owner["token"])[0] == 204
+
+
+def test_the_owner_cannot_change_server_fields(api, alice, owner):
+    level = create_level(api, alice)
+    for field, value in (("code", "AAA-AAA-AAA"), ("downloads", 99), ("likes", 99), ("author", owner["id"])):
+        assert patch_level(api, level, {field: value}, owner["token"])[0] in (400, 403, 404), field
+
+
+@pytest.mark.parametrize("field", ["hidden", "viewers", "blocked"])
+def test_an_author_cannot_change_visibility_on_their_own_level(api, alice, bob, owner, field):
+    level = create_level(api, alice)
+    value = True if field == "hidden" else [bob["id"]]
+    assert patch_level(api, level, {field: value}, alice["token"])[0] in (400, 403, 404)
+    assert api.request("GET", level_path(level), owner["token"])[2][field] in (False, None, [])
+
+
+def test_an_author_still_sees_their_hidden_level_but_others_do_not(api, alice, bob, owner):
+    level = create_level(api, alice)
+    patch_level(api, level, {"hidden": True}, owner["token"])
+    assert can_view(api, level, alice) and listed(api, level, alice)
+    assert not can_view(api, level, bob) and not listed(api, level, bob)
+    assert can_view(api, level, owner)
+    assert not can_view(api, level)
+
+
+def test_a_viewer_sees_a_hidden_level_and_nobody_else_does(api, alice, bob, carol, owner):
+    level = create_level(api, alice)
+    assert patch_level(api, level, {"hidden": True, "viewers": [bob["id"]]}, owner["token"])[0] == 200
+    assert can_view(api, level, bob) and listed(api, level, bob)
+    assert not can_view(api, level, carol) and not can_view(api, level)
+
+
+def test_a_blocked_user_cannot_see_a_public_level_but_others_can(api, alice, bob, carol, owner):
+    level = create_level(api, alice)
+    assert patch_level(api, level, {"blocked": [bob["id"]]}, owner["token"])[0] == 200
+    assert not can_view(api, level, bob) and not listed(api, level, bob)
+    assert can_view(api, level, carol) and can_view(api, level) and listed(api, level)
+
+
+def test_the_author_still_sees_their_level_when_blocked(api, alice, owner):
+    level = create_level(api, alice)
+    patch_level(api, level, {"blocked": [alice["id"]]}, owner["token"])
+    assert can_view(api, level, alice)
+
+
+def test_visibility_lists_are_only_shown_to_the_owner(api, alice, bob, owner):
+    level = create_level(api, alice)
+    patch_level(api, level, {"viewers": [bob["id"]], "blocked": [bob["id"]]}, owner["token"])
+    seen = api.request("GET", level_path(level), alice["token"])[2]
+    assert "viewers" not in seen and "blocked" not in seen
+    assert "viewers" not in api.request("GET", level_path(level))[2]
+    seen = api.request("GET", level_path(level), owner["token"])[2]
+    assert seen["viewers"] == [bob["id"]] and seen["blocked"] == [bob["id"]]
+
+
+def test_downloads_follow_the_visibility_lists(api, alice, bob, carol, owner):
+    level = create_level(api, alice)
+    patch_level(api, level, {"hidden": True, "viewers": [bob["id"]]}, owner["token"])
+    assert api.request("GET", f"/api/l/{level['code']}/download", bob["token"])[0] == 302
+    assert api.request("GET", f"/api/l/{level['code']}/download", carol["token"])[0] == 404
+    assert api.request("GET", f"/api/l/{level['code']}/download")[0] == 404
 
 
 def test_replacing_the_file_rederives_metadata_and_keeps_the_code(api, alice):
