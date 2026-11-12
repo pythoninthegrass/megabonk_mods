@@ -122,3 +122,15 @@ export function levelFormData({ description, chosen }, files) {
   }
   return form;
 }
+
+export function likesFilter(levelIds) {
+  return levelIds
+    .filter((id) => typeof id === 'string' && /^[a-z0-9]{15}$/.test(id))
+    .map((id) => `level = "${id}"`)
+    .join(' || ');
+}
+
+export function likeTitle(signedIn, liked) {
+  if (!signedIn) return 'Sign in to like this level';
+  return liked ? 'Remove your like' : 'Like this level';
+}

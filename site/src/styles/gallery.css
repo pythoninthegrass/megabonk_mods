@@ -46,7 +46,12 @@ body.gallery main { flex: 1; }
 .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; padding: 0; margin: 0; }
 .chips li { padding: 0.1rem 0.6rem; border: 1px solid var(--muted-ink); border-radius: 3px; font-size: 0.72rem; font-weight: 650; }
 .counts { display: flex; gap: 1rem; margin: auto 0 0; padding-top: 0.5rem; color: var(--muted-ink); font-size: 0.78rem; }
-.counts > span, .counts-inline > span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.counts-inline > span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.count-action { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 32px; margin-block: -6px 0; padding: 0 0.5rem; margin-inline: -0.5rem 0; background: none; border: 0; border-radius: 5px; color: inherit; font: inherit; text-decoration: none; cursor: pointer; }
+.count-action:hover:not(:disabled) { color: var(--ink); background: #26333a14; }
+.count-action:disabled { cursor: progress; opacity: 0.6; }
+.count-action[aria-pressed="true"], .count-action[aria-pressed="true"]:hover:not(:disabled) { color: var(--accent); }
+.count-action[aria-pressed="true"] svg { fill: currentColor; }
 .counts svg, .counts-inline svg { width: 14px; height: 14px; flex: none; }
 .counts-inline { display: inline-flex; flex-wrap: wrap; gap: 0 1rem; margin-left: 0.75rem; }
 .pager { display: flex; align-items: center; justify-content: center; gap: 1.5rem; margin-top: 3rem; font-size: 0.85rem; }

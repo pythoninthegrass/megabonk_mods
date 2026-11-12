@@ -105,3 +105,17 @@ test('the level page byline puts the same icons before its counts', async () => 
   assert.match(counts, /data-icon="heart"[\s\S]*plural\(level\?\.likes, 'like'\)/);
   assert.match(counts, /data-icon="download"[\s\S]*plural\(level\?\.downloads, 'download'\)/);
 });
+
+test('level card counts are a like button and a download link', async () => {
+  const page = await readFile(new URL('levels/index.html', root), 'utf8');
+  const counts = /<p class="counts">(.*?)<\/p>/s.exec(page)?.[1] ?? '';
+  assert.match(
+    counts,
+    /<button[^>]*class="count-action"[^>]*@click="toggleLike\(item\)"[^>]*>[\s\S]*data-icon="heart"/,
+  );
+  assert.match(counts, /:aria-pressed="/);
+  assert.match(
+    counts,
+    /<a[^>]*class="count-action"[^>]*:href="downloadHref\(item\.code\)"[^>]*>[\s\S]*data-icon="download"/,
+  );
+});

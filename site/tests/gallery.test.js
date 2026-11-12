@@ -13,6 +13,8 @@ import {
   giscusAttrs,
   isOwner,
   levelFormData,
+  likesFilter,
+  likeTitle,
   mapName,
   pbErrorMessages,
   plural,
@@ -304,4 +306,26 @@ test('levelFormData clears the tags when none are chosen and adds only chosen fi
   assert.equal(form.get('tags'), '');
   assert.ok(form.get('cover') instanceof Blob);
   assert.equal(form.has('level'), false);
+});
+
+test('likesFilter matches any of the given level ids', () => {
+  assert.equal(
+    likesFilter(['abc123def456ghi', 'zzz999yyy888xxx']),
+    'level = "abc123def456ghi" || level = "zzz999yyy888xxx"',
+  );
+});
+
+test('likesFilter drops anything that is not a PocketBase record id', () => {
+  assert.equal(
+    likesFilter(['abc123def456ghi', '" || 1=1 || "', '', undefined, 42]),
+    'level = "abc123def456ghi"',
+  );
+  assert.equal(likesFilter(['nope']), '');
+  assert.equal(likesFilter([]), '');
+});
+
+test('likeTitle says what clicking the heart will do', () => {
+  assert.equal(likeTitle(false, false), 'Sign in to like this level');
+  assert.equal(likeTitle(true, false), 'Like this level');
+  assert.equal(likeTitle(true, true), 'Remove your like');
 });

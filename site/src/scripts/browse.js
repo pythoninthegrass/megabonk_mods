@@ -1,9 +1,12 @@
 import {
   codeFromSearch,
   coverUrl,
+  downloadUrl,
   editUrl,
   excerpt,
   isOwner,
+  likesFilter,
+  likeTitle,
   pbErrorMessages,
   plural,
   relativeDate,
@@ -31,6 +34,9 @@ export default () => ({
   state: 'loading',
   message: '',
   timer: null,
+  likes: {},
+  busyLikes: {},
+  notice: '',
 
   async init() {
     const params = new URLSearchParams(location.search);
@@ -38,6 +44,7 @@ export default () => ({
     this.tag = TAGS.includes(params.get('tag')) ? params.get('tag') : '';
     this.sort = SORTS.some(([key]) => key === params.get('sort')) ? params.get('sort') : 'newest';
     this.page = Math.max(1, Number.parseInt(params.get('page'), 10) || 1);
+    this.$watch('$store.session.user', () => this.loadLikes());
     await this.load();
   },
 
@@ -85,11 +92,56 @@ export default () => ({
       this.totalPages = result.totalPages;
       this.totalItems = result.totalItems;
       this.state = result.items.length ? 'ready' : 'empty';
+      await this.loadLikes();
     } catch (error) {
       this.items = [];
       this.message = error.status === 0 ? '' : pbErrorMessages(error).join(' ');
       this.state = 'error';
     }
+  },
+
+  async loadLikes() {
+    this.likes = {};
+    const filter = likesFilter(this.items.map((item) => item.id));
+    if (!pb.authStore.isValid || !filter) return;
+    try {
+      const rows = await pb.collection('likes').getFullList({ filter });
+      this.likes = Object.fromEntries(rows.map((row) => [row.level, row.id]));
+    } catch {
+      this.likes = {};
+    }
+  },
+
+  async toggleLike(item) {
+    if (!pb.authStore.isValid) {
+      location.assign(`/l/${item.code}#social`);
+      return;
+    }
+    if (this.busyLikes[item.id]) return;
+    this.busyLikes[item.id] = true;
+    this.notice = '';
+    try {
+      if (this.likes[item.id]) {
+        await pb.collection('likes').delete(this.likes[item.id]);
+        delete this.likes[item.id];
+      } else {
+        const like = await pb.collection('likes').create({
+          user: pb.authStore.record.id,
+          level: item.id,
+        });
+        this.likes[item.id] = like.id;
+      }
+      const fresh = await pb.collection('levels').getOne(item.id, { expand: 'author' });
+      this.items = this.items.map((entry) => (entry.id === item.id ? fresh : entry));
+    } catch (error) {
+      this.notice = pbErrorMessages(error).join(' ');
+    } finally {
+      delete this.busyLikes[item.id];
+    }
+  },
+
+  likeTitle(item) {
+    return likeTitle(pb.authStore.isValid, Boolean(this.likes[item.id]));
   },
 
   get filtered() {
@@ -103,6 +155,7 @@ export default () => ({
   },
 
   cover: (item, thumb) => coverUrl(PB_URL, item, thumb),
+  downloadHref: (code) => downloadUrl(PB_URL, code),
   editUrl,
   excerpt,
   isOwner,
