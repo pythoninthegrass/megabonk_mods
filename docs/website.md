@@ -49,16 +49,16 @@ Docker Engine with Docker Compose v2 is the only prerequisite: the image builds 
 From the repository root:
 
 ```sh
-docker compose -f site/docker-compose.yml up -d --build   # build and start
-docker compose -f site/docker-compose.yml ps              # status, including health
-docker compose -f site/docker-compose.yml logs site       # server logs
-docker compose -f site/docker-compose.yml down            # stop
+docker compose up -d --build   # build and start
+docker compose ps              # status, including health
+docker compose logs site       # server logs
+docker compose down            # stop
 ```
 
-Open `http://127.0.0.1:8080/`. The published host port defaults to `8080` and is configurable through `SITE_PORT`, either per command (`SITE_PORT=8123 docker compose -f site/docker-compose.yml up -d`) or in the repository's gitignored root `.env`, which Compose reads once `COMPOSE_ENV_FILES` is exported in your shell as that file's absolute path (Compose takes it from the shell, not from a `.env`). That one file also holds the gallery API URL and giscus values below and the PocketBase OAuth credentials; `.env.example` is the template, and `ic` never pushes the `SITE_`, `PUBLIC_` and `COMPOSE_` keys. Astro reads the `PUBLIC_` values from the same file (`vite.envDir` in `site/astro.config.mjs` points at the repository root), so `npm run dev` and `npm run build` need no `site/.env`. Rebuild after editing content, the server or the image itself with `up -d --build`. The service publishes on `127.0.0.1` only, serves the static files with content types and cache headers (immutable for hashed `_astro/` assets, an `ETag` on every file, and `no-cache` revalidation for HTML pages so a deploy shows at once and an unchanged page answers `304`; `SITE_HTML_CACHE_CONTROL` replaces the HTML header, for example `public, max-age=60`), and runs `bun smoke.mjs` as its health check; `ps` reports `healthy` once it passes. To run that smoke check by hand, which fetches the home page and every local CSS, JavaScript and image it references and asserts status and content type:
+Open `http://127.0.0.1:8080/`. The published host port defaults to `8080` and is configurable through `SITE_PORT`, either per command (`SITE_PORT=8123 docker compose up -d`) or in the repository's gitignored root `.env`. The commands above run from the repository root: `COMPOSE_FILE=site/docker-compose.yml` in that `.env` (the template sets it) points Compose at the site's file, and Compose then also reads the root `.env` for `SITE_PORT`, `PUBLIC_PB_URL` and the PocketBase OAuth credentials (a `-f site/docker-compose.yml` flag would read `site/.env` instead, and running from `site/` finds no root `.env`). Build contexts still resolve from `site/`. That one file also holds the giscus values below; `.env.example` is the template, and `ic` never pushes the `SITE_`, `PUBLIC_` and `COMPOSE_` keys. Astro reads the `PUBLIC_` values from the same file (`vite.envDir` in `site/astro.config.mjs` points at the repository root), so `npm run dev` and `npm run build` need no `site/.env`. Rebuild after editing content, the server or the image itself with `up -d --build`. The service publishes on `127.0.0.1` only, serves the static files with content types and cache headers (immutable for hashed `_astro/` assets, an `ETag` on every file, and `no-cache` revalidation for HTML pages so a deploy shows at once and an unchanged page answers `304`; `SITE_HTML_CACHE_CONTROL` replaces the HTML header, for example `public, max-age=60`), and runs `bun smoke.mjs` as its health check; `ps` reports `healthy` once it passes. To run that smoke check by hand, which fetches the home page and every local CSS, JavaScript and image it references and asserts status and content type:
 
 ```sh
-docker compose -f site/docker-compose.yml exec site bun smoke.mjs
+docker compose exec site bun smoke.mjs
 ```
 
 The same checks run on the host as part of `npm run test:site`. Compose is the local preview path; the published site is deployed by Dokploy under Deployment.
