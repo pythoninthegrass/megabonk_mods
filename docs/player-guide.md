@@ -89,7 +89,7 @@ A level can have a picture on the Map Selection screen: put an image with the sa
 
 ## Installing an asset pack
 
-A level that needs an asset pack, such as the Warehouse (`thps`), needs the pack's files in the game folder as well as the level. A pack is a folder under `UserData/LevelPacks/` named for the pack, and it holds three files: the bundle, which has the pack's name and no file extension, plus `manifest.json` and `attachments.json`.
+A level that needs an asset pack, such as the Warehouse (`thps`), needs the pack's files in the game folder as well as the level. When the level's page links the pack (a pack someone shared on the gallery), open its page, press the Download button for your platform and unzip the file into `UserData/LevelPacks/`; the zip already holds the pack's folder, so you can skip step 3 below. Otherwise, ask the level's author for the pack and follow the steps. A pack is a folder under `UserData/LevelPacks/` named for the pack, and it holds three files: the bundle, which has the pack's name and no file extension, plus `manifest.json` and `attachments.json`.
 
 1. Close Megabonk.
 2. Open the game folder (see [Finding your levels folder](#finding-your-levels-folder)). Create `UserData/LevelPacks/` if it is missing.
@@ -149,8 +149,16 @@ language and advanced debug commands, see the
 
 The easiest way is the level gallery at [megabonkmod.party/levels](https://megabonkmod.party/levels/). Sign in with GitHub, Google or Discord on the [upload page](https://megabonkmod.party/levels/upload/), then upload the `.mblevel.json` file from your `UserData/Levels/` folder with a cover picture (and a biome picture if you made one). The gallery gives the level a share code such as `7N1-MVB-WKF`, and the level's page is at `megabonkmod.party/l/<code>`. Send that link or code to anyone.
 
-To play a level from the gallery, press Download Level on its page and follow [Playing a level someone shared](#playing-a-level-someone-shared). If the level lists required packs, install them first; the gallery never offers pack files, so see [Installing an asset pack](#installing-an-asset-pack) and ask the author where to get them. Save the level's cover picture next to the level file with the same name, such as `my-level.png`, so Map Selection shows it.
+To play a level from the gallery, press Download Level on its page and follow [Playing a level someone shared](#playing-a-level-someone-shared). If the level lists required packs, install them first. A pack that someone shared on the gallery links to its page from the level page, with a flag when the hosted version differs from the one the level was saved with; a pack marked not hosted is not offered on the site, so ask the author where to get it. See [Installing an asset pack](#installing-an-asset-pack). Save the level's cover picture next to the level file with the same name, such as `my-level.png`, so Map Selection shows it.
 
 You can also share a level by hand. Send the `.mblevel.json` file from your `UserData/Levels/` folder, as a Discord attachment, a forum upload or by any other way you would send a file. If it has a picture, send that too. If your level uses an asset pack, say which one, because the person receiving it needs it as well.
+
+## Sharing an asset pack
+
+Small packs can be shared on the gallery too. Sign in on the [pack upload page](https://megabonkmod.party/packs/upload/) and upload the files from your pack's folder in `UserData/LevelPacks/`: `manifest.json`, `attachments.json` and the bundle for Windows, Linux or both (a bundle is built for one platform, so upload the one you built, or both). A pack can be at most 30 MiB in total. The pack's id, the folder name and the `id` in `manifest.json`, belongs to the first person who uploads it; only that person can add versions, and each upload needs a new `version` in `manifest.json`.
+
+You must tick the box that says you made the pack or have the right to share it. You can share your own work and assets under a licence that allows redistribution. You cannot share assets ripped from games or other copyrighted material, which includes the Warehouse (`thps`) pack when you built it yourself from the game's files.
+
+Anyone signed in can report a level or a pack. A copyright report asks for who owns the work, what was copied, a way to contact the reporter and a signed statement; the site owners review it, and a valid report hides the item and tells the uploader. See the website docs for the full process.
 
 Levels from other people are data files the game reads, not programs, but the mod itself is code from a third party. Install the mod only from someone you trust.
