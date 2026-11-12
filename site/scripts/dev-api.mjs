@@ -98,6 +98,14 @@ async function seed() {
     json('POST', ADMIN),
   );
   await request('/api/settings', admin, json('PATCH', { rateLimits: { enabled: false } }));
+  // The dev addresses are not deliverable, so new-login alerts only bounce into the local mailbox.
+  for (const collection of ['_superusers', 'users']) {
+    await request(
+      `/api/collections/${collection}`,
+      admin,
+      json('PATCH', { authAlert: { enabled: false } }),
+    );
+  }
   const users = new Map();
   for (const { email, name } of SEED_MAKERS) {
     const filter = encodeURIComponent(`email = "${email}"`);
