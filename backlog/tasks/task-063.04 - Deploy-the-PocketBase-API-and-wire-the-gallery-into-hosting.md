@@ -1,10 +1,10 @@
 ---
 id: TASK-063.04
 title: Deploy the PocketBase API and wire the gallery into hosting
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-11 04:49'
-updated_date: '2026-11-11 22:09'
+updated_date: '2026-11-12 00:23'
 labels:
   - website
   - sharing
@@ -50,18 +50,19 @@ Requirements:
 - [x] #6 OAuth sign-in works in production for each enabled provider, or the provider that is not yet set up is documented as pending
 - [x] #7 site/docker-compose.yml starts PocketBase for local development and site/.env.example documents PUBLIC_PB_URL and the giscus values
 - [x] #8 docs/website.md Deployment section covers the PocketBase app, DNS, environment variables, OAuth app setup, backups and restore, and the giscus setup steps
-- [ ] #9 One production upload, download and like completes end to end once the gallery pages (TASK-063.03) are deployed
+- [x] #9 One production upload, download and like completes end to end once the gallery pages (TASK-063.03) are deployed
 <!-- AC:END -->
 
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-1. Tests first: add a test in tests/test_pocketbase_service.py that starts the real entrypoint and checks the backup cron and retention settings, including PB_BACKUP_CRON and PB_BACKUP_KEEP overrides; confirm it fails.
-2. Add pocketbase/pb_hooks/backups.pb.js, a bootstrap hook setting backups.cron and backups.cronMaxKeep from the environment (defaults: daily, keep 7); backups land in the data volume.
-3. dokploy.yml: add a pocketbase app (dockerfile pocketbase/Dockerfile, dockerContextPath /pocketbase because the root .dockerignore excludes everything but docs/ and site/), volume at /pb_data, domain api.megabonkmod.party port 8090 letsencrypt, watchPaths pocketbase/**, healthcheck; deploy_order [pocketbase] then [site]; rewrite the project description.
-4. site/docker-compose.yml: pocketbase service with a named data volume on 127.0.0.1:8090. PUBLIC_PB_URL and giscus values are already in site/.env.example.
-5. docs/website.md: extend Deployment and Backups for the PocketBase app, api DNS record, environment variables, OAuth app setup, scheduled backups and restore, and manual giscus steps.
-6. Validate with ic check/plan only if credentials are present; do NOT run ic apply (approved scope stops before apply). ACs 3-6 and 9 need prod access and stay open.
+1. Tests first: PocketBase service tests for the backup schedule and retention; add pocketbase/pb_hooks/backups.pb.js, applied from PB_BACKUP_CRON and PB_BACKUP_KEEP on every start (default daily at 03:00, keep 7).
+2. dokploy.yml: a pocketbase app (pocketbase/Dockerfile, build context /pocketbase because the root .dockerignore excludes everything but docs/ and site/), persistent /pb_data volume, api.megabonkmod.party on port 8090 with Let's Encrypt, healthcheck, deployed before the site, env_targets limited to pocketbase.
+3. Move the Dokploy and OAuth settings into the root .env (template in .env.example), filtered by ENV_EXCLUDES so only PB_* keys reach the API app; run ic from the repository root.
+4. Patch icarus (separate repository) so apply creates apps missing from the state file and plan lists them; make ic exec interactive on a terminal.
+5. site/docker-compose.yml: pocketbase service with a named data volume; site/.env.example: gallery and giscus settings.
+6. docs/website.md: deployment, DNS, environment variables, OAuth app setup, backups and restore, giscus steps.
+7. Apply to production, verify health and certificate, persistence across a redeploy, a manual backup and restore, scheduled backups, GitHub sign-in, and an upload, like and download.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -88,12 +89,31 @@ Production checks over HTTPS with a throwaway test user (impersonated, then dele
 Scheduled backups are NOT running in production: /api/settings reports an empty backups.cron and cronMaxKeep 3 (the defaults), because the deployed image was built from origin/main, which does not yet contain backups.pb.js (the three commits are local and unpushed). AC 5 stays open until the commits are pushed, the app redeploys, and settings show the cron. AC 6: a users record created before the test user exists in production, probably a GitHub sign-in; awaiting confirmation. AC 9: API-level upload, download and like verified; the gallery pages path in the browser is untested.
 
 Pushed to main; Dokploy autodeployed pocketbase and site. Production /api/settings now reports backups.cron '0 3 * * *' and cronMaxKeep 7, so scheduled backups are configured from code (AC 5; restore of a production backup was verified earlier). GitHub sign-in confirmed working by the maintainer; Google and Discord remain pending without credentials (AC 6). The new 404 page serves with status 404 in production. AC 9 browser path through the gallery pages remains for the maintainer to try.
+
+AC 9 confirmed by the maintainer: a like and a download completed through the deployed gallery pages in production. The maintainer keeps a superuser as the local admin; its credentials stay in the untracked .env and are excluded from the env pushed to the API app (verified: the live container has no such keys).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+The PocketBase API is deployed next to the site and the gallery works end to end in production.
+
+What changed:
+- dokploy.yml declares a pocketbase app (api.megabonkmod.party, port 8090, Let's Encrypt, persistent /pb_data volume, healthcheck) deployed before the site. Its build context is pocketbase/ because the root .dockerignore only allows docs/ and site/.
+- pocketbase/pb_hooks/backups.pb.js applies a daily backup schedule (03:00, keep 7) from PB_BACKUP_CRON and PB_BACKUP_KEEP on every start, with service tests.
+- Dokploy credentials and PB_OAUTH_* now live in the untracked root .env. env_targets pushes that file to the pocketbase app only, filtered by ENV_EXCLUDES; .env.example documents every key and the exclusion prefixes. No secret or identifier is in the repository.
+- site/docker-compose.yml gained a pocketbase service for local development; docs/website.md covers deployment, DNS, environment variables, OAuth app setup, backups and restore, and the giscus steps.
+- icarus (separate repository, pushed) now creates apps missing from the state file during apply and lists them in plan, and ic exec opens an interactive shell on a terminal.
+
+Verified in production: /api/health answers 200 with a valid certificate; a level, its uploaded file and the download route survived a redeploy; a production backup restored into a throwaway instance; the scheduled backup settings show the cron and retention; GitHub sign-in works; a like and a download completed through the deployed pages. Tests: 65 PocketBase service tests, the site test suites and task check pass.
+
+Risks and follow-ups: Google and Discord sign-in are pending until their OAuth credentials are added (providers without both id and secret are not offered). Backups stay on the data volume; an off-box copy is a possible follow-up. The ENV_EXCLUDES denylist must gain a prefix for any unrelated secret added to the root .env. The .dokploy-state/prod.json file is per machine and must be copied when ic is used from another box.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
