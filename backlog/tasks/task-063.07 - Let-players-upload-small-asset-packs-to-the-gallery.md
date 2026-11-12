@@ -53,7 +53,7 @@ Level page and docs:
 - Each required pack on a level page links to the hosted pack with the same id when one exists, and flags it when the hosted version differs from the one the level records. Packs that are not hosted keep today's text and the link to the "Installing an asset pack" guide.
 - Update docs/player-guide.md (installing a downloaded pack and sharing one), docs/website.md, site/PRODUCT.md and the pack paragraph in TASK-063's decisions list.
 
-Open question: whether to also register a DMCA designated agent and publish a takedown and repeat-infringer policy page. Hosting user uploads without that registration can cost the site safe-harbour protection in the US. Decide before launch; the tooltip and report flow above are the agreed minimum.
+Decided: no DMCA designated agent and no takedown or repeat-infringer policy page. The site is run by one maintainer and handles copyright reports best-effort; the tooltip and report flow above are the whole process, and the site does not claim US safe-harbour protection.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -86,7 +86,7 @@ Open question: whether to also register a DMCA designated agent and publish a ta
 4. Site: pure helpers first (node tests): pack id/route, pack list merge with hosted lookups, report payload. Pages: `/p/<id>` pack view, `/packs/upload`, attestation checkbox with tooltip, level page pack links with version-mismatch flag, report form with reason category and copyright detail.
 5. Docs: player-guide, website.md, site/PRODUCT.md, TASK-063 decisions paragraph, asset-bundles if needed.
 6. E2E: local PocketBase + site dev, upload a test pack, download, install, load a level using it via the megabonk MCP, screenshots.
-Decisions to confirm with Lance if they change scope: DMCA agent question stays open (not in scope).
+DMCA agent registration and a takedown policy page are out of scope (decided: best-effort reporting).
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -109,13 +109,13 @@ Also carry over from the source:
 - An incomplete report is not actioned: an admin asks the reporter for the missing detail, and the item may stay up until it arrives.
 - Admins review each report for the required information before removing anything. Removal sets the item's hidden flag and the uploader is notified with the report's description.
 
-Out of scope unless the DMCA open question resolves that way: counter-notification, retraction, prevent-reupload and strike tracking. The source documents all four as separate flows.
+Out of scope, since no DMCA agent is registered: counter-notification, retraction, prevent-reupload and strike tracking. The source documents all four as separate flows.
 
 Decision (Lance, 2026-11-12): the pack zip is built on the server by running the system `zip` from the download hook, since PocketBase's JS hooks have no zip API. The pocketbase image (Alpine Linux) gains the `zip` package.
 
 Server side done and green (174 PocketBase service tests): migrations 1763000000 (packs) and 1763100000 (report categories, copyright fields, status), hooks pack_lib.js/packs.pb.js/report_lib.js/reports.pb.js, zip added to the pocketbase Dockerfile. A 30 MiB upload passed against the local PocketBase body limit; the production Traefik/Dokploy limit is not verified. Per-field maxSize: bundles 30 MiB each and JSON files 256 KiB; the 30 MiB total across all files is enforced by the hook, since two single-field caps cannot sum to a shared total. Pack updates are admin-only (author edits are not supported; publish a new version). Next: site pages (Alpine.js, check Context7), then docs, then end-to-end.
 
-Verified 2026-11-12: 175 PocketBase service tests and 138 site tests pass; deno lint/fmt, ruff and markdownlint clean. End-to-end against a local PocketBase and the site dev server: uploaded a testprop pack (Windows and Linux bundles) and a level that requires it, downloaded the Windows zip, unzipped to LevelPacks/testprop/{testprop,manifest.json,attachments.json} with the bundle byte-identical, and captured screenshots of the level page, pack page, copyright report form and upload page with its tooltip. The run found a bug (a relative data directory broke the zip download); fixed with a regression test. Not done, per Lance: loading the level in the game, so AC #2 (loads in the game) and AC #6 (game-load part) stay open. Remaining: DoD #1 (full task check not run) and DoD #4 once reviewed. The DMCA designated-agent question is still open.
+Verified 2026-11-12: 175 PocketBase service tests and 138 site tests pass; deno lint/fmt, ruff and markdownlint clean. End-to-end against a local PocketBase and the site dev server: uploaded a testprop pack (Windows and Linux bundles) and a level that requires it, downloaded the Windows zip, unzipped to LevelPacks/testprop/{testprop,manifest.json,attachments.json} with the bundle byte-identical, and captured screenshots of the level page, pack page, copyright report form and upload page with its tooltip. The run found a bug (a relative data directory broke the zip download); fixed with a regression test. Not done, per Lance: loading the level in the game, so AC #2 (loads in the game) and AC #6 (game-load part) stay open. Remaining: DoD #1 (full task check not run) and DoD #4 once reviewed. The DMCA question is closed (see the decision below).
 
 Decision (Lance, 2026-11-12): no DMCA designated agent registration and no takedown or repeat-infringer policy page. The site is run by one maintainer and handles copyright reports best-effort through the report flow. The earlier open question is closed; the site does not claim US safe-harbour protection. docs/website.md records this.
 <!-- SECTION:NOTES:END -->
