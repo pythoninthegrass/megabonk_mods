@@ -31,7 +31,7 @@ function contentSecurityPolicy(apiOrigin) {
   return [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://giscus.app",
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://giscus.app",
     `img-src 'self' data: blob: ${apiOrigin}`,
     "font-src 'self'",
     `connect-src 'self' ${apiOrigin}`,

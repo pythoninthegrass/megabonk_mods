@@ -258,6 +258,7 @@ test('the content security policy allows the configured API origin and giscus on
     assert.ok(policy['connect-src'].includes('https://api.example.test'));
     assert.ok(policy['img-src'].includes('https://api.example.test'));
     assert.ok(policy['script-src'].includes('https://giscus.app'));
+    assert.ok(policy['style-src'].includes('https://giscus.app'));
     assert.deepEqual(policy['frame-src'], ['https://giscus.app']);
   } finally {
     custom.close();
