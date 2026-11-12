@@ -5,6 +5,7 @@ import {
   editUrl,
   giscusAttrs,
   isOwner,
+  likeTitle,
   mapName,
   pbErrorMessages,
   plural,
@@ -63,7 +64,20 @@ export default () => ({
     this.level = await pb.collection('levels').getOne(this.level.id, { expand: 'author' });
   },
 
+  likeFromCounts() {
+    if (!pb.authStore.isValid) {
+      document.getElementById('social')?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    return this.toggleLike();
+  },
+
+  likeTitle() {
+    return likeTitle(pb.authStore.isValid, Boolean(this.liked));
+  },
+
   async toggleLike() {
+    if (this.busy) return;
     this.busy = true;
     this.notice = '';
     try {
