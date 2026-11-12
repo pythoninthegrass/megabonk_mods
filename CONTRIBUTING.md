@@ -62,6 +62,7 @@ Nothing runs on pull requests: the only workflow is release-please on push to
 | `task installer:test` | `gofmt`, `go vet`, and Go tests | no |
 | `task lint` | markdownlint, ruff over `scripts/`, `tests/` and `tools/`, and the site checks | no |
 | `task site:lint` | `deno fmt --check` and `deno lint` over the site's JavaScript | no |
+| `task site:dev` / `task site:serve` | Run the Astro dev server, or build and serve the production site on port 8080 | no |
 | `npm run check` | Astro types and the wiki sync, run from `site/` | no |
 | `npm test` | clipboard, copy, and docs-sync tests, run from `site/` | no |
 | `npm run test:site` | page, server, and wiki checks, run from `site/` after `npm run build` | no |

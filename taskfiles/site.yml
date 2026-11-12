@@ -1,0 +1,76 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+vars:
+  SITE_PORT: "8080"
+
+tasks:
+  install:
+    desc: "Install the site's npm dependencies"
+    dir: site
+    cmds:
+      - npm ci
+    sources:
+      - package-lock.json
+    generates:
+      - node_modules/.package-lock.json
+
+  dev:
+    desc: "Run the Astro dev server with docs watching on http://127.0.0.1:4321"
+    dir: site
+    deps: [install]
+    cmds:
+      - npm run dev -- {{.CLI_ARGS}}
+
+  build:
+    desc: "Build the site into site/dist"
+    dir: site
+    deps: [install]
+    cmds:
+      - npm run build
+    sources:
+      - src/**/*
+      - public/**/*
+      - scripts/**/*
+      - astro.config.*
+      - package-lock.json
+      - .env
+      - ../.env
+      - ../docs/**/*
+    generates:
+      - dist/index.html
+
+  serve:
+    desc: "Build the site and serve site/dist on http://127.0.0.1:{{.SITE_PORT}} (override with SITE_PORT)"
+    summary: |
+      Serves the production build with the same server the container uses, so
+      /l/<code> routes, headers and Pagefind search work. Port 8080 is in the
+      local PocketBase API's allowed origins.
+    dir: site
+    cmds:
+      - task: build
+      - PORT={{.SITE_PORT}} node server.mjs
+
+  test:
+    desc: "Run the site's unit tests, then build and run the built-page tests"
+    dir: site
+    deps: [install]
+    cmds:
+      - npm test
+      - task: build
+      - npm run test:site
+
+  check:
+    desc: "Sync docs and run astro check"
+    dir: site
+    deps: [install]
+    cmds:
+      - npm run check
+
+  lint:
+    desc: "Deno format check and lint over the site's JavaScript and TypeScript"
+    dir: site
+    cmds:
+      - deno fmt --check
+      - deno lint

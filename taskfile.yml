@@ -24,6 +24,7 @@ includes:
   re: taskfiles/re.yml
   ghidra: taskfiles/ghidra.yml
   pocketbase: taskfiles/pocketbase.yml
+  site: taskfiles/site.yml
   wine:
     taskfile: taskfiles/wine.yml
     platforms: [darwin]
@@ -60,13 +61,6 @@ tasks:
       - markdownlint -c .markdownlint.jsonc .
       - ruff check scripts/ src/ tests/ tools/
       - task: site:lint
-
-  site:lint:
-    desc: "Deno format check and lint over the site's JavaScript and TypeScript"
-    dir: site
-    cmds:
-      - deno fmt --check
-      - deno lint
 
   check:
     desc: "Build, test, and lint in sequence; non-zero exit on any failure"
