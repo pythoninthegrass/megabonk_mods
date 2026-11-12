@@ -1,6 +1,7 @@
 ---
 import GalleryLayout from '../../layouts/GalleryLayout.astro';
 import Icon from '../../components/Icon.astro';
+import LevelActions from '../../components/LevelActions.astro';
 ---
 <GalleryLayout title="Levels · Megabonk Mod Party" description="Browse custom Megabonk levels shared by the community, and download them with a share code." path="/levels/">
   <section class="gallery-page wrap" x-data="browse" aria-labelledby="browse-title">
@@ -46,12 +47,12 @@ import Icon from '../../components/Icon.astro';
 
       <ul class="level-grid" x-show="state === 'ready'">
         <template x-for="item in items" :key="item.id">
-          <li class="level-card">
+          <li class="level-card" :class="{ 'is-hidden': item.hidden }">
             <figure class="cover-plate">
               <a class="plate-link" :href="`/l/${item.code}`" tabindex="-1" aria-hidden="true">
                 <img :src="cover(item, '640x0')" :srcset="`${cover(item, '320x0')} 320w, ${cover(item, '640x0')} 640w`" sizes="(max-width: 700px) 90vw, 320px" :alt="`Cover picture for ${item.title}`" loading="lazy" width="320" height="213" />
               </a>
-              <figcaption><span x-text="item.code"></span><span class="card-actions"><a class="edit-link" x-show="isOwner($store.session.user, item)" :href="editUrl(item.code)" :aria-label="`Edit ${item.title}`" title="Edit this level"><Icon name="pencil" /></a>{import.meta.env.DEV && <button class="edit-link admin-delete" type="button" @click="deleteLevel(item)" :aria-label="`Delete ${item.title}`" title="Delete this level (admin)"><Icon name="trash" /></button>}</span></figcaption>
+              <figcaption><span x-text="item.code"></span><span class="hidden-tag" x-show="item?.hidden">Hidden</span><LevelActions level="item" /></figcaption>
             </figure>
             <a class="card-link" :href="`/l/${item.code}`"><h2 x-text="item.title"></h2></a>
             <p class="byline"><a class="maker-link" :href="creatorUrl(item.author)" x-text="author(item)"></a> · <time :datetime="item.created" x-text="relativeDate(item.created)"></time></p>

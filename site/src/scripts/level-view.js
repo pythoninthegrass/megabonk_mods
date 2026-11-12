@@ -11,6 +11,7 @@ import {
   pbErrorMessages,
   plural,
   relativeDate,
+  withAccess,
 } from './gallery.js';
 import { packList } from './levels.js';
 import { giscusConfig, pb, PB_URL } from './pb.js';
@@ -25,6 +26,11 @@ export default () => ({
   notice: '',
   reporting: false,
   reason: '',
+  users: [],
+  accessGroups: [
+    { field: 'viewers', title: 'Can see it while hidden' },
+    { field: 'blocked', title: 'Cannot see it' },
+  ],
 
   async init() {
     this.$store.session.loadProviders();
@@ -33,24 +39,64 @@ export default () => ({
       this.state = 'notfound';
       return;
     }
+    if (!(await this.fetchLevel())) return;
+    document.title = `${this.level.title} · Megabonk Mod Party`;
+    await this.loadLike();
+    this.$watch('$store.session.user', () => {
+      this.fetchLevel();
+      this.loadLike();
+    });
+    this.mountComments();
+  },
+
+  async fetchLevel() {
     try {
       this.level = await pb.collection('levels').getFirstListItem(
         pb.filter('code = {:code}', { code: this.code }),
         { expand: 'author' },
       );
+      this.state = 'ready';
+      return true;
     } catch (error) {
       this.state = error.status === 404 ? 'notfound' : 'error';
-      return;
+      return false;
     }
-    document.title = `${this.level.title} · Megabonk Mod Party`;
-    this.state = 'ready';
-    await this.loadLike();
-    this.$watch('$store.session.user', () => this.loadLike());
-    this.mountComments();
+  },
+
+  async loadUsers() {
+    if (this.users.length) return;
+    try {
+      this.users = await pb.collection('users').getFullList({ fields: 'id,name', sort: 'name' });
+    } catch (error) {
+      this.notice = pbErrorMessages(error).join(' ');
+    }
+  },
+
+  userName(id) {
+    return this.users.find((user) => user.id === id)?.name || id;
+  },
+
+  accessIds(field) {
+    return this.level?.[field] ?? [];
+  },
+
+  accessCandidates(field) {
+    const taken = this.accessIds(field);
+    return this.users.filter((user) => !taken.includes(user.id));
+  },
+
+  async changeAccess(field, id, add) {
+    const ids = withAccess(this.accessIds(field), id, add);
+    const next = {
+      viewers: this.accessIds('viewers'),
+      blocked: this.accessIds('blocked'),
+      [field]: ids,
+    };
+    if (await this.$store.session.setAccess(this.level, next)) this.level[field] = ids;
   },
 
   async deleteLevel(level) {
-    if (await this.$store.session.adminDelete(level)) location.assign('/levels/');
+    if (await this.$store.session.deleteLevel(level)) location.assign('/levels/');
   },
 
   async loadLike() {

@@ -1,0 +1,13 @@
+---
+import Icon from './Icon.astro';
+interface Props { level: string; }
+const { level } = Astro.props;
+const label = (verb: string) => `\`${verb} \${${level}.title}\``;
+---
+<span class="card-actions">
+  <a class="edit-link" x-show={`isOwner($store.session.user, ${level}) || $store.session.isAdmin`} :href={`editUrl(${level}.code)`} :aria-label={label('Edit')} title="Edit this level"><Icon name="pencil" /></a>
+  <button class="edit-link" type="button" x-show="$store.session.isAdmin" @click={`$store.session.toggleHidden(${level})`} :aria-label={`${level}.hidden ? ${label('Show')} : ${label('Hide')}`} :title={`${level}.hidden ? 'Show this level' : 'Hide this level'`}>
+    <span x-show={`!${level}.hidden`}><Icon name="eye" /></span><span x-show={`${level}.hidden`}><Icon name="eye-off" /></span>
+  </button>
+  <button class="edit-link" type="button" x-show="$store.session.isAdmin" @click={`deleteLevel(${level})`} :aria-label={label('Delete')} title="Delete this level"><Icon name="trash" /></button>
+</span>

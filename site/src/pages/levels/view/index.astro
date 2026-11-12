@@ -1,6 +1,7 @@
 ---
 import GalleryLayout from '../../../layouts/GalleryLayout.astro';
 import Icon from '../../../components/Icon.astro';
+import LevelActions from '../../../components/LevelActions.astro';
 ---
 <GalleryLayout title="Level · Megabonk Mod Party" description="A custom Megabonk level shared on megabonkmod.party." path="/levels/view/">
   <section class="gallery-page wrap" x-data="levelView" aria-live="polite">
@@ -27,7 +28,7 @@ import Icon from '../../../components/Icon.astro';
       <div class="level-layout">
         <figure class="cover-plate large">
           <img :src="cover" :alt="`Cover picture for ${level?.title}`" width="1080" height="720" />
-          <figcaption><span x-text="code"></span><span class="card-actions"><a class="edit-link" x-show="isOwner($store.session.user, level)" :href="editUrl(code)" :aria-label="`Edit ${level?.title}`" title="Edit this level"><Icon name="pencil" /></a>{import.meta.env.DEV && <button class="edit-link admin-delete" type="button" @click="deleteLevel(level)" :aria-label="`Delete ${level?.title}`" title="Delete this level (admin)"><Icon name="trash" /></button>}</span></figcaption>
+          <figcaption><span x-text="code"></span><span class="hidden-tag" x-show="level?.hidden">Hidden</span><LevelActions level="level" /></figcaption>
         </figure>
         <div class="level-info">
           <h1 x-text="level?.title"></h1>
@@ -71,6 +72,24 @@ import Icon from '../../../components/Icon.astro';
           <p class="small"><a href="https://docs.megabonkmod.party/player-guide/#finding-your-levels-folder">Where is my levels folder?</a></p>
         </div>
       </div>
+
+      <section class="visibility" x-show="$store.session.isAdmin" x-cloak x-effect="if ($store.session.isAdmin) loadUsers()">
+        <h2 class="quiet-heading">Visibility</h2>
+        <label class="hide-toggle"><input type="checkbox" :checked="level?.hidden" @change="$store.session.toggleHidden(level)" /> Hidden from the public</label>
+        <p class="small">A hidden level still shows for its maker, for site owners and for anyone listed under "Can see it while hidden". Anyone listed under "Cannot see it" loses a public level.</p>
+        <template x-for="group in accessGroups" :key="group.field">
+          <div class="access-group">
+            <h3 x-text="group.title"></h3>
+            <p class="small" x-show="accessIds(group.field).length === 0">Nobody.</p>
+            <ul class="chips"><template x-for="id in accessIds(group.field)" :key="id"><li><span x-text="userName(id)"></span> <button type="button" @click="changeAccess(group.field, id, false)" :aria-label="`Remove ${userName(id)} from: ${group.title}`">&times;</button></li></template></ul>
+            <select :aria-label="`Add a user to: ${group.title}`" @change="changeAccess(group.field, $event.target.value, true); $event.target.value = ''">
+              <option value="">Add a user…</option>
+              <template x-for="user in accessCandidates(group.field)" :key="user.id"><option :value="user.id" x-text="user.name || user.id"></option></template>
+            </select>
+          </div>
+        </template>
+        <p class="gallery-status" role="alert" x-show="$store.session.adminError" x-text="$store.session.adminError"></p>
+      </section>
 
       <div class="social" id="social">
         <h2 class="quiet-heading">Like or report</h2>

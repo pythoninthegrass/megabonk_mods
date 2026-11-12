@@ -147,6 +147,15 @@ body.gallery main { flex: 1; }
 .dev-menu button[aria-checked="true"] { font-weight: 800; }
 .dev-error { padding: 0.3rem 0.7rem; color: var(--accent); font-size: 0.75rem; line-height: 1.2; }
 .card-actions { display: flex; align-items: center; }
-.admin-delete { background: none; border: 0; padding: 0; }
-.admin-delete:hover { color: var(--accent); }
+.card-actions button.edit-link { padding: 0; background: none; border: 0; }
+.card-actions span:has(> svg) { display: grid; place-items: center; }
+.hidden-tag { margin-right: auto; padding: 0.05rem 0.4rem; color: var(--paper); background: var(--muted-ink); border-radius: 3px; font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.level-card.is-hidden .cover-plate img { filter: grayscale(1) brightness(0.6); opacity: 0.85; }
 @media (prefers-reduced-motion: reduce) { .dev-panel, .dev-menu { transition: none; } }
+
+.visibility { margin-top: 2.5rem; }
+.hide-toggle { display: flex; align-items: center; gap: 0.5rem; font-weight: 650; }
+.access-group { margin-top: 1.25rem; }
+.access-group h3 { font-size: 0.9rem; margin-bottom: 0.4rem; }
+.access-group .chips button { padding: 0 0.2rem; background: none; border: 0; color: inherit; font: inherit; line-height: 1; }
+.access-group select { margin-top: 0.5rem; max-width: 100%; font: inherit; }

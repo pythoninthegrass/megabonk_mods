@@ -6,6 +6,9 @@ function fakeAuthStore() {
   return {
     token: '',
     record: null,
+    get isValid() {
+      return Boolean(this.token);
+    },
     save(token, record) {
       this.token = token;
       this.record = record;
@@ -17,7 +20,16 @@ function fakeAuthStore() {
   };
 }
 
-function setup({ users = [{ id: 'u1', name: 'Alice' }], failDelete = false } = {}) {
+function fakeStorage() {
+  const data = new Map();
+  return {
+    getItem: (key) => data.get(key) ?? null,
+    setItem: (key, value) => data.set(key, String(value)),
+    removeItem: (key) => data.delete(key),
+  };
+}
+
+function setup({ users = [{ id: 'u1', name: 'Alice', email: 'a@dev.test' }] } = {}) {
   const calls = [];
   const pb = { authStore: fakeAuthStore() };
   const newClient = () => {
@@ -35,20 +47,19 @@ function setup({ users = [{ id: 'u1', name: 'Alice' }], failDelete = false } = {
           target.authStore.save(`token-${id}`, { id, collectionName: 'users' });
           return target;
         },
-        delete: async (id) => {
-          calls.push(['delete', name, id, client.authStore.token]);
-          if (failDelete) throw new Error('nope');
-        },
       }),
     };
     return client;
   };
+  const storage = fakeStorage();
   const session = devSession({
     pb,
     newClient,
     credentials: { identity: 'dev@dev.test', password: 'pw' },
+    defaultEmail: 'a@dev.test',
+    storage,
   });
-  return { pb, session, calls };
+  return { pb, session, calls, storage };
 }
 
 test('the superuser signs in once, lazily, on a private client', async () => {
@@ -64,7 +75,7 @@ test('the superuser signs in once, lazily, on a private client', async () => {
 test('loadUsers lists the accounts', async () => {
   const { session } = setup();
   await session.loadUsers();
-  assert.deepEqual(session.users, [{ id: 'u1', name: 'Alice' }]);
+  assert.deepEqual(session.users, [{ id: 'u1', name: 'Alice', email: 'a@dev.test' }]);
 });
 
 test('switchUser signs the page in as the user with the superuser token', async () => {
@@ -80,18 +91,6 @@ test('switchUser with no id signs the page out', async () => {
   await session.switchUser('u1');
   await session.switchUser(null);
   assert.equal(pb.authStore.record, null);
-});
-
-test('adminDelete removes the level with the superuser token', async () => {
-  const { session, calls } = setup();
-  assert.equal(await session.adminDelete({ id: 'l1' }), true);
-  assert.deepEqual(calls.at(-1), ['delete', 'levels', 'l1', 'su-token']);
-});
-
-test('a failed delete reports false and sets devError', async () => {
-  const { session } = setup({ failDelete: true });
-  assert.equal(await session.adminDelete({ id: 'l1' }), false);
-  assert.match(session.devError, /nope/);
 });
 
 test('a failed user switch sets devError and leaves the session alone', async () => {
@@ -113,4 +112,57 @@ test('a failed user switch sets devError and leaves the session alone', async ()
   await broken.switchUser('u1');
   assert.match(broken.devError, /down/);
   assert.equal(pb.authStore.token, 'keep');
+});
+
+test('signInDefault signs in as the default user when nobody is signed in', async () => {
+  const { pb, session } = setup();
+  await session.signInDefault();
+  assert.equal(pb.authStore.record.id, 'u1');
+});
+
+test('signInDefault leaves an existing session alone', async () => {
+  const { pb, session, calls } = setup();
+  pb.authStore.save('keep', { id: 'keep' });
+  await session.signInDefault();
+  assert.equal(pb.authStore.token, 'keep');
+  assert.equal(calls.length, 0);
+});
+
+test('choosing anonymous stops the default sign-in until another user is chosen', async () => {
+  const { pb, session } = setup();
+  await session.switchUser(null);
+  await session.signInDefault();
+  assert.equal(pb.authStore.record, null);
+  await session.switchUser('u1');
+  pb.authStore.clear();
+  await session.signInDefault();
+  assert.equal(pb.authStore.record.id, 'u1');
+});
+
+test('signInDefault does nothing when no account has the default email', async () => {
+  const { pb, session } = setup({ users: [{ id: 'u2', email: 'other@dev.test' }] });
+  await session.signInDefault();
+  assert.equal(pb.authStore.record, null);
+});
+
+test('loadUsers puts the default user first and keeps the rest in order', async () => {
+  const ordered = devSession({
+    pb: { authStore: fakeAuthStore() },
+    newClient: () => ({
+      authStore: fakeAuthStore(),
+      collection: () => ({
+        authWithPassword: async () => {},
+        getFullList: async () => [
+          { id: 'u1', email: 'a@dev.test' },
+          { id: 'u2', email: 'b@dev.test' },
+          { id: 'u3', email: 'c@dev.test' },
+        ],
+      }),
+    }),
+    credentials: { identity: 'x', password: 'y' },
+    defaultEmail: 'b@dev.test',
+    storage: fakeStorage(),
+  });
+  await ordered.loadUsers();
+  assert.deepEqual(ordered.users.map((user) => user.id), ['u2', 'u1', 'u3']);
 });

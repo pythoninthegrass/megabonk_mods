@@ -1,5 +1,6 @@
 import Alpine from 'alpinejs';
-import { availableProviders, pbErrorMessages } from './gallery.js';
+import { availableProviders, isAdmin, pbErrorMessages } from './gallery.js';
+import { moderation } from './moderation.js';
 import { pb, PB_URL } from './pb.js';
 
 const KNOWN_PROVIDERS = [
@@ -34,6 +35,9 @@ function sessionStore() {
     get oauthEnabled() {
       return !import.meta.env.DEV;
     },
+    get isAdmin() {
+      return isAdmin(this.user);
+    },
     get signedIn() {
       return Boolean(this.user) && this.user.collectionName !== '_superusers';
     },
@@ -55,7 +59,11 @@ function sessionStore() {
 }
 
 async function withDevSession(store) {
-  const [{ devSession }, { DEV_SUPERUSER }, { default: PocketBase, BaseAuthStore }] = await Promise
+  const [
+    { devSession },
+    { DEV_ADMIN_EMAILS, DEV_SUPERUSER },
+    { default: PocketBase, BaseAuthStore },
+  ] = await Promise
     .all([
       import('./dev-session.js'),
       import('../../scripts/dev-seed.mjs'),
@@ -67,17 +75,19 @@ async function withDevSession(store) {
       pb,
       newClient: () => new PocketBase(PB_URL, new BaseAuthStore()),
       credentials: DEV_SUPERUSER,
+      defaultEmail: DEV_ADMIN_EMAILS,
     }),
   );
 }
 
 export async function startGallery(components) {
-  const store = sessionStore();
+  const store = Object.assign(sessionStore(), moderation({ pb }));
   if (import.meta.env.DEV) await withDevSession(store);
   Alpine.store('session', store);
   pb.authStore.onChange(() => {
     Alpine.store('session').user = pb.authStore.record;
   });
+  if (import.meta.env.DEV) await store.signInDefault();
   for (const [name, component] of Object.entries(components)) Alpine.data(name, component);
   Alpine.start();
 }

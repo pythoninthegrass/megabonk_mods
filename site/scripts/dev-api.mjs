@@ -1,11 +1,19 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
-import { DEV_SUPERUSER as ADMIN, SEED_MAKERS, seedLevels, signInPath } from './dev-seed.mjs';
+import {
+  DEV_ADMIN_EMAILS,
+  DEV_SUPERUSER as ADMIN,
+  SEED_ACCESS,
+  SEED_MAKERS,
+  seedLevels,
+  signInPath,
+} from './dev-seed.mjs';
 
 const API = 'http://127.0.0.1:8090';
 const REPO = fileURLToPath(new URL('../../', import.meta.url));
+const LEVELS_DIR = `${REPO}levels/`;
 const DATA_DIR = `${REPO}pocketbase/pb_data_dev`;
 const POCKETBASE_VERSION = '0.40.6';
 
@@ -116,7 +124,8 @@ async function seed() {
       level,
     ) => level.title),
   );
-  const cover = coverPng();
+  const generated = coverPng();
+  const coverFor = (level) => level.cover ? readFileSync(`${LEVELS_DIR}${level.cover}`) : generated;
   for (const level of seedLevels().filter((entry) => !existing.has(entry.title))) {
     const form = new FormData();
     form.set('title', level.title);
@@ -127,18 +136,40 @@ async function seed() {
       }),
       'level.json',
     );
-    form.set('cover', new Blob([cover], { type: 'image/png' }), 'cover.png');
-    const created = await request('/api/collections/levels/records', users.get(level.maker).token, {
+    form.set(
+      'cover',
+      new Blob([coverFor(level)], { type: 'image/png' }),
+      level.cover ?? 'cover.png',
+    );
+    await request('/api/collections/levels/records', users.get(level.maker).token, {
       method: 'POST',
       body: form,
     });
-    if (level.hidden) {
-      await request(
-        `/api/collections/levels/records/${created.id}`,
-        admin,
-        json('PATCH', { hidden: true }),
-      );
+  }
+  for (const level of seedLevels().filter((entry) => entry.hidden || entry.cover)) {
+    const filter = encodeURIComponent(`title = "${level.title}"`);
+    const [record] =
+      (await request(`/api/collections/levels/records?filter=${filter}`, admin)).items;
+    const form = new FormData();
+    form.set('hidden', String(level.hidden));
+    if (level.cover && !record.cover.includes(level.cover.split('-')[0])) {
+      form.set('cover', new Blob([coverFor(level)], { type: 'image/png' }), level.cover);
     }
+    await request(`/api/collections/levels/records/${record.id}`, admin, {
+      method: 'PATCH',
+      body: form,
+    });
+  }
+  for (const { title, viewers = [], blocked = [] } of SEED_ACCESS) {
+    const filter = encodeURIComponent(`title = "${title}"`);
+    const [level] =
+      (await request(`/api/collections/levels/records?filter=${filter}`, admin)).items;
+    const ids = (emails) => emails.map((email) => users.get(email).user.id);
+    await request(
+      `/api/collections/levels/records/${level.id}`,
+      admin,
+      json('PATCH', { viewers: ids(viewers), blocked: ids(blocked) }),
+    );
   }
   console.log('\nDev API seeded. Sign in as a maker by opening the path on the dev server:');
   for (const maker of SEED_MAKERS) {
@@ -187,6 +218,7 @@ export async function startDevApi() {
     stdio: 'ignore',
     env: {
       ...process.env,
+      PB_ADMIN_EMAILS: DEV_ADMIN_EMAILS,
       PB_BIN: binary,
       PB_HTTP: '127.0.0.1:8090',
       PB_DATA_DIR: DATA_DIR,

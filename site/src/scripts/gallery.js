@@ -112,6 +112,16 @@ export function isOwner(user, level) {
   return Boolean(user?.id) && user.id === level?.author;
 }
 
+export function isAdmin(user) {
+  return Boolean(user?.admin);
+}
+
+export function withAccess(ids, id, add) {
+  const current = ids ?? [];
+  if (!id) return current;
+  return add ? [...new Set([...current, id])] : current.filter((entry) => entry !== id);
+}
+
 export function editFormState(level) {
   return { description: level?.description ?? '', chosen: [...(level?.tags ?? [])] };
 }

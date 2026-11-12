@@ -36,7 +36,7 @@ export default () => ({
   },
 
   async deleteLevel(level) {
-    if (await this.$store.session.adminDelete(level)) await this.load();
+    if (await this.$store.session.deleteLevel(level)) await this.load();
   },
 
   async load() {

@@ -29,23 +29,33 @@ export default () => ({
     this.$store.session.loadProviders();
     this.pendingEdit = editCodeFromSearch(location.search);
     await this.loadMine();
-    this.openRequestedEdit();
+    await this.openRequestedEdit();
     this.$watch('$store.session.user', async () => {
       this.resetForm();
       await this.loadMine();
-      this.openRequestedEdit();
+      await this.openRequestedEdit();
     });
   },
 
-  openRequestedEdit() {
+  async findEditable(code) {
+    const own = this.mine.find((item) => item.code === code);
+    if (own || !this.$store.session.isAdmin) return own;
+    try {
+      return await pb.collection('levels').getFirstListItem(pb.filter('code = {:code}', { code }));
+    } catch {
+      return undefined;
+    }
+  },
+
+  async openRequestedEdit() {
     if (!this.pendingEdit || this.mineState !== 'ready') return;
-    const level = this.mine.find((item) => item.code === this.pendingEdit);
+    const level = await this.findEditable(this.pendingEdit);
     if (level) {
       this.edit(level);
       this.returnTo = levelUrl(level.code);
     } else {
       this.errors = [
-        `No level ${this.pendingEdit} was found in your account, so it cannot be edited here.`,
+        `No level ${this.pendingEdit} was found that you can edit.`,
       ];
     }
     this.pendingEdit = null;

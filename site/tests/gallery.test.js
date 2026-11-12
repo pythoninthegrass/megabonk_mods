@@ -16,6 +16,7 @@ import {
   editUrl,
   excerpt,
   giscusAttrs,
+  isAdmin,
   isOwner,
   levelFormData,
   levelUrl,
@@ -26,6 +27,7 @@ import {
   plural,
   relativeDate,
   sumCounts,
+  withAccess,
 } from '../src/scripts/gallery.js';
 import { buildFilter } from '../src/scripts/levels.js';
 
@@ -390,4 +392,19 @@ test('the creator page requests only public account fields', async () => {
   for (const file of ['src/scripts/creator-view.js', 'src/pages/creators/view/index.astro']) {
     assert.doesNotMatch(await readFile(file, 'utf8'), /email|verified|username/i, file);
   }
+});
+
+test('isAdmin is true only for an account flagged as a site owner', () => {
+  assert.equal(isAdmin({ id: 'u1', admin: true }), true);
+  assert.equal(isAdmin({ id: 'u1', admin: false }), false);
+  assert.equal(isAdmin({ id: 'u1' }), false);
+  assert.equal(isAdmin(null), false);
+});
+
+test('withAccess adds an id once and removes it on request', () => {
+  assert.deepEqual(withAccess(['a'], 'b', true), ['a', 'b']);
+  assert.deepEqual(withAccess(['a', 'b'], 'b', true), ['a', 'b']);
+  assert.deepEqual(withAccess(['a', 'b'], 'a', false), ['b']);
+  assert.deepEqual(withAccess(undefined, 'a', true), ['a']);
+  assert.deepEqual(withAccess(['a'], '', true), ['a']);
 });
