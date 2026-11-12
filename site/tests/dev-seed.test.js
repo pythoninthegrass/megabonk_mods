@@ -16,12 +16,14 @@ test('seedLevels yields unique titles with exactly one hidden level', () => {
   assert.ok(levels.every((level) => SEED_MAKERS.some((maker) => maker.email === level.maker)));
 });
 
-test('signInSnippet stores the session the SDK reads from localStorage', () => {
-  const snippet = signInSnippet({ token: 'tok', record: { id: 'abc' } });
+test('signInSnippet stores a compact session the SDK reads from localStorage', () => {
+  const snippet = signInSnippet({
+    token: 'tok',
+    record: { id: 'abc', name: 'Alice', email: 'a@dev.test', created: 'x' },
+  });
   assert.equal(
     snippet,
-    `localStorage.setItem('pocketbase_auth', ${
-      JSON.stringify(JSON.stringify({ token: 'tok', record: { id: 'abc' } }))
-    })`,
+    `localStorage.setItem('pocketbase_auth',JSON.stringify({"token":"tok","record":{"id":"abc","name":"Alice","collectionName":"users"}}))`,
   );
+  assert.doesNotMatch(snippet, /email|\\"/);
 });

@@ -15,8 +15,11 @@ export function seedLevels() {
   );
 }
 
+// One-line console snippet carrying only the session fields the pages read.
 export function signInSnippet({ token, record }) {
-  return `localStorage.setItem('pocketbase_auth', ${
-    JSON.stringify(JSON.stringify({ token, record }))
-  })`;
+  const session = {
+    token,
+    record: { id: record.id, name: record.name, collectionName: 'users' },
+  };
+  return `localStorage.setItem('pocketbase_auth',JSON.stringify(${JSON.stringify(session)}))`;
 }
