@@ -65,6 +65,13 @@
           "start"
         ]
       },
+      "blender": {
+        "type": "local",
+        "command": [
+          "uvx",
+          "mcp-for-blender"
+        ]
+      },
       "context7": {
         "type": "local",
         "command": [

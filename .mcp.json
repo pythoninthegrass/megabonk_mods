@@ -7,6 +7,12 @@
         "start"
       ]
     },
+    "blender": {
+      "command": "uvx",
+      "args": [
+        "mcp-for-blender"
+      ]
+    },
     "context7": {
       "command": "npx",
       "args": [
