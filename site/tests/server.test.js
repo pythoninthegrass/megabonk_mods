@@ -194,3 +194,72 @@ test('SITE_HTML_CACHE_CONTROL sets the html cache header of the running server',
     child.kill('SIGTERM');
   }
 });
+
+const SECURITY_HEADERS = {
+  'strict-transport-security': 'max-age=63072000; includeSubDomains',
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+  'cross-origin-opener-policy': 'same-origin-allow-popups',
+  'cross-origin-resource-policy': 'same-origin',
+};
+
+test('every kind of response carries the security headers', async () => {
+  const requests = [
+    ['page', `${base}`],
+    ['asset', `${base}favicon.svg`],
+    ['not found', `${base}does-not-exist`],
+    ['redirect', `${base}docs/`],
+  ];
+  for (const [label, url] of requests) {
+    const response = await fetch(url, { redirect: 'manual' });
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+      assert.equal(response.headers.get(name), value, `${label}: ${name}`);
+    }
+    assert.ok(response.headers.get('content-security-policy'), `${label}: content-security-policy`);
+  }
+});
+
+test('a method not allowed response carries the security headers', async () => {
+  const response = await fetch(base, { method: 'POST' });
+  assert.equal(response.status, 405);
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+});
+
+test('the content security policy locks down plugins, base, forms and framing', async () => {
+  const csp = (await fetch(base)).headers.get('content-security-policy');
+  for (
+    const directive of [
+      "object-src 'none'",
+      "base-uri 'self'",
+      "frame-ancestors 'none'",
+      "form-action 'self'",
+    ]
+  ) {
+    assert.ok(csp.includes(directive), directive);
+  }
+});
+
+test('the content security policy allows the configured API origin and giscus only', async () => {
+  const custom = createApp({
+    root: new URL('../dist/', import.meta.url),
+    apiOrigin: 'https://api.example.test',
+  });
+  await new Promise((resolve) => custom.listen(0, '127.0.0.1', resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${custom.address().port}/`);
+    const policy = Object.fromEntries(
+      response.headers.get('content-security-policy').split(';').map((part) => {
+        const [name, ...sources] = part.trim().split(/\s+/);
+        return [name, sources];
+      }),
+    );
+    assert.ok(policy['connect-src'].includes('https://api.example.test'));
+    assert.ok(policy['img-src'].includes('https://api.example.test'));
+    assert.ok(policy['script-src'].includes('https://giscus.app'));
+    assert.deepEqual(policy['frame-src'], ['https://giscus.app']);
+  } finally {
+    custom.close();
+  }
+});

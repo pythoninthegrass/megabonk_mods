@@ -16,10 +16,11 @@ ENV PUBLIC_GISCUS_REPO=$PUBLIC_GISCUS_REPO PUBLIC_GISCUS_REPO_ID=$PUBLIC_GISCUS_
 RUN --mount=type=cache,target=/app/site/node_modules/.astro,sharing=locked bun run scripts/sync-docs.mjs && NODE_ENV=production bunx --bun astro build
 
 FROM oven/bun:1.4.4-alpine
+ARG PUBLIC_PB_URL=https://api.megabonkmod.party
 WORKDIR /app
 COPY --from=build --chown=bun:bun /app/site/dist ./dist
 COPY --chown=bun:bun site/server.mjs site/routes.mjs site/smoke.mjs ./
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080 PUBLIC_PB_URL=$PUBLIC_PB_URL
 USER bun
 EXPOSE 8080
 CMD ["bun", "server.mjs"]

@@ -25,8 +25,40 @@ const TYPES = {
   '.xml': 'application/xml; charset=utf-8',
 };
 
+const DEFAULT_API_ORIGIN = 'https://api.megabonkmod.party';
+
+function contentSecurityPolicy(apiOrigin) {
+  return [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://giscus.app",
+    "style-src 'self' 'unsafe-inline'",
+    `img-src 'self' data: blob: ${apiOrigin}`,
+    "font-src 'self'",
+    `connect-src 'self' ${apiOrigin}`,
+    'frame-src https://giscus.app',
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    'upgrade-insecure-requests',
+  ].join('; ');
+}
+
+function securityHeaders(apiOrigin) {
+  return {
+    'strict-transport-security': 'max-age=63072000; includeSubDomains',
+    'x-content-type-options': 'nosniff',
+    'x-frame-options': 'DENY',
+    'referrer-policy': 'strict-origin-when-cross-origin',
+    'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    'cross-origin-opener-policy': 'same-origin-allow-popups',
+    'cross-origin-resource-policy': 'same-origin',
+    'content-security-policy': contentSecurityPolicy(apiOrigin),
+  };
+}
+
 function reply(res, status, headers, body) {
-  res.writeHead(status, headers);
+  res.writeHead(status, { ...res.securityHeaders, ...headers });
   res.end(body);
 }
 
@@ -56,9 +88,11 @@ async function notFound(req, res, rootDir, pathname) {
   );
 }
 
-export function createApp({ root, htmlCacheControl = 'no-cache' }) {
+export function createApp({ root, htmlCacheControl = 'no-cache', apiOrigin = DEFAULT_API_ORIGIN }) {
   const rootDir = resolve(typeof root === 'string' ? root : fileURLToPath(root));
+  const security = securityHeaders(apiOrigin);
   return createServer(async (req, res) => {
+    res.securityHeaders = security;
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       reply(res, 405, { allow: 'GET, HEAD', 'content-length': '0' });
       return;
@@ -149,6 +183,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const server = createApp({
     root,
     htmlCacheControl: process.env.SITE_HTML_CACHE_CONTROL || undefined,
+    apiOrigin: process.env.PUBLIC_PB_URL ? new URL(process.env.PUBLIC_PB_URL).origin : undefined,
   });
   server.listen(port, host, () => console.log(`serving ${root} on http://${host}:${port}/`));
   for (const signal of ['SIGINT', 'SIGTERM']) {
