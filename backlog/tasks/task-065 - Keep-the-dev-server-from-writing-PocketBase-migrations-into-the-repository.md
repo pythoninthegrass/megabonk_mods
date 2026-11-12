@@ -4,7 +4,7 @@ title: Keep the dev server from writing PocketBase migrations into the repositor
 status: Done
 assignee: []
 created_date: '2026-11-12 05:13'
-updated_date: '2026-11-12T20:17:00Z'
+updated_date: '2026-11-12T20:20:00Z'
 labels:
   - site
   - pocketbase
@@ -54,5 +54,5 @@ Pass --automigrate=false (a stock `pocketbase serve` flag) when dev-api.mjs spaw
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-dev-api.mjs now starts PocketBase with --automigrate=false. On a fresh pb_data_dev the API seeded, authAlert.enabled was false for users and _superusers, and git status under pocketbase/ was clean. pb_migrations is untouched, so production keeps the default alerts. Documented in docs/website.md. site:test (42 pass) and lint pass; task check could not run because mod:build needs game assemblies absent on this box.
+dev-api.mjs now starts PocketBase with --automigrate=false. On a fresh pb_data_dev the API seeded, authAlert.enabled was false for users and _superusers, and git status under pocketbase/ was clean. pb_migrations is untouched, so production keeps the default alerts. Documented in docs/website.md. task check passes on the macOS box with the game installed (exit 0, 1551 Python tests).
 <!-- SECTION:FINAL_SUMMARY:END -->
