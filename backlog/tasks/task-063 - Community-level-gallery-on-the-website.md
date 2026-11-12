@@ -29,7 +29,7 @@ Decisions already made, which subtasks must follow:
 - PocketBase (new `pocketbase/` directory, a second Dokploy app at `api.megabonkmod.party` with a persistent data volume) owns accounts (GitHub, Google and Discord OAuth2, no password sign-up), level records, file storage, likes and reports.
 - giscus (GitHub Discussions on this repository) provides one comment thread per level, keyed by the share code. Commenting needs a GitHub account; uploading and liking work with any OAuth provider.
 - Web only for now: players download the level and install it into `UserData/Levels/` by hand. Share codes are stable so the mod can resolve them in a later task. Mod-side import is out of scope.
-- Pack bundles are never hosted or offered for download (see TASK-050.03, no automatic proprietary downloads). A level page only lists the packs a level needs, with versions.
+- Small player-made pack bundles (at most 30 MiB) are hosted, with an attestation that the uploader may share them and reporting-based copyright moderation (see TASK-063.07). Downloads stay manual and the mod never fetches a pack on its own (TASK-050.03). A level page lists the packs a level needs, with versions, and links the ones hosted here.
 - Moderation uses the PocketBase admin dashboard; no custom moderation UI.
 
 Level files and sidecar images follow docs/level-format.md (schema 4; `title` is required for a level to appear on Map Selection; cover limits are 8 MiB and 4096 px).
