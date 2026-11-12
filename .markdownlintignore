@@ -17,3 +17,6 @@ site/dist/**
 
 # Embedded page fragments use h2/h3 and sentence headings; validate the built page
 site/src/content/**
+
+# Third-party submodule; its files cannot be changed from this repository
+tools/thps2-tools/**
