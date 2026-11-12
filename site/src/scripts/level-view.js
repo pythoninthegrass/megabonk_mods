@@ -1,6 +1,7 @@
 import {
   codeFromPath,
   coverUrl,
+  creatorUrl,
   downloadUrl,
   editUrl,
   giscusAttrs,
@@ -162,6 +163,7 @@ export default () => ({
       relativeDate(this.level.created)
     })`;
   },
+  creatorUrl,
   editUrl,
   isOwner,
   mapName,

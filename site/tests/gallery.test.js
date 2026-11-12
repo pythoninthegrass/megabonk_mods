@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   availableProviders,
   codeFromPath,
   codeFromSearch,
   coverUrl,
+  CREATOR_FIELDS,
+  creatorFilter,
+  creatorIdFromPath,
+  creatorUrl,
   downloadUrl,
   editCodeFromSearch,
   editFormState,
@@ -19,6 +24,7 @@ import {
   pbErrorMessages,
   plural,
   relativeDate,
+  sumCounts,
 } from '../src/scripts/gallery.js';
 import { buildFilter } from '../src/scripts/levels.js';
 
@@ -328,4 +334,50 @@ test('likeTitle says what clicking the heart will do', () => {
   assert.equal(likeTitle(false, false), 'Sign in to like this level');
   assert.equal(likeTitle(true, false), 'Like this level');
   assert.equal(likeTitle(true, true), 'Remove your like');
+});
+
+const ID = 'abc123def456ghi';
+
+test('creatorIdFromPath accepts only a 15 character lowercase alphanumeric id', () => {
+  assert.equal(creatorIdFromPath(`/u/${ID}`), ID);
+  assert.equal(creatorIdFromPath(`/u/${ID}/`), ID);
+  for (
+    const path of [
+      '/u/',
+      '/u/short',
+      `/u/${ID}x`,
+      `/u/${ID.toUpperCase()}`,
+      `/u/${ID}/extra`,
+      `/x/${ID}`,
+      null,
+    ]
+  ) {
+    assert.equal(creatorIdFromPath(path), null, String(path));
+  }
+});
+
+test('creatorUrl links by account id and rejects anything else', () => {
+  assert.equal(creatorUrl(ID), `/u/${ID}`);
+  assert.equal(creatorUrl('bad id'), null);
+  assert.equal(creatorUrl(undefined), null);
+});
+
+test('creatorFilter matches the author id exactly', () => {
+  assert.equal(creatorFilter(ID), `author = "${ID}"`);
+  assert.equal(creatorFilter('x" || true'), null);
+});
+
+test('sumCounts totals likes and downloads and tolerates missing values', () => {
+  assert.deepEqual(sumCounts([{ likes: 2, downloads: 5 }, { likes: 1 }, {}]), {
+    likes: 3,
+    downloads: 5,
+  });
+  assert.deepEqual(sumCounts([]), { likes: 0, downloads: 0 });
+});
+
+test('the creator page requests only public account fields', async () => {
+  assert.equal(CREATOR_FIELDS, 'id,name,created');
+  for (const file of ['src/scripts/creator-view.js', 'src/pages/creators/view/index.astro']) {
+    assert.doesNotMatch(await readFile(file, 'utf8'), /email|verified|username/i, file);
+  }
 });

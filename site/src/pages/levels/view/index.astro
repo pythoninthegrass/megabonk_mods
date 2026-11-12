@@ -31,7 +31,7 @@ import Icon from '../../../components/Icon.astro';
         </figure>
         <div class="level-info">
           <h1 x-text="level?.title"></h1>
-          <p class="byline"><span>by <span x-text="author"></span></span><span class="counts-inline"><button class="count-action" type="button" :aria-pressed="Boolean(liked)" :title="likeTitle()" :disabled="busy" @click="likeFromCounts()"><Icon name="heart" /><span x-text="plural(level?.likes, 'like')"></span><span class="sr-only" x-text="` for ${level?.title}`"></span></button><a class="count-action" :href="download" title="Download this level" @click="level.downloads += 1"><Icon name="download" /><span x-text="plural(level?.downloads, 'download')"></span><span class="sr-only" x-text="` of ${level?.title}`"></span></a></span></p>
+          <p class="byline"><span>by <a class="maker-link" :href="creatorUrl(level?.author)" x-text="author"></a></span><span class="counts-inline"><button class="count-action" type="button" :aria-pressed="Boolean(liked)" :title="likeTitle()" :disabled="busy" @click="likeFromCounts()"><Icon name="heart" /><span x-text="plural(level?.likes, 'like')"></span><span class="sr-only" x-text="` for ${level?.title}`"></span></button><a class="count-action" :href="download" title="Download this level" @click="level.downloads += 1"><Icon name="download" /><span x-text="plural(level?.downloads, 'download')"></span><span class="sr-only" x-text="` of ${level?.title}`"></span></a></span></p>
           <div class="share-code"><code x-text="code" aria-label="Share code"></code><button class="btn" data-variant="outline" type="button" @click="copyCode()"><span x-text="copied ? 'Copied' : 'Copy code'"></span></button></div>
           <ul class="chips" x-show="level?.tags?.length"><template x-for="name in level?.tags" :key="name"><li x-text="name"></li></template></ul>
           <p class="description" x-show="level?.description" x-text="level?.description"></p>
@@ -46,7 +46,7 @@ import Icon from '../../../components/Icon.astro';
           <caption class="sr-only">Level details</caption>
           <tbody>
             <tr class="echo"><th scope="row">Share code</th><td><code x-text="code"></code></td></tr>
-            <tr><th scope="row">Maker</th><td x-text="author"></td></tr>
+            <tr><th scope="row">Maker</th><td><a class="maker-link" :href="creatorUrl(level?.author)" x-text="author"></a></td></tr>
             <tr><th scope="row">Uploaded</th><td x-text="uploaded"></td></tr>
             <tr><th scope="row">Map</th><td x-text="mapName(level?.map)"></td></tr>
             <tr><th scope="row">Schema</th><td x-text="level?.schemaVersion"></td></tr>

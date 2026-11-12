@@ -25,6 +25,7 @@ const TYPES = {
 };
 
 const LEVEL_ROUTE = /^\/l\/[0-9A-HJKMNP-TV-Z]{3}-[0-9A-HJKMNP-TV-Z]{3}-[0-9A-HJKMNP-TV-Z]{3}\/?$/;
+const CREATOR_ROUTE = /^\/u\/[a-z0-9]{15}\/?$/;
 
 function reply(res, status, headers, body) {
   res.writeHead(status, headers);
@@ -96,6 +97,7 @@ export function createApp({ root, htmlCacheControl = 'no-cache' }) {
       return;
     }
     if (LEVEL_ROUTE.test(pathname)) pathname = '/levels/view/index.html';
+    if (CREATOR_ROUTE.test(pathname)) pathname = '/creators/view/index.html';
     if (pathname === '/' || pathname.endsWith('/')) pathname += 'index.html';
     const target = resolve(join(rootDir, pathname));
     if (target !== rootDir && !target.startsWith(rootDir + sep)) {

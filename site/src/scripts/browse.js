@@ -1,6 +1,7 @@
 import {
   codeFromSearch,
   coverUrl,
+  creatorUrl,
   downloadUrl,
   editUrl,
   excerpt,
@@ -154,6 +155,7 @@ export default () => ({
     return this.refilter();
   },
 
+  creatorUrl,
   cover: (item, thumb) => coverUrl(PB_URL, item, thumb),
   downloadHref: (code) => downloadUrl(PB_URL, code),
   editUrl,

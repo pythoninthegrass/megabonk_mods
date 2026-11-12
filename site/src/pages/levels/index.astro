@@ -54,7 +54,7 @@ import Icon from '../../components/Icon.astro';
               <figcaption><span x-text="item.code"></span><a class="edit-link" x-show="isOwner($store.session.user, item)" :href="editUrl(item.code)" :aria-label="`Edit ${item.title}`" title="Edit this level"><Icon name="pencil" /></a></figcaption>
             </figure>
             <a class="card-link" :href="`/l/${item.code}`"><h2 x-text="item.title"></h2></a>
-            <p class="byline"><span x-text="author(item)"></span> · <time :datetime="item.created" x-text="relativeDate(item.created)"></time></p>
+            <p class="byline"><a class="maker-link" :href="creatorUrl(item.author)" x-text="author(item)"></a> · <time :datetime="item.created" x-text="relativeDate(item.created)"></time></p>
             <p class="excerpt" x-show="item.description" x-text="excerpt(item.description)"></p>
             <ul class="chips" x-show="item.tags?.length"><template x-for="name in item.tags" :key="name"><li x-text="name"></li></template></ul>
             <p class="counts">

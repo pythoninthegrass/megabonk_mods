@@ -134,3 +134,30 @@ export function likeTitle(signedIn, liked) {
   if (!signedIn) return 'Sign in to like this level';
   return liked ? 'Remove your like' : 'Like this level';
 }
+
+export const CREATOR_FIELDS = 'id,name,created';
+
+const CREATOR_ID = /^[a-z0-9]{15}$/;
+
+export function creatorIdFromPath(pathname) {
+  const match = /^\/u\/([^/]+)\/?$/.exec(String(pathname ?? ''));
+  return match && CREATOR_ID.test(match[1]) ? match[1] : null;
+}
+
+export function creatorUrl(id) {
+  return typeof id === 'string' && CREATOR_ID.test(id) ? `/u/${id}` : null;
+}
+
+export function creatorFilter(id) {
+  return typeof id === 'string' && CREATOR_ID.test(id) ? `author = "${id}"` : null;
+}
+
+export function sumCounts(rows) {
+  return rows.reduce(
+    (total, row) => ({
+      likes: total.likes + (row.likes ?? 0),
+      downloads: total.downloads + (row.downloads ?? 0),
+    }),
+    { likes: 0, downloads: 0 },
+  );
+}

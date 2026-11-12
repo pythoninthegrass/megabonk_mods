@@ -10,6 +10,8 @@ const root = join(workDir, 'dist');
 await mkdir(join(root, 'levels', 'view'), { recursive: true });
 await writeFile(join(root, 'index.html'), '<h1>home</h1>');
 await writeFile(join(root, 'levels', 'view', 'index.html'), '<h1>level view</h1>');
+await mkdir(join(root, 'creators', 'view'), { recursive: true });
+await writeFile(join(root, 'creators', 'view', 'index.html'), '<h1>creator view</h1>');
 await writeFile(join(root, 'inside.txt'), 'inside');
 await writeFile(join(workDir, 'outside.txt'), 'outside');
 
@@ -78,4 +80,33 @@ test('other paths are unaffected by the share code route', async () => {
 
 test('POST to a share code path answers 405', async () => {
   assert.equal((await fetch(`${base}l/7N1-MVB-WKF`, { method: 'POST' })).status, 405);
+});
+
+test('an account id path serves the creator view page', async () => {
+  for (const path of ['u/abc123def456ghi', 'u/abc123def456ghi/', 'u/abc123def456ghi?page=2']) {
+    const response = await fetch(`${base}${path}`);
+    assert.equal(response.status, 200, path);
+    assert.equal(await response.text(), '<h1>creator view</h1>', path);
+  }
+});
+
+test('anything that is not a well-formed account id answers 404', async () => {
+  for (
+    const path of [
+      'u/',
+      'u/short',
+      'u/abc123def456ghix',
+      'u/ABC123DEF456GHI',
+      'u/abc123def456ghi/extra',
+      'u/..%2f..%2foutside.txt',
+      'u/abc123def456gh%00',
+    ]
+  ) {
+    const status = (await fetch(`${base}${path}`, { redirect: 'manual' })).status;
+    assert.ok(status === 404 || status === 400, `${path} answered ${status}`);
+  }
+});
+
+test('POST to an account id path answers 405', async () => {
+  assert.equal((await fetch(`${base}u/abc123def456ghi`, { method: 'POST' })).status, 405);
 });
