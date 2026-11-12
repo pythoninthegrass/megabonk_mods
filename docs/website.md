@@ -184,6 +184,7 @@ Wiki canonical URLs use `https://docs.megabonkmod.party` from `site/astro.config
 | `pocketbase/pb_hooks/levels.pb.js` | Upload validation, the download route and the download filename |
 | `pocketbase/pb_hooks/likes.pb.js` | Recomputes `levels.likes` from the like records |
 | `pocketbase/pb_hooks/oauth.pb.js` | Copies OAuth credentials from the environment on every start |
+| `pocketbase/pb_hooks/ratelimit.pb.js`, `ratelimit_lib.js` | Applies the rate limits and the trusted proxy header from the environment on every start |
 | `pocketbase/entrypoint.sh` | Starts the server; maps the environment variables below to flags |
 | `pocketbase/Dockerfile` | Alpine image with a checksum-verified PocketBase release |
 
@@ -215,6 +216,9 @@ Pack bundles are never stored or offered. `packs` is metadata only. A hidden lev
 | `PB_BIN` | `/usr/local/bin/pocketbase` | Binary to run |
 | `PB_BACKUP_CRON` | `0 3 * * *` | Scheduled backup cron expression |
 | `PB_BACKUP_KEEP` | `7` | Number of scheduled backups kept |
+| `PB_RATE_LIMITS_ENABLED` | `true` | `false` turns the rate limiter off |
+| `PB_RATE_LIMIT_RULES` | see [Rate limiting](#rate-limiting) | Comma-separated `<label> <max requests> <seconds>` rules; replaces the whole list |
+| `PB_TRUSTED_PROXY_HEADERS` | `X-Forwarded-For` | Comma-separated headers that carry the real client IP behind the reverse proxy |
 
 A provider is enabled only when both its id and secret are set; PocketBase rejects an empty credential. The migration applies them on first start and `oauth.pb.js` re-applies them on every start, so a secret that is set or rotated later takes effect on the next restart. Each OAuth app's redirect URL is `<api origin>/api/oauth2-redirect`. Credentials belong in the environment or an untracked `.env`, never in the repository.
 
@@ -230,6 +234,21 @@ task pocketbase:image                                  # builds the container im
 Data lives in the gitignored `pocketbase/pb_data/`. `task pocketbase:test` runs `tests/test_pocketbase_service.py` and fails when the binary is missing. The same tests run under `task test` and `uv run pytest`, where they skip with the install hint instead. Set `POCKETBASE_BIN` to use a binary from elsewhere. The tests start the real `entrypoint.sh` against a temporary data directory and the real files in `levels/`, sign in as test users through superuser impersonation (password sign-in is off), and cover the validation rejections, derived fields, access rules, like counts, the download route, reports, OAuth configuration and CORS.
 
 The image build context is `pocketbase/`: `docker build -t megabonk-levels-api pocketbase`. It builds on a pinned Alpine release and runs `apk upgrade`, downloads the PocketBase zip for the build architecture and verifies its SHA-256, runs as a non-root user and exposes port 8090 with a health check on `/api/health`. The build fails if any `openssh` package is present: the image never runs `sshd`, and the Alpine OpenSSH password-bypass advisory of 2026-11-05 is fixed in 3.24.4 and later, so keep the base tag at or above that. When bumping PocketBase, update `PB_VERSION` and both checksums from the release's `checksums.txt`, and `POCKETBASE_VERSION` in `taskfiles/pocketbase.yml` and the test file.
+
+### Rate limiting
+
+`pb_hooks/ratelimit.pb.js` enables PocketBase's rate limiter on every start, so the limits are code rather than dashboard state. A rule is `<label> <max requests per IP> <seconds>`. The label is a tag such as `levels:create` or `*:auth`, a complete path, or a path prefix ending in `/`; a label may contain spaces, such as `POST /api/collections/`. PocketBase applies the most specific matching rule whatever the order of the list, and superusers are never limited. Over the limit a client gets `429` with `Too Many Requests.`.
+
+| Rule | Limit per IP | Covers |
+| --- | --- | --- |
+| `*:auth` | 2 per 3 s | Sign-in attempts |
+| `*:create` | 20 per 5 s | Every create, including likes and reports |
+| `/api/batch` | 3 per 1 s | The batch endpoint |
+| `/api/` | 300 per 10 s | Everything else |
+| `/api/l/` | 30 per 60 s | The download route, which increments the public counter |
+| `levels:create` | 10 per 60 s | Level uploads, which carry large image files |
+
+The first four are PocketBase's suggested defaults. `PB_RATE_LIMIT_RULES` replaces the whole list in the same format, and a malformed entry stops the server with the entry in the error. Behind the reverse proxy every request reaches PocketBase from the proxy's address, so the limiter would give all visitors one shared budget. `PB_TRUSTED_PROXY_HEADERS` (default `X-Forwarded-For`) names the header that carries the real client address; the hook reads the proxy-appended end of that header, so a client cannot choose its own address, provided the API is reachable only through the proxy. The service tests cover the defaults, the environment overrides, specific-over-prefix matching and separate budgets per forwarded address.
 
 ### Moderation
 

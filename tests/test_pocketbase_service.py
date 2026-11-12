@@ -108,6 +108,7 @@ def start_service(data_dir: Path, port: int, extra_env: dict | None = None) -> t
     env = {
         **os.environ,
         **OAUTH_ENV,
+        "PB_RATE_LIMITS_ENABLED": "false",
         "PB_BIN": str(POCKETBASE),
         "PB_DATA_DIR": str(data_dir),
         "PB_HOOKS_DIR": str(PB_DIR / "pb_hooks"),
@@ -605,5 +606,109 @@ def test_a_backup_is_written_under_the_data_directory(tmp_path):
     try:
         assert client.request("POST", "/api/backups", admin_token(client))[0] == 204
         assert list((tmp_path / "backups").glob("*.zip"))
+    finally:
+        stop_service(process)
+
+
+DEFAULT_RATE_LIMIT_LABELS = ["*:auth", "*:create", "/api/batch", "/api/", "/api/l/", "levels:create"]
+
+
+def rate_limit_settings(client: Api) -> dict:
+    return client.request("GET", "/api/settings", admin_token(client))[2]
+
+
+def statuses(client: Api, path: str, count: int, headers: dict | None = None) -> list[int]:
+    return [client.request("GET", path, headers=headers)[0] for _ in range(count)]
+
+
+def test_rate_limits_are_on_by_default_and_trust_the_forwarded_for_header(tmp_path):
+    process, client = start_service(tmp_path, free_port(), {"PB_RATE_LIMITS_ENABLED": ""})
+    try:
+        settings = rate_limit_settings(client)
+        assert settings["rateLimits"]["enabled"] is True
+        assert [rule["label"] for rule in settings["rateLimits"]["rules"]] == DEFAULT_RATE_LIMIT_LABELS
+        assert settings["trustedProxy"]["headers"] == ["X-Forwarded-For"]
+        assert settings["trustedProxy"]["useLeftmostIP"] is False
+    finally:
+        stop_service(process)
+
+
+def test_default_rules_carry_their_limits(tmp_path):
+    process, client = start_service(tmp_path, free_port(), {"PB_RATE_LIMITS_ENABLED": ""})
+    try:
+        rules = {rule["label"]: (rule["maxRequests"], rule["duration"]) for rule in rate_limit_settings(client)["rateLimits"]["rules"]}
+        assert rules == {
+            "*:auth": (2, 3),
+            "*:create": (20, 5),
+            "/api/batch": (3, 1),
+            "/api/": (300, 10),
+            "/api/l/": (30, 60),
+            "levels:create": (10, 60),
+        }
+    finally:
+        stop_service(process)
+
+
+def test_rate_limits_can_be_switched_off(tmp_path):
+    process, client = start_service(tmp_path, free_port(), {"PB_RATE_LIMITS_ENABLED": "false"})
+    try:
+        assert rate_limit_settings(client)["rateLimits"]["enabled"] is False
+    finally:
+        stop_service(process)
+
+
+def test_rules_and_proxy_headers_come_from_the_environment(tmp_path):
+    env = {
+        "PB_RATE_LIMITS_ENABLED": "true",
+        "PB_RATE_LIMIT_RULES": "/api/health 3 60, POST /api/collections/ 5 30",
+        "PB_TRUSTED_PROXY_HEADERS": "X-Real-IP, CF-Connecting-IP",
+    }
+    process, client = start_service(tmp_path, free_port(), env)
+    try:
+        settings = rate_limit_settings(client)
+        assert [(r["label"], r["maxRequests"], r["duration"]) for r in settings["rateLimits"]["rules"]] == [
+            ("/api/health", 3, 60),
+            ("POST /api/collections/", 5, 30),
+        ]
+        assert settings["trustedProxy"]["headers"] == ["X-Real-IP", "CF-Connecting-IP"]
+    finally:
+        stop_service(process)
+
+
+LEVELS_LIST = "/api/collections/levels/records"
+
+
+def test_a_client_over_its_limit_gets_429(tmp_path):
+    process, client = start_service(tmp_path, free_port(), {"PB_RATE_LIMITS_ENABLED": "true", "PB_RATE_LIMIT_RULES": f"{LEVELS_LIST} 3 60"})
+    try:
+        assert statuses(client, LEVELS_LIST, 5) == [200, 200, 200, 429, 429]
+    finally:
+        stop_service(process)
+
+
+def test_each_forwarded_client_has_its_own_budget(tmp_path):
+    process, client = start_service(tmp_path, free_port(), {"PB_RATE_LIMITS_ENABLED": "true", "PB_RATE_LIMIT_RULES": f"{LEVELS_LIST} 2 60"})
+    try:
+        assert statuses(client, LEVELS_LIST, 3, {"X-Forwarded-For": "203.0.113.1"}) == [200, 200, 429]
+        assert statuses(client, LEVELS_LIST, 2, {"X-Forwarded-For": "203.0.113.2"}) == [200, 200]
+    finally:
+        stop_service(process)
+
+
+def test_a_specific_rule_wins_over_a_prefix_rule_whatever_their_order(tmp_path):
+    for index, rules in enumerate((f"/api/ 300 10, {LEVELS_LIST} 2 60", f"{LEVELS_LIST} 2 60, /api/ 300 10")):
+        process, client = start_service(tmp_path / str(index), free_port(), {"PB_RATE_LIMITS_ENABLED": "true", "PB_RATE_LIMIT_RULES": rules})
+        try:
+            assert statuses(client, LEVELS_LIST, 3) == [200, 200, 429], rules
+            assert statuses(client, "/api/collections/users/auth-methods", 5) == [200] * 5, rules
+        finally:
+            stop_service(process)
+
+
+def test_superusers_are_never_rate_limited(tmp_path):
+    process, client = start_service(tmp_path, free_port(), {"PB_RATE_LIMITS_ENABLED": "true", "PB_RATE_LIMIT_RULES": "/api/settings 1 60"})
+    try:
+        token = admin_token(client)
+        assert [client.request("GET", "/api/settings", token)[0] for _ in range(3)] == [200, 200, 200]
     finally:
         stop_service(process)
