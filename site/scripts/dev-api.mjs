@@ -259,7 +259,8 @@ export async function startDevApi() {
     ['superuser', 'upsert', ADMIN.identity, ADMIN.password, `--dir=${DATA_DIR}`],
     { stdio: 'ignore' },
   );
-  const child = spawn('sh', [`${REPO}pocketbase/entrypoint.sh`], {
+  // Auto-migrations are off so the authAlert change in seed() is never written into pb_migrations, which production ships.
+  const child = spawn('sh', [`${REPO}pocketbase/entrypoint.sh`, '--automigrate=false'], {
     stdio: 'ignore',
     env: {
       ...process.env,
