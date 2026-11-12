@@ -100,6 +100,10 @@ export function editUrl(code) {
   return isShareCode(code) ? `/levels/upload/?edit=${code}` : null;
 }
 
+export function levelUrl(code) {
+  return isShareCode(code) ? `/l/${code}` : null;
+}
+
 export function editCodeFromSearch(search) {
   return codeFromSearch(new URLSearchParams(search ?? '').get('edit'));
 }

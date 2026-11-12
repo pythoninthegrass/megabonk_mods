@@ -3,6 +3,7 @@ import {
   editCodeFromSearch,
   editFormState,
   levelFormData,
+  levelUrl,
   mapName,
   pbErrorMessages,
   plural,
@@ -22,6 +23,7 @@ export default () => ({
   busy: false,
   confirmDelete: null,
   pendingEdit: null,
+  returnTo: null,
 
   async init() {
     this.$store.session.loadProviders();
@@ -40,6 +42,7 @@ export default () => ({
     const level = this.mine.find((item) => item.code === this.pendingEdit);
     if (level) {
       this.edit(level);
+      this.returnTo = levelUrl(level.code);
     } else {
       this.errors = [
         `No level ${this.pendingEdit} was found in your account, so it cannot be edited here.`,
@@ -72,8 +75,17 @@ export default () => ({
     }
   },
 
+  cancelEdit() {
+    if (this.returnTo) {
+      location.assign(this.returnTo);
+      return;
+    }
+    this.resetForm();
+  },
+
   resetForm() {
     this.editing = null;
+    this.returnTo = null;
     this.description = '';
     this.chosen = [];
     this.errors = [];

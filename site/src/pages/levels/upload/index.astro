@@ -46,7 +46,7 @@ import Icon from '../../../components/Icon.astro';
 
         <div class="actions">
           <button class="btn" type="submit" :disabled="busy" x-text="busy ? 'Saving…' : (editing ? 'Save changes' : 'Upload level')"></button>
-          <button class="btn" data-variant="outline" type="button" x-show="editing" @click="resetForm()">Cancel edit</button>
+          <button class="btn" data-variant="outline" type="button" x-show="editing" @click="cancelEdit()">Cancel edit</button>
         </div>
       </form>
 

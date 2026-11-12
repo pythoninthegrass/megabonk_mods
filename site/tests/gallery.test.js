@@ -18,6 +18,7 @@ import {
   giscusAttrs,
   isOwner,
   levelFormData,
+  levelUrl,
   likesFilter,
   likeTitle,
   mapName,
@@ -264,6 +265,15 @@ test('editUrl links to the upload page with the share code to edit', () => {
 test('editUrl refuses anything that is not a share code', () => {
   assert.equal(editUrl('not-a-code'), null);
   assert.equal(editUrl(undefined), null);
+});
+
+test('levelUrl points at the level page for a share code', () => {
+  assert.equal(levelUrl('7N1-MVB-WKF'), '/l/7N1-MVB-WKF');
+});
+
+test('levelUrl refuses anything that is not a share code', () => {
+  assert.equal(levelUrl('not-a-code'), null);
+  assert.equal(levelUrl(undefined), null);
 });
 
 test('editCodeFromSearch reads a share code from the edit parameter', () => {
