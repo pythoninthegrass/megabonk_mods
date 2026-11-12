@@ -1,0 +1,27 @@
+---
+interface Props { what: string; }
+const { what } = Astro.props;
+---
+<form id="report-form" class="report-form" x-show="reporting" @submit.prevent="sendReport()">
+  <label class="field"><span>What kind of problem is it?</span>
+    <select name="category" x-model="category"><template x-for="option in categories" :key="option.id"><option :value="option.id" x-text="option.label"></option></template></select>
+  </label>
+
+  <fieldset class="copyright-fields" x-show="category === 'copyright'">
+    <legend>Copyright report</legend>
+    <p class="warning" role="note">Only the copyright owner, or someone authorized to act for the owner, should send this. False reports are misuse of this form and can lead to account termination or legal consequences.</p>
+    <p class="small">Sending it shares your name, email address and the description of the work with the person who shared the {what}. Your postal address and phone number are not shared. If you do not want your name shared, ask an authorized representative to report for you.</p>
+    <label class="field"><span>Email address</span><input type="email" name="contactEmail" x-model="copyright.contactEmail" maxlength="320" autocomplete="email" /></label>
+    <label class="field"><span>Postal address</span><input type="text" name="contactAddress" x-model="copyright.contactAddress" maxlength="500" autocomplete="street-address" /></label>
+    <label class="field"><span>Phone number</span><input type="tel" name="contactPhone" x-model="copyright.contactPhone" maxlength="50" autocomplete="tel" /><small class="help">Give at least one of email, postal address or phone so we can reach you.</small></label>
+    <label class="field"><span>The work that was copied</span><textarea name="work" x-model="copyright.work" :required="category === 'copyright'" maxlength="2000" rows="4"></textarea><small class="help">Describe it clearly and say where the original is. A representative list is enough when several works were copied.</small></label>
+    <label class="field"><span>Link to the reported {what}</span><input type="url" name="itemUrl" x-model="copyright.itemUrl" :required="category === 'copyright'" maxlength="500" /><small class="help">Filled in from this page. It must be the address of this {what}.</small></label>
+    <label class="check"><input type="checkbox" name="fairUseConsidered" x-model="copyright.fairUseConsidered" :required="category === 'copyright'" /><span>I considered whether fair use, a licence or the public domain applies, and it does not.</span></label>
+    <label class="check"><input type="checkbox" name="goodFaith" x-model="copyright.goodFaith" :required="category === 'copyright'" /><span x-text="goodFaithText"></span></label>
+    <label class="check"><input type="checkbox" name="accurate" x-model="copyright.accurate" :required="category === 'copyright'" /><span x-text="perjuryText"></span></label>
+    <label class="field"><span>Signature</span><input type="text" name="signature" x-model="copyright.signature" :required="category === 'copyright'" maxlength="200" autocomplete="name" /><small class="help">Type your full legal name, as a person rather than a company.</small></label>
+  </fieldset>
+
+  <label class="field"><span x-text="category === 'copyright' ? 'Anything else, such as who you represent and how you are authorized' : `What is wrong with this ${what}?`"></span><textarea name="reason" x-model="reason" :required="category !== 'copyright'" maxlength="1000" rows="3"></textarea></label>
+  <button class="btn" type="submit" :disabled="busy || !reportReady">Send report</button>
+</form>

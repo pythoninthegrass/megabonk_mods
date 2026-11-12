@@ -2,6 +2,7 @@
 import GalleryLayout from '../../../layouts/GalleryLayout.astro';
 import Icon from '../../../components/Icon.astro';
 import LevelActions from '../../../components/LevelActions.astro';
+import ReportForm from '../../../components/ReportForm.astro';
 ---
 <GalleryLayout title="Level · Megabonk Mod Party" description="A custom Megabonk level shared on megabonkmod.party." path="/levels/view/">
   <section class="gallery-page wrap" x-data="levelView" aria-live="polite">
@@ -52,8 +53,13 @@ import LevelActions from '../../../components/LevelActions.astro';
             <tr><th scope="row">Schema</th><td x-text="level?.schemaVersion"></td></tr>
             <tr :class="packs.length ? 'needs-packs' : ''"><th scope="row">Required packs</th><td>
               <span x-show="packs.length === 0">None</span>
-              <ul class="pack-list" x-show="packs.length"><template x-for="pack in packs" :key="pack.id"><li><code x-text="pack.id"></code> <span x-text="pack.version"></span></li></template></ul>
-              <p class="small" x-show="packs.length">This level looks empty without these packs. <a href="https://docs.megabonkmod.party/player-guide/#installing-an-asset-pack">How to install an asset pack</a>. Pack files are not offered here.</p>
+              <ul class="pack-list"><template x-for="pack in packs" :key="pack.id"><li>
+                <a x-show="pack.hosted" :href="packUrl(pack.id, pack.hostedVersion)"><code x-text="pack.id"></code></a><code x-show="!pack.hosted" x-text="pack.id"></code>
+                <span x-text="pack.version"></span>
+                <span class="pack-flag" x-show="pack.mismatch" x-text="`Hosted here: ${pack.hostedVersion}`"></span>
+                <span class="small" x-show="!pack.hosted">Not hosted here</span>
+              </li></template></ul>
+              <p class="small" x-show="packs.length">This level looks empty without these packs. <span x-show="anyHosted">Download the ones hosted here from their pages. </span><a href="https://docs.megabonkmod.party/player-guide/#installing-an-asset-pack">How to install an asset pack</a>. <span x-show="anyUnhosted">Packs marked not hosted are not offered here; ask the level's maker for them.</span></p>
             </td></tr>
             <tr class="echo"><th scope="row">Likes</th><td x-text="level?.likes"></td></tr>
             <tr class="echo"><th scope="row">Downloads</th><td x-text="level?.downloads"></td></tr>
@@ -105,12 +111,9 @@ import LevelActions from '../../../components/LevelActions.astro';
         </div>
         <div x-show="$store.session.signedIn" class="actions">
           <button class="btn" data-variant="outline" type="button" :aria-pressed="Boolean(liked)" :disabled="busy" @click="toggleLike()" x-text="`${liked ? 'Unlike' : 'Like'} · ${level?.likes ?? 0}`"></button>
-          <button class="btn" data-variant="outline" type="button" :aria-expanded="reporting" aria-controls="report-form" @click="reporting = !reporting">Report</button>
+          <button class="btn" data-variant="outline" type="button" :aria-expanded="reporting" aria-controls="report-form" @click="toggleReport()">Report</button>
         </div>
-        <form id="report-form" class="report-form" x-show="reporting" @submit.prevent="sendReport()">
-          <label class="field"><span>What is wrong with this level?</span><textarea name="reason" x-model="reason" required maxlength="1000" rows="3"></textarea></label>
-          <button class="btn" type="submit" :disabled="busy || !reason.trim()">Send report</button>
-        </form>
+        <ReportForm what="level" />
         <p class="notice" x-show="notice" x-text="notice" role="status"></p>
       </div>
 

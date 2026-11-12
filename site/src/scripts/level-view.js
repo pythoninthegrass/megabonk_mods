@@ -14,7 +14,9 @@ import {
   withAccess,
 } from './gallery.js';
 import { packList } from './levels.js';
+import { hostedPacks, packsFilter, packUrl } from './packs.js';
 import { giscusConfig, pb, PB_URL } from './pb.js';
+import { reportForm } from './report-form.js';
 
 export default () => ({
   code: null,
@@ -24,9 +26,9 @@ export default () => ({
   busy: false,
   copied: false,
   notice: '',
-  reporting: false,
-  reason: '',
+  hosted: null,
   users: [],
+  ...reportForm(),
   accessGroups: [
     { field: 'viewers', title: 'Can see it while hidden' },
     { field: 'blocked', title: 'Cannot see it' },
@@ -42,6 +44,7 @@ export default () => ({
     if (!(await this.fetchLevel())) return;
     document.title = `${this.level.title} · Megabonk Mod Party`;
     await this.loadLike();
+    this.loadHostedPacks();
     this.$watch('$store.session.user', () => {
       this.fetchLevel();
       this.loadLike();
@@ -60,6 +63,21 @@ export default () => ({
     } catch (error) {
       this.state = error.status === 404 ? 'notfound' : 'error';
       return false;
+    }
+  },
+
+  async loadHostedPacks() {
+    const ids = Object.keys(this.level.packs ?? {});
+    if (!ids.length) return;
+    try {
+      const records = await pb.collection('packs').getFullList({
+        filter: packsFilter(ids),
+        fields: 'packId,version,created',
+        sort: '-created',
+      });
+      this.hosted = hostedPacks(this.level.packs, records);
+    } catch {
+      this.hosted = null;
     }
   },
 
@@ -149,23 +167,8 @@ export default () => ({
     }
   },
 
-  async sendReport() {
-    this.busy = true;
-    this.notice = '';
-    try {
-      await pb.collection('reports').create({
-        user: pb.authStore.record.id,
-        level: this.level.id,
-        reason: this.reason.trim(),
-      });
-      this.reporting = false;
-      this.reason = '';
-      this.notice = 'Report sent. Thank you.';
-    } catch (error) {
-      this.notice = pbErrorMessages(error).join(' ');
-    } finally {
-      this.busy = false;
-    }
+  reportTarget() {
+    return { level: this.level };
   },
 
   async copyCode() {
@@ -195,7 +198,14 @@ export default () => ({
   },
 
   get packs() {
-    return packList(this.level?.packs);
+    return this.hosted ??
+      packList(this.level?.packs).map((pack) => ({ ...pack, hosted: false, mismatch: false }));
+  },
+  get anyHosted() {
+    return this.packs.some((pack) => pack.hosted);
+  },
+  get anyUnhosted() {
+    return this.packs.some((pack) => !pack.hosted);
   },
   get download() {
     return downloadUrl(PB_URL, this.code);
@@ -217,5 +227,6 @@ export default () => ({
   editUrl,
   isOwner,
   mapName,
+  packUrl,
   plural,
 });

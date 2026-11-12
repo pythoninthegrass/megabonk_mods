@@ -1,0 +1,89 @@
+---
+import GalleryLayout from '../../../layouts/GalleryLayout.astro';
+---
+<GalleryLayout title="Share an asset pack · Megabonk Mod Party" description="Sign in and upload a small custom Megabonk asset pack to share with other players." path="/packs/upload/">
+  <section class="gallery-page wrap" x-data="packUpload" aria-labelledby="upload-title">
+    <div class="gallery-heading">
+      <h1 id="upload-title">Share an asset pack</h1>
+      <p>Upload the files from your pack folder in <code>UserData/LevelPacks/</code>: <code>manifest.json</code>, <code>attachments.json</code> and the bundle for Windows, Linux or both. A pack can be at most 30 MiB in total.</p>
+    </div>
+
+    <noscript>
+      <p class="gallery-note">Uploading needs JavaScript. Without it you can still share a pack by hand: see <a href="https://docs.megabonkmod.party/player-guide/#sharing-an-asset-pack">Sharing an asset pack</a> in the player guide.</p>
+    </noscript>
+
+    <div class="signin-prompt" x-show="!$store.session.signedIn" x-cloak>
+      <h2>Sign in first</h2>
+      <p>Your pack is listed under your account name, and its id becomes yours. Pick a provider to sign in.</p>
+      <div class="providers">
+        <template x-for="provider in $store.session.providers" :key="provider.id">
+          <button class="btn" data-variant="outline" type="button" :disabled="$store.session.busy || !$store.session.oauthEnabled" @click="$store.session.signIn(provider.id)" x-text="`Sign in with ${provider.label}`"></button>
+        </template>
+      </div>
+      <p class="small" x-show="$store.session.signInUnavailable">Sign-in is not available yet.</p>
+      <p class="error" x-show="$store.session.error" x-text="$store.session.error" role="alert"></p>
+    </div>
+
+    <div x-show="$store.session.signedIn" x-cloak>
+      <p class="signed-in">Signed in as <strong x-text="$store.session.user?.name || 'your account'"></strong>. <button class="text-button" type="button" @click="$store.session.signOut()">Sign out</button></p>
+
+      <form class="upload-form" @submit.prevent="submit()">
+        <h2>New pack or new version</h2>
+        <label class="field"><span>Pack id <small>(required)</small></span><input name="packId" type="text" x-model="packId" required maxlength="64" pattern="[a-z0-9][a-z0-9_\-]*" autocomplete="off" aria-describedby="help-id" /><small id="help-id" class="help">The folder name of the pack and the <code>id</code> in <code>manifest.json</code>: lowercase letters, digits, hyphens and underscores. The first person to upload an id owns it, and only they can add versions.</small></label>
+        <label class="field"><span>manifest.json <small>(required)</small></span><input x-ref="manifest" name="manifest" type="file" accept=".json,application/json" required aria-describedby="help-manifest" /><small id="help-manifest" class="help">Its <code>version</code> must be new for this id.</small></label>
+        <label class="field"><span>attachments.json <small>(required)</small></span><input x-ref="attachments" name="attachments" type="file" accept=".json,application/json" required /></label>
+        <label class="field"><span>Windows bundle <small>(the file named after the pack, with no extension)</small></span><input x-ref="bundleWindows" name="bundleWindows" type="file" aria-describedby="help-bundles" /></label>
+        <label class="field"><span>Linux bundle <small>(the file named after the pack, with no extension)</small></span><input x-ref="bundleLinux" name="bundleLinux" type="file" aria-describedby="help-bundles" /><small id="help-bundles" class="help">A bundle is built per platform. Upload at least one.</small></label>
+        <label class="field"><span>Description</span><textarea name="description" x-model="description" maxlength="2000" rows="4"></textarea></label>
+
+        <div class="attest">
+          <label class="check"><input type="checkbox" name="attested" x-model="attested" required aria-describedby="attest-tip" /><span>I made this pack or have the right to share it.</span></label>
+          <span class="tip">
+            <button class="tip-trigger" type="button" aria-label="What can I upload?" aria-describedby="attest-tip">?</button>
+            <span class="tip-text" id="attest-tip" role="tooltip">You can share your own work, and assets under a licence that allows redistribution. You cannot share assets ripped from games or other copyrighted material, and that includes the THPS Warehouse pack built on your own machine from the game files. Anyone can report a pack, and a valid copyright report hides it.</span>
+          </span>
+        </div>
+
+        <div class="error-list" x-show="errors.length" role="alert">
+          <p>The pack was not saved:</p>
+          <ul><template x-for="message in errors" :key="message"><li x-text="message"></li></template></ul>
+        </div>
+
+        <div class="actions">
+          <button class="btn" type="submit" :disabled="busy || !attested" x-text="busy ? 'Uploading…' : 'Upload pack'"></button>
+        </div>
+      </form>
+
+      <div class="mine">
+        <h2>Your packs</h2>
+        <p class="gallery-status" x-show="mineState === 'loading'">Loading your packs…</p>
+        <p x-show="mineState === 'ready' && mine.length === 0">You have not shared a pack yet.</p>
+        <ul class="mine-list">
+          <template x-for="pack in mine" :key="pack.id">
+            <li class="mine-item pack-item">
+              <div>
+                <h3><a :href="packUrl(pack.packId, pack.version)"><code x-text="pack.packId"></code> <span x-text="pack.version"></span></a></h3>
+                <p class="small"><span x-text="relativeDate(pack.created)"></span> · <span x-text="plural(pack.downloads, 'download')"></span></p>
+              </div>
+              <div class="actions" x-show="confirmDelete !== pack.id">
+                <button class="btn danger" data-variant="outline" type="button" @click="confirmDelete = pack.id">Delete</button>
+              </div>
+              <div class="actions confirm" x-show="confirmDelete === pack.id" role="alertdialog" :aria-label="`Delete ${pack.packId} ${pack.version}?`">
+                <span>Delete this version for good?</span>
+                <button class="btn danger-solid" type="button" @click="remove(pack)">Yes, delete</button>
+                <button class="btn" data-variant="outline" type="button" @click="confirmDelete = null">Cancel</button>
+              </div>
+            </li>
+          </template>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    import { startGallery } from '../../../scripts/gallery-app.js';
+    import packUpload from '../../../scripts/pack-upload.js';
+
+    startGallery({ packUpload });
+  </script>
+</GalleryLayout>

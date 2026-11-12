@@ -1,0 +1,93 @@
+---
+import GalleryLayout from '../../../layouts/GalleryLayout.astro';
+import Icon from '../../../components/Icon.astro';
+import ReportForm from '../../../components/ReportForm.astro';
+---
+<GalleryLayout title="Asset pack · Megabonk Mod Party" description="A custom Megabonk asset pack shared on megabonkmod.party." path="/packs/view/">
+  <section class="gallery-page wrap" x-data="packView" aria-live="polite">
+    <noscript>
+      <p class="gallery-note">The pack gallery needs JavaScript. Without it you can still share packs by hand: see <a href="https://docs.megabonkmod.party/player-guide/#sharing-an-asset-pack">Sharing an asset pack</a> in the player guide.</p>
+    </noscript>
+
+    <p class="gallery-status" x-show="state === 'loading'" x-cloak>Loading pack…</p>
+
+    <div class="gallery-message" x-show="state === 'notfound'" x-cloak>
+      <h1>Pack not found</h1>
+      <p>No pack with that id is hosted here. Check the id, or browse the gallery.</p>
+      <a class="btn" href="/levels/">Browse levels <Icon name="arrow" /></a>
+    </div>
+
+    <div class="gallery-message" x-show="state === 'error'" x-cloak role="alert">
+      <h1>The gallery is unreachable</h1>
+      <p>The server did not answer. Try again in a moment.</p>
+      <button class="btn" data-variant="outline" type="button" @click="location.reload()">Try again</button>
+    </div>
+
+    <article class="level-page" x-show="state === 'ready'" x-cloak>
+      <div class="gallery-heading">
+        <h1><code x-text="id"></code> <span class="pack-version" x-text="pack?.version"></span></h1>
+        <p class="byline"><span>by <a class="maker-link" :href="creatorUrl(pack?.author)" x-text="author"></a></span><span class="counts-inline"><span class="count-action"><Icon name="download" /><span x-text="plural(pack?.downloads, 'download')"></span></span></span></p>
+        <p class="description" x-show="pack?.description" x-text="pack?.description"></p>
+      </div>
+
+      <div class="level-details">
+        <table class="meta-table">
+          <caption class="sr-only">Pack details</caption>
+          <tbody>
+            <tr><th scope="row">Pack id</th><td><code x-text="id"></code></td></tr>
+            <tr><th scope="row">Name</th><td x-text="pack?.name || id"></td></tr>
+            <tr><th scope="row">Version</th><td x-text="pack?.version"></td></tr>
+            <tr><th scope="row">Maker</th><td><a class="maker-link" :href="creatorUrl(pack?.author)" x-text="author"></a></td></tr>
+            <tr><th scope="row">Assets</th><td x-text="pack?.assetCount"></td></tr>
+            <tr><th scope="row">Uploaded</th><td x-text="uploaded"></td></tr>
+            <tr><th scope="row">Platforms</th><td>
+              <ul class="pack-list"><template x-for="platform in platforms" :key="platform.id"><li><span x-text="platform.label"></span> <span class="small" x-text="formatBytes(platform.size)"></span></li></template></ul>
+            </td></tr>
+            <tr x-show="versions.length > 1"><th scope="row">Versions</th><td>
+              <ul class="pack-list"><template x-for="record in versions" :key="record.id"><li><a :href="`/p/${id}?v=${encodeURIComponent(record.version)}`" x-text="record.version"></a></li></template></ul>
+            </td></tr>
+          </tbody>
+        </table>
+
+        <div class="install">
+          <h2>Install it</h2>
+          <div class="actions">
+            <template x-for="platform in platforms" :key="platform.id"><a class="btn" :href="downloadFor(platform.id)" :data-platform="platform.id" x-text="`Download for ${platform.label}`"></a></template>
+          </div>
+          <ol>
+            <li>Close Megabonk, then download the zip for the platform you play on.</li>
+            <li>Unzip it into the <code>UserData/LevelPacks/</code> folder in the Megabonk game folder, so the files end up in <code x-text="unzipTo"></code>.</li>
+            <li>Start Megabonk. Packs load once per session, so a pack copied while the game runs appears after a restart.</li>
+          </ol>
+          <p class="small"><a href="https://docs.megabonkmod.party/player-guide/#installing-an-asset-pack">More about installing an asset pack</a></p>
+        </div>
+      </div>
+
+      <div class="social" id="social">
+        <h2 class="quiet-heading">Report this pack</h2>
+        <div x-show="!$store.session.signedIn" class="signin-prompt">
+          <p>Sign in to report this pack.</p>
+          <div class="providers">
+            <template x-for="provider in $store.session.providers" :key="provider.id">
+              <button class="btn" data-variant="outline" type="button" :disabled="$store.session.busy || !$store.session.oauthEnabled" @click="$store.session.signIn(provider.id)" x-text="`Sign in with ${provider.label}`"></button>
+            </template>
+          </div>
+          <p class="small" x-show="$store.session.signInUnavailable">Sign-in is not available yet.</p>
+          <p class="error" x-show="$store.session.error" x-text="$store.session.error" role="alert"></p>
+        </div>
+        <div x-show="$store.session.signedIn" class="actions">
+          <button class="btn" data-variant="outline" type="button" :aria-expanded="reporting" aria-controls="report-form" @click="toggleReport()">Report</button>
+        </div>
+        <ReportForm what="pack" />
+        <p class="notice" x-show="notice" x-text="notice" role="status"></p>
+      </div>
+    </article>
+  </section>
+
+  <script>
+    import { startGallery } from '../../../scripts/gallery-app.js';
+    import packView from '../../../scripts/pack-view.js';
+
+    startGallery({ packView });
+  </script>
+</GalleryLayout>
