@@ -10,6 +10,7 @@ import socket
 import subprocess
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
@@ -551,6 +552,46 @@ def test_visibility_lists_are_only_shown_to_the_owner(api, alice, bob, owner):
     assert "viewers" not in api.request("GET", level_path(level))[2]
     seen = api.request("GET", level_path(level), owner["token"])[2]
     assert seen["viewers"] == [bob["id"]] and seen["blocked"] == [bob["id"]]
+
+
+def list_levels(api, user: dict | None, **query) -> tuple[int, dict]:
+    qs = urllib.parse.urlencode({"perPage": 500, **query})
+    status, _, body = api.request("GET", f"/api/collections/levels/records?{qs}", user["token"] if user else None)
+    return status, body
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        {"filter": "blocked.id = 'x'"},
+        {"filter": "viewers:length > 0"},
+        {"filter": "title ~ 'a' && blocked.id ?= 'x'"},
+        {"sort": "viewers"},
+        {"sort": "-blocked"},
+        {"expand": "viewers"},
+        {"expand": "author,blocked"},
+    ],
+)
+def test_visibility_lists_cannot_be_probed_through_query_options(api, alice, bob, owner, query):
+    level = create_level(api, alice)
+    patch_level(api, level, {"blocked": [bob["id"]], "viewers": [bob["id"]]}, owner["token"])
+    for user in (None, alice, bob):
+        assert list_levels(api, user, **query)[0] == 400, (user, query)
+    assert api.request("GET", level_path(level) + "?" + urllib.parse.urlencode(query), alice["token"])[0] == 400
+    assert list_levels(api, owner, **query)[0] == 200
+
+
+def test_the_owner_can_filter_levels_by_their_visibility_lists(api, alice, bob, owner):
+    level = create_level(api, alice)
+    patch_level(api, level, {"blocked": [bob["id"]]}, owner["token"])
+    status, body = list_levels(api, owner, filter=f"blocked.id ?= '{bob['id']}'")
+    assert status == 200 and level["id"] in {item["id"] for item in body["items"]}
+
+
+@pytest.mark.parametrize("term", ["blocked", "viewers", "it's viewers"])
+def test_searching_for_the_words_blocked_or_viewers_still_works(api, term):
+    escaped = term.replace("'", "\\'")
+    assert list_levels(api, None, filter=f"title ~ '{escaped}' || description ~ '{escaped}'")[0] == 200
 
 
 def test_downloads_follow_the_visibility_lists(api, alice, bob, carol, owner):

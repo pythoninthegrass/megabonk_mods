@@ -151,4 +151,19 @@ function applyUploadedLevel(e) {
   }
 }
 
-module.exports = { applyUploadedLevel, slugify, newCode }
+// True when a filter, sort or expand names a visibility list outside of a quoted string, so a search for the word "blocked" still works.
+function touchesVisibilityLists(text) {
+  const withoutStrings = (text || "").replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g, "''")
+  return /(^|[^A-Za-z0-9_])(viewers|blocked)([^A-Za-z0-9_]|$)/i.test(withoutStrings)
+}
+
+// Rejects queries that could reveal who is on a visibility list; those lists are hidden from responses, but a filter or sort on them would still leak.
+function rejectVisibilityListProbes(e) {
+  if (e.hasSuperuserAuth() || (e.auth && e.auth.getBool("admin"))) return
+  const query = e.requestInfo().query
+  if ([query["filter"], query["sort"], query["expand"]].some(touchesVisibilityLists)) {
+    throw new BadRequestError("Only site owners can use the visibility lists in a query.")
+  }
+}
+
+module.exports = { applyUploadedLevel, slugify, newCode, touchesVisibilityLists, rejectVisibilityListProbes }

@@ -28,6 +28,16 @@ onRecordEnrich((e) => {
   e.next()
 }, "levels")
 
+onRecordsListRequest((e) => {
+  require(`${__hooks}/level_lib.js`).rejectVisibilityListProbes(e)
+  e.next()
+}, "levels")
+
+onRecordViewRequest((e) => {
+  require(`${__hooks}/level_lib.js`).rejectVisibilityListProbes(e)
+  e.next()
+}, "levels")
+
 // Names a downloaded level file after its title.
 onFileDownloadRequest((e) => {
   if (e.fileField.name === "level" && e.requestInfo().query["download"]) {
