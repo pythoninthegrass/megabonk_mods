@@ -2,7 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
-import { SEED_MAKERS, seedLevels, signInSnippet } from './dev-seed.mjs';
+import { SEED_MAKERS, seedLevels, signInPath } from './dev-seed.mjs';
 
 const API = 'http://127.0.0.1:8090';
 const REPO = fileURLToPath(new URL('../../', import.meta.url));
@@ -141,18 +141,29 @@ async function seed() {
       );
     }
   }
-  console.log(
-    '\nDev API seeded. Open /u/<id> for a maker; sign in by pasting a snippet into the browser console:',
-  );
-  for (const { email, name } of SEED_MAKERS) {
-    const { user, token } = users.get(email);
-    console.log(
-      `\n  ${name || 'Nameless'} (${email}) /u/${user.id}\n  ${
-        signInSnippet({ token, record: user })
-      }`,
-    );
+  console.log('\nDev API seeded. Sign in as a maker by opening the path on the dev server:');
+  for (const maker of SEED_MAKERS) {
+    const { user } = users.get(maker.email);
+    console.log(`  ${(maker.name || 'Nameless').padEnd(8)} ${signInPath(maker)}  (/u/${user.id})`);
   }
   console.log();
+}
+
+// A session for a seeded maker, for the dev server's sign-in route.
+export async function devSession(maker) {
+  const { token: admin } = await request(
+    '/api/collections/_superusers/auth-with-password',
+    null,
+    json('POST', ADMIN),
+  );
+  const filter = encodeURIComponent(`email = "${maker.email}"`);
+  const [user] = (await request(`/api/collections/users/records?filter=${filter}`, admin)).items;
+  const { token } = await request(
+    `/api/collections/users/impersonate/${user.id}`,
+    admin,
+    json('POST', { duration: 86400 }),
+  );
+  return { token, record: user };
 }
 
 // Starts a local API for the gallery pages and returns a function that stops it.

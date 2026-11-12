@@ -5,12 +5,27 @@ import starlightLlmsTxt from 'starlight-llms-txt';
 import sitemap from '@astrojs/sitemap';
 import { guides } from './scripts/sync-docs.mjs';
 import { viewRoute } from './routes.mjs';
+import { devSession } from './scripts/dev-api.mjs';
+import { makerFromSignInPath, signInPage } from './scripts/dev-seed.mjs';
 
 const shareLinkRewrites = {
   name: 'share-link-rewrites',
   configureServer(server) {
-    server.middlewares.use((req, _res, next) => {
-      const target = viewRoute(new URL(req.url, 'http://dev.local').pathname);
+    server.middlewares.use(async (req, res, next) => {
+      const { pathname } = new URL(req.url, 'http://dev.local');
+      const maker = makerFromSignInPath(pathname);
+      if (maker) {
+        try {
+          const session = await devSession(maker);
+          res.setHeader('content-type', 'text/html; charset=utf-8');
+          res.end(signInPage(session, `/u/${session.record.id}`));
+        } catch (error) {
+          res.statusCode = 502;
+          res.end(`Dev sign-in failed: ${error.message}`);
+        }
+        return;
+      }
+      const target = viewRoute(pathname);
       if (target) req.url = target.replace(/index\.html$/, '');
       next();
     });

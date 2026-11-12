@@ -15,11 +15,26 @@ export function seedLevels() {
   );
 }
 
-// One-line console snippet carrying only the session fields the pages read.
-export function signInSnippet({ token, record }) {
-  const session = {
+const SIGN_IN_PREFIX = '/__dev/signin/';
+
+const slug = (maker) => maker.email.split('@')[0];
+
+export function signInPath(maker) {
+  return `${SIGN_IN_PREFIX}${slug(maker)}`;
+}
+
+export function makerFromSignInPath(pathname) {
+  if (!pathname.startsWith(SIGN_IN_PREFIX)) return undefined;
+  return SEED_MAKERS.find((maker) => slug(maker) === pathname.slice(SIGN_IN_PREFIX.length));
+}
+
+// Page that stores only the session fields the gallery pages read, then redirects.
+export function signInPage({ token, record }, next) {
+  const session = JSON.stringify({
     token,
     record: { id: record.id, name: record.name, collectionName: 'users' },
-  };
-  return `localStorage.setItem('pocketbase_auth',JSON.stringify(${JSON.stringify(session)}))`;
+  }).replaceAll('<', '\\u003c');
+  return `<!doctype html><meta charset="utf-8"><title>Signing in</title><script>localStorage.setItem('pocketbase_auth', JSON.stringify(${session}));location.replace(${
+    JSON.stringify(next)
+  });</script>`;
 }
