@@ -3,6 +3,8 @@ import test, { after } from 'node:test';
 import { createApp } from '../server.mjs';
 import { runSmoke } from '../smoke.mjs';
 import { get } from 'node:http';
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 
 const server = createApp({ root: new URL('../dist/', import.meta.url) });
 await new Promise((resolve, reject) => {
@@ -115,4 +117,80 @@ test('HEAD answers with the same status and headers but no body', async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type') ?? '', /^text\/html/);
   assert.equal((await response.arrayBuffer()).byteLength, 0);
+});
+
+test('html pages are revalidated on every load by default', async () => {
+  for (const path of ['', 'levels/', 'l/7N1-MVB-WKF', 'does-not-exist']) {
+    const response = await fetch(`${base}${path}`);
+    assert.equal(response.headers.get('cache-control'), 'no-cache', path);
+  }
+});
+
+test('static assets keep their cache lifetimes', async () => {
+  const icon = await fetch(`${base}favicon.svg`);
+  assert.equal(icon.headers.get('cache-control'), 'public, max-age=3600');
+  const home = await (await fetch(base)).text();
+  const asset = /\/_astro\/[^"']+\.css/.exec(home)?.[0];
+  assert.ok(asset, 'the home page references a hashed stylesheet');
+  assert.equal(
+    (await fetch(`${base}${asset.slice(1)}`)).headers.get('cache-control'),
+    'public, max-age=31536000, immutable',
+  );
+});
+
+test('responses carry an ETag and a matching If-None-Match answers 304 without a body', async () => {
+  const first = await fetch(`${base}levels/`);
+  const etag = first.headers.get('etag');
+  assert.match(etag, /^"[A-Za-z0-9_-]{22}"$/);
+  const again = await fetch(`${base}levels/`, { headers: { 'if-none-match': etag } });
+  assert.equal(again.status, 304);
+  assert.equal(await again.text(), '');
+  assert.equal(again.headers.get('etag'), etag);
+  assert.equal(again.headers.get('cache-control'), 'no-cache');
+  const stale = await fetch(`${base}levels/`, { headers: { 'if-none-match': '"old"' } });
+  assert.equal(stale.status, 200);
+});
+
+test('the html cache header can be set when the app is created', async () => {
+  const custom = createApp({
+    root: new URL('../dist/', import.meta.url),
+    htmlCacheControl: 'public, max-age=60',
+  });
+  await new Promise((resolve) => custom.listen(0, '127.0.0.1', resolve));
+  try {
+    const url = `http://127.0.0.1:${custom.address().port}/`;
+    assert.equal((await fetch(url)).headers.get('cache-control'), 'public, max-age=60');
+    assert.equal(
+      (await fetch(`${url}favicon.svg`)).headers.get('cache-control'),
+      'public, max-age=3600',
+    );
+  } finally {
+    custom.close();
+  }
+});
+
+test('SITE_HTML_CACHE_CONTROL sets the html cache header of the running server', async () => {
+  const port = await new Promise((resolve) => {
+    const probe = createServer().listen(0, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+  const child = spawn(process.execPath, ['server.mjs'], {
+    cwd: new URL('..', import.meta.url),
+    env: {
+      ...process.env,
+      PORT: String(port),
+      HOST: '127.0.0.1',
+      SITE_HTML_CACHE_CONTROL: 'public, max-age=120',
+    },
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+  try {
+    await new Promise((resolve) => child.stdout.once('data', resolve));
+    const response = await fetch(`http://127.0.0.1:${port}/`);
+    assert.equal(response.headers.get('cache-control'), 'public, max-age=120');
+  } finally {
+    child.kill('SIGTERM');
+  }
 });

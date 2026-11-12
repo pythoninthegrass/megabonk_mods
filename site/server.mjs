@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
@@ -56,7 +57,7 @@ async function notFound(req, res, rootDir, pathname) {
   );
 }
 
-export function createApp({ root }) {
+export function createApp({ root, htmlCacheControl = 'no-cache' }) {
   const rootDir = resolve(typeof root === 'string' ? root : fileURLToPath(root));
   return createServer(async (req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -116,16 +117,27 @@ export function createApp({ root }) {
       reply(res, 500, { 'content-length': '0' });
       return;
     }
+    const extension = extname(target).toLowerCase();
+    const etag = `"${createHash('sha1').update(body).digest('base64url').slice(0, 22)}"`;
+    const cacheControl = target.startsWith(join(rootDir, '_astro'))
+      ? 'public, max-age=31536000, immutable'
+      : extension === '.html'
+      ? htmlCacheControl
+      : 'public, max-age=3600';
+    const matches = (req.headers['if-none-match'] ?? '').split(',').map((tag) =>
+      tag.trim().replace(/^W\//, '')
+    );
+    if (matches.includes(etag)) {
+      reply(res, 304, { etag, 'cache-control': cacheControl });
+      return;
+    }
     const headers = {
       'content-type': /\/wasm\.[\w-]+\.pagefind$/.test(target)
         ? 'application/wasm'
-        : TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream',
+        : TYPES[extension] ?? 'application/octet-stream',
       'content-length': String(body.byteLength),
-      'cache-control': target.startsWith(join(rootDir, '_astro'))
-        ? 'public, max-age=31536000, immutable'
-        : target === join(rootDir, 'index.html')
-        ? 'no-cache'
-        : 'public, max-age=3600',
+      'cache-control': cacheControl,
+      etag,
     };
     reply(res, 200, headers, req.method === 'HEAD' ? undefined : body);
   });
@@ -135,7 +147,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const root = process.env.SITE_ROOT ?? new URL('dist/', import.meta.url);
   const host = process.env.HOST ?? '0.0.0.0';
   const port = Number(process.env.PORT ?? 8080);
-  const server = createApp({ root });
+  const server = createApp({
+    root,
+    htmlCacheControl: process.env.SITE_HTML_CACHE_CONTROL || undefined,
+  });
   server.listen(port, host, () => console.log(`serving ${root} on http://${host}:${port}/`));
   for (const signal of ['SIGINT', 'SIGTERM']) {
     process.on(signal, () => server.close(() => process.exit(0)));

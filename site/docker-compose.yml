@@ -25,6 +25,8 @@ services:
       args:
         PUBLIC_PB_URL: ${PUBLIC_PB_URL:-http://127.0.0.1:8090}
     image: megabonkmod-party-site:local
+    environment:
+      SITE_HTML_CACHE_CONTROL: ${SITE_HTML_CACHE_CONTROL:-}
     ports:
       - "127.0.0.1:${SITE_PORT:-8080}:8080"
     healthcheck:
