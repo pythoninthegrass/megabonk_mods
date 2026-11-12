@@ -16,23 +16,52 @@ const REPO = fileURLToPath(new URL('../../', import.meta.url));
 const LEVELS_DIR = `${REPO}levels/`;
 const DATA_DIR = `${REPO}pocketbase/pb_data_dev`;
 const POCKETBASE_VERSION = '0.40.6';
+const MAILPIT_VERSION = '1.33.1';
+const SMTP = { host: '127.0.0.1', port: 1025 };
+const MAILPIT_UI = '127.0.0.1:8025';
 
-function findPocketbase() {
-  if (process.env.POCKETBASE_BIN) return process.env.POCKETBASE_BIN;
+function miseInstallDir(tool) {
   try {
-    const mise = `${process.env.HOME}/.local/bin/mise`;
-    const dir = execFileSync(
-      mise,
-      ['where', `github:pocketbase/pocketbase@${POCKETBASE_VERSION}`],
-      {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      },
-    ).trim();
-    return existsSync(`${dir}/pocketbase`) ? `${dir}/pocketbase` : null;
+    return execFileSync(`${process.env.HOME}/.local/bin/mise`, ['where', tool], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
   } catch {
     return null;
   }
+}
+
+function findPocketbase() {
+  if (process.env.POCKETBASE_BIN) return process.env.POCKETBASE_BIN;
+  const dir = miseInstallDir(`github:pocketbase/pocketbase@${POCKETBASE_VERSION}`);
+  return dir && existsSync(`${dir}/pocketbase`) ? `${dir}/pocketbase` : null;
+}
+
+function findMailpit() {
+  if (process.env.MAILPIT_BIN) return process.env.MAILPIT_BIN;
+  const dir = miseInstallDir(`aqua:axllent/mailpit@${MAILPIT_VERSION}`);
+  return dir && existsSync(`${dir}/mailpit`) ? `${dir}/mailpit` : null;
+}
+
+// Mailpit catches the API's mail; without it the SMTP target refuses and the send fails in the PocketBase log.
+function startMailpit() {
+  const binary = findMailpit();
+  if (!binary) {
+    console.warn(
+      'Dev API: Mailpit not found, so outgoing mail is dropped. Run `task pocketbase:install` to read it at http://' +
+        MAILPIT_UI,
+    );
+    return () => {};
+  }
+  const child = spawn(binary, [
+    '--listen',
+    MAILPIT_UI,
+    '--smtp',
+    `${SMTP.host}:${SMTP.port}`,
+    '--database',
+    `${DATA_DIR}/mailpit.db`,
+  ], { stdio: 'ignore' });
+  return () => child.kill('SIGTERM');
 }
 
 async function healthy() {
@@ -97,7 +126,15 @@ async function seed() {
     null,
     json('POST', ADMIN),
   );
-  await request('/api/settings', admin, json('PATCH', { rateLimits: { enabled: false } }));
+  // With SMTP off PocketBase falls back to sendmail, which fills the local /var/mail spool.
+  await request(
+    '/api/settings',
+    admin,
+    json('PATCH', {
+      rateLimits: { enabled: false },
+      smtp: { enabled: true, ...SMTP, tls: false },
+    }),
+  );
   // The dev addresses are not deliverable, so new-login alerts only bounce into the local mailbox.
   for (const collection of ['_superusers', 'users']) {
     await request(
@@ -234,7 +271,11 @@ export async function startDevApi() {
       PB_MIGRATIONS_DIR: `${REPO}pocketbase/pb_migrations`,
     },
   });
-  const stop = () => child.kill('SIGTERM');
+  const stopMailpit = startMailpit();
+  const stop = () => {
+    child.kill('SIGTERM');
+    stopMailpit();
+  };
   for (let attempt = 0; attempt < 50 && !(await healthy()); attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 200));
   }

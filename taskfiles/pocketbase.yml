@@ -4,13 +4,15 @@ version: "3.0"
 
 vars:
   POCKETBASE_VERSION: "0.40.6"
+  MAILPIT_VERSION: "1.33.1"
   MISE_BIN: '$HOME/.local/bin/mise'
 
 tasks:
   install:
-    desc: "Install the pinned PocketBase binary through mise, outside .tool-versions"
+    desc: "Install the pinned PocketBase and Mailpit binaries through mise, outside .tool-versions"
     cmds:
       - '{{.MISE_BIN}} install github:pocketbase/pocketbase@{{.POCKETBASE_VERSION}}'
+      - '{{.MISE_BIN}} install aqua:axllent/mailpit@{{.MAILPIT_VERSION}}'
 
   run:
     desc: "Serve the gallery API on 127.0.0.1:8090 with data in the gitignored pocketbase/pb_data"
@@ -35,6 +37,16 @@ tasks:
       - |-
         "$({{.MISE_BIN}} where github:pocketbase/pocketbase@{{.POCKETBASE_VERSION}})/pocketbase" \
         superuser upsert {{.CLI_ARGS}} --dir=pocketbase/pb_data
+
+  mail:
+    desc: "Catch local PocketBase mail in Mailpit (SMTP 127.0.0.1:1025, web UI http://127.0.0.1:8025)"
+    summary: |
+      Usage: task pocketbase:mail
+
+      Point the local instance's Settings, Mail at host 127.0.0.1, port 1025, TLS off, SMTP enabled
+      (see docs/website.md). Without SMTP PocketBase falls back to sendmail and fills /var/mail.
+    cmds:
+      - '{{.MISE_BIN}} exec aqua:axllent/mailpit@{{.MAILPIT_VERSION}} -- mailpit --listen 127.0.0.1:8025 --smtp 127.0.0.1:1025'
 
   test:
     desc: "Run the PocketBase service tests; fails when the binary is not installed"
