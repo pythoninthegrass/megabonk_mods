@@ -172,6 +172,16 @@ DNS is managed by DNSControl in the infrastructure repo's `dns/records/dnsconfig
 
 Wiki canonical URLs use `https://docs.megabonkmod.party` from `site/astro.config.mjs`; the showcase retains explicit apex metadata. Build and publish the static output; no game installation or harness endpoint is needed in production beyond the static server in the image.
 
+### Security headers
+
+`site/server.mjs` adds HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP, CORP and a Content-Security-Policy to every response, redirects and errors included, so Traefik needs no headers middleware. The CSP allows the gallery API origin in `connect-src` and `img-src` (read from `PUBLIC_PB_URL`, which the `site/Dockerfile` runtime stage carries over from the build argument) and `https://giscus.app` for scripts and frames. It still allows `'unsafe-inline'` and `'unsafe-eval'` for scripts because Astro and Starlight emit inline scripts and the standard Alpine build evaluates expressions; a strict policy needs Alpine's CSP build and hashed inline scripts. COOP is `same-origin-allow-popups` so the OAuth popup keeps its opener. HSTS covers subdomains but is not preloaded, since preloading is hard to undo. COEP is not set: `require-corp` would block the giscus frame and cross-origin gallery images.
+
+`pocketbase/pb_hooks/security_headers.pb.js` adds HSTS, `Referrer-Policy`, `Permissions-Policy` and `Cross-Origin-Resource-Policy: same-site` to API responses; PocketBase already sends the rest. It sets no CSP, because the superuser UI under `/_/` needs its own scripts. CORP is `same-site` because the apex loads gallery images from the `api` subdomain.
+
+`site/public/.well-known/security.txt` points at the reporting address and policy in `SECURITY.md`. Its `Expires` date is checked by `site/tests/site.test.js`, so the test fails when the file is due for renewal: bump the date and rebuild.
+
+The zone also publishes null-mail records (`v=spf1 -all`, a reject-everything DMARC policy, an empty DKIM key) and a CAA record that limits issuance to Let's Encrypt, all in the infrastructure repo's `dns/records/dnsconfig.js`. DNSSEC is not managed there: enable it in the Cloudflare dashboard and add the DS record at the registrar.
+
 ## Gallery API (PocketBase)
 
 `pocketbase/` holds the backend for the community level gallery: a PocketBase 0.40 instance configured entirely from code, so a fresh data directory comes up with every collection, rule and hook in place. Nothing is built from Go; the stock release binary loads the JavaScript in `pb_migrations/` and `pb_hooks/`.
