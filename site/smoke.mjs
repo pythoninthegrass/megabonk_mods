@@ -65,6 +65,7 @@ export async function runSmoke(baseUrl) {
   refs.add('/player-guide.md');
   refs.add('/pagefind/pagefind.js');
   refs.add('/llms.txt');
+  refs.add('/.well-known/security.txt');
   const kinds = { css: 0, js: 0, images: 0 };
   for (const ref of refs) countKind(ref, kinds);
   failIf(kinds.css < 1, 'the home page references no local CSS');

@@ -168,3 +168,12 @@ test('the level filters render without Alpine', async () => {
     assert.match(page, new RegExp(`<option value="[a-z]+"[^>]*>${label}</option>`), label);
   }
 });
+
+test('security.txt names a contact and policy and has not expired', async () => {
+  const text = await readFile(new URL('.well-known/security.txt', root), 'utf8');
+  assert.match(text, /^Contact: mailto:\S+@\S+$/m);
+  assert.match(text, /^Policy: https:\/\/\S+SECURITY\.md$/m);
+  assert.match(text, /^Canonical: https:\/\/megabonkmod\.party\/\.well-known\/security\.txt$/m);
+  const expires = new Date(text.match(/^Expires: (\S+)$/m)?.[1]);
+  assert.ok(expires > new Date(), 'the Expires date is in the future; renew it');
+});
