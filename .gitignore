@@ -330,3 +330,4 @@ unity/*/Assets/Thps.meta
 *.mov
 
 pocketbase/pb_data/
+pocketbase/pb_data_dev/

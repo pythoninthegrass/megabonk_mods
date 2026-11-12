@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/app/site/node_modules/.astro,sharing=locked bun r
 FROM oven/bun:1.4.4-alpine
 WORKDIR /app
 COPY --from=build --chown=bun:bun /app/site/dist ./dist
-COPY --chown=bun:bun site/server.mjs site/smoke.mjs ./
+COPY --chown=bun:bun site/server.mjs site/routes.mjs site/smoke.mjs ./
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080
 USER bun
 EXPOSE 8080

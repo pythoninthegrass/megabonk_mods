@@ -4,11 +4,23 @@ import starlight from '@astrojs/starlight';
 import starlightLlmsTxt from 'starlight-llms-txt';
 import sitemap from '@astrojs/sitemap';
 import { guides } from './scripts/sync-docs.mjs';
+import { viewRoute } from './routes.mjs';
+
+const shareLinkRewrites = {
+  name: 'share-link-rewrites',
+  configureServer(server) {
+    server.middlewares.use((req, _res, next) => {
+      const target = viewRoute(new URL(req.url, 'http://dev.local').pathname);
+      if (target) req.url = target.replace(/index\.html$/, '');
+      next();
+    });
+  },
+};
 
 export default defineConfig({
   site: 'https://docs.megabonkmod.party',
   output: 'static',
-  vite: { plugins: [tailwindcss()] },
+  vite: { plugins: [tailwindcss(), shareLinkRewrites] },
   markdown: { shikiConfig: { theme: 'github-dark' } },
   integrations: [
     sitemap({

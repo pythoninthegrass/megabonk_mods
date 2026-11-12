@@ -1,8 +1,10 @@
 import { watch } from 'node:fs';
 import { spawn } from 'node:child_process';
+import { startDevApi } from './dev-api.mjs';
 import { syncDocs } from './sync-docs.mjs';
 
 await syncDocs();
+const stopApi = await startDevApi();
 let pending;
 let syncing = Promise.resolve();
 const watcher = watch(new URL('../../docs/', import.meta.url), () => {
@@ -24,5 +26,6 @@ for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(
 child.on('exit', (code) => {
   clearTimeout(pending);
   watcher.close();
+  stopApi();
   process.exitCode = code ?? 0;
 });

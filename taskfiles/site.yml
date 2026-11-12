@@ -17,7 +17,7 @@ tasks:
       - node_modules/.package-lock.json
 
   dev:
-    desc: "Run the Astro dev server with docs watching on http://127.0.0.1:4321"
+    desc: "Run the Astro dev server on http://127.0.0.1:4321 with docs watching and a seeded local gallery API on 127.0.0.1:8090"
     dir: site
     deps: [install]
     cmds:
