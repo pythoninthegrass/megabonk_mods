@@ -5,6 +5,7 @@ import '@fontsource-variable/public-sans';
 import '../styles/global.css';
 import '../styles/gallery.css';
 import Icon from '../components/Icon.astro';
+import DevPanel from '../components/DevPanel.astro';
 
 interface Props {
   title: string;
@@ -43,6 +44,7 @@ const external = { target: '_blank', rel: 'noopener noreferrer' };
     <main id="main">
       <slot />
     </main>
+    {import.meta.env.DEV && <DevPanel />}
     <footer class="site-footer wrap"><a class="wordmark" href="/"><Icon name="cube" /><span>megabonkmod.party</span></a><p>Built for the fun of making something.</p><a href={repo} {...external}>Source & documentation <Icon name="external" /></a></footer>
   </body>
 </html>

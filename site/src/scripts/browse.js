@@ -80,6 +80,10 @@ export default () => ({
     history.replaceState(null, '', query ? `?${query}` : location.pathname);
   },
 
+  async deleteLevel(level) {
+    if (await this.$store.session.adminDelete(level)) await this.load();
+  },
+
   async load() {
     this.state = 'loading';
     this.syncUrl();

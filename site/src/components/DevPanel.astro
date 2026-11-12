@@ -1,0 +1,16 @@
+---
+import Icon from './Icon.astro';
+---
+<aside class="dev-panel" :class="{ 'is-open': open }" x-data="{ open: false, menu: false }" x-cloak @keydown.escape="menu = false" @click.outside="menu = false" aria-label="Developer tools">
+  <button class="dev-tab" type="button" aria-label="Developer tools" :aria-expanded="open" aria-controls="dev-strip" @click="open = !open; menu = open; if (menu) $store.session.loadUsers()"><Icon name="code" /></button>
+  <div class="dev-strip" id="dev-strip" :inert="!open">
+    <button class="dev-user" type="button" aria-haspopup="menu" :aria-expanded="menu" :title="$store.session.signedIn ? `Signed in as ${$store.session.user.name || $store.session.user.email || $store.session.user.id}` : 'Anonymous'" @click="menu = !menu; if (menu) $store.session.loadUsers()"><Icon name="user" /></button>
+    <ul class="dev-menu" :class="{ 'is-open': menu }" role="menu">
+      <li role="none"><button type="button" role="menuitemradio" :aria-checked="!$store.session.signedIn" @click="$store.session.switchUser(null); menu = false; open = false">anonymous</button></li>
+      <template x-for="user in $store.session.users" :key="user.id">
+        <li role="none"><button type="button" role="menuitemradio" :aria-checked="$store.session.user?.id === user.id" @click="$store.session.switchUser(user.id).then(() => { menu = false; open = false })" x-text="user.name || user.email"></button></li>
+      </template>
+      <li class="dev-error" x-show="$store.session.devError" x-text="$store.session.devError" role="alert"></li>
+    </ul>
+  </div>
+</aside>

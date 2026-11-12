@@ -35,6 +35,10 @@ export default () => ({
     await this.load();
   },
 
+  async deleteLevel(level) {
+    if (await this.$store.session.adminDelete(level)) await this.load();
+  },
+
   async load() {
     this.state = 'loading';
     const filter = creatorFilter(this.id);

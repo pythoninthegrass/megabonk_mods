@@ -1,3 +1,5 @@
+export const DEV_SUPERUSER = { identity: 'dev@dev.test', password: 'dev-password-not-a-secret' };
+
 export const SEED_MAKERS = [
   { email: 'alice@dev.test', name: 'Alice', levels: 14 },
   { email: 'bob@dev.test', name: '', levels: 3 },

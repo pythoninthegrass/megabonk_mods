@@ -2,12 +2,11 @@ import { execFileSync, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
-import { SEED_MAKERS, seedLevels, signInPath } from './dev-seed.mjs';
+import { DEV_SUPERUSER as ADMIN, SEED_MAKERS, seedLevels, signInPath } from './dev-seed.mjs';
 
 const API = 'http://127.0.0.1:8090';
 const REPO = fileURLToPath(new URL('../../', import.meta.url));
 const DATA_DIR = `${REPO}pocketbase/pb_data_dev`;
-const ADMIN = { identity: 'dev@dev.test', password: 'dev-password-not-a-secret' };
 const POCKETBASE_VERSION = '0.40.6';
 
 function findPocketbase() {

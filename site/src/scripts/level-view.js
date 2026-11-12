@@ -49,6 +49,10 @@ export default () => ({
     this.mountComments();
   },
 
+  async deleteLevel(level) {
+    if (await this.$store.session.adminDelete(level)) location.assign('/levels/');
+  },
+
   async loadLike() {
     this.liked = null;
     if (!pb.authStore.isValid) return;

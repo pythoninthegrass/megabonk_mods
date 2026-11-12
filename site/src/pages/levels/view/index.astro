@@ -27,7 +27,7 @@ import Icon from '../../../components/Icon.astro';
       <div class="level-layout">
         <figure class="cover-plate large">
           <img :src="cover" :alt="`Cover picture for ${level?.title}`" width="1080" height="720" />
-          <figcaption><span x-text="code"></span><a class="edit-link" x-show="isOwner($store.session.user, level)" :href="editUrl(code)" :aria-label="`Edit ${level?.title}`" title="Edit this level"><Icon name="pencil" /></a></figcaption>
+          <figcaption><span x-text="code"></span><span class="card-actions"><a class="edit-link" x-show="isOwner($store.session.user, level)" :href="editUrl(code)" :aria-label="`Edit ${level?.title}`" title="Edit this level"><Icon name="pencil" /></a>{import.meta.env.DEV && <button class="edit-link admin-delete" type="button" @click="deleteLevel(level)" :aria-label="`Delete ${level?.title}`" title="Delete this level (admin)"><Icon name="trash" /></button>}</span></figcaption>
         </figure>
         <div class="level-info">
           <h1 x-text="level?.title"></h1>
@@ -78,7 +78,7 @@ import Icon from '../../../components/Icon.astro';
           <p>Sign in to like or report this level.</p>
           <div class="providers">
             <template x-for="provider in $store.session.providers" :key="provider.id">
-              <button class="btn" data-variant="outline" type="button" :disabled="$store.session.busy" @click="$store.session.signIn(provider.id)" x-text="`Sign in with ${provider.label}`"></button>
+              <button class="btn" data-variant="outline" type="button" :disabled="$store.session.busy || !$store.session.oauthEnabled" @click="$store.session.signIn(provider.id)" x-text="`Sign in with ${provider.label}`"></button>
             </template>
           </div>
           <p class="small" x-show="$store.session.signInUnavailable">Sign-in is not available yet.</p>

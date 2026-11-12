@@ -18,7 +18,7 @@ import Icon from '../../../components/Icon.astro';
       <p>Your level is listed under your account name. Pick a provider to sign in.</p>
       <div class="providers">
         <template x-for="provider in $store.session.providers" :key="provider.id">
-          <button class="btn" data-variant="outline" type="button" :disabled="$store.session.busy" @click="$store.session.signIn(provider.id)" x-text="`Sign in with ${provider.label}`"></button>
+          <button class="btn" data-variant="outline" type="button" :disabled="$store.session.busy || !$store.session.oauthEnabled" @click="$store.session.signIn(provider.id)" x-text="`Sign in with ${provider.label}`"></button>
         </template>
       </div>
       <p class="small" x-show="$store.session.signInUnavailable">Sign-in is not available yet.</p>

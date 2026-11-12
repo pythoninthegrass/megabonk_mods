@@ -1,6 +1,6 @@
 import Alpine from 'alpinejs';
 import { availableProviders, pbErrorMessages } from './gallery.js';
-import { pb } from './pb.js';
+import { pb, PB_URL } from './pb.js';
 
 const KNOWN_PROVIDERS = [
   { id: 'github', label: 'GitHub' },
@@ -31,8 +31,11 @@ function sessionStore() {
     get signInUnavailable() {
       return this.providersState === 'ready' && this.providers.length === 0;
     },
+    get oauthEnabled() {
+      return !import.meta.env.DEV;
+    },
     get signedIn() {
-      return Boolean(this.user);
+      return Boolean(this.user) && this.user.collectionName !== '_superusers';
     },
     async signIn(provider) {
       this.busy = true;
@@ -51,8 +54,27 @@ function sessionStore() {
   };
 }
 
-export function startGallery(components) {
-  Alpine.store('session', sessionStore());
+async function withDevSession(store) {
+  const [{ devSession }, { DEV_SUPERUSER }, { default: PocketBase, BaseAuthStore }] = await Promise
+    .all([
+      import('./dev-session.js'),
+      import('../../scripts/dev-seed.mjs'),
+      import('pocketbase'),
+    ]);
+  Object.assign(
+    store,
+    devSession({
+      pb,
+      newClient: () => new PocketBase(PB_URL, new BaseAuthStore()),
+      credentials: DEV_SUPERUSER,
+    }),
+  );
+}
+
+export async function startGallery(components) {
+  const store = sessionStore();
+  if (import.meta.env.DEV) await withDevSession(store);
+  Alpine.store('session', store);
   pb.authStore.onChange(() => {
     Alpine.store('session').user = pb.authStore.record;
   });
