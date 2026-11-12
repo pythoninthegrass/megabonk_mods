@@ -275,7 +275,7 @@ The report hook (`report_lib.js`) records what a copyright report lacks in `miss
 - `rejected`: nothing changes.
 - `valid`: refused with a message while `missing` is not empty, so an incomplete report can never remove anything. On a complete one the item's `hidden` flag is set and the uploader is mailed, with the description of the work and the reporter's name and email for a copyright report, and `notifiedAt` is set. A failed mail is logged and leaves `notifiedAt` empty. Setting `valid` again does not mail twice.
 
-Mail needs the SMTP settings in the dashboard (Settings, Mail). Counter-notification, retraction, repeat-offender tracking and prevent-reupload are not built. Whether to register a DMCA designated agent and publish a takedown and repeat-infringer policy is an open question to settle before launch; without it the site may lose US safe-harbour protection.
+Mail needs the SMTP settings in the dashboard (Settings, Mail). Counter-notification, retraction, repeat-offender tracking and prevent-reupload are not built. The site does not register a DMCA designated agent or publish a takedown and repeat-infringer policy: copyright handling is best-effort by a single maintainer through the report flow above. That means the site does not claim US safe-harbour protection.
 
 ### Backups
 
