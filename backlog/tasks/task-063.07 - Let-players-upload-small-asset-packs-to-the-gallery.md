@@ -4,7 +4,7 @@ title: Let players upload small asset packs to the gallery
 status: In Progress
 assignee: []
 created_date: '2026-11-12T18:16:00Z'
-updated_date: '2026-11-12T18:43:00Z'
+updated_date: '2026-11-12T18:46:00Z'
 labels:
   - website
   - sharing
@@ -116,4 +116,6 @@ Decision (Lance, 2026-11-12): the pack zip is built on the server by running the
 Server side done and green (174 PocketBase service tests): migrations 1763000000 (packs) and 1763100000 (report categories, copyright fields, status), hooks pack_lib.js/packs.pb.js/report_lib.js/reports.pb.js, zip added to the pocketbase Dockerfile. A 30 MiB upload passed against the local PocketBase body limit; the production Traefik/Dokploy limit is not verified. Per-field maxSize: bundles 30 MiB each and JSON files 256 KiB; the 30 MiB total across all files is enforced by the hook, since two single-field caps cannot sum to a shared total. Pack updates are admin-only (author edits are not supported; publish a new version). Next: site pages (Alpine.js, check Context7), then docs, then end-to-end.
 
 Verified 2026-11-12: 175 PocketBase service tests and 138 site tests pass; deno lint/fmt, ruff and markdownlint clean. End-to-end against a local PocketBase and the site dev server: uploaded a testprop pack (Windows and Linux bundles) and a level that requires it, downloaded the Windows zip, unzipped to LevelPacks/testprop/{testprop,manifest.json,attachments.json} with the bundle byte-identical, and captured screenshots of the level page, pack page, copyright report form and upload page with its tooltip. The run found a bug (a relative data directory broke the zip download); fixed with a regression test. Not done, per Lance: loading the level in the game, so AC #2 (loads in the game) and AC #6 (game-load part) stay open. Remaining: DoD #1 (full task check not run) and DoD #4 once reviewed. The DMCA designated-agent question is still open.
+
+Decision (Lance, 2026-11-12): no DMCA designated agent registration and no takedown or repeat-infringer policy page. The site is run by one maintainer and handles copyright reports best-effort through the report flow. The earlier open question is closed; the site does not claim US safe-harbour protection. docs/website.md records this.
 <!-- SECTION:NOTES:END -->
