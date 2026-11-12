@@ -24,7 +24,6 @@ import LevelActions from '../../../components/LevelActions.astro';
     </div>
 
     <article class="level-page" x-show="state === 'ready'" x-cloak>
-      <p class="crumb"><a href="/levels/">Levels</a></p>
       <div class="level-layout">
         <figure class="cover-plate large">
           <img :src="cover" :alt="`Cover picture for ${level?.title}`" width="1080" height="720" />

@@ -2,14 +2,17 @@
 import GalleryLayout from '../../../layouts/GalleryLayout.astro';
 import Icon from '../../../components/Icon.astro';
 import LevelActions from '../../../components/LevelActions.astro';
+import CardSkeletons from '../../../components/CardSkeletons.astro';
 ---
 <GalleryLayout title="Creator · Megabonk Mod Party" description="Custom Megabonk levels shared by one maker on megabonkmod.party." path="/creators/view/">
   <section class="gallery-page wrap" x-data="creatorView" aria-live="polite">
     <noscript>
+      <style>.skeleton-grid, .heading-skeleton { display: none; }</style>
       <p class="gallery-note">The level gallery needs JavaScript. Without it you can still share levels by hand: see <a href="https://docs.megabonkmod.party/player-guide/#sharing-a-level">Sharing a level</a> in the player guide.</p>
     </noscript>
 
-    <p class="gallery-status" x-show="state === 'loading'" x-cloak>Loading creator…</p>
+    <p class="sr-only" x-show="state === 'loading'">Loading creator…</p>
+    <div class="gallery-heading heading-skeleton is-skeleton" x-show="state === 'loading'" aria-hidden="true"><span class="bar bar-name"></span><span class="bar bar-byline"></span></div>
 
     <div class="gallery-message" x-show="state === 'notfound'" x-cloak>
       <h1>Creator not found</h1>
@@ -24,25 +27,25 @@ import LevelActions from '../../../components/LevelActions.astro';
     </div>
 
     <div x-show="showHeader" x-cloak>
-      <p class="crumb"><a href="/levels/">Levels</a></p>
       <div class="gallery-heading">
         <h1 x-text="name"></h1>
         <p class="byline creator-stats"><span>Joined <span x-text="joined"></span></span><span x-text="plural(totalItems, 'level')"></span><span x-text="plural(totals.likes, 'like')"></span><span x-text="plural(totals.downloads, 'download')"></span></p>
       </div>
     </div>
 
-    <div id="results" class="gallery-results" x-cloak>
-      <div class="gallery-message" x-show="state === 'empty'">
+    <div id="results" class="gallery-results">
+      <CardSkeletons count={3} />
+      <div class="gallery-message" x-show="state === 'empty'" x-cloak>
         <h2>No levels yet</h2>
         <p>This creator has no public levels right now.</p>
       </div>
 
-      <ul class="level-grid" x-show="state === 'ready'">
+      <ul class="level-grid" x-show="state === 'ready'" x-cloak>
         <template x-for="item in items" :key="item.id">
           <li class="level-card" :class="{ 'is-hidden': item.hidden }">
             <figure class="cover-plate">
               <a class="plate-link" :href="`/l/${item.code}`" tabindex="-1" aria-hidden="true">
-                <img :src="cover(item, '640x0')" :srcset="`${cover(item, '320x0')} 320w, ${cover(item, '640x0')} 640w`" sizes="(max-width: 700px) 90vw, 320px" :alt="`Cover picture for ${item.title}`" loading="lazy" width="320" height="213" />
+                <img :src="cover(item, '640x0')" :srcset="`${cover(item, '320x0')} 320w, ${cover(item, '640x0')} 640w`" sizes="(max-width: 700px) 90vw, 320px" :alt="`Cover picture for ${item.title}`" loading="lazy" width="320" height="213" @load="$el.classList.add('is-loaded')" @error="$el.classList.add('is-loaded')" />
               </a>
               <figcaption><span x-text="item.code"></span><span class="hidden-tag" x-show="item?.hidden">Hidden</span><LevelActions level="item" /></figcaption>
             </figure>
@@ -51,7 +54,7 @@ import LevelActions from '../../../components/LevelActions.astro';
         </template>
       </ul>
 
-      <nav class="pager" aria-label="Pages of levels" x-show="state === 'ready' && totalPages > 1">
+      <nav class="pager" aria-label="Pages of levels" x-show="state === 'ready' && totalPages > 1" x-cloak>
         <button class="btn" data-variant="outline" type="button" :disabled="page <= 1" @click="goTo(page - 1)">Previous</button>
         <span>Page <span x-text="page"></span> of <span x-text="totalPages"></span></span>
         <button class="btn" data-variant="outline" type="button" :disabled="page >= totalPages" @click="goTo(page + 1)">Next</button>

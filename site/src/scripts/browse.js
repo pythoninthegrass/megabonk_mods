@@ -12,19 +12,13 @@ import {
   plural,
   relativeDate,
 } from './gallery.js';
-import { buildFilter, sortParam, TAGS } from './levels.js';
+import { buildFilter, SORT_OPTIONS, sortParam, TAGS } from './levels.js';
 import { pb, PB_URL } from './pb.js';
+import { cacheKey, readCached, writeCached } from './result-cache.js';
 
 const PER_PAGE = 12;
-const SORTS = [
-  ['newest', 'Newest'],
-  ['liked', 'Most liked'],
-  ['downloads', 'Most downloaded'],
-];
 
 export default () => ({
-  tags: TAGS,
-  sorts: SORTS,
   search: '',
   tag: '',
   sort: 'newest',
@@ -43,7 +37,9 @@ export default () => ({
     const params = new URLSearchParams(location.search);
     this.search = params.get('q') ?? '';
     this.tag = TAGS.includes(params.get('tag')) ? params.get('tag') : '';
-    this.sort = SORTS.some(([key]) => key === params.get('sort')) ? params.get('sort') : 'newest';
+    this.sort = SORT_OPTIONS.some(([key]) => key === params.get('sort'))
+      ? params.get('sort')
+      : 'newest';
     this.page = Math.max(1, Number.parseInt(params.get('page'), 10) || 1);
     this.$watch('$store.session.user', () => this.loadLikes());
     await this.load();
@@ -84,21 +80,40 @@ export default () => ({
     if (await this.$store.session.deleteLevel(level)) await this.load();
   },
 
+  applyResult({ items, totalPages, totalItems }) {
+    this.items = items;
+    this.totalPages = totalPages;
+    this.totalItems = totalItems;
+    this.state = items.length ? 'ready' : 'empty';
+  },
+
   async load() {
-    this.state = 'loading';
     this.syncUrl();
+    const key = cacheKey('browse', pb.authStore.record, [
+      this.page,
+      this.search.trim(),
+      this.tag,
+      this.sort,
+    ]);
+    const cached = readCached(globalThis.sessionStorage, key);
+    if (cached) this.applyResult(cached);
+    else this.state = 'loading';
     try {
       const result = await pb.collection('levels').getList(this.page, PER_PAGE, {
         filter: buildFilter({ search: this.search, tag: this.tag }),
         sort: sortParam(this.sort),
         expand: 'author',
       });
-      this.items = result.items;
-      this.totalPages = result.totalPages;
-      this.totalItems = result.totalItems;
-      this.state = result.items.length ? 'ready' : 'empty';
+      const fresh = {
+        items: result.items,
+        totalPages: result.totalPages,
+        totalItems: result.totalItems,
+      };
+      writeCached(globalThis.sessionStorage, key, fresh);
+      this.applyResult(fresh);
       await this.loadLikes();
     } catch (error) {
+      if (cached) return;
       this.items = [];
       this.message = error.status === 0 ? '' : pbErrorMessages(error).join(' ');
       this.state = 'error';
@@ -106,9 +121,11 @@ export default () => ({
   },
 
   async loadLikes() {
-    this.likes = {};
     const filter = likesFilter(this.items.map((item) => item.id));
-    if (!pb.authStore.isValid || !filter) return;
+    if (!pb.authStore.isValid || !filter) {
+      this.likes = {};
+      return;
+    }
     try {
       const rows = await pb.collection('likes').getFullList({ filter });
       this.likes = Object.fromEntries(rows.map((row) => [row.level, row.id]));

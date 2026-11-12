@@ -9,6 +9,7 @@ import {
   sumCounts,
 } from './gallery.js';
 import { pb, PB_URL } from './pb.js';
+import { cacheKey, readCached, writeCached } from './result-cache.js';
 
 const PER_PAGE = 12;
 
@@ -39,11 +40,24 @@ export default () => ({
     if (await this.$store.session.deleteLevel(level)) await this.load();
   },
 
+  applyResult({ creator, totals, items, totalPages, totalItems }) {
+    this.creator = creator;
+    this.totals = totals;
+    this.items = items;
+    this.totalPages = totalPages;
+    this.totalItems = totalItems;
+    document.title = `${this.name} · Megabonk Mod Party`;
+    this.state = items.length ? 'ready' : 'empty';
+  },
+
   async load() {
-    this.state = 'loading';
+    const key = cacheKey('creator', pb.authStore.record, [this.id, this.page]);
+    const cached = readCached(globalThis.sessionStorage, key);
+    if (cached) this.applyResult(cached);
+    else this.state = 'loading';
     const filter = creatorFilter(this.id);
     try {
-      this.creator = await pb.collection('users').getOne(this.id, { fields: CREATOR_FIELDS });
+      const creator = await pb.collection('users').getOne(this.id, { fields: CREATOR_FIELDS });
       const [rows, result] = await Promise.all([
         pb.collection('levels').getFullList({
           filter,
@@ -56,17 +70,21 @@ export default () => ({
           requestKey: 'creator-levels',
         }),
       ]);
-      this.totals = sumCounts(rows);
-      this.items = result.items;
-      this.totalPages = result.totalPages;
-      this.totalItems = result.totalItems;
+      const fresh = {
+        creator,
+        totals: sumCounts(rows),
+        items: result.items,
+        totalPages: result.totalPages,
+        totalItems: result.totalItems,
+      };
+      writeCached(globalThis.sessionStorage, key, fresh);
+      this.applyResult(fresh);
     } catch (error) {
+      if (cached && error.status !== 404) return;
       this.state = error.status === 404 ? 'notfound' : 'error';
       return;
     }
-    document.title = `${this.name} · Megabonk Mod Party`;
     this.syncUrl();
-    this.state = this.items.length ? 'ready' : 'empty';
   },
 
   syncUrl() {

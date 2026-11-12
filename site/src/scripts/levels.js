@@ -1,5 +1,11 @@
 export const TAGS = ['Speedrun', 'Platforming', 'Survival', 'Puzzle', 'Showcase', 'Short'];
 
+export const SORT_OPTIONS = [
+  ['newest', 'Newest'],
+  ['liked', 'Most liked'],
+  ['downloads', 'Most downloaded'],
+];
+
 const CODE_PATTERN = /^[0-9A-HJKMNP-TV-Z]{3}-[0-9A-HJKMNP-TV-Z]{3}-[0-9A-HJKMNP-TV-Z]{3}$/;
 const SORTS = {
   newest: '-created',

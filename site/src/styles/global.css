@@ -27,7 +27,12 @@
   scroll-behavior: smooth;
   scroll-padding-top: 2rem;
   scrollbar-color: var(--muted-ink) var(--table);
+  scrollbar-gutter: stable;
 }
+
+@view-transition { navigation: auto; }
+.site-header { view-transition-name: site-header; }
+.header-action { min-width: 10rem; justify-content: center; }
 
 * { box-sizing: border-box; }
 body { margin: 0; font-size: 16px; line-height: 1.65; }
@@ -207,7 +212,7 @@ pre code { overflow-wrap: normal; font-size: inherit; }
   .wordmark { font-size: 1rem; }
   .brand-mark { width: 30px; height: 36px; }
   .brand-mark svg { width: 30px; height: 30px; }
-  .header-action { margin-left: auto; font-size: 0.72rem; padding-inline: 0.7rem; }
+  .header-action { min-width: 0; margin-left: auto; font-size: 0.72rem; padding-inline: 0.7rem; }
   .site-header nav { order: 3; width: 100%; justify-content: space-between; margin: 0; gap: 0.5rem; font-size: 0.76rem; }
   .site-header nav .source-link { margin-left: auto; }
   .hero { padding-top: 38px; }

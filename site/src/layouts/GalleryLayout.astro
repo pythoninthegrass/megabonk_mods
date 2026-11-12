@@ -35,7 +35,7 @@ const external = { target: '_blank', rel: 'noopener noreferrer' };
       <a class="wordmark" href="/" aria-label="Megabonk Mod Party home"><span class="brand-mark"><Icon name="cube" /></span><span>megabonk<span class="wordmark-bottom">mod.party</span></span></a>
       <nav aria-label="Main navigation">
         <a href="/#editor">Editor</a><a href="/#console">Console</a><a href="/#mcp">MCP</a>
-        <a href="/levels/" aria-current={path === '/levels/' ? 'page' : undefined}>Levels</a>
+        <a href="/levels/" aria-current={path === '/levels/' ? 'page' : path === '/levels/view/' || path === '/creators/view/' ? 'true' : undefined}>Levels</a>
         <a class="source-link" href="https://docs.megabonkmod.party/home/" {...external}>Docs <Icon name="external" /></a>
         <a class="source-link" href={repo} {...external}>Source <Icon name="external" /></a>
       </nav>

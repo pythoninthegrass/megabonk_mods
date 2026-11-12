@@ -1,0 +1,14 @@
+---
+interface Props { count?: number; }
+const { count = 12 } = Astro.props;
+---
+<ul class="level-grid skeleton-grid" x-show="state === 'loading'" aria-hidden="true">
+  {Array.from({ length: count }, () => (
+    <li class="level-card is-skeleton">
+      <figure class="cover-plate"><span class="plate-link"><span class="plate-fill"></span></span><figcaption>&nbsp;</figcaption></figure>
+      <span class="bar bar-title"></span>
+      <span class="bar bar-byline"></span>
+      <span class="bar bar-counts"></span>
+    </li>
+  ))}
+</ul>

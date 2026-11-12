@@ -135,3 +135,36 @@ test('level card counts are a like button and a download link', async () => {
     /<a[^>]*class="count-action"[^>]*:href="downloadHref\(item\.code\)"[^>]*>[\s\S]*data-icon="download"/,
   );
 });
+
+const gridPages = [['levels/index.html', 12], ['creators/view/index.html', 3]];
+
+for (const [path, cards] of gridPages) {
+  test(`${path} paints a full grid of placeholder cards before Alpine runs`, async () => {
+    const page = await readFile(new URL(path, root), 'utf8');
+    const grid = /<ul[^>]*class="level-grid skeleton-grid"[^>]*>(.*?)<\/ul>/s.exec(page);
+    assert.ok(grid, 'skeleton grid is present');
+    assert.match(grid[0], /x-show="state === 'loading'"/);
+    assert.match(grid[0], /aria-hidden="true"/);
+    assert.equal((grid[1].match(/<li class="level-card is-skeleton"/g) ?? []).length, cards);
+  });
+
+  test(`${path} keeps x-cloak off the results container`, async () => {
+    const page = await readFile(new URL(path, root), 'utf8');
+    const container = /<div id="results"[^>]*>/.exec(page)?.[0] ?? '';
+    assert.ok(container, 'results container is present');
+    assert.doesNotMatch(container, /x-cloak/);
+  });
+}
+
+test('the level filters render without Alpine', async () => {
+  const page = await readFile(new URL('levels/index.html', root), 'utf8');
+  const form = /<form class="gallery-filters"[^>]*>/.exec(page)?.[0] ?? '';
+  assert.ok(form, 'filter form is present');
+  assert.doesNotMatch(form, /x-cloak/);
+  for (const label of ['Speedrun', 'Platforming', 'Survival', 'Puzzle', 'Showcase', 'Short']) {
+    assert.match(page, new RegExp(`<option value="${label}"`), label);
+  }
+  for (const label of ['Newest', 'Most liked', 'Most downloaded']) {
+    assert.match(page, new RegExp(`<option value="[a-z]+"[^>]*>${label}</option>`), label);
+  }
+});
