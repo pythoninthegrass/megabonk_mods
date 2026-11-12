@@ -7,7 +7,7 @@ ARG PB_SHA256_AMD64=0e1f609158ed945f809f8a02ae012aa0427129c66ebb63c1aee76f2c0309
 ARG PB_SHA256_ARM64=d22c66ceb67ca92b7d767f36d826e848a276bcfa3c197ead20bf87c42208984f
 
 RUN apk upgrade --no-cache \
- && apk add --no-cache ca-certificates \
+ && apk add --no-cache ca-certificates zip \
  && if apk info | grep -q '^openssh'; then echo "an openssh package is installed; the image must not ship sshd" >&2; exit 1; fi
 
 RUN case "$TARGETARCH" in \
