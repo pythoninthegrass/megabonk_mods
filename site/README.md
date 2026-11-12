@@ -44,7 +44,7 @@ docker compose logs site       # server logs
 docker compose down            # stop
 ```
 
-Re-run `docker compose up -d --build` after content or server changes to rebuild. The published host port defaults to `8080` and is configurable with `SITE_PORT` (per command, or in a gitignored `site/.env` that Compose reads; [`.env.example`](.env.example) is the template): `SITE_PORT=8123 docker compose up -d`. The service publishes on `127.0.0.1` only, and `smoke.mjs` — the container health check — fetches the home page and every referenced local CSS, JavaScript and image; run it on demand with `docker compose exec site bun smoke.mjs`. Container serving is the local preview path; the published site is deployed with the same image, described under Deployment.
+Re-run `docker compose up -d --build` after content or server changes to rebuild. The published host port defaults to `8080` and is configurable with `SITE_PORT` (per command, or in the gitignored root `.env`, which Compose reads once `COMPOSE_ENV_FILES` is exported in your shell as that file's absolute path; the root [`.env.example`](../.env.example) is the template): `SITE_PORT=8123 docker compose up -d`. The service publishes on `127.0.0.1` only, and `smoke.mjs` — the container health check — fetches the home page and every referenced local CSS, JavaScript and image; run it on demand with `docker compose exec site bun smoke.mjs`. Container serving is the local preview path; the published site is deployed with the same image, described under Deployment.
 
 ## Deployment
 

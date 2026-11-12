@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import starlight from '@astrojs/starlight';
@@ -35,7 +36,10 @@ const shareLinkRewrites = {
 export default defineConfig({
   site: 'https://docs.megabonkmod.party',
   output: 'static',
-  vite: { plugins: [tailwindcss(), shareLinkRewrites] },
+  vite: {
+    envDir: fileURLToPath(new URL('..', import.meta.url)),
+    plugins: [tailwindcss(), shareLinkRewrites],
+  },
   markdown: { shikiConfig: { theme: 'github-dark' } },
   integrations: [
     sitemap({
