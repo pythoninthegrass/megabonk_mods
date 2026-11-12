@@ -58,7 +58,7 @@ tasks:
   lint:
     desc: "markdownlint, ruff, and the site's Deno checks over the repo"
     cmds:
-      - markdownlint -c .markdownlint.jsonc .
+      - markdownlint -c .markdownlint.jsonc --ignore tools/thps2-tools .
       - ruff check scripts/ src/ tests/ tools/
       - task: site:lint
 
