@@ -3,10 +3,10 @@ id: TASK-067.04
 title: >-
   Register Squeaker at runtime with a stale cookie weapon and the Tiny target
   passive
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-12T22:18:00Z'
-updated_date: '2026-11-13T05:10:00Z'
+updated_date: '2026-11-13T05:13:00Z'
 labels:
   - character
   - bepinex
@@ -80,3 +80,11 @@ AC5 left unchecked: config.json written during a Squeaker run holds selectedChar
 
 Not done: keeping Squeaker runs off the leaderboards (the submission gate was not found; nothing blocks it), and restore of the stock Bone icon/text after a run was seen only on a fresh relaunch, not across a run ending in the same session.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Squeaker is a selectable, playable character (id 21), registered at startup when the squeaker pack is installed: a DataManager.Load prefix appends a cloned CharacterData and SkinData, a Preferences.Init postfix seeds characterSkins[21], and postfixes on the unlock checks and name/description getters give it its own name, unlocked state and passive text. Tiny Target is MaxHealth Flat -30, Evasion Flat 0.25 and a 2.9 x 0.5 collider; a fresh run reads maxHp 70, evasion 0.206 (21% on the stats panel) and the capsule at 2.9 x 0.5. The stale cookie is Bone's behaviour with the stock Bone attack repointed at a cookie projectile, icon and text for the length of a Squeaker run (restored on MyPlayer.OnDestroy), because the game builds the live weapon from stock Bone data rather than CharacterData.weapon. SaveConfig and SaveProgression hooks keep id 21 out of the written files. `squeaker` is accepted by the character-name parser, `relaunch --character squeaker` starts as character 21, and the custom-level restriction still greys Squeaker out. Also fixed the TASK-067.03 bundle: the pack-authoring project lacked com.unity.modules.animation, so the Animator, controller and clips were dropped and the spawn portal intro threw in PlayerRenderer.ForceMoving. Pure logic is in squeaker_character.cs with tests written first (2816 C# tests); task check passes; docs/characters.md covers the registration, the values and the cookie swap. Commits fe31b0e, a7ecf46.
+
+Closed with these gaps, all recorded in docs/characters.md under Not verified: AC5 is unchecked because the stock game was never started with the mod removed and progression.json is encrypted (config.json held Calcium and no id 21 after confirming Squeaker); tierCompletionsWithCharacters is not covered by the save guard; Squeaker runs are not kept off the leaderboards (the submission gate was not found); the cookie in flight was confirmed by the user in the running game but no screenshot caught a projectile mid-air; and the restore of Bone's icon and text after a run ended was seen only on a fresh relaunch.
+<!-- SECTION:FINAL_SUMMARY:END -->
