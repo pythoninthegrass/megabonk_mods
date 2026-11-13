@@ -136,8 +136,38 @@ The hooks are a prefix on `DataManager.Load` (`0x4F96D0`) and a postfix on `Pref
 
 Registering a value outside `0..20` is supported by the code paths that were read, with one required fix. The character table, the grid and the spawn path are dictionary and list driven. The lookups that throw for a missing key (`GetCharacterData`, `GetSkins` and the `characterSkins` read) are satisfied by registering the `CharacterData` and one `SkinData` and seeding the skin preference. The one place that loops over the enum, `Preferences.Init`, only fails to seed the new value, which step 3 covers. The fallback, if the points under [Not verified](#not-verified) turn out badly, is to reuse a stock id by cloning that stock character's `CharacterData` instead of adding a new value; that keeps every table lookup valid at the cost of replacing that character while the mod is loaded.
 
+## Stock animation and icon conventions
+
+Measured in the running game with `query_objects`:
+
+- The character-select icon is a 32x32 `Texture` (Calcium, Monke and Amog were read): a pixel-art bust portrait shown on a dark tile.
+- Every character has its own `RuntimeAnimatorController` (`CalciumAController`, `AnimatorMonke`, `AnimatorBirdo` and so on). All of them carry an idle, a run (named Run, Running, Walk, Walking or Moving), a Jump, a Falling and a Grind clip, at 45 to 60 frames per second. Idle clips run 1 to 14 s, run cycles 0.6 to 1.5 s, grind cycles 0.5 to 1.3 s and jumps 0.5 to 1.2 s; all but a few jumps loop.
+- Animator parameter names are not read from the controllers. The string table holds `grounded`, `moving`, `jump`, `grinding`, `idle` and `slide` as candidates; the exact names stay open until `PlayerRenderer.Update` (`0x3492F0`) is decompiled.
+
+## Authoring the Squeaker model
+
+Squeaker is the original four-legged mouse sketch (`tools/simple_mouse.blend`, left untouched as the source) joined into one skinned mesh and rigged. Four scripts in `scripts/blender/` build it, run in order with `exec(open(path).read())` through the Blender MCP or the Scripting workspace. They rebuild their output on every run; the built scene is `tools/squeaker.blend`.
+
+| Script | Produces |
+| --- | --- |
+| `squeaker_model.py` | Appends the original parts from a copy of `tools/simple_mouse.blend` (Blender cannot append from the file it has open), bakes the whisker and tail curves to mesh, joins everything into the smooth-shaded mesh `Squeaker` (about 12.7k faces) and builds the armature `SqueakerRig` with vertex weights |
+| `squeaker_anim.py` | The actions `Idle`, `Run`, `Jump`, `Falling` and `Grind` on the rig (60 fps, fake user set so they survive a save) |
+| `squeaker_cookie.py` | The separate `StaleCookie` object, about 0.64 x 0.68 x 0.12 units (the mouse is about 2.4 units tall), origin at its centre, face along +Z |
+| `squeaker_export.py` | `unity/pack-authoring/Assets/Squeaker/squeaker_icon.png` (32x32, transparent, rendered from the head and ears), `Squeaker.fbx` and `StaleCookie.fbx` |
+
+Conventions the Unity import relies on:
+
+- Z up in Blender, the mouse faces -Y. The exporter uses `axis_forward=-Z`, `axis_up=Y`, so the character faces +Z in Unity. `add_leaf_bones` is off, so the bone list is exactly the one below.
+- Bones: `root`, `hips` (child of `root`, rear of the body), `torso` (child of `hips`, front of the body), `head`, `ear.L`, `ear.R` (left and right as the source names them), `leg.FL`, `leg.FR`, `leg.BL`, `leg.BR`, `tail.1` to `tail.3`. `hips` and `torso` are lowercase because `PlayerRenderer.SetCharacter` finds them by name. The body blends between them across its middle, so it bends along the spine.
+- One mesh with five material slots in a fixed order: fur (`Mouse - warm gray`), skin (`Mouse - pink`), eyes (`Mouse - shiny eyes`), eye sparkle, whiskers. `SkinData.materials` replaces them at runtime, so the slot order is the contract, not the Blender colours. The cookie has two slots: dough, chip.
+- Clips are named exactly `Idle`, `Run`, `Jump`, `Falling` and `Grind`, matching the stock set. They are a first pass for a scurrying quadruped; tune them against the game.
+- The mesh keeps the sketch's smooth shading and density. The stock characters are low-poly and pixel-textured, so Squeaker does not match them in style; the model follows the sketch.
+- Set a `REPO` global before running the scripts when the checkout is not at `~/git/megabonk_mods`.
+
 ## Not verified
 
+- The imported FBX clip names and the Animator controller wiring in Unity (no Unity import has been run on these files yet).
+- How the game's look rotation and movement tilt (driven through `hips` and `torso`) read on a horizontal body, and whether the model scale fills `colliderHeight`; both are chosen when the prefab is built.
 - How the game reacts at startup when `Preferences.selectedCharacter` or an enum-keyed save dictionary holds a value the installed data does not define (the mod removed after a run as the new character). The restore in step 4 avoids the first case; the dictionaries are expected to round-trip an unnamed integer key through Newtonsoft but that has not been tried.
 - Readers of `ECharacter` that the dump does not show as typed members. Every typed reference in the dump was read and the ones that matter were decompiled (`DataManager`, the character menu, spawn, stats, `Preferences`, progression, kill statistics, skin achievement names, the hat screen, presence, leaderboards); code that reaches the value through an untyped integer is not covered.
 - Whether runs on custom levels or with a modded character submit leaderboard scores. Step 5 depends on where the submission is gated.
