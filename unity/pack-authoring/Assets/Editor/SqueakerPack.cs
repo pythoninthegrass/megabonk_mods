@@ -48,22 +48,50 @@ public static class SqueakerPack
         return clip;
     }
 
+    // The four bool parameters are the ones PlayerRenderer.Update sets on the stock controllers.
     static AnimatorController BuildController()
     {
         AssetDatabase.DeleteAsset(ControllerPath);
         var controller = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
+        foreach (var parameter in new[] { "moving", "grounded", "jumping", "grinding" })
+            controller.AddParameter(parameter, AnimatorControllerParameterType.Bool);
+
+        var machine = controller.layers[0].stateMachine;
         var clips = AssetDatabase.LoadAllAssetsAtPath(AssetDirectory + "/Squeaker.fbx").OfType<AnimationClip>().ToDictionary(c => c.name);
+        var states = new Dictionary<string, AnimatorState>();
         foreach (var name in ClipNames)
         {
             if (!clips.TryGetValue(name, out var clip))
                 throw new System.Exception("Squeaker.fbx has no clip named " + name + "; found " + string.Join(", ", clips.Keys));
-            var state = controller.layers[0].stateMachine.AddState(name);
-            state.motion = clip;
-            if (name == "Idle")
-                controller.layers[0].stateMachine.defaultState = state;
+            states[name] = machine.AddState(name);
+            states[name].motion = clip;
         }
 
+        machine.defaultState = states["Idle"];
+        Connect(states["Idle"], states["Run"], ("moving", true));
+        Connect(states["Run"], states["Idle"], ("moving", false));
+        Connect(machine, states["Grind"], ("grinding", true));
+        Connect(machine, states["Jump"], ("jumping", true), ("grinding", false));
+        Connect(machine, states["Falling"], ("grounded", false), ("jumping", false), ("grinding", false));
+        foreach (var name in new[] { "Grind", "Jump", "Falling" })
+            Connect(states[name], states["Idle"], ("grounded", true), ("jumping", false), ("grinding", false));
+
         return controller;
+    }
+
+    static void Connect(AnimatorState from, AnimatorState to, params (string Parameter, bool Value)[] conditions) =>
+        Configure(from.AddTransition(to), conditions);
+
+    static void Connect(AnimatorStateMachine machine, AnimatorState to, params (string Parameter, bool Value)[] conditions) =>
+        Configure(machine.AddAnyStateTransition(to), conditions);
+
+    static void Configure(AnimatorStateTransition transition, (string Parameter, bool Value)[] conditions)
+    {
+        transition.hasExitTime = false;
+        transition.duration = 0.1f;
+        transition.canTransitionToSelf = false;
+        foreach (var (parameter, value) in conditions)
+            transition.AddCondition(value ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, 0, parameter);
     }
 
     // Unpacked so the prefab holds its own hierarchy (hips, torso, renderer) rather than a link into the FBX.

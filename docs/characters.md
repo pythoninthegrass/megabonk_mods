@@ -142,7 +142,7 @@ Measured in the running game with `query_objects`:
 
 - The character-select icon is a 32x32 `Texture` (Calcium, Monke and Amog were read): a pixel-art bust portrait shown on a dark tile.
 - Every character has its own `RuntimeAnimatorController` (`CalciumAController`, `AnimatorMonke`, `AnimatorBirdo` and so on). All of them carry an idle, a run (named Run, Running, Walk, Walking or Moving), a Jump, a Falling and a Grind clip, at 45 to 60 frames per second. Idle clips run 1 to 14 s, run cycles 0.6 to 1.5 s, grind cycles 0.5 to 1.3 s and jumps 0.5 to 1.2 s; all but a few jumps loop.
-- Animator parameter names are not read from the controllers. The string table holds `grounded`, `moving`, `jump`, `grinding`, `idle` and `slide` as candidates; the exact names stay open until `PlayerRenderer.Update` (`0x3492F0`) is decompiled.
+- `PlayerRenderer.Update` (`0x3492F0`) sets four bool parameters on the Animator, found by decompiling it and resolving its string-literal slots: `moving` (from the movement input, with a `movingToIdleTimeout` delay before it clears), `grounded`, `jumping` (the player's state field at `0x164` is below 4) and `grinding`. These are the only Animator writes in `Update`.
 
 ## Authoring the Squeaker model
 
@@ -171,14 +171,14 @@ Conventions the Unity import relies on:
 The build:
 
 - Sets `Squeaker.fbx` to a Generic rig with one clip per Blender take, named after the take (`Idle`, `Run`, `Jump`, `Falling`, `Grind`) and looping except `Jump`. `StaleCookie.fbx` imports with no animation.
-- Builds `Squeaker.controller`: one state per clip with no transitions or parameters, `Idle` as the default.
+- Builds `Squeaker.controller`: one state per clip, the four bool parameters above, and transitions without exit time: `Idle` and `Run` switch on `moving`; `Grind`, `Jump` and `Falling` are entered from any state on `grinding`, `jumping` and `grounded` false, and return to `Idle` once grounded and neither jumping nor grinding. `Idle` is the default.
 - Instantiates each FBX, unpacks it completely so the prefab carries its own hierarchy (`hips`, `torso`, the `SkinnedMeshRenderer`) instead of linking into the FBX, adds the Animator with the controller and avatar to Squeaker, and saves `Squeaker.prefab` and `StaleCookie.prefab` beside the FBX.
 
 The prefabs, controller and their `.meta` files are generated and gitignored; the FBX `.meta` files are committed. The manifest lists both prefabs, so they resolve as `bundle:squeaker/Squeaker` and `bundle:squeaker/StaleCookie`, and the pack loader's shader remap turns their Standard materials into the toon shader like any other pack. `tests/test_squeaker_pack.py` checks the generated prefabs and skips when they are absent.
 
 ## Not verified
 
-- The Animator controller transitions and parameters: the controller holds the five clips as unconnected states because the parameter names `PlayerRenderer.Update` sets are still unread.
+- The controller's transitions in game. The parameter names come from the decompile, but what `jumping` tracks (the state field comparison at `0x164`) was not traced, so the Jump and Falling conditions are a guess at stock behaviour.
 - That the remap renders the Squeaker materials correctly in game: the pack loads with both prefabs and no warnings, but neither prefab has been placed or seen.
 - How the game's look rotation and movement tilt (driven through `hips` and `torso`) read on a horizontal body, and whether the model scale fills `colliderHeight`; both are chosen when the prefab is built.
 - How the game reacts at startup when `Preferences.selectedCharacter` or an enum-keyed save dictionary holds a value the installed data does not define (the mod removed after a run as the new character). The restore in step 4 avoids the first case; the dictionaries are expected to round-trip an unnamed integer key through Newtonsoft but that has not been tried.

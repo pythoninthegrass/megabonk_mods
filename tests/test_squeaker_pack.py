@@ -11,6 +11,7 @@ PREFAB_DIR = ROOT / "unity/pack-authoring/Assets/Squeaker"
 SQUEAKER_PREFAB = PREFAB_DIR / "Squeaker.prefab"
 COOKIE_PREFAB = PREFAB_DIR / "StaleCookie.prefab"
 CLIPS = ["Idle", "Run", "Jump", "Falling", "Grind"]
+PARAMETERS = ["moving", "grounded", "jumping", "grinding"]
 
 needs_prefabs = pytest.mark.skipif(
     not (SQUEAKER_PREFAB.exists() and COOKIE_PREFAB.exists()),
@@ -54,6 +55,13 @@ def test_squeaker_controller_holds_the_stock_clip_names() -> None:
     controller = (PREFAB_DIR / "Squeaker.controller").read_text()
     for clip in CLIPS:
         assert re.search(rf"^  m_Name: {clip}$", controller, re.MULTILINE), clip
+
+
+@needs_prefabs
+def test_squeaker_controller_declares_the_bool_parameters_the_player_renderer_sets() -> None:
+    controller = (PREFAB_DIR / "Squeaker.controller").read_text()
+    for name in PARAMETERS:
+        assert re.search(rf"m_Name: {name}\n\s+m_Type: 4", controller), name
 
 
 @needs_prefabs
