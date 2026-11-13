@@ -218,3 +218,38 @@ public class CookieProjectileSwapTests
         Assert.Equal(expected, SqueakerCharacter.UsesCookieProjectile(characterId));
     }
 }
+
+public class ModCharacterStatKeysTests
+{
+    [Theory]
+    [InlineData("21Kills")]
+    [InlineData("21Rank")]
+    [InlineData("22Kills")]
+    public void IsModCharacterKey_MatchesTheKeysAnUnnamedCharacterGetsWritten(string key)
+    {
+        Assert.True(ModCharacterStatKeys.IsModCharacterKey(key));
+    }
+
+    [Theory]
+    [InlineData("calciumKills")]
+    [InlineData("calciumRank")]
+    [InlineData("ent1Kills")]
+    [InlineData("ghostGrave4Kills")]
+    [InlineData("kills")]
+    [InlineData("")]
+    public void IsModCharacterKey_LeavesStockKeysAlone(string key)
+    {
+        Assert.False(ModCharacterStatKeys.IsModCharacterKey(key));
+    }
+
+    [Theory]
+    [InlineData("20Kills")]
+    [InlineData("0Rank")]
+    [InlineData("21Gold")]
+    [InlineData("21")]
+    [InlineData("Kills21")]
+    public void IsModCharacterKey_IgnoresStockIdsAndOtherSuffixes(string key)
+    {
+        Assert.False(ModCharacterStatKeys.IsModCharacterKey(key));
+    }
+}

@@ -111,10 +111,10 @@ Tony's `MaxHealth` Flat `-30` is the stock precedent for a character that trades
 | Skin per character | `Preferences.characterSkins` (`0x10`) | **Throws.** `Preferences.Init` (`0x40F220`) seeds an entry of 0 for each defined `ECharacter` value only (it loops over the enum), and `PlayerRenderer.SetCharacter` reads `characterSkins[eCharacter]` with the throwing getter |
 | Hat per character | `Preferences.characterHats` (`0x18`) | `GetCharacterHat` (`0x40F180`) adds a default entry when the key is missing (safe) |
 | Progression per character | `ProgressionSaveFile.characterProgression` | `GetCharacterProgression` creates a missing entry on demand |
-| Kill statistics key | `StatTrackingUtility.GetKeyKillsCharacter` (`0x412000`) | Creates a missing cache entry on demand |
+| Kill statistics key | `StatTrackingUtility.GetKeyKillsCharacter` (`0x412000`) | Creates a missing cache entry on demand; the stat keys it builds (`21Kills`, `21Rank`) land in `stats.json` |
 | Skin achievement names | `LocalizationUtility.GetSkinAchievementName` (`0x3D6DC0`) | Builds and caches a missing `(character, skin type)` key on demand |
 | Hat screen | `HatSelection.OnSelectCharacter` (`0x5683A0`) | Takes `eCharacter` from the selected button and reads the hat through the guarded `GetCharacterHat`; its hat list comes from `DataManager.unsortedHats`, not per character |
-| Run history by tier | `tierCompletionsWithCharacters` | A `HashSet<ECharacter>` per tier |
+| Run history by tier | `MapProgress.tierCompletionsWithCharacters` (`ProgressionSaveFile.menuMeta.mapsProgress`), filled by `MapProgress.OnRunFinished(character, victory, tier)` (`0x402920`) | A `HashSet<ECharacter>` per tier; written to `progression.json` |
 
 The saves are Newtonsoft JSON (`SaveManager.SaveTemp`), and the enum-keyed dictionaries serialize through that. An id with no defined name is written as its number.
 
@@ -209,7 +209,21 @@ The starting weapon is a clone of Bone's `WeaponData`. The game builds the live 
 
 ### Keeping the saves stock
 
-Prefixes and postfixes on `SaveManager.SaveConfig` and `SaveProgression` take id `21` out of what is written and put it back in memory afterwards: `selectedCharacter` is written as the last stock selection (Calcium when there is none), and the `characterSkins`, `characterHats` and `characterProgression` entries for `21` are left out. Checked in `config.json` after confirming Squeaker: it holds `Calcium` and no entry for `21`. `progression.json` is encrypted, so that file could not be inspected from outside. A Squeaker run's rank and run count are not kept between sessions.
+The game writes three files through `SaveManager.SaveTemp`: `config.json`, `progression.json` (encrypted) and `stats.json`. Every structure in them that is keyed or valued by a character:
+
+| File | Structure | Guard |
+| --- | --- | --- |
+| `config.json` | `Preferences.selectedCharacter` | Written as the last stock selection (Calcium when there is none) |
+| `config.json` | `Preferences.characterSkins`, `Preferences.characterHats` | The entry for `21` is left out |
+| `progression.json` | `ProgressionSaveFile.characterProgression` | The entry for `21` is left out |
+| `progression.json` | `MenuMeta.mapsProgress[*].tierCompletionsWithCharacters` | `21` is removed from every tier's set |
+| `stats.json` | `StatsSaveFile.stats` keys `21Kills` and `21Rank` | Keys matched by `ModCharacterStatKeys.IsModCharacterKey` (a leading mod character id followed by `Kills` or `Rank`) are left out |
+
+Prefixes on `SaveManager.SaveConfig`, `SaveProgression` and `SaveStats` take these out of what is written, and the postfixes put them back in memory, so the running session sees unchanged values. `stats.json` was the one structure found unguarded: a Squeaker run wrote `21Kills` and `21Rank` there. A save that already holds those keys is cleaned the next time it is written. A Squeaker run's rank and run count are not kept between sessions.
+
+Verified on the macOS Wine setup by hooking `SaveManager.SaveTemp` (a temporary diagnostic, not kept) to write each file's plaintext before encryption, which is how the encrypted progression file was read. After a Squeaker run ended through the harness `kill`: none of the three files holds `21` or `Squeaker` as a key, set member or value, apart from unrelated numbers. Before the `SaveStats` guard the same run wrote the two stat keys. The tier-completion strip was exercised by adding `21` to all 12 tier sets just before the guard ran (a victory run is not reachable from the harness): the written JSON held none and all 12 sets held `21` again in memory afterwards.
+
+Removing the mod: with `winhttp.dll` and `doorstop_config.ini` moved aside so BepInEx did not load, the stock game was started against the saves a Squeaker session had just written. `Player.log` shows `SaveManager.Load` completing and `OnSavesLoaded` firing with no exception, the files were not rewritten or rejected, and `config.json` still selects Calcium with the 21 stock skin entries. The window could not be captured, so the main menu itself was not seen.
 
 ### Harness and restrictions
 
@@ -227,5 +241,5 @@ Stock characters on a stock level pass through unchanged.
 
 - The controller's transitions in game. The parameter names come from the decompile, but what `jumping` tracks (the state field comparison at `0x164`) was not traced, so the Jump and Falling conditions are a guess at stock behaviour.
 - How the game's look rotation and movement tilt (driven through `hips` and `torso`) read on a horizontal body, and whether the model scale fills `colliderHeight`; both are chosen when the prefab is built.
-- Starting the stock game with the mod removed after a Squeaker session. The config was checked to hold no `21`; the encrypted progression file and the statistics saves were not, and `tierCompletionsWithCharacters` (a `HashSet<ECharacter>` per tier) is not covered by the save guard.
+- Whether `MapProgress.OnRunFinished` is the only writer of `tierCompletionsWithCharacters`, and what it does for a non-victory run. The guard removes the id whatever wrote it, but the writer was not decompiled.
 - Readers of `ECharacter` that the dump does not show as typed members. Every typed reference in the dump was read and the ones that matter were decompiled (`DataManager`, the character menu, spawn, stats, `Preferences`, progression, kill statistics, skin achievement names, the hat screen, presence, leaderboards); code that reaches the value through an untyped integer is not covered.

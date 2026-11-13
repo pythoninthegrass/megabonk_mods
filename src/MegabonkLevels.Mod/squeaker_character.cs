@@ -61,3 +61,30 @@ public static class SelectedCharacterGuard
         return saved is { } id && !ModCharacterRegistration.IsModCharacter(id) ? id : CharacterOverride.CalciumId;
     }
 }
+
+// Recognises the stat keys the game builds from a character id it has no name for.
+public static class ModCharacterStatKeys
+{
+    private static readonly string[] Suffixes = { "Kills", "Rank" };
+
+    public static bool IsModCharacterKey(string key)
+    {
+        if (string.IsNullOrEmpty(key))
+        {
+            return false;
+        }
+
+        var digits = 0;
+        while (digits < key.Length && char.IsDigit(key[digits]))
+        {
+            digits++;
+        }
+
+        if (digits == 0 || !int.TryParse(key.Substring(0, digits), out var id) || !ModCharacterRegistration.IsModCharacter(id))
+        {
+            return false;
+        }
+
+        return Suffixes.Contains(key.Substring(digits));
+    }
+}
