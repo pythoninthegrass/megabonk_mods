@@ -4,7 +4,7 @@ title: Import Squeaker into Unity and build a squeaker asset bundle
 status: Done
 assignee: []
 created_date: '2026-11-12T22:18:00Z'
-updated_date: '2026-11-13T04:45:00Z'
+updated_date: '2026-11-13T05:10:00Z'
 labels:
   - character
   - assets
@@ -67,6 +67,8 @@ Built 2026-11-12 (commit 00f71fe): SqueakerPack.Build produces Squeaker.prefab, 
 Ghidra decompile of PlayerRenderer.Update (VA 0x1803492F0) done: it calls Animator.SetBool four ways, with string-literal slots resolved through .tools/il2cpp_dump/stringliteral.json to `moving`, `grounded`, `jumping`, `grinding`. The controller now declares those bools and connects the clips with transitions. What `jumping` tracks (player state field 0x164 below 4) was not traced, so the Jump/Falling conditions are a guess; the transitions have not been seen in game.
 
 Remap check 2026-11-12: a scratch level placed bundle:squeaker/Squeaker and bundle:squeaker/StaleCookie in a Forest level; both spawned as placements and rendered with the toon shader (all five Squeaker slots coloured, cel bands, fog; cookie dough and chips). Screenshot at .tools/evidence/067-03-squeaker-in-game.png. The animation transitions and the model scale against colliderHeight remain untested (TASK-067.04 territory, once the character is selectable).
+
+2026-11-12 follow-up: the bundle built here shipped without its Animator, controller and clips because the pack-authoring project did not list com.unity.modules.animation; fixed in fe31b0e and the rebuilt bundles were checked to contain them (found while testing TASK-067.04).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
