@@ -3,8 +3,8 @@ using Assets.Scripts.Steam;
 
 namespace MegabonkLevels;
 
-// Suppresses Steam leaderboard/achievement/stats writes while CustomLevelState.IsActive — a custom
-// or edited level didn't come from legitimate procedural generation, and the game's
+// Suppresses Steam leaderboard/achievement/stats writes while RunExclusion.Reason() is non-null (a custom
+// level is active or the run is a mod character) — a modded run didn't come from legitimate play, and the game's
 // SteamLeaderboardsManagerNew maintains a server-side banned_players board, so these calls must never
 // run for a modded level. Exact targets confirmed against .tools/il2cpp_dump/dump.cs (all RVAs
 // unique — safe to patch per TASK-004.01's RVA-sharing caution):
@@ -25,12 +25,13 @@ public static class SteamWriteGuard
 
     private static bool ShouldRunOriginal(string callSite)
     {
-        if (!CustomLevelState.IsActive)
+        var reason = RunExclusion.Reason();
+        if (reason == null)
         {
             return true;
         }
 
-        _logger?.Msg($"SteamWriteGuard: suppressed {callSite} (custom-level run active)");
+        _logger?.Msg($"SteamWriteGuard: suppressed {callSite} ({reason})");
         return false;
     }
 

@@ -224,7 +224,11 @@ public static class SqueakerRegistrationPatch
     [HarmonyPatch(typeof(MyPlayer), nameof(MyPlayer.StartPlayer))]
     private static class StartPlayerPrefix
     {
-        private static void Prefix(ECharacter character) => SetCookieIdentity(SqueakerCharacter.UsesCookieProjectile((int)character));
+        private static void Prefix(ECharacter character)
+        {
+            RunExclusion.OnPlayerStarting((int)character);
+            SetCookieIdentity(SqueakerCharacter.UsesCookieProjectile((int)character));
+        }
     }
 
     [HarmonyPatch(typeof(MyPlayer), "OnDestroy")]

@@ -109,6 +109,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/cell_change_tracker.cs" Link="cell_change_tracker.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/hud_visibility.cs" Link="hud_visibility.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/custom_level_state.cs" Link="custom_level_state.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/run_exclusion.cs" Link="run_exclusion.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/free_fly_camera.cs" Link="free_fly_camera.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/editor_session_state.cs" Link="editor_session_state.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/palette_entry.cs" Link="palette_entry.cs" />

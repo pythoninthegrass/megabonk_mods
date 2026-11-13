@@ -128,7 +128,7 @@ A new `ECharacter` value needs no change to the enum, because the tables are pla
 2. Give the `CharacterData` a `prefab`, `icon`, `weapon`, `passive`, `statModifiers` and collider size as described above.
 3. Seed `Preferences.characterSkins[value] = 0` after `Preferences.Init` runs, because `PlayerRenderer.SetCharacter` reads that entry with a throwing getter. The hat table needs nothing.
 4. Restore `Preferences.selectedCharacter` when the run ends, as the existing character-screen restriction already does, so the save never names a character the stock game cannot resolve. Remove the seeded skin entry at the same point if the key should not persist in the save.
-5. Keep runs as the new character off the leaderboards.
+5. Keep runs as the new character off Steam; see [Keeping mod character runs off Steam](#keeping-mod-character-runs-off-steam).
 
 The hooks are a prefix on `DataManager.Load` (`0x4F96D0`) and a postfix on `Preferences.Init` (`0x40F220`). Both RVAs are unique in the dump, which matters because a patch on a folded RVA shared by several methods crashes the game.
 
@@ -215,10 +215,17 @@ Prefixes and postfixes on `SaveManager.SaveConfig` and `SaveProgression` take id
 
 `squeaker` is accepted by the character-name parser, so `--character squeaker` and `load(character="squeaker")` work with `MEGABONK_DEV`. `CharacterOverride.IsAllowed` still names only Calcium and Tony, and the level `allowedCharacters` validation still lists only those two, so the custom-level restriction greys Squeaker out like every other character.
 
+## Keeping mod character runs off Steam
+
+`RunExclusion.Reason` (`run_exclusion.cs`, Unity-free and unit-tested) is the one rule `SteamWriteGuard` asks before every Steam write: a run is excluded when a custom level is active or when its character id is past the stock range (`ModCharacterRegistration.IsModCharacter`). A `MyPlayer.StartPlayer` prefix records the character id, and the id stays until the next `StartPlayer`, so an upload queued after the player object is destroyed at the end of a run is still excluded. Every suppression logs `SteamWriteGuard: suppressed <call> (<reason>)`.
+
+Leaderboard uploads, achievement unlocks and Steam stat writes are all suppressed for a mod character run, not only the uploads. A stat update feeds the `kills` boards that the server's `banned_players` list is built from, an achievement unlock carries no meaning for a character the stock game does not define, and one rule for every write is simpler than a per-write exception. The game's own local progression (`MyStats`, `RunStats`) is untouched; only the Steam-bound copy is dropped. See [level-format](level-format.md#suppressing-steam-leaderboard-achievement-and-stats-writes) for the guarded call sites.
+
+Stock characters on a stock level pass through unchanged.
+
 ## Not verified
 
 - The controller's transitions in game. The parameter names come from the decompile, but what `jumping` tracks (the state field comparison at `0x164`) was not traced, so the Jump and Falling conditions are a guess at stock behaviour.
 - How the game's look rotation and movement tilt (driven through `hips` and `torso`) read on a horizontal body, and whether the model scale fills `colliderHeight`; both are chosen when the prefab is built.
 - Starting the stock game with the mod removed after a Squeaker session. The config was checked to hold no `21`; the encrypted progression file and the statistics saves were not, and `tierCompletionsWithCharacters` (a `HashSet<ECharacter>` per tier) is not covered by the save guard.
 - Readers of `ECharacter` that the dump does not show as typed members. Every typed reference in the dump was read and the ones that matter were decompiled (`DataManager`, the character menu, spawn, stats, `Preferences`, progression, kill statistics, skin achievement names, the hat screen, presence, leaderboards); code that reaches the value through an untyped integer is not covered.
-- Squeaker runs on a stock level still upload a leaderboard score. The mod's existing suppression of leaderboard, achievement and stat writes (see [level-format](level-format.md)) is keyed only on a custom level being active, so it does not cover them.
