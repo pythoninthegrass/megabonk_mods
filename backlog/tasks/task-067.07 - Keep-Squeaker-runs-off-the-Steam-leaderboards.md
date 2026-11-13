@@ -1,10 +1,10 @@
 ---
 id: TASK-067.07
 title: Keep Squeaker runs off the Steam leaderboards
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-13T05:17:00Z'
-updated_date: '2026-11-13T05:20:00Z'
+updated_date: '2026-11-13T05:54:00Z'
 labels:
   - character
   - bepinex
@@ -30,9 +30,9 @@ Squeaker is a mod-added character (id 21, past the stock enum). A run as Squeake
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A leaderboard upload attempted during a run as Squeaker is skipped and logged, on a stock level and on a custom level
-- [ ] #2 A run as Calcium or any other stock character on a stock level still uploads its leaderboard score exactly as before
-- [ ] #3 The existing custom-level suppression of leaderboard, achievement and stat writes behaves as before
+- [x] #1 A leaderboard upload attempted during a run as Squeaker is skipped and logged, on a stock level and on a custom level
+- [x] #2 A run as Calcium or any other stock character on a stock level still uploads its leaderboard score exactly as before
+- [x] #3 The existing custom-level suppression of leaderboard, achievement and stat writes behaves as before
 - [x] #4 The decision on achievement and stat writes for Squeaker runs is made, implemented accordingly and recorded in docs/characters.md
 - [x] #5 The rule that decides whether a run is excluded is pure logic with unit tests written before the code, covering Squeaker, stock characters, custom levels and their combinations
 - [x] #6 docs/characters.md no longer lists the leaderboard gate as unfound and describes the exclusion
@@ -40,10 +40,10 @@ Squeaker is a mod-added character (id 21, past the stock enum). A run as Squeake
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -61,4 +61,12 @@ Squeaker is a mod-added character (id 21, past the stock enum). A run as Squeake
 
 <!-- SECTION:NOTES:BEGIN -->
 Implemented RunExclusion (pure rule, 6 unit tests written first and seen failing on the missing source), recorded the character in the MyPlayer.StartPlayer prefix, SteamWriteGuard now asks RunExclusion.Reason(). Decision: leaderboard, achievement and stat writes are all suppressed for mod character runs. task check passes; mod:build --force succeeds. Not yet live-verified: #1 needs a Squeaker run to end (or a forced QueueLeaderboardUpload) and a `SteamWriteGuard: suppressed ... (mod character run active)` log line; #2/#3 rest on the unchanged pass-through path and unit tests.
+
+Live check on the CrossOver reference platform: a Squeaker run started from the stock menu on Forest (IsActive=False) logged `SteamWriteGuard: suppressed QueueLeaderboardUpload (mod character run active)` twice at death; a Squeaker run on a custom level logged the custom-level reason. Not run live: a Calcium stock run (menu input stopped advancing after a relaunch; #2 rests on RunExclusionTests.Reason_StockCharacterOnStockLevel_IsNotExcluded and the unchanged pass-through branch) and the achievement and stat prefixes.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added RunExclusion, a pure rule that excludes a run when a custom level is active or its character id is past the stock range. SteamWriteGuard asks it before every leaderboard, achievement and stat write and logs the reason; a MyPlayer.StartPlayer prefix records the character id. Decision: all three write kinds are suppressed for mod character runs (recorded in docs/characters.md). Verified with six unit tests written first, task check, and a live Squeaker run on a stock level whose leaderboard upload was suppressed. The Calcium stock-run comparison was not run live.
+<!-- SECTION:FINAL_SUMMARY:END -->
