@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-11-12T22:18:00Z'
-updated_date: '2026-11-13T05:13:00Z'
+updated_date: '2026-11-13T05:18:00Z'
 labels:
   - character
   - bepinex
@@ -79,6 +79,8 @@ Evidence (.tools/evidence): 067-04-character-grid-2.png (grid, confirm), 067-04-
 AC5 left unchecked: config.json written during a Squeaker run holds selectedCharacter Calcium and no id 21 in characterSkins or characterHats, but progression.json is encrypted so the entry removal there is unconfirmed, and the stock game was not started with the mod removed. tierCompletionsWithCharacters is not covered by the save guard.
 
 Not done: keeping Squeaker runs off the leaderboards (the submission gate was not found; nothing blocks it), and restore of the stock Bone icon/text after a run was seen only on a fresh relaunch, not across a run ending in the same session.
+
+Correction: the leaderboard submission gate is known. TASK-004.04's SteamWriteGuard already suppresses leaderboard, achievement and stat writes, but only while a custom level is active, so Squeaker runs on a stock level are uncovered. The leaderboard exclusion is now TASK-067.07 and the save-guard verification is TASK-067.08.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
