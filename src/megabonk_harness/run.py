@@ -382,7 +382,7 @@ def build_load_level_command(
     character: str | None = None,
     unseeded: bool = False,
 ) -> dict[str, object]:
-    """A load-level command whose supplied overrides replace those fields of the level file for this load only; character names the dev-flag character (calcium or tonymczoom). unseeded sends seed null so the game rolls its own instead of forcing one."""
+    """A load-level command whose supplied overrides replace those fields of the level file for this load only; character names the dev-flag character (calcium, tonymczoom or squeaker). unseeded sends seed null so the game rolls its own instead of forcing one."""
     if unseeded and seed is not None:
         raise ValueError("build_load_level_command: unseeded and seed cannot both be set")
     payload: dict[str, object] = dict(build_command("load-level", path))
@@ -402,7 +402,7 @@ def add_load_overrides(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--tier", type=int, help="replace the level's tier")
     parser.add_argument("--seed", type=int, help="replace the level's debug seed")
     parser.add_argument("--no-seed", action="store_true", help="let the game roll its own seed instead of forcing the level's")
-    parser.add_argument("--character", help="character for the run when MEGABONK_DEV is on: calcium or tonymczoom (default tonymczoom)")
+    parser.add_argument("--character", help="character for the run when MEGABONK_DEV is on: calcium, tonymczoom or squeaker (default tonymczoom)")
 
 
 def add_client_flags(parser: argparse.ArgumentParser) -> None:

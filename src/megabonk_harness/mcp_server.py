@@ -178,7 +178,7 @@ async def load(
     unseeded: bool = False,
     character: str | None = None,
 ) -> CallToolResult:
-    """Load a level file and start it. character (calcium or tonymczoom) names the run's character when MEGABONK_DEV is on; the default is Tony McZoom. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only; the file is not modified. unseeded leaves seeding to the game, which rolls its own seed instead of the mod forcing one; it cannot be combined with seed."""
+    """Load a level file and start it. character (calcium, tonymczoom or squeaker) names the run's character when MEGABONK_DEV is on; the default is Tony McZoom. map (eMap value, e.g. 64 for Hell), stage, tier and seed optionally replace those fields of the level file for this load only; the file is not modified. unseeded leaves seeding to the game, which rolls its own seed instead of the mod forcing one; it cannot be combined with seed."""
     if unseeded and seed is not None:
         raise ToolError("load: unseeded and seed cannot both be set")
     payload = run.build_load_level_command(run.to_game_path(Path(level).resolve()), map, stage, tier, seed, character, unseeded)

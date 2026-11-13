@@ -9,11 +9,13 @@ public static class CharacterOverride
 {
     public const int TonyMcZoomId = 13;
     public const int CalciumId = 1;
+    public const int SqueakerId = SqueakerCharacter.Id;
 
     public static string DisplayName(int id) => id switch
     {
         CalciumId => "Calcium",
         TonyMcZoomId => "Tony McZoom",
+        SqueakerId => SqueakerCharacter.DisplayName,
         _ => $"character {id}",
     };
 
@@ -26,6 +28,7 @@ public static class CharacterOverride
         {
             "calcium" => CalciumId,
             "tony" or "tonymczoom" => TonyMcZoomId,
+            "squeaker" => SqueakerId,
             _ => null,
         };
     }
@@ -62,7 +65,7 @@ public static class DevCharacter
         }
 
         return CharacterOverride.TryParseName(name)
-            ?? throw new ArgumentException($"'{name}' is not an allowed character (calcium, tonymczoom)");
+            ?? throw new ArgumentException($"'{name}' is not an allowed character (calcium, tonymczoom, squeaker)");
     }
 }
 

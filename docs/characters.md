@@ -2,7 +2,7 @@
 
 How the game defines, lists, spawns and persists playable characters, read from the Il2Cpp dump and Ghidra decompiles of `GameAssembly.dll` (see [Using Ghidra through REA](development.md#using-ghidra-through-rea)). RVAs are offsets from the image base; add `0x180000000` for the Ghidra address. Field offsets are the ones `dump.cs` prints beside each field. Everything here is read from static code unless it is listed under [Not verified](#not-verified).
 
-The mod itself only restricts, reorders and selects the stock characters (see "Character selection" in [development](development.md)). Nothing in it adds a character, so this page is the groundwork for doing that.
+The mod restricts, reorders and selects the stock characters (see "Character selection" in [development](development.md)) and, when the `squeaker` pack is installed, adds one of its own: [Squeaker in the game](#squeaker-in-the-game) describes how.
 
 ## The character is data, keyed by an enum
 
@@ -174,15 +174,51 @@ The build:
 - Builds `Squeaker.controller`: one state per clip, the four bool parameters above, and transitions without exit time: `Idle` and `Run` switch on `moving`; `Grind`, `Jump` and `Falling` are entered from any state on `grinding`, `jumping` and `grounded` false, and return to `Idle` once grounded and neither jumping nor grinding. `Idle` is the default.
 - Instantiates each FBX, unpacks it completely so the prefab carries its own hierarchy (`hips`, `torso`, the `SkinnedMeshRenderer`) instead of linking into the FBX, adds the Animator with the controller and avatar to Squeaker, and saves `Squeaker.prefab` and `StaleCookie.prefab` beside the FBX.
 
+The pack-authoring project must list `com.unity.modules.animation` in `Packages/manifest.json`. Without it Unity drops the `Animator`, controller, clips and avatar from the bundle without an error, the prefab loads with no `Animator`, `PlayerRenderer.animator` stays null and the spawn-portal intro throws in `PlayerRenderer.ForceMoving`, which leaves the player stuck at the spawn. Check a rebuilt bundle by listing its object types: it should hold one `Animator`, one `AnimatorController` and five `AnimationClip`s. The Animator's avatar stays null, which a Generic hierarchy tolerates.
+
 The prefabs, controller and their `.meta` files are generated and gitignored; the FBX `.meta` files are committed. The manifest lists both prefabs, so they resolve as `bundle:squeaker/Squeaker` and `bundle:squeaker/StaleCookie`, and the pack loader's shader remap turns their Standard materials into the toon shader like any other pack. `tests/test_squeaker_pack.py` checks the generated prefabs and skips when they are absent. Placed in a level as `bundle:squeaker/Squeaker` and `bundle:squeaker/StaleCookie`, both render in the running game with the toon shader: all five Squeaker material slots (fur, pink skin, eyes, sparkle, whiskers) and the cookie dough and chips show their colours with cel shading and the level fog.
+
+## Squeaker in the game
+
+`squeaker_registration_patch.cs` and `squeaker_save_guard_patch.cs` register the character at startup; the pure decisions (ids, stat rows, collider, text, when to append) are in `squeaker_character.cs`. Squeaker is character id `21`, the first value past `ECharacter.Roberto`, and nothing is added when the `squeaker` pack is absent.
+
+Registration, in order:
+
+- A prefix on `DataManager.Load` clones Calcium's `CharacterData` and a Calcium `SkinData`, sets the id, the model prefab from `bundle:squeaker/Squeaker`, the icon, the collider and the stat modifiers, and appends both to `unsortedCharacterData` and `unsortedSkins`. The skin's materials come from the model's `SkinnedMeshRenderer`. The clones are pinned against the unused-asset unload.
+- A postfix on `Preferences.Init` seeds `characterSkins[21] = 0`, which `PlayerRenderer.SetCharacter` needs.
+- `MyAchievements.IsPurchased` and `IsAvailable` return true for the Squeaker `CharacterData`. It has no save entry, and without this the grid shows it as a locked tile with a price.
+- `UnlockableBase.GetName` and `GetDescription`, and the `PassiveData` equivalents, return fixed text for the objects the mod built, because the cloned `LocalizedString`s would still read as Calcium. The text is keyed by instance id.
+- The icon is `squeaker_icon.png` from the installed pack folder, decoded through the native image loader. `task squeaker:install` copies it beside the bundle.
+
+### Tiny Target
+
+The passive is a `PassiveData` clone with `ePassive` set to `None`, so it carries no behaviour; its numbers live in the character's `statModifiers` and collider:
+
+| Part | Value | Stock for comparison |
+| --- | --- | --- |
+| `MaxHealth` | Flat -30 | Base 100; Tony has the same -30 |
+| `Evasion` | Flat 0.25, which the game's `v / (v + 1) * 0.999` transform reads as 20% | Calcium and Tony add none |
+| `colliderHeight` | 2.9 | 3.85 for most characters (3.7 to 4.75) |
+| `colliderWidth` | 0.5 | 0.7 for most characters (0.5 to 0.85) |
+
+In a fresh run the fall-damage report (`fall_damage`) lists the two modifiers and reads `maxHp` 70, the collider capsule reads 2.9 high and 0.5 wide, and the stats panel shows Evasion at 21% after one level-up.
+
+### The cookie weapon
+
+The starting weapon is a clone of Bone's `WeaponData`. The game builds the live weapon from Bone's own data rather than from the character's field, so the clone only supplies the weapon's name, description and icon. The swap that makes the throw a cookie happens on the stock attack prefab: a prefix on `MyPlayer.StartPlayer` points the stock `BoneAttackPrefab`'s `WeaponAttack.prefabProjectile` at a cookie projectile for a Squeaker run and back at the bone for any other character, and a postfix on `MyPlayer.OnDestroy` puts it back when the player goes away. The same switch changes the stock Bone `WeaponData` icon and text, which is what the level-up offers and the inventory read. The cookie projectile is a clone of the bone projectile with its renderers disabled and the `StaleCookie` prefab added as a child, so collision, bouncing and upgrades stay Bone's. The icon is a thumbnail rendered from the cookie prefab. A Bone picked up in a Squeaker run therefore also throws cookies.
+
+### Keeping the saves stock
+
+Prefixes and postfixes on `SaveManager.SaveConfig` and `SaveProgression` take id `21` out of what is written and put it back in memory afterwards: `selectedCharacter` is written as the last stock selection (Calcium when there is none), and the `characterSkins`, `characterHats` and `characterProgression` entries for `21` are left out. Checked in `config.json` after confirming Squeaker: it holds `Calcium` and no entry for `21`. `progression.json` is encrypted, so that file could not be inspected from outside. A Squeaker run's rank and run count are not kept between sessions.
+
+### Harness and restrictions
+
+`squeaker` is accepted by the character-name parser, so `--character squeaker` and `load(character="squeaker")` work with `MEGABONK_DEV`. `CharacterOverride.IsAllowed` still names only Calcium and Tony, and the level `allowedCharacters` validation still lists only those two, so the custom-level restriction greys Squeaker out like every other character.
 
 ## Not verified
 
 - The controller's transitions in game. The parameter names come from the decompile, but what `jumping` tracks (the state field comparison at `0x164`) was not traced, so the Jump and Falling conditions are a guess at stock behaviour.
 - How the game's look rotation and movement tilt (driven through `hips` and `torso`) read on a horizontal body, and whether the model scale fills `colliderHeight`; both are chosen when the prefab is built.
-- How the game reacts at startup when `Preferences.selectedCharacter` or an enum-keyed save dictionary holds a value the installed data does not define (the mod removed after a run as the new character). The restore in step 4 avoids the first case; the dictionaries are expected to round-trip an unnamed integer key through Newtonsoft but that has not been tried.
+- Starting the stock game with the mod removed after a Squeaker session. The config was checked to hold no `21`; the encrypted progression file and the statistics saves were not, and `tierCompletionsWithCharacters` (a `HashSet<ECharacter>` per tier) is not covered by the save guard.
 - Readers of `ECharacter` that the dump does not show as typed members. Every typed reference in the dump was read and the ones that matter were decompiled (`DataManager`, the character menu, spawn, stats, `Preferences`, progression, kill statistics, skin achievement names, the hat screen, presence, leaderboards); code that reaches the value through an untyped integer is not covered.
-- Whether runs on custom levels or with a modded character submit leaderboard scores. Step 5 depends on where the submission is gated.
-- How a character gets custom passive text. `PassiveData` names and descriptions are `LocalizedString` values, so text for a new passive depends on building one at runtime; an existing passive's text is the safe fallback.
-- The literal match used for the `hips` and `torso` bones (exact or substring); the lowercase names match the strings the game stores.
-- That the throwing getter used for `characterSkins` raises `KeyNotFoundException`; the lookup calls a throw helper that was not decompiled.
+- Whether a Squeaker run submits a leaderboard score. Nothing in the mod blocks it yet; the submission gate has not been found.

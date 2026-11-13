@@ -25,6 +25,7 @@ tasks:
     cmds:
       - task: :pack:install
         vars: {PACK: squeaker}
+      - cp unity/pack-authoring/Assets/Squeaker/squeaker_icon.png "$(uv run scripts/game_paths.py | jq -r .game_dir)/UserData/LevelPacks/squeaker/squeaker_icon.png"
 
   default:
     desc: "Build the Squeaker pack and install it into the game"

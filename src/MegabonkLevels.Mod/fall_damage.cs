@@ -16,6 +16,7 @@ public static class FallDamage
     {
         (EStat.FallDamageReduction, "fallDamageReduction"),
         (EStat.MaxHealth, "maxHealth"),
+        (EStat.Evasion, "evasion"),
         (EStat.DamageReductionMultiplier, "damageReduction"),
     };
 

@@ -53,6 +53,13 @@ public static class PackPrefabs
         return PlaceholderFor(key);
     }
 
+    // The pack prefab, or null when the pack or asset is absent; unlike Resolve it neither warns nor builds a placeholder.
+    public static GameObject TryResolve(CatalogId id)
+    {
+        var lookup = Catalog.Resolve(id);
+        return lookup.Result == PackResolution.Found ? lookup.Prefab : null;
+    }
+
     // The pack's AudioClip with this name, or null when the pack is not installed or holds no such clip. Clips are not filtered by the manifest.
     public static AudioClip ResolveClip(string pack, string asset)
     {

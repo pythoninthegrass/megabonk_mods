@@ -102,6 +102,7 @@
     <Compile Include="../../src/MegabonkLevels.Mod/steam_readiness.cs" Link="steam_readiness.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/png_encoder.cs" Link="png_encoder.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/character_override.cs" Link="character_override.cs" />
+    <Compile Include="../../src/MegabonkLevels.Mod/squeaker_character.cs" Link="squeaker_character.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/position_readout.cs" Link="position_readout.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/nearby_enemy_selector.cs" Link="nearby_enemy_selector.cs" />
     <Compile Include="../../src/MegabonkLevels.Mod/actor_kind.cs" Link="actor_kind.cs" />
