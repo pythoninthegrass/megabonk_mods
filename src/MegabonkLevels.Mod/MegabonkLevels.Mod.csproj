@@ -6,7 +6,7 @@
     <Nullable>disable</Nullable>
     <RootNamespace>MegabonkLevels</RootNamespace>
     <AssemblyName>MegabonkLevels.Mod</AssemblyName>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <!-- Same bytes from any checkout path: the PDB path and module id no longer depend on where the repo lives. -->
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <PathMap>$(MSBuildProjectDirectory)=/_/MegabonkLevels.Mod</PathMap>
