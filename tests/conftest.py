@@ -15,6 +15,8 @@ GENERATED_ARTIFACTS = (
     "check_thps_piece_inventory.OBJ_PATH",
     "unity/pack-authoring/packs/thps/pieces.json",
     "unity/pack-authoring/Assets/Thps",
+    "unity/pack-authoring/Assets/Squeaker/Squeaker.prefab",
+    "unity/pack-authoring/Assets/Squeaker/StaleCookie.prefab",
 )
 
 

@@ -164,9 +164,22 @@ Conventions the Unity import relies on:
 - The mesh keeps the sketch's smooth shading and density. The stock characters are low-poly and pixel-textured, so Squeaker does not match them in style; the model follows the sketch.
 - Set a `REPO` global before running the scripts when the checkout is not at `~/git/megabonk_mods`.
 
+## Building the squeaker bundle
+
+`task squeaker:pack` runs `SqueakerPack.Build` (`unity/pack-authoring/Assets/Editor/SqueakerPack.cs`) in batch mode, the same Unity path as `task pack:build`, and writes the `squeaker` bundle to `.tools/bundles/windows/` and `.tools/bundles/linux/`. `task squeaker:install` copies the bundle for the host platform and `unity/pack-authoring/packs/squeaker/manifest.json` into the game's `UserData/LevelPacks/squeaker/` through `task pack:install`; `task squeaker` does both. A running game sees the pack only after a relaunch.
+
+The build:
+
+- Sets `Squeaker.fbx` to a Generic rig with one clip per Blender take, named after the take (`Idle`, `Run`, `Jump`, `Falling`, `Grind`) and looping except `Jump`. `StaleCookie.fbx` imports with no animation.
+- Builds `Squeaker.controller`: one state per clip with no transitions or parameters, `Idle` as the default.
+- Instantiates each FBX, unpacks it completely so the prefab carries its own hierarchy (`hips`, `torso`, the `SkinnedMeshRenderer`) instead of linking into the FBX, adds the Animator with the controller and avatar to Squeaker, and saves `Squeaker.prefab` and `StaleCookie.prefab` beside the FBX.
+
+The prefabs, controller and their `.meta` files are generated and gitignored; the FBX `.meta` files are committed. The manifest lists both prefabs, so they resolve as `bundle:squeaker/Squeaker` and `bundle:squeaker/StaleCookie`, and the pack loader's shader remap turns their Standard materials into the toon shader like any other pack. `tests/test_squeaker_pack.py` checks the generated prefabs and skips when they are absent.
+
 ## Not verified
 
-- The imported FBX clip names and the Animator controller wiring in Unity (no Unity import has been run on these files yet).
+- The Animator controller transitions and parameters: the controller holds the five clips as unconnected states because the parameter names `PlayerRenderer.Update` sets are still unread.
+- That the remap renders the Squeaker materials correctly in game: the pack loads with both prefabs and no warnings, but neither prefab has been placed or seen.
 - How the game's look rotation and movement tilt (driven through `hips` and `torso`) read on a horizontal body, and whether the model scale fills `colliderHeight`; both are chosen when the prefab is built.
 - How the game reacts at startup when `Preferences.selectedCharacter` or an enum-keyed save dictionary holds a value the installed data does not define (the mod removed after a run as the new character). The restore in step 4 avoids the first case; the dictionaries are expected to round-trip an unnamed integer key through Newtonsoft but that has not been tried.
 - Readers of `ECharacter` that the dump does not show as typed members. Every typed reference in the dump was read and the ones that matter were decompiled (`DataManager`, the character menu, spawn, stats, `Preferences`, progression, kill statistics, skin achievement names, the hat screen, presence, leaderboards); code that reaches the value through an untyped integer is not covered.

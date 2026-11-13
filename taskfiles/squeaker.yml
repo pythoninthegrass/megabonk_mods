@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+tasks:
+  pack:
+    desc: "Build the Squeaker pack bundles for Windows and Linux with Unity"
+    sources:
+      - unity/pack-authoring/Assets/Editor/SqueakerPack.cs
+      - unity/pack-authoring/Assets/Squeaker/*.fbx
+      - unity/pack-authoring/packs/squeaker/**/*
+    generates:
+      - .tools/bundles/windows/squeaker
+      - .tools/bundles/linux/squeaker
+    cmds:
+      - task: :pack:build
+        vars: {PACK_METHOD: SqueakerPack.Build}
+
+  install:
+    desc: "Copy the Squeaker pack into the game's UserData"
+    summary: |
+      Usage: task squeaker:install
+
+      A running game only sees the pack after a relaunch.
+    cmds:
+      - task: :pack:install
+        vars: {PACK: squeaker}
+
+  default:
+    desc: "Build the Squeaker pack and install it into the game"
+    cmds:
+      - task: pack
+      - task: install

@@ -331,3 +331,7 @@ unity/*/Assets/Thps.meta
 
 pocketbase/pb_data/
 pocketbase/pb_data_dev/
+unity/*/Assets/Squeaker/*.prefab
+unity/*/Assets/Squeaker/*.prefab.meta
+unity/*/Assets/Squeaker/Squeaker.controller
+unity/*/Assets/Squeaker/Squeaker.controller.meta

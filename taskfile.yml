@@ -21,6 +21,7 @@ includes:
   package: taskfiles/package.yml
   installer: taskfiles/installer.yml
   thps: taskfiles/thps.yml
+  squeaker: taskfiles/squeaker.yml
   re: taskfiles/re.yml
   ghidra: taskfiles/ghidra.yml
   pocketbase: taskfiles/pocketbase.yml

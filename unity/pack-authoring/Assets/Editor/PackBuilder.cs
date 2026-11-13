@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -109,6 +110,16 @@ public static class PackBuilder
         if (manifest == null)
             throw new Exception("BuildAssetBundles failed for " + target);
         Debug.Log("PackBuilder: built " + target + " into " + directory);
+    }
+
+    internal static void BuildNamedBundle(string bundleName, List<string> assetPaths, BuildTarget target, string directory)
+    {
+        Directory.CreateDirectory(directory);
+        var builds = new[] { new AssetBundleBuild { assetBundleName = bundleName, assetNames = assetPaths.ToArray() } };
+        var manifest = BuildPipeline.BuildAssetBundles(directory, builds, BuildAssetBundleOptions.ChunkBasedCompression, target);
+        if (manifest == null)
+            throw new Exception("BuildAssetBundles failed for " + target);
+        Debug.Log("PackBuilder: built " + bundleName + " for " + target + " into " + directory);
     }
 
     internal static string ArgValue(string name)

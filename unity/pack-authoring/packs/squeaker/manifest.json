@@ -1,0 +1,7 @@
+{
+  "id": "squeaker",
+  "name": "Squeaker",
+  "author": "pythoninthegrass",
+  "version": "1.0.0",
+  "assets": ["Squeaker", "StaleCookie"]
+}

@@ -810,13 +810,6 @@ public static class ThpsPack
         return path;
     }
 
-    static void BuildBundle(List<string> prefabPaths, BuildTarget target, string directory)
-    {
-        Directory.CreateDirectory(directory);
-        var builds = new[] { new AssetBundleBuild { assetBundleName = BundleName, assetNames = prefabPaths.ToArray() } };
-        var manifest = BuildPipeline.BuildAssetBundles(directory, builds, BuildAssetBundleOptions.ChunkBasedCompression, target);
-        if (manifest == null)
-            throw new System.Exception("BuildAssetBundles failed for " + target);
-        Debug.Log("ThpsPack: built " + target + " into " + directory);
-    }
+    static void BuildBundle(List<string> prefabPaths, BuildTarget target, string directory) =>
+        PackBuilder.BuildNamedBundle(BundleName, prefabPaths, target, directory);
 }
