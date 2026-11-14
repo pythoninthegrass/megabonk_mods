@@ -75,6 +75,24 @@ test('coverUrl returns null when the record has no cover', () => {
   assert.equal(coverUrl('http://pb.test', { id: 'rec123', cover: '' }), null);
 });
 
+test('coverUrl supports same-origin development file requests', () => {
+  assert.equal(
+    coverUrl('', { id: 'rec123', cover: 'cover.png' }, '320x0'),
+    '/api/files/levels/rec123/cover.png?thumb=320x0',
+  );
+});
+
+test('gallery actions tolerate the level being absent during initial loading', async () => {
+  const source = await readFile('src/components/LevelActions.astro', 'utf8');
+  assert.doesNotMatch(source, /\$\{level\}\.(?:title|code|hidden)/);
+});
+
+test('report labels interpolate the content type at build time, not in Alpine', async () => {
+  const source = await readFile('src/components/ReportForm.astro', 'utf8');
+  assert.doesNotMatch(source, /\$\{what\}/);
+  assert.match(source, /What is wrong with this \{what\}\?/);
+});
+
 test('downloadUrl uses the counted download route', () => {
   assert.equal(
     downloadUrl('http://pb.test', '7N1-MVB-WKF'),

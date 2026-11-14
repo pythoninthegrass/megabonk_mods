@@ -2,6 +2,7 @@
 import GalleryLayout from '../../../layouts/GalleryLayout.astro';
 import Icon from '../../../components/Icon.astro';
 import LevelActions from '../../../components/LevelActions.astro';
+import CoverImage from '../../../components/CoverImage.astro';
 import CardSkeletons from '../../../components/CardSkeletons.astro';
 ---
 <GalleryLayout title="Creator · Megabonk Mod Party" description="Custom Megabonk levels shared by one maker on megabonkmod.party." path="/creators/view/">
@@ -45,7 +46,7 @@ import CardSkeletons from '../../../components/CardSkeletons.astro';
           <li class="level-card" :class="{ 'is-hidden': item.hidden }">
             <figure class="cover-plate">
               <a class="plate-link" :href="`/l/${item.code}`" tabindex="-1" aria-hidden="true">
-                <img :src="cover(item, '640x0')" :srcset="`${cover(item, '320x0')} 320w, ${cover(item, '640x0')} 640w`" sizes="(max-width: 700px) 90vw, 320px" :alt="`Cover picture for ${item.title}`" loading="lazy" width="320" height="213" @load="$el.classList.add('is-loaded')" @error="$el.classList.add('is-loaded')" />
+                <CoverImage level="item" source="cover(item, '640x0')" responsive />
               </a>
               <figcaption><span x-text="item.code"></span><span class="hidden-tag" x-show="item?.hidden">Hidden</span><LevelActions level="item" /></figcaption>
             </figure>

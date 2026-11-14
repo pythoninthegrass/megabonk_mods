@@ -22,6 +22,6 @@ const { what } = Astro.props;
     <label class="field"><span>Signature</span><input type="text" name="signature" x-model="copyright.signature" :required="category === 'copyright'" maxlength="200" autocomplete="name" /><small class="help">Type your full legal name, as a person rather than a company.</small></label>
   </fieldset>
 
-  <label class="field"><span x-text="category === 'copyright' ? 'Anything else, such as who you represent and how you are authorized' : `What is wrong with this ${what}?`"></span><textarea name="reason" x-model="reason" :required="category !== 'copyright'" maxlength="1000" rows="3"></textarea></label>
+  <label class="field"><span x-show="category === 'copyright'">Anything else, such as who you represent and how you are authorized</span><span x-show="category !== 'copyright'">What is wrong with this {what}?</span><textarea name="reason" x-model="reason" :required="category !== 'copyright'" maxlength="1000" rows="3"></textarea></label>
   <button class="btn" type="submit" :disabled="busy || !reportReady">Send report</button>
 </form>

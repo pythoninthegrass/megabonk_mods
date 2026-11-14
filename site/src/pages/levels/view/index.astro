@@ -2,15 +2,16 @@
 import GalleryLayout from '../../../layouts/GalleryLayout.astro';
 import Icon from '../../../components/Icon.astro';
 import LevelActions from '../../../components/LevelActions.astro';
+import CoverImage from '../../../components/CoverImage.astro';
 import ReportForm from '../../../components/ReportForm.astro';
 ---
 <GalleryLayout title="Level · Megabonk Mod Party" description="A custom Megabonk level shared on megabonkmod.party." path="/levels/view/">
-  <section class="gallery-page wrap" x-data="levelView" aria-live="polite">
+  <section class="gallery-page wrap" x-data="levelView">
     <noscript>
       <p class="gallery-note">The level gallery needs JavaScript. Without it you can still share levels by hand: see <a href="https://docs.megabonkmod.party/player-guide/#sharing-a-level">Sharing a level</a> in the player guide.</p>
     </noscript>
 
-    <p class="gallery-status" x-show="state === 'loading'" x-cloak>Loading level…</p>
+    <p class="gallery-status" role="status" x-show="state === 'loading'" x-cloak>Loading level…</p>
 
     <div class="gallery-message" x-show="state === 'notfound'" x-cloak>
       <h1>Level not found</h1>
@@ -27,7 +28,7 @@ import ReportForm from '../../../components/ReportForm.astro';
     <article class="level-page" x-show="state === 'ready'" x-cloak>
       <div class="level-layout">
         <figure class="cover-plate large">
-          <img :src="cover" :alt="`Cover picture for ${level?.title}`" width="1080" height="720" />
+          <CoverImage level="level" source="cover" />
           <figcaption><span x-text="code"></span><span class="hidden-tag" x-show="level?.hidden">Hidden</span><LevelActions level="level" /></figcaption>
         </figure>
         <div class="level-info">

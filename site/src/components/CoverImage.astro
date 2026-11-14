@@ -1,0 +1,15 @@
+---
+interface Props { level: string; source: string; responsive?: boolean; }
+const { level, source, responsive = false } = Astro.props;
+const srcset = responsive
+  ? `\`\${cover(${level}, '320x0')} 320w, \${cover(${level}, '640x0')} 640w\``
+  : undefined;
+---
+<span class="cover-frame" x-data="{ failed: false }">
+  <img :src={source} :srcset={srcset} sizes={responsive ? '(max-width: 700px) 90vw, 320px' : undefined} :alt={`\`Cover picture for \${${level}?.title ?? 'this level'}\``} loading="lazy" width="320" height="213" x-show="!failed" @load="failed = false; $el.classList.add('is-loaded')" @error="failed = true" />
+  <span class="cover-fallback" x-show="failed" x-cloak>
+    <strong>Cover unavailable</strong>
+    <span x-text={`${level}?.title`}></span>
+    <code x-text={`${level}?.code`}></code>
+  </span>
+</span>

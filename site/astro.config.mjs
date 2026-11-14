@@ -38,6 +38,11 @@ export default defineConfig({
   output: 'static',
   vite: {
     envDir: fileURLToPath(new URL('..', import.meta.url)),
+    server: {
+      proxy: {
+        '/api/files/': { target: 'http://127.0.0.1:8090', changeOrigin: true },
+      },
+    },
     plugins: [tailwindcss(), shareLinkRewrites],
   },
   markdown: { shikiConfig: { theme: 'github-dark' } },

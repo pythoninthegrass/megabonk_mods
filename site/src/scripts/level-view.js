@@ -15,7 +15,7 @@ import {
 } from './gallery.js';
 import { packList } from './levels.js';
 import { hostedPacks, packsFilter, packUrl } from './packs.js';
-import { giscusConfig, pb, PB_URL } from './pb.js';
+import { FILE_URL, giscusConfig, pb, PB_URL } from './pb.js';
 import { reportForm } from './report-form.js';
 
 export default () => ({
@@ -211,7 +211,7 @@ export default () => ({
     return downloadUrl(PB_URL, this.code);
   },
   get cover() {
-    return coverUrl(PB_URL, this.level);
+    return coverUrl(FILE_URL, this.level);
   },
   get author() {
     return this.level?.expand?.author?.name || 'Unknown maker';

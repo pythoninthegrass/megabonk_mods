@@ -4,6 +4,12 @@ The creator-first showcase for **megabonkmod.party** lives in [`site/`](../site/
 
 The website is separate from the game mod: it neither connects to the running game nor exposes the development harness. Website-only changes do not need `task mod:build`, a game launch or a mod relaunch.
 
+Local cover images use the dev server's `/api/files/` proxy to PocketBase on
+`127.0.0.1:8090`. This keeps image requests same-origin: PocketBase's
+`Cross-Origin-Resource-Policy: same-site` otherwise blocks images between the two
+loopback ports in Chrome. SDK requests still go directly to PocketBase.
+Production image URLs and server routing are unchanged.
+
 ## Stack and design
 
 - **Astro** renders the page and Markdown at build time, with static output and responsive image optimization.
