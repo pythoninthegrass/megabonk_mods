@@ -1,10 +1,10 @@
 ---
 id: TASK-063.03
 title: 'Gallery pages: browse, level view and upload'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-11 04:49'
-updated_date: '2026-11-11 07:55'
+updated_date: '2026-11-14 23:10'
 labels:
   - website
   - sharing
@@ -78,9 +78,9 @@ Design and product constraints:
 - [x] #5 An unknown or malformed code on the level page shows a not-found state
 - [x] #6 Signed-in users can like and unlike a level and report it; signed-out users are prompted to sign in
 - [x] #7 The level page embeds a giscus thread keyed by the share code, and shows a short note rather than a broken frame when giscus is not configured
-- [ ] #8 The upload page offers GitHub, Google and Discord sign-in, then a form for the level file, cover, optional biome image and tags; server-side validation errors from the API are shown to the user; success redirects to the new level page
+- [x] #8 The upload page offers GitHub, Google and Discord sign-in, then a form for the level file, cover, optional biome image and tags; server-side validation errors from the API are shown to the user; success redirects to the new level page
 - [x] #9 Signed-in users can see their own levels and edit or delete them
-- [ ] #10 The pages meet DESIGN.md and are usable at phone and desktop widths and with keyboard only; an Impeccable critique of the three pages has been run and its findings addressed
+- [x] #10 The pages meet DESIGN.md and are usable at phone and desktop widths and with keyboard only; an Impeccable critique of the three pages has been run and its findings addressed
 - [x] #11 A Levels link and a share call to action are added to the showcase page; docs/player-guide.md 'Sharing a level' points to the gallery and explains installing a downloaded level; site/PRODUCT.md records the JavaScript exception and the changed stack
 - [x] #12 Pure logic is unit-tested in site/tests with node --test; an end-to-end check against a local PocketBase uploads levels/bramblecrown-hill.mblevel.json with its cover, finds it by search, downloads it byte-identical, and likes it, with screenshots captured
 <!-- AC:END -->
@@ -112,7 +112,29 @@ Plan deviations: no page-math helper (the SDK's totalPages is used); helpers add
 Impeccable critique ran twice (27 then 28 out of 40); P1, P2 and P3 findings were fixed (share-code block, action ranking, delete focus, upload help, edit-mode cover and row marker, mobile header and filters, outline sign-in buttons). Remaining minor findings are in site/.impeccable/critique.
 
 Open ACs: #8 real OAuth sign-in is untested locally and is covered by the production sign-in check in the deployment task; #10 skipped by decision because no critique pass was run after the last fixes. Both left unticked.
+
+2026-11-14 closeout review: independent design and detector/browser assessments covered browse, a real level and upload at desktop and phone widths. Confirmed fixes in progress: build-time report label instead of undefined Alpine variable; null-safe owner-action bindings during initial load; readable cover-failure plate shared by browse/creator/detail; same-origin development image proxy; narrowly scoped status announcements, restored post-edit focus ring, 44px action targets and readable small text. Regression tests reproduced both Alpine/Astro bugs before fixing.
+
+Scope decision after review: maintainer approved confirmed correctness/accessibility fixes and local cover rendering, with layout redesigns explicitly excluded. Owner-toolbar relocation, custom file-picker/preview design and level-page composition changes are deferred design preferences, not additional closure blockers. Existing native confirmation remains a functioning safety step; the repeated cover link is deliberately omitted from keyboard navigation because the equivalent title link remains accessible.
+
+OAuth evidence reconciliation: production GitHub sign-in was verified under TASK-063.04. Provider buttons follow the API's configured auth methods; unconfigured Google/Discord are hidden, not broken or advertised. Those providers await deployment credentials and are not claimed to have been exercised. Dev provider buttons remain intentionally disabled; seeded sessions test the signed-in flows.
+
+Post-fix verification 2026-11-14: independent design and mechanical rechecks passed on browse/detail/upload at desktop and true 390px width. All attempted covers loaded through the development file proxy; forced image errors showed a readable paper-backed fallback with title/code. No uncaught errors or warnings on the level page, all rendered form controls labeled, 44px action targets, visible keyboard/post-edit focus, no viewport overflow. Rendered-URL detector returned zero findings on all three pages. Evidence is in the local critique-a/critique-b recheck artifacts.
+
+Final suggestion disposition: a percentage upload meter, richer per-field error associations and a results total are future enhancements, not correctness blockers for this bounded closeout. Existing upload errors already have role=alert, the submit button displays Saving…, the pager displays Page N of M, and GalleryLayout.astro:38 already exposes Levels navigation (the final review's missing-navigation claim was contradicted by source). Custom file pickers and structural layout redesign remain deferred per the approved scope.
+
+Fresh verification: task check passed (1552 Python tests, 6 skipped; C# build/test and lint green), Astro check had 0 errors/warnings, site unit tests 141 passed and built-page tests 42 passed. Fix commit 279995d uses a conventional subject with no attribution. Earlier notes about an undeployed API and pending production GitHub sign-in are historical; TASK-063.04 records the completed deployment and verified enabled-provider sign-in.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Completed and verified the browse, level-view and upload gallery pages, including search/filter/pagination, download/copy code, likes/reporting and owner edit/delete flows. Reconciled OAuth closure evidence with the deployed API: GitHub is verified; unconfigured Google/Discord stay hidden and pending credentials, not claimed as tested.
+
+Closed the final review gaps with regression tests and fixes for null-unsafe owner bindings, the missing report label, readable failed-cover plates, same-origin development cover requests, scoped announcements, restored keyboard focus, larger action targets and readable small text. Independent post-fix browser checks passed at desktop and 390px, with no level-page exceptions and clean rendered-page scans.
+
+Validation: task check green; Astro check 0 errors/warnings; 141 site unit and 42 built-page tests passed. Implementation commit: 279995d. Layout redesigns, custom file pickers and upload-progress percentages are deliberately outside this correctness/accessibility closeout. No push or deployment performed.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

@@ -4,7 +4,7 @@ title: Automate approved starter packages and draft release publication
 status: To Do
 assignee: []
 created_date: '2026-11-07 01:56'
-updated_date: '2026-11-07 01:57'
+updated_date: '2026-11-14 23:03'
 labels:
   - onboarding
 dependencies:
@@ -17,7 +17,6 @@ documentation:
   - README.md
 parent_task_id: TASK-048
 priority: high
-type: enhancement
 ordinal: 180000
 ---
 
@@ -35,6 +34,12 @@ Turn the existing package commands into a reliable GitHub Releases download path
 - [ ] #4 A published starter release is downloadable without contributor tools, and README/player-guide placeholders are replaced with verified release links.
 - [ ] #5 Maintainer documentation explains trusted-input provenance, validation, approvals and failure recovery without exposing private inputs or credentials.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Canceled during 2026-11-14 backlog reconciliation: per-platform Go-installer starter releases are no longer the distribution plan. package:linux/windows/macos are internal legacy tasks. The shipped runtime-only Thunderstore release flow is completed under TASK-056.05 and TASK-056.06; separate starter content remains TASK-048.01. Archive as superseded, not completed; no acceptance criteria are being claimed as met.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

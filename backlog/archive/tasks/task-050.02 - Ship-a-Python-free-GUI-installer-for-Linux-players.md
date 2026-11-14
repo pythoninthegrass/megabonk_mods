@@ -4,19 +4,17 @@ title: Polish the Python-free Linux installer desktop experience
 status: To Do
 assignee: []
 created_date: '2026-11-07 01:57'
-updated_date: '2026-11-07 01:57'
+updated_date: '2026-11-14 23:03'
 labels:
   - onboarding
 dependencies:
   - TASK-049
-  - TASK-050.01
 documentation:
   - docs/player-installer.md
   - docs/player-guide.md
   - docs/modding-setup.md
 parent_task_id: TASK-050
 priority: medium
-type: enhancement
 ordinal: 185000
 ---
 
@@ -33,6 +31,12 @@ Polish the established cross-platform Go installer as a non-technical Linux desk
 - [ ] #3 Executable permissions, extraction and desktop security friction are checked using a browser-downloaded package on supported Linux setups.
 - [ ] #4 Fresh install, check/repair and uninstall are verified with Python unavailable, including supported Steam discovery scenarios; all player guides describe the resulting entry point.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Canceled during 2026-11-14 backlog reconciliation: graphical launch, executable-permission polishing and Python-free verification target the abandoned standalone Go-installer Linux package. Current public distribution is runtime-only Thunderstore/BepInEx for the Windows game build, using Proton on Linux; it has no per-platform installer to polish. Keep genuine current-route platform validation under TASK-049.03 and manager guidance under TASK-062. Archive as superseded, without checking unperformed acceptance criteria.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
