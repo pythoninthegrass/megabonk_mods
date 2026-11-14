@@ -67,8 +67,13 @@ for the full command language and advanced debug commands.
 1. Install and start Megabonk once, then quit before changing mods.
 2. In your Thunderstore-compatible manager, select **Megabonk** and install
    **Megabonk Level Editor**. The manager should also install BepInExPack IL2CPP 6.0.788.
-3. Start the modded game. The first BepInEx launch needs internet access and can
-   take roughly half a minute to generate game interop assemblies.
+3. Start the game **from the manager**, using its modded launch (r2modman and
+   Thunderstore Mod Manager: **Start modded** in the sidebar). The first BepInEx
+   launch needs internet access and can take roughly half a minute to generate game
+   interop assemblies. Starting Megabonk from Steam instead boots the unmodded game
+   and writes no `BepInEx/LogOutput.log`, because the manager keeps BepInEx in its
+   profile folder; launching from Steam only works when the BepInEx files are also in
+   the game folder.
 4. Add `.mblevel.json` files to `<game>/UserData/Levels/`. Create the folder if
    needed. Levels appear on Map Selection after restarting the game.
 
@@ -103,12 +108,42 @@ developer mode. Editing through the console and cheat/debug commands require
 it. A repository `.env` is only read by the repository's development launch tools,
 not by mod managers.
 
-If the mod does not appear, check `BepInEx/LogOutput.log` for
-`Megabonk Level Editor` and `MegabonkLevels mod initialized.`. No log at
-all usually means the loader/runtime or Wine override is missing. Duplicate
-MegabonkLevels DLLs can conflict: remove or park a manual development install
-before applying the manager profile. Test other plugins individually if a run
-misbehaves; compatibility with all community mods has not been verified.
+### Where the logs are
+
+The loader's log is `BepInEx/LogOutput.log`. A profile-based manager keeps BepInEx,
+and that log with it, in the manager's **profile folder** rather than in the game
+folder, so look there first:
+
+- **r2modman and Thunderstore Mod Manager:** open **Settings** and choose **Browse
+  profile folder**, then open `BepInEx/LogOutput.log` inside it. The same screen has
+  **Copy log file contents to clipboard**, which copies the whole log for pasting into
+  a report and tells you whether the log exists at all.
+
+Menu names shift a little between manager versions and platforms; the entries you want
+are the ones that open the profile folder and copy the log.
+
+Unity keeps its own log beside the mod's: `Player.log`, with the run before it in
+`Player-prev.log`, in `%USERPROFILE%\AppData\LocalLow\Ved\Megabonk\` on Windows, or
+`<prefix>/drive_c/users/<user>/AppData/LocalLow/Ved/Megabonk/` under Wine or Proton.
+Attach both when the game itself does not start.
+
+### If the mod does not appear
+
+Check `BepInEx/LogOutput.log` for `Megabonk Level Editor` and
+`MegabonkLevels mod initialized.`.
+
+- **No BepInEx log at all on Windows:** the game was probably started outside the
+  manager. A profile-based manager keeps BepInEx in the profile folder, so a launch
+  from Steam boots the unmodded game and writes no log. Start the game from the
+  manager, or keep the BepInEx files in the game folder as well.
+- **Still no log after a modded launch:** the loader's .NET runtime or the Wine
+  `winhttp` override is missing. See the macOS / Wine and Linux / Proton section
+  above.
+- **A log with no `MegabonkLevels` line:** duplicate MegabonkLevels DLLs can conflict.
+  Remove or park a manual development install, then apply the manager profile again.
+
+Test other plugins individually if a run misbehaves; compatibility with all community
+mods has not been verified.
 
 ## Source and feedback
 
