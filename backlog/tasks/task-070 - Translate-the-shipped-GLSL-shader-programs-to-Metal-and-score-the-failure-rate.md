@@ -1,10 +1,10 @@
 ---
 id: TASK-070
 title: Translate the shipped GLSL shader programs to Metal and score the failure rate
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-15 08:49'
-updated_date: '2026-11-15 09:23'
+updated_date: '2026-11-15 10:12'
 labels:
   - research
   - native
@@ -98,25 +98,42 @@ Granularity: the platform-15 chunk of each Shader object is one GLSL unit holdin
 
 Unity 2023.2.22f1 macOS Build Support is still in the archive (hash 6b19bf4f8115): UnitySetup-Mac-Mono-Support 554,499,901 B and UnitySetup-Mac-IL2CPP-Support 539,183,293 B, both HTTP 200, plus matching MacEditorInstaller (4,186,416,450 B) and MacEditorInstallerArm64 (4,181,442,624 B) editors.
 
-BepInEx Unity.IL2CPP-macos-x64 is published on both channels, including the bleeding-edge channel this repo uses on Windows: 6.0.0-be.793 (2026-11-05, 32,735,133 B) at builds.bepinex.dev/projects/bepinex_be (the download URL is the href path, not /downloads/...), and the last tagged v6.0.0-pre.2 (2024-08-27, 32,523,182 B). be.793 ships libdoorstop.dylib universal (x86_64 arm64 arm64e, doorstop 4.6.0) so the injector does not need Rosetta, but dotnet/libcoreclr.dylib, libclrjit.dylib and BepInEx/core/libdobby.dylib are x86_64-only, so the managed host does. The interop chain is all present (Il2CppInterop.Generator.dll, Cpp2IL.Core.dll, LibCpp2IL.dll, 0Harmony.dll, BepInEx.Unity.IL2CPP.dll), so BepInEx/interop is a shipped capability. Rosetta 2 is installed on the authoring Mac and executes x86_64.
+BepInEx Unity.IL2CPP-macos-x64 is published on both channels, including the bleeding-edge channel this repo uses on Windows: 6.0.0-be.793 (2026-11-05, 32,735,133 B) at builds.bepinex.dev/projects/bepinex_be (the download URL is the href path, not /downloads/...), and the last tagged v6.0.0-pre.2 (2024-08-27, 32,523,182 B). be.793 ships libdoorstop.dylib universal (x86_64 arm64 arm64e, doorstop 4.6.0) so the injector does not need Rosetta, but dotnet/libcoreclr.dylib, libclrjit.dylib and BepInEx/core/libdobby.dylib are x86_64-only, so the managed host does. The interop chain is all present (Il2CppInterop.Generator.dll, Cpp2IL.Core.dll, LibCpp2IL.dll, 0Harmony.dll, BepInEx.Unity.IL2CPP.dll). Rosetta 2 is installed on the authoring Mac and executes x86_64.
 
-Not done by design (user-approved scope): actually producing BepInEx/interop + LogOutput.log needs a licensed 2023.2.22f1 macOS player, i.e. the 4.2 GB editor + 554 MB module installed under a signed-in Unity ID. This machine has no Unity install at all (task thps:pack fails for the same reason). Recorded as a loud blocker in docs/development.md.
+The loader check was run rather than deferred, using a minimal IL2CPP player built with the already-installed editor at the pinned 2023.2.22f1 (global-metadata.dat version 29, matching the shipped game). Both build targets succeed and the player and GameAssembly.dylib come out universal x86_64+arm64, i.e. SetArchitecture(Standalone, 0) does not restrict. Launched translated (arch -x86_64 on the launcher script itself: a universal binary follows its parent's slice and pre.2's script ends in a bare exec, so ARCHPREFERENCE is ignored) and headless (-batchmode -nographics -logFile), be.793 injects, writes BepInEx/LogOutput.log, logs Running under Unity 2023.2.22f1, downloads unity.bepinex.dev/libraries/2023.2.22.zip, runs Cpp2IL on the Mach-O (metadata version 29.1, Universal Mach-O File, 15,955 method definitions) and generates 80 interop assemblies (16 MB: Assembly-CSharp.dll, UnityEngine.CoreModule.dll 2.7 MB, Il2Cppmscorlib.dll 4.3 MB) with assembly-hash.txt, then Chainloader initialized. So the AC#4 signal is yes: interop and LogOutput.log are produced under Rosetta.
+
+Root cause of every failure is the app-bundle layout, announced by the loader's own line System platform: Linux 64-bit. Paths.SetExecutablePath never takes its macOS branch, so GameRootPath is the executable's own directory and the data probe looks for <exe dir>/<Proc>_Data then <exe dir>/Data, while a .app keeps data at Contents/Resources/Data; UnityPreloaderRunner hardcodes gameDataRelativeToManaged=false, so DOORSTOP_MANAGED_FOLDER_DIR cannot redirect it. Two symlinks in Contents/MacOS/ are the whole workaround (<Proc>_Data -> ../Resources/Data, GameAssembly.so -> ../Frameworks/GameAssembly.dylib, the .so suffix following the misdetected platform). The two bundles fail at different depths from that one cause: be.793 throws ArgumentNullException(gameDataPath) at UnityInfo.Initialize, while pre.2 keeps a wrong-but-non-null path, so UnityInfo.DetermineVersion (which reads the version string out of <GameDataPath>/globalgamemanagers at a fixed offset and defaults when it is missing) leaves the version at 0.0.0 and dies deeper as Il2CppInterop UnityVersionHandler "No handler" despite that bundle shipping a 2023.2.0 handler.
+
+One gap remains after interop: Chainloader initialized then Fatal "Could not locate Il2Cpp game assembly (GameAssembly.dll, UserAssembly.dll or libil2cpp.so)" - a by-name NativeLibrary.TryLoad with no macOS candidate. Upstream PR 1407 adds exactly these bundle fallbacks plus a resolved-path fallback for that load and was closed unmerged, which is why be.793 still fails; 1096 is the open macOS-Intel no-logs report, and the arm64 detour fix merged as 1405 (2026-11-05) pending a doorstop release exporting doorstop_jit_memcpy. Verdict for the route decision is unchanged: GO on route B, and the loader blocker is now three named layout gaps with an upstream patch rather than an unmeasured unknown.
 
 ## Notes for review
 
-- Pre-existing suite failures in this fresh worktree, unrelated to this task: tests/test_thps_preservation.py's two @needs_extract tests fail because the gitignored unity/pack-authoring/Assets/Thps product was never generated here (1,438 entries in the main checkout, 0 in the worktree) and .tools/thps1/warehouse exists via the shared .tools symlink, so the skip guard passes but the comparison reports every asset as missing. Regenerating needs `task thps:pack --force`, which needs the Unity editor.
+- `task check` is green here (1,622 passed, 6 skipped) once the two gitignored worktree inputs are present: unity/pack-authoring/Assets/Thps (1,438 entries, copied rather than symlinked because .gitignore:326 "unity/*/Assets/Thps/" has a trailing slash and does not match a symlink) and the tools/ost symlink (the ripped OST the preservation baseline fingerprints). Both were verified byte-identical to the main checkout. They are gitignored, so the worktree stays clean.
 - `task re:shaders-metal` namespaces its knobs as SHADERS_BUILD/SHADERS_PLATFORM/SHADERS_STAGES/SHADERS_JOBS/SHADERS_OUT/SHADERS_EXTRA: a bare OUT collides with taskfiles/installer.yml's root var, which leaks into the shared Task environment.
 - `task re:shaders-pull` reads the rsync source from MEGABONK_LINUX_BUILD_RSYNC in the gitignored .env, so the player box's hostname stays out of tracked files.
+- Probing the loader is cheap (about a minute a run) but must stay off the display: -batchmode -nographics, and SIGTERM not SIGKILL, because killing a windowed player leaves a WindowServer "not responding" sheet on the desktop. BepInEx writes an unhandled preloader exception to preloader_<timestamp>.log beside the executable inside Contents/MacOS/, not to BepInEx/LogOutput.log, so a missing LogOutput.log is not by itself a failed injection.
 
-`task check` reaches the Python suite and fails only on tests/test_thps_preservation.py's two @needs_extract tests (1,618 passed, 8 skipped): the gitignored unity/pack-authoring/Assets/Thps product is absent in this worktree and regenerating it needs the Unity editor, which this machine does not have. Unrelated to this task's files; DoD #1 left unchecked for that reason. `task mod:test` passes 2,836, `task lint` is clean, and tests/test_shader_metal_pass.py is 70 passed.
-
-Committed as 6e5b6c6 on research/task-070-shader-metal-translation.
+Committed as 1e36f98 (pass, tests, task aliases) and a88a099 (these companion-check findings) on research/task-070-shader-metal-translation.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Scored route B's two open blockers by measurement instead of argument.
+
+Shader translation (the deciding blocker): scripts/shader_metal_pass.py drives all 7,305 GLSL programs from the native Linux build through glslangValidator -> spirv-cross --msl -> xcrun metal -c, behind task re:shaders-metal (with re:shaders-pull for the build input), and prints a JSON summary with per-stage counts and a grouped failure taxonomy. Raw end-to-end 91.57%; with the three mechanical fixes that are now defaults, 7,305 / 7,305 / 7,256 = 99.33%, verdict scriptable. The hand-edit tail is 49 programs in 5 shaders, all one kind of work (uniforms that must move into named blocks). Go: the shader story is scripted translation, and the route decision in docs/development.md stands rather than flipping.
+
+Companion checks: the Unity archive still serves macOS Mono and IL2CPP Build Support for the shipping version 2023.2.22f1, and BepInEx Unity.IL2CPP-macos-x64 is published and current on both channels. The loader was then actually run against a self-built 2023.2.22f1 macOS player under Rosetta: it injects, writes BepInEx/LogOutput.log and generates 80 interop assemblies (16 MB), reaching Chainloader initialized. All failures traced to the app-bundle layout behind a "System platform: Linux 64-bit" misdetection, with the two symlinks that work around it documented and the one remaining by-name game-assembly lookup named (upstream PR 1407, unmerged).
+
+Route B stands, with the shader blocker closed as scriptable work and the loader blocker reduced from an unmeasured unknown to three named layout gaps plus an existing upstream patch.
+
+Tests: 70 in tests/test_shader_metal_pass.py, written before the implementation, over the pure logic (directory parsing, manifest building, diagnostic classification, summary aggregation, verdict thresholds). task check green (1,622 passed, 6 skipped), task mod:test 2,836, task lint clean. Docs: "Shader translation pass" and "Companion checks" under "Static recomp" in docs/development.md.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
+- [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
