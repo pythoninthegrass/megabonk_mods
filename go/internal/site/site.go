@@ -1,14 +1,5 @@
 // Package site talks to the megabonkmod.party API: it turns what a player
-// pastes — a share code, a share link, or a view-page link — into the level
-// file, the cover and biome pictures, and the asset packs that level needs.
-//
-// The endpoints are the ones the site's own PocketBase hooks serve
-// (pocketbase/pb_hooks/levels.pb.js and packs.pb.js). Level files always come
-// from /api/l/<code>/download rather than the raw /api/files/ path, because
-// that route is what counts the download; packs come from
-// /api/p/<id>/download, which builds the zip that unpacks into
-// UserData/LevelPacks/. Only the standard library is used, so MyGo stays the
-// installer's one direct module dependency.
+// pastes into the level file, pictures and asset packs that level needs.
 package site
 
 import (
@@ -28,8 +19,7 @@ import (
 const (
 	// DefaultBaseURL is the production API.
 	DefaultBaseURL = "https://api.megabonkmod.party"
-	// BaseURLEnv names the environment variable that overrides the API
-	// location, which is how a test points the client at a local server.
+	// BaseURLEnv names the environment variable that overrides the API location.
 	BaseURLEnv = "MEGABONK_API_URL"
 	// SiteHost is the host a player's link is accepted from.
 	SiteHost = "megabonkmod.party"
@@ -53,16 +43,14 @@ const (
 	notFoundMessage     = "level not found"
 )
 
-// shareCodePattern is the code pattern the levels collection enforces; the
-// alphabet leaves out I, L, O and U so a code survives being read aloud.
+// shareCodePattern is the code pattern the levels collection enforces.
 var shareCodePattern = regexp.MustCompile(`^[0-9A-HJKMNP-TV-Z]{3}-[0-9A-HJKMNP-TV-Z]{3}-[0-9A-HJKMNP-TV-Z]{3}$`)
 
 var packIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
 var notAllowed = regexp.MustCompile(`[^a-zA-Z0-9.\-]`)
 
-// Error is anything the player needs to read: the API answered, but not with
-// what was asked for.
+// Error is anything the player needs to read from the API.
 type Error struct{ message string }
 
 func (e *Error) Error() string { return e.message }
@@ -71,9 +59,7 @@ func fail(format string, args ...any) error {
 	return &Error{message: fmt.Sprintf(format, args...)}
 }
 
-// NotFoundError means no level answers to that share code, whether it never
-// existed or it is hidden: both get the same wording, so the installer never
-// reveals that a hidden level is there.
+// NotFoundError means no level answers to that share code, hidden or never created.
 type NotFoundError struct {
 	Code    string
 	Message string
@@ -87,8 +73,7 @@ func (e *NotFoundError) Error() string {
 	return withDetail(message, e.Message)
 }
 
-// PackNotHostedError means the site has no archive for that pack version, so
-// the player should ask its maker for it rather than retry the download.
+// PackNotHostedError means the site has no archive for that pack version.
 type PackNotHostedError struct {
 	PackID  string
 	Version string
@@ -110,12 +95,10 @@ func withDetail(message, detail string) string {
 	return message + ": " + detail
 }
 
-// PackNotHosted reports that the site simply does not offer this pack, which
-// is how callers tell it apart from the site being unreachable.
+// PackNotHosted tells callers this is a missing pack, not an unreachable site.
 func (e *PackNotHostedError) PackNotHosted() bool { return true }
 
-// RateLimitedError means the API asked for fewer requests; the player should
-// wait the reported seconds and retry.
+// RateLimitedError means the API asked for fewer requests.
 type RateLimitedError struct {
 	Path    string
 	Seconds int
@@ -129,12 +112,10 @@ func (e *RateLimitedError) Error() string {
 	return "the " + SiteHost + " API is busy: too many requests for " + e.Path + ". Wait a moment and retry."
 }
 
-// RateLimited reports that the request was rate limited, which is how callers
-// test for it without naming the type.
+// RateLimited lets callers test for a rate limit without naming the type.
 func (e *RateLimitedError) RateLimited() bool { return true }
 
-// HTTPError is an API response that is neither a missing record nor a rate
-// limit: an outage, or a request the server refused.
+// HTTPError is an API response that is neither a missing record nor a rate limit.
 type HTTPError struct {
 	Status  int
 	Path    string
@@ -189,10 +170,7 @@ func (l *Level) DownloadURL() string {
 	return l.client.baseURL + fmt.Sprintf(LevelDownloadSuffix, url.PathEscape(l.Code))
 }
 
-// Download fetches the level file through the counting route, which is what
-// counts the download; the raw /api/files/ path is never used. The body is
-// capped, so a login or captive-portal page reads as too large rather than as
-// a level.
+// Download fetches the level file through the counting route, never the raw file path.
 func (l *Level) Download() ([]byte, error) {
 	if l.Code == "" || l.client == nil {
 		return nil, fail("cannot download a level without a share code")
@@ -224,8 +202,7 @@ func NewClient(baseURL string) *Client {
 	return &Client{baseURL: normalised, httpClient: newHTTPClient()}
 }
 
-// NewClientFromEnv builds a client for MEGABONK_API_URL, or the production API
-// when the variable is unset or blank.
+// NewClientFromEnv builds a client for MEGABONK_API_URL, or the default.
 func NewClientFromEnv() *Client { return NewClient(EnvBaseURL()) }
 
 // BaseURL is the API location this client goes to.
@@ -245,9 +222,8 @@ func EnvBaseURL() string {
 	return DefaultBaseURL
 }
 
-// NormalizeBaseURL checks and canonicalises an API location: a missing scheme
-// gets https, a trailing slash is dropped, and anything that is not a plain
-// http or https origin is refused.
+// NormalizeBaseURL canonicalises an API location, refusing anything that is not a
+// plain http or https origin.
 func NormalizeBaseURL(raw string) (string, error) {
 	text := strings.TrimSpace(raw)
 	if text == "" {
@@ -276,10 +252,7 @@ func NormalizeBaseURL(raw string) (string, error) {
 	return parsed.Scheme + "://" + parsed.Host, nil
 }
 
-// NormalizeCode turns anything a player pastes into the canonical share code:
-// a code in any case or without its hyphens, a megabonkmod.party/l/<code>
-// share link, or a /levels/view/?code=<code> link. Anything else is refused
-// with a message that says what was expected.
+// NormalizeCode turns a code or a site level link into the canonical share code.
 func NormalizeCode(input string) (string, error) {
 	text := strings.TrimSpace(input)
 	if text == "" {
@@ -296,8 +269,7 @@ func NormalizeCode(input string) (string, error) {
 		SiteHost+"/l/<code> link, or a "+SiteHost+"/levels/view/?code=<code> link", strconv.Quote(input))
 }
 
-// looksLikeLink reports whether the input names a site rather than a bare code:
-// a scheme, an authority, or a path.
+// looksLikeLink reports whether the input names a site rather than a bare code.
 func looksLikeLink(text string) bool {
 	if strings.Contains(text, "://") {
 		return true
@@ -348,8 +320,7 @@ func orNone(text string) string {
 	return text
 }
 
-// formatCode canonicalises a code, or "" when it is not one. Upper-casing
-// matches the server, which stores codes upper-cased.
+// formatCode canonicalises a code, or "" when it is not one.
 func formatCode(raw string) string {
 	compact := strings.ReplaceAll(strings.ToUpper(strings.TrimSpace(raw)), "-", "")
 	if len(compact) != 9 {
@@ -376,8 +347,7 @@ func Slug(title string) string {
 	return slug
 }
 
-// keepSlugRune keeps what JS [^a-z0-9]+ survives: everything else, including
-// every non-ASCII letter, becomes a hyphen and then collapses with its neighbours.
+// keepSlugRune keeps what JS [^a-z0-9]+ survives; everything else becomes a hyphen.
 func keepSlugRune(r rune) rune {
 	if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
 		return r
@@ -385,8 +355,7 @@ func keepSlugRune(r rune) rune {
 	return '-'
 }
 
-// LookupLevel fetches a level's metadata by share code. Codes are upper-cased
-// server-side, so any case the caller passes works.
+// LookupLevel fetches a level's metadata by share code.
 func (c *Client) LookupLevel(input string) (*Level, error) {
 	code, err := NormalizeCode(input)
 	if err != nil {
@@ -410,9 +379,7 @@ func (c *Client) LookupLevel(input string) (*Level, error) {
 	return level, nil
 }
 
-// DownloadPack fetches one pack version as the zip that unpacks into
-// UserData/LevelPacks/. A pack the site does not host comes back as
-// PackNotHostedError, which is a different thing from the site being down.
+// DownloadPack fetches one pack version as the zip that unpacks into UserData/LevelPacks/.
 func (c *Client) DownloadPack(packID, version string) ([]byte, error) {
 	if !packIDPattern.MatchString(packID) {
 		return nil, fail("%s is not a pack id: use 1 to 64 characters of lowercase letters, digits, '_', or '-'",
@@ -431,9 +398,7 @@ func (c *Client) DownloadPack(packID, version string) ([]byte, error) {
 	})
 }
 
-// responseError turns a failed response into the error for it: a rate limit
-// says how long to wait, and a PocketBase error document contributes its own
-// message, which is usually more useful than the status alone.
+// responseError turns a failed response into the error the player should see.
 func responseError(response *http.Response) error {
 	if response.StatusCode == http.StatusTooManyRequests {
 		return &RateLimitedError{
@@ -459,8 +424,7 @@ func retryAfterSeconds(response *http.Response) int {
 	return seconds
 }
 
-// serverMessage reads a small error body and returns the message a PocketBase
-// handler sent with it.
+// serverMessage returns the message a PocketBase handler sent with its body.
 func serverMessage(body io.Reader) string {
 	limited, err := io.ReadAll(io.LimitReader(body, maxErrorBodyBytes))
 	if err != nil || len(limited) == 0 {
@@ -511,8 +475,7 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-// request gets a body, checking the status before the body is read so a 404 or
-// a login page reads as what it is rather than as corrupt data.
+// request gets a body, checking the status before the body is read.
 func (c *Client) request(requestURL string, classify func(response *http.Response) error) ([]byte, error) {
 	request, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
@@ -543,8 +506,7 @@ type transportFunc func(request *http.Request) (*http.Response, error)
 
 func (f transportFunc) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }
 
-// levelFromDocument reads the record out of PocketBase's list envelope. An
-// empty page is the same answer as a 404: no level the player can see.
+// levelFromDocument reads the record out of PocketBase's list envelope.
 func levelFromDocument(body []byte, code string) (*Level, error) {
 	document, err := decodeObject(body)
 	if err != nil {
@@ -577,8 +539,7 @@ func levelFromDocument(body []byte, code string) (*Level, error) {
 	return level, nil
 }
 
-// packsField reads the pack id to version map, keeping the keys the server
-// stored and ignoring entries that are not version strings.
+// packsField reads the pack id to version map, ignoring entries that are not strings.
 func packsField(record map[string]any) map[string]string {
 	packs, ok := objectField(record["packs"])
 	if !ok {
