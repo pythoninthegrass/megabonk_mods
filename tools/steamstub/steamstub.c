@@ -29,16 +29,16 @@ static long long write_buffer(void *buf, long long size, const char *s) {
 }
 
 // ---- runtime entry points (Steamworks.NET init + lifecycle) ---------------
+// MEGABONK_STEAM_FAIL_INIT=1 puts the stub in "no client" mode: init fails and the
+// session-backed queries answer with no data, so the degraded path is observable
+// end to end. Without it the stub stands in for a logged-in session.
+static int client_down(void) { return getenv("MEGABONK_STEAM_FAIL_INIT") != 0; }
+
 // InitEx -> this. Return 0 (k_ESteamAPIInitResult_OK) so SteamAPI.InitEx()
 // reports success and the game caches interfaces instead of staying degraded.
 int SteamInternal_SteamAPI_Init(const char *version, char *outErrMsg) {
-    // MEGABONK_STEAM_FAIL_INIT=1 makes Init() fail exactly as it would with no
-    // Steam client, so the game logs and continues into the degraded/offline
-    // verdict. Without the env var, Init() succeeds and the stub stands in for
-    // a logged-in session. See the #2 degraded-verdict test in docs/development.md.
     (void)version;
-    const char *fail = getenv("MEGABONK_STEAM_FAIL_INIT");
-    if (fail) {
+    if (client_down()) {
         if (outErrMsg) {
             const char *msg = "Steam client not available";
             int i = 0;
@@ -96,22 +96,21 @@ void SteamAPI_UseBreakpadCrashHandler(const char *a, const char *b, const char *
 }
 
 // The game reads these to decide whether Steam is present. Report "running",
-// unless MEGABONK_STEAM_FAIL_INIT is set, which also makes this report "down"
-// so the degraded path is observable end-to-end.
+// unless the client is meant to be down, so the degraded path is observable end-to-end.
 int SteamAPI_IsSteamRunning(void) {
-    return getenv("MEGABONK_STEAM_FAIL_INIT") ? 0 : 1;
+    return client_down() ? 0 : 1;
 }
-int SteamAPI_GetHSteamPipe(void) { return 1; }
-int SteamAPI_GetHSteamUser(void) { return 1; }
+int SteamAPI_GetHSteamPipe(void) { return client_down() ? 0 : 1; }
+int SteamAPI_GetHSteamUser(void) { return client_down() ? 0 : 1; }
 int SteamAPI_GetSteamInstallPath(char *buf, int size) {
     if (buf && size > 0) { buf[0] = 0; }
     return 0;
 }
 
 // Alternate init entry points the shim also exports; behave like Init.
-int SteamAPI_InitAnonymousUser(void) { return 1; }
-int SteamAPI_InitFlat(void) { return 1; }
-int SteamAPI_InitSafe(void) { return 1; }
+int SteamAPI_InitAnonymousUser(void) { return client_down() ? 0 : 1; }
+int SteamAPI_InitFlat(void) { return client_down() ? 0 : 1; }
+int SteamAPI_InitSafe(void) { return client_down() ? 0 : 1; }
 
 // RestartAppIfNecessary returns the app id to relaunch with; 0 means "no restart".
 int SteamAPI_RestartAppIfNecessary(unsigned long long ownAppId) {
@@ -137,7 +136,9 @@ long long SteamAPI_ISteamApps_BIsSubscribedFromFamilySharing(void) { return 0; }
 long long SteamAPI_ISteamApps_BIsSubscribedFromFreeWeekend(void) { return 0; }
 long long SteamAPI_ISteamApps_BIsTimedTrial(void) { return 0; }
 long long SteamAPI_ISteamApps_BIsVACBanned(void) { return 0; }
-long long SteamAPI_ISteamApps_GetAppBuildId(void) { return (long long)STEAMBUILD_ID; }
+// No depot identity without a client: answering this with the canned build id is what made a
+// "failed init" run still look ready.
+long long SteamAPI_ISteamApps_GetAppBuildId(void) { return client_down() ? 0 : (long long)STEAMBUILD_ID; }
 long long SteamAPI_ISteamApps_GetAppInstallDir(void *inst, char *buf, long long size) { return write_buffer(buf, size, g_install_dir); }
 long long SteamAPI_ISteamApps_GetAppOwner(void) { return 0; }
 long long SteamAPI_ISteamApps_GetAvailableGameLanguages(void) { return 0; }
