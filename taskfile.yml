@@ -25,6 +25,7 @@ includes:
   re: taskfiles/re.yml
   ghidra: taskfiles/ghidra.yml
   pocketbase: taskfiles/pocketbase.yml
+  setup: taskfiles/setup.yml
   site: taskfiles/site.yml
   wine:
     taskfile: taskfiles/wine.yml
