@@ -39,6 +39,24 @@ type DllOverride struct {
 	Via     *string `json:"via"`
 }
 
+// LoaderState is the record's entry for the BepInEx loader install: the pack and
+// mod versions this installer put in the game folder, the MelonLoader proxy it
+// parked, and the pack files it wrote there.
+type LoaderState struct {
+	BepInExVersion string `json:"bepinex_version"`
+	ModVersion     string `json:"mod_version"`
+	// Installed reports that this installer, and not a mod manager, put the
+	// loader pack and the mod's plugin folder in the game folder.
+	Installed   bool     `json:"installed"`
+	PackFiles   []string `json:"pack_files"`
+	ProxyParked bool     `json:"proxy_parked"`
+	ProxyBackup *string  `json:"proxy_backup"`
+	// ModSHA256 is the digest the mod archive carried when this install fetched
+	// it. Thunderstore publishes no checksum, so this is what lets a repair reuse
+	// the cached archive instead of fetching the release again.
+	ModSHA256 string `json:"mod_sha256,omitempty"`
+}
+
 // Record is MegabonkLevels.installer.json: the mod and BepInEx pack versions
 // that are installed, and the levels and packs this installer placed, so --check
 // can report drift and uninstall can remove exactly this.
@@ -56,6 +74,7 @@ type Record struct {
 	Packs                map[string]PackRecord  `json:"packs"`
 	Runtime              *Runtime               `json:"runtime"`
 	DllOverride          *DllOverride           `json:"dll_override"`
+	Loader               *LoaderState           `json:"loader,omitempty"`
 }
 
 // HasLevel reports whether the installer placed this level.

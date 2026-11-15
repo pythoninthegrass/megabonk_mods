@@ -308,7 +308,7 @@ func (c *Client) DownloadBepInEx(version, expectedSHA256, target string) (*Downl
 		return nil, err
 	}
 	archiveURL := c.ArchiveURL(BepInExNamespace, BepInExName, version)
-	if existing, err := verifiedFile(target, digest); err == nil {
+	if existing, err := cachedArchive(target, digest, packArchiveShape); err == nil {
 		return existing, nil
 	}
 	if err := os.MkdirAll(ppath.Parent(target), 0o755); err != nil {
@@ -331,6 +331,105 @@ func (c *Client) DownloadBepInEx(version, expectedSHA256, target string) (*Downl
 		return nil, err
 	}
 	return &Downloaded{Path: target, URL: archiveURL, Version: version, SHA256: digest, Size: int64(len(body))}, nil
+}
+
+// DownloadMod puts the mod's own archive for one version at target. expectedSHA256
+// is what proves the bytes: Thunderstore publishes no checksum for the mod, so a
+// caller either holds one from its own pin or from the install that first fetched
+// the release, or passes "" and gets the archive fetched fresh and proven by its
+// contents before it is installed. An archive with nothing to check it against is
+// never reused from the cache: the file name is derived from the version alone,
+// and a release republished under the same version would keep its old cached
+// bytes forever.
+func (c *Client) DownloadMod(version, expectedSHA256, target string) (*Downloaded, error) {
+	if !versionPattern.MatchString(version) {
+		return nil, fail("%s is not a mod version: expected a three-part version", strconv.Quote(version))
+	}
+	digest := strings.ToLower(strings.TrimSpace(expectedSHA256))
+	if digest != "" && !hex64.MatchString(digest) {
+		return nil, fail("the SHA-256 %s held for %s/%s %s is not 64 hex characters",
+			strconv.Quote(expectedSHA256), ModNamespace, ModName, version)
+	}
+	if err := checkTargetPath(target); err != nil {
+		return nil, err
+	}
+	archiveURL := c.ArchiveURL(ModNamespace, ModName, version)
+	if digest != "" {
+		if existing, err := cachedArchive(target, digest, modArchiveShape); err == nil {
+			existing.URL = archiveURL
+			existing.Version = version
+			return existing, nil
+		}
+	}
+	if err := os.MkdirAll(ppath.Parent(target), 0o755); err != nil {
+		return nil, fail("cannot create the folder for %s: %s", target, err.Error())
+	}
+	body, err := c.get(archiveURL, MaxArchiveBytes, func(response *http.Response) error {
+		return &Error{Message: fmt.Sprintf("Thunderstore answered %d for the %s %s archive: %s",
+			response.StatusCode, ModName, version, errorBody(response.Body))}
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := CheckModDigest(body, digest); err != nil {
+		return nil, err
+	}
+	// A zip that cannot be opened is not the mod's archive, whatever digest it
+	// carries. Whether its members are the plugin set is the installer's check, so
+	// that it can take back what it already placed.
+	if _, err := zip.NewReader(bytes.NewReader(body), int64(len(body))); err != nil {
+		return nil, fail("the %s %s archive is not a readable zip: %s", ModName, version, clip(err.Error()))
+	}
+	if err := writeVerified(target, body); err != nil {
+		return nil, err
+	}
+	if digest == "" {
+		digest = sha256Of(body)
+	}
+	return &Downloaded{Path: target, URL: archiveURL, Version: version, SHA256: digest, Size: int64(len(body))}, nil
+}
+
+// CheckModDigest reports whether bytes carry the digest the mod's archive was
+// downloaded for. A caller that holds no digest for the release passes "" and
+// gets the archive as it came, to be proven by its contents before it is used.
+func CheckModDigest(body []byte, expectedSHA256 string) error {
+	want := strings.ToLower(strings.TrimSpace(expectedSHA256))
+	if want == "" {
+		return nil
+	}
+	if !hex64.MatchString(want) {
+		return fail("the expected SHA-256 %s is not 64 hex characters", strconv.Quote(want))
+	}
+	got := sha256Of(body)
+	if got != want {
+		return fail("checksum mismatch: the %s/%s archive has SHA-256 %s, expected %s; nothing was installed",
+			ModNamespace, ModName, got, want)
+	}
+	return nil
+}
+
+// ArchiveName is the vendor-style filename one package version's archive is
+// cached under, so a cache directory holds only plain .zip files.
+func ArchiveName(namespace, name, version string) string {
+	return sanitize(namespace) + "-" + sanitize(name) + "-" + version + ".zip"
+}
+
+// sanitize keeps a cache filename to characters that are safe in one on every
+// platform, so a package name can never turn into a path.
+func sanitize(part string) string {
+	var builder strings.Builder
+	for _, r := range part {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_', r == '.':
+			builder.WriteRune(r)
+		default:
+			builder.WriteByte('-')
+		}
+	}
+	if builder.Len() == 0 {
+		return "package"
+	}
+	return builder.String()
 }
 
 // checkTargetPath accepts only a plain file path: every component names a real
@@ -368,14 +467,19 @@ func PinnedBepInExDigest(version string) (string, bool) {
 	return digest, ok
 }
 
+// sha256Of is the lowercase hex digest of bytes.
+func sha256Of(body []byte) string {
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:])
+}
+
 // CheckDigest reports whether bytes carry the digest they were downloaded for.
 func CheckDigest(body []byte, expectedSHA256 string) error {
 	want := strings.ToLower(strings.TrimSpace(expectedSHA256))
 	if !hex64.MatchString(want) {
 		return fail("the expected SHA-256 %s is not 64 hex characters", strconv.Quote(expectedSHA256))
 	}
-	sum := sha256.Sum256(body)
-	got := hex.EncodeToString(sum[:])
+	got := sha256Of(body)
 	if got != want {
 		return fail("checksum mismatch: the %s-%s archive has SHA-256 %s, expected %s; nothing was installed",
 			BepInExNamespace, BepInExName, got, want)
@@ -482,7 +586,11 @@ func climbsOut(relative string) bool {
 
 // verifiedFile is the archive already at path when it carries the digest, so a
 // second run does not refetch it.
-func verifiedFile(path, digest string) (*Downloaded, error) {
+// cachedArchive is the bytes already at path when they carry the expected digest
+// and still look like the archive that name is supposed to hold, so a second run
+// never pays for an archive it already has. Anything wrong with the file — no
+// digest match, an archive that no longer opens — means a fetch, never a reuse.
+func cachedArchive(path, digest string, shape func(body []byte) error) (*Downloaded, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -490,10 +598,26 @@ func verifiedFile(path, digest string) (*Downloaded, error) {
 	if err := CheckDigest(body, digest); err != nil {
 		return nil, err
 	}
-	if err := checkPackLayout(body, "cached "+BepInExName); err != nil {
+	if err := shape(body); err != nil {
 		return nil, err
 	}
-	return &Downloaded{Path: path, Version: "", SHA256: digest, Size: int64(len(body)), FromCache: true}, nil
+	return &Downloaded{Path: path, SHA256: digest, Size: int64(len(body)), FromCache: true}, nil
+}
+
+// packArchiveShape is what proves cached bytes are the loader pack: the digest,
+// and members that sit where the pack puts them.
+func packArchiveShape(body []byte) error {
+	return checkPackLayout(body, "cached "+BepInExName)
+}
+
+// modArchiveShape is what proves cached bytes are the mod's archive: the digest,
+// and a zip that opens. Whether its members are the plugin set is the installer's
+// check, so that it can take back whatever it already placed.
+func modArchiveShape(body []byte) error {
+	if _, err := zip.NewReader(bytes.NewReader(body), int64(len(body))); err != nil {
+		return fail("the cached archive is not a readable zip: %s", clip(err.Error()))
+	}
+	return nil
 }
 
 // writeVerified puts the verified bytes at path through a temporary file, so a

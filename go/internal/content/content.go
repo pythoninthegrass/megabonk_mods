@@ -181,6 +181,20 @@ func LoadRecord(gameDir string) *Record {
 			}
 		}
 	}
+	if loader, ok := jsonx.AsMap(fields["loader"]); ok && len(loader) > 0 {
+		record.Loader = &LoaderState{
+			BepInExVersion: stringField(loader, "bepinex_version"),
+			ModVersion:     stringField(loader, "mod_version"),
+			Installed:      jsonx.Truthy(loader["installed"]),
+			PackFiles:      stringListField(loader, "pack_files"),
+			ProxyParked:    jsonx.Truthy(loader["proxy_parked"]),
+			ModSHA256:      stringField(loader, "mod_sha256"),
+		}
+		if value, found := loader["proxy_backup"]; found && value != nil {
+			backup := jsonx.Text(value)
+			record.Loader.ProxyBackup = &backup
+		}
+	}
 	if entries, ok := jsonx.AsMap(fields["levels"]); ok {
 		record.Levels = map[string]LevelRecord{}
 		for code, raw := range entries {
