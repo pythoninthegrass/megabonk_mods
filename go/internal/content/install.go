@@ -20,8 +20,6 @@ func fail(format string, args ...any) error {
 
 func quote(text string) string { return strconv.Quote(text) }
 
-// LevelStem is a level file's name without the suffix the loaders append, the
-// stem its sidecar images are named after (level_thumbnail_sidecar.cs).
 func LevelStem(name string) string {
 	stem := ppath.Name(name)
 	for _, suffix := range LevelSuffixes {
@@ -65,15 +63,11 @@ type InstallLevelInput struct {
 
 type imagePlacement struct {
 	source string
-	// name is the file the image lands under: the slug's .png for a cover and
-	// .biome.png for a biome icon, the only names the install writes.
+	// name is the file the image lands under: <slug>.png or <slug>.biome.png.
 	name string
 }
 
-// InstallLevel writes a level and its images into UserData/Levels under the slug
-// name, creating the folders the game expects. An existing level file of that
-// name is replaced and reported; sidecar images left from an earlier install of
-// the same level, but absent from this one, are removed and recorded.
+// InstallLevel writes a level and its images into UserData/Levels under the slug name.
 func InstallLevel(gameDir string, input InstallLevelInput) (*LevelResult, error) {
 	if !ValidPackID(input.Slug) {
 		return nil, fail("level name %s: use a lowercase id of a-z, 0-9, '.', '_' or '-'", quote(input.Slug))
@@ -135,8 +129,7 @@ func InstallLevel(gameDir string, input InstallLevelInput) (*LevelResult, error)
 	return result, nil
 }
 
-// staleSidecars are the images the loaders would pick up for this level that the
-// current install does not carry, so a re-install cannot serve a stale cover.
+// staleSidecars are the images the loaders would pick up that this install does not carry.
 func staleSidecars(dir, slug string, placed []imagePlacement) []string {
 	wanted := map[string]bool{}
 	for _, image := range placed {
@@ -163,8 +156,7 @@ func sidecarCandidates(slug string) []string {
 	return names
 }
 
-// relativeToGame is a level folder file name as the record keeps it, relative to
-// the game directory.
+// relativeToGame is a level folder file name relative to the game directory.
 func relativeToGame(gameDir, name string) string {
 	return relativeFrom(gameDir, ppath.Join(LevelsPath(gameDir), name))
 }
@@ -187,11 +179,7 @@ type PackResult struct {
 	Files   []string
 }
 
-// InstallPackFromZip unpacks a pack archive as UserData/LevelPacks/<id>/, the
-// layout the pack loaders read. Members are checked before anything is written:
-// no name may escape the pack folder, and the unpacked directory has to pass
-// ValidatePackSource, so a broken pack never lands where the game would show it
-// as a placeholder.
+// InstallPackFromZip unpacks a pack archive as UserData/LevelPacks/<id>/.
 func InstallPackFromZip(gameDir, packID, version, archive string) (*PackResult, error) {
 	if !ValidPackID(packID) {
 		return nil, fail("pack id %s: use a lowercase id of a-z, 0-9, '.', '_' or '-'", quote(packID))
@@ -225,8 +213,7 @@ func InstallPackFromZip(gameDir, packID, version, archive string) (*PackResult, 
 		Dir: ppath.Join(UserData, LevelPacksDir, packID), Files: written}, nil
 }
 
-// packMembers is the archive's installable members, every name vetted before a
-// single byte is written.
+// packMembers is the archive's installable members, every name vetted first.
 func packMembers(archive, packID string) (map[string]*zip.File, *zip.ReadCloser, error) {
 	bundle, err := zip.OpenReader(archive)
 	if err != nil {
@@ -270,9 +257,7 @@ func packMembers(archive, packID string) (map[string]*zip.File, *zip.ReadCloser,
 	return members, bundle, nil
 }
 
-// checkMember reads a member through and reports anything its header did not
-// promise. The whole archive is proven this way before the installed pack folder
-// is replaced, so a truncated or tampered download never touches the game.
+// checkMember reads a member through and reports anything its header did not promise.
 func checkMember(member *zip.File, packID, name string) error {
 	promised := member.UncompressedSize64
 	reader, err := member.Open()
@@ -287,8 +272,7 @@ func checkMember(member *zip.File, packID, name string) error {
 	return nil
 }
 
-// packWants reports whether a pack member is one of the files the loaders read:
-// the manifest, its attachments sidecar, and the bundles.
+// packWants reports whether a pack member is one the loaders read.
 func packWants(name string) bool {
 	switch name {
 	case manifestName, attachmentsName:
@@ -297,10 +281,8 @@ func packWants(name string) bool {
 	return IsBundleName(name)
 }
 
-// memberInside is a zip member's path inside the pack folder. Every member is
-// vetted, wherever it sits: names that climb out of the destination, use a drive
-// letter or a backslash separator, or bury the pack folder under another name
-// are refused before any file is opened.
+// memberInside is a zip member's path inside the pack folder, "" when the member is
+// outside it, and an error when the name would escape.
 func memberInside(entry, prefix, packID string) (string, error) {
 	slash := filepath.ToSlash(entry)
 	if strings.Contains(slash, "\\") || hasDriveLetter(slash) {
@@ -344,8 +326,7 @@ func hasDriveLetter(name string) bool {
 	return (name[0] >= 'a' && name[0] <= 'z') || (name[0] >= 'A' && name[0] <= 'Z')
 }
 
-// preparePackDir makes the destination hold nothing but the pack about to be
-// written, so a re-install never leaves an old bundle beside the new one.
+// preparePackDir makes the destination hold nothing but the pack about to be written.
 func preparePackDir(dest string) error {
 	if err := os.MkdirAll(ppath.Parent(dest), 0o755); err != nil {
 		return err
@@ -409,8 +390,7 @@ func sortedMembers(members map[string]*zip.File) []string {
 	return keys
 }
 
-// packOrder puts the manifest first, then its attachments sidecar, then the
-// bundles in name order.
+// packOrder puts the manifest and its sidecar before the bundles.
 func packOrder(names []string) []string {
 	ordered := make([]string, 0, len(names))
 	for _, first := range []string{manifestName, attachmentsName} {

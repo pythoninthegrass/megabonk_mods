@@ -1,7 +1,5 @@
-// Package zipx unpacks an archive into one directory. Every member name is
-// checked against the destination before anything is written, so an archive that
-// climbs out of its target fails as an error rather than as files in the wrong
-// place.
+// Package zipx unpacks an archive into one directory, vetting every member name
+// against the destination before anything is written.
 package zipx
 
 import (
@@ -23,8 +21,8 @@ func fail(format string, args ...any) error {
 	return &Error{message: fmt.Sprintf(format, args...)}
 }
 
-// Extract unpacks archive into target, creating target when it is missing. The
-// whole archive is checked first, so a refusing run writes nothing.
+// Extract unpacks archive into target, creating target when it is missing; a run
+// that refuses writes nothing.
 func Extract(archive, target string) error {
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		return err
@@ -52,9 +50,8 @@ func Extract(archive, target string) error {
 	return nil
 }
 
-// ExtractMember writes one already-vetted member at relative under root, keeping
-// its mode. A positive limit caps how much is copied, so a member whose declared
-// size lies about it cannot fill the disk.
+// ExtractMember writes one already-vetted member at relative under root, keeping its
+// mode; a positive limit caps how much is copied.
 func ExtractMember(member *zip.File, root, relative string, limit int64) error {
 	destination := filepath.Join(root, filepath.FromSlash(filepath.ToSlash(relative)))
 	if member.FileInfo().IsDir() {
