@@ -7,7 +7,9 @@ public static class GameBuildIdCheck
 {
     public static string MismatchWarning(string recordedBuildId, string actualBuildId)
     {
-        if (string.IsNullOrEmpty(recordedBuildId) || recordedBuildId == actualBuildId)
+        // Either side being unknown means there is nothing to compare: an empty recorded id is a level saved
+        // before the check existed (or with Steamworks unavailable), and a null actual id is an unavailable client.
+        if (string.IsNullOrEmpty(recordedBuildId) || string.IsNullOrEmpty(actualBuildId) || recordedBuildId == actualBuildId)
         {
             return null;
         }

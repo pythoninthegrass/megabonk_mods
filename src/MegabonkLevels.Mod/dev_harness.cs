@@ -247,10 +247,14 @@ public static class DevHarness
                 EditorMode.Set(command.Enabled, _logger);
                 break;
             case HarnessCommandKind.SteamReady:
-                var readiness = SteamReadiness.Probe(GameBuildIdPatch.CurrentBuildId);
+                var readiness = SteamReadiness.Probe(GameBuildIdPatch.CurrentBuildId, GameBuildIdPatch.IsSteamRunning);
                 if (readiness.Ready)
                 {
                     _logger.Msg($"DevHarness: Steamworks ready (build {readiness.BuildId}).");
+                }
+                else
+                {
+                    _logger.Msg($"DevHarness: Steamworks not ready ({readiness.Reason}).");
                 }
 
                 return readiness.ToJson();

@@ -1318,9 +1318,17 @@ def steam_ready_verdict(harness: Path, timeout: float) -> str | None:
     return "ready"
 
 
-def send_steam_ready(harness: Path, timeout: float) -> bool:
-    """True when the game's Steamworks client is up; a mod that returns no result counts as ready."""
-    return steam_ready_verdict(harness, timeout) == "ready"
+def steam_ready_detail(harness: Path, timeout: float) -> tuple[bool, str]:
+    """Whether the client is up plus the mod's own verdict text: the build id when up, the reason when not."""
+    ok, result = send_for_result(harness, build_command("steam-ready"), timeout)
+    payload = (result or {}).get("result")
+    if not isinstance(payload, dict):
+        return ok, ""
+    if payload.get("ready") is False:
+        reason = payload.get("reason")
+        return False, f"not ready ({reason})" if reason else "not ready"
+    build_id = payload.get("buildId")
+    return ok, f"ready (build {build_id})" if build_id else "ready"
 
 
 def send_printing_result(
@@ -2111,7 +2119,9 @@ def main(argv: list[str] | None = None) -> int:
         case "quit":
             ok = quit_game(harness, args.timeout, stop_steam=args.stop_steam, stop_menu=args.stop_menu)
         case "steam-ready":
-            ok = send_steam_ready(harness, args.timeout)
+            ok, detail = steam_ready_detail(harness, args.timeout)
+            if detail:
+                print(f"steam-ready: {detail}")
         case "freeze" | "resume" | "invulnerable" | "vulnerable" | "kill" | "restart-run":
             ok = send(harness, build_command(args.action), args.timeout)
         case "state":

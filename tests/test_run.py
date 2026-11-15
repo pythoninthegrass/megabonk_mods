@@ -723,6 +723,20 @@ def test_steam_ready_exits_0_for_a_mod_that_returns_no_result() -> None:
         assert run_main(game, "steam-ready") == 0
 
 
+def test_steam_ready_prints_the_build_id_when_the_client_is_up(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"steam-ready","ok":true,"result":{"ready":true,"buildId":"21750826"}}')
+        assert run_main(game, "steam-ready") == 0
+    assert "steam-ready: ready (build 21750826)" in capsys.readouterr().out.splitlines()
+
+
+def test_steam_ready_prints_the_reason_when_the_client_is_down(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        game = fake_game(tmp, '{"command":"steam-ready","ok":true,"result":{"ready":false,"reason":"steam-not-running"}}')
+        assert run_main(game, "steam-ready") == 1
+    assert "steam-ready: not ready (steam-not-running)" in capsys.readouterr().out.splitlines()
+
+
 def test_wait_for_steamworks_ready_retries_until_the_game_reports_ready() -> None:
     results = iter(["not-ready", "not-ready", "ready"])
     assert run.wait_for_steamworks_ready(lambda: next(results), timeout=5, sleep=lambda _: None) == "ready"
