@@ -158,6 +158,20 @@ def test_install_on_an_installed_stub_is_a_no_op(plugins, monkeypatch, capsys):
     assert backup_file(plugins).read_bytes() == ORIGINAL
 
 
+def test_install_replaces_an_installed_stub_when_the_artifact_was_rebuilt(plugins, monkeypatch, capsys):
+    shim_file(plugins).write_bytes(STUB_BYTES)
+    backup_file(plugins).write_bytes(ORIGINAL)
+    rebuilt = STUB_BYTES + b" and a new gate"
+    swap.STUB.write_bytes(rebuilt)
+
+    code, out = run(monkeypatch, capsys, "install")
+
+    assert code == 0
+    assert shim_file(plugins).read_bytes() == rebuilt
+    assert "stub already installed" not in out
+    assert backup_file(plugins).read_bytes() == ORIGINAL
+
+
 def test_install_refuses_to_record_a_stub_as_the_original(plugins, monkeypatch, capsys):
     shim_file(plugins).write_bytes(STUB_BYTES)
 

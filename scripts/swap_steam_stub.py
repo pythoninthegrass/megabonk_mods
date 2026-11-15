@@ -90,12 +90,12 @@ def do_install(shim: Path, bak: Path) -> int:
     if state == "STUB" and not bak.exists():
         print(f"the shim is already the stub and {bak.name} is missing; refusing to record the stub as the original")
         return 1
-    if state == "STUB":
-        print("stub already installed")
-        return 0
     if not bak.exists():
         shutil.copy2(shim, bak)
         print(f"backed up original -> {bak.name}")
+    if state == "STUB" and sha256(shim) == sha256(STUB):
+        print(f"stub already installed ({sha256(shim)})")
+        return 0
     shutil.copy2(STUB, shim)
     print(f"installed STUB -> {shim.name}  ({sha256(shim)})")
     print("relaunch the game to load it; quit first (a loaded DLL can't be overwritten).")
