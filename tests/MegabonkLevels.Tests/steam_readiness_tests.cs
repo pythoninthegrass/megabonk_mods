@@ -71,6 +71,15 @@ public class SteamReadinessTests
     }
 
     [Fact]
+    public void Probe_WhenSteamRunningAnswerThrows_FallsBackToTheClientReason()
+    {
+        var readiness = SteamReadiness.Probe(() => null, () => throw new InvalidOperationException("no entry point"));
+
+        Assert.False(readiness.Ready);
+        Assert.Equal(SteamReadiness.ReasonClientNotInitialized, readiness.Reason);
+    }
+
+    [Fact]
     public void IsNotInitialized_WhenMessageCarriesTheInteropFault_ReturnsTrue()
     {
         Assert.True(SteamReadiness.IsNotInitialized(new InvalidOperationException(NotInitializedFault)));

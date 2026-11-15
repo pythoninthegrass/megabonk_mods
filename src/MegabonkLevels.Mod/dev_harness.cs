@@ -248,16 +248,27 @@ public static class DevHarness
                 break;
             case HarnessCommandKind.SteamReady:
                 var readiness = SteamReadiness.Probe(GameBuildIdPatch.CurrentBuildId, GameBuildIdPatch.IsSteamRunning);
+                var steamRunning = GameBuildIdPatch.IsSteamRunning();
+                var steamSession = GameBuildIdPatch.HasSteamSession();
+                var steamLibrary = SteamLibraryReport.FromGameRoot(ModPaths.GameRootDirectory);
+                var failInitRequested = Environment.GetEnvironmentVariable("MEGABONK_STEAM_FAIL_INIT") != null;
+                var evidence = $"steam={TriState(steamRunning)}, session={TriState(steamSession)}, " +
+                    $"library={steamLibrary}, failInitEnv={(failInitRequested ? "set" : "unset")}";
                 if (readiness.Ready)
                 {
-                    _logger.Msg($"DevHarness: Steamworks ready (build {readiness.BuildId}).");
+                    _logger.Msg($"DevHarness: Steamworks ready (build {readiness.BuildId}) [{evidence}].");
                 }
                 else
                 {
-                    _logger.Msg($"DevHarness: Steamworks not ready ({readiness.Reason}).");
+                    _logger.Msg($"DevHarness: Steamworks not ready ({readiness.Reason}) [{evidence}].");
                 }
 
-                return readiness.ToJson();
+                var steamJson = readiness.ToJson();
+                steamJson["steamRunning"] = steamRunning.HasValue ? JsonValue.Create(steamRunning.Value) : null;
+                steamJson["steamSession"] = steamSession.HasValue ? JsonValue.Create(steamSession.Value) : null;
+                steamJson["steamLibrary"] = steamLibrary;
+                steamJson["failInitEnv"] = failInitRequested;
+                return steamJson;
             case HarnessCommandKind.State:
                 return ReadState().ToJson();
             case HarnessCommandKind.Key:
@@ -915,6 +926,8 @@ public static class DevHarness
             _logger.Warning($"DevHarness: key name '{name}' is not a UnityEngine.KeyCode member.");
         }
     }
+
+    private static string TriState(bool? value) => value == true ? "up" : value == false ? "down" : "unreadable";
 
     private static GameStateSnapshot ReadState()
     {

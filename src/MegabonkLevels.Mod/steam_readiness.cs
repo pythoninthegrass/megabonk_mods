@@ -3,7 +3,8 @@ using System.Text.Json.Nodes;
 
 namespace MegabonkLevels;
 
-// Whether the game's Steamworks client is up, read through the build id; the not-initialized fault is an expected answer while the game starts or with no Steam session.
+// Whether the game's Steamworks client is up. The build id answers for it, and the reason for its absence comes
+// from the shim; which steam_api64 is loaded decides how much a build id is worth.
 public readonly record struct SteamReadiness(bool Ready, string BuildId, string Reason = null)
 {
     public const string NotInitializedMessage = "Steamworks is not initialized";
@@ -29,9 +30,20 @@ public readonly record struct SteamReadiness(bool Ready, string BuildId, string 
             return new SteamReadiness(true, buildId);
         }
 
-        var reason = isSteamRunning != null && isSteamRunning() == false ? ReasonSteamNotRunning : ReasonClientNotInitialized;
-        return new SteamReadiness(false, null, reason);
+        bool? running;
+        try
+        {
+            running = isSteamRunning?.Invoke();
+        }
+        catch (Exception)
+        {
+            running = null;
+        }
+
+        return new SteamReadiness(false, null, ReasonFor(running));
     }
+
+    private static string ReasonFor(bool? running) => running == false ? ReasonSteamNotRunning : ReasonClientNotInitialized;
 
     public JsonObject ToJson()
     {

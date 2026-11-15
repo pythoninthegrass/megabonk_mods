@@ -1326,9 +1326,26 @@ def steam_ready_detail(harness: Path, timeout: float) -> tuple[bool, str]:
         return ok, ""
     if payload.get("ready") is False:
         reason = payload.get("reason")
-        return False, f"not ready ({reason})" if reason else "not ready"
-    build_id = payload.get("buildId")
-    return ok, f"ready (build {build_id})" if build_id else "ready"
+        detail = f"not ready ({reason})" if reason else "not ready"
+        ready = False
+    else:
+        build_id = payload.get("buildId")
+        detail = f"ready (build {build_id})" if build_id else "ready"
+        ready = True
+
+    evidence = [
+        f"{label}={value if isinstance(value, str) else str(value).lower()}"
+        for label, key in (
+            ("steam", "steamRunning"),
+            ("session", "steamSession"),
+            ("library", "steamLibrary"),
+            ("failInitEnv", "failInitEnv"),
+        )
+        if (value := payload.get(key)) is not None
+    ]
+    if evidence:
+        detail += f" [{', '.join(evidence)}]"
+    return ok and ready, detail
 
 
 def send_printing_result(
