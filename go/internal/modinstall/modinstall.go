@@ -68,8 +68,14 @@ type Options struct {
 	WineBin string
 	// Runner runs the wine command, which tests supply.
 	Runner proton.Runner
+	// OverrideOnly places no loader or plugin files: the caller installed them,
+	// and this run only applies the platform's winhttp override and records it.
+	OverrideOnly bool
 	// DryRun plans the run and changes nothing.
 	DryRun bool
+	// SkipRecord leaves the install record to the caller, which is what a plan
+	// that also places levels and packs wants: one record, written once.
+	SkipRecord bool
 }
 
 // Result is what a run did.
@@ -120,6 +126,11 @@ type State struct {
 	Release        string `json:"latest_version,omitempty"`
 	UpToDate       *bool  `json:"up_to_date,omitempty"`
 	Reason         string `json:"reason,omitempty"`
+	// OverrideSet says the run wrote the winhttp override into OverridePrefix, and
+	// OverrideVia names the route that did it.
+	OverrideSet    bool   `json:"override_set,omitempty"`
+	OverrideVia    string `json:"override_via,omitempty"`
+	OverridePrefix string `json:"override_prefix,omitempty"`
 }
 
 // Fetcher hands over one verified archive; tests use it instead of a network.
@@ -223,6 +234,10 @@ func install(client *thunderstore.Client, options Options, reporter Progress, fe
 		return client.DownloadMod(version, want, target)
 	}
 
+	if options.OverrideOnly {
+		return overrideOnly(options, reporter, result, resolution)
+	}
+
 	start(reporter, len(planLabels()), "installing MegabonkLevels "+result.ModVersion)
 
 	// Both archives are fetched before the game directory is touched.
@@ -287,24 +302,56 @@ func install(client *thunderstore.Client, options Options, reporter Progress, fe
 	case PlatformWine:
 		via := proton.SetDllOverride(options.Prefix, proton.WinHTTPDLLName, proton.WinHTTPValue,
 			"", options.WineBin, options.Runner)
-		result.OverrideApplied = true
-		result.OverrideVia = via
-		run.markOverride(options.Prefix)
+		run.markOverride(options.Prefix, via)
 		step(reporter, "set the winhttp override in the Wine prefix ("+via+")")
 	default:
 		step(reporter, "no DLL override needed on Windows")
 	}
+	result.OverrideApplied, result.OverrideVia = run.overrideSet, run.overrideVia
 
 	if err := run.writeRecord(result); err != nil {
 		return nil, run.abort(err)
 	}
-	step(reporter, "wrote the install record")
+	if !options.SkipRecord {
+		step(reporter, "wrote the install record")
+	}
 	run.commit()
 
 	if result.LaunchOption != "" {
 		showLaunchOption(reporter, result.LaunchOption)
 	}
 	finish(reporter, "MegabonkLevels "+result.ModVersion+" installed", true)
+	return result, nil
+}
+
+// overrideOnly applies just the platform winhttp override for a loader and plugin
+// set somebody else placed, so a foreign install is never rewritten.
+func overrideOnly(options Options, reporter Progress, result *Result,
+	resolution *thunderstore.Resolution) (*Result, error) {
+	start(reporter, 2, "enabling MegabonkLevels "+result.ModVersion)
+	run := newTransaction(result.Game, reporter)
+	switch result.Platform {
+	case PlatformProton:
+		result.LaunchOption = proton.WinHTTPLaunchOption
+		step(reporter, "prepared the Steam launch option to copy")
+	case PlatformWine:
+		via := proton.SetDllOverride(options.Prefix, proton.WinHTTPDLLName, proton.WinHTTPValue,
+			"", options.WineBin, options.Runner)
+		run.markOverride(options.Prefix, via)
+		step(reporter, "set the winhttp override in the Wine prefix ("+via+")")
+	default:
+		step(reporter, "no DLL override needed on Windows")
+	}
+	result.OverrideApplied, result.OverrideVia = run.overrideSet, run.overrideVia
+	if err := run.writeOverrideRecord(result); err != nil {
+		return nil, run.abort(err)
+	}
+	step(reporter, "wrote the install record")
+	run.commit()
+	if result.LaunchOption != "" {
+		showLaunchOption(reporter, result.LaunchOption)
+	}
+	finish(reporter, "MegabonkLevels "+result.ModVersion+" enabled", true)
 	return result, nil
 }
 
@@ -401,6 +448,9 @@ func (r *Result) State() State {
 		BepInExVersion: r.BepInExVersion,
 		Platform:       r.Platform,
 		Release:        r.ModVersion,
+		OverrideSet:    r.OverrideApplied,
+		OverrideVia:    r.OverrideVia,
+		OverridePrefix: r.Prefix,
 	}
 }
 
@@ -645,6 +695,7 @@ type transaction struct {
 	rollbacks      []string
 	parkedProxy    bool
 	overrideSet    bool
+	overrideVia    string
 	overridePrefix string
 	reporter       Progress
 	committed      bool
@@ -734,8 +785,11 @@ func (t *transaction) backup(destination, relative string) (string, error) {
 	return backup, nil
 }
 
-func (t *transaction) markOverride(prefix string) {
+// markOverride notes that this run pointed the prefix at the loader's winhttp
+// proxy. Any route that wrote the key counts, so uninstall can clear either.
+func (t *transaction) markOverride(prefix, via string) {
 	t.overrideSet = true
+	t.overrideVia = via
 	t.overridePrefix = ppath.Normalize(prefix)
 }
 
@@ -765,6 +819,29 @@ func (t *transaction) writeRecord(result *Result) error {
 		record.Loader.ProxyBackup = &backup
 	}
 	record.Runtime = &content.Runtime{Mode: "gamedir", Path: content.RuntimeDirName, Version: "6"}
+	if result.OverrideApplied {
+		prefix := t.overridePrefix
+		via := result.OverrideVia
+		record.DllOverride = &content.DllOverride{
+			Applied: true,
+			Name:    proton.WinHTTPDLLName,
+			Value:   proton.WinHTTPValue,
+			Via:     &via,
+			Prefix:  &prefix,
+		}
+	} else {
+		record.DllOverride = nil
+	}
+	_, err := content.SaveRecord(t.gameDir, record)
+	return err
+}
+
+// writeOverrideRecord records only the prefix override this run applied.
+func (t *transaction) writeOverrideRecord(result *Result) error {
+	record := content.LoadRecord(t.gameDir)
+	if record == nil {
+		record = &content.Record{Schema: content.RecordSchema}
+	}
 	if result.OverrideApplied {
 		prefix := t.overridePrefix
 		via := result.OverrideVia
@@ -918,12 +995,19 @@ func showLaunchOption(reporter Progress, option string) {
 	}
 }
 
+// cancelled asks whether the player stopped the run. A reporter is asked once
+// its own steps have been reported, so a step counter alone is not a request.
 func cancelled(reporter Progress) bool {
 	if reporter == nil {
 		return false
 	}
-	if cancellable, ok := reporter.(ui.Cancellable); ok {
-		return cancellable.Cancelled()
-	}
-	return false
+	cancellable, ok := reporter.(ui.Cancellable)
+	return ok && cancellable.Cancelled()
 }
+
+// PlannedStepCount is how many steps a mod install reports, so a caller that
+// owns the whole run's progress can count them up front.
+const PlannedStepCount = 10
+
+// OverrideOnlyStepCount is how many steps an override-only run reports.
+const OverrideOnlyStepCount = 2

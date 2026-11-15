@@ -632,6 +632,17 @@ func UninstallRecorded(gameDir string, record *Record) ([]string, error) {
 		}
 		removed = append(removed, name)
 	}
+	// The level and pack folders the record just emptied go too: they are the
+	// installer's own, and a game it made untouched should look untouched.
+	for _, folder := range []string{LevelsPath(game), LevelPacksPath(game)} {
+		if !collapsible(folder) {
+			continue
+		}
+		if err := os.RemoveAll(nativePath(folder)); err != nil {
+			return removed, err
+		}
+		removed = append(removed, ppath.Join(UserData, ppath.Name(folder)))
+	}
 	if err := dropRemovedEntries(game, record); err != nil {
 		return removed, err
 	}

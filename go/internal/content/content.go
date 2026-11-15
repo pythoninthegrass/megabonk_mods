@@ -26,8 +26,6 @@ const (
 	LevelsDir = "Levels"
 	// LevelPacksDir is the folder asset packs are read from.
 	LevelPacksDir = "LevelPacks"
-	// RuntimeSubdir holds the private .NET 6 runtime.
-	RuntimeSubdir = "dotnet6-win"
 	// RecordName is the install record, the contract uninstall reads.
 	RecordName = "MegabonkLevels.installer.json"
 	// LoaderDir is MelonLoader's directory.
@@ -35,11 +33,9 @@ const (
 	// ModsDir holds the mod assemblies.
 	ModsDir = "Mods"
 	// UserLibsDir holds extra assemblies the game probes early.
-	UserLibsDir = "UserLibs"
-	// VersionMarkerName records the loader version already installed.
-	VersionMarkerName = "MegabonkLevels.melonloader_version"
-	manifestName      = "manifest.json"
-	attachmentsName   = "attachments.json"
+	UserLibsDir     = "UserLibs"
+	manifestName    = "manifest.json"
+	attachmentsName = "attachments.json"
 	// AttachmentsSchema is the only attachments sidecar document the game reads.
 	AttachmentsSchema = "pack-attachments/1"
 	prefabSuffix      = ".bundle"
@@ -75,40 +71,6 @@ func LevelPacksPath(gameDir string) string { return ppath.Join(UserDataDir(gameD
 
 // PackDest is where a pack id lands.
 func PackDest(gameDir, packID string) string { return ppath.Join(LevelPacksPath(gameDir), packID) }
-
-// RuntimePath is the private runtime directory.
-func RuntimePath(gameDir string) string { return ppath.Join(gameDir, RuntimeSubdir) }
-
-// NativeRuntimePath is where MelonLoader looks for a .NET runtime on a native
-// Windows install without any environment variable.
-func NativeRuntimePath(gameDir string) string {
-	return ppath.Join(gameDir, LoaderDir, "Dependencies", "dotnet")
-}
-
-// VersionMarkerPath is the file recording the installed MelonLoader version.
-func VersionMarkerPath(gameDir string) string {
-	return ppath.Join(gameDir, LoaderDir, VersionMarkerName)
-}
-
-// InstalledLoaderVersion is the loader version the marker file names, or "" when
-// there is no marker.
-func InstalledLoaderVersion(gameDir string) string {
-	marker := VersionMarkerPath(gameDir)
-	if !ppath.IsFile(marker) {
-		return ""
-	}
-	text, err := ppath.ReadTextReplace(marker)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(text)
-}
-
-// HasInstalledLoaderVersion tells the two states InstalledLoaderVersion
-// collapses: a marker that exists but is blank still counts as installed.
-func HasInstalledLoaderVersion(gameDir string) bool {
-	return ppath.IsFile(VersionMarkerPath(gameDir))
-}
 
 // RecordFilePath is the install record.
 func RecordFilePath(gameDir string) string { return ppath.Join(gameDir, RecordName) }

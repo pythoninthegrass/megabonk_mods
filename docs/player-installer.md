@@ -66,7 +66,7 @@ megabonk-levels-<mod>-ml<melonloader>-linux/
 └── content/packs/<pack-id>/      bundle + manifest.json (+ attachments.json) per pack
 ```
 
-`megabonk-installer` is the only entry point a player needs: a static binary that reads `manifest.json` from the folder it runs in (or `--package <dir>`), so there is no interpreter to choose and nothing to put on a path. The builder copies the platform's binary from `.tools/installer/` and marks it executable; a package build without `--installer-binary` fails, and a missing file is a missing input that points at `task installer:build`.
+`megabonk-installer` is the only entry point a player needs: a static binary, so there is no interpreter to choose and nothing to put on a path. It takes the levels to install as arguments and finds everything else itself — the mod and its loader from Thunderstore, the level files from `megabonkmod.party`. The builder copies the platform's binary from `.tools/installer/` and marks it executable; a package build without `--installer-binary` fails, and a missing file is a missing input that points at `task installer:build`.
 
 ## The manifest
 
@@ -136,31 +136,31 @@ That one file drives both `--check` and `--uninstall`. Uninstall is deliberately
 | Code | Meaning |
 | --- | --- |
 | 0 | Done, nothing needed. |
-| 1 | Error (bad package, checksum mismatch, I/O). |
-| 2 | Usage — e.g. no `--package`. |
-| 3 | Nothing found to work on: no Steam install, no game directory, no package. |
+| 1 | Error (archive checksum mismatch, I/O, a step that failed and rolled back). |
+| 2 | Usage — no level was named, an invalid choice was given, or the platform needs `--prefix` and none was passed. |
+| 3 | Nothing found to work on: no Steam install, no game directory. |
 | 4 | The game directory is a build this installer will not touch, i.e. the native Linux build. |
-| 10 | `--check` found drift between the record and the package. A script can treat 10 as "reinstall" and 0 as "already installed". |
+| 10 | `--check` found content the game does not have yet. A script can treat 10 as "install it" and 0 as "already installed". |
 
 ## Installer contract
 
 Every platform's installer — the same Go binary, built as `megabonk-installer` for Linux and macOS and `install.exe` for Windows — implements the steps below in this order, and a player's experience differs between platforms only in how the installer is launched. The sections after this one describe the platform specifics; this one is the single list they must agree with, and the Go tests under `go/internal` hold the installer to it.
 
-1. **Check the package.** Load `manifest.json` and verify every `vendor/` archive and `files[]` entry against its digest before touching the game. A bad or tampered package exits 1 with the list of mismatches and changes nothing.
-2. **Find the game directory.** Use `--game-dir` when given. Otherwise read Steam's recorded libraries and accept a directory only when it holds `Megabonk.exe`, `Megabonk.x86_64` or `Megabonk_Data/`. A game that cannot be found exits 3 and names every Steam client and library considered, each with why it was rejected, plus the flag to retry with.
-3. **Classify the build.** Only the Windows build is supported, on every platform. The native Linux build is refused with exit 4 and the steps for switching to the Windows build.
-4. **Compare the game build.** Read the installed build id from the library's `appmanifest_3405340.acf` and print whether it matches the build the package was verified against. A difference prints a warning and the run continues, because a game update must not lock a player out; an absent appmanifest prints that the installed build is unknown. The installed id goes into the install record.
-5. **Install MelonLoader at the pinned version** from `vendor/`, verified against the manifest checksum. The installer never goes to the network.
-6. **Provide the .NET 6 runtime** from `vendor/` at user scope, inside the game directory or the Wine prefix, never machine-wide. Where it goes depends on the platform: [Windows package](#windows-package), [macOS package](#macos-package) and [.NET placement](#net-placement-and-the-launch-option) on Linux.
-7. **Apply the `version.dll` override** where a Wine or Proton prefix needs it. Native Windows has none.
-8. **Place the mod files** from `files[]`: the mod DLL and its managed dependencies.
-9. **Create `UserData/Levels/`**, then **import levels** and **install packs** the package carries or that `--level` and `--pack` name. Inputs are validated first, so a bad level or pack is listed and nothing is half-installed.
+1. **Classify the build.** Only the Windows build is supported, on every platform. This happens before the network is used, so a native Linux game is refused without a download and a player is not kept waiting: exit 4 with the steps for switching to the Windows build.
+2. **Read the inputs.** Each positional `LEVEL` is a share code, a `megabonkmod.party` level link, a level's stored file name, or a `.mblevel.json` path on disk, and each is resolved to its hosted record before anything else is judged — so a bad file or an unknown code reaches the player rather than a complaint about a folder. Two spellings of one level are one install, and a local file is preferred over the site's copy of the same name.
+3. **Resolve the prefix and platform.** A `--prefix` with `drive_c/` is usable; one named but without it is a Steam install that has not been launched under Proton yet, which downgrades to the loader's own runtime with a warning rather than refusing. Nothing usable at all, where the platform needs a prefix, is a usage error naming the flag.
+4. **Name the game build.** Read the installed build id from the library's `appmanifest_3405340.acf` and print it, so a player reporting a problem has it in front of them. Nothing is pinned to one build, so this is an observation rather than a verdict: an untested build still installs. The id goes into the install record.
+5. **Plan it.** The levels, their sidecar images, the packs they need, and the optional mod become a list of steps. A pack several levels need appears once; a pack already installed at the version every level asks for is skipped; a pack the site does not host is a warning, not a failure, and the level still installs.
+6. **Fetch into staging.** Every download and every content file is written into a staging folder the game cannot read. Nothing in the game directory changes while this happens, so a plan the player walks away from, cancels, or that fails halfway leaves the game exactly as it was: the run rolls back what it placed and reports what it could not restore.
+7. **Commit the plan.** Staged files move into `UserData/Levels/` and `UserData/LevelPacks/` in the order the plan promised, replacing a pack folder whole so a pack that changed version keeps no stale bundle.
+8. **Install the mod** from Thunderstore when asked for or when the game lacks one: the BepInEx loader pack, its .NET 6 runtime in `dotnet/` beside the executable, and the plugin under `BepInEx/plugins/MegabonkLevels/`. Where a loader and plugin set are already in place but not this installer's, only the platform override is applied — a foreign install is never rewritten.
+9. **Apply the `winhttp` override** where a Wine or Proton prefix needs it. Native Windows has none; a Proton run prints the Steam launch option instead of writing one.
 10. **Write the install record**, which drives `--check` and `--uninstall`.
 11. **Report** what was done and what was not, as numbered `N/M label` lines or a progress window. A failure exits nonzero with a message that says what to do.
 
 ### Re-running
 
-A second run with nothing changed does nothing and says so. A run after something has gone missing or stale repairs only that: `--check` compares the install against the package by file digest and loader version marker, exits 10 when anything differs, and the next install run fixes just those entries. A wiped runtime is reinstalled together with its `version.dll` override, because losing one without the other leaves a game that starts and never loads a mod.
+A second run with nothing changed does nothing and says so, answering from the record alone. A run after something has gone missing or stale repairs only that: `--check` reports the content the game does not have and answers whether the mod is in place, exiting 10 when anything is missing and 0 when it is not. The level and pack archives are cached under `~/.cache/megabonk-levels`, so a repair reuses what was already fetched and verified rather than asking Thunderstore again; an install takes what the site offers now, into a folder of its own.
 
 After a game update the answer is the same run again. The game build comparison in step 4 tells the player whether the package still matches the game and the repair covers any loader file that went missing; if the build differs and the mod stops loading, the fix is a newer package, which the warning says. Whether Steam's own update or file verification removes the loader files it did not install is not established here, and the game has not updated since February 2026, so no update has been observed; see [what is not verified](#what-is-verified-and-what-is-not).
 
@@ -195,7 +195,7 @@ task package:windows
 task package:windows MOD_VERSION=0.4.2
 ```
 
-`task package:windows` builds the mod and the `windows/amd64` Go installer, then runs `scripts/build_player_package.py --platform windows --installer-binary <exe>`. The package has the same `vendor/`, `content/` and `manifest.json` layout as the Linux one with `"platform": "windows"`, but the binary is `install.exe`. It lands in `.tools/player-package-windows/` (override with `OUTPUT_WINDOWS`), with `megabonk-levels-<mod>-ml<loader>-windows.zip` beside it. Windows players unzip it and double-click `install.exe`: with no `--package`, the Go installer takes the folder it runs from.
+`task package:windows` builds the mod and the `windows/amd64` Go installer, then runs `scripts/build_player_package.py --platform windows --installer-binary <exe>`. The package has the same `vendor/`, `content/` and `manifest.json` layout as the Linux one with `"platform": "windows"`, but the binary is `install.exe`. It lands in `.tools/player-package-windows/` (override with `OUTPUT_WINDOWS`), with `megabonk-levels-<mod>-ml<loader>-windows.zip` beside it. Windows players unzip it and run `install.exe LEVEL...`: the installer takes its levels from the command line, not from the folder it happens to sit in.
 
 On native Windows the installer finds Steam through `HKCU\Software\Valve\Steam` (then `HKLM\...\WOW6432Node\Valve\Steam` and the Program Files default) and reads `libraryfolders.vdf` for libraries on other drives. It has no prefix, no `version.dll` override and no launch option; every write is inside the game directory. MelonLoader's bootstrap otherwise installs .NET 6 machine-wide under Program Files on first launch, so the installer pre-seeds the vendored runtime into `MelonLoader/Dependencies/dotnet`, the path the loader itself uses; it then logs `Using HostFXR Path: <game>\MelonLoader\Dependencies\dotnet\host\fxr\6.0.36\hostfxr.dll` and runs no runtime installer. `--uninstall` also removes the files the loader creates at first launch (`UserData/Loader.cfg`, and `Plugins/`, `UserData/Levels`, `UserData/LevelPacks`, `UserData` when empty), so the game returns to vanilla while a player's own plugins, preferences and levels stay.
 
@@ -211,7 +211,7 @@ APPLE_SIGNING_IDENTITY="<Developer ID Application identity>" NOTARY_PROFILE=<not
 
 `task package:macos` builds the mod in Release and the `darwin/arm64` Go installer, then runs `scripts/build_player_package.py --platform macos --installer-binary <binary>`. The package has the same `vendor/`, `content/` and `manifest.json` layout as the others with `"platform": "macos"`, and carries a bare `megabonk-installer` binary with no extension and no wrapper script, mode 0755 in the zip. It lands in `.tools/player-package-macos/` (override with `OUTPUT_MACOS`), with `megabonk-levels-<mod>-ml<loader>-macos.zip` beside it. Only Apple silicon is built: no Intel Mac was available to test an `amd64` binary.
 
-Megabonk has no macOS build, so the player runs the **Windows build under Wine** and the installer works inside that prefix. It does not install Wine, create a prefix or log into Steam: Steam and Megabonk must already be installed in a Wine prefix, and the game started once. The player runs `./megabonk-installer` from the unzipped folder, which is the default `--package`.
+Megabonk has no macOS build, so the player runs the **Windows build under Wine** and the installer works inside that prefix. It does not install Wine, create a prefix or log into Steam: Steam and Megabonk must already be installed in a Wine prefix, and the game started once. The player runs `./megabonk-installer LEVEL...` from the unzipped folder.
 
 ### Finding the game and the prefix
 
@@ -279,17 +279,17 @@ DOTNET_ROOT=Z:\path\to\game\dotnet6-win %command%
 
 `UsablePrefix` checks for `drive_c`, which Steam creates on the first Proton launch — so the fallback to `gamedir` mode fires when the player has not launched the game yet under Proton, and the warning tells them the launch option is coming.
 
-### version.dll override
+### The winhttp override
 
-IL2Cpp hooking under Proton needs the `version.dll` = `native,builtin` DLL override in the prefix, and the game directory ships a `version.dll` stub for it to pick up. `SetDllOverride` in `go/internal/proton` writes it through the Proton tool's own `wine` with `reg add` when that binary is findable (`via: wine`), and otherwise merges `Software\Wine\DllOverrides` into the prefix's `user.reg` (`via: registry`). `--wine-override off` skips it; `--wine-override wine` fails loudly when no wine binary exists instead of falling back.
+BepInEx is reached under Proton and Wine by a `winhttp` = `native,builtin` DLL override, which makes the game load the loader's `winhttp.dll` proxy. `SetDllOverride` in `go/internal/proton` writes it through the Proton tool's own `wine` with `reg add` when that binary is findable (`via: wine`), and otherwise merges `Software\Wine\DllOverrides` into the prefix's `user.reg` (`via: registry`). `--wine-override off` skips it; `--wine-override wine` fails loudly when no wine binary exists instead of falling back.
 
-The override is written when the entry is **missing or** when the runtime is being (re)installed. The second condition matters: a wiped prefix loses the override along with the runtime, and reinstalling only one of the two leaves a game that starts and never loads a mod.
+The two routes are alternatives to the same end, so whichever one runs is recorded the same way and names the prefix it edited — that is what lets `--uninstall` clear a key the game folder itself says nothing about. A Proton run writes no prefix key at all: it prints the Steam launch option instead and the player pastes it.
 
-The method actually used is recorded and echoed back, so a player reporting a problem can say whether it went in through wine or the registry.
+A MelonLoader `version.dll` left by an older install is parked aside rather than deleted, and restoring it is part of uninstall.
 
 ### Levels and packs from the command line
 
-`--level <file>` and `--pack <dir>` install extra content the package does not carry, through the same record so `--uninstall` removes it too. Both are validated before anything is copied — a bad pack is reported as a list of problems and nothing is half-installed. A pack that arrives as an archive goes through `InstallPackFromZip` instead of a directory copy, which is where the member-name and content checks above apply.
+Each positional `LEVEL` is a share code, a `megabonkmod.party` level link, or the path of a `.mblevel.json` file on disk, and a run installs exactly what it names — there is no bundled set to choose out of. The packs a level needs come with it: they are read off the level's record, fetched at the version that record names, and go through the member-name and content checks above, so a pack a player never mentions is still validated before anything is copied. Everything lands in the install record, which is what `--uninstall` works from.
 
 ### Progress reporting
 
