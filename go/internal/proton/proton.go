@@ -8,13 +8,11 @@
 package proton
 
 import (
-	"archive/zip"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -22,6 +20,7 @@ import (
 	"time"
 
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/ppath"
+	"github.com/pythoninthegrass/megabonk_mods/installer/internal/zipx"
 )
 
 const (
@@ -82,7 +81,7 @@ func RuntimeInstalled(target, version string) bool {
 
 // ExtractRuntime unpacks a Windows .NET runtime archive and marks it installed.
 func ExtractRuntime(archive, target, version string) error {
-	if err := extractAll(archive, target); err != nil {
+	if err := zipx.Extract(archive, target); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(target, 0o755); err != nil {
@@ -108,7 +107,6 @@ func UserRegPath(prefix string) string { return ppath.Join(prefix, "user.reg") }
 
 var (
 	drivePath   = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
-	driveLetter = regexp.MustCompile(`^[A-Za-z]:`)
 	entryLine   = regexp.MustCompile(`^"([^"]+)"\s*=\s*(?:\([^)]*\)\s*)?"(.*)"\s*$`)
 	sectionLine = regexp.MustCompile(`^\[(.+)\](?:\s+\d+)?\s*$`)
 	numbers     = regexp.MustCompile(`\d+`)
@@ -535,75 +533,4 @@ func LaunchOption(runtimeDir string, extra ...string) string {
 // the first Proton launch.
 func UsablePrefix(prefix string) bool {
 	return ppath.IsDir(ppath.Join(prefix, "drive_c"))
-}
-
-func extractAll(archive, target string) error {
-	if err := os.MkdirAll(target, 0o755); err != nil {
-		return err
-	}
-	root, err := filepath.EvalSymlinks(target)
-	if err != nil {
-		root = target
-	}
-	reader, err := zip.OpenReader(archive)
-	if err != nil {
-		return fail("%s: %s", ppath.Name(archive), err.Error())
-	}
-	defer reader.Close()
-	name := ppath.Name(archive)
-	for _, member := range reader.File {
-		if err := checkInside(member.Name, root, name); err != nil {
-			return err
-		}
-	}
-	for _, member := range reader.File {
-		if err := extractMember(member, root); err != nil {
-			return fail("%s: %s", name, err.Error())
-		}
-	}
-	return nil
-}
-
-func checkInside(entry, root, archive string) error {
-	slash := filepath.ToSlash(entry)
-	if strings.HasPrefix(slash, "/") || driveLetter.MatchString(slash) {
-		return escapeError(archive, entry)
-	}
-	clean := filepath.Clean(root)
-	resolved := filepath.Clean(filepath.Join(clean, filepath.FromSlash(slash)))
-	if resolved != clean && !strings.HasPrefix(resolved, clean+string(filepath.Separator)) {
-		return escapeError(archive, entry)
-	}
-	return nil
-}
-
-func escapeError(archive, entry string) error {
-	return &Error{message: archive + ": entry " + strconv.Quote(entry) + " would escape its target directory"}
-}
-
-func extractMember(member *zip.File, root string) error {
-	destination := filepath.Join(root, filepath.FromSlash(filepath.ToSlash(member.Name)))
-	if member.FileInfo().IsDir() {
-		return os.MkdirAll(destination, 0o755)
-	}
-	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
-		return err
-	}
-	source, err := member.Open()
-	if err != nil {
-		return err
-	}
-	defer source.Close()
-	handle, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, member.Mode().Perm())
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(handle, source); err != nil {
-		handle.Close()
-		return err
-	}
-	if err := handle.Close(); err != nil {
-		return err
-	}
-	return os.Chmod(destination, member.Mode().Perm())
 }

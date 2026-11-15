@@ -456,8 +456,9 @@ func TestApplyRecordsLevelsAndPacks(t *testing.T) {
 	if record == nil {
 		t.Fatal("no record was written")
 	}
-	if !reflect.DeepEqual(record.Levels, []string{"UserData/Levels/a.mblevel.json"}) {
-		t.Errorf("levels = %v", record.Levels)
+	want := map[string]content.LevelRecord{"a": {Code: "a", Filename: "UserData/Levels/a.mblevel.json"}}
+	if !reflect.DeepEqual(record.Levels, want) {
+		t.Errorf("levels = %v, want %v", record.Levels, want)
 	}
 	entry, found := record.Packs["thps"]
 	if !found || entry.Dir != "UserData/LevelPacks/thps" || !reflect.DeepEqual(entry.Files, []string{

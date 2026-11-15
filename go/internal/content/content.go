@@ -13,7 +13,6 @@ import (
 	"os"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/jsonx"
@@ -37,7 +36,7 @@ const (
 	ModsDir = "Mods"
 	// UserLibsDir holds extra assemblies the game probes early.
 	UserLibsDir = "UserLibs"
-	// VersionMarkerName records the MelonLoader version already installed.
+	// VersionMarkerName records the loader version already installed.
 	VersionMarkerName = "MegabonkLevels.melonloader_version"
 	manifestName      = "manifest.json"
 	attachmentsName   = "attachments.json"
@@ -46,8 +45,16 @@ const (
 	prefabSuffix      = ".bundle"
 	// MaxFileBytes is the largest file the installer will copy.
 	MaxFileBytes = 256 * 1024 * 1024
+	// MaxImageBytes is the largest sidecar image a level may carry, the limit
+	// LevelThumbnailSidecar refuses to load beyond.
+	MaxImageBytes = 8 * 1024 * 1024
 	// RecordSchema is the install record's own schema tag.
-	RecordSchema = "megabonk-levels-install/1"
+	RecordSchema = "megabonk-levels-install/2"
+)
+
+const (
+	primaryLevelSuffix = ".mblevel.json"
+	megabyte           = 1024 * 1024
 )
 
 // LevelSuffixes are the file extensions a player level may carry.
@@ -56,47 +63,6 @@ var LevelSuffixes = []string{".mblevel.json", ".level.json"}
 var packIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 var requiredManifestFields = []string{"id", "name", "author", "version"}
-
-// Runtime is the record's entry for the private .NET runtime.
-type Runtime struct {
-	Mode         string  `json:"mode"`
-	Path         string  `json:"path"`
-	Version      string  `json:"version"`
-	LaunchOption *string `json:"launch_option"`
-}
-
-// DllOverride is the record's entry for the Wine version.dll override.
-type DllOverride struct {
-	Applied bool    `json:"applied"`
-	Name    string  `json:"name"`
-	Value   string  `json:"value"`
-	Prefix  *string `json:"prefix"`
-	Via     *string `json:"via"`
-}
-
-// PackEntry is what the installer placed for one asset pack.
-type PackEntry struct {
-	Files []string `json:"files"`
-	Dir   string   `json:"dir"`
-}
-
-// Record is MegabonkLevels.installer.json: exactly what this installer placed,
-// so uninstall can remove it and nothing else.
-type Record struct {
-	Schema               string               `json:"schema"`
-	PackageID            string               `json:"package_id"`
-	ModVersion           string               `json:"mod_version"`
-	MelonloaderVersion   string               `json:"melonloader_version"`
-	GameBuildID          string               `json:"game_buildid"`
-	InstalledGameBuildID *string              `json:"installed_game_buildid"`
-	InstalledAt          string               `json:"installed_at"`
-	GameDir              string               `json:"game_dir"`
-	Files                []string             `json:"files"`
-	Levels               []string             `json:"levels"`
-	Packs                map[string]PackEntry `json:"packs"`
-	Runtime              *Runtime             `json:"runtime"`
-	DllOverride          *DllOverride         `json:"dll_override"`
-}
 
 // UserDataDir is the game's UserData directory.
 func UserDataDir(gameDir string) string { return ppath.Join(gameDir, UserData) }
@@ -124,8 +90,32 @@ func VersionMarkerPath(gameDir string) string {
 	return ppath.Join(gameDir, LoaderDir, VersionMarkerName)
 }
 
+// InstalledLoaderVersion is the loader version the marker file names, or "" when
+// there is no marker.
+func InstalledLoaderVersion(gameDir string) string {
+	marker := VersionMarkerPath(gameDir)
+	if !ppath.IsFile(marker) {
+		return ""
+	}
+	text, err := ppath.ReadTextReplace(marker)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(text)
+}
+
+// HasInstalledLoaderVersion tells the two states InstalledLoaderVersion
+// collapses: a marker that exists but is blank still counts as installed.
+func HasInstalledLoaderVersion(gameDir string) bool {
+	return ppath.IsFile(VersionMarkerPath(gameDir))
+}
+
 // RecordFilePath is the install record.
 func RecordFilePath(gameDir string) string { return ppath.Join(gameDir, RecordName) }
+
+// ValidPackID reports whether a name may be a pack folder or a level slug: the
+// lowercase id the pack loaders accept.
+func ValidPackID(name string) bool { return packIDPattern.MatchString(name) }
 
 // LoadRecord reads the install record, or nil when there is nothing readable: a
 // missing, unreadable, malformed, or non-object record all mean "no install".
@@ -148,32 +138,18 @@ func LoadRecord(gameDir string) *Record {
 		return nil
 	}
 	record := &Record{
-		Schema:             stringField(fields, "schema"),
-		PackageID:          stringField(fields, "package_id"),
-		ModVersion:         stringField(fields, "mod_version"),
-		MelonloaderVersion: stringField(fields, "melonloader_version"),
-		GameBuildID:        stringField(fields, "game_buildid"),
-		InstalledAt:        stringField(fields, "installed_at"),
-		GameDir:            stringField(fields, "game_dir"),
-		Files:              stringListField(fields, "files"),
-		Levels:             stringListField(fields, "levels"),
+		Schema:         stringField(fields, "schema"),
+		PackageID:      stringField(fields, "package_id"),
+		ModVersion:     stringField(fields, "mod_version"),
+		BepinexVersion: stringField(fields, "bepinex_version"),
+		GameBuildID:    stringField(fields, "game_buildid"),
+		InstalledAt:    stringField(fields, "installed_at"),
+		GameDir:        stringField(fields, "game_dir"),
+		Files:          stringListField(fields, "files"),
 	}
 	if value, found := fields["installed_game_buildid"]; found && value != nil {
 		installed := jsonx.Text(value)
 		record.InstalledGameBuildID = &installed
-	}
-	if entries, ok := jsonx.AsMap(fields["packs"]); ok {
-		record.Packs = map[string]PackEntry{}
-		for name, raw := range entries {
-			entry, ok := jsonx.AsMap(raw)
-			if !ok {
-				entry = map[string]any{}
-			}
-			record.Packs[name] = PackEntry{
-				Files: stringListField(entry, "files"),
-				Dir:   stringField(entry, "dir"),
-			}
-		}
 	}
 	if runtime, ok := jsonx.AsMap(fields["runtime"]); ok && len(runtime) > 0 {
 		record.Runtime = &Runtime{
@@ -202,6 +178,35 @@ func LoadRecord(gameDir string) *Record {
 			if value, found := override[pair.key]; found && value != nil {
 				text := jsonx.Text(value)
 				*pair.field = &text
+			}
+		}
+	}
+	if entries, ok := jsonx.AsMap(fields["levels"]); ok {
+		record.Levels = map[string]LevelRecord{}
+		for code, raw := range entries {
+			entry, ok := jsonx.AsMap(raw)
+			if !ok {
+				entry = map[string]any{}
+			}
+			record.Levels[code] = LevelRecord{
+				Code:     orDefault(stringField(entry, "code"), code),
+				Filename: stringField(entry, "filename"),
+				Cover:    stringField(entry, "cover"),
+				Biome:    stringField(entry, "biome"),
+			}
+		}
+	}
+	if entries, ok := jsonx.AsMap(fields["packs"]); ok {
+		record.Packs = map[string]PackRecord{}
+		for name, raw := range entries {
+			entry, ok := jsonx.AsMap(raw)
+			if !ok {
+				entry = map[string]any{}
+			}
+			record.Packs[name] = PackRecord{
+				Version: stringField(entry, "version"),
+				Dir:     stringField(entry, "dir"),
+				Files:   stringListField(entry, "files"),
 			}
 		}
 	}
@@ -237,6 +242,13 @@ func stringListField(fields map[string]any, key string) []string {
 	return texts
 }
 
+func orDefault(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
 // SaveRecord writes the install record with two-space indent, sorted keys, and
 // a trailing newline, then returns the path.
 func SaveRecord(gameDir string, record *Record) (string, error) {
@@ -264,26 +276,6 @@ func ClearRecord(gameDir string) error {
 		return err
 	}
 	return nil
-}
-
-// InstalledLoaderVersion is the version the marker file names, or "" when there
-// is no marker.
-func InstalledLoaderVersion(gameDir string) string {
-	marker := VersionMarkerPath(gameDir)
-	if !ppath.IsFile(marker) {
-		return ""
-	}
-	text, err := ppath.ReadTextReplace(marker)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(text)
-}
-
-// HasInstalledLoaderVersion tells the two states InstalledLoaderVersion
-// collapses: a marker that exists but is blank still counts as installed.
-func HasInstalledLoaderVersion(gameDir string) bool {
-	return ppath.IsFile(VersionMarkerPath(gameDir))
 }
 
 // IsBundleName reports whether a file in a pack directory is a bundle. Pack
@@ -500,57 +492,4 @@ func oversizedFiles(source string) []string {
 	}
 	sort.Strings(relatives)
 	return relatives
-}
-
-// DescribeRecord is the human-readable description of an install record that
-// --check and uninstall print.
-func DescribeRecord(record *Record) []string {
-	if record == nil {
-		record = &Record{}
-	}
-	lines := []string{
-		"package " + orDefault(record.PackageID, "unknown"),
-		"mod " + orDefault(record.ModVersion, "?") + " / MelonLoader " + orDefault(record.MelonloaderVersion, "?"),
-	}
-	if record.InstalledAt != "" {
-		lines = append(lines, "installed "+record.InstalledAt)
-	}
-	if runtime := record.Runtime; runtime != nil && (runtime.Mode != "" || runtime.Path != "" || runtime.Version != "" || runtime.LaunchOption != nil) {
-		lines = append(lines, ".NET "+orDefault(runtime.Version, "?")+" in "+orDefault(runtime.Mode, "?")+
-			" at "+orDefault(runtime.Path, "?"))
-	}
-	if override := record.DllOverride; override != nil {
-		if override.Applied {
-			lines = append(lines, "version.dll override: "+orDefault(override.Value, "?")+" via "+orDefault(deref(override.Via), "unknown"))
-		} else {
-			lines = append(lines, "version.dll override: not set")
-		}
-	}
-	lines = append(lines, strconv.Itoa(len(record.Files))+" mod file(s)")
-	if len(record.Packs) > 0 {
-		names := make([]string, 0, len(record.Packs))
-		for name := range record.Packs {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		lines = append(lines, "packs: "+strings.Join(names, ", "))
-	}
-	if len(record.Levels) > 0 {
-		lines = append(lines, strconv.Itoa(len(record.Levels))+" level file(s)")
-	}
-	return lines
-}
-
-func orDefault(value, fallback string) string {
-	if value == "" {
-		return fallback
-	}
-	return value
-}
-
-func deref(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return *value
 }
