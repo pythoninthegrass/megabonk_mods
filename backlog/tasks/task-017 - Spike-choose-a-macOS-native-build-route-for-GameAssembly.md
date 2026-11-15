@@ -4,7 +4,7 @@ title: 'Spike: choose a macOS-native build route for GameAssembly'
 status: Done
 assignee: []
 created_date: '2026-10-27T05:57:00Z'
-updated_date: '2026-11-15 08:37'
+updated_date: '2026-11-15 08:47'
 labels:
   - research
   - native
@@ -61,6 +61,14 @@ Read-only spike; the only file written is docs/development.md 'Static recomp'. I
 
 <!-- SECTION:NOTES:BEGIN -->
 Checks run in the worktree: mod build 0 warnings 0 errors, 2836 xUnit tests, 1498 Python tests (60 skipped), installer Go tests, and lint (markdownlint, ruff, deno fmt/lint). task check itself cannot run in a fresh worktree: the csproj resolves its Unity and BepInEx reference assemblies from the game folder, whose path comes only from the gitignored .env, so without it every UnityEngine type fails with CS0246 (1228 errors). Reproduced by copying the .env in and pointing ModInstanceFolder at a temp directory so the build could not write into the real game install; both files were removed again afterwards.
+
+Loader correction folded in after review: the mod is a BepInEx IL2CPP BasePlugin injected by doorstop, not a MelonLoader plugin. The section's Scale, Entry point, Interop surface, Build/relink and Recommendation text now name BepInEx.Core, BepInEx.Unity.IL2CPP, the BepInEx/interop stubs, the CopyOutputToPluginsFolder deploy into BepInEx/plugins/MegabonkLevels, and doorstop as the injector. Linux GameAssembly.so exports 480 il2cpp_* (the Windows DLL 240).
+
+Does not change the pick: B over C stands, same top blocker. BepInEx makes B's loader half cheaper (an official Unity.IL2CPP-macos-x64 build plus doorstop's libdoorstop.dylib exist, so injection and interop generation are not to be written) and adds one blocker to probe (interop generation on Apple silicon under Rosetta has open upstream failures: preloader loads with no config/LogOutput.log/interop folder, and a second report needs a doorstop symbol newer than the doorstop BepInEx pinned).
+
+New dated risk for B, not for C: the translated dylib is an Intel-only app, and Apple names macOS 27 as the last release running Intel-only apps on Apple silicon. The smallest-first-step list now also carries a loader probe: run Unity.IL2CPP-macos-x64 plus universal doorstop against a macOS player under Rosetta and score it on whether BepInEx/interop and LogOutput.log appear.
+
+Left alone deliberately: MelonLoader remnants that are still live tooling, not stale prose (scripts/install_melonloader.py, game:melonloader:install, crossover:melonloader:install, the BepInEx-vs-MelonLoader rollback notes in this doc, and ~70 mentions across 11 other docs). Worth a separate cleanup decision.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
