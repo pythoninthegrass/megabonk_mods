@@ -87,10 +87,8 @@ func InstalledBepInExVersion(gameDir string) string {
 	return ""
 }
 
-// InstalledModVersion is the mod version this installer recorded placing, and
-// only when the plugin, NLayer and its licence are really in the folder the
-// loader reads them from. Files alone are not an installer install: a manager
-// can put the same three there.
+// InstalledModVersion is the recorded mod version, and only when the plugin files
+// are really in place.
 func InstalledModVersion(gameDir string) string {
 	state, err := DetectLoader(gameDir)
 	if err != nil || state == nil || !modFilesPresent(gameDir) {
@@ -99,10 +97,8 @@ func InstalledModVersion(gameDir string) string {
 	return state.ModVersion
 }
 
-// ModInstalled reports whether the level editor mod is installed here, which is
-// what the GUI checkbox defaults to. It asks only whether the files the loader
-// reads are in place, so it also answers yes for an install a mod manager made;
-// InstalledModVersion is the one that insists on the install record.
+// ModInstalled reports whether the mod's files are in place, manager installs
+// included; InstalledModVersion is the one that insists on the record.
 func ModInstalled(gameDir string) bool { return modFilesPresent(ppath.Normalize(gameDir)) }
 
 func modFilesPresent(gameDir string) bool {
@@ -122,19 +118,12 @@ type BepInExResult struct {
 	Placed []string
 	// Parked reports a MelonLoader version.dll moved aside as ProxyBackup.
 	Parked bool
-	// PackFiles names every file the pack puts in the game folder, whether or not
-	// this run had to write it. It is what the install record keeps, so uninstall
-	// can take the pack back by name.
+	// PackFiles names every file the pack places, so uninstall can remove them.
 	PackFiles []string
 }
 
-// InstallBepInEx unpacks the loader pack archive into the game directory: every
-// file under the archive's BepInExPack/ folder lands beside the executable,
-// including the dotnet/ tree, .doorstop_version and changelog.txt a mod manager's
-// Apply leaves out. Nothing is written until the whole archive is vetted, and a
-// MelonLoader version.dll found there is parked as version.dll.bak. The install
-// record is what says this loader install is the installer's own: the pack
-// version is written into it by SaveBepInExRecord, not beside the game.
+// InstallBepInEx unpacks the loader pack's BepInExPack/ tree beside the
+// executable and parks a MelonLoader version.dll, writing nothing until vetting.
 func InstallBepInEx(gameDir, archive, version string) (*BepInExResult, error) {
 	if strings.TrimSpace(version) == "" {
 		return nil, loaderFail("no BepInEx pack version was given for %s", ppath.Name(archive))
@@ -177,10 +166,7 @@ func InstallBepInEx(gameDir, archive, version string) (*BepInExResult, error) {
 	return &BepInExResult{Version: version, Placed: placed, Parked: parked, PackFiles: packFiles}, nil
 }
 
-// BepInExInstallRecord returns the record entry for a loader pack install and a
-// mod install that have just been carried out. It is what makes them detectable
-// afterwards and what uninstall removes by: the pack files are the ones the pack
-// put in the game folder, named by the install that placed them.
+// BepInExInstallRecord builds the record entry for a loader and mod install.
 func BepInExInstallRecord(bepinexVersion, modVersion string, packFiles []string, proxyParked bool) (*LoaderState, error) {
 	bepinex := strings.TrimSpace(bepinexVersion)
 	mod := strings.TrimSpace(modVersion)
@@ -215,9 +201,7 @@ func BepInExInstallRecord(bepinexVersion, modVersion string, packFiles []string,
 	return state, nil
 }
 
-// checkLoaderMembers refuses an archive that is not a usable loader pack: the
-// files the loader cannot start without, and no member over the size a pack's
-// runtime should ever reach.
+// checkLoaderMembers refuses an archive missing what the loader needs to start.
 func checkLoaderMembers(members map[string]*zip.File) error {
 	for _, name := range loaderRequiredNames {
 		member, found := members[name]
@@ -228,9 +212,7 @@ func checkLoaderMembers(members map[string]*zip.File) error {
 	return nil
 }
 
-// checkLoaderGameDir refuses to install beside a build the loader cannot hook:
-// the native Linux build has no winhttp.dll or doorstop_config.ini to sit next
-// to, and a directory that is not a Megabonk install has nothing to install into.
+// checkLoaderGameDir refuses a build the loader cannot hook, such as native Linux.
 func checkLoaderGameDir(game string) error {
 	if ppath.IsFile(ppath.Join(game, NativeExeName)) {
 		return loaderFail("%s is the Linux native build of Megabonk: BepInEx hooks the "+
@@ -244,8 +226,7 @@ func checkLoaderGameDir(game string) error {
 	return nil
 }
 
-// versionProxy is a version.dll beside the executable together with the backup
-// slot it would be parked into, decided before anything is written.
+// versionProxy is a version.dll and the backup slot it would park into.
 type versionProxy struct {
 	present  bool
 	parkable bool
@@ -253,10 +234,8 @@ type versionProxy struct {
 	backupFree bool
 }
 
-// inspectVersionProxy decides what to do with a version.dll without touching it.
-// Only a proxy with a MelonLoader folder behind it is a loader the installer may
-// turn off; anything else is the player's or another tool's to move. A backup that
-// already exists means two proxies are still in play.
+// inspectVersionProxy decides what to do with a version.dll without touching it;
+// only a MelonLoader proxy may be parked.
 func inspectVersionProxy(game string) (versionProxy, error) {
 	proxy := ppath.Join(game, VersionDLLName)
 	backup := ppath.Join(game, ProxyBackupName)
@@ -302,16 +281,12 @@ func parkVersionProxy(game string, proxy versionProxy) (bool, error) {
 type ModResult struct {
 	Version string
 	Files   []string
-	// Replaced reports a plugin folder that already held files from an earlier
-	// install of the mod.
+	// Replaced reports files from an earlier install of the mod were overwritten.
 	Replaced bool
 }
 
-// InstallModFromZip merges the mod archive's BepInEx/ tree into the game folder,
-// which is where its plugin, NLayer and NLayer's licence belong together. The
-// archive has to be a level editor package: one whose plugin folder carries all
-// three, so a loader pack or a half-built archive never lands as a plugin that
-// fails to load.
+// InstallModFromZip merges the mod archive's plugin folder into the game folder,
+// refusing an archive that does not carry the complete plugin set.
 func InstallModFromZip(gameDir, archive, version string) (*ModResult, error) {
 	if strings.TrimSpace(version) == "" {
 		return nil, loaderFail("no mod version was given for %s", ppath.Name(archive))
@@ -358,15 +333,8 @@ func InstallModFromZip(gameDir, archive, version string) (*ModResult, error) {
 // ModPluginPrefix is the folder inside a mod archive that holds its plugin set.
 const ModPluginPrefix = PluginsDir + "/" + ModFolderName + "/"
 
-// ModPluginFiles returns one archive's plugin members, keyed by the path each one
-// carries inside the archive (BepInEx/plugins/MegabonkLevels/...), which is also
-// the path it belongs at inside a game folder. Every entry name is vetted against
-// the folder it is allowed to write into before a byte of it is extracted.
-//
-// A caller that unpacks a mod itself — package modinstall stages the whole set in
-// a temporary folder and checks it before placing any of it — reads the archive
-// through this rather than opening the zip on its own, so both paths share one
-// set of path-traversal rules. The caller closes the returned reader.
+// ModPluginFiles returns an archive's vetted plugin members keyed by archive path,
+// which is also their path in the game folder. The caller closes the reader.
 func ModPluginFiles(archive string) (map[string]*zip.File, *zip.ReadCloser, error) {
 	return packMembersUnder(archive, ModPluginPrefix, "mod archive "+ppath.Name(archive))
 }
@@ -416,17 +384,14 @@ func packMembersUnder(archive, prefix, what string) (map[string]*zip.File, *zip.
 	return members, bundle, nil
 }
 
-// memberUnder is a member's path inside the archive's payload folder. Names that
-// climb out, are absolute, use a backslash or a drive letter, or sit outside the
-// folder are refused; a member outside it entirely is ignored.
+// memberUnder is a member's path inside the payload folder; escaping names are
+// refused and members outside it entirely are ignored.
 func memberUnder(entry, prefix string) (string, error) {
 	slash := filepath.ToSlash(entry)
 	if strings.Contains(slash, "\\") || hasDriveLetter(slash) || strings.HasPrefix(slash, "/") {
 		return "", loaderFail("entry %s is not a safe archive name", strconv.Quote(entry))
 	}
-	// Any name that climbs out is refused outright, whether or not it sits under
-	// the payload folder: "../x" is not a member to ignore, it is an archive
-	// reaching outside the folder it was unpacked into.
+	// A climbing name is refused outright, not ignored: it reaches outside.
 	if climbsOut(slash) {
 		return "", loaderFail("entry %s would escape its target directory", strconv.Quote(entry))
 	}
@@ -441,8 +406,7 @@ func memberUnder(entry, prefix string) (string, error) {
 	return relative, nil
 }
 
-// readMemberThrough reads a member once and compares it with what its header
-// promised, so a truncated or tampered archive fails before anything is written.
+// readMemberThrough reads a member once so a truncated or tampered archive fails.
 func readMemberThrough(member *zip.File, what, name string) error {
 	reader, err := member.Open()
 	if err != nil {
@@ -466,8 +430,8 @@ func sortedMemberNames(members map[string]*zip.File) []string {
 	return names
 }
 
-// sameFile reports whether the target already holds exactly the bytes the member
-// declares, which is what makes a second install do nothing.
+// sameFile reports whether the target already holds the member's bytes, so a
+// second install does nothing.
 func sameFile(target string, member *zip.File) bool {
 	info, err := os.Stat(target)
 	if err != nil || !info.Mode().IsRegular() {
@@ -503,8 +467,7 @@ func sameFile(target string, member *zip.File) bool {
 	}
 }
 
-// atEnd reports a clean end of stream, including a full final chunk, which
-// io.ReadFull reports as EOF or ErrUnexpectedEOF respectively.
+// atEnd reports a clean end of stream, including a full final chunk.
 func atEnd(err error) bool {
 	return err == nil || err == io.EOF || err == io.ErrUnexpectedEOF
 }
@@ -521,9 +484,7 @@ func equalBytes(left, right []byte) bool {
 	return true
 }
 
-// SaveBepInExRecord writes an install record whose loader entry the caller has
-// assembled, which is the step that makes a BepInEx install detectable and
-// uninstallable afterwards.
+// SaveBepInExRecord writes a record whose loader entry the caller assembled.
 func SaveBepInExRecord(gameDir string, record *Record) error {
 	if record == nil {
 		return loaderFail("no install record to write")
@@ -531,17 +492,14 @@ func SaveBepInExRecord(gameDir string, record *Record) error {
 	if record.Loader == nil {
 		return loaderFail("the record has no loader entry to write")
 	}
-	// The top-level versions are what --check and the GUI read; they agree with
-	// the loader entry rather than drifting from it.
+	// The top-level versions --check and the GUI read, kept in step with loader.
 	record.BepinexVersion = record.Loader.BepInExVersion
 	record.ModVersion = record.Loader.ModVersion
 	_, err := SaveRecord(gameDir, record)
 	return err
 }
 
-// WriteBepInExInstallRecord records a loader pack install and a mod install that
-// have just been carried out, which is what makes them detectable afterwards and
-// what uninstall removes by.
+// WriteBepInExInstallRecord records a loader and mod install just carried out.
 func WriteBepInExInstallRecord(gameDir, bepinexVersion, modVersion string, packFiles []string, proxyParked bool) error {
 	state, err := BepInExInstallRecord(bepinexVersion, modVersion, packFiles, proxyParked)
 	if err != nil {
@@ -564,10 +522,7 @@ func WriteBepInExInstallRecord(gameDir, bepinexVersion, modVersion string, packF
 	return err
 }
 
-// DetectLoader reports what the game folder holds of this installer's loader
-// install: the pack version and mod version it recorded, the pack files it
-// wrote, and the MelonLoader proxy it parked. It is how --check and the GUI
-// checkbox learn the mod is already in place, and what uninstall removes by.
+// DetectLoader reports the loader install the record describes, or nil.
 func DetectLoader(gameDir string) (*LoaderState, error) {
 	record := LoadRecord(ppath.Normalize(gameDir))
 	if record == nil || record.Loader == nil {
@@ -580,19 +535,13 @@ func DetectLoader(gameDir string) (*LoaderState, error) {
 	return &state, nil
 }
 
-// loaderInstalled reports whether a record says this installer, and not a mod
-// manager, put the loader pack and the mod's plugin folder in the game folder.
-// The record is the only thing that can tell the two apart: the files themselves
-// look the same either way.
+// loaderInstalled says whether the record, not the files, proves this is ours.
 func loaderInstalled(record *Record) bool {
 	return record != nil && record.Loader != nil && record.Loader.Installed
 }
 
-// UninstallBepInEx removes exactly what the record says this installer placed:
-// the mod's plugin folder and the pack files it recorded, collapsing the folders
-// they left behind, and putting back the version.dll it parked. Without a
-// recorded loader install it removes nothing: an unrecorded BepInEx belongs to a
-// mod manager or to the player, not to this installer.
+// UninstallBepInEx removes the recorded pack files and plugin folder and restores
+// a parked proxy; with no recorded install it removes nothing.
 func UninstallBepInEx(gameDir string, record *Record) ([]string, error) {
 	removed := []string{}
 	if !loaderInstalled(record) {
@@ -618,8 +567,7 @@ func UninstallBepInEx(gameDir string, record *Record) ([]string, error) {
 	if err := restoreVersionProxy(game, record, &removed); err != nil {
 		return removed, err
 	}
-	// Folders go last and deepest first, so a folder that still holds something
-	// the installer did not place stays where it is.
+	// Folders go last and deepest first, and only when nothing foreign is left.
 	for _, directory := range recordedFolders(record) {
 		if !collapsible(ppath.Join(game, directory)) {
 			continue
@@ -635,12 +583,8 @@ func UninstallBepInEx(gameDir string, record *Record) ([]string, error) {
 	return removed, nil
 }
 
-// UninstallRecorded removes everything the record says this installer placed and
-// nothing it did not: the BepInEx loader install and the mod's plugin folder, the
-// levels and packs it imported, and the loose files it recorded. A directory with
-// no record is left alone, and one whose loader came from a mod manager keeps that
-// loader, because the record is what says whose files these are. The record keeps
-// whatever it still has to describe and is dropped only when it is empty.
+// UninstallRecorded removes the loader, plugin folder, levels, packs and loose
+// files the record names and nothing else, dropping the record only when empty.
 func UninstallRecorded(gameDir string, record *Record) ([]string, error) {
 	game := ppath.Normalize(gameDir)
 	if record == nil {
@@ -726,9 +670,7 @@ func dropRemovedEntries(game string, record *Record) error {
 	return err
 }
 
-// clearLoaderEntryIfGone drops the record's loader entry once nothing it named
-// remains, so detection stops reporting an install that has been taken back. The
-// record itself stays: uninstall keeps it until the whole install is gone.
+// clearLoaderEntryIfGone drops the loader entry once nothing it named remains.
 func clearLoaderEntryIfGone(game string) error {
 	record := LoadRecord(game)
 	if record == nil || record.Loader == nil {
@@ -770,9 +712,7 @@ func collapsible(directory string) bool {
 	return true
 }
 
-// recordedPackFiles are the loader pack files the record says this installer
-// placed: the dotnet runtime tree and the loose files the pack brings with it.
-// Nothing else in the game folder is the installer's to remove.
+// recordedPackFiles are the pack files the record says this installer placed.
 func recordedPackFiles(record *Record) []string {
 	names := []string{}
 	seen := map[string]bool{}
@@ -798,14 +738,11 @@ func recordedPackFiles(record *Record) []string {
 	return names
 }
 
-// modTree is where the mod's own plugin folder sits, and the second tree the
-// installer is allowed to take back.
+// modTree is the mod's plugin folder, the second tree the installer may remove.
 const modTree = PluginsDir + "/"
 
-// underPackTree reports whether a name is one the loader pack owns: its .NET
-// runtime tree, its own assemblies under BepInEx, and the loose files it brings
-// beside the executable. It is deliberately narrow, so no level, pack, config or
-// plugin a player authored can read as the installer's.
+// underPackTree is deliberately narrow, so nothing a player authored reads as
+// the installer's to remove.
 func underPackTree(name string) bool {
 	switch {
 	case strings.HasPrefix(name, dotnetTree):
@@ -822,9 +759,7 @@ func underPackTree(name string) bool {
 	return false
 }
 
-// recordedFolders are the folders the recorded files sat in, deepest first, so a
-// collapse pass can take dotnet/ and then BepInEx/ once they hold nothing the
-// installer did not place.
+// recordedFolders are the folders the recorded files sat in, deepest first.
 func recordedFolders(record *Record) []string {
 	folders := map[string]bool{}
 	add := func(name string) {
@@ -852,10 +787,7 @@ func recordedFolders(record *Record) []string {
 	return order
 }
 
-// restoreVersionProxy puts back exactly the proxy this installer recorded
-// parking, and no other. A proxy it did not park stays where it is, and when
-// both the proxy and its parked backup are present the installer refuses to
-// choose which one the game should load.
+// restoreVersionProxy puts back only the proxy this installer recorded parking.
 func restoreVersionProxy(game string, record *Record, removed *[]string) error {
 	if !loaderInstalled(record) || !record.Loader.ProxyParked {
 		return nil

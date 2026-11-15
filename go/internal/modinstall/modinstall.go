@@ -1,10 +1,5 @@
-// Package modinstall installs the Megabonk Level Editor mod itself: it resolves
-// the latest release on Thunderstore, verifies the loader pack archive against a
-// SHA-256 before anything is written, merges the loader pack beside the
-// executable, puts the mod's DLLs under BepInEx/plugins, and applies the winhttp
-// proxy override where the platform needs one. It is the Thunderstore path; the
-// offline player-package path lives in package plan and shares the same content
-// and prefix primitives.
+// Package modinstall installs BepInEx and the Megabonk Levels mod from
+// Thunderstore. The offline package path lives in package plan.
 package modinstall
 
 import (
@@ -29,17 +24,14 @@ import (
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/zipx"
 )
 
-// Platforms the installer sets up. Detection picks one when the caller does not
-// say.
+// Platforms the installer sets up; detection picks one when the caller does not.
 const (
 	PlatformProton = "proton"
 	PlatformWine   = "wine"
 	PlatformNative = "native"
 )
 
-// Names this package owns. The loader's own names (version.dll and its parked
-// backup, the .NET runtime folder, the pack's payload root) come from package
-// content and package thunderstore, so one place decides what each is called.
+// backupDir is the folder the transaction keeps pre-write backups in.
 const backupDir = ".megabonk-levels-backup"
 
 // ErrCancelled stops a run the user aborted; everything it placed is rolled back
@@ -65,14 +57,11 @@ type Options struct {
 	Platform string
 	// Cache holds the downloaded archives. Empty means a temporary folder.
 	Cache string
-	// Pins are known-good loader pack digests by version. A version with no pin
-	// here and no built-in pin is refused: nothing installs from an archive that
-	// cannot be verified.
+	// Pins are known-good loader pack digests by version; a version with no pin
+	// anywhere is refused.
 	Pins map[string]string
-	// ModPins are known-good digests for the mod's own releases. Thunderstore
-	// publishes no checksum, so a release with no pin here and no digest kept from
-	// an earlier install is verified by its contents instead: the archive has to
-	// unpack to the complete plugin set before anything is written.
+	// ModPins are known-good digests for the mod's own releases, which
+	// Thunderstore does not publish.
 	ModPins []ModPin
 	// WineBin names the wine binary for prefix edits; "" uses the built-in
 	// registry writer.
@@ -107,18 +96,14 @@ type Result struct {
 	OverrideVia     string `json:"override_via,omitempty"`
 	// ProxyParked says a MelonLoader version.dll was moved aside.
 	ProxyParked bool `json:"proxy_parked,omitempty"`
-	// ModSHA256 is the digest the mod archive carried. Thunderstore publishes no
-	// checksum, so it is recorded and reused as the pin for a later repair.
+	// ModSHA256 is the digest the mod archive carried, kept for a later repair.
 	ModSHA256 string `json:"mod_sha256,omitempty"`
 
 	CachePaths []string `json:"cache_paths,omitempty"`
 }
 
-// Progress is what a run reports through. It is the interface package ui defines,
-// restated here so this package does not depend on the reporters; ui's optional
-// extras (LaunchOptionShower, Cancellable) are still probed by type assertion
-// below, so a reporter that implements them gets the launch option and the abort
-// button without this package having to know what they are.
+// Progress is what a run reports through, restated from package ui so this
+// package does not depend on the reporters; ui's extras are probed by assertion.
 type Progress interface {
 	Start(total int, label string)
 	Step(label string)
@@ -180,9 +165,7 @@ func install(client *thunderstore.Client, options Options, reporter Progress, fe
 
 	result := &Result{Game: gameDir, Platform: platform, Prefix: givenPrefix(options), DryRun: options.DryRun}
 
-	// The record is what makes an install a no-op, so it is read before the
-	// network: a player who runs the installer again gets an answer, not a
-	// download.
+	// Read the record before the network: an installed run answers without a fetch.
 	record := content.LoadRecord(gameDir)
 
 	if options.DryRun {
@@ -197,9 +180,7 @@ func install(client *thunderstore.Client, options Options, reporter Progress, fe
 		return result, nil
 	}
 
-	// A repair of what is already here is decided from the record and the archives
-	// already in the cache, so a player who runs the installer again gets an
-	// answer without a download.
+	// A run over an existing install answers from the record alone.
 	if alreadyInstalled(gameDir, record) {
 		result.ModVersion = record.ModVersion
 		result.BepInExVersion = record.BepinexVersion
@@ -222,10 +203,7 @@ func install(client *thunderstore.Client, options Options, reporter Progress, fe
 	if err != nil {
 		return nil, err
 	}
-	// The mod's own release is checked against the caller's pin when it holds one,
-	// and otherwise against the digest the install being repaired recorded for the
-	// very same version. Those are the only two things that can prove bytes
-	// Thunderstore publishes no checksum for.
+	// The caller's pin, or the digest the install being repaired recorded.
 	wantedModDigest := modDigest(options, resolution.Version, options.ModPins)
 	if wantedModDigest == "" && record != nil && record.ModVersion == resolution.Version {
 		wantedModDigest = recordedModDigest(record)
@@ -247,9 +225,7 @@ func install(client *thunderstore.Client, options Options, reporter Progress, fe
 
 	start(reporter, len(planLabels()), "installing MegabonkLevels "+result.ModVersion)
 
-	// Both archives are fetched before the game directory is touched. An archive
-	// already in the cache with the digest this run expects is never fetched
-	// again, which is what makes a repair cheap and an update unavoidable.
+	// Both archives are fetched before the game directory is touched.
 	pack, err := get("pack", resolution.BepInExVersion, digest, filepath.Join(cache,
 		thunderstore.ArchiveName(thunderstore.BepInExNamespace, thunderstore.BepInExName,
 			resolution.BepInExVersion)))
@@ -268,16 +244,8 @@ func install(client *thunderstore.Client, options Options, reporter Progress, fe
 	result.ModSHA256 = mod.SHA256
 	step(reporter, "verified "+thunderstore.ModName+" "+resolution.Version)
 
-	// Everything is verified; the game directory is only touched from here, and
-	// everything placed is taken back if the run is aborted or fails. The plugin
-	// set is unpacked into a folder the game cannot read first, so a package that
-	// turns out not to be the level editor never reaches the game directory, and
-	// the loader install is told what to hand back should that happen.
-	// The plugin set is unpacked into a folder the game cannot read and checked
-	// whole before any of it is placed: a package with a manifest and an icon but
-	// no plugin never reaches the game directory. Staging keeps the archive's own
-	// layout, so a member is copied to the game folder by the same relative name
-	// it carries.
+	// Verified so far: the game directory is only touched from here, and the
+	// plugin set is staged where the game cannot read it before any of it is placed.
 	staging, err := os.MkdirTemp("", "megabonk-levels-mod")
 	if err != nil {
 		return nil, fail("cannot create a folder to check the %s archive in: %s",
@@ -340,10 +308,8 @@ func install(client *thunderstore.Client, options Options, reporter Progress, fe
 	return result, nil
 }
 
-// Uninstall removes exactly what the record says this installer placed, clears
-// the winhttp override it set, and restores a parked version.dll. It removes
-// nothing the record does not name, so another mod's files and the player's own
-// levels and saves survive. reporter may be nil.
+// Uninstall removes what the record names, clears the winhttp override, and
+// restores a parked version.dll. reporter may be nil.
 func Uninstall(gameDir string, reporter Progress) ([]string, error) {
 	gameDir = ppath.Normalize(gameDir)
 	record := content.LoadRecord(gameDir)
@@ -354,9 +320,7 @@ func Uninstall(gameDir string, reporter Progress) ([]string, error) {
 	override := record.DllOverride
 	parked := record.Loader != nil && record.Loader.ProxyParked
 
-	// The override is cleared from the record rather than from what is on disk, so
-	// a prefix this installer edited is left clean even when a mod manager owns
-	// the loader files and they stay where they are.
+	// Cleared from the record, so the prefix is clean even if the loader stays.
 	if override != nil {
 		prefix := gameDir
 		if override.Prefix != nil {
@@ -373,9 +337,7 @@ func Uninstall(gameDir string, reporter Progress) ([]string, error) {
 	if loaderOwned && content.InstalledBepInExVersion(gameDir) != "" {
 		return removed, fail("the loader files are still in place, so the install record was kept")
 	}
-	// content.UninstallRecorded put back the proxy this installer recorded parking
-	// and reports it among the files it removed; this package never renames a
-	// version.dll itself, so there is nothing to do here beyond saying so.
+	// content.UninstallRecorded restored the proxy; this package renames none.
 	if parked {
 		step(reporter, "restored "+content.VersionDLLName)
 	}
@@ -383,10 +345,8 @@ func Uninstall(gameDir string, reporter Progress) ([]string, error) {
 	return removed, nil
 }
 
-// Detect reports what is installed in a game directory. Files that are there
-// without a record are reported as not installed, with FilesPresent saying they
-// exist: they were put there by something else, so this installer claims and
-// removes nothing of them.
+// Detect reports what is installed. Files with no record are another tool's, so
+// they are reported present but not installed.
 func Detect(gameDir string) State {
 	gameDir = ppath.Normalize(gameDir)
 	record := content.LoadRecord(gameDir)
@@ -444,8 +404,7 @@ func (r *Result) State() State {
 	}
 }
 
-// checkGameDir accepts only a Windows bundle: the native Linux build cannot load
-// this mod at all.
+// checkGameDir accepts only a Windows bundle; the native Linux build loads nothing.
 func checkGameDir(gameDir string) error {
 	if !ppath.IsDir(gameDir) {
 		return fail("%s is not a directory", strconv.Quote(gameDir))
@@ -502,8 +461,7 @@ func isProtonPrefix(prefix string) bool {
 	return strings.Contains(normal, "/compatdata/")
 }
 
-// isWinePrefix recognises any directory holding a drive_c, which covers a plain
-// Wine prefix and a CrossOver bottle alike.
+// isWinePrefix recognises any directory holding a drive_c, Wine or CrossOver.
 func isWinePrefix(prefix string) bool {
 	if ppath.Normalize(prefix) == "" {
 		return false
@@ -511,9 +469,7 @@ func isWinePrefix(prefix string) bool {
 	return ppath.IsDir(filepath.Join(prefix, "drive_c"))
 }
 
-// givenPrefix is the prefix the caller named, or "" for none. ppath.Normalize
-// reads an empty path as the current directory, which is not a prefix anyone
-// passed.
+// givenPrefix is the caller's prefix, or "" for none; Normalize reads "" as ".".
 func givenPrefix(options Options) string {
 	if strings.TrimSpace(options.Prefix) == "" {
 		return ""
@@ -534,9 +490,8 @@ func checkPrefix(prefix, platform string) error {
 	return nil
 }
 
-// packDigest is the SHA-256 the loader pack archive must carry. A pin the caller
-// passes wins; otherwise the built-in table has to know the version Thunderstore
-// named. An unknown version is refused before anything is downloaded.
+// packDigest is the SHA-256 the pack archive must carry: caller pin, then the
+// built-in table, then refusal.
 func packDigest(options Options, resolution *thunderstore.Resolution) (string, error) {
 	version := strings.TrimSpace(resolution.BepInExVersion)
 	if pinned, found := options.Pins[version]; found && strings.TrimSpace(pinned) != "" {
@@ -550,11 +505,7 @@ func packDigest(options Options, resolution *thunderstore.Resolution) (string, e
 		thunderstore.BepInExNamespace, thunderstore.BepInExName, version)
 }
 
-// modDigest is the SHA-256 the mod archive has to carry: the caller's pin for
-// this version, or the digest the install record kept when the release being
-// repaired is the one that install fetched. With neither, the archive is fetched
-// fresh and proven by its contents instead, in content.StagedModFiles, and its
-// digest is recorded for the next run.
+// modDigest is the caller's pin for this mod version, or "" when it holds none.
 func modDigest(options Options, version string, pins []ModPin) string {
 	version = strings.TrimSpace(version)
 	for _, pin := range pins {
@@ -565,8 +516,7 @@ func modDigest(options Options, version string, pins []ModPin) string {
 	return ""
 }
 
-// recordedModDigest is the digest the install record kept for the release it
-// fetched, which is what lets a repair reuse the cached archive.
+// recordedModDigest is the digest the record kept, letting a repair reuse a cache.
 func recordedModDigest(record *content.Record) string {
 	if record == nil || record.Loader == nil {
 		return ""
@@ -574,9 +524,7 @@ func recordedModDigest(record *content.Record) string {
 	return strings.ToLower(strings.TrimSpace(record.Loader.ModSHA256))
 }
 
-// recordVersions names what a dry run would place, taken from the record it is
-// repairing. A dry run never goes to the network: what is on disk is what it can
-// honestly report on.
+// recordVersions names what a dry run would place, read off the record.
 func recordVersions(record *content.Record) (string, string) {
 	if record == nil {
 		return "", ""
@@ -591,13 +539,8 @@ func launchOptionFor(platform string) string {
 	return ""
 }
 
-// unpackModArchive writes the plugin set an archive carries into staging and
-// returns those files by the path they hold both in the archive and in the game
-// folder. The set is written whole into a folder the game cannot read and checked
-// afterwards, so a package that turns out to hold no plugin costs a temporary
-// folder rather than a game directory with a half-install in it. Entry names are
-// vetted by package content before any byte is read, so an archive whose member
-// tries to climb out is refused here.
+// unpackModArchive writes an archive's plugin set into staging, in the archive's
+// own layout, and returns those members by their archive path.
 func unpackModArchive(archive, staging string) ([]string, error) {
 	members, bundle, err := content.ModPluginFiles(archive)
 	if err != nil {
@@ -609,8 +552,7 @@ func unpackModArchive(archive, staging string) ([]string, error) {
 		if !modPluginFile(name) {
 			continue
 		}
-		// Keys are relative to the plugin folder; the archive path and the path in
-		// the game folder are that folder plus the key, which is the same for both.
+		// Keys are relative to the plugin folder, the same in archive and game dir.
 		archivePath := content.ModPluginPrefix + name
 		if !ppath.SafeRelative(name) {
 			return nil, fail("the %s archive carries an unsafe member name: %s",
@@ -629,8 +571,6 @@ func unpackModArchive(archive, staging string) ([]string, error) {
 }
 
 // modPluginFile reports whether an archive member belongs in the plugin folder.
-// The plugin assembly and its managed dependency are what the loader loads, and
-// NLayer's licence rides along with the DLL it licenses.
 func modPluginFile(name string) bool {
 	switch path.Base(name) {
 	case content.ModDLLName, content.NLayerName, content.LicenseName:
@@ -652,14 +592,11 @@ func sortedMemberNames(members map[string]*zip.File) []string {
 	return names
 }
 
-// cacheDir is where archives are kept between runs. A caller that passes none
-// gets a temporary folder, and the cache holds nothing but plain .zip archives.
-
+// cacheDir is where archives are kept; a caller that passes none gets a temp folder.
 func cacheDir(options Options) (string, error) {
 	cache := strings.TrimSpace(options.Cache)
 	if cache == "" {
-		// An empty path means "no cache folder was named", not "the one the
-		// process happens to be sitting in": ppath.Normalize reads "" as ".".
+		// "" means no folder was named, not the process's working directory.
 		dir, err := os.MkdirTemp("", "megabonk-installer-cache")
 		if err != nil {
 			return "", fail("cannot create a temporary folder for the archives: %s", err.Error())
@@ -692,17 +629,14 @@ func planLabels() []string {
 	}
 }
 
-// alreadyInstalled reports a run with nothing left to do. The record is the only
-// thing that says this installer, and not a mod manager, put these files here, so
-// it is the same record the unpacked archives end up in that decides.
+// alreadyInstalled reports a run with nothing left to do, decided by the record.
 func alreadyInstalled(gameDir string, record *content.Record) bool {
 	return record != nil && record.Loader != nil && record.Loader.Installed && record.ModVersion != "" &&
 		record.BepinexVersion != "" && content.ModInstalled(gameDir)
 }
 
-// transaction places files and can take them all back. Files it overwrote are
-// restored from a backup made before the write, so a rollback leaves the game
-// directory as it was rather than deleting through it.
+// transaction places files and can take them all back, restoring overwrites from
+// a pre-write backup rather than deleting through them.
 type transaction struct {
 	gameDir        string
 	placed         []string
@@ -716,8 +650,7 @@ type transaction struct {
 	committed      bool
 }
 
-// fileBackup names the file a write is about to replace and the copy kept of its
-// previous bytes.
+// fileBackup names a file a write replaces and the copy kept of its old bytes.
 type fileBackup struct {
 	backup string
 	target string
@@ -727,10 +660,7 @@ func newTransaction(gameDir string, reporter Progress) *transaction {
 	return &transaction{gameDir: gameDir, backups: map[string]fileBackup{}, reporter: reporter}
 }
 
-// adoptPack takes over the undo of a loader pack install that has just been
-// carried out: the pack files it wrote are removed by a rollback, and a proxy it
-// parked is put back. The pack install itself is content's, so its inventory comes
-// from the result the caller holds.
+// adoptPack takes over the undo of a loader pack install content just carried out.
 func (t *transaction) adoptPack(pack *content.BepInExResult) {
 	if pack == nil {
 		return
@@ -749,9 +679,7 @@ func (t *transaction) adoptPack(pack *content.BepInExResult) {
 func (t *transaction) placeMod(staging string, staged []string) ([]string, error) {
 	var placed []string
 	for _, relative := range staged {
-		// Staging holds each member at the path it carries in the archive, and so
-		// does the game folder: that path is already BepInEx/plugins/MegabonkLevels,
-		// which is exactly where the loader looks for the plugin.
+		// The archive path is already where the loader looks for the plugin.
 		if err := t.copyIn(filepath.Join(staging, filepath.FromSlash(relative)), relative); err != nil {
 			return nil, err
 		}
@@ -761,8 +689,7 @@ func (t *transaction) placeMod(staging string, staged []string) ([]string, error
 	return placed, nil
 }
 
-// copyIn puts one already-unpacked file at relative inside the game directory,
-// keeping the bytes of anything it replaces so a rollback can put them back.
+// copyIn puts one unpacked file into the game directory, backing up what it replaces.
 func (t *transaction) copyIn(source, relative string) error {
 	destination := filepath.Join(t.gameDir, filepath.FromSlash(relative))
 	if !inside(destination, t.gameDir) {
@@ -812,15 +739,12 @@ func (t *transaction) markOverride(prefix string) {
 	t.overridePrefix = ppath.Normalize(prefix)
 }
 
-// record notes a file this run created, as opposed to one it replaced, so a
-// rollback removes it instead of restoring bytes over it.
+// record notes a file this run created, so a rollback removes rather than restores.
 func (t *transaction) record(relative string) {
 	t.placed = append(t.placed, relative)
 }
 
-// writeRecord puts the install record that drives --check and --uninstall. Only
-// this run's own loader state is written; levels and packs another command
-// installed stay in the record untouched.
+// writeRecord writes this run's loader state, leaving levels and packs alone.
 func (t *transaction) writeRecord(result *Result) error {
 	record := content.LoadRecord(t.gameDir)
 	if record == nil {
@@ -863,10 +787,7 @@ func (t *transaction) commit() {
 	t.dropBackups()
 }
 
-// abort rolls the run back and hands the error to the caller. A rollback that
-// could not put something back is reported alongside the error that caused it: a
-// player needs to know the game directory was left half-changed, not just that the
-// run failed.
+// abort rolls the run back and names anything the rollback could not restore.
 func (t *transaction) abort(err error) error {
 	t.rollback()
 	if len(t.rollbacks) > 0 {
@@ -883,9 +804,7 @@ func (t *transaction) rollback() {
 	if t.committed {
 		return
 	}
-	// A rollback is the last chance to put the player's files back, so it keeps
-	// going through every one of them and reports what it could not restore
-	// rather than stopping at the first failure and leaving the rest.
+	// Keep going through every backup; stopping early would leave the rest broken.
 	for _, kept := range t.backups {
 		if body, err := os.ReadFile(kept.backup); err == nil {
 			if err := os.MkdirAll(filepath.Dir(kept.target), 0o755); err != nil {
@@ -898,20 +817,17 @@ func (t *transaction) rollback() {
 		}
 		_ = os.Remove(kept.backup)
 	}
-	// One inventory: every file this run put in the game directory, whether it
-	// came from the loader pack or from the mod, removed deepest first.
+	// One inventory, pack and mod alike, removed deepest first.
 	names := append(append([]string{}, t.packFiles...), t.placed...)
 	sort.Sort(sort.Reverse(sort.StringSlice(names)))
 	for _, relative := range names {
 		target := filepath.Join(t.gameDir, filepath.FromSlash(relative))
-		// A file that is already gone removed nothing; anything else that could
-		// not be removed is a file this run left in the game directory.
+		// Already-gone is fine; anything else was left behind by this run.
 		if err := os.Remove(target); err != nil && !errors.Is(err, os.ErrNotExist) {
 			t.rollbacks = append(t.rollbacks, target)
 		}
 	}
-	// Then the folders they filled, deepest first, each dropped only once nothing
-	// the installer did not place is left in it.
+	// Then the folders they filled, each dropped only once nothing else is left.
 	for _, folder := range packFolders(names) {
 		dropIfEmpty(filepath.Join(t.gameDir, filepath.FromSlash(folder)))
 	}
@@ -925,17 +841,14 @@ func (t *transaction) rollback() {
 		t.overrideSet = false
 	}
 	if t.parkedProxy {
-		// content.UninstallRecorded put the parked proxy back when it removed the
-		// loader; nothing else may move a version.dll.
+		// content.UninstallRecorded restored the proxy; nothing else moves it.
 		t.parkedProxy = false
 	}
-	// A record that cannot be removed describes an install that no longer exists.
-	// Better a stale record than a claim that nothing is there to clean up.
+	// A stale record beats a claim there is nothing left to clean up.
 	_ = content.ClearRecord(t.gameDir)
 }
 
-// packFolders are the folders the placed files filled, deepest first, so a
-// rollback can collapse them once they hold nothing the installer did not place.
+// packFolders are the folders the placed files filled, deepest first.
 func packFolders(names []string) []string {
 	folders := map[string]bool{}
 	for _, name := range names {
@@ -947,8 +860,7 @@ func packFolders(names []string) []string {
 	for folder := range folders {
 		order = append(order, folder)
 	}
-	// Deepest first by depth, then by name, so a folder is always visited after
-	// everything inside it has already been dropped.
+	// Deepest first, so a folder is visited after its contents were dropped.
 	sort.Slice(order, func(i, j int) bool {
 		left, right := strings.Count(order[i], "/"), strings.Count(order[j], "/")
 		if left != right {

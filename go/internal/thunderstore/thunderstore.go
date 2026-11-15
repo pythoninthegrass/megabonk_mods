@@ -1,16 +1,5 @@
-// Package thunderstore resolves the level editor mod and the BepInEx pack it
-// depends on from Thunderstore, and downloads the pack archive.
-//
-// Metadata comes from the experimental package endpoint, whose latest entry
-// carries version_number, download_url and dependencies as
-// Namespace-Name-Version strings. The pack archive itself comes from the CDN at
-// gcdn.thunderstore.io, whose files sit under BepInExPack/. Every request
-// carries an ordinary browser User-Agent: the default scripting client is
-// refused by Cloudflare with error 1010 (docs/thunderstore.md).
-//
-// Nothing is written where the game can see it until the archive's SHA-256 has
-// been checked against the caller's pinned digest, so a swapped or truncated
-// download fails as an error rather than as a broken install.
+// Package thunderstore resolves the mod and the BepInEx pack it depends on, and
+// downloads both archives, checking each SHA-256 before it is written anywhere.
 package thunderstore
 
 import (
@@ -84,16 +73,12 @@ const (
 	referenceParts = 3
 )
 
-// bepinexPins holds the SHA-256 of every loader pack archive the installer is
-// known to work with; 6.0.788 is the version thunderstore.toml depends on and
-// the digest scripts/repair_bepinex.py pins.
+// bepinexPins holds a known-good SHA-256 for each loader pack version.
 var bepinexPins = map[string]string{
 	"6.0.788": "ce25d925f9eaba817214f5d6b2083b8e135ed0592b5a61b9f75ea5d4c02f5300",
 }
 
-// dependencyField is a namespace or name: letters, digits, '_' and '.', with
-// hyphens allowed only between two such characters, so no field starts or ends
-// with a hyphen or carries two in a row.
+// dependencyField is one namespace or name, hyphens only between other chars.
 var dependencyField = regexp.MustCompile(`^[A-Za-z0-9_.]+(?:-[A-Za-z0-9_.]+)*$`)
 
 var (
@@ -102,8 +87,7 @@ var (
 	safeName       = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 )
 
-// Error means Thunderstore could not be asked, answered something the installer
-// cannot use, or delivered bytes that are not what was pinned.
+// Error is Thunderstore unreachable, answered unusably, or delivered bad bytes.
 type Error struct{ Message string }
 
 func (e *Error) Error() string { return e.Message }
@@ -112,8 +96,7 @@ func fail(format string, args ...any) error {
 	return &Error{Message: fmt.Sprintf(format, args...)}
 }
 
-// Dependency is one package reference in the form Thunderstore spells it,
-// Namespace-Name-Version.
+// Dependency is a package reference as Thunderstore spells it.
 type Dependency struct {
 	Namespace string
 	Name      string
@@ -125,15 +108,12 @@ func (d Dependency) FullName() string {
 	return d.Namespace + "-" + d.Name + "-" + d.Version
 }
 
-// ParseDependency reads a Namespace-Name-Version reference the way the site's
-// own PackageReference.parse does: the version is taken from the right first,
-// then the name, so the namespace may keep hyphens and a name may keep
-// underscores.
+// ParseDependency reads a Namespace-Name-Version reference, taking version and
+// name from the right so the namespace may keep hyphens.
 func ParseDependency(reference string) (Dependency, error) {
 	notADependency := fail("%s is not a Thunderstore dependency: expected Namespace-Name-Version with a three-part version",
 		strconv.Quote(reference))
-	// A dotted version is one hyphen-separated part, so the tail is the version,
-	// the part before it the name, and everything left over the namespace.
+	// Tail is the version, then the name, the rest the namespace.
 	parts := strings.Split(reference, "-")
 	version := parts[len(parts)-1]
 	if !versionPattern.MatchString(version) || len(parts) < referenceParts {
@@ -147,9 +127,7 @@ func ParseDependency(reference string) (Dependency, error) {
 	return Dependency{Namespace: namespace, Name: name, Version: version}, nil
 }
 
-// Latest is the latest object in the package endpoint's document. The site also
-// answers icon, downloads, date_created, website_url and is_active, which the
-// installer has no use for.
+// Latest is the latest object in the package endpoint's document.
 type Latest struct {
 	Namespace    string
 	Name         string
@@ -159,9 +137,7 @@ type Latest struct {
 	DownloadURL  string
 }
 
-// DependsOn finds the version of one dependency, reporting false when the
-// package does not declare it. A reference the site wrote badly is an error
-// rather than a miss, because the installer cannot tell which version to install.
+// DependsOn finds a dependency's version; a malformed reference is an error.
 func (l Latest) DependsOn(namespace, name string) (string, bool, error) {
 	for _, reference := range l.Dependencies {
 		dependency, err := ParseDependency(reference)
@@ -176,9 +152,7 @@ func (l Latest) DependsOn(namespace, name string) (string, bool, error) {
 	return "", false, nil
 }
 
-// Resolution is what the installer needs before it downloads anything: the
-// mod's current version and where to get it, and the loader pack version that
-// mod depends on with its CDN archive URL.
+// Resolution is what a run needs before it downloads anything.
 type Resolution struct {
 	Version           string
 	FullName          string
@@ -196,9 +170,7 @@ type Client struct {
 	httpClient *http.Client
 }
 
-// NewClient builds a client for a metadata site and a CDN. A blank or unusable
-// location falls back to the public one, so a mistyped
-// MEGABONK_THUNDERSTORE_*_URL cannot stop an install.
+// NewClient falls back to the public locations when one is blank or unusable.
 func NewClient(apiBase, cdnBase string) *Client {
 	return &Client{
 		apiBase:    resolveBase(apiBase, DefaultAPIBaseURL),
@@ -291,10 +263,8 @@ type Downloaded struct {
 	FromCache bool
 }
 
-// DownloadBepInEx puts the loader pack archive for one version at target,
-// fetching it from the CDN when it is not already there intact. The digest is
-// mandatory: an archive that does not match it is discarded before anything is
-// installed, and so is one whose members do not sit under BepInExPack/.
+// DownloadBepInEx puts the loader pack archive at target, fetched unless already
+// there intact. The digest is mandatory.
 func (c *Client) DownloadBepInEx(version, expectedSHA256, target string) (*Downloaded, error) {
 	if !versionPattern.MatchString(version) {
 		return nil, fail("%s is not a loader pack version: expected a three-part version", strconv.Quote(version))
@@ -333,14 +303,8 @@ func (c *Client) DownloadBepInEx(version, expectedSHA256, target string) (*Downl
 	return &Downloaded{Path: target, URL: archiveURL, Version: version, SHA256: digest, Size: int64(len(body))}, nil
 }
 
-// DownloadMod puts the mod's own archive for one version at target. expectedSHA256
-// is what proves the bytes: Thunderstore publishes no checksum for the mod, so a
-// caller either holds one from its own pin or from the install that first fetched
-// the release, or passes "" and gets the archive fetched fresh and proven by its
-// contents before it is installed. An archive with nothing to check it against is
-// never reused from the cache: the file name is derived from the version alone,
-// and a release republished under the same version would keep its old cached
-// bytes forever.
+// DownloadMod puts the mod's archive at target. expectedSHA256 may be "" when no
+// pin is held; then it is fetched fresh and its digest returned for a later run.
 func (c *Client) DownloadMod(version, expectedSHA256, target string) (*Downloaded, error) {
 	if !versionPattern.MatchString(version) {
 		return nil, fail("%s is not a mod version: expected a three-part version", strconv.Quote(version))
@@ -374,9 +338,7 @@ func (c *Client) DownloadMod(version, expectedSHA256, target string) (*Downloade
 	if err := CheckModDigest(body, digest); err != nil {
 		return nil, err
 	}
-	// A zip that cannot be opened is not the mod's archive, whatever digest it
-	// carries. Whether its members are the plugin set is the installer's check, so
-	// that it can take back what it already placed.
+	// Unopenable bytes are not the archive, whatever their digest.
 	if _, err := zip.NewReader(bytes.NewReader(body), int64(len(body))); err != nil {
 		return nil, fail("the %s %s archive is not a readable zip: %s", ModName, version, clip(err.Error()))
 	}
@@ -389,9 +351,7 @@ func (c *Client) DownloadMod(version, expectedSHA256, target string) (*Downloade
 	return &Downloaded{Path: target, URL: archiveURL, Version: version, SHA256: digest, Size: int64(len(body))}, nil
 }
 
-// CheckModDigest reports whether bytes carry the digest the mod's archive was
-// downloaded for. A caller that holds no digest for the release passes "" and
-// gets the archive as it came, to be proven by its contents before it is used.
+// CheckModDigest checks the bytes against a held digest; "" means check nothing.
 func CheckModDigest(body []byte, expectedSHA256 string) error {
 	want := strings.ToLower(strings.TrimSpace(expectedSHA256))
 	if want == "" {
@@ -408,14 +368,12 @@ func CheckModDigest(body []byte, expectedSHA256 string) error {
 	return nil
 }
 
-// ArchiveName is the vendor-style filename one package version's archive is
-// cached under, so a cache directory holds only plain .zip files.
+// ArchiveName is the cache filename one package version's archive is kept under.
 func ArchiveName(namespace, name, version string) string {
 	return sanitize(namespace) + "-" + sanitize(name) + "-" + version + ".zip"
 }
 
-// sanitize keeps a cache filename to characters that are safe in one on every
-// platform, so a package name can never turn into a path.
+// sanitize keeps a cache filename safe on every platform, never a path.
 func sanitize(part string) string {
 	var builder strings.Builder
 	for _, r := range part {
@@ -432,9 +390,7 @@ func sanitize(part string) string {
 	return builder.String()
 }
 
-// checkTargetPath accepts only a plain file path: every component names a real
-// file or folder, so no ".." can climb out of the folder the caller meant and
-// "." cannot stand in for the file name itself.
+// checkTargetPath accepts only a plain file name inside one folder.
 func checkTargetPath(target string) error {
 	if strings.TrimSpace(target) == "" {
 		return fail("no target path was given for the %s archive", PackRoot)
@@ -442,9 +398,7 @@ func checkTargetPath(target string) error {
 	if strings.ContainsRune(target, 0) || strings.ContainsAny(target, "\\:") {
 		return fail("%s is not a usable archive path", strconv.Quote(target))
 	}
-	// Clean would collapse "a/../b" to "b" and hide the climb, so the raw path
-	// is what gets inspected. An absolute path's leading slash shows up as an
-	// empty first part and is not a name.
+	// The raw path is inspected: Clean would collapse a climb and hide it.
 	for index, part := range strings.Split(filepath.ToSlash(target), "/") {
 		if index == 0 && part == "" {
 			continue
@@ -487,9 +441,7 @@ func CheckDigest(body []byte, expectedSHA256 string) error {
 	return nil
 }
 
-// decodeLatest reads the latest object out of the package document. The status
-// has already been checked, so anything that is not the expected JSON object
-// reads as a broken response rather than as a missing package.
+// decodeLatest reads the latest object; a bad body reads as broken, not missing.
 func decodeLatest(body []byte) (*Latest, error) {
 	var document struct {
 		Namespace string `json:"namespace"`
@@ -547,9 +499,7 @@ func decodeLatest(body []byte) (*Latest, error) {
 	}, nil
 }
 
-// checkPackLayout makes sure the archive is a loader pack rather than something
-// else served at that URL: every member sits under BepInExPack/ and no name
-// climbs out of it.
+// checkPackLayout makes sure the archive is a loader pack, not something else.
 func checkPackLayout(body []byte, what string) error {
 	reader, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
 	if err != nil {
@@ -584,12 +534,8 @@ func climbsOut(relative string) bool {
 	return false
 }
 
-// verifiedFile is the archive already at path when it carries the digest, so a
-// second run does not refetch it.
-// cachedArchive is the bytes already at path when they carry the expected digest
-// and still look like the archive that name is supposed to hold, so a second run
-// never pays for an archive it already has. Anything wrong with the file — no
-// digest match, an archive that no longer opens — means a fetch, never a reuse.
+// cachedArchive reuses the bytes at path when they carry the digest and still
+// look like this archive; anything else means a fetch, never a reuse.
 func cachedArchive(path, digest string, shape func(body []byte) error) (*Downloaded, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -604,15 +550,12 @@ func cachedArchive(path, digest string, shape func(body []byte) error) (*Downloa
 	return &Downloaded{Path: path, SHA256: digest, Size: int64(len(body)), FromCache: true}, nil
 }
 
-// packArchiveShape is what proves cached bytes are the loader pack: the digest,
-// and members that sit where the pack puts them.
+// packArchiveShape proves cached bytes are the loader pack by their layout.
 func packArchiveShape(body []byte) error {
 	return checkPackLayout(body, "cached "+BepInExName)
 }
 
-// modArchiveShape is what proves cached bytes are the mod's archive: the digest,
-// and a zip that opens. Whether its members are the plugin set is the installer's
-// check, so that it can take back whatever it already placed.
+// modArchiveShape proves cached bytes are the mod's archive by opening as a zip.
 func modArchiveShape(body []byte) error {
 	if _, err := zip.NewReader(bytes.NewReader(body), int64(len(body))); err != nil {
 		return fail("the cached archive is not a readable zip: %s", clip(err.Error()))
@@ -620,8 +563,7 @@ func modArchiveShape(body []byte) error {
 	return nil
 }
 
-// writeVerified puts the verified bytes at path through a temporary file, so a
-// failed write never leaves a half archive where the installer would use it.
+// writeVerified puts bytes at path through a temp file, never a half archive.
 func writeVerified(path string, body []byte) error {
 	temporary := path + tempSuffix
 	if err := writeTemporary(temporary, body); err != nil {
@@ -634,8 +576,7 @@ func writeVerified(path string, body []byte) error {
 	return nil
 }
 
-// writeTemporary writes the whole body to a fresh file at path, which is left
-// behind only when the bytes landed there intact.
+// writeTemporary writes the whole body, leaving the file only if it landed whole.
 func writeTemporary(path string, body []byte) error {
 	handle, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -661,8 +602,7 @@ func writeTemporary(path string, body []byte) error {
 // discard removes a temporary file, whose absence is the outcome either way.
 func discard(path string) { _ = os.Remove(path) }
 
-// get fetches a body, checking the status before it is read so a 404 or a
-// Cloudflare error page reads as what it is rather than as corrupt data.
+// get fetches a body, checking status first so an error page is not read as data.
 func (c *Client) get(requestURL string, limit int64, classify func(response *http.Response) error) ([]byte, error) {
 	request, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
@@ -705,9 +645,7 @@ func clip(text string) string {
 	return text[:maxErrorRunes] + "..."
 }
 
-// normalizeBase canonicalises a location: a missing scheme gets https, a
-// trailing slash is dropped, and anything that is not a plain http or https
-// origin is refused so a bad setting cannot point the installer at a file.
+// normalizeBase adds https, drops a trailing slash, and refuses non-http origins.
 func normalizeBase(raw string) (string, error) {
 	candidate := strings.TrimSpace(raw)
 	if candidate == "" {
