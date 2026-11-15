@@ -61,6 +61,55 @@ tasks:
       - mkdir -p .tools/megabonk-linux-native
       - rsync -a --delete "$MEGABONK_LINUX_BUILD_RSYNC" .tools/megabonk-linux-native/Megabonk/
 
+  native-bind:
+    desc: "Score the loader-free native binding spike: dlopen GameAssembly by exported symbol (macOS legs, Linux control leg)"
+    vars:
+      NATIVE_BIND_APP: '{{.NATIVE_BIND_APP | default ".tools/native-bind/ProbePlayer.app"}}'
+      NATIVE_BIND_OUT: '{{.NATIVE_BIND_OUT | default ".tools/native-bind"}}'
+      NATIVE_BIND_ARCH: '{{.NATIVE_BIND_ARCH | default "both"}}'
+      NATIVE_BIND_LEGS: '{{.NATIVE_BIND_LEGS | default "leg1,leg2,leg3"}}'
+      NATIVE_BIND_LINUX_BUILD: '{{.NATIVE_BIND_LINUX_BUILD | default ".tools/megabonk-linux-native/Megabonk"}}'
+      NATIVE_BIND_EXTRA: '{{.NATIVE_BIND_EXTRA | default ""}}'
+    summary: |
+      Usage: task re:native-bind [NATIVE_BIND_APP=<.app>] [NATIVE_BIND_OUT=<dir>]
+             [NATIVE_BIND_ARCH=both|x86_64|arm64] [NATIVE_BIND_LEGS=leg1,leg2,leg3]
+             [NATIVE_BIND_EXTRA=--quiet|--only Rewired|--skip-preflight ...]
+
+       Compiles scripts/native_bind_probe/host.c into a loader-free native host and
+       scores three legs against a GameAssembly binary: exported-symbol binding, a
+       managed static method invoked by name, and a self-authored trampoline on an
+       exported il2cpp function. Writes summary.json (with a per-attempt ladder) to
+       NATIVE_BIND_OUT. Leg 2 runs a candidate ladder; --only <text> narrows it.
+
+       The macOS legs probe NATIVE_BIND_APP, a locally built Unity 2023.2.22f1 IL2CPP
+       universal player (there is no shipped macOS Megabonk build). The Linux control
+       leg runs the same driver over ssh on the player box against the shipped
+       GameAssembly.so and shipped metadata; it needs MEGABONK_LINUX_BUILD_RSYNC in
+       .env ("<host>:<path>/Megabonk/"), which keeps that box's hostname out of
+       tracked files. See the "Binding the Il2Cpp runtime without a mod loader"
+       section in docs/development.md.
+    preconditions:
+      - sh: '[ -d "{{.NATIVE_BIND_APP}}" ]'
+        msg: "No probe player bundle at {{.NATIVE_BIND_APP}}; see docs/development.md to build it, or pass NATIVE_BIND_APP"
+    cmds:
+      - uv run --script scripts/native_bind_probe.py --app "{{.NATIVE_BIND_APP}}"
+        --arch "{{.NATIVE_BIND_ARCH}}" --legs "{{.NATIVE_BIND_LEGS}}"
+        --out "{{.NATIVE_BIND_OUT}}" {{.NATIVE_BIND_EXTRA}}
+      - |
+        if [ -n "${MEGABONK_LINUX_BUILD_RSYNC:-}" ]; then
+          host="${MEGABONK_LINUX_BUILD_RSYNC%%:*}"
+          dir="${MEGABONK_LINUX_BUILD_RSYNC#*:}"
+          dir="${dir%/}"
+          uv run --script scripts/native_bind_probe.py \
+            --dylib "{{.NATIVE_BIND_LINUX_BUILD}}/GameAssembly.so" \
+            --metadata "{{.NATIVE_BIND_LINUX_BUILD}}/Megabonk_Data/il2cpp_data/Metadata" \
+            --platform linux --arch x86_64 --legs leg1,leg2 \
+            --linux-target x86_64 --linux-host "$host" --linux-target-dir "$dir" \
+            --remote-only --out "{{.NATIVE_BIND_OUT}}-linux" --skip-preflight
+        else
+          echo "skipping the Linux control leg: set MEGABONK_LINUX_BUILD_RSYNC in .env"
+        fi
+
   _install-dotnet:
     internal: true
     desc: "Install the mise-managed dotnet SDK used to run Il2CppDumper"
