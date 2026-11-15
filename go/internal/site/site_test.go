@@ -30,16 +30,24 @@ type stub struct {
 	server   *httptest.Server
 	calls    []string
 	metadata string
-	status   int
-	packs    map[string]int
+	// records is the answer to a lookup by stored file name.
+	records string
+	status  int
+	packs   map[string]int
 }
 
 func newStub(t *testing.T) *stub {
 	t.Helper()
-	stub := &stub{metadata: defaultLevelBody, packs: map[string]int{}}
+	stub := &stub{metadata: defaultLevelBody, records: `[` + defaultLevelBody + `]`, packs: map[string]int{}}
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		stub.calls = append(stub.calls, request.Method+" "+request.URL.RequestURI())
 		switch {
+		case request.URL.Path == "/api/collections/levels/records" && strings.Contains(request.URL.Query().Get("filter"), "level="):
+			writer.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(writer, `{"page":1,"perPage":30,"totalItems":1,"items":[`+stub.records+`]}`)
+		case request.URL.Path == "/api/collections/levels/records" && strings.Contains(request.URL.Query().Get("fields"), "code"):
+			writer.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(writer, `{"page":1,"perPage":30,"totalItems":1,"items":[`+stub.records+`]}`)
 		case request.URL.Path == "/api/collections/levels/records":
 			if stub.status != 0 && stub.status != 200 {
 				http.Error(writer, "upstream said no", stub.status)
@@ -55,6 +63,8 @@ func newStub(t *testing.T) *stub {
 			http.Redirect(writer, request, "/api/files/levels/lv1/thps-warehouse-v2.mblevel.json?download=1", http.StatusFound)
 		case request.URL.Path == "/api/files/levels/lv1/thps-warehouse-v2.mblevel.json":
 			fmt.Fprint(writer, defaultLevelBody)
+		case request.URL.Path == "/api/files/levels/lv1/cover.png":
+			fmt.Fprint(writer, "cover")
 		case request.URL.Path == "/api/p/thps/download":
 			version := request.URL.Query().Get("version")
 			code, hosted := stub.packs[version]

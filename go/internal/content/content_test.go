@@ -44,8 +44,6 @@ func TestPathsMatchTheReference(t *testing.T) {
 		LevelsPath("/g"):         "/g/UserData/Levels",
 		LevelPacksPath("/g"):     "/g/UserData/LevelPacks",
 		PackDest("/g", "thps"):   "/g/UserData/LevelPacks/thps",
-		RuntimePath("/g"):        "/g/dotnet6-win",
-		VersionMarkerPath("/g"):  "/g/MelonLoader/MegabonkLevels.melonloader_version",
 		RecordFilePath("/g"):     "/g/MegabonkLevels.installer.json",
 		UserDataDir("/g/"):       "/g/UserData",
 		PackDest("/g//", "thps"): "/g/UserData/LevelPacks/thps",

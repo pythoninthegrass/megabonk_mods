@@ -158,7 +158,7 @@ func sidecarCandidates(slug string) []string {
 
 // relativeToGame is a level folder file name relative to the game directory.
 func relativeToGame(gameDir, name string) string {
-	return relativeFrom(gameDir, ppath.Join(LevelsPath(gameDir), name))
+	return relativeFrom(gameDir, ppath.Join(UserData, LevelsDir, name))
 }
 
 // relativeFrom is a path under base in base-relative form.

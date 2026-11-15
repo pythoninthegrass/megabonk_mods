@@ -4,6 +4,7 @@ package site
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +24,10 @@ const (
 	BaseURLEnv = "MEGABONK_API_URL"
 	// SiteHost is the host a player's link is accepted from.
 	SiteHost = "megabonkmod.party"
+
+	// ExampleCode is a real share code, used wherever the installer shows the
+	// player what an input looks like.
+	ExampleCode = "7N1-MVB-WKF"
 
 	// LevelDownloadSuffix is the counting route for a level file.
 	LevelDownloadSuffix = "/api/l/%s/download"
@@ -183,6 +188,15 @@ func (l *Level) Download() ([]byte, error) {
 	})
 }
 
+// DownloadLevel gets one level file by share code through the counting route.
+func (c *Client) DownloadLevel(input string) ([]byte, error) {
+	level, err := c.LookupLevel(input)
+	if err != nil {
+		return nil, err
+	}
+	return level.Download()
+}
+
 // Client talks to one API location.
 type Client struct {
 	baseURL    string
@@ -256,7 +270,7 @@ func NormalizeBaseURL(raw string) (string, error) {
 func NormalizeCode(input string) (string, error) {
 	text := strings.TrimSpace(input)
 	if text == "" {
-		return "", fail("no share code given: pass a code such as 7N1-MVB-WKF, a " +
+		return "", fail("no share code given: pass a code such as " + ExampleCode + ", a " +
 			SiteHost + "/l/<code> link, or a " + SiteHost + "/levels/view/?code=<code> link")
 	}
 	if looksLikeLink(text) {
@@ -265,7 +279,7 @@ func NormalizeCode(input string) (string, error) {
 	if code := formatCode(text); code != "" {
 		return code, nil
 	}
-	return "", fail("%s is not a level: pass a share code such as 7N1-MVB-WKF, a "+
+	return "", fail("%s is not a level: pass a share code such as "+ExampleCode+", "+
 		SiteHost+"/l/<code> link, or a "+SiteHost+"/levels/view/?code=<code> link", strconv.Quote(input))
 }
 
@@ -290,7 +304,7 @@ func codeFromURL(text string) (string, error) {
 	host := strings.ToLower(parsed.Hostname())
 	if host != SiteHost && host != "www."+SiteHost {
 		return "", fail("%s is not a %s level link: it points at %s, so there is no share code to read. "+
-			"Pass a code such as 7N1-MVB-WKF or a https://%s/l/<code> link.",
+			"Pass a code such as "+ExampleCode+" or a https://%s/l/<code> link.",
 			strconv.Quote(text), SiteHost, orNone(host), SiteHost)
 	}
 	path := strings.TrimSuffix(parsed.EscapedPath(), "/")
@@ -531,6 +545,11 @@ func levelFromDocument(body []byte, code string) (*Level, error) {
 		Cover:     textField(record, "cover"),
 		Biome:     textField(record, "biome"),
 	}
+	// A lookup by file name asks for the code in the same request, so the caller
+	// can still take the counting download route rather than the raw file path.
+	if level.Code == "" {
+		level.Code = textField(record, "code")
+	}
 	level.Slug = Slug(level.Title)
 	if level.ID == "" || level.LevelFile == "" {
 		return nil, fail("the level record for %s is missing its id or level file", code)
@@ -589,4 +608,90 @@ func arrayField(object map[string]any, key string) ([]any, bool) {
 func textField(object map[string]any, key string) string {
 	text, _ := object[key].(string)
 	return text
+}
+
+// levelFileName is the shape a stored level file name keeps to be worth asking
+// the server about.
+var levelFileName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._ -]{0,120}$`)
+
+// safeLevelFileName accepts one file name, with no path in it, that is worth
+// asking the server about.
+func safeLevelFileName(filename string) (string, error) {
+	name := strings.TrimSpace(filename)
+	if !levelFileName.MatchString(name) || strings.ContainsAny(name, "/\\") ||
+		strings.Contains(name, "..") {
+		return "", fail("%s is not a level file name: expected a file name such as my-level.mblevel.json",
+			strconv.Quote(filename))
+	}
+	return name, nil
+}
+
+// LookupLevelByFilename finds the hosted record whose stored level file carries
+// the name a player's local file has, so its packs can be installed too.
+func (c *Client) LookupLevelByFilename(filename string) (*Level, error) {
+	name, err := safeLevelFileName(filename)
+	if err != nil {
+		return nil, err
+	}
+	requestURL := c.baseURL + RecordsSuffix + "?filter=" + url.QueryEscape("(level='"+name+"')")
+	body, err := c.request(requestURL, func(response *http.Response) error {
+		if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusForbidden {
+			return &NotFoundError{Message: serverMessage(response.Body)}
+		}
+		return responseError(response)
+	})
+	if err != nil {
+		return nil, err
+	}
+	level, err := levelFromDocument(body, "")
+	if err != nil {
+		return nil, err
+	}
+	return c.withClient(level), nil
+}
+
+// DownloadFile gets one file the API serves, such as a level's cover picture. The
+// URL has to be on this client's API host.
+func (c *Client) DownloadFile(fileURL string) ([]byte, error) {
+	parsed, err := url.Parse(strings.TrimSpace(fileURL))
+	if err != nil || parsed.Scheme != "https" && parsed.Scheme != "http" || parsed.Host == "" {
+		return nil, fail("%s is not a file URL the %s API serves", strconv.Quote(fileURL), SiteHost)
+	}
+	if !sameAPIHost(parsed.Host, c.baseURL) {
+		return nil, fail("%s is not served by the %s API at %s", strconv.Quote(fileURL), SiteHost, c.baseURL)
+	}
+	return c.request(parsed.String(), responseError)
+}
+
+// sameAPIHost reports whether a host is the one the client's API lives on.
+func sameAPIHost(host, baseURL string) bool {
+	origin, err := NormalizeBaseURL(baseURL)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(host, strings.TrimPrefix(strings.TrimPrefix(origin, "https://"), "http://"))
+}
+
+// PackDownloadURL is where one pack version's archive is served.
+func (c *Client) PackDownloadURL(packID, version string) string {
+	origin := c.baseURL + fmt.Sprintf(PackDownloadSuffix, url.PathEscape(packID))
+	requestURL := origin + "?platform=" + packPlatform
+	if version != "" {
+		requestURL += "&version=" + url.QueryEscape(version)
+	}
+	return requestURL
+}
+
+// IsNotFound reports a level the player cannot see, whether it never existed or
+// is hidden.
+func IsNotFound(err error) bool {
+	var notFound *NotFoundError
+	return errors.As(err, &notFound)
+}
+
+// IsPackNotHosted reports a pack the site does not offer, as distinct from the
+// site being unreachable.
+func IsPackNotHosted(err error) bool {
+	var notHosted *PackNotHostedError
+	return errors.As(err, &notHosted)
 }

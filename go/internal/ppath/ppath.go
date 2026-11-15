@@ -184,3 +184,29 @@ func SafeRelative(name string) bool {
 	}
 	return true
 }
+
+// SanitizeName turns any text into a lowercase folder or file stem the pack
+// loaders accept, or empty when nothing usable is left.
+func SanitizeName(raw string) string {
+	var builder strings.Builder
+	lastHyphen := true
+	for _, r := range strings.ToLower(raw) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '.' || r == '_' {
+			builder.WriteRune(r)
+			lastHyphen = false
+			continue
+		}
+		if !lastHyphen {
+			builder.WriteByte('-')
+			lastHyphen = true
+		}
+	}
+	name := strings.Trim(builder.String(), "-.")
+	if name == "." || name == ".." {
+		return ""
+	}
+	for strings.Contains(name, "--") {
+		name = strings.ReplaceAll(name, "--", "-")
+	}
+	return name
+}

@@ -511,6 +511,11 @@ func checkPackLayout(body []byte, what string) error {
 		if !strings.HasPrefix(name, packArchiveName) {
 			return fail("the %s archive puts %s outside %s/", what, strconv.Quote(member.Name), PackRoot)
 		}
+		// Directory members are skipped, the same way the unpacker skips them, so
+		// the archive that passes here is the archive that can actually be written.
+		if member.FileInfo().IsDir() {
+			continue
+		}
 		relative := strings.TrimPrefix(name, packArchiveName)
 		if relative == "" || strings.HasPrefix(relative, "/") || strings.Contains(relative, "\\") ||
 			strings.Contains(relative, ":") || climbsOut(relative) {
