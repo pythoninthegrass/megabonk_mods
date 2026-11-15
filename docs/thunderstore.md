@@ -185,6 +185,64 @@ Behaviours worth knowing before debugging a disagreement with the site:
 - A bare `mailto:` address is rejected while `mailto://anything` passes, and `ipfs://`
   needs something that looks like a host: `ipfs://CID` fails.
 
+## Resolve the mod and its loader pack at install time
+
+`go/internal/thunderstore` is the installer's client for the two downloads an opt-in install needs: the current `pythoninthegrass/Megabonk_Level_Editor` package, and the `BepInEx-BepInExPack_IL2CPP` version that package declares as its dependency. It uses the standard library only, so MyGo stays the installer's one direct module dependency.
+
+`Resolve` reads `GET /api/experimental/package/<ns>/<name>/` and returns the latest version, its download URL, the parsed dependency list, and the loader pack version with its CDN archive URL. `DownloadBepInEx` fetches that archive and will not put it anywhere the installer would later use it until its SHA-256 matches the digest it was fetched for, so a swapped or truncated download fails as an error rather than as a broken install. The known-good digest for 6.0.788 is the one `scripts/repair_bepinex.py` pins, and a version with no pinned digest is refused rather than installed unverified. An archive already on disk with the right digest is reused instead of refetched, and anything that does not match is replaced by a fresh download.
+
+Requests carry an ordinary browser `User-Agent`: a default scripting client is refused by Cloudflare with error 1010. `MEGABONK_THUNDERSTORE_API_URL` and `MEGABONK_THUNDERSTORE_CDN_URL` point the client somewhere else, which is how the unit tests aim it at a local `httptest` server; no `go test` run touches the network, and a blank or unusable value falls back to the public host rather than stopping an install.
+
+### The experimental package endpoint's response
+
+Confirmed against the live endpoint, which answers `200` with `content-type: application/json` for an anonymous `GET` carrying a browser `User-Agent`. The fields the installer depends on are these; the rest of the document is ignored.
+
+```json
+{
+  "namespace": "pythoninthegrass",
+  "name": "Megabonk_Level_Editor",
+  "full_name": "pythoninthegrass-Megabonk_Level_Editor",
+  "owner": "pythoninthegrass",
+  "package_url": "https://thunderstore.io/package/pythoninthegrass/Megabonk_Level_Editor/",
+  "date_created": "2026-11-09T04:13:00.711517Z",
+  "date_updated": "2026-11-09T21:06:14.256961Z",
+  "rating_score": -1,
+  "is_pinned": false,
+  "is_deprecated": false,
+  "total_downloads": -1,
+  "latest": {
+    "namespace": "pythoninthegrass",
+    "name": "Megabonk_Level_Editor",
+    "version_number": "0.2.0",
+    "full_name": "pythoninthegrass-Megabonk_Level_Editor-0.2.0",
+    "description": "Play and build custom Megabonk levels with an in-game map editor, custom music and a drop-down console.",
+    "icon": "https://ccdn.thunderstore.io/live/repository/icons/pythoninthegrass-Megabonk_Level_Editor-0.2.0.png",
+    "dependencies": ["BepInEx-BepInExPack_IL2CPP-6.0.788"],
+    "download_url": "https://thunderstore.io/package/download/pythoninthegrass/Megabonk_Level_Editor/0.2.0/",
+    "downloads": 86,
+    "date_created": "2026-11-09T21:06:13.821991Z",
+    "website_url": "https://megabonkmod.party",
+    "is_active": true
+  },
+  "community_listings": [
+    {
+      "has_nsfw_content": false,
+      "categories": ["Mods", "Tools"],
+      "community": "megabonk",
+      "review_status": "unreviewed"
+    }
+  ]
+}
+```
+
+What that shape means in practice:
+
+- `latest.download_url` is a `thunderstore.io` page-style URL (`/package/download/<ns>/<name>/<version>/`), not a direct CDN link, so it is a location to hand to a manager or to follow; the archive bytes the installer verifies come from the CDN path instead. Nothing assumes the download URL is served with a matching digest.
+- `latest.dependencies` is a list of `Namespace-Name-Version` strings, split the same way `PackageReference.parse` splits them (see [Validate a manifest offline](#validate-a-manifest-offline)): version first from the right, then the name, so `BepInExPack_IL2CPP` keeps its underscores and a namespace keeps its hyphens.
+- `rating_score` and `total_downloads` answer `-1` rather than a real number when the site has no figure, so neither is usable as a value and neither is read.
+- The loader pack archive is not on `thunderstore.io`: it comes from `https://gcdn.thunderstore.io/live/repository/packages/BepInEx-BepInExPack_IL2CPP-<version>.zip`, whose members all sit under `BepInExPack/`. An archive served at that URL whose members do not sit under that root is rejected as the wrong artifact, which is also what stops a path-traversal member from being accepted.
+- The `readme` subpath documented under [Release gate and publishing](#release-gate-and-publishing) is a sibling of this endpoint and needs a version segment; `/api/experimental/package/<ns>/<name>/` answers for the package as a whole.
+
 ## Content and licensing
 
 The Thunderstore package is runtime-only: **no levels, third-party packs or
