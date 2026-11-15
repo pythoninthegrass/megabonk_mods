@@ -106,11 +106,28 @@ Each entry needs `path` (relative to the package root), `sha256`, and `dest` (re
 
 Bundled content is ordinary `files[]` entries, so nothing in the schema is special about it: the same digest check covers it, and `--uninstall` removes it by the same record that removes the mod.
 
+### Where content lands
+
+`go/internal/content` is the one place that knows the layout the mod's loaders read, and it is the only writer of those paths:
+
+| Content | Destination | Loader that reads it |
+| --- | --- | --- |
+| Level | `UserData/Levels/<slug>.mblevel.json` | Map Selection lists every titled `.mblevel.json` in the folder. |
+| Cover | `UserData/Levels/<slug>.png` | `LevelThumbnailSidecar` finds the image named after the level's base name. |
+| Biome icon | `UserData/Levels/<slug>.biome.png` | The same lookup with its `.biome` stem suffix. |
+| Pack | `UserData/LevelPacks/<id>/{<id>,manifest.json,attachments.json}` | `PackPrefabs` loads one folder per pack id; see [asset-bundles.md](asset-bundles.md). |
+
+`InstallLevel` takes the slug, the level file, and optionally the cover and biome image, and creates any missing `UserData` folder on the way. The images are written under the slug-derived names whichever file names they arrived with, because the lookup is by the level's base name and nothing in the level file points at a picture. An existing level file of the same name is replaced and the replacement is reported. Images left from an earlier install of that level which this install does not carry are removed, so a re-install cannot serve a stale cover, and the removal is reported with it.
+
+`InstallPackFromZip` unpacks a pack archive into `UserData/LevelPacks/<id>/`. Nothing is written until the archive as a whole is proven: every member name is vetted against the pack folder, so a name that climbs out of it, uses a drive letter or a backslash separator, or is absolute is refused outright; each member is then read through and checked against the size and checksum its header declares. The unpacked folder must pass `ValidatePackSource`, the same rules the game applies, before the install is accepted. A refusal leaves no pack folder behind, and an accepted install replaces the folder wholesale rather than merging into it. Members outside the `<id>/` folder, and inside it but not a manifest, attachments sidecar or bundle, are not installed.
+
+Zip extraction lives in `go/internal/zipx`. Its `Extract` is what the loader and .NET runtime archives are unpacked with, and `ExtractMember` is the shared member copy the pack install builds on, so zip-slip protection is written once rather than per caller.
+
 `verify_package` checks every `vendor/<name>` and `files[].path` against its digest and returns a message per problem — missing file or checksum mismatch — which is what `task package:check` runs.
 
 ## Install record
 
-After a successful install the installer writes `MegabonkLevels.installer.json` into the game directory, schema `megabonk-levels-install/1`: package id and versions, `installed_at`, the relative paths of every mod file, level and pack it placed, where the .NET runtime went and with what launch option, and how the `version.dll` override was applied. `game_buildid` is the build the package was verified against; `installed_game_buildid` is the build Steam's appmanifest reported when the installer ran, or `null` when it reported none. The second key is optional, so records written before it existed still load under the same schema.
+After a successful install the installer writes `MegabonkLevels.installer.json` into the game directory, schema `megabonk-levels-install/2`: package id, `installed_at`, the game directory, and what is installed — `mod_version` and `bepinex_version`, `levels` as a code-to-entry map naming the level file and the cover and biome image beside it, and `packs` as an id-to-version map holding each pack folder and the files in it. `game_buildid` is the build the package was verified against; `installed_game_buildid` is the build Steam's appmanifest reported when the installer ran, or `null` when it reported none. Both keys are optional, so records written before they existed still load under the same schema. The `files`, `runtime` and `dll_override` entries carry the loader-side state the plan still writes; the loader install owns them, not the content install.
 
 That one file drives both `--check` and `--uninstall`. Uninstall is deliberately record-driven rather than a glob: it removes what it recorded placing and leaves anything it did not put there alone, so a player's own `Mods/` entries, saves, and `UserData` survive.
 
@@ -272,7 +289,7 @@ The method actually used is recorded and echoed back, so a player reporting a pr
 
 ### Levels and packs from the command line
 
-`--level <file>` and `--pack <dir>` install extra content the package does not carry, through the same record so `--uninstall` removes it too. Both are validated before anything is copied — a bad pack is reported as a list of problems and nothing is half-installed.
+`--level <file>` and `--pack <dir>` install extra content the package does not carry, through the same record so `--uninstall` removes it too. Both are validated before anything is copied — a bad pack is reported as a list of problems and nothing is half-installed. A pack that arrives as an archive goes through `InstallPackFromZip` instead of a directory copy, which is where the member-name and content checks above apply.
 
 ### Progress reporting
 
@@ -330,7 +347,7 @@ Cancel, or closing the window, once the run has started is only a request: the e
 
 Automated, in `task check`:
 
-- Go: `task installer:test` runs gofmt, `go vet` and the unit tests under `go/internal`: plan, prefix selection, VDF and Steam discovery, manifest rules, record-driven uninstall, cancellation and the text reporter.
+- Go: `task installer:test` runs gofmt, `go vet` and the unit tests under `go/internal`: plan, prefix selection, VDF and Steam discovery, manifest rules, level and pack installs, the shared zip extraction, the install record's round trip, record-driven uninstall, cancellation and the text reporter. Every test works in a temporary directory and none reaches the network.
 - Python: `tests/test_build_player_package.py`, `tests/test_package_manifest.py` and `tests/test_package_packs.py` cover assembly for all three platforms, the manifest round-trip and `verify_package` on built packages, deterministic zips, vendor download handling and pack validation.
 
 Run against the real binaries when the installer was ported, using the Python installer it replaced as the oracle (it is no longer in the repository):

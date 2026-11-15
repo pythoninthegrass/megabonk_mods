@@ -23,6 +23,7 @@ import (
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/proton"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/steam"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/ui"
+	"github.com/pythoninthegrass/megabonk_mods/installer/internal/zipx"
 )
 
 // RuntimeModePrefix puts .NET inside the Proton prefix; RuntimeModeGameDir puts
@@ -662,7 +663,7 @@ func extractLoader(packageDir string, pkg *manifest.Package, game string) error 
 		}
 	}
 	for _, member := range bundle.File {
-		if err := extractMember(member, game); err != nil {
+		if err := zipx.ExtractMember(member, game, filepath.ToSlash(member.Name), 0); err != nil {
 			return err
 		}
 	}
@@ -706,34 +707,6 @@ func resolveMissing(path string, abs func(string) (string, error), toSlash func(
 		return path
 	}
 	return ppath.Join(resolveWith(parent, abs, toSlash, eval), ppath.Name(path))
-}
-
-func extractMember(member *zip.File, game string) error {
-	target := ppath.Join(game, filepath.ToSlash(member.Name))
-	native := filepath.FromSlash(filepath.ToSlash(target))
-	if member.FileInfo().IsDir() {
-		return os.MkdirAll(native, 0o755)
-	}
-	if err := os.MkdirAll(filepath.Dir(native), 0o755); err != nil {
-		return err
-	}
-	source, err := member.Open()
-	if err != nil {
-		return err
-	}
-	defer source.Close()
-	handle, err := os.OpenFile(native, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, member.Mode().Perm())
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(handle, source); err != nil {
-		handle.Close()
-		return err
-	}
-	if err := handle.Close(); err != nil {
-		return err
-	}
-	return os.Chmod(native, member.Mode().Perm())
 }
 
 // wineBinary is the wine binary that edits the prefix's registry: the one the
@@ -810,7 +783,7 @@ func writeRecord(built *Plan, overrideVia *string) error {
 	record.Schema = content.RecordSchema
 	record.PackageID = built.Manifest.PackageID
 	record.ModVersion = built.Manifest.ModVersion
-	record.MelonloaderVersion = built.Manifest.MelonloaderVersion
+	record.BepinexVersion = built.Manifest.MelonloaderVersion
 	record.GameBuildID = built.Manifest.GameBuildID
 	record.InstalledGameBuildID = installedBuildID(game)
 	record.InstalledAt = time.Now().UTC().Format("2006-01-02T15:04:05Z")
@@ -825,19 +798,19 @@ func writeRecord(built *Plan, overrideVia *string) error {
 	}
 	record.Files = files
 
-	levels := append([]string{}, record.Levels...)
+	levels := map[string]content.LevelRecord{}
+	for code, entry := range record.Levels {
+		levels[code] = entry
+	}
 	for _, action := range built.Actions {
 		if action.Kind != "install-file" || ppath.Parent(action.Path) != content.LevelsPath(game) {
 			continue
 		}
-		name := relative(game, action.Path)
-		if !contains(levels, name) {
-			levels = append(levels, name)
-		}
+		recordLevel(levels, relative(game, action.Path))
 	}
 	record.Levels = levels
 
-	packs := map[string]content.PackEntry{}
+	packs := map[string]content.PackRecord{}
 	for name, entry := range record.Packs {
 		packs[name] = entry
 	}
@@ -906,15 +879,18 @@ func writePartialRecord(built *Plan, done []Action, overrideVia *string) error {
 	record.Schema = content.RecordSchema
 	record.PackageID = built.Manifest.PackageID
 	record.ModVersion = built.Manifest.ModVersion
-	record.MelonloaderVersion = built.Manifest.MelonloaderVersion
+	record.BepinexVersion = built.Manifest.MelonloaderVersion
 	record.GameBuildID = built.Manifest.GameBuildID
 	record.InstalledGameBuildID = installedBuildID(game)
 	record.InstalledAt = time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	record.GameDir = game
 
 	files := append([]string{}, record.Files...)
-	levels := append([]string{}, record.Levels...)
-	packs := map[string]content.PackEntry{}
+	levels := map[string]content.LevelRecord{}
+	for code, entry := range record.Levels {
+		levels[code] = entry
+	}
+	packs := map[string]content.PackRecord{}
 	for name, entry := range record.Packs {
 		packs[name] = entry
 	}
@@ -930,9 +906,7 @@ func writePartialRecord(built *Plan, done []Action, overrideVia *string) error {
 		name := relative(game, action.Path)
 		switch {
 		case ppath.Parent(action.Path) == content.LevelsPath(game):
-			if !contains(levels, name) {
-				levels = append(levels, name)
-			}
+			recordLevel(levels, name)
 		case ppath.Parent(ppath.Parent(action.Path)) == packRoot:
 			packID := ppath.Name(ppath.Parent(action.Path))
 			entry := packs[packID]
@@ -990,6 +964,25 @@ func writePartialRecord(built *Plan, done []Action, overrideVia *string) error {
 	return err
 }
 
+// recordLevel puts one placed file under the level its name belongs to: the
+// level file itself, or the cover / biome image beside it.
+func recordLevel(levels map[string]content.LevelRecord, name string) {
+	stem := content.LevelStem(name)
+	entry := levels[stem]
+	if entry.Code == "" {
+		entry.Code = stem
+	}
+	switch ppath.Name(name) {
+	case content.CoverFor(stem):
+		entry.Cover = name
+	case content.BiomeFor(stem):
+		entry.Biome = name
+	default:
+		entry.Filename = name
+	}
+	levels[stem] = entry
+}
+
 func contains(items []string, wanted string) bool {
 	for _, item := range items {
 		if item == wanted {
@@ -1029,6 +1022,15 @@ func Uninstall(game string, progress ui.Progress) ([]string, error) {
 
 	if progress != nil {
 		steps := 5 + len(record.Files)
+		for _, entry := range record.Levels {
+			steps += 1
+			if entry.Cover != "" {
+				steps++
+			}
+			if entry.Biome != "" {
+				steps++
+			}
+		}
 		for _, entry := range record.Packs {
 			steps += len(entry.Files)
 		}
@@ -1073,8 +1075,12 @@ func Uninstall(game string, progress ui.Progress) ([]string, error) {
 		return removed, ErrCancelled
 	}
 
-	for _, name := range record.Levels {
-		remove(ppath.Join(game, name), false)
+	for _, entry := range record.Levels {
+		for _, name := range []string{entry.Filename, entry.Cover, entry.Biome} {
+			if name != "" {
+				remove(ppath.Join(game, name), false)
+			}
+		}
 	}
 	for packID, entry := range record.Packs {
 		target := content.PackDest(game, packID)
