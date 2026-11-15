@@ -168,3 +168,19 @@ func ExpandUser(p string) string {
 	}
 	return Join(home, p[2:])
 }
+
+// SafeRelative reports whether name is a plain slash-separated relative path that
+// stays inside the directory it is joined to: no drive letter, no backslash that
+// another platform would obey, no NUL, and no part that climbs out.
+func SafeRelative(name string) bool {
+	if name == "" || strings.HasPrefix(name, "/") || strings.Contains(name, "\\") ||
+		strings.Contains(name, ":") || strings.ContainsRune(name, 0) {
+		return false
+	}
+	for _, part := range strings.Split(name, "/") {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
+}
