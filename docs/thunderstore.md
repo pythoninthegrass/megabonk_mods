@@ -312,13 +312,29 @@ Package ZIPs are immutable. Binary or archive updates require a higher version
 with the same team/name identity. A displayed README can be updated separately
 without rebuilding or publishing a version: send an authenticated
 `PATCH /api/cyberstorm/package/{namespace}/{name}/v/{version}/markdown/readme/update/`
-with JSON `{"content":"<updated Markdown>"}` and the team service-account Bearer
-token. Keep `pkg/README.md` in sync for future archives. This is a display override;
-the README inside the existing downloadable ZIP does not change. Verify the
-displayed README after saving and confirm the package version remains unchanged.
+with JSON `{"content":"<updated Markdown>"}`. **A team service account cannot make
+this call.** It authenticates with the `TCLI_AUTH_TOKEN` Bearer token and is then
+refused with `403 {"non_field_errors":["Service accounts are unable to perform this
+action"]}`, because the view authorizes through the namespace's package-management
+permission, which excludes service accounts. Use the site's README editor while signed
+in as a human who manages the package, or the same endpoint with
+`Authorization: Session <session key>` from that browser session. `DELETE` on the
+sibling `.../markdown/readme/delete/` path discards the override and returns the
+package's own README. Keep `pkg/README.md` in sync for future archives. This is a
+display override; the README inside the existing downloadable ZIP does not change. The
+displayed README is also the first troubleshooting document a player reads: it carries
+the launch-through-the-manager instruction, where the profile's
+`BepInEx/LogOutput.log` lives in r2modman and Thunderstore Mod Manager, and the Unity
+`Player.log` locations, so keep that guidance when editing it. Verify the displayed
+README after saving with
+`GET /api/experimental/package/{namespace}/{name}/{version}/readme/`, which answers
+`{"markdown":"<displayed Markdown>"}`, and confirm the package version remains
+unchanged. That read needs an ordinary browser `User-Agent`; a default scripting
+client is refused by the CDN with Cloudflare error 1010.
 The [API docs](https://thunderstore.io/api/docs/) expose a
 [machine-readable OpenAPI schema](https://thunderstore.io/api/docs/?format=openapi),
-but the schema does not currently include this Cyberstorm endpoint.
+but the schema does not currently include this Cyberstorm endpoint, and it advertises
+only Basic authentication, so neither is a reliable guide to these calls.
 
 Retain superseded releases; after a soak period and approval,
 **deprecate, never delete** an obsolete package. Do not automatically deprecate
@@ -355,7 +371,7 @@ The `publish` job runs only for a release or a manual run with `publish` true. I
 - A skipped or failed release: run the workflow manually with the release's tag, `publish` true, and approve it. The same guards apply.
 - A build that failed on the runner: check the runner service is online (repository Settings, Actions, Runners) and that the game's `BepInEx/interop` folder exists, then re-run.
 - Published with a defect: Thunderstore ZIPs are immutable. Release a higher version; do not delete or overwrite. See [Release gate and publishing](#release-gate-and-publishing).
-- A displayed-README-only change needs no workflow; use the README update call described above.
+- A displayed-README-only change needs no workflow; use the README update call described above, which requires a signed-in human rather than the service account.
 
 ## Rollback
 
