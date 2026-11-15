@@ -94,10 +94,10 @@ def do_install(shim: Path, bak: Path) -> int:
         shutil.copy2(shim, bak)
         print(f"backed up original -> {bak.name}")
     if state == "STUB" and sha256(shim) == sha256(STUB):
-        print(f"stub already installed ({sha256(shim)})")
+        print(f"stub already installed ({sha256(shim)}) from {STUB}")
         return 0
     shutil.copy2(STUB, shim)
-    print(f"installed STUB -> {shim.name}  ({sha256(shim)})")
+    print(f"installed STUB -> {shim}  ({sha256(shim)})  from {STUB}")
     print("relaunch the game to load it; quit first (a loaded DLL can't be overwritten).")
     return 0
 

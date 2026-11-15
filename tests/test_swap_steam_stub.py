@@ -134,6 +134,15 @@ def test_install_backs_up_the_original_then_writes_the_stub(plugins, monkeypatch
     assert shim_file(plugins).read_bytes() == STUB_BYTES
 
 
+def test_install_names_the_artifact_it_copied(plugins, monkeypatch, capsys):
+    shim_file(plugins).write_bytes(ORIGINAL)
+
+    code, out = run(monkeypatch, capsys, "install")
+
+    assert code == 0
+    assert str(swap.STUB) in out
+
+
 def test_install_keeps_the_first_backup_when_the_shim_was_replaced(plugins, monkeypatch, capsys):
     shim_file(plugins).write_bytes(ORIGINAL)
     run(monkeypatch, capsys, "install")
