@@ -673,10 +673,40 @@ Mouse coordinates are the screenshot's top-left pixels (see the "Commands" table
 
 With the stub, the game is playable but Steam is faked, so anything that would have talked to Steam returns a default or does nothing:
 
-- No authenticated Steam identity. `GetSteamID` returns 0, which is exactly what selects the offline `steamId 0` save path, so saves go to `UserData/Levels/` rather than any Steam cloud location.
+- No authenticated Steam identity. `GetSteamID` returns 0, which selects the offline `steamId 0` bucket: the game's own progression still persists, under `AppData/LocalLow/Ved/Megabonk/Saves/CloudDir/0/`, and nothing goes to a Steam cloud location. Mod-authored levels are in `UserData/Levels/` regardless.
 - Achievements, leaderboards and stats return defaults. The mod suppresses those writes entirely for mod-loaded levels anyway (see `steam_write_guard_patch.cs`), so this changes nothing for custom levels.
 - Steam cloud, remote storage,UGC, screenshots, chat and the overlay are unavailable; the game's code paths that would use them read a default or no-op.
 - `SteamAPI_RestartAppIfNecessary` returns 0, so the game never relaunches itself.
+
+### A prefix with no Steam installed at all
+
+The offline setups above all keep a Steam install on disk. The stronger claim — a machine where Steam's files are simply not there — was tested in a throwaway prefix: `wineboot --init` for a fresh prefix, an APFS clone of the game directory (`cp -c -R`) at the path the launcher expects, the game directory's only Steam artifact deleted (`steam.exe`; the sole `steam_api64.dll` is the one under `Megabonk_Data/Plugins/x86_64`), and DXVK installed into the prefix with `task wine:dxvk`. Every command in the experiment carries `MEGABONK_GAME_DIR` and `MEGABONK_WINE_PREFIX`, because without them the harness resolves to the real bottle and `run.py quit` attributes its process search there.
+
+The Windows-build launch path never needed CrossOver. `BepInEx/wine-latest.log`'s `watch: argv=` line shows the repo-pinned standalone Wine (`task wine:install`, wine-11.18) as the launched binary; CrossOver's own `bin/wine` is a Perl launcher that is never exec'd, so a bottle contributes only a prefix directory.
+
+A fresh prefix needs three things beyond a copy of the game directory:
+
+- DXVK (`d3d11`, `d3d9`, `dxgi` in `system32`) or the game dies at device creation. `task wine:dxvk` installs it into the prefix named by `MEGABONK_WINE_PREFIX`.
+- A Windows user profile named after the launcher's `WINDOWS_USER`. Wine names the profile after the Unix user at `wineboot` time; when the two disagree, Unity cannot resolve `AppData\LocalLow` and silently drops `persistentDataPath` into the game directory — `Player.log` and `Saves/` appear inside the install. Nothing in the log says so.
+- Nothing else. `msvcp140*` and `vcruntime140*` ship with Wine 11, and a run with every Steam file gone produced zero `err:module` and `err:seh` lines, so there was no missing prerequisite to copy from the bottle.
+
+A copied game directory is not self-contained, and the failure is easy to mistake for a broken harness. `doorstop_config.ini` can record `target_assembly` and `dll_search_path_override` as absolute paths into the install it was written for (on Wine, `Z:\` plus the host path). The copy then runs the *original* install's BepInEx core, plugin, interop and log files: the copy's `BepInEx/LogOutput.log` is never created, the harness marker in the copy is never read, and the original install's log grows. `BepInEx/cache/chainloader_typeloader.dat` caches absolute assembly paths the same way. Make those two config values relative to the game folder and delete `BepInEx/cache`; `task crossover:run`-style absolute values are otherwise correct in place. Whether an install moved by a player keeps them is unconfirmed — it is worth checking a fresh player install for absolute paths in that file.
+
+Both trees claim the same `C:\Program Files (x86)\Steam\steamapps\common\Megabonk` path, so no in-game path distinguishes them. The only reliable discriminator is the loaddll trace: grep `BepInEx/wine-latest.log` for `Z:\` and for `steamclient|vstdlib|tier0|steam\.exe`, both of which must be empty.
+
+With that isolation in place, all three configurations boot and play:
+
+| Configuration | `steam-ready` at t+0, t+25, t+50 | `load-level` | `save-level` | frame |
+| --- | --- | --- | --- | --- |
+| stub | `ready (build 21750826)` at all three | kill floor arms | written, `gameBuildId` `21750826` | rendered |
+| original shim, no Steam files, client absent | `not ready (steam-not-running)` at all three | kill floor arms | written, `gameBuildId` empty | rendered |
+| stub, `SteamAppId`/`SteamGameId` both removed from the launch env | `not ready (client-not-initialized)`, then `ready` at t+25 | kill floor arms | written | rendered |
+
+The middle row is the one that matters for shipping: the level loads and saves with the real Valve shim and no Steam anywhere on the machine, because the guarded build-id read carries it — `GameBuildId: Steamworks is not initialized; levels load and save without a game build id.` — while the game's own `[Steamworks.NET] SteamAPI_Init() failed.` line goes by harmlessly.
+
+A genuinely cold profile keeps the game's own progression. With no prior game keys and no `saves_last_steamid`, the game creates `AppData/LocalLow/Ved/Megabonk/Saves/CloudDir/0/` with `progression.json` and `stats.json`, plus `Saves/LocalDir/config.json`; no `saves_last_steamid` value is written and no `Software\Valve` hive appears in `user.reg`. Rewired logs two save paths per run, one under `CloudDir\69\` (the patch number of the version the log announces as `1.0.69`) and one under `CloudDir\0\`; only `0` is ever created, and it holds the controller config. Mod-authored levels stay in `UserData/Levels/` and are keyed by nothing, so they are unaffected by any of this.
+
+Screenshot timing is worth knowing when a cold boot is being judged by its frame: the game sits on the `Loading` overlay for roughly half a minute after `editor on`. A shot taken eight seconds in is that overlay — a recognizably small PNG, around 50 KB — and the same shot thirty seconds later is the level at a few megabytes. Compare frame sizes before concluding a level failed to load.
 
 ### Second Mac
 
