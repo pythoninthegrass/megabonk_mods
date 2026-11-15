@@ -130,6 +130,85 @@ def test_incomplete_archive_is_refused(game, monkeypatch):
         repair.repair(game, body)
 
 
+ABSOLUTE_DOORSTOP = """[General]
+enabled = true
+target_assembly=Z:\\other\\drive_c\\Program Files\\Megabonk\\BepInEx\\core\\BepInEx.Unity.IL2CPP.dll
+redirect_output_log = false
+
+[UnityMono]
+dll_search_path_override=Z:\\other\\drive_c\\Program Files\\Megabonk\\BepInEx\\core
+debug_enabled = false
+
+[Il2Cpp]
+coreclr_path = dotnet\\coreclr.dll
+corlibDir = dotnet
+"""
+
+
+def test_rewrites_absolute_doorstop_paths_to_relative(game, pack):
+    (game / "doorstop_config.ini").write_text(ABSOLUTE_DOORSTOP, encoding="utf-8")
+    (game / "BepInEx/cache").mkdir()
+    (game / "BepInEx/cache/chainloader_typeloader.dat").write_bytes(b"stale paths")
+
+    actions = repair.repair(game, pack)
+
+    text = (game / "doorstop_config.ini").read_text(encoding="utf-8")
+    assert "target_assembly=BepInEx\\core\\BepInEx.Unity.IL2CPP.dll" in text
+    assert "dll_search_path_override=BepInEx\\core" in text
+    assert "Z:" not in text
+    assert "coreclr_path = dotnet\\coreclr.dll" in text
+    assert "enabled = true" in text
+    assert not (game / "BepInEx/cache/chainloader_typeloader.dat").exists()
+    assert (game / "doorstop_config.ini.bak").read_text(encoding="utf-8") == ABSOLUTE_DOORSTOP
+    assert [a for a in actions if a.startswith("doorstop ")]
+
+
+def test_relative_doorstop_config_is_left_alone(game, pack):
+    relative = ABSOLUTE_DOORSTOP.replace("Z:\\other\\drive_c\\Program Files\\Megabonk\\", "")
+    (game / "doorstop_config.ini").write_text(relative, encoding="utf-8")
+    (game / "BepInEx/cache").mkdir()
+    (game / "BepInEx/cache/chainloader_typeloader.dat").write_bytes(b"keep")
+
+    actions = repair.repair(game, pack)
+
+    assert (game / "doorstop_config.ini").read_text(encoding="utf-8") == relative
+    assert (game / "BepInEx/cache/chainloader_typeloader.dat").read_bytes() == b"keep"
+    assert not (game / "doorstop_config.ini.bak").exists()
+    assert not [a for a in actions if a.startswith("doorstop ")]
+
+
+def test_absolute_doorstop_pointing_elsewhere_is_left_and_reported(game, pack):
+    (game / "doorstop_config.ini").write_text(
+        "[General]\ntarget_assembly=C:\\shared\\BepInExPack\\core\\BepInEx.Unity.IL2CPP.dll\n", encoding="utf-8")
+
+    actions = repair.repair(game, pack)
+
+    assert "C:\\shared\\BepInExPack" in (game / "doorstop_config.ini").read_text(encoding="utf-8")
+    assert not (game / "doorstop_config.ini.bak").exists()
+    assert [a for a in actions if a.startswith("left absolute")]
+
+
+def test_doorstop_rewrite_is_reported_without_writing_on_dry_run(game, pack):
+    (game / "doorstop_config.ini").write_text(ABSOLUTE_DOORSTOP, encoding="utf-8")
+
+    actions = repair.repair(game, pack, dry_run=True)
+
+    assert [a for a in actions if a.startswith("doorstop ")]
+    assert (game / "doorstop_config.ini").read_text(encoding="utf-8") == ABSOLUTE_DOORSTOP
+    assert not (game / "doorstop_config.ini.bak").exists()
+    assert not (game / "dotnet").exists()
+
+
+def test_doorstop_rewrite_keeps_crlf_line_endings(game, pack):
+    (game / "doorstop_config.ini").write_bytes(ABSOLUTE_DOORSTOP.replace("\n", "\r\n").encode("utf-8"))
+
+    repair.repair(game, pack)
+
+    raw = (game / "doorstop_config.ini").read_bytes()
+    assert raw.count(b"\r\n") == raw.count(b"\n")
+    assert b"target_assembly=BepInEx\\core\\BepInEx.Unity.IL2CPP.dll\r\n" in raw
+
+
 def test_cli_dry_run_download_does_not_cache(game, pack, monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(repair, "CACHE", tmp_path / "cache.zip")
     monkeypatch.setattr(repair, "download", lambda url: pack)

@@ -297,8 +297,14 @@ See [Running BepInEx under Wine](development.md#running-bepinex-under-wine).
 
 For an isolated test game outside the Wine prefix, inspect the manager-written
 `doorstop_config.ini` before launching. r2modmac may write a host path such as
-`\Users\...` without a Windows drive letter. Back up that file, then use paths
-relative to the game folder instead:
+`\Users\...`, with or without a Windows drive letter, and doorstop then loads no
+BepInEx core. With the game quit, `task wine:bepinex:repair -- --game-dir
+"/path/to/Megabonk"` normalizes those values to paths relative to the game
+folder and keeps the original as `doorstop_config.ini.bak`; it also clears
+`BepInEx/cache/chainloader_typeloader.dat`, which caches the old absolute paths.
+Like any repair run it needs the pinned pack archive, so add `--download` or
+`--pack-zip` when `.tools/vendor-cache/` does not hold it, and `--dry-run` to see
+the plan first. The values it writes are the pack's own:
 
 ```ini
 [General]

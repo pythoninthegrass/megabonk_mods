@@ -402,10 +402,11 @@ The proxy is the switch, not the folders. Wine resolves `version` native-first w
 
 That line prints to the console during the launch, where it is easy to mistake for a failed file move in the step before it. A `MelonLoader/` directory that reappears after being moved, or that line in `MelonLoader/Latest.log`, means the proxy is still active: check for `version.dll` in the game directory rather than for the folders, and delete the recreated stub once the proxy is parked.
 
-Two things a mod manager's Apply does not do, both fatal and silent (doorstop's `winhttp.dll` loads, but no `BepInEx/LogOutput.log` ever appears):
+Three things a mod manager's Apply leaves wrong, all fatal and silent (doorstop's `winhttp.dll` loads, but no `BepInEx/LogOutput.log` ever appears):
 
 - **The pack's `dotnet/` folder is not written.** BepInEx needs `dotnet/` (187 files, including `coreclr.dll`), `.doorstop_version` and `changelog.txt` beside `doorstop_config.ini`, which points at `dotnet\coreclr.dll`. A package or installer must copy them from the pack zip; a manager Apply alone leaves them out.
 - **The `winhttp` DLL override is not created.** Wine resolves `winhttp` to its builtin before the game directory's proxy, so the prefix needs `"winhttp"="native,builtin"` under `[Software\\Wine\\DllOverrides]`. `wine reg add` fails in a headless/SSH session, so the working edit is a line in the prefix's `user.reg` with no Wine process running (Wine rewrites the file while alive). A Steam launch under Proton can carry the same override as its launch option, `WINEDLLOVERRIDES="winhttp=n,b" %command%`, with no registry edit at all; it shows up in the launched command line ahead of `proton waitforexitandrun`, which is how to confirm the game actually got it. An app with no launch option and no registry line fails the same silent way.
+- **`doorstop_config.ini` can name a path outside the game folder.** A manager may record a host path for `target_assembly` and `dll_search_path_override`, sometimes without a Windows drive letter, and doorstop then loads no BepInEx core. Both values belong relative to the game folder; `task wine:bepinex:repair` normalizes them. See [Repairing an r2modmac Apply](#repairing-an-r2modmac-apply).
 
 A mod manager's own Play does not work for the Windows build under Wine: it routes through the CrossOver runner and the bottle's `steam.exe` and never plain Wine, and the game never comes up that way. CrossOver's launcher gates its runner on its license, so an expired trial puts up its dialog instead of starting anything — the bottle's `[Software\\CodeWeavers\\CrossOver\\cxoffice]` registry entries (`NagTime` and friends) only record that state, they do not control it. Launch through `task game:run` (or Steam) instead; the manager is for file management only.
 
@@ -444,6 +445,24 @@ Resolve a refusal rather than deleting a backup or replacing another runtime.
 Repeated runs leave matching files alone. Plugins, configuration, other
 MelonLoader files, and `UserData/` are not changed. Quit the game before running
 the helper and keep it closed until repair finishes; it never stops processes.
+
+The helper also normalizes `doorstop_config.ini`. Doorstop resolves a relative
+`target_assembly` and `dll_search_path_override` against the game folder, so a
+value that already points into this folder from any absolute prefix — a manager
+recording the install's own path, or a `Z:\` path copied from another machine —
+becomes `BepInEx\core\BepInEx.Unity.IL2CPP.dll` and `BepInEx\core`, and the
+stale `BepInEx/cache/chainloader_typeloader.dat`, which caches those absolute
+paths, is deleted so the next launch rebuilds it. The original file is kept as
+`doorstop_config.ini.bak` on the first rewrite; the other lines, the line
+endings and the trailing newline are kept as they were. An absolute value that
+points somewhere other than this game folder is left alone and reported instead
+of rewritten, because guessing would break an install that deliberately shares a
+BepInEx tree. This matters most when a tree is copied between prefixes: a config
+recording the source install's absolute paths makes the copy run the *source's*
+BepInEx core, plugin and log, so the copy appears to do nothing and the source
+appears to have changed on its own. Run the repair on a copied tree before
+launching it; the loaddll trace in `BepInEx/wine-latest.log` shows which tree's
+files actually loaded.
 
 The helper does not edit the Wine registry. `task game:run` already supplies
 `WINEDLLOVERRIDES="winhttp=n,b;d3d11,d3d10core=n,b"`; another launch method still
@@ -690,7 +709,7 @@ A fresh prefix needs three things beyond a copy of the game directory:
 - A Windows user profile named after the launcher's `WINDOWS_USER`. Wine names the profile after the Unix user at `wineboot` time; when the two disagree, Unity cannot resolve `AppData\LocalLow` and silently drops `persistentDataPath` into the game directory — `Player.log` and `Saves/` appear inside the install. Nothing in the log says so.
 - Nothing else. `msvcp140*` and `vcruntime140*` ship with Wine 11, and a run with every Steam file gone produced zero `err:module` and `err:seh` lines, so there was no missing prerequisite to copy from the bottle.
 
-A copied game directory is not self-contained, and the failure is easy to mistake for a broken harness. `doorstop_config.ini` can record `target_assembly` and `dll_search_path_override` as absolute paths into the install it was written for (on Wine, `Z:\` plus the host path). The copy then runs the *original* install's BepInEx core, plugin, interop and log files: the copy's `BepInEx/LogOutput.log` is never created, the harness marker in the copy is never read, and the original install's log grows. `BepInEx/cache/chainloader_typeloader.dat` caches absolute assembly paths the same way. Make those two config values relative to the game folder and delete `BepInEx/cache`; `task crossover:run`-style absolute values are otherwise correct in place. Whether an install moved by a player keeps them is unconfirmed — it is worth checking a fresh player install for absolute paths in that file.
+A copied game directory is not self-contained, and the failure is easy to mistake for a broken harness. `doorstop_config.ini` can record `target_assembly` and `dll_search_path_override` as absolute paths into the install it was written for (on Wine, `Z:\` plus the host path). The copy then runs the *original* install's BepInEx core, plugin, interop and log files: the copy's `BepInEx/LogOutput.log` is never created, the harness marker in the copy is never read, and the original install's log grows. `BepInEx/cache/chainloader_typeloader.dat` caches absolute assembly paths the same way. `task wine:bepinex:repair` rewrites both keys relative to the game folder and clears that cache (see [Repairing an r2modmac Apply](#repairing-an-r2modmac-apply)); it is the first thing to run on a copied tree. Absolute values are otherwise correct in place — a config naming the folder it lives in needs no change — so this only bites copies, and whether an install moved by a player keeps them is unconfirmed.
 
 Both trees claim the same `C:\Program Files (x86)\Steam\steamapps\common\Megabonk` path, so no in-game path distinguishes them. The only reliable discriminator is the loaddll trace: grep `BepInEx/wine-latest.log` for `Z:\` and for `steamclient|vstdlib|tier0|steam\.exe`, both of which must be empty.
 
