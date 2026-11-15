@@ -394,10 +394,18 @@ BepInEx 6 (`BepInExPack_IL2CPP` 6.0.0-be.788) boots Megabonk under the same plai
 
 BepInEx and MelonLoader cannot be active together. MelonLoader's `version.dll` proxy in the game directory blocks the doorstop's startup, so a BepInEx install replaces MelonLoader: `version.dll` must be removed or renamed out of the game directory (rename it back to go the other way). `winhttp.dll` (the doorstop proxy) and `doorstop_config.ini` then sit in the game directory beside `Megabonk.exe`, with `BepInEx/` and `dotnet/` under it.
 
+The proxy is the switch, not the folders. Wine resolves `version` native-first with no help from the registry, so moving `MelonLoader/`, `Mods/` and `UserLibs/` aside while `version.dll` stays in place still starts MelonLoader — and the bootstrap then recreates a stub `MelonLoader/` holding only `Latest.log` and `Logs/`, because its own `net6/` went with the moved folder:
+
+```text
+    [ERROR] [MelonLoader.Bootstrap] Runtime config not found at: '<game dir>\MelonLoader\net6\MelonLoader.runtimeconfig.json'
+```
+
+That line prints to the console during the launch, where it is easy to mistake for a failed file move in the step before it. A `MelonLoader/` directory that reappears after being moved, or that line in `MelonLoader/Latest.log`, means the proxy is still active: check for `version.dll` in the game directory rather than for the folders, and delete the recreated stub once the proxy is parked.
+
 Two things a mod manager's Apply does not do, both fatal and silent (doorstop's `winhttp.dll` loads, but no `BepInEx/LogOutput.log` ever appears):
 
 - **The pack's `dotnet/` folder is not written.** BepInEx needs `dotnet/` (187 files, including `coreclr.dll`), `.doorstop_version` and `changelog.txt` beside `doorstop_config.ini`, which points at `dotnet\coreclr.dll`. A package or installer must copy them from the pack zip; a manager Apply alone leaves them out.
-- **The `winhttp` DLL override is not created.** Wine resolves `winhttp` to its builtin before the game directory's proxy, so the prefix needs `"winhttp"="native,builtin"` under `[Software\\Wine\\DllOverrides]`. `wine reg add` fails in a headless/SSH session, so the working edit is a line in the prefix's `user.reg` with no Wine process running (Wine rewrites the file while alive).
+- **The `winhttp` DLL override is not created.** Wine resolves `winhttp` to its builtin before the game directory's proxy, so the prefix needs `"winhttp"="native,builtin"` under `[Software\\Wine\\DllOverrides]`. `wine reg add` fails in a headless/SSH session, so the working edit is a line in the prefix's `user.reg` with no Wine process running (Wine rewrites the file while alive). A Steam launch under Proton can carry the same override as its launch option, `WINEDLLOVERRIDES="winhttp=n,b" %command%`, with no registry edit at all; it shows up in the launched command line ahead of `proton waitforexitandrun`, which is how to confirm the game actually got it. An app with no launch option and no registry line fails the same silent way.
 
 A mod manager's own Play does not work for the Windows build under Wine: it routes through the CrossOver runner and the bottle's `steam.exe` and never plain Wine, and the game never comes up that way. CrossOver's launcher gates its runner on its license, so an expired trial puts up its dialog instead of starting anything — the bottle's `[Software\\CodeWeavers\\CrossOver\\cxoffice]` registry entries (`NagTime` and friends) only record that state, they do not control it. Launch through `task game:run` (or Steam) instead; the manager is for file management only.
 
