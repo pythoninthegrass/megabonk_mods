@@ -6,9 +6,7 @@ const (
 	WinHTTPDLLName = "winhttp"
 	// WinHTTPValue is the DllOverrides value that makes Wine load that proxy.
 	WinHTTPValue = "native,builtin"
-	// WinHTTPLaunchOption is what a Proton player pastes into Steam's Launch
-	// Options: Proton reads overrides from the environment rather than needing a
-	// registry write the installer can make in someone else's prefix.
+	// WinHTTPLaunchOption is what a Proton player pastes into Steam's Launch Options.
 	WinHTTPLaunchOption = `WINEDLLOVERRIDES="winhttp=n,b" %command%`
 )
 
