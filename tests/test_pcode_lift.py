@@ -147,6 +147,80 @@ def movmskps_body(dst=REG_EAX, src=REG_XMM1):
     return packed_body("movmskps", "a1", dst, src)
 
 
+def pshuflw_body(selector=0xE0, src=REG_XMM0, start=0x1000):
+    return body(
+        insn(start, 5, op("CALLOTHER", REG_XMM0, "const,bb,4", REG_XMM0, src, f"const,{selector:x},8", user="pshuflw")),
+        insn(start + 5, 1, op("RETURN", None, "register,288,8")),
+        start=start,
+    )
+
+
+@pytest.mark.parametrize("src", [REG_XMM0, REG_XMM1])
+@requires_llvm
+def test_pshuflw_shipped_shape_verifies(src):
+    result = pl.lift_body(pshuflw_body(src=src))
+    assert result.holes == []
+    checked = verify(pl.module_for([result]))
+    assert checked.returncode == 0, checked.stderr
+    assert result.ir.count("load i128") == 1
+    assert result.ir.count("store i128") == 1
+
+
+@pytest.mark.parametrize(
+    "dst,inputs",
+    [
+        (None, ["const,bb,4", REG_XMM0, REG_XMM1, "const,e0,8"]),
+        (REG_EAX, ["const,bb,4", REG_EAX, REG_XMM1, "const,e0,8"]),
+        (REG_XMM0, ["const,bb,4", REG_XMM1, REG_XMM1, "const,e0,8"]),
+        (REG_XMM0, ["const,bb,4", REG_XMM0, "register,1240,8", "const,e0,8"]),
+        (REG_XMM0, ["const,bb,4", REG_XMM0, REG_XMM1]),
+        (REG_XMM0, ["const,bb,4", REG_XMM0, REG_XMM1, REG_EAX]),
+        (REG_XMM0, ["const,bb,4", REG_XMM0, REG_XMM1, "const,100,8"]),
+        (REG_XMM0, ["const,bb,4", REG_XMM0, REG_XMM1, "const,e0,8", "const,0,8"]),
+    ],
+)
+def test_pshuflw_unexpected_shape_stays_a_hole(dst, inputs):
+    fn = body(insn(0x1000, 5, op("CALLOTHER", dst, *inputs, user="pshuflw")))
+    assert pl.lift_body(fn).holes == ["CALLOTHER:pshuflw"]
+
+
+@requires_llvm
+@pytest.mark.parametrize("src", [REG_XMM0, REG_XMM1])
+def test_pshuflw_all_selectors_match_word_reference(tmp_path, src):
+    lifted = [pl.lift_body(pshuflw_body(selector, src, 0x1000 + selector * 16)) for selector in range(256)]
+    assert all(result.holes == [] for result in lifted)
+    ir = pl.module_for(lifted)
+    checked = verify(ir)
+    assert checked.returncode == 0, checked.stderr
+    calls = ", ".join(f"sub_{result.start:x}" for result in lifted)
+    declarations = "\n".join(f"extern void sub_{result.start:x}(unsigned char *);" for result in lifted)
+    source = tmp_path / "pshuflw.c"
+    source.write_text(
+        "#include <stdint.h>\n#include <string.h>\n#include <stdio.h>\n"
+        + declarations
+        + f"\nstatic void (*calls[])(unsigned char *) = {{{calls}}};\n"
+        "int main(void) { unsigned char reg[8192], before[8192];\n"
+        "uint16_t words[8] = {0x1234, 0xabcd, 0x8001, 0x5678, 0xdead, 0xbeef, 0x4321, 0xfedc};\n"
+        "for (unsigned imm = 0; imm < 256; imm++) {\n"
+        "memset(reg, 0xa5, sizeof reg);\n"
+        f"memcpy(reg + {pl.parse_varnode(src)[1]}, words, 16);\n"
+        "memcpy(before, reg, sizeof reg); calls[imm](reg);\n"
+        "uint16_t want[8]; memcpy(want, words, 16);\n"
+        "for (unsigned lane = 0; lane < 4; lane++) want[lane] = words[(imm >> (2 * lane)) & 3];\n"
+        "if (memcmp(reg + 0x1200, want, 16)) return 1;\n"
+        "memcpy(before + 0x1200, want, 16);\n"
+        "if (memcmp(reg, before, sizeof reg)) return 2;\n"
+        '} puts("ok 256"); return 0; }\n'
+    )
+    obj = tmp_path / "pshuflw.o"
+    proc = subprocess.run(
+        [LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", obj, "-"],
+        input=ir, text=True, capture_output=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert compile_and_run(tmp_path, source, "arm64", [obj]).strip() == "ok 256"
+
+
 @pytest.mark.parametrize("dst", [REG_EAX, "register,8,4"])
 @pytest.mark.parametrize("src", [REG_XMM0, REG_XMM1])
 def test_movmskps_writes_a_32_bit_register(dst, src):

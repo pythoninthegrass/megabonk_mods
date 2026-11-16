@@ -97,6 +97,16 @@ def is_movmskps_op(out: str | None, ins: list[str]) -> bool:
     )
 
 
+def is_pshuflw_op(out: str | None, ins: list[str]) -> bool:
+    """PSHUFLW adds a constant immediate selector to the packed destination/source shape."""
+    return (
+        len(ins) == 4
+        and is_packed_lane_op(out, ins)
+        and parse_varnode(ins[3])[0] == "const"
+        and 0 <= parse_varnode(ins[3])[1] <= 0xFF
+    )
+
+
 def itype(size: int) -> str:
     return f"i{size * 8}"
 
@@ -338,6 +348,8 @@ class BodyLifter:
                 self.packed_minmax(out, ins[2], *PACKED_MINMAX[user])
             elif user == "movmskps" and is_movmskps_op(out, ins):
                 self.packed_sign_mask(out, ins[2])
+            elif user == "pshuflw" and is_pshuflw_op(out, ins):
+                self.shuffle_low_words(out, ins[2], parse_varnode(ins[3])[1])
             else:
                 self.holes.append(f"CALLOTHER:{user}")
         else:
@@ -434,6 +446,12 @@ class BodyLifter:
             self.emit(f"{merged} = or i{total} {result}, {piece}")
             result = merged
         self.write(out, result)
+
+    def shuffle_low_words(self, out: str, src: str, selector: int) -> None:
+        source = self.read(src)
+        indices = [(selector >> (2 * lane)) & 3 for lane in range(4)] + list(range(4, 8))
+        pieces = [self.fit(self.lane(source, 128, index, 16), 16, 128) for index in indices]
+        self.merge_lanes(out, pieces, 16, 128)
 
     def packed_sign_mask(self, out: str, src: str) -> None:
         value = self.read(src)

@@ -1,6 +1,7 @@
 #include <stdint.h>
 #ifdef __x86_64__
 #include <xmmintrin.h>
+#include <emmintrin.h>
 #endif
 
 uint64_t f_sum(uint64_t n) {
@@ -97,6 +98,16 @@ uint32_t f_movmskps(__attribute__((vector_size(16))) float a) {
     uint32_t mask = 0;
     for (int i = 0; i < 4; i++) mask |= (lanes[i] >> 31) << i;
     return mask;
+#endif
+}
+
+__attribute__((vector_size(16))) uint16_t f_pshuflw(__attribute__((vector_size(16))) uint16_t a) {
+#ifdef __x86_64__
+    return (__attribute__((vector_size(16))) uint16_t)_mm_shufflelo_epi16((__m128i)a, 0xe0);
+#else
+    __attribute__((vector_size(16))) uint16_t r = a;
+    for (unsigned i = 0; i < 4; i++) r[i] = a[(0xe0 >> (2 * i)) & 3];
+    return r;
 #endif
 }
 

@@ -48,6 +48,7 @@ FUNCTIONS = {
     "f_minps": ("ff", "f"),
     "f_maxps": ("ff", "f"),
     "f_movmskps": ("f", "u32"),
+    "f_pshuflw": ("w", "w"),
 }
 # Returned lane by lane rather than computed, so a lifted version that picked the other
 # source would differ in bits the tolerant comparison below forgives.
@@ -93,7 +94,7 @@ CONVERSIONS = {
     ),
 }
 
-VEC_LANES = {"v": ("double", 2), "f": ("float", 4)}
+VEC_LANES = {"v": ("double", 2), "f": ("float", 4), "w": ("uint16_t", 8)}
 REG = {"rax": 0x0, "rdx": 0x10, "rsp": 0x20, "rsi": 0x30, "rdi": 0x38, "xmm0": 0x1200, "xmm1": 0x1240}
 INT_ARGS = ["rdi", "rsi", "rdx"]
 
@@ -129,11 +130,12 @@ def lift_x86_symbols(tmp_path):
         if name in FUNCTIONS:
             syms[name] = (int(addr, 16), int(size, 16))
     assert set(syms) == set(FUNCTIONS)
-    address, size = syms["f_movmskps"]
-    assembly = run(
-        [LLVM / "llvm-objdump", "-d", f"--start-address={address}", f"--stop-address={address + size}", so]
-    )
-    assert any("movmskps" in line.split() for line in assembly.splitlines())
+    for name, mnemonic in (("f_movmskps", "movmskps"), ("f_pshuflw", "pshuflw")):
+        address, size = syms[name]
+        assembly = run(
+            [LLVM / "llvm-objdump", "-d", f"--start-address={address}", f"--stop-address={address + size}", so]
+        )
+        assert any(mnemonic in line.split() for line in assembly.splitlines())
     ranges = tmp_path / "ranges.txt"
     ranges.write_text("".join(f"{a:x} {s}\n" for a, s in syms.values()))
     env = {**os.environ, "JAVA_HOME": run([JAVA, "where", "java"]).strip(), "GHIDRA_HEADLESS_MAXMEM": "2G"}
@@ -272,6 +274,8 @@ def harness_source(syms):
                         " (i < 16 ? 0u : (i < 32 ? 0x7fc01234u : 0x7f800001u)) : (uint32_t)next())"
                         for lane in range(n)
                     )
+                elif kind == "w":
+                    lanes = ", ".join("(uint16_t)(next() | 1u)" for _ in range(n))
                 else:
                     lanes = ", ".join(f"{pick}()" for _ in range(n))
                 decl.append(f"{ty} t{idx}[{n}] = {{ {lanes} }};")
@@ -296,7 +300,7 @@ def harness_source(syms):
                 f"{ty} native[{n}]; {ty} __attribute__((vector_size(16))) r = {name}({', '.join(call)}); memcpy(native, &r, 16);"
             )
             lines.append("int diff = 0;")
-            either_nan = "" if name in STRICT_LANES else " && !(got[l] != got[l] && native[l] != native[l])"
+            either_nan = "" if name in STRICT_LANES or ret == "w" else " && !(got[l] != got[l] && native[l] != native[l])"
             lines.append(f"for (int l = 0; l < {n}; l++) if (memcmp(&got[l], &native[l], sizeof ({ty})){either_nan}) diff = 1;")
             cond = "if (diff)"
         elif ret == "d":
@@ -356,6 +360,37 @@ int main(void) {
 """
     )
     exe = tmp_path / "movmskps-x86"
+    run([LLVM / "clang", "-O1", "-arch", "x86_64", source, "-o", exe])
+    assert "ok 2000" in run(["arch", "-x86_64", exe])
+
+
+def test_pshuflw_reference_matches_x86_instruction(tmp_path):
+    source = tmp_path / "pshuflw-x86.c"
+    source.write_text(
+        "#include <stdio.h>\n#include <string.h>\n"
+        + SOURCE.read_text()
+        + """
+int main(void) {
+    uint32_t state = 0x12345678u;
+    for (unsigned i = 0; i < 2000; i++) {
+        uint16_t lanes[8], want[8], got[8];
+        for (unsigned j = 0; j < 8; j++) {
+            state = state * 1664525u + 1013904223u;
+            lanes[j] = (uint16_t)(state | 1u);
+            want[j] = lanes[j];
+        }
+        for (unsigned j = 0; j < 4; j++) want[j] = lanes[(0xe0 >> (2 * j)) & 3];
+        __attribute__((vector_size(16))) uint16_t a;
+        memcpy(&a, lanes, 16);
+        a = f_pshuflw(a);
+        memcpy(got, &a, 16);
+        if (memcmp(got, want, 16)) return 1;
+    }
+    puts("ok 2000"); return 0;
+}
+"""
+    )
+    exe = tmp_path / "pshuflw-x86"
     run([LLVM / "clang", "-O1", "-arch", "x86_64", source, "-o", exe])
     assert "ok 2000" in run(["arch", "-x86_64", exe])
 
