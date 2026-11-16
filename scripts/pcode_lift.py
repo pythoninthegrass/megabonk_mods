@@ -779,8 +779,11 @@ class BodyLifter:
         self.emit(f"br i1 {c}, label %{taken}, label %{fall}")
         return True
 
-    def defined_by_load(self, insn: dict, k: int, target: str) -> bool:
-        """True when `target` traces back through COPYs to a LOAD, in instruction order."""
+    def defined_by_load(self, insn: dict, k: int, target: str, slots: bool = False) -> bool:
+        """True when `target` traces back through COPYs to a LOAD, in instruction order.
+
+        With `slots`, a COPY from a fixed memory slot (a ram-space varnode) also counts as a load.
+        """
         flat = []
         for earlier in self.fn["insns"]:
             if earlier is insn:
@@ -794,28 +797,26 @@ class BodyLifter:
                 return True
             if op["op"] != "COPY":
                 return False
+            if slots and op["in"][0].startswith("ram,"):
+                return True
             target = op["in"][0]
         return False
 
     def branch_indirect(self, insn: dict, k: int, target: str) -> None:
-        """Lowers a BRANCHIND as a switch, or as an indirect call and a return when rsp is proven balanced.
+        """Lowers a BRANCHIND as a switch, or as an indirect call and a return for a loaded-pointer tail call.
 
-        `jmp rax` with rsp at its entry value is equivalent to `call rax` followed by `ret`, so the
-        balance proof is what licenses the rewrite; without it the site stays a recorded hole.
+        `jmp rax` with rsp at its entry value is `call rax` then `ret` only when the target is another
+        function, so rsp balance licenses the rewrite just for a target read from memory.
         """
         cases = self.tables.get(insn["a"])
         sec = self.last_data
         if not cases:
-            # Two things license lowering a bare `jmp reg` as a call and a return: the straight-line
-            # load rule the emitter always used (the recognition floor, so the proof never un-lifts a
-            # site the old rule lifted), and the stack-balance proof, which lifts a site only when rsp
-            # is proven equal to its entry value on every path into it. `proven_tail_calls` counts the
-            # lifted sites that carry that proof; a site the rule lifted without it is recorded unproven
-            # with the reason. An inconsistent or untrackable rsp never lifts on the proof alone, and a
-            # site with neither the load rule nor the proof stays a recorded hole: no guessing.
+            # A bare `jmp reg` lowers as a call and a return when the target is a loaded pointer (the
+            # original rule), or when rsp is proven at its entry value and the target is read from memory.
+            # The balance alone never licenses it: a frameless switch also has rsp at entry.
             load_traced = self.defined_by_load(insn, k, target)
             verdict = self.frame.get(insn["a"], {})
-            balanced = verdict.get("reason") == ""
+            balanced = verdict.get("reason") == "" and self.defined_by_load(insn, k, target, slots=True)
             if not (load_traced or balanced):
                 self.unproven_branchind.append(
                     {

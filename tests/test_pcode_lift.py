@@ -5,7 +5,7 @@ file as a byte array. The structural contract is testable on hand-written pcode;
 verifier and arm64 backend are exercised only when the LLVM toolchain is present.
 """
 
-import pytest  # type: ignore[import-not-found]  # resolved at runtime via pytest pythonpath
+import pytest
 import struct
 import subprocess
 import sys
@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-import pcode_lift as pl  # type: ignore[import-not-found]  # resolved at runtime via scripts on sys.path
+import pcode_lift as pl
 
 LLVM = Path("/opt/homebrew/opt/llvm/bin")
 requires_llvm = pytest.mark.skipif(not (LLVM / "opt").exists(), reason="LLVM toolchain absent")
@@ -112,13 +112,9 @@ def test_load_store_and_call_verify():
     assert verify(pl.module_for([result])).returncode == 0
 
 
-def test_branchind_at_a_balanced_rsp_lifts_as_a_tail_call():
-    """A bare `jmp reg` with rsp at its entry value is a tail call, not a hole."""
+def test_branchind_is_recorded_as_a_hole():
     fn = body(insn(0x1000, 2, op("BRANCHIND", None, "register,0,8")))
-    result = pl.lift_body(fn)
-    assert result.holes == []
-    assert result.tail_calls == 1
-    assert result.proven_tail_calls == 1
+    assert pl.lift_body(fn).holes == ["BRANCHIND"]
 
 
 def test_callother_is_recorded_as_a_hole_with_its_name():
@@ -808,16 +804,11 @@ def test_branchind_through_a_loaded_pointer_is_an_indirect_tail_call():
 
 
 def test_branchind_on_a_computed_register_without_a_table_stays_a_hole():
-    # rsp is at its entry value here (nothing moves it), so the balance proof holds and the site lifts
-    # as a tail call; the old straight-line load rule alone left it a hole. The proof is what licenses
-    # the rewrite. An unbalanced variant keeps the hole (see the counter-example below).
     fn = body(
         insn(0x1000, 3, op("INT_ADD", "register,0,8", "register,0,8", "const,8,8")),
         insn(0x1003, 2, op("BRANCHIND", None, "register,0,8")),
     )
-    result = pl.lift_body(fn)
-    assert result.holes == []
-    assert result.proven_tail_calls == 1
+    assert pl.lift_body(fn).holes == ["BRANCHIND"]
 
 
 def test_branchind_on_a_computed_register_with_an_unbalanced_frame_stays_a_hole():
@@ -845,14 +836,10 @@ def test_branchind_on_a_register_loaded_by_an_earlier_instruction_is_a_tail_call
 
 
 def test_branchind_on_a_register_defined_by_arithmetic_stays_a_hole():
-    # The target is computed by arithmetic off a loaded value, so the straight-line load rule rejects
-    # it, and a push with no matching pop leaves rsp off its entry value, so the balance proof fails
-    # too: with neither license the site stays a recorded hole rather than a guessed tail call.
     fn = body(
-        insn(0x1000, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,8,8")),
-        insn(0x1003, 4, op("LOAD", "register,8,8", "const,1,8", "register,38,8")),
-        insn(0x1007, 3, op("INT_ADD", "register,8,8", "register,8,8", "register,10,8")),
-        insn(0x100A, 2, op("BRANCHIND", None, "register,8,8")),
+        insn(0x1000, 4, op("LOAD", "register,8,8", "const,1,8", "register,38,8")),
+        insn(0x1004, 3, op("INT_ADD", "register,8,8", "register,8,8", "register,10,8")),
+        insn(0x1007, 2, op("BRANCHIND", None, "register,8,8")),
     )
     assert pl.lift_body(fn).holes == ["BRANCHIND"]
 
@@ -860,16 +847,14 @@ def test_branchind_on_a_register_defined_by_arithmetic_stays_a_hole():
 @requires_llvm
 def test_branchind_follows_a_copy_from_a_loaded_temporary():
     fn = body(
-        insn(0x1000, 4, op("INT_SUB", REG_RSP, REG_RSP, "const,28,8")),
         insn(
-            0x1004,
+            0x1000,
             4,
             op("INT_ADD", "unique,8e00,8", "register,38,8", "const,18,8"),
             op("LOAD", "unique,23d00,8", "const,1b1,4", "unique,8e00,8"),
             op("COPY", "register,8,8", "unique,23d00,8"),
         ),
-        insn(0x1008, 3, op("INT_ADD", REG_RSP, REG_RSP, "const,28,8")),
-        insn(0x100B, 2, op("BRANCHIND", None, "register,8,8")),
+        insn(0x1004, 2, op("BRANCHIND", None, "register,8,8")),
     )
     result = pl.lift_body(fn)
     assert result.holes == []
@@ -892,7 +877,7 @@ def thunk_body(*, unbalanced=None, entry=0x1000, table=False, guard_target=None)
     entry value. `table` swaps the jump target for a slot reloaded through a computed pointer, the
     shape a recovered jump table arrives in.
     """
-    slot = f"cptr,{SLOT:x},8"
+    slot = f"ram,{SLOT:x},8"
     target = "register,80,8" if table else "register,0,8"
     taken = f"ram,{entry + 0x20:x},8" if guard_target is None else guard_target
     insns = [
@@ -1006,7 +991,7 @@ def test_terminating_branch_to_an_unemitted_target_stays_a_balanced_tail_call():
     # A BRANCHIND site reached without crossing an escaping CBRANCH still proves, even though the
     # body also terminates on a BRANCH to an address the dump never emitted.
     fn = body(
-        insn(0x1000, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,20,8")),
+        insn(0x1000, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,20,8"), op("COPY", "register,0,8", f"ram,{SLOT:x},8")),
         insn(0x1003, 3, op("INT_ADD", REG_RSP, REG_RSP, "const,20,8")),
         insn(0x1006, 2, op("BRANCHIND", None, "register,0,8")),
         insn(0x1008, 5, op("BRANCH", None, "ram,0x900000,8")),
