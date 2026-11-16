@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-11-15 23:53'
+updated_date: '2026-11-16 00:32'
 labels: []
 dependencies: []
 references:
@@ -15,7 +16,7 @@ modified_files:
   - scripts/shader_metal_pass.py
   - tests/
   - docs/development.md
-priority: medium
+priority: high
 ordinal: 250000
 ---
 
@@ -48,4 +49,5 @@ Out of scope: blend state, depth conventions and culling, which metal -c does no
 - [ ] #4 Conventional commit with no attribution
 - [ ] #5 No hostname or username or home path appears in tracked files
 - [ ] #6 task check passes
+- [ ] #7 The pass is scored per program so the 49-program tail is counted rather than described
 <!-- DOD:END -->
