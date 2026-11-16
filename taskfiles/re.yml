@@ -159,7 +159,8 @@ tasks:
       LIFT_EXTRA: '{{.LIFT_EXTRA | default ""}}'
     summary: |
       Usage: task re:lift-probe [LIFT_SO=<GameAssembly.so>] [LIFT_OUT=<dir>]
-             [LIFT_PER_CLASS=300] [LIFT_SEED=80] [LIFT_EXTRA=--r2-per-class 0|--jobs 4]
+             [LIFT_PER_CLASS=300] [LIFT_SEED=80]
+             [LIFT_EXTRA=--r2-per-class 0|--tool-timeout 600|--jobs 4|--extra=--mcpu=neoverse-n1]
 
       Draws LIFT_PER_CLASS bodies from each size class (tiny <= 63 B, small <= 512 B,
       large above) of the il2cpp section, bounded by the .eh_frame records, dumps their
@@ -170,8 +171,16 @@ tasks:
       Writes summary.json and bodies.jsonl to LIFT_OUT. Needs the brew llvm (keg-only,
       named by path), Ghidra and radare2 (brew install llvm ghidra radare2).
 
+      Every sampled body is accounted for: one the dump never emitted, or one whose lift
+      or LLVM tool timed out or crashed, is recorded in summary.json under failures and
+      failed_bodies with its address rather than dropped from the totals, and the run
+      exits non-zero if a body never reached the scorer. A body opt or llc merely rejects
+      is a measurement, not a failure. --tool-timeout bounds one opt or llc run and
+      --ghidra-timeout the whole dump; a Ghidra run that dies partway keeps the rows it
+      wrote and leaves its console output in LIFT_OUT/ghidra-stdout.txt.
+
       The sampling seed and size classes are fixed so a run is reproducible. See the
-      "Liftability spike" section in docs/development.md.
+      "Lifting the shipped code to arm64" section in docs/development.md.
     preconditions:
       - sh: '[ -f "{{.LIFT_SO}}" ]'
         msg: "No Linux GameAssembly.so at {{.LIFT_SO}}; see docs/development.md for the rsync step that populates .tools/megabonk-linux-native"

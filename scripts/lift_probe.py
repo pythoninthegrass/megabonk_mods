@@ -6,7 +6,9 @@ Draws a size-stratified sample of function bodies from the shipped Linux GameAss
 pcode and jump tables through headless Ghidra, lifts each body to LLVM IR with
 scripts/pcode_lift.py, and records a pass/fail per stage: fully decoded, lifted with no
 holes, accepted by the LLVM verifier, compiled to an arm64 object. A radare2 leg scores its
-function extents and whether its decompiler output compiles.
+function extents and whether its decompiler output compiles. Every body the run asked for is
+accounted for: a body the dump never emitted, or one whose lift or LLVM tool crashed, is
+recorded with its address rather than dropped from the totals.
 """
 
 from __future__ import annotations
@@ -17,11 +19,12 @@ import json
 import os
 import random
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,6 +43,11 @@ SECTION_LINE = re.compile(
 
 FDE_LINE = re.compile(r"\sFDE\s.*pc=([0-9a-fA-F]+)\.\.\.([0-9a-fA-F]+)")
 TINY_MAX, SMALL_MAX = 63, 512
+TOOL_TIMEOUT = 120
+# Extra opt/llc arguments from --extra, set once by main() and appended to every scoring tool call.
+EXTRA_ARGS: list[str] = []
+GHIDRA_TIMEOUT = 3600
+MISSING_DUMP = "no pcode row from Ghidra"
 
 
 @dataclass(frozen=True)
@@ -99,6 +107,64 @@ def tally_holes(results: list[dict]) -> dict[str, int]:
     return dict(counts)
 
 
+def failed_row(start: int, size: int, error: str, missing_dump: bool = False) -> dict:
+    """A body the pipeline could not score, recorded so it still counts in the totals."""
+    return {
+        "start": start,
+        "size": size,
+        "holes": [],
+        "unmapped_refs": 0,
+        "indirect_calls": 0,
+        "tail_calls": 0,
+        "jump_tables": 0,
+        "obj_bytes": 0,
+        "error": error,
+        "missing_dump": missing_dump,
+        "stages": {"decoded": False, "clean": False, "verify": False, "arm64": False},
+    }
+
+
+def reconcile(fdes: list[Fde], rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Pairs the requested sample with the dumped rows so no body can vanish from the totals.
+
+    Returns one row per sampled body in sample order, and the rows that matched none of them.
+    """
+    by_start: dict[int, list[dict]] = {}
+    for row in rows:
+        by_start.setdefault(row["start"], []).append(row)
+    aligned, extras = [], []
+    for fde in fdes:
+        matches = by_start.pop(fde.start, [])
+        if matches:
+            aligned.append(matches[0])
+            extras.extend(matches[1:])
+        else:
+            aligned.append(failed_row(fde.start, fde.size, MISSING_DUMP, missing_dump=True))
+    for duplicates in by_start.values():
+        extras.extend(duplicates)
+    return aligned, extras
+
+
+def tally_failures(results: list[dict]) -> dict[str, int]:
+    """Counts the bodies the pipeline could not score, grouped by what stopped them."""
+    return dict(Counter(row["error"] for row in results if row.get("error")))
+
+
+def failure_rows(results: list[dict]) -> list[dict]:
+    """Every body the pipeline could not score, with its address so it can be examined again."""
+    return [
+        {
+            "start": row["start"],
+            "hex": hex(row["start"]),
+            "size": row["size"],
+            "class": size_class(row["size"]),
+            "error": row["error"],
+        }
+        for row in results
+        if row.get("error")
+    ]
+
+
 def parse_exec_sections(text: str) -> dict[str, tuple[int, int]]:
     """Reads executable section ranges from `llvm-readelf -S` output."""
     sections = {}
@@ -112,6 +178,13 @@ def parse_exec_sections(text: str) -> dict[str, tuple[int, int]]:
 
 def run_tool(cmd: list, **kw) -> subprocess.CompletedProcess:
     return subprocess.run([str(c) for c in cmd], capture_output=True, **kw)
+
+
+def as_text(value) -> str:
+    """Reads a subprocess stream as text whether the run finished or timed out."""
+    if value is None:
+        return ""
+    return value.decode(errors="replace") if isinstance(value, bytes) else value
 
 
 def find_ghidra() -> Path:
@@ -132,42 +205,91 @@ def ghidra_env() -> dict[str, str]:
     return env
 
 
-def dump_pcode(so: Path, fdes: list[Fde], work: Path) -> tuple[list[dict], list[dict]]:
-    """Returns the sampled bodies' pcode records and the ELF's loaded sections."""
+def dump_pcode(so: Path, fdes: list[Fde], work: Path, timeout: int | None = None, diag: Path | None = None) -> tuple[list[dict], list[dict]]:
+    """Returns the sampled bodies' pcode records and the ELF's loaded sections.
+
+    A Ghidra run that dies partway leaves a short pcode file: the rows it wrote are kept and
+    `reconcile` records the bodies it never reached, so the run names them instead of losing them.
+    A run that times out or exits nonzero leaves its console output under `diag`.
+    """
     ranges, pcode, sections = work / "ranges.txt", work / "pcode.jsonl", work / "sections.json"
     ranges.write_text("".join(f"{f.start:x} {f.size}\n" for f in fdes))
     project = work / "ghidra"
     project.mkdir()
-    proc = run_tool(
-        [
-            find_ghidra(),
-            project,
-            "probe",
-            "-import",
-            so,
-            "-noanalysis",
-            "-scriptPath",
-            DUMP_SCRIPT_DIR,
-            "-postScript",
-            "LiftDump.java",
-            ranges,
-            pcode,
-            sections,
-        ],
-        env=ghidra_env(),
-        text=True,
-    )
+    note, timed_out = "", False
+    try:
+        proc = run_tool(
+            [
+                find_ghidra(),
+                project,
+                "probe",
+                "-import",
+                so,
+                "-noanalysis",
+                "-scriptPath",
+                DUMP_SCRIPT_DIR,
+                "-postScript",
+                "LiftDump.java",
+                ranges,
+                pcode,
+                sections,
+            ],
+            env=ghidra_env(),
+            text=True,
+            timeout=timeout,
+        )
+        note = "" if proc.returncode == 0 else f"Ghidra exited {proc.returncode}\n"
+        stdout = note + proc.stdout + as_text(proc.stderr)
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        tail = as_text(exc.stdout) + as_text(exc.stderr)
+        stdout = f"Ghidra timed out after {exc.timeout}s\n{tail[-1500:]}"
+    if diag is not None and (note or timed_out):
+        diag.mkdir(parents=True, exist_ok=True)
+        (diag / "ghidra-stdout.txt").write_text(stdout)
     if not pcode.exists():
-        raise SystemExit(f"Ghidra produced no pcode:\n{proc.stdout[-1500:]}")
+        raise SystemExit(f"Ghidra produced no pcode:\n{stdout[-1500:]}")
+    if not sections.exists():
+        raise SystemExit(f"Ghidra produced pcode but no section table:\n{stdout[-1500:]}")
     return [json.loads(line) for line in pcode.read_text().splitlines()], json.loads(sections.read_text())
 
 
-def score_body(fn: dict, sections: list[dict]) -> dict:
-    """Lifts one body and records each stage's outcome."""
-    lifted = pcode_lift.lift_body(fn, sections)
-    ir = pcode_lift.module_for([lifted])
-    verified = run_tool([LLVM / "opt", "-passes=verify", "-disable-output", "-"], input=ir.encode())
-    obj = run_tool([LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", "-", "-"], input=ir.encode())
+def score_tool(name: str, cmd: list, ir: str, timeout: int) -> tuple[bool, int, str | None]:
+    """Runs one LLVM tool over a body's IR: whether it accepted the body, its object size, and any run failure.
+
+    A tool that rejects the IR (exit 1) is a measurement; a hang or a crash is a failure and is named.
+    """
+    try:
+        proc = run_tool(cmd, input=ir.encode(), timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False, 0, f"{name} timed out after {timeout}s"
+    except OSError as exc:
+        return False, 0, f"{name} could not run: {exc}"
+    if proc.returncode == 0:
+        return True, len(proc.stdout), None
+    if proc.returncode < 0:
+        return False, 0, f"{name} was killed by signal {-proc.returncode}"
+    if proc.returncode > 1:
+        return False, 0, f"{name} exited {proc.returncode}"
+    return False, 0, None
+
+
+def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT) -> dict:
+    """Lifts one body and records each stage's outcome; anything that breaks is recorded against the body."""
+    try:
+        lifted = pcode_lift.lift_body(fn, sections)
+        ir = pcode_lift.module_for([lifted])
+    except Exception as exc:
+        return failed_row(fn["start"], fn["size"], f"lift raised {type(exc).__name__}: {exc}")
+    verified, _, verify_error = score_tool(
+        "opt", [LLVM / "opt", "-passes=verify", "-disable-output", "-"] + EXTRA_ARGS, ir, tool_timeout
+    )
+    accepted, obj_bytes, obj_error = score_tool(
+        "llc",
+        [LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", "-", "-"] + EXTRA_ARGS,
+        ir,
+        tool_timeout,
+    )
     return {
         "start": fn["start"],
         "size": fn["size"],
@@ -176,14 +298,25 @@ def score_body(fn: dict, sections: list[dict]) -> dict:
         "indirect_calls": lifted.indirect_calls,
         "tail_calls": lifted.tail_calls,
         "jump_tables": len(fn.get("jt", [])),
-        "obj_bytes": len(obj.stdout) if obj.returncode == 0 else 0,
+        "obj_bytes": obj_bytes,
+        "error": verify_error or obj_error,
         "stages": {
             "decoded": fn["undecoded"] == 0,
             "clean": not lifted.holes,
-            "verify": verified.returncode == 0,
-            "arm64": obj.returncode == 0,
+            "verify": verified,
+            "arm64": accepted,
         },
     }
+
+
+def score_row(row: dict, sections: list[dict], tool_timeout: int) -> dict:
+    """Scores one reconciled row, turning anything that escapes the scorer into a recorded failure."""
+    if row.get("error"):
+        return row
+    try:
+        return score_body(row, sections, tool_timeout)
+    except Exception as exc:
+        return failed_row(row["start"], row["size"], f"scoring raised {type(exc).__name__}: {exc}")
 
 
 def r2_leg(so: Path, fdes: list[Fde], work: Path) -> list[dict]:
@@ -226,8 +359,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=80)
     ap.add_argument("--section", default="il2cpp", help="executable section the sample is drawn from")
     ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--tool-timeout", type=int, default=TOOL_TIMEOUT, help="seconds an opt or llc run may take per body")
+    ap.add_argument("--ghidra-timeout", type=int, default=GHIDRA_TIMEOUT, help="seconds the whole pcode dump may take")
     ap.add_argument("--r2-per-class", type=int, default=10, help="bodies per class for the radare2 leg; 0 skips it")
+    ap.add_argument(
+        "--extra",
+        default="",
+        help="arguments appended to every opt and llc call, e.g. --extra '--mcpu=neoverse-n1'",
+    )
     args = ap.parse_args(argv)
+    EXTRA_ARGS[:] = shlex.split(args.extra)
 
     if not args.so.exists():
         raise SystemExit(f"no ELF at {args.so}")
@@ -240,30 +381,55 @@ def main(argv: list[str] | None = None) -> int:
 
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
-        bodies, sections = dump_pcode(args.so, sample, work)
-        with ThreadPoolExecutor(args.jobs) as pool:
-            results = list(pool.map(lambda fn: score_body(fn, sections), bodies))
+        bodies, sections = dump_pcode(args.so, sample, work, timeout=args.ghidra_timeout, diag=args.out)
+        rows, extras = reconcile(sample, bodies)
+        scored: list[dict] = []
+        with ThreadPoolExecutor(args.jobs) as pool, (args.out / "bodies.jsonl").open("w") as sink:
+            pending = [pool.submit(score_row, row, sections, args.tool_timeout) for row in rows]
+            for future in as_completed(pending):
+                row = future.result()
+                scored.append(row)
+                sink.write(json.dumps(row) + "\n")
+                sink.flush()
+        scored.sort(key=lambda row: row["start"])
+        (args.out / "bodies.jsonl").write_text("".join(json.dumps(row) + "\n" for row in scored))
         r2 = None
         if args.r2_per_class:
             r2_sample = stratified_sample(frames, args.r2_per_class, args.seed, *window)
             r2 = r2_summary(r2_leg(args.so, r2_sample, work))
 
+    scored_ok = [row for row in scored if not row.get("error")]
+    failures = failure_rows(scored)
+    dropped = [row for row in failures if row["error"] == MISSING_DUMP]
+    x86_bytes = sum(row["size"] for row in scored_ok)
+    obj_ratio = round(sum(row["obj_bytes"] for row in scored_ok) / x86_bytes, 2) if x86_bytes else 0
     summary = {
         "binary_sha256": sha256(args.so),
         "section": args.section,
         "section_bodies": {name: sum(size_class(f.size) == name for f in in_section) for name in ("tiny", "small", "large")},
-        "sample": {"per_class": args.per_class, "seed": args.seed, "n": len(results)},
-        "stages": summarize(results),
-        "holes": tally_holes(results),
-        "obj_bytes_per_x86_byte": round(sum(r["obj_bytes"] for r in results) / sum(r["size"] for r in results), 2),
-        "unmapped_refs": sum(r["unmapped_refs"] for r in results),
-        "bodies_with_tail_calls": sum(bool(r["tail_calls"]) for r in results),
-        "bodies_with_indirect_calls": sum(bool(r["indirect_calls"]) for r in results),
+        "sample": {"per_class": args.per_class, "seed": args.seed, "requested": len(sample), "n": len(scored)},
+        "stages": summarize(scored),
+        "holes": tally_holes(scored),
+        "failures": tally_failures(scored),
+        "failed_bodies": failures,
+        "unsampled_rows": [hex(row["start"]) for row in extras],
+        "obj_bytes_per_x86_byte": obj_ratio,
+        "unmapped_refs": sum(row["unmapped_refs"] for row in scored),
+        "bodies_with_tail_calls": sum(bool(row["tail_calls"]) for row in scored),
+        "bodies_with_indirect_calls": sum(bool(row["indirect_calls"]) for row in scored),
         "r2": r2,
     }
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-    (args.out / "bodies.jsonl").write_text("".join(json.dumps(r) + "\n" for r in results))
     print(json.dumps(summary, indent=2))
+    if failures:
+        print(f"{len(failures)} of {len(scored)} sampled bodies could not be scored:", file=sys.stderr)
+        for row in failures[:20]:
+            print(f"  {row['hex']} {row['size']} B {row['class']}: {row['error']}", file=sys.stderr)
+    if extras:
+        print(f"{len(extras)} dumped rows matched no sampled body: {', '.join(summary['unsampled_rows'][:20])}", file=sys.stderr)
+    if dropped:
+        print(f"{len(dropped)} sampled bodies never reached the scorer: the census is incomplete", file=sys.stderr)
+        return 1
     return 0
 
 
