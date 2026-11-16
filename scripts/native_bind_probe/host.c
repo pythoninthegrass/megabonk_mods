@@ -56,6 +56,8 @@ typedef struct {
   const char *arg_values[8];
   const char *arg_types[8];
   size_t arg_count;
+  const char *state_chains[4];
+  size_t state_chain_count;
   int skip_init;
 } Config;
 
@@ -639,6 +641,20 @@ static const char *type_kind_name(int value) {
   }
 }
 
+/* MethodInfo begins with the native body pointer; its offset from the containing image is the body's RVA. */
+static uintptr_t g_method_image_base;
+
+static void record_method_body(MethodInfo method) {
+  void *body = *(void **)method;
+  Dl_info info;
+  ev_ptr("method_pointer", body);
+  if (body && dladdr(body, &info) && info.dli_fbase) {
+    g_method_image_base = (uintptr_t)info.dli_fbase;
+    ev_ptr("method_image_base", info.dli_fbase);
+    ev_ptr("method_rva", (const void *)((uintptr_t)body - (uintptr_t)info.dli_fbase));
+  }
+}
+
 static MethodInfo lookup_method(Il2CppClass *class_out, char *label, size_t label_len) {
   g_phase = "method lookup";
   char ns[192], cls[192];
@@ -713,6 +729,7 @@ static MethodInfo lookup_method(Il2CppClass *class_out, char *label, size_t labe
     }
   }
   ev_ptr("method", method);
+  record_method_body(method);
   if (api.method_get_name) ev_str("method_name", api.method_get_name(method));
   if (api.method_get_param_count)
     ev_num("param_count", (long long)api.method_get_param_count(method));
@@ -766,6 +783,27 @@ static int invoke_candidate(void **method_slot, char *got_out, size_t got_len, c
        cfg.invoke_expected);
   *why = NULL;
   return 1;
+}
+
+/* Follows "RVA:off,off,..." from the method's image: reads a word at the RVA, then a word at each prior value plus the next offset. */
+static void record_state_chain(const char *spec, size_t index) {
+  char key[24], text[256];
+  size_t used = 0;
+  char *cursor = NULL;
+  uintptr_t addr = g_method_image_base + (uintptr_t)strtoull(spec, &cursor, 16);
+  snprintf(key, sizeof(key), "state%zu", index);
+  text[0] = '\0';
+  for (;;) {
+    uint64_t value = *(uint64_t *)addr;
+    used += (size_t)snprintf(text + used, sizeof(text) - used, "%s0x%llx", used ? "," : "", (unsigned long long)value);
+    if (*cursor != ':' && *cursor != ',') break;
+    if (value == 0) {
+      used += (size_t)snprintf(text + used, sizeof(text) - used, ",stopped-at-null");
+      break;
+    }
+    addr = (uintptr_t)value + (uintptr_t)strtoull(cursor + 1, &cursor, 16);
+  }
+  ev_str(key, text);
 }
 
 /* ------------------------------------------------------------------ legs */
@@ -885,6 +923,7 @@ static int leg2(void) {
     emit(0, "returned value does not match the expected value");
     return 1;
   }
+  for (size_t i = 0; i < cfg.state_chain_count; i++) record_state_chain(cfg.state_chains[i], i);
   emit(1, NULL);
   return 0;
 }
@@ -1320,6 +1359,10 @@ int main(int argc, char **argv) {
       const char *token;
       used = need_value(argc, argv, i, &token);
       if (cfg.preload_count < 4) cfg.preloads[cfg.preload_count++] = token;
+    } else if (strcmp(argv[i], "--state-chain") == 0) {
+      const char *token;
+      used = need_value(argc, argv, i, &token);
+      if (cfg.state_chain_count < 4) cfg.state_chains[cfg.state_chain_count++] = token;
     } else if (strcmp(argv[i], "--skip-init") == 0) {
       cfg.skip_init = 1;
     } else {
