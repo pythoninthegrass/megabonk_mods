@@ -54,6 +54,37 @@ double f_poly(double x, double y) { return x * x + 2 * x * y - y / 3.0; }
 
 int32_t f_f2i(double x) { return (int32_t)(x > 1e6 ? 1e6 : (x < -1e6 ? -1e6 : x)); }
 
+/* The x86 rule for cvttss2si/cvttsd2si: NaN or a magnitude the destination cannot hold
+   gives the integer indefinite value, where arm64 saturates. These are the oracle for the
+   unclamped conversions below; the native cast runs only where both ISAs truncate alike. */
+int32_t r_d2i32(double x) {
+    if (!(x >= -2147483648.0) || !(x < 2147483648.0)) return INT32_MIN;
+    return (int32_t)x;
+}
+
+int64_t r_d2i64(double x) {
+    if (!(x >= -9223372036854775808.0) || !(x < 9223372036854775808.0)) return INT64_MIN;
+    return (int64_t)x;
+}
+
+int32_t r_f2i32(float x) {
+    if (!(x >= -2147483648.0f) || !(x < 2147483648.0f)) return INT32_MIN;
+    return (int32_t)x;
+}
+
+int64_t r_f2i64(float x) {
+    if (!(x >= -9223372036854775808.0f) || !(x < 9223372036854775808.0f)) return INT64_MIN;
+    return (int64_t)x;
+}
+
+int32_t f_d2i32(double x) { return (int32_t)x; }
+
+int64_t f_d2i64(double x) { return (int64_t)x; }
+
+int32_t f_f2i32(float x) { return (int32_t)x; }
+
+int64_t f_f2i64(float x) { return (int64_t)x; }
+
 __attribute__((vector_size(16))) double f_divpd(__attribute__((vector_size(16))) double a,
                                                 __attribute__((vector_size(16))) double b) {
     return a / b;

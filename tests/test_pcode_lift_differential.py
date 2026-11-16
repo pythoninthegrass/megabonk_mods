@@ -28,7 +28,7 @@ pytestmark = pytest.mark.skipif(
     reason="needs the LLVM toolchain, Ghidra and an arm64 macOS host",
 )
 
-# name -> (argument kinds, return kind)
+# name -> (argument kinds, return kind). "s" is a scalar float, "d" a scalar double.
 FUNCTIONS = {
     "f_sum": ("u", "u64"),
     "f_clamp": ("uuu", "i32"),
@@ -40,11 +40,50 @@ FUNCTIONS = {
     "f_switch": ("u", "i32"),
     "f_poly": ("dd", "d"),
     "f_f2i": ("d", "i32"),
+    "f_d2i32": ("d", "i32"),
+    "f_d2i64": ("d", "i64"),
+    "f_f2i32": ("s", "i32"),
+    "f_f2i64": ("s", "i64"),
     "f_divpd": ("vv", "v"),
     "f_divps": ("ff", "f"),
     "f_divps_mem": ("fp", "f"),
 }
-RET_MASK = {"u64": "0xffffffffffffffffull", "u32": "0xffffffffull", "i32": "0xffffffffull", "u8": "0xffull"}
+RET_MASK = {
+    "u64": "0xffffffffffffffffull",
+    "i64": "0xffffffffffffffffull",
+    "u32": "0xffffffffull",
+    "i32": "0xffffffffull",
+    "u8": "0xffull",
+}
+# name -> (C reference in diff.c, argument type, literals just inside and outside the
+# destination's range). The reference is the oracle rather than a native cast because
+# arm64 saturates where x86 returns the integer indefinite value.
+CONVERSIONS = {
+    "f_d2i32": (
+        "r_d2i32",
+        "double",
+        ["2147483647.0", "2147483647.5", "2147483648.0", "-2147483648.0", "-2147483648.5",
+         "-2147483649.0", "1e18", "-1e18"],
+    ),
+    "f_d2i64": (
+        "r_d2i64",
+        "double",
+        ["9223372036854774784.0", "9223372036854775808.0", "-9223372036854775808.0",
+         "-9223372036854776832.0", "4611686018427387904.0", "1e18", "-1e18"],
+    ),
+    "f_f2i32": (
+        "r_f2i32",
+        "float",
+        ["2147483392.0f", "2147483648.0f", "-2147483648.0f", "-2147483904.0f", "3e9f", "-3e9f"],
+    ),
+    "f_f2i64": (
+        "r_f2i64",
+        "float",
+        ["9223372036854774784.0f", "9223372036854775808.0f", "-9223372036854775808.0f",
+         "1e18f", "-1e18f", "1.7e30f"],
+    ),
+}
+
 VEC_LANES = {"v": ("double", 2), "f": ("float", 4)}
 REG = {"rax": 0x0, "rdx": 0x10, "rsp": 0x20, "rsi": 0x30, "rdi": 0x38, "xmm0": 0x1200, "xmm1": 0x1240}
 INT_ARGS = ["rdi", "rsi", "rdx"]
@@ -130,6 +169,27 @@ def section_images(so, sections):
     return images
 
 
+def conversion_pickers():
+    """One picker per conversion: the specials that make the x86 and arm64 rules disagree,
+    the boundary literals, and scaled randoms on the rest."""
+    out = []
+    for name, (_, ty, bounds) in CONVERSIONS.items():
+        if ty == "double":
+            special = ["0.0", "-(double)0.0", "bitsd(0x7ff0000000000000ull)", "bitsd(0xfff0000000000000ull)",
+                       "bitsd(0x7ff8000000000000ull)", "bitsd(0x7ff0000000000001ull)"]
+            random = "(double)(int64_t)v / 1e12"
+        else:
+            special = ["0.0f", "-(float)0.0f", "bitsf(0x7f800000u)", "bitsf(0xff800000u)",
+                       "bitsf(0x7fc00000u)", "bitsf(0x7f800001u)"]
+            random = "(float)(int32_t)v / 1e6f"
+        arms = " ".join(f"case {i}: return {v};" for i, v in enumerate(special + bounds))
+        out.append(
+            f"static {ty} pick_{name}(void) {{ uint64_t v = next();"
+            f" switch (v % {len(special) + len(bounds) + 1}u) {{ {arms} default: return {random}; }} }}"
+        )
+    return out
+
+
 def harness_source(syms):
     lines = ["#include <stdint.h>", "#include <stdio.h>", "#include <string.h>", "#include <math.h>"]
     for name in FUNCTIONS:
@@ -154,6 +214,7 @@ def harness_source(syms):
         " case 4: return bitsf(0x7fc00000u); case 5: return bitsf(0x7f800001u);"
         " default: return (float)(int32_t)v / 1e6f; } }",
         "static float vsrc[4];",
+        *conversion_pickers(),
         "static unsigned char reg[8192];",
         "static void reset(void) { memset(reg, 0, sizeof reg); *(uint64_t *)(reg + %d) = (uint64_t)(stack + sizeof stack - 64); }"
         % REG["rsp"],
@@ -188,8 +249,10 @@ def harness_source(syms):
                 sse_arg += 1
                 call.append(f"a{idx}")
             else:
-                decl.append(f"double a{idx} = pickd();")
-                setup.append(f"memcpy(reg + {REG[['xmm0', 'xmm1'][sse_arg]]}, &a{idx}, 8);")
+                ty, size = ("double", 8) if kind == "d" else ("float", 4)
+                pick = f"pick_{name}" if name in CONVERSIONS else "pickd"
+                decl.append(f"{ty} a{idx} = {pick}();")
+                setup.append(f"memcpy(reg + {REG[['xmm0', 'xmm1'][sse_arg]]}, &a{idx}, {size});")
                 sse_arg += 1
                 call.append(f"a{idx}")
         lines += decl + ["reset();"] + setup + [f"{sub}(reg);"]
@@ -209,8 +272,9 @@ def harness_source(syms):
             lines.append(f"double got; memcpy(&got, reg + {REG['xmm0']}, 8); double want = {name}({', '.join(call)});")
             cond = "if (memcmp(&got, &want, 8) != 0 && !(got != got && want != want))"
         else:
+            oracle = CONVERSIONS[name][0] if name in CONVERSIONS else name
             lines.append(
-                f"uint64_t got = *(uint64_t *)(reg + {REG['rax']}) & {RET_MASK[ret]}; uint64_t want = (uint64_t){name}({', '.join(call)}) & {RET_MASK[ret]};"
+                f"uint64_t got = *(uint64_t *)(reg + {REG['rax']}) & {RET_MASK[ret]}; uint64_t want = (uint64_t){oracle}({', '.join(call)}) & {RET_MASK[ret]};"
             )
             cond = "if (got != want)"
         lines.append(cond)

@@ -446,10 +446,24 @@ class BodyLifter:
                 self.emit(f"{v} = {kind} {FLOAT_TYPES[isz]} {a} to {FLOAT_TYPES[osz]}")
                 self.write(out, self.from_float(v, osz))
         elif name == "TRUNC":
+            # x86 cvttss2si/cvttsd2si hand back the integer indefinite value exactly where
+            # fptosi is poison, so keep the operand in range and replace the result.
+            fty, limit = FLOAT_TYPES[isz], 1 << (osz * 8 - 1)
             a = self.as_float(self.read(ins[0]), isz)
+            nan, high, low = self.tmp(), self.tmp(), self.tmp()
+            self.emit(f"{nan} = fcmp uno {fty} {a}, {a}")
+            self.emit(f"{high} = fcmp oge {fty} {a}, {limit}.0")
+            self.emit(f"{low} = fcmp olt {fty} {a}, -{limit}.0")
+            over, bad = self.tmp(), self.tmp()
+            self.emit(f"{over} = or i1 {high}, {low}")
+            self.emit(f"{bad} = or i1 {over}, {nan}")
+            safe = self.tmp()
+            self.emit(f"{safe} = select i1 {bad}, {fty} 0.0, {fty} {a}")
             v = self.tmp()
-            self.emit(f"{v} = fptosi {FLOAT_TYPES[isz]} {a} to {itype(osz)}")
-            self.write(out, v)
+            self.emit(f"{v} = fptosi {fty} {safe} to {itype(osz)}")
+            result = self.tmp()
+            self.emit(f"{result} = select i1 {bad}, {itype(osz)} {-limit}, {itype(osz)} {v}")
+            self.write(out, result)
 
     def call_direct(self, target: str) -> None:
         space, offset, _ = parse_varnode(target)

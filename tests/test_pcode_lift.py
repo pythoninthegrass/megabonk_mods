@@ -6,6 +6,7 @@ verifier and arm64 backend are exercised only when the LLVM toolchain is present
 """
 
 import pytest
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -457,3 +458,183 @@ def test_branchind_follows_a_copy_from_a_loaded_temporary():
     assert result.holes == []
     assert result.tail_calls == 1
     assert verify(pl.module_for([result])).returncode == 0
+
+
+def trunc_body(src_size: int, dst_size: int) -> dict:
+    """cvttss2si/cvttsd2si arrive as TRUNC from the xmm slot to a general-purpose slot."""
+    return body(
+        insn(0x1000, 6, op("TRUNC", f"register,0,{dst_size}", f"register,1200,{src_size}")),
+        insn(0x1006, 1, op("RETURN", None, "register,288,8")),
+    )
+
+
+def fbits(value: float, size: int) -> int:
+    return int.from_bytes(struct.pack(">f" if size == 4 else ">d", value), "big")
+
+
+def cases(src_size: int, dst_size: int, rows: list[tuple]) -> list[tuple[int, int]]:
+    """(value or raw bits, signed expectation) pairs as source and destination bit patterns."""
+    mask = (1 << (dst_size * 8)) - 1
+    return [(v if isinstance(v, int) else fbits(v, src_size), want & mask) for v, want in rows]
+
+
+INDEF32, INDEF64 = -2147483648, -(2**63)
+SNAN64, QUIET_NAN_NEG = 0x7FF0000000000001, 0xFFF8000000000000
+
+# Every expectation below is truncation toward zero, not floor: -0.9999999 gives 0.
+DOUBLE_TO_I32 = cases(8, 4, [
+    (0.0, 0), (-0.0, 0), (1.5, 1), (-1.5, -1), (0.9999999, 0), (-0.9999999, 0),
+    (2147483647.0, 2147483647), (2147483647.5, 2147483647),
+    (-2147483648.0, INDEF32), (-2147483648.5, INDEF32), (-2147483649.0, INDEF32),
+    (2147483648.0, INDEF32), (1e18, INDEF32),
+    (float("inf"), INDEF32), (float("-inf"), INDEF32), (float("nan"), INDEF32),
+    (0x7FF8000000000000, INDEF32), (QUIET_NAN_NEG, INDEF32), (SNAN64, INDEF32),
+])
+DOUBLE_TO_I64 = cases(8, 8, [
+    (0.0, 0), (-0.0, 0), (0.5, 0), (-0.5, 0), (1.5, 1), (-1.5, -1), (1e18, 10**18),
+    (2.0**62, 2**62), (9223372036854774784.0, 9223372036854774784),
+    (-2.0**63, INDEF64), (-9223372036854776832.0, INDEF64),
+    (2.0**63, INDEF64), (float("inf"), INDEF64), (float("-inf"), INDEF64),
+    (float("nan"), INDEF64), (SNAN64, INDEF64),
+])
+FLOAT_TO_I32 = cases(4, 4, [
+    (0.0, 0), (-0.0, 0), (0.5, 0), (-0.5, 0), (1.5, 1), (-1.5, -1), (100000.0, 100000),
+    (2147483392.0, 2147483392), (-2147483648.0, INDEF32), (-2147483904.0, INDEF32),
+    (2147483648.0, INDEF32), (3e9, INDEF32), (float("inf"), INDEF32), (float("-inf"), INDEF32),
+    (float("nan"), INDEF32), (0x7F800001, INDEF32),
+])
+FLOAT_TO_I64 = cases(4, 8, [
+    (0.0, 0), (-0.0, 0), (-0.5, 0), (1.5, 1), (-1.5, -1), (2.0**62, 2**62), (1e18, 999999984306749440),
+    (-2.0**63, INDEF64), (2.0**63, INDEF64), (float("inf"), INDEF64),
+    (float("-inf"), INDEF64), (float("nan"), INDEF64),
+])
+SHAPES = {(8, 4): DOUBLE_TO_I32, (8, 8): DOUBLE_TO_I64, (4, 4): FLOAT_TO_I32, (4, 8): FLOAT_TO_I64}
+EVERY_SHAPE = pytest.mark.parametrize("src,dst", sorted(SHAPES))
+
+# Rebuilds the source value from its bit pattern so the table can name a bit pattern exactly:
+# a hex integer literal written into a double column gets rounded.
+X86_LOAD = {
+    8: "double v; memcpy(&v, &bits, 8);",
+    4: "uint32_t b32 = (uint32_t)bits; float v; memcpy(&v, &b32, 4);",
+}
+X86_CONVERT = {
+    (8, 4): "(uint64_t)(int32_t)_mm_cvttsd_si32(_mm_set_sd(v))",
+    (8, 8): "(uint64_t)_mm_cvttsd_si64(_mm_set_sd(v))",
+    (4, 4): "(uint64_t)(int32_t)_mm_cvttss_si32(_mm_set_ss(v))",
+    (4, 8): "(uint64_t)_mm_cvttss_si64(_mm_set_ss(v))",
+}
+
+requires_rosetta = pytest.mark.skipif(
+    not (LLVM / "clang").exists()
+    or subprocess.run(["arch", "-x86_64", "/bin/echo"], capture_output=True).returncode != 0,
+    reason="needs the LLVM toolchain and an x86-64 runtime to compare against",
+)
+
+
+def compile_and_run(tmp_path, source, arch, extra=()):
+    exe = tmp_path / f"run-{arch}"
+    proc = subprocess.run(
+        [LLVM / "clang", "-O1", "-arch", arch, *extra, "-o", exe, source], text=True, capture_output=True
+    )
+    assert proc.returncode == 0, proc.stderr
+    argv = [str(exe)] if arch == "arm64" else ["arch", "-x86_64", str(exe)]
+    return subprocess.run(argv, text=True, capture_output=True).stdout
+
+
+CONVERSION_DRIVER = r"""
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+{sse}
+{extern}
+static unsigned char reg[8192];
+typedef struct {{ uint64_t in; uint64_t want; }} row;
+static row cases[] = {{ {rows} }};
+int main(void) {{
+  int bad = 0;
+  for (unsigned i = 0; i < sizeof cases / sizeof *cases; i++) {{
+    const row *c = &cases[i];
+    uint64_t got, bits = c->in;
+    {load}
+    memset(reg, 0, sizeof reg);
+    memcpy(reg + 0x1200, &bits, {src});
+    {call}
+    got = {got};
+    if (got != (c->want & 0x{mask:x}ull)) {{
+      bad++;
+      printf("case %u got 0x%llx want 0x%llx\n", i, (unsigned long long)got,
+             (unsigned long long)c->want);
+    }}
+  }}
+  printf("bad=%d\n", bad);
+  return 0;
+}}
+"""
+
+
+def compare_conversion(tmp_path, result, src, dst, rows, arch, convert):
+    """Feeds each input through the register file and reports the cases that disagree.
+
+    The arm64 side calls the lifted function and reads the destination slot back out of the
+    register file; the x86-64 side runs the instruction itself against the same table.
+    """
+    obj = None
+    if arch == "arm64":
+        obj = tmp_path / "lifted.o"
+        proc = subprocess.run(
+            [LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", obj, "-"],
+            input=pl.module_for([result]),
+            text=True,
+            capture_output=True,
+        )
+        assert proc.returncode == 0, proc.stderr
+    mask = (1 << (dst * 8)) - 1
+    got = f"*(uint64_t *)(reg + 0) & 0x{mask:x}ull" if obj else f"({convert}) & 0x{mask:x}ull"
+    source = tmp_path / f"{arch}.c"
+    source.write_text(
+        CONVERSION_DRIVER.format(
+            sse="" if obj else "#include <xmmintrin.h>\n#include <emmintrin.h>",
+            extern="extern void sub_1000(unsigned char *reg);" if obj else "",
+            load="" if obj else X86_LOAD[src],
+            rows=", ".join(f"{{ 0x{b:x}, 0x{w:x} }}" for b, w in rows),
+            src=src,
+            call="sub_1000(reg);" if obj else "",
+            got=got,
+            mask=mask,
+        )
+    )
+    lines = compile_and_run(tmp_path, source, arch, [obj] if obj else []).splitlines()
+    return [line for line in lines if "got" in line]
+
+
+@EVERY_SHAPE
+def test_trunc_lifts_with_no_hole_and_a_single_conversion(src, dst):
+    result = pl.lift_body(trunc_body(src, dst))
+    assert result.holes == []
+    assert result.ir.count("fptosi") == 1
+
+
+@requires_llvm
+@EVERY_SHAPE
+def test_trunc_verifies(src, dst):
+    assert verify(pl.module_for([pl.lift_body(trunc_body(src, dst))])).returncode == 0
+
+
+@requires_llvm
+@EVERY_SHAPE
+def test_trunc_gives_the_integer_indefinite_value_where_x86_does(tmp_path, src, dst):
+    mismatches = compare_conversion(
+        tmp_path, pl.lift_body(trunc_body(src, dst)), src, dst, SHAPES[(src, dst)], "arm64", None
+    )
+    assert mismatches == []
+
+
+@requires_rosetta
+@EVERY_SHAPE
+def test_the_expectation_tables_match_the_real_x86_instruction(tmp_path, src, dst):
+    """Native arm64 saturates where x86 returns the integer indefinite value, so the tables
+    above need an oracle that is not arm64: this runs the instruction itself."""
+    mismatches = compare_conversion(
+        tmp_path, None, src, dst, SHAPES[(src, dst)], "x86_64", X86_CONVERT[(src, dst)]
+    )
+    assert mismatches == []
