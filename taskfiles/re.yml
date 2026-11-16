@@ -208,6 +208,35 @@ tasks:
     cmds:
       - uv run --script scripts/lift_holes.py "{{.LIFT_SO}}" --out "{{.LIFT_OUT}}" {{.LIFT_EXTRA}}
 
+  lift-tail-calls:
+    desc: "Check the emitter's indirect tail-call rule against Ghidra's decompiler for the bodies it fired on"
+    vars:
+      LIFT_SO: '{{.LIFT_SO | default ".tools/megabonk-linux-native/Megabonk/GameAssembly.so"}}'
+      LIFT_OUT: '{{.LIFT_OUT | default ".tools/lift-probe"}}'
+      LIFT_EXTRA: '{{.LIFT_EXTRA | default ""}}'
+    summary: |
+      Usage: task re:lift-tail-calls [LIFT_SO=<GameAssembly.so>] [LIFT_OUT=<dir>]
+             [LIFT_EXTRA=--json|--bodies <bodies.jsonl>]
+
+      Reads LIFT_OUT/bodies.jsonl from a prior task re:lift-probe run (run that first),
+      keeps the bodies whose tail_calls count is non-zero, redumps their pcode through
+      headless Ghidra, and compares what scripts/pcode_lift.py decided at each BRANCHIND
+      site with the jump tables and the switch the decompiler recovered for the body.
+      Verdicts per body: agrees, disagrees, mixed, no tail call, switch beyond body, or
+      not decompiled. Writes tail_calls.jsonl and tail_calls_summary.json to LIFT_OUT and
+      prints the per-verdict counts with every non-agreeing body's addresses and reasons.
+      It records only: no lifting rule is added and scripts/pcode_lift.py is not modified.
+      Needs the brew llvm and Ghidra.
+
+      See the "Lifting the shipped code to arm64" section in docs/development.md.
+    preconditions:
+      - sh: '[ -f "{{.LIFT_SO}}" ]'
+        msg: "No Linux GameAssembly.so at {{.LIFT_SO}}; see docs/development.md for the rsync step that populates .tools/megabonk-linux-native"
+      - sh: '[ -f "{{.LIFT_OUT}}/bodies.jsonl" ]'
+        msg: "No {{.LIFT_OUT}}/bodies.jsonl; run task re:lift-probe first"
+    cmds:
+      - uv run --script scripts/lift_tail_calls.py "{{.LIFT_SO}}" --out "{{.LIFT_OUT}}" {{.LIFT_EXTRA}}
+
   eh-probe:
     desc: "Count how many il2cpp function bodies carry an LSDA and how many landing pads each has"
     vars:

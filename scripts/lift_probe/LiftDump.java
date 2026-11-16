@@ -1,6 +1,8 @@
-// Dumps raw pcode, jump tables and memory sections for sampled bodies as JSON lines.
+// Dumps raw pcode, the decompiler's jump tables, its switch flag, the indirect jumps it gave up on, and
+// memory sections for sampled bodies as JSON lines.
 import ghidra.app.cmd.disassemble.DisassembleCommand;
 import ghidra.app.decompiler.DecompInterface;
+import ghidra.app.decompiler.DecompiledFunction;
 import ghidra.app.decompiler.DecompileResults;
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.Address;
@@ -16,9 +18,25 @@ import ghidra.program.model.pcode.Varnode;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class LiftDump extends GhidraScript {
+
+    private static final Pattern SWITCH = Pattern.compile("\\bswitch\\b");
+    private static final Pattern UNRECOVERED = Pattern.compile("Could not recover jumptable at 0x([0-9a-fA-F]+)");
+
+    // What one decompile pass says about a body: the tables it recovered, the switch its C shows, and the
+    // indirect jumps it reported as an unrecoverable jumptable.
+    private static class Decomp {
+        String tables = "[]";
+        String unrecovered = "[]";
+        boolean switchInC;
+        boolean completed;
+    }
 
     private long imageBase;
 
@@ -62,22 +80,27 @@ public class LiftDump extends GhidraScript {
         Files.writeString(Paths.get(path), sb.toString());
     }
 
-    private String jumpTables(Address entry, AddressSet body, DecompInterface decomp) throws Exception {
+    private Decomp decompileEvidence(Address entry, DecompInterface decomp) throws Exception {
+        Decomp view = new Decomp();
         Function fn = getFunctionAt(entry);
         if (fn == null) {
             fn = createFunction(entry, null);
         }
         if (fn == null) {
-            return "[]";
+            return view;
         }
         DecompileResults res = decomp.decompileFunction(fn, 120, monitor);
-        HighFunction hf = res.getHighFunction();
-        if (hf == null) {
-            return "[]";
+        view.completed = res.decompileCompleted();
+        DecompiledFunction df = res.getDecompiledFunction();
+        String code = df == null ? null : df.getC();
+        if (code != null) {
+            view.switchInC = SWITCH.matcher(code).find();
+            view.unrecovered = unrecovered(code);
         }
-        JumpTable[] tables = hf.getJumpTables();
+        HighFunction hf = res.getHighFunction();
+        JumpTable[] tables = hf == null ? null : hf.getJumpTables();
         if (tables == null) {
-            return "[]";
+            return view;
         }
         StringBuilder sb = new StringBuilder("[");
         for (int t = 0; t < tables.length; t++) {
@@ -93,6 +116,26 @@ public class LiftDump extends GhidraScript {
                 sb.append(fileVa(cases[c].getOffset()));
             }
             sb.append("]}");
+        }
+        view.tables = sb.append("]").toString();
+        return view;
+    }
+
+    // The decompiler's own admission that an indirect jump may have been a switch it could not rebuild: it names the address.
+    private String unrecovered(String code) {
+        Set<Long> at = new LinkedHashSet<>();
+        Matcher m = UNRECOVERED.matcher(code);
+        while (m.find()) {
+            at.add(Long.parseLong(m.group(1), 16) - imageBase);
+        }
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (Long a : at) {
+            if (!first) {
+                sb.append(",");
+            }
+            first = false;
+            sb.append(a);
         }
         return sb.append("]").toString();
     }
@@ -168,7 +211,10 @@ public class LiftDump extends GhidraScript {
                     }
                     sb.append("]}");
                 }
-                sb.append("],\"jt\":").append(hasBranchInd ? jumpTables(a, body, decomp) : "[]").append("}");
+                Decomp view = hasBranchInd ? decompileEvidence(a, decomp) : new Decomp();
+                sb.append("],\"jt\":").append(view.tables).append(",\"uw\":").append(view.unrecovered)
+                    .append(",\"sw\":").append(view.switchInC)
+                    .append(",\"dc\":").append(view.completed).append("}");
                 out.println(sb);
             }
         }
