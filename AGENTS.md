@@ -82,6 +82,8 @@ Megabonk is an Il2Cpp build with no managed IL anywhere in the install. `MelonLo
 
 Whether the shipped x86-64 code can be lifted and rebuilt for arm64 is a measured question, so do not re-sample it: the "Lifting the shipped code to arm64" section of `docs/development.md` records the four-stage scores, the jump and instruction-set census, the exception-handling census and what still blocks it, and `task re:lift-probe` with `task re:lift-holes`, `task re:eh-probe` and `task re:reloc-probe` reproduce the numbers.
 
+For LLVM pipeline comparisons, reuse a validated pcode dump instead of repeating Ghidra; keep per-pipeline outputs separate and published baselines untouched. See the pcode cache tip in [Lifting the shipped code to arm64](docs/development.md#lifting-the-shipped-code-to-arm64).
+
 `.tools/` is gitignored, so `rg` skips it by default. Pass `-u` (`--no-ignore`, honours `.gitignore` off) to search gitignored files, or `-uu` to also include hidden files, e.g. `rg -u 'RandomMapObject' .tools/il2cpp_dump/dump.cs`. Prefer scoping the search to the specific path over `-uu` across the repo. `-u` also sidesteps a `rg` quirk where a malformed `.gitignore` glob (such as the `Icon[` / `.HFS+ Private Directory Data[` entries here) prints a parse error and can mangle matched-line output.
 
 ## Python tests
