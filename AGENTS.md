@@ -76,6 +76,10 @@ uv run scripts/run.py editor on
 
 Prefer the steamstub for offline development: with `tools/steamstub/`'s drop-in `steam_api64.dll` installed (`task steamstub:install`, reversible with `task steamstub:restore`), the game launches and plays with Steam stopped — no login and no signing other machines out. Launch through the same `task game:run` and `relaunch`; direct-Proton runs on Linux hosts use the same stub. See "Launching without a Steam session" in `docs/development.md`.
 
+## Native macOS OpenBonk experiment
+
+Before continuing desktop upgrade-input work, read [Desktop upgrade-input handoff](docs/development.md#desktop-upgrade-input-handoff) for the private artifacts, reproduction command and unresolved input-module lifecycle. The candidate passes its editor fixture but still fails native selection; do not treat it as a working fix. Preserve the isolated profile and keep game-derived outputs local-only.
+
 ## Reading the game's code
 
 Megabonk is an Il2Cpp build with no managed IL anywhere in the install. `MelonLoader/Il2CppAssemblies/*.dll` and Il2CppDumper's `DummyDll/*.dll` are both stubs — interop thunks and empty method bodies — so decompiling either returns plumbing, never game logic. Read `.tools/il2cpp_dump/dump.cs` (regenerate with `task re:dump`) for fields, method signatures and enum values; a method body exists only as native code in `GameAssembly`, reachable in Ghidra or Binary Ninja at the RVA the dump lists. Ghidra is wired into the REA MCP tools through environment variables in `.claude/settings.json`; see "Using Ghidra through REA" in `docs/development.md` for the setup and for binding it with `provider_id: "ghidra"`. Behaviour that lives in a serialized Unity asset rather than in code, such as Rewired's key bindings, is in neither place and has to be confirmed in the running game. See `docs/development.md` for the detail and the one-command check.

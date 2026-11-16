@@ -2159,7 +2159,8 @@ Several failures were integration work rather than architecture barriers:
 - Minimal stripping retains an unused exported Discord import which fails in UnityLinker. Low stripping passed; Discord integration was not implemented or verified.
 - The initial player reaches `MainMenu` but has missing localization keys. Reading the preserved Windows localization bundles with the existing exporter and changing the rebuilder's target to StandaloneOSX recovered 17 locales, 867 tables and 19,157 entries. The existing GUID repair restored 51 collection GUIDs across 919 files; collection, GUID and English/Spanish default-description checks passed.
 - Map-generation startup is guarded by `UNITY_ANDROID && !UNITY_EDITOR`. A workspace-only OSX branch starts the existing recovered map coroutine, not the older substitute-arena bootstrap. The existing prepared-scene step supplies tile references and removes unsupported plugin components.
-- Reloading the experiment's own profile initially throws in Newtonsoft's `JsonArrayContract.CreateWrapper`, whose reflected constructor is missing. Explicit `AotHelper` coverage for string collections and the progression dictionaries removes that failure without resetting the profile. The existing standalone UI input modules also need enabling.
+- Reloading the experiment's own profile initially throws in Newtonsoft's `JsonArrayContract.CreateWrapper`, whose reflected constructor is missing. Explicit `AotHelper` coverage for string collections and the progression dictionaries removes that failure without resetting the profile.
+- Prepared scenes remove unsupported Rewired components, leaving their EventSystem without an active input module. Enabling existing `StandaloneInputModule` components is insufficient when none exists. A candidate private desktop compatibility adapter adds a missing standard module to each scene EventSystem and enables it, preserving existing bindings and avoiding duplicates. An editor regression first reproduced the missing-module failure, then passed installation, default legacy axes, idempotence and binding preservation. This candidate still fails native selection; the editor fixture does not cover the runtime lifecycle.
 
 The resulting bundle is universal x86_64/arm64 despite requesting arm64 in the build entry point. Select and measure the running slice rather than calling the artifact arm64-only:
 
@@ -2172,7 +2173,34 @@ sample <player-pid> 1 -file "<experiment>/native-process.txt"
 
 Those research switches belong to a workspace-only smoke component, not to upstream OpenBonk or the shipped game. The component captures frames, invokes existing menu/map handlers when explicitly requested, and exits after a bounded run. macOS `sample` reports `Code Type: ARM64`; the player reports `OSXPlayer`, Metal and the Apple M4 Max. A captured run renders Fox in Forest with terrain, HUD, minimap and timer, defeats 15 enemies, and reaches the level-one upgrade screen. The previously failing profile reload succeeds, and that smoke log contains no gameplay exception. The final build still reports three errors despite a successful build result; it is not a clean production pipeline.
 
-Separate focus-guarded macOS input runs exercise W movement and Space with changed gameplay views and ongoing combat. Upgrade selection remains blocked: a mouse click and Enter do not dismiss the level-up screen in the captured runs. Successful event posting is not counted as successful UI interaction. The next bounded portability step is the desktop UI/upgrade-selection path, before a longer run or a claim that the build is fully playable.
+Separate focus-guarded macOS input runs exercise W movement and Space with changed gameplay views and ongoing combat. A diagnostic baseline reproduces blocked upgrade selection with actual focused mouse-down/up at the measured offer center and raycasts resolving to that offer, followed by Down and Enter received by Unity. The offer is enabled/interactable and already has a serialized `SelectUpgrade` listener, but `EventSystem.currentInputModule` is null and no button click is dispatched. Do not fill the empty `UpgradeButton.OnClick` as a workaround: the existing serialized listener is the normal award path, and duplicating it risks double awards. Successful event posting alone is not successful UI interaction.
+
+The private probe is read-only apart from diagnostic output and a logging-only click listener. Mouse targeting uses the offer's actual screen-space center and verifies the resulting Unity position/raycast; the saved video settings can override a windowed launch request, requiring centered-letterbox correction rather than a guessed title-bar offset.
+
+#### Desktop upgrade-input handoff
+
+The candidate's bounded native run completes normally but **still cannot select an upgrade**. Its diagnostic `availableModule=StandaloneInputModule:False:True` means the module exists, is disabled and reports supported; `currentInputModule` remains null. Focused mouse input reaches the offered button, but no `MAC_UPGRADE_CLICK` is recorded, all three tracked upgrade levels remain zero, and `MyTime.paused=True` with the stage timer unchanged. The process exits with `MAC_RESEARCH_COMPLETE` and driver status 0, with no gameplay exception: normal exit is not successful selection. The combined driver never reaches its subsequent-offer keyboard action, so this run proves neither keyboard selection nor a subsequent level-up.
+
+The retained private experiment directory is named `openbonk-macos-spike-20261116`. Read its `EXPERIMENT.md` and inspect the current scripts before rerunning; early notes there describe intermediate candidates, not necessarily working results.
+
+| Artifact relative to the experiment | Purpose |
+| --- | --- |
+| `working-build-07.app`, `profile-before-upgrade-task/` | Preserved pre-investigation app and isolated-profile backup; do not reset the profile |
+| `diagnostic-build-08.app`, `upgrade-baseline-04/player.log` | Unchanged selection logic with a verified focused click/raycast and received Down/Enter, but no active input module |
+| `MacResearchCompatibility.cs`, `MacUpgradeInputCheck.cs` | Candidate scene-load adapter and editor-only installation regression; matching copies are under the workspace's Scripts and Editor directories |
+| `upgrade-input-test-red.log`, `upgrade-input-test-green.log` | Failing-before/passing-after editor evidence, not native award evidence |
+| `MacUpgradeProbe.cs`, `upgrade-input.swift` | Read-only runtime diagnostics and focus-guarded OS input driver; neither is the mod's file-queue harness |
+| `build-10.log`, `upgrade-fixed-01/`, `upgrade-fixed-01-driver.log`, `upgrade-fixed-01-native.txt` | Candidate build, failed native validation, driver outcome and measured ARM64 process |
+
+The build entry point refuses an existing output app. Preserve each app under a new name before rebuilding, use a fresh run-output directory, and run only one player against the isolated profile at a time. From the directory containing the private driver, a bounded combined check is:
+
+```sh
+swift upgrade-input.swift "<experiment>" "<new-run-directory-name>" both
+```
+
+The driver passes `-research-upgrades` to enable the probe and `-research-long` for an approximately three-minute smoke deadline. It attempts a measured first-offer mouse click, then waits for a later offer before sending Down/Enter. Verify those actions actually occurred in the driver and player logs; a missing target, death before offers or no subsequent offer is an unmet test precondition, not a passed input path.
+
+TODO: establish why the module is disabled after startup. Log the adapter callback's execution, scene and EventSystem/module instance identities, and enabled/active state before and after installation and through subsequent initialization. Distinguish a later disabling write from a missed callback or a different/persistent EventSystem; the present evidence does not identify the writer or timing. Extend the regression to the reproduced lifecycle before changing the adapter again. Do not mask the cause with an unconditional per-frame enable, invoke the selection handler directly, or force an unpause as input verification. A working result must show the intended upgrade's level increasing exactly once, visible keyboard focus where applicable, normal screen closure/resume, a subsequent level-up and restart against the same isolated profile.
 
 This is a useful native-execution and short-combat result, not a full-run, physical-controller, audio, save-parity or rendering-parity result. The source contains approximations and remaining stubs, and the captures show visual defects. It does not replace the shipped-build differential oracle or retire the lifted-runtime route. The next decision should compare measured input, save/restart, longer-run and visual behaviour against the frozen shipped game before adopting the reconstruction as a verification platform.
 
