@@ -7,9 +7,9 @@ without a disassembler or a game process.
 """
 
 import json
-import lift_probe as lp
+import lift_probe as lp  # type: ignore[import-not-found]  # resolved at runtime via pytest pythonpath
 import os
-import pytest
+import pytest  # type: ignore[import-not-found]  # resolved at runtime via pytest pythonpath
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -187,7 +187,7 @@ def test_failure_rows_name_each_body_by_address_and_size():
 
 
 def healthy_lifted(*_args, **_kw):
-    return SimpleNamespace(holes=[], unmapped_refs=0, indirect_calls=0, tail_calls=0)
+    return SimpleNamespace(holes=[], unmapped_refs=0, indirect_calls=0, tail_calls=0, proven_tail_calls=0, unproven_branchind=[])
 
 
 def body_fn(start=0x4DD8A20, size=312):

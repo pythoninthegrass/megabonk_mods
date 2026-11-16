@@ -47,6 +47,8 @@ FLOAT_UNARY_INTRINSIC = {
     "FLOAT_FLOOR": "floor",
 }
 OVERFLOW_INTRINSIC = {"INT_CARRY": "uadd", "INT_SCARRY": "sadd", "INT_SBORROW": "ssub"}
+# Ghidra's register-space offset for rsp in the x86-64 language definition.
+RSP = "register,20,8"
 FLOAT_TYPES = {4: "float", 8: "double"}
 PACKED_DIVISION = {"divps": (4, 4), "divpd": (2, 8)}
 PACKED_MINMAX = {"minps": (4, 4, "olt"), "maxps": (4, 4, "ogt")}
@@ -66,11 +68,199 @@ class Lifted:
     data_sections: set[str] = field(default_factory=set)
     unmapped_refs: int = 0
     tail_calls: int = 0
+    proven_tail_calls: int = 0
+    unproven_branchind: list[dict] = field(default_factory=list)
 
 
 def parse_varnode(text: str) -> tuple[str, int, int]:
     space, offset, size = text.split(",")
     return space, int(offset, 16), int(size)
+
+
+def const_of(text: str | None) -> int | None:
+    """The value of a const varnode, or None when the operand is not a constant."""
+    try:
+        space, offset, _ = parse_varnode(text or "")
+    except (AttributeError, ValueError):
+        return None
+    return offset if space == "const" else None
+
+
+def branch_target(op: dict, order: list[int]) -> int | None:
+    """Where a BRANCH or CBRANCH goes: an address in the dump, or None when it leaves it.
+
+    A const operand is the signed op-index offset from within the same instruction, which is
+    where the target is an op the emitter has already labelled.
+    """
+    space, offset, size = parse_varnode(op["in"][0])
+    if space != "const":
+        return offset if offset in addresses(order) else None
+    modulus = 1 << (size * 8)
+    index = offset - modulus if offset >= (modulus >> 1) else offset
+    return order[index] if 0 <= index < len(order) else None
+
+
+def addresses(order: list[int]) -> frozenset[int]:
+    """The dump's instruction addresses, for the repeated membership test the walk does."""
+    return frozenset(order)
+
+
+def escapes_the_dump(insn: dict, order: list[int], follows: int | None) -> bool:
+    """Whether control can leave the dump from this instruction by a path whose frame is unknown.
+
+    A branch to an address the dump never emitted, and a straight-line or conditional fallthrough
+    past the last instruction, both hand control somewhere the balance pass cannot read. A
+    terminating `BRANCH` to an unemitted address is not such a path: the emitter lowers it to a call
+    and a return, which hands control back balanced, so only a non-terminating branch to an
+    unemitted address (or a fallthrough off the end) makes everything downstream untrackable.
+    """
+    terminates = any(op["op"] in ("BRANCH", "RETURN", "BRANCHIND") for op in insn["ops"])
+    if any(branch_target(op, order) is None for op in insn["ops"] if op["op"] == "CBRANCH"):
+        return True
+    return not terminates and follows is None
+
+
+def successors(insn: dict, order: list[int], follows: int | None) -> list[int]:
+    """The addresses control can reach inside the dump from one instruction.
+
+    A BRANCH, RETURN or BRANCHIND is a terminator and contributes only the address its target names
+    (a BRANCHIND names none: where it goes is not in the body). A CBRANCH that is not a terminator
+    also falls through to the next instruction, as does any straight-line instruction.
+    """
+    out: list[int] = []
+    terminator = False
+    for op in insn["ops"]:
+        if op["op"] not in ("BRANCH", "CBRANCH"):
+            continue
+        target = branch_target(op, order)
+        if target is not None:
+            out.append(target)
+        if op["op"] == "BRANCH":
+            terminator = True
+    if any(op["op"] in ("RETURN", "BRANCHIND") for op in insn["ops"]):
+        terminator = True
+    if not terminator and follows is not None:
+        out.append(follows)
+    return out
+
+
+def rsp_effect(insn: dict) -> int | None:
+    """The net rsp change of one instruction: adds and subs of a constant, plus the 8 a CALL pushes.
+
+    None means the frame cannot be balanced by counting, because rsp is written some other way
+    (a POP, `leave`, a copy from a register or a temporary, an add or sub by a computed value).
+    """
+    delta = 0
+    for op in insn["ops"]:
+        if op.get("out") != RSP:
+            if op["op"] == "CALL":
+                delta += 8
+            continue
+        operands = op.get("in") or []
+        amount = const_of(operands[1]) if len(operands) > 1 else None
+        if op["op"] in ("INT_SUB", "INT_ADD") and len(operands) > 1 and operands[0] == RSP and amount is not None:
+            delta += -amount if op["op"] == "INT_SUB" else amount
+        else:
+            return None
+    return delta
+
+
+MISSING = object()
+PROVEN = {"reason": "", "rsp_delta": 0}
+
+
+def join(state: dict[int, int | None], target: int, value: int | None, todo: list[int]) -> bool:
+    """Merges one path's rsp balance into `state[target]`; returns True when the merge changed it."""
+    seen = state.get(target, MISSING)
+    if seen is MISSING:
+        state[target] = value
+        todo.append(target)
+        return True
+    if seen != value:
+        state[target] = None
+        todo.append(target)
+        return True
+    return False
+
+
+def rsp_verdict(balance: object) -> dict:
+    """Why a site is or is not liftable as an indirect call followed by a return."""
+    if balance is MISSING:
+        return {"reason": "no path in the dump reaches the site", "rsp_delta": None}
+    if balance is None:
+        return {"reason": "rsp untrackable on a path into the site", "rsp_delta": None}
+    return PROVEN if not balance else {"reason": "rsp not at entry value", "rsp_delta": balance}
+
+
+def site_frame(fn: dict) -> dict[int, dict]:
+    """Per BRANCHIND address, whether a frame-safe tail call can be read off the body, conservatively.
+
+    `unknown_balanced` says the pass cannot prove the site off-entry: no path in the dump reaches it,
+    or every path into it leaves rsp trackable and free of an intervening call. That is the shape the
+    old straight-line load rule lifted, and the refinement keeps lifting it. A CALL or an untrackable
+    rsp write on a path to the site is not unknown: it is a frame the pass can see and cannot balance.
+    """
+    order = sorted(insn["a"] for insn in fn["insns"])
+    if not order:
+        return {}
+    by_addr = {insn["a"]: insn for insn in fn["insns"]}
+    follows = {addr: nxt for addr, nxt in zip(order, order[1:])}
+    state: dict[int, int | None] = {order[0]: 0}
+    called: dict[int, bool] = {order[0]: False}
+    todo = [order[0]]
+    while todo:
+        addr = todo.pop()
+        insn = by_addr[addr]
+        effect, balance = rsp_effect(insn), state[addr]
+        reached = None if effect is None or balance is None else balance + effect
+        call_on_path = called.get(addr, False) or any(op["op"] == "CALL" for op in insn["ops"])
+        if escapes_the_dump(insn, order, follows.get(addr)):
+            reached = None
+        for target in successors(insn, order, follows.get(addr)):
+            if join(state, target, reached, todo):
+                called[target] = call_on_path
+    verdicts = {}
+    for insn in fn["insns"]:
+        if not any(op["op"] == "BRANCHIND" for op in insn["ops"]):
+            continue
+        balance = state.get(insn["a"], MISSING)
+        verdicts[insn["a"]] = {
+            "reason": rsp_verdict(balance)["reason"],
+            "rsp_delta": rsp_verdict(balance)["rsp_delta"],
+            "unknown_balanced": balance is MISSING or (balance is not None and not called.get(insn["a"], False)),
+        }
+    return verdicts
+
+
+def site_proof(fn: dict) -> dict[int, dict]:
+    """Per BRANCHIND address, whether rsp is proven equal to its entry value on every path into it.
+
+    The lattice is balanced, off by a constant, or untrackable (None). A branch whose target is not
+    in the dump makes everything downstream of it untrackable: the emitter turns that branch into a
+    call and a return, so it balances only because of the shape the emitter gives it, which is not
+    something read off the body.
+    """
+    order = sorted(insn["a"] for insn in fn["insns"])
+    if not order:
+        return {}
+    by_addr = {insn["a"]: insn for insn in fn["insns"]}
+    follows = {addr: nxt for addr, nxt in zip(order, order[1:])}
+    state: dict[int, int | None] = {order[0]: 0}
+    todo = [order[0]]
+    while todo:
+        addr = todo.pop()
+        insn = by_addr[addr]
+        effect, balance = rsp_effect(insn), state[addr]
+        reached = None if effect is None or balance is None else balance + effect
+        if escapes_the_dump(insn, order, follows.get(addr)):
+            reached = None
+        for target in successors(insn, order, follows.get(addr)):
+            join(state, target, reached, todo)
+    return {
+        insn["a"]: rsp_verdict(state.get(insn["a"], MISSING))
+        for insn in fn["insns"]
+        if any(op["op"] == "BRANCHIND" for op in insn["ops"])
+    }
 
 
 def is_packed_lane_op(out: str | None, ins: list[str]) -> bool:
@@ -129,6 +319,10 @@ class BodyLifter:
         self.decls: set[str] = set()
         self.indirect_calls = 0
         self.tail_calls = 0
+        self.proven_tail_calls = 0
+        self.unproven_branchind: list[dict] = []
+        self.proof = site_proof(fn)
+        self.frame = site_frame(fn)
         self.counter = 0
         self.addrs = {i["a"] for i in fn["insns"]}
         self.next_addr = {i["a"]: i["a"] + i["len"] for i in fn["insns"]}
@@ -249,7 +443,7 @@ class BodyLifter:
 
     def lift_op(self, insn: dict, k: int, op: dict) -> bool:
         """Emits one op; returns True when the op ended the block."""
-        name, out, ins = op["op"], op["out"], op["in"]
+        name, out, ins = op["op"], op["out"], op.get("in") or []
         sz = lambda t: parse_varnode(t)[2]
         if name == "COPY":
             self.write(out, self.read(ins[0]))
@@ -604,19 +798,50 @@ class BodyLifter:
         return False
 
     def branch_indirect(self, insn: dict, k: int, target: str) -> None:
-        """Lowers a recovered jump table to a switch over the target rebased to file addresses.
+        """Lowers a BRANCHIND as a switch, or as an indirect call and a return when rsp is proven balanced.
 
-        A target whose nearest earlier definition is a plain memory load is an indirect tail call
-        instead; that is a straight-line approximation, so such bodies are counted in `tail_calls`.
+        `jmp rax` with rsp at its entry value is equivalent to `call rax` followed by `ret`, so the
+        balance proof is what licenses the rewrite; without it the site stays a recorded hole.
         """
         cases = self.tables.get(insn["a"])
         sec = self.last_data
-        if not cases and self.defined_by_load(insn, k, target):
+        if not cases:
+            # Two things license lowering a bare `jmp reg` as a call and a return: the straight-line
+            # load rule the emitter always used (the recognition floor, so the proof never un-lifts a
+            # site the old rule lifted), and the stack-balance proof, which lifts a site only when rsp
+            # is proven equal to its entry value on every path into it. `proven_tail_calls` counts the
+            # lifted sites that carry that proof; a site the rule lifted without it is recorded unproven
+            # with the reason. An inconsistent or untrackable rsp never lifts on the proof alone, and a
+            # site with neither the load rule nor the proof stays a recorded hole: no guessing.
+            load_traced = self.defined_by_load(insn, k, target)
+            verdict = self.frame.get(insn["a"], {})
+            balanced = verdict.get("reason") == ""
+            if not (load_traced or balanced):
+                self.unproven_branchind.append(
+                    {
+                        "a": insn["a"],
+                        "reason": verdict.get("reason") or "no path in the dump reaches the site",
+                        "rsp_delta": verdict.get("rsp_delta"),
+                    }
+                )
+                self.holes.append("BRANCHIND")
+                self.emit("unreachable")
+                return
             self.tail_calls += 1
+            if balanced:
+                self.proven_tail_calls += 1
+            else:
+                self.unproven_branchind.append(
+                    {
+                        "a": insn["a"],
+                        "reason": verdict.get("reason") or "no path in the dump reaches the site",
+                        "rsp_delta": verdict.get("rsp_delta"),
+                    }
+                )
             self.call_indirect(target)
             self.emit("ret void")
             return
-        if not cases or sec is None:
+        if sec is None:
             self.holes.append("BRANCHIND")
             self.emit("unreachable")
             return
@@ -648,7 +873,7 @@ class BodyLifter:
                 self.lines.append(f"{self.label(insn['a'], k)}:")
                 try:
                     ended = self.lift_op(insn, k, op)
-                except (ValueError, KeyError) as exc:
+                except (ValueError, KeyError, IndexError, TypeError) as exc:
                     self.holes.append(f"{op['op']}:{exc}")
                     ended = False
                 if not ended:
@@ -674,6 +899,8 @@ class BodyLifter:
             self.data_sections,
             self.unmapped,
             self.tail_calls,
+            self.proven_tail_calls,
+            self.unproven_branchind,
         )
 
 

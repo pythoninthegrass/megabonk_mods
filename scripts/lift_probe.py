@@ -111,6 +111,25 @@ def tally_holes(results: list[dict]) -> dict[str, int]:
     return dict(counts)
 
 
+def tally_branchind(results: list[dict]) -> dict:
+    """Counts BRANCHIND sites by the stack-balance verdict: proven, or unproven grouped by reason.
+
+    `untracked_rsp` is the subset the pass could not read a frame delta for at all, which is the
+    class that keeps an indirect jump from ever being recognised as a tail call.
+    """
+    tally: dict = {"proven": 0, "unproven": 0, "untracked_rsp": 0}
+    reasons: Counter[str] = Counter()
+    for result in results:
+        tally["proven"] += result.get("proven_tail_calls", 0)
+        for site in result.get("unproven_branchind", []):
+            tally["unproven"] += 1
+            reasons[site["reason"]] += 1
+            if site["rsp_delta"] is None:
+                tally["untracked_rsp"] += 1
+    tally["unproven_reasons"] = dict(reasons)
+    return tally
+
+
 def failed_row(start: int, size: int, error: str, missing_dump: bool = False) -> dict:
     """A body the pipeline could not score, recorded so it still counts in the totals."""
     return {
@@ -120,6 +139,8 @@ def failed_row(start: int, size: int, error: str, missing_dump: bool = False) ->
         "unmapped_refs": 0,
         "indirect_calls": 0,
         "tail_calls": 0,
+        "proven_tail_calls": 0,
+        "unproven_branchind": [],
         "jump_tables": 0,
         "obj_bytes": 0,
         "error": error,
@@ -438,8 +459,10 @@ class PcodeCache:
 
     def lookup(self, fdes: list[Fde]) -> list[dict]:
         """Returns the cached records for these bodies, recording the addresses it could not answer."""
-        usable = self.complete and len(self.by_start) == len(fdes) and all(
-            self.by_start.get(f.start, {}).get("size") == f.size for f in fdes
+        usable = (
+            self.complete
+            and len(self.by_start) == len(fdes)
+            and all(self.by_start.get(f.start, {}).get("size") == f.size for f in fdes)
         )
         if not usable:
             self.by_start = {}
@@ -470,9 +493,7 @@ class PcodeCache:
         if self.sections is not None:
             records.append(section_record(self.digest, self.sections, self.key))
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        records += [
-            {"cache": self.key, "sha256": self.digest, **row} for row in self.by_start.values()
-        ]
+        records += [{"cache": self.key, "sha256": self.digest, **row} for row in self.by_start.values()]
         with tempfile.NamedTemporaryFile(mode="w", dir=self.path.parent, delete=False) as sink:
             temporary = Path(sink.name)
             try:
@@ -533,9 +554,7 @@ def verify_body(ir: str, tool_timeout: int) -> tuple[bool, str | None]:
 
 
 def optimise_body(ir: str, pipeline: str, tool_timeout: int) -> tuple[bool, bytes | None, str | None]:
-    return run_tool_body(
-        "opt", [LLVM / "opt", f"-passes={pipeline}", "-S", "-o", "-"] + EXTRA_ARGS, ir, tool_timeout
-    )
+    return run_tool_body("opt", [LLVM / "opt", f"-passes={pipeline}", "-S", "-o", "-"] + EXTRA_ARGS, ir, tool_timeout)
 
 
 def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT, pipeline: str = "") -> dict:
@@ -557,6 +576,8 @@ def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT,
                 "unmapped_refs": lifted.unmapped_refs,
                 "indirect_calls": lifted.indirect_calls,
                 "tail_calls": lifted.tail_calls,
+                "proven_tail_calls": lifted.proven_tail_calls,
+                "unproven_branchind": lifted.unproven_branchind,
                 "jump_tables": len(fn.get("jt", [])),
                 "stages": {
                     "decoded": fn["undecoded"] == 0,
@@ -579,6 +600,8 @@ def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT,
                 "unmapped_refs": lifted.unmapped_refs,
                 "indirect_calls": lifted.indirect_calls,
                 "tail_calls": lifted.tail_calls,
+                "proven_tail_calls": lifted.proven_tail_calls,
+                "unproven_branchind": lifted.unproven_branchind,
                 "jump_tables": len(fn.get("jt", [])),
                 "stages": {
                     "decoded": fn["undecoded"] == 0,
@@ -601,6 +624,8 @@ def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT,
         "unmapped_refs": lifted.unmapped_refs,
         "indirect_calls": lifted.indirect_calls,
         "tail_calls": lifted.tail_calls,
+        "proven_tail_calls": lifted.proven_tail_calls,
+        "unproven_branchind": lifted.unproven_branchind,
         "jump_tables": len(fn.get("jt", [])),
         "obj_bytes": obj_bytes,
         "error": error,
@@ -708,9 +733,7 @@ def main(argv: list[str] | None = None) -> int:
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
         pcode_at = time.monotonic()
-        bodies, sections = dump_pcode_cached(
-            args.so, sample, work, wanted_cache, timeout=args.ghidra_timeout, diag=args.out
-        )
+        bodies, sections = dump_pcode_cached(args.so, sample, work, wanted_cache, timeout=args.ghidra_timeout, diag=args.out)
         pcode_seconds = round(time.monotonic() - pcode_at, 1)
         rows, extras = reconcile(sample, bodies)
         scored: list[dict] = []
@@ -746,6 +769,7 @@ def main(argv: list[str] | None = None) -> int:
         "sample": {"per_class": args.per_class, "seed": args.seed, "requested": len(sample), "n": len(scored)},
         "stages": summarize(scored),
         "holes": tally_holes(scored),
+        "branchind": tally_branchind(scored),
         "failures": tally_failures(scored),
         "failed_bodies": failures,
         "unsampled_rows": [hex(row["start"]) for row in extras],

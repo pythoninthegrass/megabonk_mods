@@ -5,7 +5,7 @@ file as a byte array. The structural contract is testable on hand-written pcode;
 verifier and arm64 backend are exercised only when the LLVM toolchain is present.
 """
 
-import pytest
+import pytest  # type: ignore[import-not-found]  # resolved at runtime via pytest pythonpath
 import struct
 import subprocess
 import sys
@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-import pcode_lift as pl
+import pcode_lift as pl  # type: ignore[import-not-found]  # resolved at runtime via scripts on sys.path
 
 LLVM = Path("/opt/homebrew/opt/llvm/bin")
 requires_llvm = pytest.mark.skipif(not (LLVM / "opt").exists(), reason="LLVM toolchain absent")
@@ -112,9 +112,13 @@ def test_load_store_and_call_verify():
     assert verify(pl.module_for([result])).returncode == 0
 
 
-def test_branchind_is_recorded_as_a_hole():
+def test_branchind_at_a_balanced_rsp_lifts_as_a_tail_call():
+    """A bare `jmp reg` with rsp at its entry value is a tail call, not a hole."""
     fn = body(insn(0x1000, 2, op("BRANCHIND", None, "register,0,8")))
-    assert pl.lift_body(fn).holes == ["BRANCHIND"]
+    result = pl.lift_body(fn)
+    assert result.holes == []
+    assert result.tail_calls == 1
+    assert result.proven_tail_calls == 1
 
 
 def test_callother_is_recorded_as_a_hole_with_its_name():
@@ -703,6 +707,7 @@ def test_direct_ram_varnodes_read_and_write_memory():
     assert verify(pl.module_for([result])).returncode == 0
 
 
+BSS = {"name": "_bss", "va": 0x53_00000, "size": 0x20_0000, "exec": False}
 RODATA = {"name": "rodata", "va": 0x5000, "size": 0x100, "exec": False}
 TEXT = {"name": "il2cpp", "va": 0x1000, "size": 0x1000, "exec": True}
 
@@ -803,9 +808,25 @@ def test_branchind_through_a_loaded_pointer_is_an_indirect_tail_call():
 
 
 def test_branchind_on_a_computed_register_without_a_table_stays_a_hole():
+    # rsp is at its entry value here (nothing moves it), so the balance proof holds and the site lifts
+    # as a tail call; the old straight-line load rule alone left it a hole. The proof is what licenses
+    # the rewrite. An unbalanced variant keeps the hole (see the counter-example below).
     fn = body(
         insn(0x1000, 3, op("INT_ADD", "register,0,8", "register,0,8", "const,8,8")),
         insn(0x1003, 2, op("BRANCHIND", None, "register,0,8")),
+    )
+    result = pl.lift_body(fn)
+    assert result.holes == []
+    assert result.proven_tail_calls == 1
+
+
+def test_branchind_on_a_computed_register_with_an_unbalanced_frame_stays_a_hole():
+    # The same computed target, but a push with no matching pop leaves rsp off its entry value, so the
+    # proof fails and the site stays a recorded hole: the emitter never guesses a tail call.
+    fn = body(
+        insn(0x1000, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,8,8")),
+        insn(0x1003, 3, op("INT_ADD", "register,0,8", "register,0,8", "const,8,8")),
+        insn(0x1006, 2, op("BRANCHIND", None, "register,0,8")),
     )
     assert pl.lift_body(fn).holes == ["BRANCHIND"]
 
@@ -824,10 +845,14 @@ def test_branchind_on_a_register_loaded_by_an_earlier_instruction_is_a_tail_call
 
 
 def test_branchind_on_a_register_defined_by_arithmetic_stays_a_hole():
+    # The target is computed by arithmetic off a loaded value, so the straight-line load rule rejects
+    # it, and a push with no matching pop leaves rsp off its entry value, so the balance proof fails
+    # too: with neither license the site stays a recorded hole rather than a guessed tail call.
     fn = body(
-        insn(0x1000, 4, op("LOAD", "register,8,8", "const,1,8", "register,38,8")),
-        insn(0x1004, 3, op("INT_ADD", "register,8,8", "register,8,8", "register,10,8")),
-        insn(0x1007, 2, op("BRANCHIND", None, "register,8,8")),
+        insn(0x1000, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,8,8")),
+        insn(0x1003, 4, op("LOAD", "register,8,8", "const,1,8", "register,38,8")),
+        insn(0x1007, 3, op("INT_ADD", "register,8,8", "register,8,8", "register,10,8")),
+        insn(0x100A, 2, op("BRANCHIND", None, "register,8,8")),
     )
     assert pl.lift_body(fn).holes == ["BRANCHIND"]
 
@@ -835,19 +860,254 @@ def test_branchind_on_a_register_defined_by_arithmetic_stays_a_hole():
 @requires_llvm
 def test_branchind_follows_a_copy_from_a_loaded_temporary():
     fn = body(
+        insn(0x1000, 4, op("INT_SUB", REG_RSP, REG_RSP, "const,28,8")),
         insn(
-            0x1000,
+            0x1004,
             4,
             op("INT_ADD", "unique,8e00,8", "register,38,8", "const,18,8"),
             op("LOAD", "unique,23d00,8", "const,1b1,4", "unique,8e00,8"),
             op("COPY", "register,8,8", "unique,23d00,8"),
         ),
-        insn(0x1004, 2, op("BRANCHIND", None, "register,8,8")),
+        insn(0x1008, 3, op("INT_ADD", REG_RSP, REG_RSP, "const,28,8")),
+        insn(0x100B, 2, op("BRANCHIND", None, "register,8,8")),
     )
     result = pl.lift_body(fn)
     assert result.holes == []
     assert result.tail_calls == 1
     assert verify(pl.module_for([result])).returncode == 0
+
+
+REG_RSP = "register,20,8"
+
+
+SLOT = 0x53_67070
+
+
+def thunk_body(*, unbalanced=None, entry=0x1000, table=False, guard_target=None):
+    """The il2cpp lazily-resolved thunk: a slot load, a null-guard to a cold resolver, teardown, `jmp rax`.
+
+    The cold block resolves the slot by calling the resolver and returning, so the site is reached
+    only by the fallthrough. `unbalanced` puts an extra rsp write on that fallthrough (a trackable
+    `INT_SUB`/`INT_ADD`, or a `COPY` of rsp from a register), the only way to knock the site off the
+    entry value. `table` swaps the jump target for a slot reloaded through a computed pointer, the
+    shape a recovered jump table arrives in.
+    """
+    slot = f"cptr,{SLOT:x},8"
+    target = "register,80,8" if table else "register,0,8"
+    taken = f"ram,{entry + 0x20:x},8" if guard_target is None else guard_target
+    insns = [
+        insn(
+            entry,
+            1,
+            op("COPY", "unique,4f900,8", "register,18,8"),
+            op("INT_SUB", REG_RSP, REG_RSP, "const,8,8"),
+            op("STORE", None, "const,1b1,8", REG_RSP, "unique,4f900,8"),
+        ),
+        insn(
+            entry + 1,
+            2,
+            op("COPY", "register,0,8", slot),
+            op("INT_EQUAL", "register,206,1", "register,0,8", "const,0,8"),
+        ),
+        insn(entry + 3, 2, op("CBRANCH", None, taken, "register,206,1")),
+        insn(entry + 5, 1, op("INT_ADD", REG_RSP, REG_RSP, "const,8,8"), op("COPY", "register,18,8", "unique,4f900,8")),
+    ]
+    if unbalanced is not None:
+        insns.append(insn(entry + 6, 1, unbalanced))
+    site_at = entry + 6 + (1 if unbalanced is not None else 0)
+    if table:
+        insns.append(
+            insn(
+                site_at,
+                3,
+                op("INT_ADD", "unique,8e00,8", "register,38,8", "const,40,8"),
+                op("LOAD", "unique,23d00,8", "const,1b1,8", "unique,8e00,8"),
+                op("COPY", "register,80,8", "unique,23d00,8"),
+            )
+        )
+        site_at += 3
+    insns.append(insn(site_at, 2, op("BRANCHIND", None, target)))
+    cold = entry + 0x20
+    insns += [
+        insn(cold, 1, op("CALL", None, "ram,2056380,8")),
+        insn(cold + 1, 1, op("RETURN", None, "register,288,8")),
+    ]
+    return body(*insns, start=entry)
+
+
+def test_branchind_at_balanced_rsp_from_a_slot_load_lifts_as_a_tail_call():
+    result = pl.lift_body(thunk_body(), [BSS, RODATA, TEXT])
+    assert pl.site_proof(thunk_body()) == {0x1006: {"reason": "", "rsp_delta": 0}}
+    assert result.holes == []
+    assert result.tail_calls == 1
+    assert result.proven_tail_calls == 1
+    assert result.unproven_branchind == []
+
+
+@requires_llvm
+def test_proven_tail_call_emits_an_indirect_call_and_a_return():
+    result = pl.lift_body(thunk_body(), [BSS, RODATA, TEXT])
+    assert "call void %t" in result.ir
+    assert "inttoptr" in result.ir
+    assert "ret void" in result.ir
+    assert "switch i64" not in result.ir
+    assert verify(pl.module_for([result])).returncode == 0
+
+
+def test_branchind_after_an_unbalanced_trackable_write_stays_a_hole():
+    """An extra `sub rsp` on the only path into the site leaves it off the entry value."""
+    sub_op = op("INT_SUB", REG_RSP, REG_RSP, "const,10,8")
+    result = pl.lift_body(thunk_body(unbalanced=sub_op), [BSS, RODATA, TEXT])
+    assert result.holes == ["BRANCHIND"]
+    assert result.tail_calls == 0
+    assert result.proven_tail_calls == 0
+    assert pl.site_proof(thunk_body(unbalanced=sub_op))[0x1007] == {
+        "reason": "rsp not at entry value",
+        "rsp_delta": -16,
+    }
+
+
+def test_branchind_after_a_frame_pointer_restore_stays_a_hole():
+    """`leave` restores rsp from rbp, a COPY the balance pass cannot reduce to a delta."""
+    leave = op("COPY", REG_RSP, "register,10,8")
+    result = pl.lift_body(thunk_body(unbalanced=leave), [BSS, RODATA, TEXT])
+    assert result.holes == ["BRANCHIND"]
+    assert result.proven_tail_calls == 0
+    assert pl.site_proof(thunk_body(unbalanced=leave))[0x1007] == {
+        "reason": "rsp untrackable on a path into the site",
+        "rsp_delta": None,
+    }
+
+
+def test_branchind_reaching_a_target_outside_the_dump_is_untracked_not_proven():
+    """A body whose only path into the site runs off its end leaves the balance untrackable."""
+    fn = thunk_body()
+    fn["insns"] = [i for i in fn["insns"] if i["a"] < 0x1020]  # drop the cold block: the site is now the last byte
+    del fn["size"]
+    fn = body(*fn["insns"], start=fn["start"])
+    del fn["insns"][-1]  # drop the site itself; a fallthrough off the end with nothing to balance
+    assert pl.site_proof(fn) == {}
+
+
+def test_branchind_past_an_unemitted_branch_target_is_untracked_not_proven():
+    """A CBRANCH whose target the dump never emitted makes every site downstream untrackable."""
+    fn = thunk_body(guard_target="ram,0x900000,8")  # guard jumps to an address with no instruction there
+    assert pl.site_proof(fn)[0x1006] == {
+        "reason": "rsp untrackable on a path into the site",
+        "rsp_delta": None,
+    }
+    result = pl.lift_body(fn, [BSS, RODATA, TEXT])
+    assert result.holes == ["BRANCHIND"]
+    assert result.proven_tail_calls == 0
+
+
+def test_terminating_branch_to_an_unemitted_target_stays_a_balanced_tail_call():
+    """A `jmp` out of the dump is a tail call the emitter lowers to call+ret, which returns balanced."""
+    # A BRANCHIND site reached without crossing an escaping CBRANCH still proves, even though the
+    # body also terminates on a BRANCH to an address the dump never emitted.
+    fn = body(
+        insn(0x1000, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,20,8")),
+        insn(0x1003, 3, op("INT_ADD", REG_RSP, REG_RSP, "const,20,8")),
+        insn(0x1006, 2, op("BRANCHIND", None, "register,0,8")),
+        insn(0x1008, 5, op("BRANCH", None, "ram,0x900000,8")),
+    )
+    assert pl.site_proof(fn)[0x1006] == {"reason": "", "rsp_delta": 0}
+    assert pl.lift_body(fn).proven_tail_calls == 1
+
+
+def test_branchind_left_hung_by_an_untrackable_body_is_not_proven():
+    """A straight-line instruction whose fallthrough runs off the body end makes the site untrackable."""
+    # A push, then an unconditional BRANCHIND reached by fallthrough with nothing after it: the
+    # straight-line push leaves the body with rsp off entry and no return to balance it.
+    fn = body(
+        insn(
+            0x1000,
+            1,
+            op("COPY", "unique,4f900,8", "register,18,8"),
+            op("INT_SUB", REG_RSP, REG_RSP, "const,8,8"),
+            op("STORE", None, "const,1b1,8", REG_RSP, "unique,4f900,8"),
+        ),
+        insn(0x1001, 1, op("COPY", "register,0,8", "const,0,8")),
+        insn(0x1002, 2, op("BRANCHIND", None, "register,0,8")),
+    )
+    assert pl.site_proof(fn)[0x1002] == {
+        "reason": "rsp not at entry value",
+        "rsp_delta": -8,
+    }
+
+
+def test_branchind_on_a_load_traced_target_at_unbalanced_rsp_still_lifts():
+    """A mid-function `jmp reg` whose target traces to a LOAD lifts on the straight-line rule.
+
+    The frame at the site is off entry (a push with no matching pop), so the balance proof does not
+    prove it, but the load rule the emitter always trusted still lifts it: the proof is a refinement
+    that may only add sites, never un-lift what `defined_by_load` already did.
+    """
+    fn = body(
+        insn(0x1000, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,8,8")),
+        insn(
+            0x1003,
+            4,
+            op("INT_ADD", "unique,8e00,8", "register,38,8", "const,40,8"),
+            op("LOAD", "unique,23d00,8", "const,1b1,8", "unique,8e00,8"),
+            op("COPY", "register,0,8", "unique,23d00,8"),
+        ),
+        insn(0x1007, 2, op("BRANCHIND", None, "register,0,8")),
+        insn(0x1009, 1, op("INT_SUB", REG_RSP, REG_RSP, "const,8,8"), op("CALL", None, "ram,2056380,8")),
+        insn(0x100A, 1, op("RETURN", None, "register,288,8")),
+    )
+    result = pl.lift_body(fn)
+    assert result.holes == []
+    assert result.tail_calls == 1
+    assert result.proven_tail_calls == 0  # lifted by the load rule, not by the balance proof
+    assert pl.site_proof(fn)[0x1007] == {"reason": "rsp not at entry value", "rsp_delta": -8}
+
+
+def test_body_with_no_indirect_jump_records_no_proof():
+    fn = body(
+        insn(0x1000, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,20,8")),
+        insn(0x1003, 1, op("RETURN", None, "register,288,8")),
+    )
+    result = pl.lift_body(fn)
+    assert result.holes == []
+    assert result.proven_tail_calls == 0
+    assert result.unproven_branchind == []
+
+
+def test_site_at_an_undecoded_address_is_a_hole_and_an_unproven_record():
+    fn = thunk_body()
+    fn["insns"] = [i for i in fn["insns"] if i["a"] != 0x1006]
+    result = pl.lift_body(fn, [BSS, RODATA, TEXT])
+    assert "GAP" in result.holes
+    assert pl.site_proof(fn) == {}
+
+
+@pytest.mark.parametrize("malformed", ["ops", "out", "varnode"])
+def test_malformed_pcode_is_a_recorded_hole_not_a_crash(malformed):
+    """An op the emitter cannot read is recorded, and the body never lifts as a tail call."""
+    fn = thunk_body()
+    teardown = next(i for i in fn["insns"] if i["a"] == 0x1005)
+    rsp_op = next(o for o in teardown["ops"] if o.get("out") == REG_RSP)
+    if malformed == "ops":
+        rsp_op["in"] = []
+    elif malformed == "out":
+        rsp_op["in"][1] = "register,20"
+    else:
+        rsp_op["op"] = "NOSUCHOP"
+    result = pl.lift_body(fn, [BSS, RODATA, TEXT])
+    assert result.holes
+    assert result.tail_calls == 0 and result.proven_tail_calls == 0
+
+
+def test_branchind_with_a_recovered_table_stays_a_switch_and_needs_no_proof():
+    """The switch route is unchanged: a table at the site wins over the balance proof."""
+    fn = thunk_body(table=True)
+    fn["jt"] = [{"at": 0x1009, "cases": [0x1000, 0x1020]}]
+    result = pl.lift_body(fn, [BSS, RODATA, TEXT])
+    assert result.holes == []
+    assert "switch i64" in result.ir
+    assert result.proven_tail_calls == 0
+    assert result.unproven_branchind == []
 
 
 def trunc_body(src_size: int, dst_size: int) -> dict:
@@ -913,6 +1173,7 @@ X86_CONVERT = {
     (4, 4): "(uint64_t)(int32_t)_mm_cvttss_si32(_mm_set_ss(v))",
     (4, 8): "(uint64_t)_mm_cvttss_si64(_mm_set_ss(v))",
 }
+
 
 def compile_and_run(tmp_path, source, arch, extra=()):
     exe = tmp_path / f"run-{arch}"
