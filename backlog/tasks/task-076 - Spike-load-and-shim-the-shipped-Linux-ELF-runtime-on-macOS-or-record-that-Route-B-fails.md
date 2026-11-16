@@ -3,10 +3,10 @@ id: TASK-076
 title: >-
   Spike: load and shim the shipped Linux ELF runtime on macOS, or record that
   Route B fails
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-15 23:53'
-updated_date: '2026-11-16 00:10'
+updated_date: '2026-11-16 00:11'
 labels: []
 dependencies: []
 references:
@@ -45,7 +45,43 @@ Deliberately out of scope: lifting the 87741 native bodies (that is Route A), an
 - [ ] #9 Findings recorded in docs/development.md and reproducible through a taskfile alias
 <!-- AC:END -->
 
+## Final Summary
 
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## What was built
+
+- `scripts/elf_shim_probe.py`: stdlib-only ELF64 reader plus four scored legs, no external dependency and no launch.
+- `scripts/native_bind_probe/symprobe.c`: the macOS loader oracle. Every `RTLD_DEFAULT` lookup runs before any `dlopen`, so "a library must be opened first" is provable rather than asserted.
+- `task re:elf-shim`: scores both Apple targets (`x86_64` and `arm64`) into `.tools/elf-shim-<arch>/summary.json`.
+- `tests/test_elf_shim_probe.py`: 71 tests covering the ELF rejections, the loader-probe contract, the curated tables (they may not disagree about a symbol), each leg's pass/fail logic, and the shipped binary's measured shape.
+
+## Measured result
+
+`elf-load-and-shim=feasible`, four legs passing on both targets. The clause that made Route C the fallback did not fire.
+
+| Leg | Result |
+| --- | --- |
+| imports | 303 unique undefined, all reachable; 221 free, 8 alias, 17 locale-alias, 12 compat, 29 ABI-divergent, 10 weak-noop, 6 loader-owned, 0 unclassified |
+| ABI nodes | 12 distinct nodes; 291 live imports bind to one; none stranded |
+| relocations | 470,466 in 5 types (466,320 RELATIVE); 0 COPY; 0 IRELATIVE |
+| strategy | self-relocate 4 PT_LOAD segments; 51,319,793 B of code; 16 B TLS; 21 init hooks; 240 il2cpp_* exports |
+
+## Findings that corrected the notes
+
+- Version binding is real (291 live imports, 258 to GLIBC_2.2.5) and harmless for a different reason than recorded: the contract is with the Linux loader, and Mach-O has no versioning to satisfy.
+- TLS is one DTPMOD64 over a 16-byte PT_TLS, not the TLSDESC cluster assumed.
+- The two classic dlopen blockers, COPY and IRELATIVE, are absent outright.
+- dlsym accepts the unadorned ELF name; 0 of 247 resolvable imports needed the underscored spelling, and `_malloc` itself fails. A hand-written nlist resolver would not get that courtesy.
+- iconv_open/iconv_close exist only in /usr/lib/libiconv.2.dylib; the gettext family has no macOS counterpart at all.
+
+## Not proven, deliberately
+
+Nothing launched, so no claim that the runtime boots, that the 29 ABI-divergent shims behave, that a gettext passthrough is safe, or anything about performance. The 66 shim symbols are a work estimate, not a shim. A `--skip-dyld-probe` run reports `not-scored` rather than `feasible`, because the import legs need the live loader.
+
+## Also in the commit
+
+The probe player's provenance is documented, its import count corrected to 303, and the record made explicit that a universal binary only ever executes its native slice, so an arm64 leg must be scored on Apple silicon. TASK-079 now carries the driver's missing n/a leg status.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
