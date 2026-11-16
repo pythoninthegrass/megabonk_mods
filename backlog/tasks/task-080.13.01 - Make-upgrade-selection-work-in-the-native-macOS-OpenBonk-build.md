@@ -1,7 +1,7 @@
 ---
 id: TASK-080.13.01
 title: Make upgrade selection work in the native macOS OpenBonk build
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-16T21:05:00Z'
 updated_date: '2026-11-16T21:52:00Z'
@@ -45,7 +45,7 @@ The bounded OpenBonk macOS experiment now runs its reconstructed game natively t
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -64,6 +64,8 @@ Continuation: preserve build 10 and first add callback/install-state diagnostics
 Clean native rerun: the same-profile restart now demonstrates keyboard-first and mouse-second awards, but the read-only probe queries stale inventory after a later return to MainMenu. Add a failing return-to-menu probe regression and guard the observation lifecycle, then repeat the combined bounded sequence and restart without resets. No gameplay handler changes are needed.
 
 Validated final private adapter: discover all loaded EventSystems (including inactive/persistent), preserve or add standard module and enable on scene load only. All installation, persistent lifecycle and probe-cleanup regressions pass. Clean native mouse-first/subsequent-keyboard sequence plus prior keyboard-first restart complete; only conventional commit/final task closure remain.
+
+Completed and committed documentation/evidence as 1dbe2c8; all acceptance criteria and Definition of Done items verified. No push or release performed.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -97,3 +99,9 @@ Probe lifecycle regression upgrade-probe-test-red.log reproduces WeaponData.GetL
 
 Clean build-13 upgrade-fixed-04 completes normally with no logged exceptions; measured Code Type ARM64. Same isolated profile loads without reset after the prior runs. Mouse dispatches offer 0 once, Damage Tome 0 -> 1 at stageTime 17.3509; later Down visibly focuses offer 1 (input-5024.png), Enter dispatches it once, Firestaff 1 -> 2 at stageTime 35.30441. Unselected tracked levels stay unchanged. Both offers close, paused=False, stageTime advances to 57.85915 and a third level-up opens. The two-action driver intentionally leaves that third offer unselected; this is not a stuck pause/input state. Driver records both requested actions and exit 0; player records MAC_RESEARCH_COMPLETE. AC4–5 verified. Developer notes and private EXPERIMENT.md now document cause, exact lifecycle, reproduction, evidence, probe correction and remaining parity/build limits. Final markdownlint and git diff --check pass. Sibling overlay remains untouched apart from its pre-existing untracked instruction files; no game-derived files staged.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Verified normal native macOS upgrade input in the private OpenBonk workspace. The scene-only adapter missed the active EventSystem because AlwaysManager moves it into DontDestroyOnLoad before sceneLoaded; discovery now includes loaded persistent/inactive EventSystems without overwriting bindings or adding duplicate handlers. Added failing-before/passing-after Play Mode lifecycle coverage and probe return-to-menu coverage. Native ARM64 evidence demonstrates mouse and visible keyboard focus/confirm, exactly-one awards, normal screen closure/resume, subsequent level-ups and unchanged isolated-profile restarts. Clean build-13 run logs no exceptions. task check passes (2,211 Python tests / one skipped plus remaining checks), both installation/lifecycle/probe fixtures pass, markdownlint and diff checks pass. Documentation/evidence committed as 1dbe2c8. All game-derived sources/assets/binaries remain private; sibling overlay and shipped mod unchanged. Build still reports three existing preparation errors and no full-game parity is claimed.
+<!-- SECTION:FINAL_SUMMARY:END -->
