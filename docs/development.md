@@ -2160,7 +2160,7 @@ Several failures were integration work rather than architecture barriers:
 - The initial player reaches `MainMenu` but has missing localization keys. Reading the preserved Windows localization bundles with the existing exporter and changing the rebuilder's target to StandaloneOSX recovered 17 locales, 867 tables and 19,157 entries. The existing GUID repair restored 51 collection GUIDs across 919 files; collection, GUID and English/Spanish default-description checks passed.
 - Map-generation startup is guarded by `UNITY_ANDROID && !UNITY_EDITOR`. A workspace-only OSX branch starts the existing recovered map coroutine, not the older substitute-arena bootstrap. The existing prepared-scene step supplies tile references and removes unsupported plugin components.
 - Reloading the experiment's own profile initially throws in Newtonsoft's `JsonArrayContract.CreateWrapper`, whose reflected constructor is missing. Explicit `AotHelper` coverage for string collections and the progression dictionaries removes that failure without resetting the profile.
-- Prepared scenes remove unsupported Rewired components, leaving their EventSystem without an active input module. Enabling existing `StandaloneInputModule` components is insufficient when none exists. A candidate private desktop compatibility adapter adds a missing standard module to each scene EventSystem and enables it, preserving existing bindings and avoiding duplicates. An editor regression first reproduced the missing-module failure, then passed installation, default legacy axes, idempotence and binding preservation. This candidate still fails native selection; the editor fixture does not cover the runtime lifecycle.
+- Prepared scenes remove unsupported Rewired components and leave a disabled standard input module. The private desktop adapter must discover loaded EventSystems including persistent objects, add a standard module if absent, and enable it without changing existing bindings. Scanning only the newly loaded scene misses the active persistent EventSystem. Installation-only regression coverage missed this lifecycle; a Play Mode regression now reproduces the persistent-before-callback ordering.
 
 The resulting bundle is universal x86_64/arm64 despite requesting arm64 in the build entry point. Select and measure the running slice rather than calling the artifact arm64-only:
 
@@ -2179,7 +2179,7 @@ The private probe is read-only apart from diagnostic output and a logging-only c
 
 #### Desktop upgrade-input handoff
 
-The candidate's bounded native run completes normally but **still cannot select an upgrade**. Its diagnostic `availableModule=StandaloneInputModule:False:True` means the module exists, is disabled and reports supported; `currentInputModule` remains null. Focused mouse input reaches the offered button, but no `MAC_UPGRADE_CLICK` is recorded, all three tracked upgrade levels remain zero, and `MyTime.paused=True` with the stage timer unchanged. The process exits with `MAC_RESEARCH_COMPLETE` and driver status 0, with no gameplay exception: normal exit is not successful selection. The combined driver never reaches its subsequent-offer keyboard action, so this run proves neither keyboard selection nor a subsequent level-up.
+The scene-only candidate's bounded native run completes normally but **still cannot select an upgrade**. Its diagnostic `availableModule=StandaloneInputModule:False:True` means the module exists, is disabled and reports supported; `currentInputModule` remains null. Focused mouse input reaches the offered button, but no `MAC_UPGRADE_CLICK` is recorded, all three tracked upgrade levels remain zero, and `MyTime.paused=True` with the stage timer unchanged. The process exits with `MAC_RESEARCH_COMPLETE` and driver status 0, with no gameplay exception: normal exit is not successful selection. The combined driver never reaches its subsequent-offer keyboard action, so this run proves neither keyboard selection nor a subsequent level-up.
 
 The retained private experiment directory is named `openbonk-macos-spike-20261116`. Read its `EXPERIMENT.md` and inspect the current scripts before rerunning; early notes there describe intermediate candidates, not necessarily working results.
 
@@ -2191,6 +2191,12 @@ The retained private experiment directory is named `openbonk-macos-spike-2026111
 | `upgrade-input-test-red.log`, `upgrade-input-test-green.log` | Failing-before/passing-after editor evidence, not native award evidence |
 | `MacUpgradeProbe.cs`, `upgrade-input.swift` | Read-only runtime diagnostics and focus-guarded OS input driver; neither is the mod's file-queue harness |
 | `build-10.log`, `upgrade-fixed-01/`, `upgrade-fixed-01-driver.log`, `upgrade-fixed-01-native.txt` | Candidate build, failed native validation, driver outcome and measured ARM64 process |
+| `diagnostic-build-11.app`, `upgrade-lifecycle-01/` | Callback and object-identity evidence establishing missed persistent EventSystem coverage |
+| `MacUpgradeInputLifecycleCheck.cs`, `upgrade-lifecycle-test-red.log`, `upgrade-lifecycle-test-green.log` | Play Mode regression for a disabled EventSystem moved to persistent storage before scene-loaded installation |
+| `build-12.log`, `upgrade-fixed-02/`, `upgrade-fixed-02-native.txt` | Revised adapter's native mouse award/resume evidence and ARM64 measurement; player dies before the subsequent keyboard offer |
+| `upgrade-fixed-03/`, `upgrade-sequence.swift` | Same-profile keyboard-first/subsequent-mouse evidence and movement-aware OS driver |
+| `MacUpgradeProbeCheck.cs`, `upgrade-probe-test-red.log`, `upgrade-probe-test-green.log` | Regression for dropping stale inventory observations after returning to the menu |
+| `build-13.log`, `upgrade-fixed-04/`, `upgrade-fixed-04-native.txt` | Clean same-profile ARM64 mouse-first/subsequent-keyboard validation with the probe guard |
 
 The build entry point refuses an existing output app. Preserve each app under a new name before rebuilding, use a fresh run-output directory, and run only one player against the isolated profile at a time. From the directory containing the private driver, a bounded combined check is:
 
@@ -2200,7 +2206,25 @@ swift upgrade-input.swift "<experiment>" "<new-run-directory-name>" both
 
 The driver passes `-research-upgrades` to enable the probe and `-research-long` for an approximately three-minute smoke deadline. It attempts a measured first-offer mouse click, then waits for a later offer before sending Down/Enter. Verify those actions actually occurred in the driver and player logs; a missing target, death before offers or no subsequent offer is an unmet test precondition, not a passed input path.
 
-TODO: establish why the module is disabled after startup. Log the adapter callback's execution, scene and EventSystem/module instance identities, and enabled/active state before and after installation and through subsequent initialization. Distinguish a later disabling write from a missed callback or a different/persistent EventSystem; the present evidence does not identify the writer or timing. Extend the regression to the reproduced lifecycle before changing the adapter again. Do not mask the cause with an unconditional per-frame enable, invoke the selection handler directly, or force an unpause as input verification. A working result must show the intended upgrade's level increasing exactly once, visible keyboard focus where applicable, normal screen closure/resume, a subsequent level-up and restart against the same isolated profile.
+Callback diagnostics establish a coverage failure, not a later disabling write. `AlwaysManager.Awake` moves its hierarchy into `DontDestroyOnLoad` before activating the EventSystem. By the MainMenu scene-loaded callback, the current EventSystem and its disabled module are already outside that scene's roots. The next scene load enables a different, inactive scene EventSystem while leaving the current persistent one disabled. Discovering all loaded EventSystems, including inactive objects, covers both cases without a per-frame re-enable.
+
+The lifecycle regression was run failing before changing discovery, then passing afterward. It enters real editor Play Mode, moves a disabled module into persistent storage before invoking installation, and checks enabled state, existing submit-binding preservation and idempotence. The original missing-module/default-axis regression also still passes.
+
+The revised adapter's native ARM64 run dispatches one measured mouse click on Firestaff, raises its level from 1 to 2 while the other tracked offers remain at zero, closes the offers and resumes normal gameplay. The stage timer advances from 29.23 to 38.94 seconds before ordinary player death.
+
+A same-profile restart uses `upgrade-sequence.swift` to move between offers using OS keys only. Down visibly focuses the second offer (including its outline and hover scale), and Enter awards Projectile Speed Tome once, closes the screen and resumes gameplay. A subsequent level-up accepts one mouse click for Golden Tome, again awarding once and resuming. That run later returns from the death screen to MainMenu, exposing stale inventory reads in the diagnostic probe rather than the selection handler. A separate failing-before/passing-after editor regression covers dropping inventory observations when the run is gone.
+
+The clean rerun with that probe guard loads the same isolated profile without a reset, runs as ARM64 and completes normally with no logged exceptions. Mouse awards Damage Tome 0 → 1 at stage time 17.35; Down visibly focuses Firestaff on the next offer, and Enter awards it 1 → 2 at 35.30. Each dispatch occurs once, unselected tracked levels stay unchanged, offers close and gameplay resumes. Stage time reaches 57.86 and a third offer opens; the driver intentionally sends no selection to that offer. This is not a stuck input state.
+
+Reproduce the movement-aware sequence from the private experiment directory:
+
+```sh
+swift upgrade-sequence.swift "<experiment>" "<new-run-directory-name>" mouse-first
+```
+
+Use `keyboard-first` to reverse the two selection paths. Both modes retain normal damage, use no award handler or pause override, and run to the smoke deadline. Ordinary death before another offer remains an unmet precondition, not a successful second selection.
+
+Do not invoke the selection handler directly or force an unpause as input verification. A working result must show the intended upgrade's level increasing exactly once, visible keyboard focus where applicable, normal screen closure/resume, a subsequent level-up and restart against the same isolated profile.
 
 This is a useful native-execution and short-combat result, not a full-run, physical-controller, audio, save-parity or rendering-parity result. The source contains approximations and remaining stubs, and the captures show visual defects. It does not replace the shipped-build differential oracle or retire the lifted-runtime route. The next decision should compare measured input, save/restart, longer-run and visual behaviour against the frozen shipped game before adopting the reconstruction as a verification platform.
 

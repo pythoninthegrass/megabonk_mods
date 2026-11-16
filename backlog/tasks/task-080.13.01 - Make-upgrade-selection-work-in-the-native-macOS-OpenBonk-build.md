@@ -4,7 +4,7 @@ title: Make upgrade selection work in the native macOS OpenBonk build
 status: In Progress
 assignee: []
 created_date: '2026-11-16T21:05:00Z'
-updated_date: '2026-11-16T21:29:00Z'
+updated_date: '2026-11-16T21:52:00Z'
 labels:
   - native-macos
   - arm64
@@ -34,17 +34,17 @@ The bounded OpenBonk macOS experiment now runs its reconstructed game natively t
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 A repeatable native macOS test reproduces the blocked level-up selection and records the actual input/UI outcome; wrong focus or invalid target coordinates are distinguished from a game UI failure.
-- [ ] #2 A mouse click on an offered upgrade awards exactly that upgrade once, closes the offer screen and resumes gameplay through the normal UI path, without a direct-handler call or forced unpause substituted for input.
-- [ ] #3 Keyboard navigation visibly focuses offers and the configured confirm action awards exactly the selected upgrade once, closes the offer screen and resumes gameplay.
-- [ ] #4 A bounded native arm64 run demonstrates both selection paths and at least a subsequent level-up without double awards, stuck pause/input state or gameplay exceptions; the isolated profile survives restart without a reset or bypass.
-- [ ] #5 Regression coverage is written first for testable logic, and developer notes document the cause, the required workspace/source adaptations, reproduction evidence and remaining limits without claiming shipped-game parity.
+- [x] #2 A mouse click on an offered upgrade awards exactly that upgrade once, closes the offer screen and resumes gameplay through the normal UI path, without a direct-handler call or forced unpause substituted for input.
+- [x] #3 Keyboard navigation visibly focuses offers and the configured confirm action awards exactly the selected upgrade once, closes the offer screen and resumes gameplay.
+- [x] #4 A bounded native arm64 run demonstrates both selection paths and at least a subsequent level-up without double awards, stuck pause/input state or gameplay exceptions; the isolated profile survives restart without a reset or bypass.
+- [x] #5 Regression coverage is written first for testable logic, and developer notes document the cause, the required workspace/source adaptations, reproduction evidence and remaining limits without claiming shipped-game parity.
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
+- [x] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
@@ -58,6 +58,12 @@ The bounded OpenBonk macOS experiment now runs its reconstructed game natively t
 5. Record cause, reproducible adaptations, evidence and limits in privacy-safe developer notes; run relevant tests and task check. Only finalize criteria and commit after objective validation.
 
 Native validation found the newly created StandaloneInputModule disabled after scene startup. Trace the late initialization/component lifecycle that disables it, add a failing lifecycle regression before changing the adapter, and rerun native mouse/keyboard/subsequent-level checks. Do not treat the passing editor installation fixture as proof of usable runtime input.
+
+Continuation: preserve build 10 and first add callback/install-state diagnostics (scene, current EventSystem/module identities and before/after enabled/active states), without changing selection behaviour. Reproduce once natively to distinguish missed/persistent EventSystem coverage from later disable; write a failing lifecycle regression for the measured cause before the next adapter change. Then rebuild and re-run bounded OS-input verification.
+
+Clean native rerun: the same-profile restart now demonstrates keyboard-first and mouse-second awards, but the read-only probe queries stale inventory after a later return to MainMenu. Add a failing return-to-menu probe regression and guard the observation lifecycle, then repeat the combined bounded sequence and restart without resets. No gameplay handler changes are needed.
+
+Validated final private adapter: discover all loaded EventSystems (including inactive/persistent), preserve or add standard module and enable on scene load only. All installation, persistent lifecycle and probe-cleanup regressions pass. Clean native mouse-first/subsequent-keyboard sequence plus prior keyboard-first restart complete; only conventional commit/final task closure remain.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -78,4 +84,16 @@ The editor red/green regression validates installation, idempotence and binding 
 The bounded upgrade-fixed-01 run has now completed normally: MAC_RESEARCH_COMPLETE and driver exit=0. No MAC_UPGRADE_CLICK or gameplay exception appears in the final log. The driver records its focused first-offer mouse click, but never reaches the subsequent-offer keyboard action. This confirms the candidate still blocks selection rather than leaving native verification running. Next step remains tracing the later disable of the standard input module.
 
 Expanded docs/development.md's native OpenBonk section with the failed candidate outcome, private artifact map, bounded driver invocation, test-precondition caveats and lifecycle investigation checklist. Corrected the earlier adapter description so it is not presented as a working fix. Important precision: the observed native state is a present, supported but disabled module after startup; a later disabling write is only one hypothesis. Callback coverage, persistent/different EventSystem identity and initialization order must be distinguished before naming a writer. Focused markdownlint and git diff --check pass. No new game run or implementation change in this documentation update.
+
+Build 11 diagnostic-only native run upgrade-lifecycle-01 completed. Callback executes, but the active EventSystem (36444, module 41034) already lives in DontDestroyOnLoad before MainMenu sceneLoaded, remains disabled before/after, and is skipped by the scene-root scan. On GeneratedMap load the adapter instead enables a different inactive scene EventSystem (74702/module 80466), leaving the persistent current one unchanged. This establishes missed persistent coverage, not a later disabling writer. AlwaysManager.Awake calls DontDestroyOnLoad before activating its EventSystem.
+
+Added private MacUpgradeInputLifecycleCheck.cs: real editor Play Mode moves a disabled EventSystem with existing custom submit binding to DontDestroyOnLoad before invoking scene-loaded installation. upgrade-lifecycle-test-red.log fails precisely on persistent module still disabled; changing discovery from scene roots to all loaded EventSystems (including inactive) makes upgrade-lifecycle-test-green.log pass enabled/binding/idempotence checks. No selection handler or per-frame re-enable changed. Build 12 is running for native validation. Both repositories' prior work and all baseline apps/profiles preserved.
+
+Build 12 upgrade-fixed-02 completes with one MAC_UPGRADE_CLICK offer=0. Focused measured click selects Firestaff once (level 1 -> 2); Silver Tome/Chunkers remain 0, offers close, MyTime.paused becomes False, and stageTime advances from 29.23187 to 38.93661 before ordinary player death. ARM64 verified in upgrade-fixed-02-native.txt. No gameplay exception observed. AC2 verified; death prevents reaching the subsequent keyboard offer, so AC3–4 remain open. Restarted same app/profile as upgrade-fixed-03 with keyboard-first order and an OS-only movement sequence between offers; no invulnerability or award/pause bypass. Original installation regression still passes (upgrade-input-test-green-02.log). task check passes again: 2,211 Python tests, one skipped plus remaining checks (upgrade-repository-check-02.log).
+
+upgrade-fixed-03 (ARM64, same-profile restart) dispatches exactly two clicks: keyboard offer 1 then subsequent mouse offer 0. Down changes selected offer from Firestaff to Projectile Speed Tome; its hover scale reaches 1.03 and input-3983.png visibly outlines that second offer. Enter awards Projectile Speed Tome 0 -> 1 once (others unchanged), closes offers and resumes time. At stageTime 38.33709 a subsequent offer opens; mouse awards Golden Tome 0 -> 1 once, closes/resumes to stageTime 48.35848 before ordinary death. Driver records both requested actions and exit 0. AC3 verified. Later OS input not attributable to this driver returns the death screen to MainMenu around t145; MacUpgradeProbe's stale WeaponData.GetLevel observation then throws repeatedly. These are probe stack traces, not selection-handler failures. AC4 left open for a clean rerun after a test-first probe lifecycle guard; no unrelated game logic will be changed.
+
+Probe lifecycle regression upgrade-probe-test-red.log reproduces WeaponData.GetLevel -> MacUpgradeProbe.Update failure without a player inventory. The private guard drops stale observations when GameManager/player inventory is gone; upgrade-probe-test-green.log passes. Build 13 succeeds with the same three preparation errors and changes only that observation guard relative to build 12. Preserved candidate-build-12.app. Same-profile mouse-first/subsequent-keyboard clean native rerun upgrade-fixed-04 is running.
+
+Clean build-13 upgrade-fixed-04 completes normally with no logged exceptions; measured Code Type ARM64. Same isolated profile loads without reset after the prior runs. Mouse dispatches offer 0 once, Damage Tome 0 -> 1 at stageTime 17.3509; later Down visibly focuses offer 1 (input-5024.png), Enter dispatches it once, Firestaff 1 -> 2 at stageTime 35.30441. Unselected tracked levels stay unchanged. Both offers close, paused=False, stageTime advances to 57.85915 and a third level-up opens. The two-action driver intentionally leaves that third offer unselected; this is not a stuck pause/input state. Driver records both requested actions and exit 0; player records MAC_RESEARCH_COMPLETE. AC4–5 verified. Developer notes and private EXPERIMENT.md now document cause, exact lifecycle, reproduction, evidence, probe correction and remaining parity/build limits. Final markdownlint and git diff --check pass. Sibling overlay remains untouched apart from its pre-existing untracked instruction files; no game-derived files staged.
 <!-- SECTION:NOTES:END -->
