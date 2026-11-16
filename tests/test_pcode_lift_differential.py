@@ -47,7 +47,12 @@ FUNCTIONS = {
     "f_divpd": ("vv", "v"),
     "f_divps": ("ff", "f"),
     "f_divps_mem": ("fp", "f"),
+    "f_minps": ("ff", "f"),
+    "f_maxps": ("ff", "f"),
 }
+# Returned lane by lane rather than computed, so a lifted version that picked the other
+# source would differ in bits the tolerant comparison below forgives.
+STRICT_LANES = {"f_minps", "f_maxps"}
 RET_MASK = {
     "u64": "0xffffffffffffffffull",
     "i64": "0xffffffffffffffffull",
@@ -263,9 +268,10 @@ def harness_source(syms):
                 f"{ty} native[{n}]; {ty} __attribute__((vector_size(16))) r = {name}({', '.join(call)}); memcpy(native, &r, 16);"
             )
             lines.append("int diff = 0;")
+            either_nan = "" if name in STRICT_LANES else " && !(got[l] != got[l] && native[l] != native[l])"
             lines.append(
                 f"for (int l = 0; l < {n}; l++)"
-                f" if (memcmp(&got[l], &native[l], sizeof ({ty})) && !(got[l] != got[l] && native[l] != native[l])) diff = 1;"
+                f" if (memcmp(&got[l], &native[l], sizeof ({ty})){either_nan}) diff = 1;"
             )
             cond = "if (diff)"
         elif ret == "d":

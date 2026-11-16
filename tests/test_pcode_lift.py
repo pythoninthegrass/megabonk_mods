@@ -19,6 +19,13 @@ LLVM = Path("/opt/homebrew/opt/llvm/bin")
 requires_llvm = pytest.mark.skipif(not (LLVM / "opt").exists(), reason="LLVM toolchain absent")
 
 
+requires_rosetta = pytest.mark.skipif(
+    not (LLVM / "clang").exists()
+    or subprocess.run(["arch", "-x86_64", "/bin/echo"], capture_output=True).returncode != 0,
+    reason="needs the LLVM toolchain and an x86-64 runtime to compare against",
+)
+
+
 def op(name, out, *ins, **extra):
     return {"op": name, "out": out, "in": list(ins), **extra}
 
@@ -112,24 +119,26 @@ def test_branchind_is_recorded_as_a_hole():
 
 def test_callother_is_recorded_as_a_hole_with_its_name():
     fn = body(
-        insn(0x1000, 4, op("CALLOTHER", None, "const,5,4", REG_EDI, user="minps")),
+        insn(0x1000, 4, op("CALLOTHER", None, "const,5,4", REG_EDI, user="lzcnt")),
         insn(0x1004, 1, op("RETURN", None, "register,288,8")),
     )
-    assert pl.lift_body(fn).holes == ["CALLOTHER:minps"]
+    assert pl.lift_body(fn).holes == ["CALLOTHER:lzcnt"]
 
 
 REG_XMM0, REG_XMM1, REG_XMM2 = "register,1200,16", "register,1240,16", "register,1280,16"
+# The Ghidra userop ids as the varnode prints them for these instructions in the shipped binary.
+DIVPS_ID, DIVPD_ID, MINPS_ID, MAXPS_ID = "97", "96", "9d", "9b"
 XMM0_BYTES, XMM1_BYTES, XMM2_BYTES = 0x1200, 0x1240, 0x1280
 
 
-def packed_div(user, op_id, dst, src, addr=0x1000):
-    """The shape Ghidra gives DIVPS/DIVPD: the destination twice, the source once, 16 bytes each."""
+def packed_call(user, op_id, dst, src, addr=0x1000):
+    """The shape Ghidra gives the packed SSE maths ops: the destination twice, the source once, 16 bytes each."""
     return insn(addr, 3, op("CALLOTHER", dst, f"const,{op_id},4", dst, src, user=user))
 
 
-def divided_body(user, op_id, dst=REG_XMM0, src=REG_XMM2):
+def packed_body(user, op_id, dst=REG_XMM0, src=REG_XMM2):
     return body(
-        packed_div(user, op_id, dst, src),
+        packed_call(user, op_id, dst, src),
         insn(0x1003, 1, op("RETURN", None, "register,288,8")),
     )
 
@@ -153,21 +162,21 @@ def origin(ir, name, depth=8):
 
 
 def test_divps_lifts_four_float_lanes_without_a_hole():
-    result = pl.lift_body(divided_body("divps", 97))
+    result = pl.lift_body(packed_body("divps", DIVPS_ID))
     assert result.holes == []
     assert result.ir.count("= fdiv float") == 4
     assert "fdiv double" not in result.ir
 
 
 def test_divpd_lifts_two_double_lanes_without_a_hole():
-    result = pl.lift_body(divided_body("divpd", 96))
+    result = pl.lift_body(packed_body("divpd", DIVPD_ID))
     assert result.holes == []
     assert result.ir.count("= fdiv double") == 2
     assert "fdiv float" not in result.ir
 
 
 def test_packed_division_divides_the_destination_by_the_source():
-    result = pl.lift_body(divided_body("divpd", 96))
+    result = pl.lift_body(packed_body("divpd", DIVPD_ID))
     line = next(l for l in result.ir.splitlines() if "fdiv double" in l)
     dividend, divisor = (t.strip().rstrip(",") for t in line.split("fdiv double")[1].split(","))
     assert str(XMM0_BYTES) in origin(result.ir, dividend)
@@ -175,7 +184,7 @@ def test_packed_division_divides_the_destination_by_the_source():
 
 
 def test_packed_division_result_lands_back_in_the_destination():
-    result = pl.lift_body(divided_body("divps", 97))
+    result = pl.lift_body(packed_body("divps", DIVPS_ID))
     stores = [l for l in result.ir.splitlines() if l.strip().startswith("store i128")]
     assert len(stores) == 1
     pointer = stores[0].split("ptr")[1].split(",")[0].strip()
@@ -183,7 +192,7 @@ def test_packed_division_result_lands_back_in_the_destination():
 
 
 def test_packed_division_from_a_temporary_source_lifts_clean():
-    result = pl.lift_body(divided_body("divpd", 96, src="unique,d600,16"))
+    result = pl.lift_body(packed_body("divpd", DIVPD_ID, src="unique,d600,16"))
     assert result.holes == []
     assert result.ir.count("= fdiv double") == 2
 
@@ -226,28 +235,23 @@ def test_distant_unique_temps_get_separate_slots():
 
 
 def test_packed_division_of_an_unexpected_width_stays_a_hole():
-    assert pl.lift_body(divided_body("divps", 97, dst="register,1200,32", src="register,1280,32")).holes == ["CALLOTHER:divps"]
-    assert pl.lift_body(divided_body("divps", 97, src="register,1280,8")).holes == ["CALLOTHER:divps"]
+    assert pl.lift_body(packed_body("divps", DIVPS_ID, dst="register,1200,32", src="register,1280,32")).holes == ["CALLOTHER:divps"]
+    assert pl.lift_body(packed_body("divps", DIVPS_ID, src="register,1280,8")).holes == ["CALLOTHER:divps"]
 
 
 def test_packed_division_with_an_unmatched_destination_stays_a_hole():
     fn = body(
-        insn(0x1000, 3, op("CALLOTHER", REG_XMM1, "const,97,4", REG_XMM0, REG_XMM2, user="divps")),
+        insn(0x1000, 3, op("CALLOTHER", REG_XMM1, f"const,{DIVPS_ID},4", REG_XMM0, REG_XMM2, user="divps")),
         insn(0x1003, 1, op("RETURN", None, "register,288,8")),
     )
     assert pl.lift_body(fn).holes == ["CALLOTHER:divps"]
 
 
-def test_minps_and_maxps_are_still_holes():
-    for user in ("minps", "maxps"):
-        assert pl.lift_body(divided_body(user, 93)).holes == [f"CALLOTHER:{user}"]
-
-
 @requires_llvm
 def test_packed_division_verifies():
     fn = body(
-        packed_div("divps", 97, REG_XMM0, REG_XMM2),
-        packed_div("divpd", 96, REG_XMM1, "unique,d600,16", addr=0x1003),
+        packed_call("divps", DIVPS_ID, REG_XMM0, REG_XMM2),
+        packed_call("divpd", DIVPD_ID, REG_XMM1, "unique,d600,16", addr=0x1003),
         insn(0x1006, 1, op("RETURN", None, "register,288,8")),
     )
     result = pl.lift_body(fn)
@@ -257,7 +261,7 @@ def test_packed_division_verifies():
 
 @requires_llvm
 def test_packed_division_compiles_for_arm64(tmp_path):
-    result = pl.lift_body(divided_body("divps", 97))
+    result = pl.lift_body(packed_body("divps", DIVPS_ID))
     assert result.holes == []
     ir = pl.module_for([result])
     obj = tmp_path / "o.o"
@@ -269,6 +273,227 @@ def test_packed_division_compiles_for_arm64(tmp_path):
     )
     assert proc.returncode == 0 and obj.stat().st_size > 0
     assert proc.stderr == ""
+
+
+def packed_minmax_reference(first, second, lanes, lane_bytes, lower):
+    """The x86 rule, written out: a lane keeps the first source only while that comparison holds.
+
+    NaN compares false against everything including itself, and zeros of either sign compare
+    equal, so those lanes take the second source. Winners are copied bit for bit, so a NaN
+    payload and the sign of a zero survive exactly as the instruction returns them.
+    """
+    fmt = {4: "f", 8: "d"}[lane_bytes]
+    out = bytearray()
+    for index in range(lanes):
+        at = index * lane_bytes
+        a, = struct.unpack_from(fmt, first, at)
+        b, = struct.unpack_from(fmt, second, at)
+        first_wins = (a < b) if lower else (a > b)
+        out += first[at : at + lane_bytes] if first_wins else second[at : at + lane_bytes]
+    return bytes(out)
+
+
+PATTERNS = [0x00000000, 0x80000000, 0x3F800000, 0x40000000, 0xBF800000, 0x7F800000, 0x7FC00000, 0x7FC01234]
+
+
+def lanes_of(words):
+    return struct.pack("<4I", *words)
+
+
+def packed_cases(lower):
+    """Every ordered pair of patterns, rotated across the four lanes of 64 vector pairs."""
+    cases = []
+    for row in range(len(PATTERNS) ** 2):
+        first = lanes_of([PATTERNS[(row + k) % len(PATTERNS)] for k in range(4)])
+        second = lanes_of([PATTERNS[(2 * row + k) % len(PATTERNS)] for k in range(4)])
+        cases.append((first, second, packed_minmax_reference(first, second, 4, 4, lower)))
+    return cases
+
+
+PACKED_DRIVER = r"""
+#include <stdint.h>
+#include <string.h>
+#include <stdio.h>
+{sse}
+{extern}
+static const uint64_t cases[] = {{{rows}}};
+int main(void) {{
+  unsigned char reg[8192];
+  int bad = 0;
+  unsigned n = (unsigned)(sizeof cases / sizeof *cases / 6);
+  for (unsigned i = 0; i < n; i++) {{
+    const uint64_t *c = cases + i * 6;
+    uint64_t got[2];
+    memset(reg, 0, sizeof reg);
+    memcpy(reg + 0x{dst:x}, c, 16);
+    memcpy(reg + 0x{src:x}, c + 2, 16);
+    {call}
+    {got}
+    if (got[0] != c[4] || got[1] != c[5]) {{
+      bad++;
+      printf("case %u got %016llx%016llx want %016llx%016llx\n", i,
+             (unsigned long long)got[0], (unsigned long long)got[1],
+             (unsigned long long)c[4], (unsigned long long)c[5]);
+    }}
+  }}
+  printf("bad=%d cases=%u\n", bad, n);
+  return 0;
+}}
+"""
+
+
+def packed_driver(cases, sse, extern, call, got):
+    rows = ", ".join(f"0x{w:016x}" for case in cases for w in struct.unpack("<6Q", b"".join(case)))
+    return PACKED_DRIVER.format(
+        sse=sse, extern=extern, call=call, got=got, rows=rows, dst=XMM0_BYTES, src=XMM2_BYTES
+    )
+
+
+def run_packed_on(tmp_path, source, arch, extra=()):
+    return [line for line in compile_and_run(tmp_path, source, arch, extra).splitlines() if "got" in line]
+
+
+def run_packed_lifted(tmp_path, result, cases):
+    """Runs each (first, second, want) pair through the lifted function via xmm0 and xmm2."""
+    obj = tmp_path / "packed.o"
+    proc = subprocess.run(
+        [LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", obj, "-"],
+        input=pl.module_for([result]),
+        text=True,
+        capture_output=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    source = tmp_path / "packed-arm64.c"
+    source.write_text(
+        packed_driver(
+            cases,
+            sse="",
+            extern="extern void sub_1000(unsigned char *reg);",
+            call="sub_1000(reg);",
+            got=f"memcpy(got, reg + 0x{XMM0_BYTES:x}, 16);",
+        )
+    )
+    return run_packed_on(tmp_path, source, "arm64", [obj])
+
+
+def run_packed_on_x86(tmp_path, cases, intrinsic):
+    """The reference is only an expectation until the instruction itself agrees with it."""
+    source = tmp_path / "packed-x86_64.c"
+    source.write_text(
+        packed_driver(
+            cases,
+            sse="#include <xmmintrin.h>\n#include <emmintrin.h>",
+            extern="",
+            call=f"__m128 x, y; memcpy(&x, reg + 0x{XMM0_BYTES:x}, 16); memcpy(&y, reg + 0x{XMM2_BYTES:x}, 16);"
+            f" __m128 r = {intrinsic}(x, y);",
+            got="memcpy(got, &r, 16);",
+        )
+    )
+    return run_packed_on(tmp_path, source, "x86_64")
+
+
+def test_minps_lifts_four_float_lanes_without_a_hole():
+    result = pl.lift_body(packed_body("minps", MINPS_ID))
+    assert result.holes == []
+    assert result.ir.count("= fcmp olt float") == 4
+    assert result.ir.count("= select i1") == 4
+    assert "fcmp ogt" not in result.ir
+    assert "minnum" not in result.ir
+
+
+def test_maxps_lifts_four_float_lanes_without_a_hole():
+    result = pl.lift_body(packed_body("maxps", MAXPS_ID))
+    assert result.holes == []
+    assert result.ir.count("= fcmp ogt float") == 4
+    assert result.ir.count("= select i1") == 4
+    assert "fcmp olt" not in result.ir
+    assert "maxnum" not in result.ir
+
+
+def test_minps_reads_both_packed_sources():
+    result = pl.lift_body(packed_body("minps", MINPS_ID))
+    line = next(l for l in result.ir.splitlines() if "fcmp olt float" in l)
+    first, second = (t.strip().rstrip(",") for t in line.split("fcmp olt float")[1].split(","))
+    assert str(XMM0_BYTES) in origin(result.ir, first)
+    assert str(XMM2_BYTES) in origin(result.ir, second)
+
+
+def test_maxps_result_lands_back_in_the_destination():
+    result = pl.lift_body(packed_body("maxps", MAXPS_ID))
+    stores = [l for l in result.ir.splitlines() if l.strip().startswith("store i128")]
+    assert len(stores) == 1
+    pointer = stores[0].split("ptr")[1].split(",")[0].strip()
+    assert f"i64 {XMM0_BYTES}" in producer(result.ir, pointer)
+
+
+def test_minps_in_the_shape_the_binary_uses_lifts_clean():
+    """Every shipped instance reads a destination against xmm0, as here."""
+    assert pl.lift_body(packed_body("minps", MINPS_ID, dst=REG_XMM1, src=REG_XMM0)).holes == []
+    assert pl.lift_body(packed_body("maxps", MAXPS_ID, dst=REG_XMM1, src=REG_XMM0)).holes == []
+
+
+def test_packed_minmax_of_an_unexpected_width_stays_a_hole():
+    assert (
+        pl.lift_body(packed_body("minps", MINPS_ID, dst="register,1200,32", src="register,1280,32")).holes
+        == ["CALLOTHER:minps"]
+    )
+    assert pl.lift_body(packed_body("maxps", MAXPS_ID, src="register,1280,8")).holes == ["CALLOTHER:maxps"]
+
+
+def test_packed_minmax_with_another_destination_stays_a_hole():
+    fn = body(
+        insn(0x1000, 3, op("CALLOTHER", REG_XMM1, f"const,{MINPS_ID},4", REG_XMM0, REG_XMM2, user="minps")),
+        insn(0x1003, 1, op("RETURN", None, "register,288,8")),
+    )
+    assert pl.lift_body(fn).holes == ["CALLOTHER:minps"]
+
+
+@requires_llvm
+@pytest.mark.parametrize("user,op_id", [("minps", MINPS_ID), ("maxps", MAXPS_ID)])
+def test_packed_minmax_verifies(user, op_id):
+    result = pl.lift_body(packed_body(user, op_id))
+    assert result.holes == []
+    assert verify(pl.module_for([result])).returncode == 0
+
+
+@requires_llvm
+@pytest.mark.parametrize("user,op_id,lower", [("minps", MINPS_ID, True), ("maxps", MAXPS_ID, False)])
+def test_packed_minmax_keeps_the_first_source_only_while_it_compares(tmp_path, user, op_id, lower):
+    mismatches = run_packed_lifted(tmp_path, pl.lift_body(packed_body(user, op_id)), packed_cases(lower))
+    assert mismatches == []
+
+
+SECOND_SOURCE = [
+    (0x00000000, 0x80000000),
+    (0x80000000, 0x00000000),
+    (0x00000000, 0x00000000),
+    (0x7FC00000, 0x3F800000),
+    (0x3F800000, 0x7FC00000),
+    (0x7FC00000, 0x7FC01234),
+    (0x7FC01234, 0x7FC00000),
+    (0x7F800000, 0x7FC00000),
+    (0x7FC00000, 0xFF800000),
+]
+
+
+@requires_llvm
+@pytest.mark.parametrize("user,op_id", [("minps", MINPS_ID), ("maxps", MAXPS_ID)])
+def test_packed_minmax_returns_the_second_source_for_nan_and_signed_zero(tmp_path, user, op_id):
+    """Neither comparison holds for two zeros or for a NaN on either side, so the second source wins.
+
+    The wanted bits are written out rather than derived: the second vector, payload and sign included.
+    """
+    cases = [
+        (lanes_of([first] * 4), lanes_of([second] * 4), lanes_of([second] * 4))
+        for first, second in SECOND_SOURCE
+    ]
+    assert run_packed_lifted(tmp_path, pl.lift_body(packed_body(user, op_id)), cases) == []
+
+
+@requires_rosetta
+@pytest.mark.parametrize("user,intrinsic,lower", [("minps", "_mm_min_ps", True), ("maxps", "_mm_max_ps", False)])
+def test_the_packed_reference_matches_the_real_instruction(tmp_path, user, intrinsic, lower):
+    assert run_packed_on_x86(tmp_path, packed_cases(lower), intrinsic) == []
 
 
 def test_unknown_opcode_is_a_hole_not_a_crash():
@@ -523,13 +748,6 @@ X86_CONVERT = {
     (4, 4): "(uint64_t)(int32_t)_mm_cvttss_si32(_mm_set_ss(v))",
     (4, 8): "(uint64_t)_mm_cvttss_si64(_mm_set_ss(v))",
 }
-
-requires_rosetta = pytest.mark.skipif(
-    not (LLVM / "clang").exists()
-    or subprocess.run(["arch", "-x86_64", "/bin/echo"], capture_output=True).returncode != 0,
-    reason="needs the LLVM toolchain and an x86-64 runtime to compare against",
-)
-
 
 def compile_and_run(tmp_path, source, arch, extra=()):
     exe = tmp_path / f"run-{arch}"

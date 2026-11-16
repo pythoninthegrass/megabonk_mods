@@ -49,6 +49,7 @@ FLOAT_UNARY_INTRINSIC = {
 OVERFLOW_INTRINSIC = {"INT_CARRY": "uadd", "INT_SCARRY": "sadd", "INT_SBORROW": "ssub"}
 FLOAT_TYPES = {4: "float", 8: "double"}
 PACKED_DIVISION = {"divps": (4, 4), "divpd": (2, 8)}
+PACKED_MINMAX = {"minps": (4, 4, "olt"), "maxps": (4, 4, "ogt")}
 PACKED_WIDTH = 16
 # Ghidra's unique-space offsets are sparse; a temporary's slot is at least this wide, so it can hold a 256-bit value.
 UNIQUE_STRIDE = 32
@@ -72,8 +73,8 @@ def parse_varnode(text: str) -> tuple[str, int, int]:
     return space, int(offset, 16), int(size)
 
 
-def is_packed_division(out: str | None, ins: list[str]) -> bool:
-    """DIVPS and DIVPD arrive as destination = destination / source, every varnode 16 bytes wide."""
+def is_packed_lane_op(out: str | None, ins: list[str]) -> bool:
+    """The packed SSE ops arrive as destination = destination <op> source, every varnode 16 bytes wide."""
     return (
         out is not None
         and len(ins) >= 3
@@ -318,9 +319,10 @@ class BodyLifter:
             return True
         elif name == "CALLOTHER":
             user = op.get("user", "?")
-            lanes = PACKED_DIVISION.get(user)
-            if lanes and is_packed_division(out, ins):
-                self.packed_division(out, ins[2], *lanes)
+            if user in PACKED_DIVISION and is_packed_lane_op(out, ins):
+                self.packed_division(out, ins[2], *PACKED_DIVISION[user])
+            elif user in PACKED_MINMAX and is_packed_lane_op(out, ins):
+                self.packed_minmax(out, ins[2], *PACKED_MINMAX[user])
             else:
                 self.holes.append(f"CALLOTHER:{user}")
         else:
@@ -381,13 +383,34 @@ class BodyLifter:
         """DIVPS and DIVPD: each lane of the destination is replaced by that lane divided by the source lane."""
         ft, bits, total = FLOAT_TYPES[lane_bytes], lane_bytes * 8, PACKED_WIDTH * 8
         dividend, divisor = self.read(out), self.read(src)
-        result = "0"
+        pieces = []
         for index in range(lanes):
             a = self.as_float(self.lane(dividend, total, index, bits), lane_bytes)
             b = self.as_float(self.lane(divisor, total, index, bits), lane_bytes)
             quotient = self.tmp()
             self.emit(f"{quotient} = fdiv {ft} {a}, {b}")
-            piece = self.fit(self.from_float(quotient, lane_bytes), bits, total)
+            pieces.append(self.fit(self.from_float(quotient, lane_bytes), bits, total))
+        self.merge_lanes(out, pieces, bits, total)
+
+    def packed_minmax(self, out: str, src: str, lanes: int, lane_bytes: int, predicate: str) -> None:
+        """MINPS and MAXPS: a lane keeps the first source only while it strictly compares with the second."""
+        ft, bits, total = FLOAT_TYPES[lane_bytes], lane_bytes * 8, PACKED_WIDTH * 8
+        first, second = self.read(out), self.read(src)
+        pieces = []
+        for index in range(lanes):
+            a, b = self.lane(first, total, index, bits), self.lane(second, total, index, bits)
+            fa, fb = self.as_float(a, lane_bytes), self.as_float(b, lane_bytes)
+            holds = self.tmp()
+            self.emit(f"{holds} = fcmp {predicate} {ft} {fa}, {fb}")
+            chosen = self.tmp()
+            self.emit(f"{chosen} = select i1 {holds}, i{bits} {a}, i{bits} {b}")
+            pieces.append(self.fit(chosen, bits, total))
+        self.merge_lanes(out, pieces, bits, total)
+
+    def merge_lanes(self, out: str, pieces: list[str], bits: int, total: int) -> None:
+        """Assembles per-lane results, each already widened to the packed width, into one value."""
+        result = "0"
+        for index, piece in enumerate(pieces):
             if index:
                 shifted = self.tmp()
                 self.emit(f"{shifted} = shl i{total} {piece}, {index * bits}")

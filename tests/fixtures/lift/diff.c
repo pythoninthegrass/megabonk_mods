@@ -100,3 +100,29 @@ __attribute__((vector_size(16))) float f_divps_mem(__attribute__((vector_size(16
     for (int i = 0; i < 4; i++) b[i] = p[i];
     return a / b;
 }
+
+/* The x86 pack min/max rule lane by lane. The pragma is what keeps -O1 on the packed
+   minps/maxps; without it clang scalarizes the loop to minss/maxss. */
+__attribute__((vector_size(16))) float f_minps(__attribute__((vector_size(16))) float a,
+                                               __attribute__((vector_size(16))) float b) {
+    float x[4], y[4], r[4];
+    __builtin_memcpy(x, &a, 16);
+    __builtin_memcpy(y, &b, 16);
+#pragma clang loop vectorize(enable) interleave(enable)
+    for (int i = 0; i < 4; i++) r[i] = x[i] < y[i] ? x[i] : y[i];
+    __attribute__((vector_size(16))) float o;
+    __builtin_memcpy(&o, r, 16);
+    return o;
+}
+
+__attribute__((vector_size(16))) float f_maxps(__attribute__((vector_size(16))) float a,
+                                               __attribute__((vector_size(16))) float b) {
+    float x[4], y[4], r[4];
+    __builtin_memcpy(x, &a, 16);
+    __builtin_memcpy(y, &b, 16);
+#pragma clang loop vectorize(enable) interleave(enable)
+    for (int i = 0; i < 4; i++) r[i] = x[i] > y[i] ? x[i] : y[i];
+    __attribute__((vector_size(16))) float o;
+    __builtin_memcpy(&o, r, 16);
+    return o;
+}
