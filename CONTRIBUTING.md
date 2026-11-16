@@ -24,11 +24,11 @@ agreed before code is written, and keep one topic per pull request.
 ## Setup
 
 [mise](https://mise.jdx.dev) pins the toolchain in `.tool-versions` (task, uv,
-Python 3.13, .NET 10, Go 1.27, Deno, ruff, bun, jq); `mise install` fetches them.
+Python 3.13, .NET 10, Go 1.27, Deno, ruff, bun, jq).
 
 ```sh
-cp .env.example .env    # your local game paths; never committed
-uv sync
+mise install    # toolchain from .tool-versions; provides task itself
+task setup      # .env, uv venv, Go modules, submodules, site deps; safe to rerun
 ```
 
 The mod needs a Steam copy of the **Windows** game build with BepInEx 6 IL2CPP

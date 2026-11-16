@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+tasks:
+  default:
+    desc: "Bring a fresh clone to a working state; every step skips itself when current"
+    summary: |
+      Usage: task setup
+
+      Covers the mise toolchain, .env, the uv virtualenv, Go modules, the
+      thps2-tools submodule and the site's npm dependencies. Each step
+      fingerprints its inputs under .task/, so reruns are near-free and a
+      half-done setup completes on the next run. `task` itself comes from
+      mise, so the very first run on a bare machine needs `mise install`.
+    cmds:
+      - task: toolchain
+      - task: env
+      - task: python
+      - task: submodules
+      - task: go
+      - task: site
+
+  toolchain:
+    desc: "Install the toolchain pinned in .tool-versions when it changes"
+    sources:
+      - .tool-versions
+    cmds:
+      - mise install --yes
+
+  env:
+    desc: "Create .env from .env.example when missing; an existing .env is never touched"
+    status:
+      - test -f .env
+    cmds:
+      - cp .env.example .env
+      - echo "created .env from .env.example; set your local game paths"
+
+  python:
+    desc: "Sync the uv-managed virtualenv when pyproject.toml or uv.lock changes"
+    sources:
+      - pyproject.toml
+      - uv.lock
+    generates:
+      - .venv/pyvenv.cfg
+    cmds:
+      - uv sync
+
+  submodules:
+    desc: "Check out the thps2-tools submodule when missing or .gitmodules changes"
+    sources:
+      - .gitmodules
+    generates:
+      - tools/thps2-tools/common.py
+    cmds:
+      - git submodule update --init --recursive
+
+  go:
+    desc: "Download the installer's Go module dependencies when go.mod or go.sum changes"
+    dir: go
+    sources:
+      - go.mod
+      - go.sum
+    cmds:
+      - go mod download
+
+  site:
+    desc: "Install the site's npm dependencies (delegates to the fingerprinted site:install)"
+    cmds:
+      - task: :site:install

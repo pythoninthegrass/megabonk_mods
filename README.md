@@ -24,12 +24,14 @@ Install the toolchain in [modding setup](docs/modding-setup.md) and
 Requirements: [mise](https://mise.jdx.dev) (verified with 2026.10.15) installs the toolchain pinned in `.tool-versions`, including uv 0.11.32, Python 3.13, Task, .NET 10 and Go; run `mise install` once. uv 0.11.32 is the minimum: the package builds with `uv_build>=0.11.32,<0.12`, which needs a matching uv.
 
 ```sh
-mise install                         # pinned toolchain from .tool-versions
-cp .env.example .env                 # configure your local game paths
-uv sync
+mise install                         # pinned toolchain from .tool-versions (provides task)
+task setup                           # .env, uv venv, Go modules, submodules, site deps
 task mod:build                       # builds and deploys into your game install
 task game:run
 ```
+
+`task setup` fingerprints every step, so it is safe to rerun after a pull;
+it finishes an interrupted setup and otherwise does nothing.
 
 On macOS with **r2modmac**, install BepInExPack IL2CPP and Apply the profile,
 then quit Megabonk and run this before the first modded launch:
