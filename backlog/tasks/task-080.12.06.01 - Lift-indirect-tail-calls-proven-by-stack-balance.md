@@ -1,9 +1,10 @@
 ---
 id: TASK-080.12.06.01
 title: Lift indirect tail calls proven by stack balance
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-16T19:23:00Z'
+updated_date: '2026-11-16T23:26:00Z'
 labels:
   - native-macos
   - arm64
@@ -30,18 +31,38 @@ BRANCHIND with no recovered jump table is 152 and 144 of the remaining holes in 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Before any emitter change, the proof is measured on the seed-81 and seed-82 BRANCHIND bodies and the counts proven, unproven and untracked-rsp are recorded with a reason for each unproven body; the run stops and reports if the unproven share makes the slice not worth continuing.
-- [ ] #2 The emitter lifts a BRANCHIND as an indirect call followed by a return only when rsp is proven equal to its entry value on every path into the site; every other BRANCHIND remains a recorded hole, and an inconsistent-path or untrackable-rsp case never lifts.
-- [ ] #3 Differential tests written first compare lifted arm64 against native arm64 for a synthetic C tail call through a function-pointer slot; a stack-unbalanced counter-example stays a BRANCHIND hole and a malformed body fails safely.
-- [ ] #4 Full reruns of seeds 81 and 82 (5,000 bodies per class, same binary and options as the pshuflw reruns) write to new .tools/lift-probe-tailcall-{81,82} directories without replacing baselines; all 15,000 bodies per run decode, verify and compile for arm64 with no failure or missing body.
-- [ ] #5 Comparing every address, size and hole list against the pshuflw reruns shows the only changed bodies are BRANCHIND carriers that lose the hole; every other body is unchanged, and the report lists each remaining BRANCHIND body with the reason it lacked proof.
-- [ ] #6 docs/development.md reports the new hole counts per seed, the proof rule and its limits.
+- [x] #1 Before any emitter change, the proof is measured on the seed-81 and seed-82 BRANCHIND bodies and the counts proven, unproven and untracked-rsp are recorded with a reason for each unproven body; the run stops and reports if the unproven share makes the slice not worth continuing.
+- [x] #2 The emitter lifts a BRANCHIND as an indirect call followed by a return when rsp is proven equal to its entry value on every path into the site and the target is read from memory, or when the original load-traced rule applies; every other BRANCHIND remains a recorded hole, and an inconsistent-path or untrackable-rsp case never lifts on the proof.
+- [x] #3 Differential tests written first compare lifted arm64 against native arm64 for a synthetic C tail call through a function-pointer slot; a stack-unbalanced counter-example stays a BRANCHIND hole and a malformed body fails safely.
+- [x] #4 Full reruns of seeds 81 and 82 (5,000 bodies per class, same binary and options as the pshuflw reruns) write to new .tools/lift-probe-tailcall-{81,82} directories without replacing baselines; all 15,000 bodies per run decode, verify and compile for arm64 with no failure or missing body.
+- [x] #5 Comparing every address, size and hole list against the pshuflw reruns shows the only changed bodies are BRANCHIND carriers that lose the hole; every other body is unchanged, and the report lists each remaining BRANCHIND body with the reason it lacked proof.
+- [x] #6 docs/development.md reports the new hole counts per seed, the proof rule and its limits.
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Deviation from the original criterion #2, recorded at close: it said to lift only when rsp is proven balanced. The unattended run found that rule regressed criterion #5 (the old straight-line load rule already lifted some sites the proof does not cover) and kept the load rule as a floor, so the proof only adds lifted sites. Review then found balance alone is unsound: a frameless function with an unrecovered switch also has rsp at its entry value, and the run had rewritten four existing tests to fit. The fix requires the target to be read from memory (a LOAD or a COPY from a fixed slot) in addition to the proof, restores those four tests verbatim and corrects a fixture that modelled the slot read as its address. Criterion #2 above is reworded to the rule as shipped.
+
+Run history: the unattended run (3 launches) quit twice mid-turn on tool-less narration and shipped a regression on its first full seed run (BRANCHIND hole bodies 152 to 298 and 144 to 391) before correction; its own summary reported criterion #5 clean. Every number in the final summary was re-derived independently from the saved bodies.jsonl files.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Lowers a BRANCHIND with no recovered jump table as an indirect call followed by a return when rsp is proven at its entry value on every path into the site and the target is read from memory (a LOAD or a COPY from a fixed slot), keeping the original load-traced rule as a floor. A computed or undefined target, an inconsistent path or an untrackable rsp stays a recorded hole.
+
+Measured on the seed-81 and seed-82 draws (15,000 bodies each, same binary): 922 and 860 sites proven; BRANCHIND hole bodies fall 152 to 11 and 144 to 26; hole-free bodies rise 14,846 to 14,987 and 14,853 to 14,971. Against the pshuflw baselines the only changed bodies are 141 and 118 BRANCHIND carriers losing the hole; no other hole list, address or size changed, and all bodies decode, verify and compile for arm64. Every newly lifted site reads its target from a fixed slot; none is switch-shaped. Requiring a memory-read target changes no body on these draws. Final evidence is in .tools/lift-probe-tailcall4-{81,82} (earlier iterations in tailcall-, tailcall2- and tailcall3-); scripts/branchind_report.py writes the per-site census.
+
+Tests: existing tests unchanged (the diff to them is empty); new tests cover the balanced slot-load tail call, the unbalanced and computed counter-examples and a branch out of the dump. task check passes on main. Commits 2e08d77, 4c7fd88 and 8e49cc8, merged to main by fast-forward.
+
+Limits: frames restored through leave or lea rsp stay untrackable holes (11 and 26 bodies keep a BRANCHIND hole); the seed-81 and seed-82 shapes were only measured on these draws.
+<!-- SECTION:FINAL_SUMMARY:END -->
