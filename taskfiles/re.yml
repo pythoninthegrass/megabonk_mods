@@ -238,6 +238,37 @@ tasks:
       - uv run --script scripts/eh_probe.py "{{.EH_SO}}" --section "{{.EH_SECTION}}"
         --out "{{.EH_OUT}}" {{.EH_EXTRA}}
 
+  reloc-probe:
+    desc: "Classify every R_X86_64_RELATIVE in the shipped Linux runtime by what it points at"
+    vars:
+      RELOC_SO: '{{.RELOC_SO | default ".tools/megabonk-linux-native/Megabonk/GameAssembly.so"}}'
+      RELOC_OUT: '{{.RELOC_OUT | default ".tools/reloc-probe"}}'
+      RELOC_EXTRA: '{{.RELOC_EXTRA | default ""}}'
+    summary: |
+      Usage: task re:reloc-probe [RELOC_SO=<GameAssembly.so>] [RELOC_OUT=<dir>]
+             [RELOC_EXTRA=--json]
+
+      Takes every R_X86_64_RELATIVE the ELF carries and classifies the address its addend
+      names (a DSO links at base zero, so the addend is the pre-relocation target) into the
+      seven buckets the data model needs: function_entry, function_interior, read_only_data,
+      writable_data, bss, other_loaded and outside. Function bounds are the .eh_frame records
+      the lift probe cuts bodies from, so an entry is a real body start rather than a guess
+      from a byte pattern. Reports the same relocations again by the section holding the slot
+      and by the section holding the target, the .eh_frame records and the bodies they fold
+      to, how many bodies overlap, distinct target addresses, and the first bytes found at
+      entry targets as a check on the entry bucket. The total is asserted against the figure
+      documented in docs/development.md. Writes summary.json to RELOC_OUT. It reads bytes
+      only: nothing is loaded or run.
+
+      Shares its ELF reader with scripts/elf_shim_probe.py and its .eh_frame walk with
+      scripts/eh_probe.py, so the body counts are comparable with task re:eh-probe. See the
+      "Lifting the shipped code to arm64" section in docs/development.md.
+    preconditions:
+      - sh: '[ -f "{{.RELOC_SO}}" ]'
+        msg: "No Linux GameAssembly.so at {{.RELOC_SO}}; see docs/development.md for the rsync step that populates .tools/megabonk-linux-native"
+    cmds:
+      - uv run --script scripts/reloc_probe.py "{{.RELOC_SO}}" --out "{{.RELOC_OUT}}" {{.RELOC_EXTRA}}
+
   _install-dotnet:
     internal: true
     desc: "Install the mise-managed dotnet SDK used to run Il2CppDumper"
