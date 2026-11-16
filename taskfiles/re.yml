@@ -179,6 +179,35 @@ tasks:
       - uv run --script scripts/lift_probe.py "{{.LIFT_SO}}" --out "{{.LIFT_OUT}}"
         --per-class "{{.LIFT_PER_CLASS}}" --seed "{{.LIFT_SEED}}" {{.LIFT_EXTRA}}
 
+  lift-holes:
+    desc: "Classify the unresolved computed jumps (BRANCHIND, JUMPTABLE_TARGET) left in a lift probe sample"
+    vars:
+      LIFT_SO: '{{.LIFT_SO | default ".tools/megabonk-linux-native/Megabonk/GameAssembly.so"}}'
+      LIFT_OUT: '{{.LIFT_OUT | default ".tools/lift-probe"}}'
+      LIFT_EXTRA: '{{.LIFT_EXTRA | default ""}}'
+    summary: |
+      Usage: task re:lift-holes [LIFT_SO=<GameAssembly.so>] [LIFT_OUT=<dir>]
+             [LIFT_EXTRA=--json|--bodies <bodies.jsonl>]
+
+      Reads LIFT_OUT/bodies.jsonl from a prior task re:lift-probe run (run that first),
+      takes the bodies whose holes include BRANCHIND or JUMPTABLE_TARGET, redumps their
+      pcode through headless Ghidra, and gives every indirect jump site a category from
+      the structure that leads to it: unrecovered switch, indirect tail call, indirect
+      call target, or other. Evidence per site is the x86 sequence from llvm-objdump, the
+      traced pcode, the section the target was loaded from, any R_X86_64_RELATIVE on that
+      slot, and the jump tables Ghidra's decompiler recovered. Writes jump_holes.jsonl to
+      LIFT_OUT and prints the per-category counts. It records only: no lifting rule is
+      added and scripts/pcode_lift.py is not involved. Needs the brew llvm and Ghidra.
+
+      See the "Lifting the shipped code to arm64" section in docs/development.md.
+    preconditions:
+      - sh: '[ -f "{{.LIFT_SO}}" ]'
+        msg: "No Linux GameAssembly.so at {{.LIFT_SO}}; see docs/development.md for the rsync step that populates .tools/megabonk-linux-native"
+      - sh: '[ -f "{{.LIFT_OUT}}/bodies.jsonl" ]'
+        msg: "No {{.LIFT_OUT}}/bodies.jsonl; run task re:lift-probe first"
+    cmds:
+      - uv run --script scripts/lift_holes.py "{{.LIFT_SO}}" --out "{{.LIFT_OUT}}" {{.LIFT_EXTRA}}
+
   _install-dotnet:
     internal: true
     desc: "Install the mise-managed dotnet SDK used to run Il2CppDumper"

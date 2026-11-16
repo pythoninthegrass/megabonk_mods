@@ -1953,6 +1953,41 @@ What this does **not** prove, stated plainly: nothing was launched, so no claim 
 
 Result on 3,000 bodies (1,000 per class): all 3,000 decode, all 3,000 pass the verifier, all 3,000 compile for arm64, and 2,956 (98.5%) lift with no hole (984 tiny, 991 small, 981 large, so size is not what breaks it). The 44 bodies with holes contain 21 computed jumps with no recovered table, 25 SSE operations with no semantics yet (`divps` 20, `minps` 2, `maxps` 2, `divpd` 1) and one jump-table case outside the body; a body can have several. 193 bodies are indirect tail calls recognised by a straight-line approximation (a `BRANCHIND` whose target traces back through copies to a memory load), so a jump table the decompiler failed to recover could be classified as a tail call without any error. Every constant address resolved to a section symbol. The whole section disassembles with no undecodable bytes: 11,773,906 instructions, 298 distinct mnemonics, no x87, no AVX, no `%fs:` thread-local access, 18,986 indirect jumps and 79,458 indirect calls. The instruction set is plain; the hard part is not decoding.
 
+`task re:lift-holes`, after a `task re:lift-probe` run, names what those computed jumps are. It reads the probe's hole rows, re-dumps their pcode through Ghidra, walks each `BRANCHIND` target back through the ops that produced it, and reads a category off the result, recording as evidence the x86 text from `llvm-objdump`, the traced pcode, the section the target was loaded from, any `R_X86_64_RELATIVE` on that slot, and the jump tables the decompiler recovered. It changes no lifting and does not touch `scripts/pcode_lift.py`; `jump_holes.jsonl` keeps one row per body with every site's evidence, so a verdict can be re-checked by hand. The categories are unrecovered switch, indirect tail call, indirect call target, and other.
+
+On the same sample, 22 bodies and 34 indirect jump sites:
+
+| Category | Bodies | Sites | Identifying pattern |
+| --- | --- | --- | --- |
+| indirect tail call | 21 | 33 | jump through a register loaded from a fixed `_bss` slot, with frame teardown immediately before it |
+| unrecovered switch | 1 | 1 | compare against an immediate and an above/below jump, then a table load at a constant `_rodata` base plus a scaled index |
+| indirect call target | 0 | 0 | jump through a slot carrying `R_X86_64_RELATIVE` into executable code; none in this sample |
+| other | 0 | 0 | |
+
+All 21 tail-call bodies are the same construction, the il2cpp lazily-resolved invoke thunk: the function pointer lives in a global, one shared resolver fills it on first use, and the body ends by jumping through it.
+
+```text
+mov  rax, qword ptr [rip + slot]   # slot in .bss; 0x53648e0-0x5369790 across these 21
+test rax, rax
+je   slow
+     <restore registers>
+     jmp rax                        # the site
+slow:
+     lea  rdi, [rip + metadata]
+     call 0x2056380                 # the shared resolver, the same target in all 21
+     mov  qword ptr [rip + slot], rax
+     <restore registers>
+     jmp rax                        # the site on the cold path
+```
+
+In pcode the shape is `COPY reg <- ram,slot,8` and then `BRANCHIND reg`: Ghidra writes a fixed-address read as a copy out of the `ram` space rather than as a `LOAD`, so a rule over raw pcode has to match both. The slot sits in a non-executable section and carries no relocation, and of the file's 470,439 relocation rows none lands in `.bss` at all, so the value is written at run time and nothing static can name the target. Lifting it as an indirect jump through memory is already correct, which is what a rule here would have to preserve: match a target loaded from a fixed non-executable unrelocated slot with the jump at the end of the body, emit the indirect jump, and stop recording the body as having a hole.
+
+The one switch is a genuine position-independent switch: `cmp rcx, 0x8`, `ja <default>`, `lea rdx, [rip + ...] # 0xbfd278`, `movsxd rsi, dword ptr [rdx + 4*rcx]`, `add rsi, rdx`, `jmp rsi`, a table of self-relative 32-bit cases in `_rodata` indexed by a scaled value with the bounds check ahead of it. The decompiler recovered the table and all ten of its cases, and one case lands past the end of the `.eh_frame` record the body was cut from, so what reads as a hole there is a short body boundary rather than a switch that cannot be recovered.
+
+No site took indirect call target, the category reserved for a jump through a statically relocated pointer, the shape of a GOT- or vtable-style tail call. Its being empty is the useful part: none of the 34 sites has a target the emitter could have resolved statically, so every one of them is a hole rather than a missed direct branch. The categories stay structural rather than proven, because the decompiler's own table recovery is the only oracle available; "unrecovered switch" means the shape says switch and the recovered table, where there is one, says the same.
+
+Three properties of raw pcode matter to anything else that reads it. A `LOAD` carries its space id in the first operand and the pointer in the second, so treating `in[0]` as the address reports a space, not a location. A rip-relative `lea` deposits its result in the `cptr` space, which holds a computed value rather than a read: `COPY reg <- ram,slot,8` is a fetch from memory and `COPY reg <- cptr,addr,8` is that address itself, so code looking for a load has to name `ram` and not any memory-like space. And a branch-arm count is not evidence of a switch — one thunk has seven distinct in-body branch targets, being a chain of null-pointer guards with its resolver path duplicated — so the bounds check that separates a switch from a thunk has to come from the x86 text: a compare against an immediate followed by `ja`, `jae`, `jb` or `jbe`. None of the 33 tail-call sites has one, and the switch has it ahead of its table load.
+
 Correctness is checked by `tests/test_pcode_lift_differential.py`, which compiles ten freestanding C functions to an x86-64 ELF (loops, signed and unsigned division, popcount, overflow checks, a jump-table `switch`, double arithmetic with constants in `.rodata`), lifts them through the same Ghidra and emitter path, rebuilds them for arm64 and compares them with the same C compiled natively for arm64 on 2,000 pseudo-random inputs each. They match, and breaking the emitter makes the test fail. This validates the emitter. It says nothing about any il2cpp body, because there is no oracle for real game code.
 
 radare2 6.2.6 was scored on 30 bodies and does not get there. Its `af` can follow tail jumps well past the function end (one body came back as 12.5 MB), its extent matched the frame record in 8 of 30, none of its 30 `pdc` outputs compile as C (register-level pseudo-C with raw `push` and bare address calls), it has no IR output, and `pdg` and `pdd` need plugins that are not installed.
