@@ -1,10 +1,10 @@
 ---
 id: TASK-080.12.06
 title: Produce a complete runnable lift of the required game and runtime code
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-16T19:04:00Z'
-updated_date: '2026-11-16T19:05:00Z'
+updated_date: '2026-11-16T23:30:00Z'
 labels:
   - native-macos
   - arm64
@@ -47,3 +47,11 @@ The seed-81/82 samples now contain only named control-flow holes, but cover only
 - [ ] #3 Docs updated
 - [ ] #4 Conventional commit with no attribution
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Progress: TASK-080.12.06.01 is done. On the seed-81 and seed-82 draws (15,000 bodies each) BRANCHIND hole bodies fell 152 to 11 and 144 to 26, so the remaining holes in those samples are 11 and 26 BRANCHIND bodies plus 2 and 3 JUMPTABLE_TARGET bodies. The recorded reasons a BRANCHIND site stayed unproven are rsp not at its entry value, rsp untrackable on a path into the site, and no path in the dump reaching the site; the per-site census is in .tools/lift-probe-tailcall4-{81,82}/branchind.json. No acceptance criterion of this task is closed by it: the samples still cover a fraction of the image, and nothing yet accounts for runtime code outside the il2cpp section.
+
+Constraint carried from the subtask: rsp at its entry value does not by itself make a jmp a tail call, since a frameless function with an unrecovered switch has the same rsp. Any later rule that lowers an unresolved jump must also require positive evidence of the target (a load from memory), and must keep the existing tests that pin computed and undefined targets as holes unchanged.
+<!-- SECTION:NOTES:END -->
