@@ -157,10 +157,12 @@ tasks:
       LIFT_PER_CLASS: '{{.LIFT_PER_CLASS | default "300"}}'
       LIFT_SEED: '{{.LIFT_SEED | default "80"}}'
       LIFT_EXTRA: '{{.LIFT_EXTRA | default ""}}'
+      LIFT_PIPELINE: '{{.LIFT_PIPELINE | default ""}}'
     summary: |
       Usage: task re:lift-probe [LIFT_SO=<GameAssembly.so>] [LIFT_OUT=<dir>]
              [LIFT_PER_CLASS=300] [LIFT_SEED=80]
              [LIFT_EXTRA=--r2-per-class 0|--tool-timeout 600|--jobs 4|--extra=--mcpu=neoverse-n1]
+             [LIFT_PIPELINE='default<O2>']
 
       Draws LIFT_PER_CLASS bodies from each size class (tiny <= 63 B, small <= 512 B,
       large above) of the il2cpp section, bounded by the .eh_frame records, dumps their
@@ -187,6 +189,7 @@ tasks:
     cmds:
       - uv run --script scripts/lift_probe.py "{{.LIFT_SO}}" --out "{{.LIFT_OUT}}"
         --per-class "{{.LIFT_PER_CLASS}}" --seed "{{.LIFT_SEED}}" {{.LIFT_EXTRA}}
+        {{if .LIFT_PIPELINE}}--pipeline "{{.LIFT_PIPELINE}}"{{end}}
 
   lift-holes:
     desc: "Classify the unresolved computed jumps (BRANCHIND, JUMPTABLE_TARGET) left in a lift probe sample"

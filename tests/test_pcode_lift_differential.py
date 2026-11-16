@@ -6,16 +6,14 @@ inputs. Skipped unless the LLVM toolchain, Ghidra and an arm64 macOS host are pr
 """
 
 import json
+import lift_probe as lp
 import os
+import pcode_lift as pl
 import pytest
 import struct
 import subprocess
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-
-import pcode_lift as pl
 
 LLVM = Path("/opt/homebrew/opt/llvm/bin")
 GHIDRA = next(iter(sorted(Path("/opt/homebrew/Cellar/ghidra").glob("*/libexec/support/analyzeHeadless"))), None)
@@ -67,14 +65,20 @@ CONVERSIONS = {
     "f_d2i32": (
         "r_d2i32",
         "double",
-        ["2147483647.0", "2147483647.5", "2147483648.0", "-2147483648.0", "-2147483648.5",
-         "-2147483649.0", "1e18", "-1e18"],
+        ["2147483647.0", "2147483647.5", "2147483648.0", "-2147483648.0", "-2147483648.5", "-2147483649.0", "1e18", "-1e18"],
     ),
     "f_d2i64": (
         "r_d2i64",
         "double",
-        ["9223372036854774784.0", "9223372036854775808.0", "-9223372036854775808.0",
-         "-9223372036854776832.0", "4611686018427387904.0", "1e18", "-1e18"],
+        [
+            "9223372036854774784.0",
+            "9223372036854775808.0",
+            "-9223372036854775808.0",
+            "-9223372036854776832.0",
+            "4611686018427387904.0",
+            "1e18",
+            "-1e18",
+        ],
     ),
     "f_f2i32": (
         "r_f2i32",
@@ -84,8 +88,7 @@ CONVERSIONS = {
     "f_f2i64": (
         "r_f2i64",
         "float",
-        ["9223372036854774784.0f", "9223372036854775808.0f", "-9223372036854775808.0f",
-         "1e18f", "-1e18f", "1.7e30f"],
+        ["9223372036854774784.0f", "9223372036854775808.0f", "-9223372036854775808.0f", "1e18f", "-1e18f", "1.7e30f"],
     ),
 }
 
@@ -180,12 +183,24 @@ def conversion_pickers():
     out = []
     for name, (_, ty, bounds) in CONVERSIONS.items():
         if ty == "double":
-            special = ["0.0", "-(double)0.0", "bitsd(0x7ff0000000000000ull)", "bitsd(0xfff0000000000000ull)",
-                       "bitsd(0x7ff8000000000000ull)", "bitsd(0x7ff0000000000001ull)"]
+            special = [
+                "0.0",
+                "-(double)0.0",
+                "bitsd(0x7ff0000000000000ull)",
+                "bitsd(0xfff0000000000000ull)",
+                "bitsd(0x7ff8000000000000ull)",
+                "bitsd(0x7ff0000000000001ull)",
+            ]
             random = "(double)(int64_t)v / 1e12"
         else:
-            special = ["0.0f", "-(float)0.0f", "bitsf(0x7f800000u)", "bitsf(0xff800000u)",
-                       "bitsf(0x7fc00000u)", "bitsf(0x7f800001u)"]
+            special = [
+                "0.0f",
+                "-(float)0.0f",
+                "bitsf(0x7f800000u)",
+                "bitsf(0xff800000u)",
+                "bitsf(0x7fc00000u)",
+                "bitsf(0x7f800001u)",
+            ]
             random = "(float)(int32_t)v / 1e6f"
         arms = " ".join(f"case {i}: return {v};" for i, v in enumerate(special + bounds))
         out.append(
@@ -269,10 +284,7 @@ def harness_source(syms):
             )
             lines.append("int diff = 0;")
             either_nan = "" if name in STRICT_LANES else " && !(got[l] != got[l] && native[l] != native[l])"
-            lines.append(
-                f"for (int l = 0; l < {n}; l++)"
-                f" if (memcmp(&got[l], &native[l], sizeof ({ty})){either_nan}) diff = 1;"
-            )
+            lines.append(f"for (int l = 0; l < {n}; l++) if (memcmp(&got[l], &native[l], sizeof ({ty})){either_nan}) diff = 1;")
             cond = "if (diff)"
         elif ret == "d":
             lines.append(f"double got; memcpy(&got, reg + {REG['xmm0']}, 8); double want = {name}({', '.join(call)});")
@@ -299,6 +311,42 @@ def test_lifted_arm64_matches_native_arm64(tmp_path):
     ir.write_text(pl.module_for(lifted, images))
     obj = tmp_path / "lifted.o"
     run([LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", obj, ir])
+    harness = tmp_path / "harness.c"
+    harness.write_text(harness_source(syms))
+    exe = tmp_path / "harness"
+    run([LLVM / "clang", "-O1", "-arch", "arm64", "-ffp-contract=off", harness, obj, "-o", exe, "-lm"])
+    assert "bad=0" in run([exe], timeout=120)
+
+
+def test_best_opt_pipeline_preserves_lifted_arm64_semantics(tmp_path):
+    """Run the winning pipeline through the unchanged native-arm64 oracle."""
+    syms, bodies, sections, images = lift_x86_symbols(tmp_path)
+    lifted = [pl.lift_body(b, sections) for b in bodies]
+    for result, body in zip(lifted, bodies):
+        assert result.holes == [], (hex(body["start"]), result.holes)
+    ir = tmp_path / "lifted.ll"
+    ir.write_text(pl.module_for(lifted, images))
+
+    optimised = tmp_path / "lifted.opt.ll"
+    assert lp.verify_body(ir.read_text(), 120) == (True, None)
+    accepted, payload, error = lp.optimise_body(ir.read_text(), "default<O2>", 120)
+    assert accepted and payload is not None, error
+    optimised.write_bytes(payload)
+    text = optimised.read_text()
+    assert lp.verify_body(text, 120) == (True, None)
+    assert text != ir.read_text(), "the pipeline must actually rewrite the IR"
+    assert text.lstrip().startswith(("; ModuleID", "target triple", "define")), "opt must emit readable IR"
+
+    obj = tmp_path / "lifted.opt.o"
+    run([LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", obj, optimised])
+    assert obj.stat().st_size > 0
+    defined = {line.split()[-1] for line in run([LLVM / "llvm-nm", "--defined-only", obj]).splitlines()}
+    assert {f"_sub_{syms[name][0]:x}" for name in FUNCTIONS} <= defined, "the pipeline must not drop a lifted function"
+
+    plain = tmp_path / "lifted.plain.o"
+    run([LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", plain, ir])
+    assert obj.stat().st_size < plain.stat().st_size, "default<O2> should shrink the object"
+
     harness = tmp_path / "harness.c"
     harness.write_text(harness_source(syms))
     exe = tmp_path / "harness"
