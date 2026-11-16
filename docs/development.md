@@ -2142,7 +2142,34 @@ Reproduce with the shipped Linux build already synced to `.tools/megabonk-linux-
 
 Limits. The 40 is the value the shipped code produces when the static singleton the callee reads has not been created yet, which is the state of a runtime started with `il2cpp_init` and nothing else; it says nothing about the non-null path, which goes through the `0x2280400` dictionary lookup and real game data. The lifted body reads the modelled globals directly, with the `_got` and `_bss` sections as zeroed arrays rather than the relocated image, and no real Il2Cpp runtime, Unity player or metadata is present on arm64.
 
-Next gate: native and lifted code calling each other. The stubs here are the boundary the next step has to replace with real calls into either side, and the lifted bodies still use the state-pointer calling interface rather than the arm64 one.
+The stubs here still fail if reached. Typed native/lifted adapters are verified separately below; this modelled singleton path does not exercise those imports.
+
+### Native and lifted calling contract
+
+`scripts/lift_abi.py` generates C adapters from explicit `Binding(address, name, Signature(args, result))` lists. Lifted bodies retain `void sub_<ELF-address>(unsigned char *reg)`. Native exports marshal into a private 8 KiB register file and 64 KiB guest stack per invocation; imports decode that state, call an explicitly declared native function, store its result and consume the guest return slot. Clang handles the Apple arm64 calling convention, including its different stack argument rules. No arm64 register placement is guessed.
+
+Supported signature kinds:
+
+| Kinds | Source Linux x86-64 SysV placement |
+| --- | --- |
+| `i8/u8`, `i16/u16`, `i32/u32`, `i64/u64`, `ptr` | independent integer bank: RDI, RSI, RDX, RCX, R8, R9; then stack |
+| `f32`, `f64` | independent SSE bank: XMM0–7; then stack |
+| `v4f32`, `v2f64`, `v4u32` | one XMM register per 128-bit vector; then 16-byte-aligned stack slot |
+| `void` | result only |
+
+Scalar/pointer results use RAX; floating/vector results use XMM0. Stack arguments start at guest RSP+8, after the return address; slots are at least eight bytes. Guest RSP is 8 modulo 16 on entry and must advance by eight on return. The adapter checks this after every exported call. Raw pcode already implements CALL's push and RET's pop: adapters must not push a second return address. Import adapters preserve guest registers except the result and RSP. Lifted bodies remain responsible for SysV callee-saved registers. Private per-entry state permits a native import to call a generated lifted export synchronously, including reentry, without a global register file or TLS state swap.
+
+Enable `pcode_lift.lift_body(..., call_dispatch=True)` for these modules. Both `CALLIND` and recognized loaded indirect tail calls use `lift_dispatch`, generated from the same binding lists. Registered guest addresses select either a lifted body or a typed native import. An unregistered target aborts before dereferencing or calling it. Direct imports link through their `sub_<address>` adapter symbols. A plain `ptr` preserves data-pointer bits; it does **not** translate arbitrary function pointers. Native callbacks must explicitly use generated native export symbols, while lifted indirect calls use registered guest addresses. Do not mix the legacy unchecked indirect-call mode with this contract.
+
+The initial headless integration surface in `scripts/native_bind_probe/host.c` uses scalar/pointer API types: class/method lookup, `il2cpp_runtime_invoke`'s pointer arguments/result, string/object accessors, and command-line/internal-call registration. IL2CPP static methods also carry their final `MethodInfo*` argument, which must be explicit in the signature. This is not a complete inventory of Unity icalls. By-value structs/unions, hidden aggregate-return pointers, variadic functions, `long double`, vectors wider than 128 bits and signatures exceeding 256 arguments are rejected by `AbiError` before C generation. Passing an aggregate **by pointer** remains an ordinary `ptr`; its pointed-to layout is the caller's responsibility. There is no verified by-value aggregate or variadic bridge yet: an integration needing either must add classification and execution tests, or a separately typed nonvariadic wrapper, rather than register a guessed scalar signature.
+
+Run `uv run pytest -n 0 tests/test_lift_abi.py tests/test_native_call_probe.py` on arm64 macOS with Homebrew LLVM and Ghidra. Synthetic x86-64 fixtures cover both directions for every supported kind, integer/SSE overflow and vector stack alignment, direct nesting, indirect calls/tail calls, native callbacks into lifted code, guest callee-saved registers, return-address preservation and restored RSP. The executable must have only an arm64 Mach-O slice and report `sysctl.proc_translated == 0`. An unknown-target subprocess must terminate with SIGABRT.
+
+`task re:native-calls` adds a shipped-code oracle. Capture its controls once with `NATIVE_CALL_EXTRA='--capture-linux-host <ssh host> --linux-game-dir <game directory>'`; later runs reuse `.tools/native-calls/linux-controls.json` and a validated exact-body pcode cache. It resolves both `UnityEngine.Mathf.Clamp` overloads through the shipped Linux runtime, verifies overload types and input values, hashes the remote binary before/after capture, and requires that digest to equal the local ELF. On `GameAssembly.so` SHA-256 `a86fd434…5ba1`, the float overload is 17 B at RVA `0x4ab58f0`, and the int overload is 15 B at `0x4ab5910`. Typed native exports pass all three arguments plus a null `MethodInfo*`; six cases compare below-range, in-range and above-range results. Neither body uses substituted callees or modelled globals. These are shipped Unity math bodies, not a probe player or evidence of gameplay.
+
+The command retains generated adapters, lifted IR/object, executable and reports under `.tools/native-calls/`. `NATIVE_CALL_EXTRA='--candidate-override 999'` must fail the comparison. The automated shipped-code test runs the same build and comparison when local binary/controls exist; missing artifacts skip it, but malformed controls or mismatched identity fail. The script itself fails when controls are absent.
+
+Remaining exclusions: the fixed guest stack is a bounded probe allocation, not a guarded production stack; arbitrary recursion/large guest frames are not supported. Address relocation, callback-pointer rewriting in image data, dynamic icall discovery, exception unwinding, nonlocal exits, guest TLS and floating-point environment emulation are not supplied by these adapters. Native runtime initialization and a Unity boot remain separate verification gates.
 
 ### OpenBonk reconstruction on native macOS
 

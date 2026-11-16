@@ -215,6 +215,15 @@ tasks:
     cmds:
       - uv run --script scripts/native_exec_probe.py --so "{{.NATIVE_EXEC_SO}}" --out "{{.NATIVE_EXEC_OUT}}" {{.NATIVE_EXEC_EXTRA}}
 
+  native-calls:
+    desc: "Verify typed arm64 calls against shipped Linux Mathf.Clamp overloads"
+    vars:
+      NATIVE_CALL_SO: '{{.NATIVE_CALL_SO | default ".tools/megabonk-linux-native/Megabonk/GameAssembly.so"}}'
+      NATIVE_CALL_OUT: '{{.NATIVE_CALL_OUT | default ".tools/native-calls"}}'
+      NATIVE_CALL_EXTRA: '{{.NATIVE_CALL_EXTRA | default ""}}'
+    cmds:
+      - uv run --script scripts/native_call_probe.py --so "{{.NATIVE_CALL_SO}}" --out "{{.NATIVE_CALL_OUT}}" {{.NATIVE_CALL_EXTRA}}
+
   lift-holes:
     desc: "Classify the unresolved computed jumps (BRANCHIND, JUMPTABLE_TARGET) left in a lift probe sample"
     vars:

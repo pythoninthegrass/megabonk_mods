@@ -112,8 +112,9 @@ def itype(size: int) -> str:
 
 
 class BodyLifter:
-    def __init__(self, fn: dict, sections: list[dict] | tuple = ()):
+    def __init__(self, fn: dict, sections: list[dict] | tuple = (), *, call_dispatch: bool = False):
         self.fn = fn
+        self.call_dispatch = call_dispatch
         self.sections = list(sections)
         self.data_sections: set[str] = set()
         self.unmapped = 0
@@ -331,9 +332,7 @@ class BodyLifter:
         elif name == "CALL":
             self.call_direct(ins[0])
         elif name == "CALLIND":
-            self.indirect_calls += 1
-            p = self.pointer(ins[0])
-            self.emit(f"call void {p}(ptr %reg)")
+            self.call_indirect(ins[0])
         elif name == "RETURN":
             self.emit("ret void")
             return True
@@ -539,6 +538,16 @@ class BodyLifter:
         self.externs.add(offset)
         self.emit(f"call void @sub_{offset:x}(ptr %reg)")
 
+    def call_indirect(self, target: str) -> None:
+        self.indirect_calls += 1
+        if self.call_dispatch:
+            value = self.read(target)
+            value = self.fit(value, parse_varnode(target)[2] * 8, 64)
+            self.decls.add("declare void @lift_dispatch(i64, ptr)")
+            self.emit(f"call void @lift_dispatch(i64 {value}, ptr %reg)")
+        else:
+            self.emit(f"call void {self.pointer(target)}(ptr %reg)")
+
     def branch(self, insn: dict, k: int, target: str) -> bool:
         space, offset, _ = parse_varnode(target)
         label = self.jump_target(target, insn, k)
@@ -604,8 +613,7 @@ class BodyLifter:
         sec = self.last_data
         if not cases and self.defined_by_load(insn, k, target):
             self.tail_calls += 1
-            self.indirect_calls += 1
-            self.emit(f"call void {self.pointer(target)}(ptr %reg)")
+            self.call_indirect(target)
             self.emit("ret void")
             return
         if not cases or sec is None:
@@ -669,8 +677,8 @@ class BodyLifter:
         )
 
 
-def lift_body(fn: dict, sections: list[dict] | tuple = ()) -> Lifted:
-    return BodyLifter(fn, sections).run()
+def lift_body(fn: dict, sections: list[dict] | tuple = (), *, call_dispatch: bool = False) -> Lifted:
+    return BodyLifter(fn, sections, call_dispatch=call_dispatch).run()
 
 
 def section_global(name: str, image: bytes | None) -> str:

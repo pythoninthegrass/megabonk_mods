@@ -729,6 +729,7 @@ static MethodInfo lookup_method(Il2CppClass *class_out, char *label, size_t labe
     }
   }
   ev_ptr("method", method);
+  ev_str("invoke_class", cfg.invoke_class);
   record_method_body(method);
   if (api.method_get_name) ev_str("method_name", api.method_get_name(method));
   if (api.method_get_param_count)
