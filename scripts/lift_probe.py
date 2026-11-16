@@ -1,0 +1,271 @@
+#!/usr/bin/env -S uv run --script
+"""Score whether shipped x86-64 il2cpp code can be lifted to rebuildable arm64.
+
+Draws a size-stratified sample of function bodies from the shipped Linux GameAssembly.so
+(bounded by its .eh_frame records, since the game code carries no symbols), dumps their raw
+pcode and jump tables through headless Ghidra, lifts each body to LLVM IR with
+scripts/pcode_lift.py, and records a pass/fail per stage: fully decoded, lifted with no
+holes, accepted by the LLVM verifier, compiled to an arm64 object. A radare2 leg scores its
+function extents and whether its decompiler output compiles.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import random
+import re
+import subprocess
+import sys
+import tempfile
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import pcode_lift  # noqa: E402
+
+REPO = Path(__file__).resolve().parents[1]
+DEFAULT_SO = REPO / ".tools/megabonk-linux-native/Megabonk/GameAssembly.so"
+DEFAULT_OUT = REPO / ".tools/lift-probe"
+LLVM = Path(os.environ.get("LLVM_BIN", "/opt/homebrew/opt/llvm/bin"))
+DUMP_SCRIPT_DIR = Path(__file__).resolve().parent / "lift_probe"
+SECTION_LINE = re.compile(
+    r"\[\s*\d+\]\s+(\S+)\s+\S+\s+([0-9a-f]+)\s+[0-9a-f]+\s+([0-9a-f]+)\s+[0-9a-f]+\s+([A-Za-z]*)\s+\d+\s+\d+\s+\d+"
+)
+
+FDE_LINE = re.compile(r"\sFDE\s.*pc=([0-9a-fA-F]+)\.\.\.([0-9a-fA-F]+)")
+TINY_MAX, SMALL_MAX = 63, 512
+
+
+@dataclass(frozen=True)
+class Fde:
+    start: int
+    size: int
+
+
+def parse_fdes(text: str) -> list[Fde]:
+    """Reads function ranges from `llvm-dwarfdump --eh-frame` output."""
+    fdes = []
+    for line in text.splitlines():
+        m = FDE_LINE.search(line)
+        if m:
+            start, end = int(m.group(1), 16), int(m.group(2), 16)
+            fdes.append(Fde(start, end - start))
+    return fdes
+
+
+def size_class(size: int) -> str:
+    if size <= TINY_MAX:
+        return "tiny"
+    return "small" if size <= SMALL_MAX else "large"
+
+
+def stratified_sample(fdes: list[Fde], per_class: int, seed: int, lo: int = 0, hi: int = 1 << 64) -> list[Fde]:
+    """Picks up to `per_class` bodies from each size class inside [lo, hi), reproducibly."""
+    rng = random.Random(seed)
+    by_class: dict[str, list[Fde]] = {"tiny": [], "small": [], "large": []}
+    for fde in fdes:
+        if lo <= fde.start < hi:
+            by_class[size_class(fde.size)].append(fde)
+    picked = []
+    for name in ("tiny", "small", "large"):
+        pool = sorted(by_class[name], key=lambda f: f.start)
+        picked.extend(rng.sample(pool, min(per_class, len(pool))))
+    return picked
+
+
+def summarize(results: list[dict]) -> dict[str, dict[str, int]]:
+    """Counts bodies and per-stage passes for each size class and overall."""
+    summary: dict[str, dict[str, int]] = {}
+    for result in results:
+        for key in (size_class(result["size"]), "all"):
+            row = summary.setdefault(key, {"n": 0})
+            row["n"] += 1
+            for stage, ok in result["stages"].items():
+                row[stage] = row.get(stage, 0) + int(ok)
+    return summary
+
+
+def tally_holes(results: list[dict]) -> dict[str, int]:
+    """Counts the bodies each kind of hole occurs in."""
+    counts: Counter[str] = Counter()
+    for result in results:
+        counts.update(set(result["holes"]))
+    return dict(counts)
+
+
+def parse_exec_sections(text: str) -> dict[str, tuple[int, int]]:
+    """Reads executable section ranges from `llvm-readelf -S` output."""
+    sections = {}
+    for line in text.splitlines():
+        m = SECTION_LINE.search(line)
+        if m and "X" in m.group(4):
+            start = int(m.group(2), 16)
+            sections[m.group(1)] = (start, start + int(m.group(3), 16))
+    return sections
+
+
+def run_tool(cmd: list, **kw) -> subprocess.CompletedProcess:
+    return subprocess.run([str(c) for c in cmd], capture_output=True, **kw)
+
+
+def find_ghidra() -> Path:
+    override = os.environ.get("GHIDRA_HEADLESS")
+    if override:
+        return Path(override)
+    found = sorted(Path("/opt/homebrew/Cellar/ghidra").glob("*/libexec/support/analyzeHeadless"))
+    if not found:
+        raise SystemExit("analyzeHeadless not found; install Ghidra or set GHIDRA_HEADLESS")
+    return found[-1]
+
+
+def ghidra_env() -> dict[str, str]:
+    env = {**os.environ, "GHIDRA_HEADLESS_MAXMEM": os.environ.get("GHIDRA_HEADLESS_MAXMEM", "6G")}
+    if "JAVA_HOME" not in env:
+        mise = Path.home() / ".local/bin/mise"
+        env["JAVA_HOME"] = run_tool([mise, "where", "java"], text=True).stdout.strip()
+    return env
+
+
+def dump_pcode(so: Path, fdes: list[Fde], work: Path) -> tuple[list[dict], list[dict]]:
+    """Returns the sampled bodies' pcode records and the ELF's loaded sections."""
+    ranges, pcode, sections = work / "ranges.txt", work / "pcode.jsonl", work / "sections.json"
+    ranges.write_text("".join(f"{f.start:x} {f.size}\n" for f in fdes))
+    project = work / "ghidra"
+    project.mkdir()
+    proc = run_tool(
+        [
+            find_ghidra(),
+            project,
+            "probe",
+            "-import",
+            so,
+            "-noanalysis",
+            "-scriptPath",
+            DUMP_SCRIPT_DIR,
+            "-postScript",
+            "LiftDump.java",
+            ranges,
+            pcode,
+            sections,
+        ],
+        env=ghidra_env(),
+        text=True,
+    )
+    if not pcode.exists():
+        raise SystemExit(f"Ghidra produced no pcode:\n{proc.stdout[-1500:]}")
+    return [json.loads(line) for line in pcode.read_text().splitlines()], json.loads(sections.read_text())
+
+
+def score_body(fn: dict, sections: list[dict]) -> dict:
+    """Lifts one body and records each stage's outcome."""
+    lifted = pcode_lift.lift_body(fn, sections)
+    ir = pcode_lift.module_for([lifted])
+    verified = run_tool([LLVM / "opt", "-passes=verify", "-disable-output", "-"], input=ir.encode())
+    obj = run_tool([LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", "-", "-"], input=ir.encode())
+    return {
+        "start": fn["start"],
+        "size": fn["size"],
+        "holes": lifted.holes,
+        "unmapped_refs": lifted.unmapped_refs,
+        "indirect_calls": lifted.indirect_calls,
+        "tail_calls": lifted.tail_calls,
+        "jump_tables": len(fn.get("jt", [])),
+        "obj_bytes": len(obj.stdout) if obj.returncode == 0 else 0,
+        "stages": {
+            "decoded": fn["undecoded"] == 0,
+            "clean": not lifted.holes,
+            "verify": verified.returncode == 0,
+            "arm64": obj.returncode == 0,
+        },
+    }
+
+
+def r2_leg(so: Path, fdes: list[Fde], work: Path) -> list[dict]:
+    """Scores radare2's function extents against the frame records and whether its pdc output compiles as C."""
+    base = ["r2", "-q", "-e", "bin.relocs.apply=true", "-e", "scr.color=0"]
+    rows = []
+    for fde in fdes:
+        at = f"s 0x{fde.start:x}; af"
+        info = run_tool([*base, "-c", f"{at}; afij", so], text=True).stdout
+        sizes = json.loads(info[info.index("[") :])[0]["size"] if "[" in info else None
+        pseudo = run_tool([*base, "-c", f"{at}; pdc", so], text=True).stdout
+        source = work / f"r2_{fde.start:x}.c"
+        source.write_text(pseudo)
+        compiled = run_tool([LLVM / "clang", "-fsyntax-only", "-x", "c", source]).returncode == 0
+        rows.append({"start": fde.start, "size": fde.size, "r2_size": sizes, "pdc_compiles": compiled})
+    return rows
+
+
+def r2_summary(rows: list[dict]) -> dict:
+    return {
+        "n": len(rows),
+        "extent_matches_frame": sum(r["r2_size"] == r["size"] for r in rows),
+        "pdc_compiles": sum(r["pdc_compiles"] for r in rows),
+    }
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("so", nargs="?", type=Path, default=DEFAULT_SO)
+    ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    ap.add_argument("--per-class", type=int, default=300)
+    ap.add_argument("--seed", type=int, default=80)
+    ap.add_argument("--section", default="il2cpp", help="executable section the sample is drawn from")
+    ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--r2-per-class", type=int, default=10, help="bodies per class for the radare2 leg; 0 skips it")
+    args = ap.parse_args(argv)
+
+    if not args.so.exists():
+        raise SystemExit(f"no ELF at {args.so}")
+    readelf = run_tool([LLVM / "llvm-readelf", "-S", args.so], text=True).stdout
+    window = parse_exec_sections(readelf)[args.section]
+    frames = parse_fdes(run_tool([LLVM / "llvm-dwarfdump", "--eh-frame", args.so], text=True).stdout)
+    in_section = [f for f in frames if window[0] <= f.start < window[1]]
+    sample = stratified_sample(frames, args.per_class, args.seed, *window)
+    args.out.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp)
+        bodies, sections = dump_pcode(args.so, sample, work)
+        with ThreadPoolExecutor(args.jobs) as pool:
+            results = list(pool.map(lambda fn: score_body(fn, sections), bodies))
+        r2 = None
+        if args.r2_per_class:
+            r2_sample = stratified_sample(frames, args.r2_per_class, args.seed, *window)
+            r2 = r2_summary(r2_leg(args.so, r2_sample, work))
+
+    summary = {
+        "binary_sha256": sha256(args.so),
+        "section": args.section,
+        "section_bodies": {name: sum(size_class(f.size) == name for f in in_section) for name in ("tiny", "small", "large")},
+        "sample": {"per_class": args.per_class, "seed": args.seed, "n": len(results)},
+        "stages": summarize(results),
+        "holes": tally_holes(results),
+        "obj_bytes_per_x86_byte": round(sum(r["obj_bytes"] for r in results) / sum(r["size"] for r in results), 2),
+        "unmapped_refs": sum(r["unmapped_refs"] for r in results),
+        "bodies_with_tail_calls": sum(bool(r["tail_calls"]) for r in results),
+        "bodies_with_indirect_calls": sum(bool(r["indirect_calls"]) for r in results),
+        "r2": r2,
+    }
+    (args.out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    (args.out / "bodies.jsonl").write_text("".join(json.dumps(r) + "\n" for r in results))
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

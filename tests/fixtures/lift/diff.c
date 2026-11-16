@@ -1,0 +1,55 @@
+#include <stdint.h>
+
+uint64_t f_sum(uint64_t n) {
+    uint64_t s = 0;
+    for (uint64_t i = 0; i < n % 512; i++) s += (i * i) ^ (i >> 3);
+    return s;
+}
+
+int32_t f_clamp(int32_t x, int32_t lo, int32_t hi) { return x < lo ? lo : (x > hi ? hi : x); }
+
+uint32_t f_mix(uint32_t a, uint32_t b) {
+    a ^= b << 7;
+    a = (a >> 3) | (a << 29);
+    return a * 2654435761u + (uint32_t)__builtin_popcount(b);
+}
+
+int64_t f_div(int64_t a, int64_t b) {
+    if (b == 0 || (a == INT64_MIN && b == -1)) return -1;
+    return a / b + a % b;
+}
+
+uint8_t f_u8(uint8_t a, uint8_t b) { return (uint8_t)(a * b + (a < b)); }
+
+int32_t f_sat(int32_t a, int32_t b) {
+    int32_t r;
+    if (__builtin_add_overflow(a, b, &r)) return a < 0 ? INT32_MIN : INT32_MAX;
+    return r;
+}
+
+uint64_t f_collatz(uint64_t n) {
+    uint64_t c = 0;
+    n = (n % 100000) + 1;
+    while (n != 1 && c < 1000) {
+        n = (n & 1) ? 3 * n + 1 : n / 2;
+        c++;
+    }
+    return c;
+}
+
+int32_t f_switch(int32_t x) {
+    switch (x & 7) {
+    case 0: return x + 11;
+    case 1: return x * 3;
+    case 2: return x ^ 0x55;
+    case 3: return -x;
+    case 4: return x >> 2;
+    case 5: return x << 3;
+    case 6: return x | 9;
+    default: return 7;
+    }
+}
+
+double f_poly(double x, double y) { return x * x + 2 * x * y - y / 3.0; }
+
+int32_t f_f2i(double x) { return (int32_t)(x > 1e6 ? 1e6 : (x < -1e6 ? -1e6 : x)); }
