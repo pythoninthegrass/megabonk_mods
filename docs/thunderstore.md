@@ -185,6 +185,64 @@ Behaviours worth knowing before debugging a disagreement with the site:
 - A bare `mailto:` address is rejected while `mailto://anything` passes, and `ipfs://`
   needs something that looks like a host: `ipfs://CID` fails.
 
+## Resolve the mod and its loader pack at install time
+
+`go/internal/thunderstore` is the installer's client for the two downloads an opt-in install needs: the current `pythoninthegrass/Megabonk_Level_Editor` package, and the `BepInEx-BepInExPack_IL2CPP` version that package declares as its dependency. It uses the standard library only, so MyGo stays the installer's one direct module dependency.
+
+`Resolve` reads `GET /api/experimental/package/<ns>/<name>/` and returns the latest version, its download URL, the parsed dependency list, and the loader pack version with its CDN archive URL. `DownloadBepInEx` fetches that archive and will not put it anywhere the installer would later use it until its SHA-256 matches the digest it was fetched for, so a swapped or truncated download fails as an error rather than as a broken install. The known-good digest for 6.0.788 is the one `scripts/repair_bepinex.py` pins, and a version with no pinned digest is refused rather than installed unverified. An archive already on disk with the right digest is reused instead of refetched, and anything that does not match is replaced by a fresh download.
+
+Requests carry an ordinary browser `User-Agent`: a default scripting client is refused by Cloudflare with error 1010. `MEGABONK_THUNDERSTORE_API_URL` and `MEGABONK_THUNDERSTORE_CDN_URL` point the client somewhere else, which is how the unit tests aim it at a local `httptest` server; no `go test` run touches the network, and a blank or unusable value falls back to the public host rather than stopping an install.
+
+### The experimental package endpoint's response
+
+Confirmed against the live endpoint, which answers `200` with `content-type: application/json` for an anonymous `GET` carrying a browser `User-Agent`. The fields the installer depends on are these; the rest of the document is ignored.
+
+```json
+{
+  "namespace": "pythoninthegrass",
+  "name": "Megabonk_Level_Editor",
+  "full_name": "pythoninthegrass-Megabonk_Level_Editor",
+  "owner": "pythoninthegrass",
+  "package_url": "https://thunderstore.io/package/pythoninthegrass/Megabonk_Level_Editor/",
+  "date_created": "2026-11-09T04:13:00.711517Z",
+  "date_updated": "2026-11-09T21:06:14.256961Z",
+  "rating_score": -1,
+  "is_pinned": false,
+  "is_deprecated": false,
+  "total_downloads": -1,
+  "latest": {
+    "namespace": "pythoninthegrass",
+    "name": "Megabonk_Level_Editor",
+    "version_number": "0.2.0",
+    "full_name": "pythoninthegrass-Megabonk_Level_Editor-0.2.0",
+    "description": "Play and build custom Megabonk levels with an in-game map editor, custom music and a drop-down console.",
+    "icon": "https://ccdn.thunderstore.io/live/repository/icons/pythoninthegrass-Megabonk_Level_Editor-0.2.0.png",
+    "dependencies": ["BepInEx-BepInExPack_IL2CPP-6.0.788"],
+    "download_url": "https://thunderstore.io/package/download/pythoninthegrass/Megabonk_Level_Editor/0.2.0/",
+    "downloads": 86,
+    "date_created": "2026-11-09T21:06:13.821991Z",
+    "website_url": "https://megabonkmod.party",
+    "is_active": true
+  },
+  "community_listings": [
+    {
+      "has_nsfw_content": false,
+      "categories": ["Mods", "Tools"],
+      "community": "megabonk",
+      "review_status": "unreviewed"
+    }
+  ]
+}
+```
+
+What that shape means in practice:
+
+- `latest.download_url` is a `thunderstore.io` page-style URL (`/package/download/<ns>/<name>/<version>/`), not a direct CDN link, so it is a location to hand to a manager or to follow; the archive bytes the installer verifies come from the CDN path instead. Nothing assumes the download URL is served with a matching digest.
+- `latest.dependencies` is a list of `Namespace-Name-Version` strings, split the same way `PackageReference.parse` splits them (see [Validate a manifest offline](#validate-a-manifest-offline)): version first from the right, then the name, so `BepInExPack_IL2CPP` keeps its underscores and a namespace keeps its hyphens.
+- `rating_score` and `total_downloads` answer `-1` rather than a real number when the site has no figure, so neither is usable as a value and neither is read.
+- The loader pack archive is not on `thunderstore.io`: it comes from `https://gcdn.thunderstore.io/live/repository/packages/BepInEx-BepInExPack_IL2CPP-<version>.zip`, whose members all sit under `BepInExPack/`. An archive served at that URL whose members do not sit under that root is rejected as the wrong artifact, which is also what stops a path-traversal member from being accepted.
+- The `readme` subpath documented under [Release gate and publishing](#release-gate-and-publishing) is a sibling of this endpoint and needs a version segment; `/api/experimental/package/<ns>/<name>/` answers for the package as a whole.
+
 ## Content and licensing
 
 The Thunderstore package is runtime-only: **no levels, third-party packs or
@@ -239,8 +297,14 @@ See [Running BepInEx under Wine](development.md#running-bepinex-under-wine).
 
 For an isolated test game outside the Wine prefix, inspect the manager-written
 `doorstop_config.ini` before launching. r2modmac may write a host path such as
-`\Users\...` without a Windows drive letter. Back up that file, then use paths
-relative to the game folder instead:
+`\Users\...`, with or without a Windows drive letter, and doorstop then loads no
+BepInEx core. With the game quit, `task wine:bepinex:repair -- --game-dir
+"/path/to/Megabonk"` normalizes those values to paths relative to the game
+folder and keeps the original as `doorstop_config.ini.bak`; it also clears
+`BepInEx/cache/chainloader_typeloader.dat`, which caches the old absolute paths.
+Like any repair run it needs the pinned pack archive, so add `--download` or
+`--pack-zip` when `.tools/vendor-cache/` does not hold it, and `--dry-run` to see
+the plan first. The values it writes are the pack's own:
 
 ```ini
 [General]
@@ -312,13 +376,29 @@ Package ZIPs are immutable. Binary or archive updates require a higher version
 with the same team/name identity. A displayed README can be updated separately
 without rebuilding or publishing a version: send an authenticated
 `PATCH /api/cyberstorm/package/{namespace}/{name}/v/{version}/markdown/readme/update/`
-with JSON `{"content":"<updated Markdown>"}` and the team service-account Bearer
-token. Keep `pkg/README.md` in sync for future archives. This is a display override;
-the README inside the existing downloadable ZIP does not change. Verify the
-displayed README after saving and confirm the package version remains unchanged.
+with JSON `{"content":"<updated Markdown>"}`. **A team service account cannot make
+this call.** It authenticates with the `TCLI_AUTH_TOKEN` Bearer token and is then
+refused with `403 {"non_field_errors":["Service accounts are unable to perform this
+action"]}`, because the view authorizes through the namespace's package-management
+permission, which excludes service accounts. Use the site's README editor while signed
+in as a human who manages the package, or the same endpoint with
+`Authorization: Session <session key>` from that browser session. `DELETE` on the
+sibling `.../markdown/readme/delete/` path discards the override and returns the
+package's own README. Keep `pkg/README.md` in sync for future archives. This is a
+display override; the README inside the existing downloadable ZIP does not change. The
+displayed README is also the first troubleshooting document a player reads: it carries
+the launch-through-the-manager instruction, where the profile's
+`BepInEx/LogOutput.log` lives in r2modman and Thunderstore Mod Manager, and the Unity
+`Player.log` locations, so keep that guidance when editing it. Verify the displayed
+README after saving with
+`GET /api/experimental/package/{namespace}/{name}/{version}/readme/`, which answers
+`{"markdown":"<displayed Markdown>"}`, and confirm the package version remains
+unchanged. That read needs an ordinary browser `User-Agent`; a default scripting
+client is refused by the CDN with Cloudflare error 1010.
 The [API docs](https://thunderstore.io/api/docs/) expose a
 [machine-readable OpenAPI schema](https://thunderstore.io/api/docs/?format=openapi),
-but the schema does not currently include this Cyberstorm endpoint.
+but the schema does not currently include this Cyberstorm endpoint, and it advertises
+only Basic authentication, so neither is a reliable guide to these calls.
 
 Retain superseded releases; after a soak period and approval,
 **deprecate, never delete** an obsolete package. Do not automatically deprecate
@@ -355,7 +435,7 @@ The `publish` job runs only for a release or a manual run with `publish` true. I
 - A skipped or failed release: run the workflow manually with the release's tag, `publish` true, and approve it. The same guards apply.
 - A build that failed on the runner: check the runner service is online (repository Settings, Actions, Runners) and that the game's `BepInEx/interop` folder exists, then re-run.
 - Published with a defect: Thunderstore ZIPs are immutable. Release a higher version; do not delete or overwrite. See [Release gate and publishing](#release-gate-and-publishing).
-- A displayed-README-only change needs no workflow; use the README update call described above.
+- A displayed-README-only change needs no workflow; use the README update call described above, which requires a signed-in human rather than the service account.
 
 ## Rollback
 

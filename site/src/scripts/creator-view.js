@@ -8,7 +8,7 @@ import {
   plural,
   sumCounts,
 } from './gallery.js';
-import { pb, PB_URL } from './pb.js';
+import { FILE_URL, pb } from './pb.js';
 import { cacheKey, readCached, writeCached } from './result-cache.js';
 
 const PER_PAGE = 12;
@@ -108,7 +108,7 @@ export default () => ({
     return this.state === 'ready' || this.state === 'empty';
   },
 
-  cover: (item, thumb) => coverUrl(PB_URL, item, thumb),
+  cover: (item, thumb) => coverUrl(FILE_URL, item, thumb),
   editUrl,
   isOwner,
   plural,

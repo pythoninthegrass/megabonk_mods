@@ -124,6 +124,13 @@ def test_gui_handoff_preserves_opt_in_terrain_seed_switch(monkeypatch, tmp_path)
     assert config["EnvironmentVariables"]["MEGABONK_DEV_TERRAIN_SEED"] == "true"
 
 
+def test_gui_handoff_preserves_the_stub_failed_init_switch(monkeypatch, tmp_path):
+    calls = launchctl_stubs(monkeypatch, tmp_path)
+    lg.spawn_in_gui(lg.Launch(["/wine", "game.exe"], {}, None), {"MEGABONK_STEAM_FAIL_INIT": "1"})
+    config = plistlib.loads(Path(calls[-1][3]).read_bytes())
+    assert config["EnvironmentVariables"]["MEGABONK_STEAM_FAIL_INIT"] == "1"
+
+
 def test_missing_gui_session_fails_without_bootstrap_or_log_rotation(monkeypatch, tmp_path):
     calls = launchctl_stubs(monkeypatch, tmp_path, gui=False)
     log = tmp_path / "wine-latest.log"

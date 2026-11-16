@@ -1,7 +1,5 @@
-// Package cli is the command-line entry point: it resolves Steam, the game
-// install and its Proton prefix, checks the package, then installs, repairs,
-// checks, or uninstalls. Exit codes are stable so a desktop shortcut or script
-// can act on them.
+// Package cli is the command-line entry point: it resolves Steam, the game and
+// its prefix, then installs, checks, or uninstalls. Exit codes are stable.
 package cli
 
 import (
@@ -13,16 +11,17 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/content"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/gamebuild"
-	"github.com/pythoninthegrass/megabonk_mods/installer/internal/manifest"
+	"github.com/pythoninthegrass/megabonk_mods/installer/internal/modinstall"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/plan"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/ppath"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/proton"
+	"github.com/pythoninthegrass/megabonk_mods/installer/internal/site"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/steam"
+	"github.com/pythoninthegrass/megabonk_mods/installer/internal/thunderstore"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/ui"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/window"
 )
@@ -62,6 +61,41 @@ const LogHint = "MelonLoader/Latest.log"
 // Prog is the name usage messages call this program.
 const Prog = "megabonk-installer"
 
+// modFlag is --mod or --no-mod: both set the same choice, and the pair is
+// refused after parsing so neither flag's own order decides the outcome.
+type modFlag struct {
+	options *Options
+	choice  plan.ModChoice
+}
+
+func (m modFlag) String() string {
+	if m.options == nil || m.options.Mod != m.choice {
+		return ""
+	}
+	return m.choice.String()
+}
+
+// IsBoolFlag says these flags take no value. Without it the flag package treats
+// a Value as value-taking and swallows the level that follows --mod.
+func (m modFlag) IsBoolFlag() bool { return true }
+
+func (m modFlag) Set(string) error {
+	if m.choice == plan.ModForced {
+		m.options.saidMod = true
+	} else {
+		m.options.saidNoMod = true
+	}
+	m.options.Mod = m.choice
+	return nil
+}
+
+func (c *Command) checkModFlags(options *Options) error {
+	if options.saidMod && options.saidNoMod {
+		return fmt.Errorf("--mod and --no-mod cannot both be given")
+	}
+	return nil
+}
+
 // stringList collects a repeatable flag.
 type stringList []string
 
@@ -74,14 +108,11 @@ func (s *stringList) Set(value string) error {
 
 // Options is the parsed command line.
 type Options struct {
-	Package        string
 	Home           string
 	GameDir        string
 	Prefix         string
 	Libraries      []string
-	Levels         []string
-	Packs          []string
-	DotnetIn       string
+	Inputs         []string
 	WineOverride   string
 	Proton         string
 	NoGUI          bool
@@ -90,6 +121,12 @@ type Options struct {
 	DryRun         bool
 	Uninstall      bool
 	AsJSON         bool
+	// Mod is what the player said about the level editor mod: asked for, refused,
+	// or nothing, which means "whatever the game folder needs".
+	Mod plan.ModChoice
+
+	saidMod   bool
+	saidNoMod bool
 }
 
 // Command runs one installer invocation against injected streams so tests can
@@ -102,14 +139,24 @@ type Command struct {
 	Environ func() map[string]string
 	// PickProgress chooses the progress reporter; nil uses ui.PickProgress.
 	PickProgress func(env map[string]string, forceText bool, writer func(string)) ui.Progress
-	// StartWindow opens the MyGo native-UI progress window; nil uses
-	// window.Run. It reports (code, started): started is false when the app
-	// could not launch and the caller must fall back to plain text.
+	// StartWindow opens the MyGo native-UI progress window; nil uses window.Run.
+	// It reports (code, started), started false meaning fall back to plain text.
 	StartWindow func(title string, work func(ui.Progress) int) (int, bool)
 	// GOOS names the operating system the install targets; empty uses runtime.GOOS.
 	GOOS string
 	// Executable returns the running binary's path; nil uses os.Executable.
 	Executable func() (string, error)
+	// Gallery talks to the level site; nil uses MEGABONK_API_URL. Tests point it
+	// at a local server so no run reaches the network.
+	Gallery *site.Client
+	// Thunder talks to Thunderstore; nil uses its environment locations.
+	Thunder *thunderstore.Client
+	// Pins and ModPins are the digests the run will accept; nil uses the ones the
+	// installer ships.
+	Pins    map[string]string
+	ModPins []modinstall.ModPin
+	// WineRunner runs the wine command for a prefix edit; nil runs the real one.
+	WineRunner proton.Runner
 }
 
 // defaultPackage is the folder holding the installer on Windows and macOS, where
@@ -168,9 +215,8 @@ func (c *Command) pickProgress(env map[string]string, forceText bool, writer fun
 	return ui.PickProgress(env, forceText, writer)
 }
 
-// Reporter writes what the player sees. In JSON mode the human lines are
-// silenced so stdout stays machine-readable; warnings and problems still go to
-// stderr.
+// Reporter writes what the player sees. In JSON mode human lines are silenced
+// so stdout stays machine-readable; warnings still go to stderr.
 type Reporter struct {
 	AsJSON bool
 	Stdout io.Writer
@@ -221,51 +267,52 @@ func (r *Reporter) json(value any) {
 
 // newFlagSet wires the command line. The help text is Go's own; the flag names,
 // their meanings, and the exit codes are the contract.
-func newFlagSet(options *Options) (*flag.FlagSet, *stringList, *stringList, *stringList) {
+func newFlagSet(options *Options) (*flag.FlagSet, *stringList) {
 	fs := flag.NewFlagSet(Prog, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	var libraries, levels, packs stringList
-	fs.StringVar(&options.Package, "package", "", "the unzipped MegabonkLevels player package directory")
+	var libraries stringList
 	fs.StringVar(&options.Home, "home", "", "home directory to search for Steam (default: $HOME)")
 	fs.StringVar(&options.GameDir, "game-dir", "", "install straight into this Megabonk folder, skipping Steam discovery")
-	fs.StringVar(&options.Prefix, "prefix", "", "Proton or Wine prefix (the folder holding drive_c) to write the .NET runtime and version.dll override into")
+	fs.StringVar(&options.Prefix, "prefix", "", "Proton or Wine prefix (the folder holding drive_c) to set the winhttp DLL override in")
 	fs.Var(&libraries, "library", "extra Steam library folder to search (repeatable)")
-	fs.Var(&levels, "level", "a .mblevel.json file to add to UserData/Levels (repeatable)")
-	fs.Var(&packs, "pack", "a level-pack directory to install (repeatable)")
-	fs.StringVar(&options.DotnetIn, "dotnet-in", "prefix", "where the .NET 6 runtime goes")
-	fs.StringVar(&options.WineOverride, "wine-override", "auto", "how to set version.dll = native,builtin")
+	fs.Var(modFlag{options, plan.ModForced}, "mod", "also install the level editor mod and the loader it needs")
+	fs.Var(modFlag{options, plan.ModRefused}, "no-mod", "install levels and packs only, leaving the mod alone")
+	fs.StringVar(&options.WineOverride, "wine-override", "auto", "how to set winhttp = native,builtin")
 	fs.StringVar(&options.Proton, "proton", "", "force a named Proton compatibility tool when looking for wine")
 	fs.BoolVar(&options.NoGUI, "no-gui", false, "never open a progress dialog")
 	fs.BoolVar(&options.NonInteractive, "non-interactive", false, "force plain text without terminal input")
-	fs.BoolVar(&options.Check, "check", false, "report drift instead of changing anything")
+	fs.BoolVar(&options.Check, "check", false, "report what is missing instead of changing anything")
 	fs.BoolVar(&options.DryRun, "dry-run", false, "print what would be done and change nothing")
 	fs.BoolVar(&options.Uninstall, "uninstall", false, "remove what this installer placed")
 	fs.BoolVar(&options.AsJSON, "json", false, "machine-readable output on stdout")
-	return fs, &libraries, &levels, &packs
+	// --mod and --no-mod are one choice spelled two ways, each recorded as it is
+	// seen so the pair can be refused once the whole line is read.
+	return fs, &libraries
 }
 
 // ParseFlags reads the command line and rejects a choice outside the set the
 // reference allows.
 func ParseFlags(argv []string) (*Options, error) {
-	options := &Options{DotnetIn: "prefix", WineOverride: "auto"}
-	fs, libraries, levels, packs := newFlagSet(options)
+	options := &Options{WineOverride: "auto"}
+	fs, libraries := newFlagSet(options)
 	if err := fs.Parse(argv); err != nil {
 		return nil, err
 	}
-	if fs.NArg() > 0 {
-		return nil, fmt.Errorf("%s: error: unrecognized arguments: %s", Prog, strings.Join(fs.Args(), " "))
+	// Leftovers are the levels the player asked for. A word shaped like a flag was
+	// meant to be one: Go stops at the first non-flag word, so it lands here.
+	for _, arg := range fs.Args() {
+		if strings.HasPrefix(arg, "-") {
+			return nil, fmt.Errorf("%s: error: unrecognized arguments: %s", Prog, arg)
+		}
 	}
-	if options.DotnetIn != "prefix" && options.DotnetIn != "gamedir" {
-		return nil, fmt.Errorf("%s: error: argument --dotnet-in: invalid choice: '%s' (choose from 'gamedir', 'prefix')",
-			Prog, options.DotnetIn)
-	}
+	options.Inputs = append(options.Inputs, fs.Args()...)
 	switch options.WineOverride {
 	case "auto", "registry", "wine", "off":
 	default:
 		return nil, fmt.Errorf("%s: error: argument --wine-override: invalid choice: '%s' (choose from 'auto', 'off', 'registry', 'wine')",
 			Prog, options.WineOverride)
 	}
-	options.Libraries, options.Levels, options.Packs = *libraries, *levels, *packs
+	options.Libraries = *libraries
 	return options, nil
 }
 
@@ -273,20 +320,22 @@ func ParseFlags(argv []string) (*Options, error) {
 // each flag with its help.
 func usage() string {
 	options := &Options{}
-	fs, _, _, _ := newFlagSet(options)
+	fs, _ := newFlagSet(options)
 	var body strings.Builder
 	fs.SetOutput(&body)
 	fs.PrintDefaults()
 	lines := []string{
-		"usage: " + Prog + " [-h] [--package PACKAGE] [--home HOME]",
-		"                    [--game-dir GAME_DIR] [--prefix PREFIX] [--library LIBRARY]",
-		"                    [--level LEVEL] [--pack PACK] [--dotnet-in {gamedir,prefix}]",
+		"usage: " + Prog + " [-h] [--home HOME] [--game-dir GAME_DIR] [--prefix PREFIX]",
+		"                    [--library LIBRARY]",
 		"                    [--wine-override {auto,off,registry,wine}] [--proton PROTON]",
-		"                    [--no-gui] [--non-interactive] [--check] [--dry-run] [--uninstall]",
-		"                    [--json]",
+		"                    [--mod | --no-mod] [--no-gui] [--non-interactive] [--check]",
+		"                    [--dry-run] [--uninstall] [--json]",
+		"                    LEVEL [LEVEL ...]",
 		"",
-		"Install MelonLoader and the MegabonkLevels map editor on Linux (Steam Play /",
-		"Proton).",
+		"Install Megabonk levels from " + site.SiteHost + " into a Megabonk folder, on Linux",
+		"(Steam Play / Proton), Windows, or macOS under Wine. Each LEVEL is a share code",
+		"such as 7N1-MVB-WKF, a " + site.SiteHost + " level link, or the path to a",
+		".mblevel.json file.",
 		"",
 		"options:",
 		"  -h, --help            show this help message and exit",
@@ -297,36 +346,8 @@ func usage() string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-// ResolvePackageDir is the folder holding manifest.json, tolerating the extra
-// directory a zip usually extracts to.
-func ResolvePackageDir(raw string) (string, bool) {
-	candidate := ppath.ExpandUser(raw)
-	if ppath.IsFile(ppath.Join(candidate, "manifest.json")) {
-		return candidate, true
-	}
-	if ppath.IsDir(candidate) {
-		entries, err := os.ReadDir(candidate)
-		if err != nil {
-			return "", false
-		}
-		names := make([]string, 0, len(entries))
-		for _, entry := range entries {
-			names = append(names, entry.Name())
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			child := ppath.Join(candidate, name)
-			if ppath.IsDir(child) && ppath.IsFile(ppath.Join(child, "manifest.json")) {
-				return child, true
-			}
-		}
-	}
-	return "", false
-}
-
 // FindInstall locates Megabonk through Steam, reporting the libraries it
-// searched and the prefix that belongs to the install. A prefix chosen with
-// --prefix needs no reporting: the player already picked it.
+// searched. A prefix chosen with --prefix needs no reporting.
 func (c *Command) FindInstall(home string, extraLibraries []string, reporter *Reporter, prefixChosen bool) (gameDir string, prefix string, searched []string) {
 	if c.native() {
 		return c.findWindowsInstall(extraLibraries, reporter)
@@ -471,20 +492,6 @@ func warnUngrantedFlatpakRoots(reporter *Reporter, clients []steam.Client, roots
 }
 
 // ValidateInputs checks the --level and --pack arguments before anything else.
-func ValidateInputs(options *Options, reporter *Reporter) []string {
-	problems := []string{}
-	for _, raw := range options.Levels {
-		problems = append(problems, content.ValidateLevelFile(ppath.ExpandUser(raw))...)
-	}
-	for _, raw := range options.Packs {
-		problems = append(problems, content.ValidatePackSource(ppath.ExpandUser(raw))...)
-	}
-	for _, problem := range problems {
-		reporter.Problem(problem)
-	}
-	return problems
-}
-
 func launchOptionNote(launchOption string) string {
 	return "Steam > Library > Megabonk > Properties, then paste this into Launch Options:\n\n" +
 		"    " + launchOption + "\n\n" +
@@ -509,10 +516,7 @@ func (c *Command) startWindow(title string, work func(ui.Progress) int) (int, bo
 }
 
 // runProgress reports a long run: the MyGo native-UI window first when this
-// session can show one — GTK 3 on Linux, nothing extra elsewhere — and the
-// unchanged plain-text reporter otherwise, including when the window could
-// not start. The order is window, then text; no DE-specific dialog tool is
-// ever used.
+// session can show one, and the plain-text reporter otherwise.
 func (c *Command) runProgress(options *Options, reporter *Reporter, run windowRun, work func(ui.Progress) (int, error)) (int, error) {
 	env := c.environment()
 	forced := options.NoGUI || options.NonInteractive || reporter.AsJSON
@@ -572,27 +576,43 @@ func (r windowRun) failure(err error) string {
 }
 
 func (c *Command) planOptions(options *Options, gameDir string, located *Located) plan.Options {
-	runtimeMode := options.DotnetIn
+	inputs := make([]plan.Input, 0, len(options.Inputs))
+	for _, raw := range options.Inputs {
+		inputs = append(inputs, plan.Input{Raw: raw})
+	}
+	mode := ""
 	if c.native() {
-		runtimeMode = plan.RuntimeModeNative
+		mode = plan.PlatformNative
 	}
 	wineBin := ""
 	if c.wine() {
-		runtimeMode = plan.RuntimeModeWine
+		mode = plan.PlatformWine
 		wineBin = c.wineBinary()
 	}
 	return plan.Options{
-		Game:         gameDir,
-		Prefix:       c.prefix(options, gameDir, located),
-		RuntimeMode:  runtimeMode,
-		DllOverride:  options.WineOverride,
-		WineOverride: options.WineOverride,
-		WineBin:      wineBin,
-		ForcedTool:   options.Proton,
-		Level:        lastOf(options.Levels),
-		Pack:         lastOf(options.Packs),
-		Verify:       false,
+		Game:       gameDir,
+		Prefix:     c.prefix(options, gameDir, located),
+		Platform:   mode,
+		WineBin:    wineBin,
+		WineRunner: c.WineRunner,
+		Inputs:     inputs,
+		Mod:        options.Mod,
+		APIClient:  c.Gallery,
+		Thunder:    c.Thunder,
+		Pins:       c.Pins,
+		ModPins:    c.ModPins,
+		Cache:      c.downloadCache(),
 	}
+}
+
+// downloadCache is where archives are kept between runs, so a repair can reuse
+// what was already fetched and verified.
+func (c *Command) downloadCache() string {
+	home, found := lookupHome(c.environment())
+	if !found {
+		return ""
+	}
+	return filepath.Join(home, ".cache", "megabonk-levels")
 }
 
 func lastOf(values []string) string {
@@ -642,28 +662,81 @@ type Located struct {
 	PrefixDiscovered bool
 }
 
-func (c *Command) doCheck(options *Options, reporter *Reporter, gameDir, packageDir string, pkg *manifest.Package, located *Located) (int, error) {
-	built, err := plan.BuildPlan(packageDir, c.planOptions(options, gameDir, located))
+// doCheck reports what the named levels still need and whether the mod is in
+// place. It changes nothing.
+func (c *Command) doCheck(options *Options, reporter *Reporter, gameDir string, located *Located) (int, error) {
+	built, err := plan.BuildPlan(c.planOptions(options, gameDir, located))
 	if err != nil {
 		return 0, err
 	}
+	for _, warning := range built.Warnings {
+		reporter.Warn(warning)
+	}
 	if len(built.Actions) == 0 {
-		reporter.Say("nothing to do — the install matches the package")
+		reporter.Say(checkCleanMessage(built))
+		// A clean content check still answers the mod question, which is the only
+		// thing --check can be asked once nothing is left to place.
+		reporter.Say(modStatusLine(built))
 		if reporter.AsJSON {
-			reporter.json(withPlan(map[string]any{"ok": true, "drift": []any{}}, built))
+			reporter.json(withPlan(map[string]any{"ok": true, "missing": []any{}, "mod": modDocument(built)}, built))
 		}
 		return ExitOK, nil
 	}
-	reporter.Say(fmt.Sprintf("%d thing(s) are out of date with package %s:", len(built.Actions), pkg.PackageID))
-	drift := []any{}
+	reporter.Say(fmt.Sprintf("%d thing(s) are missing from %s:", len(built.Actions), gameDir))
+	missing := []any{}
 	for _, action := range built.Actions {
-		reporter.Say(fmt.Sprintf("  - %s: %s", action.Kind, action.Path))
-		drift = append(drift, action.Document())
+		reporter.Say(fmt.Sprintf("  - %s: %s", action.Kind, action.Label()))
+		missing = append(missing, action.Document())
 	}
+	reporter.Say(modStatusLine(built))
 	if reporter.AsJSON {
-		reporter.json(withPlan(map[string]any{"ok": false, "drift": drift}, built))
+		reporter.json(withPlan(map[string]any{"ok": false, "missing": missing, "mod": modDocument(built)}, built))
 	}
 	return ExitOutOfDate, nil
+}
+
+// checkCleanMessage tells the player the game already holds every level asked
+// for, naming what is there.
+func checkCleanMessage(built *plan.Plan) string {
+	if len(built.Levels) == 0 {
+		return "nothing to do — the game already holds what was asked for"
+	}
+	return "nothing to do — " + strings.Join(built.Levels, ", ") + " " +
+		grammaticalIs(len(built.Levels)) + " already installed"
+}
+
+func grammaticalIs(count int) string {
+	if count == 1 {
+		return "is"
+	}
+	return "are"
+}
+
+// modStatusLine says whether the level editor mod is installed, and at what
+// version.
+func modStatusLine(built *plan.Plan) string {
+	if built.ModStatus == nil || !built.ModStatus.Installed {
+		return "the " + thunderstore.ModName + " mod is not installed"
+	}
+	release := built.ModStatus.Release
+	if release == "" {
+		release = built.ModStatus.ModVersion
+	}
+	if release == "" {
+		return "the " + thunderstore.ModName + " mod is installed"
+	}
+	return "the " + thunderstore.ModName + " mod is installed (version " + release + ")"
+}
+
+// modDocument is the mod half of a --json payload.
+func modDocument(built *plan.Plan) map[string]any {
+	installed := built.ModStatus != nil && built.ModStatus.Installed
+	document := map[string]any{"installed": installed, "wanted": built.Mod}
+	if built.ModStatus != nil {
+		document["version"] = built.ModStatus.Release
+		document["bepinex_version"] = built.ModStatus.BepInExVersion
+	}
+	return document
 }
 
 // withPlan merges a plan document into a JSON payload.
@@ -682,10 +755,11 @@ func withPlan(payload map[string]any, built *plan.Plan) map[string]any {
 	return payload
 }
 
-func (c *Command) doInstall(options *Options, reporter *Reporter, gameDir, packageDir string, pkg *manifest.Package, located *Located) (int, error) {
+// doInstall shows the plan, asks for it to be confirmed through the progress
+// window, and applies it. Nothing in the game folder changes before that.
+func (c *Command) doInstall(options *Options, reporter *Reporter, gameDir string, located *Located) (int, error) {
 	opts := c.planOptions(options, gameDir, located)
-	opts.Manifest = pkg
-	built, err := plan.BuildPlan(packageDir, opts)
+	built, err := plan.BuildPlan(opts)
 	if err != nil {
 		return 0, err
 	}
@@ -700,12 +774,13 @@ func (c *Command) doInstall(options *Options, reporter *Reporter, gameDir, packa
 
 	if options.DryRun {
 		if len(built.Actions) == 0 {
-			reporter.Say("nothing to do — the install already matches the package")
+			reporter.Say(checkCleanMessage(built))
 		} else {
 			reporter.Say(fmt.Sprintf("would do %d thing(s) to %s:", len(built.Actions), gameDir))
 			for _, action := range built.Actions {
 				reporter.Say(fmt.Sprintf("  - %s: %s", action.Kind, action.Label()))
 			}
+			reporter.Say(modStatusLine(built))
 		}
 		return ExitOK, nil
 	}
@@ -733,7 +808,8 @@ func (c *Command) doInstall(options *Options, reporter *Reporter, gameDir, packa
 			reporter.json(withPlan(map[string]any{"ok": true, "dry_run": false, "taken": steps}, built))
 			return ExitOK, nil
 		}
-		c.reportInstall(reporter, built, taken, pkg)
+		c.reportInstall(reporter, built, taken)
+		reportGameBuild(reporter, steam.InstalledBuildID(built.GameDir))
 		if shower, ok := progress.(ui.LaunchOptionShower); ok && built.LaunchOption != nil {
 			shower.ShowLaunchOption(*built.LaunchOption)
 		}
@@ -749,23 +825,27 @@ func (c *Command) doInstall(options *Options, reporter *Reporter, gameDir, packa
 	return code, nil
 }
 
-func (c *Command) reportInstall(reporter *Reporter, built *plan.Plan, taken []plan.Action, pkg *manifest.Package) {
+// reportInstall tells the player what landed, in the order the plan promised it:
+// levels, packs, the mod if one was placed, and the record --uninstall reads.
+func (c *Command) reportInstall(reporter *Reporter, built *plan.Plan, taken []plan.Action) {
 	if len(taken) == 0 {
-		reporter.Say(fmt.Sprintf("nothing to do — %s is already installed and matches package %s", pkg.Label(), pkg.PackageID))
+		reporter.Say(checkCleanMessage(built))
 	} else {
-		reporter.Say(fmt.Sprintf("installed %s (%d step(s))", pkg.Label(), len(taken)))
+		reporter.Say(fmt.Sprintf("installed %d thing(s) into %s", len(taken), built.GameDir))
 	}
 	for _, action := range taken {
 		reporter.Say(fmt.Sprintf("  %s: %s", action.Kind, action.Path))
 	}
-	if len(taken) == 0 {
-		for _, entry := range pkg.Files {
-			reporter.Say(fmt.Sprintf("  already in place: %s", ppath.Join(built.GameDir, entry.Dest)))
-		}
+	if len(taken) > 0 {
+		reporter.Say("  " + modStatusLine(built))
 	}
 	if built.LaunchOption != nil {
 		reporter.Say("")
 		reporter.Say(launchOptionNote(*built.LaunchOption))
+	} else if built.OverrideNote != "" {
+		// A Wine run edited the prefix itself; say so instead of pointing at Steam.
+		reporter.Say("")
+		reporter.Say("Set " + built.OverrideNote + ".")
 	}
 	record := content.LoadRecord(built.GameDir)
 	if record != nil {
@@ -828,6 +908,10 @@ func (c *Command) Main(argv []string) int {
 		fmt.Fprintln(c.Stderr, usageError(err.Error()))
 		return ExitUsage
 	}
+	if err := c.checkModFlags(options); err != nil {
+		fmt.Fprintln(c.Stderr, usageError(err.Error()))
+		return ExitUsage
+	}
 	reporter := &Reporter{AsJSON: options.AsJSON, Stdout: c.Stdout, Stderr: c.Stderr}
 
 	if options.Uninstall {
@@ -842,29 +926,10 @@ func (c *Command) Main(argv []string) int {
 		return code
 	}
 
-	if options.Package == "" {
-		options.Package = c.defaultPackage()
-	}
-	if options.Package == "" {
-		return reporter.Fail("no --package: point it at the unzipped MegabonkLevels download (the folder holding manifest.json)", ExitUsage)
-	}
-	packageDir, found := ResolvePackageDir(options.Package)
-	if !found {
-		return reporter.Fail(options.Package+" has no manifest.json — pass the unzipped download folder, not the .zip", ExitError)
-	}
-	pkg, err := manifest.LoadManifest(ppath.Join(packageDir, "manifest.json"))
-	if err != nil {
-		return reporter.Fail(err.Error(), ExitError)
-	}
-	if len(ValidateInputs(options, reporter)) > 0 {
-		return reporter.Fail("the level or level-pack inputs are not valid — see the list above", ExitError)
-	}
-	drift, err := manifest.VerifyPackage(packageDir)
-	if err != nil {
-		return reporter.Fail(err.Error(), ExitError)
-	}
-	if len(drift) > 0 {
-		return reporter.Fail("the package does not match its manifest:\n  "+strings.Join(drift, "\n  "), ExitError)
+	if len(options.Inputs) == 0 {
+		return reporter.Fail("nothing to install: name at least one level — a share code such as "+
+			site.ExampleCode+", a "+site.SiteHost+" level link, or a "+plan.LevelFileSuffix+
+			" file on disk", ExitUsage)
 	}
 
 	located := c.locate(options, reporter)
@@ -872,42 +937,41 @@ func (c *Command) Main(argv []string) int {
 		return ExitNotFound
 	}
 	gameDir := located.GameDir
-	build := gamebuild.Classify(gameDir)
-	if !build.Supported() {
-		return reporter.Fail(gamebuild.UnsupportedBuildMessage(gameDir, build.Kind, pkg.MelonloaderVersion), ExitUnsupportedBuild)
-	}
 	if steam.SteamRunning() {
 		reporter.Warn("Steam is running — quit it first if a step looks like it did not stick")
 	}
 
-	reportGameBuild(reporter, steam.InstalledBuildID(gameDir), pkg.GameBuildID)
-
 	if options.Check {
-		code, err := c.doCheck(options, reporter, gameDir, packageDir, pkg, located)
+		code, err := c.doCheck(options, reporter, gameDir, located)
 		if err != nil {
 			return reporter.Fail(err.Error(), ExitError)
 		}
 		return code
 	}
-	code, err := c.doInstall(options, reporter, gameDir, packageDir, pkg, located)
+	code, err := c.doInstall(options, reporter, gameDir, located)
 	if err != nil {
-		return reporter.Fail(err.Error(), ExitError)
+		switch {
+		case plan.IsUnsupportedBuild(err):
+			return reporter.Fail(err.Error(), ExitUnsupportedBuild)
+		// The player left out an argument the platform needs, which is a usage
+		// error rather than something that went wrong along the way.
+		case plan.IsMissingPrefix(err):
+			return reporter.Fail(err.Error(), ExitUsage)
+		default:
+			return reporter.Fail(err.Error(), ExitError)
+		}
 	}
 	return code
 }
 
-// reportGameBuild says whether the installed game is the build the package was
-// verified against; a difference only warns.
-func reportGameBuild(reporter *Reporter, installed, verified string) {
-	switch installed {
-	case "":
-		reporter.Say("installed game build is unknown (no Steam appmanifest found); the package was verified against build " + verified)
-	case verified:
-		reporter.Say("game build " + installed + " matches the package")
-	default:
-		reporter.Warn("installed game build " + installed + " differs from build " + verified +
-			" this package was verified against; the mod may not work until a matching package is released")
+// reportGameBuild names the Steam build the game is on, for a player reporting a
+// problem. It is an observation, not a verdict: nothing is pinned to one build.
+func reportGameBuild(reporter *Reporter, installed string) {
+	if installed == "" {
+		reporter.Say("installed game build is unknown (no Steam appmanifest found)")
+		return
 	}
+	reporter.Say("game build " + installed)
 }
 
 // locate resolves the game directory from --game-dir or Steam discovery.
@@ -953,7 +1017,7 @@ func (c *Command) notFoundLines(home string, extraLibraries []string) []string {
 	lines := []string{
 		"Megabonk was not found in any Steam library.",
 		"Install it in Steam and start it once, or point the installer straight at it:",
-		"  " + Prog + " --package <package> --game-dir <path to the folder holding " + gamebuild.WindowsExe + ">",
+		"  " + Prog + " --game-dir <path to the folder holding " + gamebuild.WindowsExe + "> LEVEL...",
 	}
 	if c.native() {
 		return c.windowsNotFoundLines(extraLibraries, lines)

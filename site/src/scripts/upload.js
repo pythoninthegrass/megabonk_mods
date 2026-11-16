@@ -10,7 +10,7 @@ import {
   relativeDate,
 } from './gallery.js';
 import { TAGS } from './levels.js';
-import { pb, PB_URL } from './pb.js';
+import { FILE_URL, pb } from './pb.js';
 
 export default () => ({
   tags: TAGS,
@@ -156,7 +156,7 @@ export default () => ({
     }
   },
 
-  cover: (level) => coverUrl(PB_URL, level, '320x0'),
+  cover: (level) => coverUrl(FILE_URL, level, '320x0'),
   plural,
   relativeDate,
   mapName,

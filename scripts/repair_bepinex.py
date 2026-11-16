@@ -24,6 +24,14 @@ PREREQUISITES = (
     "Megabonk.exe", "winhttp.dll", "doorstop_config.ini",
     "BepInEx/core/BepInEx.Unity.IL2CPP.dll",
 )
+DOORSTOP_FILE = "doorstop_config.ini"
+DOORSTOP_RELATIVE = {
+    "target_assembly": "BepInEx\\core\\BepInEx.Unity.IL2CPP.dll",
+    "dll_search_path_override": "BepInEx\\core",
+    "coreclr_path": "dotnet\\coreclr.dll",
+    "corlibDir": "dotnet",
+}
+STALE_ASSEMBLY_CACHE = "BepInEx/cache/chainloader_typeloader.dat"
 
 
 def payload(body: bytes) -> dict[str, bytes]:
@@ -72,6 +80,47 @@ def require_stopped() -> None:
         raise ValueError("Quit Megabonk before repairing BepInEx; no processes will be stopped automatically")
 
 
+def _is_absolute(value: str) -> bool:
+    value = value.strip()
+    return value.startswith(("/", "\\")) or (len(value) > 1 and value[1] == ":")
+
+
+def _ends_under(value: str, expected: str) -> bool:
+    got = value.strip().replace("\\", "/").casefold()
+    want = expected.replace("\\", "/").casefold()
+    return got == want or got.endswith("/" + want)
+
+
+def plan_doorstop(game: Path) -> tuple[list[str], bytes | None]:
+    """Plan the doorstop_config.ini fix; a manager may record this install's own folder absolutely."""
+    config = game / DOORSTOP_FILE
+    if not config.is_file():
+        return [], None
+    expected = {key.casefold(): value for key, value in DOORSTOP_RELATIVE.items()}
+    raw = config.read_bytes().decode("utf-8", errors="ignore")
+    newline = "\r\n" if "\r\n" in raw else "\n"
+    actions: list[str] = []
+    lines: list[str] = []
+    rewritten = False
+    for line in raw.splitlines():
+        key, sep, value = line.partition("=")
+        target = expected.get(key.strip().casefold()) if sep else None
+        if target and _is_absolute(value) and _ends_under(value, target):
+            actions.append(f"doorstop {key.strip()} -> {target}")
+            lines.append(f"{key}={target}")
+            rewritten = True
+        elif target and _is_absolute(value):
+            actions.append(f"left absolute doorstop {key.strip()} ({value.strip()}); it points outside this game folder")
+            lines.append(line)
+        else:
+            lines.append(line)
+    if not rewritten:
+        return actions, None
+    text = newline.join(lines)
+    body = (text + newline) if raw.endswith("\n") else text
+    return actions, body.encode("utf-8")
+
+
 def repair(game: Path, body: bytes, *, dry_run: bool = False) -> list[str]:
     require_stopped()
     game = game.expanduser().resolve()
@@ -87,6 +136,7 @@ def repair(game: Path, body: bytes, *, dry_run: bool = False) -> list[str]:
                 raise ValueError(f"Existing file differs from the pinned pack; refusing to overwrite: {target}")
         else:
             missing[name] = data
+    doorstop_actions, doorstop_bytes = plan_doorstop(game)
     proxy = safe_target(game, "version.dll")
     backup = safe_target(game, "version.dll.bak")
     park = proxy.exists()
@@ -98,6 +148,7 @@ def repair(game: Path, body: bytes, *, dry_run: bool = False) -> list[str]:
     actions = [f"copy {name}" for name in missing]
     if park:
         actions.append("park version.dll -> version.dll.bak")
+    actions += doorstop_actions
     if dry_run:
         return actions
     require_stopped()
@@ -109,7 +160,20 @@ def repair(game: Path, body: bytes, *, dry_run: bool = False) -> list[str]:
     if park:
         os.link(proxy, backup)
         proxy.unlink()
+    if doorstop_bytes is not None:
+        write_doorstop(game, doorstop_bytes)
     return actions
+
+
+def write_doorstop(game: Path, body: bytes) -> None:
+    target = safe_target(game, DOORSTOP_FILE)
+    backup = safe_target(game, f"{DOORSTOP_FILE}.bak")
+    if not backup.exists():
+        backup.write_bytes(target.read_bytes())
+    target.write_bytes(body)
+    cache = safe_target(game, STALE_ASSEMBLY_CACHE)
+    if cache.is_file():
+        cache.unlink()
 
 
 def main(argv: list[str] | None = None) -> int:

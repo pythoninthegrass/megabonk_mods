@@ -417,9 +417,11 @@ These apply when using the development harness (not a packaged install) on a
 Fedora host that runs vanilla Steam (not a gamescope session):
 
 - **Offline direct-Proton launch** must export `SteamAppId=3405340 SteamGameId=3405340`.
-  Without them the loader calls `SteamApps.GetAppBuildId()` before Steamworks
-  has initialised and every `load-level` command fails with
-  `System.InvalidOperationException: Steamworks is not initialized`.
+  Without them Steamworks never initialises, so the mod logs
+  `GameBuildId: Steamworks is not initialized` once and every level loads with no
+  `gameBuildId` recorded and no stale-level comparison (an earlier build of the mod
+  rejected every `load-level` with `System.InvalidOperationException: Steamworks is
+  not initialized` instead).
 - **Stale harness commands survive a restart.** The launcher script does not
   clear the harness queue; a queued `quit` written during a previous session
   executes at the next boot and kills the process immediately. Clear all five

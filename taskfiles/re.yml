@@ -15,6 +15,52 @@ tasks:
     cmds:
       - uv run scripts/il2cpp_dump.py
 
+  shaders-metal:
+    desc: "Translate every shipped GLSL program to MSL and score the Metal compile pass rate"
+    vars:
+      SHADERS_BUILD: '{{.SHADERS_BUILD | default ".tools/megabonk-linux-native/Megabonk"}}'
+      SHADERS_PLATFORM: '{{.SHADERS_PLATFORM | default "15"}}'
+      SHADERS_STAGES: '{{.SHADERS_STAGES | default "glslang,spirv,metal"}}'
+      SHADERS_JOBS: '{{.SHADERS_JOBS | default "12"}}'
+      SHADERS_OUT: '{{.SHADERS_OUT | default ".tools/shaders-metal"}}'
+      SHADERS_EXTRA: '{{.SHADERS_EXTRA | default ""}}'
+    summary: |
+      Usage: task re:shaders-metal [SHADERS_BUILD=<linux build dir>]
+             [SHADERS_PLATFORM=15] [SHADERS_STAGES=glslang,spirv,metal]
+             [SHADERS_JOBS=12] [SHADERS_OUT=<dir>]
+             [SHADERS_EXTRA=--fresh|--no-normalize|--glslang-target-env=vulkan1.0]
+
+      Extracts one '#ifdef <STAGE>'-guarded GLSL program per chunk from the
+      platform-<SHADERS_PLATFORM> serialized shader blobs of a native Linux
+      build, then drives glslangValidator -> SPIR-V -> spirv-cross --msl ->
+      'xcrun -sdk macosx metal -c'. Prints a machine-readable JSON summary on
+      stdout and writes per-program artifacts, cache.jsonl and summary.json to
+      SHADERS_OUT (default .tools/shaders-metal). Needs glslang and spirv-cross
+      (brew install glslang spirv-cross) and the Xcode command line tools.
+      SHADERS_BUILD defaults to .tools/megabonk-linux-native/Megabonk. See
+      scripts/shader_metal_pass.py.
+    cmds:
+      - uv run --script scripts/shader_metal_pass.py "{{.SHADERS_BUILD}}"
+        --platform "{{.SHADERS_PLATFORM}}" --stages "{{.SHADERS_STAGES}}"
+        --jobs "{{.SHADERS_JOBS}}" --out "{{.SHADERS_OUT}}" {{.SHADERS_EXTRA}}
+
+  shaders-pull:
+    desc: "Rsync the native Linux Megabonk build from the player box into .tools/"
+    summary: |
+      Usage: task re:shaders-pull
+
+      Copies the Linux build into gitignored .tools/megabonk-linux-native/Megabonk/
+      for re:shaders-metal. The rsync source lives in the gitignored .env as
+      MEGABONK_LINUX_BUILD_RSYNC ("<host>:<path to the Megabonk app dir>/"),
+      keeping the player box's hostname out of tracked files.
+
+    preconditions:
+      - sh: '[ -n "${MEGABONK_LINUX_BUILD_RSYNC:-}" ]'
+        msg: "Set MEGABONK_LINUX_BUILD_RSYNC in .env to <host>:<path>/Megabonk/"
+    cmds:
+      - mkdir -p .tools/megabonk-linux-native
+      - rsync -a --delete "$MEGABONK_LINUX_BUILD_RSYNC" .tools/megabonk-linux-native/Megabonk/
+
   _install-dotnet:
     internal: true
     desc: "Install the mise-managed dotnet SDK used to run Il2CppDumper"

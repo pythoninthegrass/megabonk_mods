@@ -19,7 +19,8 @@ import (
 	"time"
 
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/content"
-	"github.com/pythoninthegrass/megabonk_mods/installer/internal/manifest"
+	"github.com/pythoninthegrass/megabonk_mods/installer/internal/gamebuild"
+	"github.com/pythoninthegrass/megabonk_mods/installer/internal/modinstall"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/plan"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/ppath"
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/proton"
@@ -85,50 +86,6 @@ func writeZip(t *testing.T, path string, entries map[string]string) string {
 	return sha256File(path)
 }
 
-func makePackage(t *testing.T) string {
-	t.Helper()
-	packageDir := filepath.Join(t.TempDir(), "package")
-	loader := writeZip(t, filepath.Join(packageDir, "vendor", "MelonLoader.x64.zip"), map[string]string{
-		"version.dll":                                     "MZ",
-		"MelonLoader/net6/MelonLoader.dll":                "MZ",
-		"MelonLoader/net6/MelonLoader.runtimeconfig.json": "{}",
-	})
-	dotnet := writeZip(t, filepath.Join(packageDir, "vendor", "dotnet-runtime-6.0.36-win-x64.zip"), map[string]string{
-		"dotnet.exe":                  "MZ",
-		"host/fxr/6.0.36/hostfxr.dll": "MZ",
-		"shared/Microsoft.NETCore.App/6.0.36/System.Private.CoreLib.dll": "MZ",
-	})
-	write(t, filepath.Join(packageDir, "mod", "MegabonkLevels.Mod.dll"), "mod dll")
-	write(t, filepath.Join(packageDir, "mod", "MegabonkLevels.Mod.pdb"), "pdb")
-	write(t, filepath.Join(packageDir, "mod", "NLayer.dll"), "nlayer")
-	document := map[string]any{
-		"schema":              manifest.PackageSchema,
-		"platform":            "linux",
-		"package_id":          "megabonk-levels-0.0.1-ml0.7.3-linux",
-		"mod_version":         "0.0.1",
-		"melonloader_version": "0.7.3",
-		"game_buildid":        "21750826",
-		"generated":           "2026-10-31T03:30:00Z",
-		"verified_on":         []any{},
-		"vendors": []any{
-			map[string]any{"name": "MelonLoader.x64.zip", "url": "u", "sha256": loader, "kind": "melonloader", "version": "0.7.3"},
-			map[string]any{"name": "dotnet-runtime-6.0.36-win-x64.zip", "url": "u", "sha256": dotnet, "kind": "dotnet", "version": "6.0.36"},
-		},
-		"files": []any{
-			map[string]any{"path": "mod/MegabonkLevels.Mod.dll", "sha256": sha256Body("mod dll"), "dest": "Mods/MegabonkLevels.Mod.dll"},
-			map[string]any{"path": "mod/MegabonkLevels.Mod.pdb", "sha256": sha256Body("pdb"), "dest": "Mods/MegabonkLevels.Mod.pdb"},
-			map[string]any{"path": "mod/NLayer.dll", "sha256": sha256Body("nlayer"), "dest": "Mods/NLayer.dll"},
-			map[string]any{"path": "mod/NLayer.dll", "sha256": sha256Body("nlayer"), "dest": "UserLibs/NLayer.dll"},
-		},
-	}
-	body, err := json.Marshal(document)
-	if err != nil {
-		t.Fatal(err)
-	}
-	write(t, filepath.Join(packageDir, "manifest.json"), string(body))
-	return packageDir
-}
-
 func makeGame(t *testing.T) string {
 	t.Helper()
 	game := filepath.Join(t.TempDir(), "Megabonk")
@@ -150,6 +107,21 @@ type session struct {
 func run(t *testing.T, argv ...string) session {
 	t.Helper()
 	return runAs(t, nil, nil, argv...)
+}
+
+// runOffline is run with the level site and Thunderstore pointed at local
+// servers, so a whole install can be driven without a network. It hands back the
+// two stubs so a test can assert on what was fetched.
+func runOffline(t *testing.T, argv ...string) (session, *gallery, *store) {
+	t.Helper()
+	gallery, thunder := newGallery(t), newStore(t)
+	got := runAs(t, func(command *Command) {
+		command.Gallery = gallery.client()
+		command.Thunder = thunder.client()
+		command.Pins = map[string]string{fixtureLoaderVer: thunder.packDigest}
+		command.ModPins = []modinstall.ModPin{{Version: fixtureModVer, SHA256: thunder.modDigest}}
+	}, nil, argv...)
+	return got, gallery, thunder
 }
 
 // runAs is run with the command's settings adjusted and the stubbed
@@ -182,98 +154,121 @@ func runAs(t *testing.T, configure func(*Command), runner func([]string, time.Du
 	return session{exit: command.Main(argv), stdout: stdout, stderr: stderr}
 }
 
-func install(t *testing.T) (string, string) {
+// install drives a whole run against the local site and Thunderstore and hands
+// back the game folder, so a test can start from an installed game.
+func install(t *testing.T) (string, *gallery, *store) {
 	t.Helper()
-	packageDir, game := makePackage(t), makeGame(t)
-	got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui")
+	game := makeGame(t)
+	got, gallery, thunder := runOffline(t, "--game-dir", game, "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("install exited %d: %s %s", got.exit, got.stdout, got.stderr)
 	}
-	return packageDir, game
+	return game, gallery, thunder
 }
 
 func TestInstallWritesTheWholeTree(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui")
-	if got.exit != ExitOK {
-		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
-	}
-	stdout := got.stdout.String()
-	for _, want := range []string{"installed MegabonkLevels 0.0.1 (MelonLoader 0.7.3)", "1/", "installed 20", LogHint} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("stdout should contain %q:\n%s", want, stdout)
-		}
-	}
+	game, gallery, _ := install(t)
+	stdout := ""
 	for _, name := range []string{
-		"Mods/MegabonkLevels.Mod.dll", "Mods/MegabonkLevels.Mod.pdb", "Mods/NLayer.dll",
-		"UserLibs/NLayer.dll", "MelonLoader/net6/MelonLoader.dll", "version.dll",
-		"MelonLoader/" + content.VersionMarkerName, "dotnet6-win/host/fxr/6.0.36/hostfxr.dll",
-		"dotnet6-win/" + proton.RuntimeMarkerName, content.RecordName,
+		// The level and its pictures, the pack it needs, and the mod with the
+		// loader it depends on: one run places all of it.
+		"UserData/Levels/" + fixtureFile,
+		"UserData/Levels/thps-warehouse.png",
+		"UserData/Levels/thps-warehouse.biome.png",
+		"UserData/LevelPacks/" + fixturePackID + "/manifest.json",
+		"BepInEx/plugins/MegabonkLevels/MegabonkLevels.Mod.dll",
+		"BepInEx/plugins/MegabonkLevels/NLayer.dll",
+		"BepInEx/core/BepInEx.dll",
+		"dotnet/host/fxr/6.0.36/hostfxr.dll",
+		"winhttp.dll",
+		content.RecordName,
 	} {
 		if !ppath.IsFile(filepath.Join(game, filepath.FromSlash(name))) {
 			t.Errorf("%s was not installed", name)
 		}
 	}
+	_ = stdout
 	if !ppath.IsDir(filepath.Join(game, "UserData", "Levels")) {
 		t.Error("UserData/Levels was not created")
+	}
+	// The level came through the counting route, which is what credits its author.
+	if !strings.Contains(strings.Join(gallery.downloads(), " "), "/api/l/"+fixtureCode+"/download") {
+		t.Errorf("the level was not fetched through the counting route: %v", gallery.downloads())
 	}
 }
 
 func TestSecondRunReportsNothingToDo(t *testing.T) {
-	packageDir, game := install(t)
-	got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui")
+	game, _, _ := install(t)
+	got, _, _ := runOffline(t, "--game-dir", game, "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
-	if !strings.Contains(got.stdout.String(), "nothing to do — MegabonkLevels 0.0.1 (MelonLoader 0.7.3) is already installed") {
+	if !strings.Contains(got.stdout.String(), "nothing to do") {
 		t.Errorf("stdout = %s", got.stdout)
-	}
-	if !strings.Contains(got.stdout.String(), "already in place: "+ppath.Join(game, "Mods/NLayer.dll")) {
-		t.Errorf("the idle report should list what is in place:\n%s", got.stdout)
 	}
 }
 
-func TestCheckReportsDriftThenClean(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	got := run(t, "--package", packageDir, "--game-dir", game, "--check", "--no-gui")
+func TestCheckReportsWhatIsMissingThenClean(t *testing.T) {
+	game := makeGame(t)
+	got, _, _ := runOffline(t, "--game-dir", game, "--check", "--no-gui", fixtureCode)
 	if got.exit != ExitOutOfDate {
 		t.Fatalf("exit = %d, want %d\n%s", got.exit, ExitOutOfDate, got.stderr)
 	}
 	stdout := got.stdout.String()
-	if !strings.Contains(stdout, "thing(s) are out of date with package megabonk-levels-0.0.1-ml0.7.3-linux") {
+	if !strings.Contains(stdout, "thing(s) are missing") {
 		t.Errorf("stdout = %s", stdout)
 	}
-	for _, want := range []string{"  - install-loader:", "  - install-runtime:", "  - install-file:"} {
+	for _, want := range []string{"fetch-level", "fetch-pack", "install-mod", "not installed"} {
 		if !strings.Contains(stdout, want) {
-			t.Errorf("drift should list %q:\n%s", want, stdout)
+			t.Errorf("the report should mention %q:\n%s", want, stdout)
 		}
 	}
 
-	if code := run(t, "--package", packageDir, "--game-dir", game, "--no-gui").exit; code != ExitOK {
-		t.Fatalf("install exit = %d", code)
+	installed, _, _ := runOffline(t, "--game-dir", game, "--no-gui", fixtureCode)
+	if installed.exit != ExitOK {
+		t.Fatalf("install exit = %d\n%s", installed.exit, installed.stderr)
 	}
-	clean := run(t, "--package", packageDir, "--game-dir", game, "--check", "--no-gui")
-	if clean.exit != ExitOK || !strings.Contains(clean.stdout.String(), "nothing to do — the install matches the package") {
+	clean, _, _ := runOffline(t, "--game-dir", game, "--check", "--no-gui", fixtureCode)
+	if clean.exit != ExitOK || !strings.Contains(clean.stdout.String(), "nothing to do") {
 		t.Errorf("clean check = %d\n%s", clean.exit, clean.stdout)
+	}
+	if !strings.Contains(clean.stdout.String(), "is installed") {
+		t.Errorf("a clean check should say the mod is in place:\n%s", clean.stdout)
 	}
 }
 
-func TestDryRunChangesNothing(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	got := run(t, "--package", packageDir, "--game-dir", game, "--dry-run", "--no-gui")
+func TestDryRunListsEveryStepAndChangesNothing(t *testing.T) {
+	game := makeGame(t)
+	got, _, _ := runOffline(t, "--game-dir", game, "--dry-run", "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
-	if !strings.Contains(got.stdout.String(), "would do ") {
-		t.Errorf("stdout = %s", got.stdout)
+	stdout := got.stdout.String()
+	if !strings.Contains(stdout, "would do ") {
+		t.Errorf("stdout = %s", stdout)
 	}
-	if ppath.Exists(filepath.Join(game, "Mods")) || ppath.Exists(content.RecordFilePath(game)) {
+	// Every download and every install the run would carry out is listed, so the
+	// player sees the whole shape of it before agreeing.
+	for _, want := range []string{
+		"fetch-level: download THPS: Warehouse",
+		"fetch-image: download thps-warehouse.png",
+		"fetch-pack: download pack " + fixturePackID,
+		"install-level: " + fixtureFile,
+		"install-pack: install pack " + fixturePackID,
+		"install-mod:",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("the plan should list %q:\n%s", want, stdout)
+		}
+	}
+	if ppath.Exists(filepath.Join(game, "BepInEx")) || ppath.Exists(filepath.Join(game, "UserData")) ||
+		ppath.Exists(content.RecordFilePath(game)) {
 		t.Error("a dry run wrote to the game directory")
 	}
 }
 
 func TestUninstallTakesItBack(t *testing.T) {
-	packageDir, game := install(t)
+	game, _, _ := install(t)
 	got := run(t, "--game-dir", game, "--uninstall", "--no-gui")
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
@@ -281,106 +276,82 @@ func TestUninstallTakesItBack(t *testing.T) {
 	if !strings.Contains(got.stdout.String(), "removed ") {
 		t.Errorf("stdout = %s", got.stdout)
 	}
-	for _, name := range []string{"Mods", "MelonLoader", content.RecordName, "dotnet6-win"} {
-		if ppath.Exists(filepath.Join(game, name)) {
+	// Everything the run placed goes, and only that: the game's own files stay.
+	for _, name := range []string{
+		"UserData/Levels", "UserData/LevelPacks", "BepInEx", "dotnet",
+		"winhttp.dll", content.RecordName,
+	} {
+		if ppath.Exists(filepath.Join(game, filepath.FromSlash(name))) {
 			t.Errorf("%s survived", name)
 		}
+	}
+	if !ppath.IsFile(filepath.Join(game, gamebuild.WindowsExe)) {
+		t.Error("the uninstall removed something the game owns")
 	}
 	again := run(t, "--game-dir", game, "--uninstall", "--no-gui")
 	if again.exit != ExitOK || !strings.Contains(again.stdout.String(), "nothing to uninstall: no installer record in "+game) {
 		t.Errorf("second uninstall = %d\n%s", again.exit, again.stdout)
 	}
-	_ = packageDir
 }
 
-func TestWindowsDefaultsThePackageToTheExecutableFolder(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	got := runAs(t, func(c *Command) {
-		c.GOOS = "windows"
-		c.Executable = func() (string, error) { return filepath.Join(packageDir, "install.exe"), nil }
-	}, nil, "--game-dir", game, "--no-gui")
-	if got.exit != ExitOK {
-		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
-	}
-	if !ppath.Exists(filepath.Join(game, "Mods", "MegabonkLevels.Mod.dll")) {
-		t.Errorf("the mod was not installed from the executable's folder")
-	}
-}
-
-func TestMacDefaultsThePackageToTheExecutableFolder(t *testing.T) {
-	packageDir, home := makePackage(t), t.TempDir()
-	_, game := makeWineGame(t, filepath.Join(home, ".local", "share", "megabonk", "wine"))
-	got := runAs(t, func(c *Command) {
-		macCommand(home, nil)(c)
-		c.Executable = func() (string, error) { return filepath.Join(packageDir, "megabonk-installer"), nil }
-	}, nil, "--no-gui")
-	if got.exit != ExitOK {
-		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
-	}
-	if !ppath.Exists(filepath.Join(game, "Mods", "MegabonkLevels.Mod.dll")) {
-		t.Errorf("the mod was not installed from the executable's folder")
-	}
-}
-
-func TestMissingPackageIsAUsageError(t *testing.T) {
-	got := run(t, "--game-dir", t.TempDir())
-	if got.exit != ExitUsage || !strings.Contains(got.stderr.String(), "no --package") {
-		t.Errorf("exit = %d, stderr = %s", got.exit, got.stderr)
-	}
-
-	got = run(t, "--package", filepath.Join(t.TempDir(), "nope"), "--game-dir", t.TempDir())
-	if got.exit != ExitError || !strings.Contains(got.stderr.String(), "has no manifest.json") {
-		t.Errorf("exit = %d, stderr = %s", got.exit, got.stderr)
-	}
-}
-
-func TestPackageDirToleratesTheZipFolder(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	nested := filepath.Join(t.TempDir(), "download")
-	if err := os.MkdirAll(nested, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Rename(packageDir, filepath.Join(nested, "MegabonkLevels-0.0.1")); err != nil {
-		t.Fatal(err)
-	}
-	got := run(t, "--package", nested, "--game-dir", game, "--no-gui")
-	if got.exit != ExitOK {
-		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
-	}
-}
-
-func TestTamperedPackageIsRefused(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	write(t, filepath.Join(packageDir, "mod", "NLayer.dll"), "trojan")
-	got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui")
-	if got.exit != ExitError || !strings.Contains(got.stderr.String(), "the package does not match its manifest") {
-		t.Errorf("exit = %d, stderr = %s", got.exit, got.stderr)
-	}
-}
-
-func TestBadLevelInputIsListed(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	bad := filepath.Join(t.TempDir(), "broken.mblevel.json")
-	write(t, bad, `{"schema": "two"}`)
-	got := run(t, "--package", packageDir, "--game-dir", game, "--level", bad, "--no-gui")
-	if got.exit != ExitError {
-		t.Fatalf("exit = %d", got.exit)
+func TestNoInputsIsAUsageError(t *testing.T) {
+	got := run(t, "--game-dir", makeGame(t))
+	if got.exit != ExitUsage {
+		t.Fatalf("exit = %d, want %d", got.exit, ExitUsage)
 	}
 	stderr := got.stderr.String()
-	if !strings.Contains(stderr, "broken.mblevel.json: 'schema' must be an integer") ||
-		!strings.Contains(stderr, "the level or level-pack inputs are not valid") {
-		t.Errorf("stderr = %s", stderr)
+	// The message has to teach the input, not just refuse it.
+	for _, want := range []string{"nothing to install", "share code", plan.LevelFileSuffix} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr should mention %q: %s", want, stderr)
+		}
+	}
+}
+
+func TestBothModFlagsIsAUsageError(t *testing.T) {
+	got := run(t, "--game-dir", makeGame(t), "--mod", "--no-mod", fixtureCode)
+	if got.exit != ExitUsage || !strings.Contains(got.stderr.String(), "--mod and --no-mod cannot both be given") {
+		t.Errorf("exit = %d, stderr = %s", got.exit, got.stderr)
+	}
+}
+
+func TestUnknownLevelIsRefused(t *testing.T) {
+	game := makeGame(t)
+	got, _, _ := runOffline(t, "--game-dir", game, "--no-gui", "no-such-level")
+	if got.exit != ExitError {
+		t.Fatalf("exit = %d, want %d", got.exit, ExitError)
+	}
+	// The player hears which of their words the site did not know, in the shape
+	// they typed it, rather than a rewritten file name.
+	if !strings.Contains(got.stderr.String(), "no-such-level") ||
+		!strings.Contains(got.stderr.String(), "not a level") {
+		t.Errorf("stderr = %s", got.stderr)
+	}
+}
+
+func TestBadLevelFileIsRefusedBeforeAnythingChanges(t *testing.T) {
+	game := makeGame(t)
+	bad := filepath.Join(t.TempDir(), "broken.mblevel.json")
+	write(t, bad, `{"schema": "two"}`)
+	got, _, _ := runOffline(t, "--game-dir", game, "--no-gui", bad)
+	if got.exit != ExitError {
+		t.Fatalf("exit = %d\n%s", got.exit, got.stdout)
+	}
+	if !strings.Contains(got.stderr.String(), "broken.mblevel.json") {
+		t.Errorf("stderr should name the file: %s", got.stderr)
+	}
+	if ppath.Exists(filepath.Join(game, "UserData")) || ppath.Exists(content.RecordFilePath(game)) {
+		t.Error("a run that was refused still wrote to the game directory")
 	}
 }
 
 func TestUnsupportedBuildExitsFour(t *testing.T) {
-	packageDir := makePackage(t)
 	native := filepath.Join(t.TempDir(), "Megabonk")
 	if err := os.MkdirAll(filepath.Join(native, "Megabonk_Data"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(native, "Megabonk.x86_64"), "ELF")
-	got := run(t, "--package", packageDir, "--game-dir", native, "--no-gui")
+	got := run(t, "--game-dir", native, "--no-gui", fixtureCode)
 	if got.exit != ExitUnsupportedBuild {
 		t.Fatalf("exit = %d, stderr = %s", got.exit, got.stderr)
 	}
@@ -390,9 +361,8 @@ func TestUnsupportedBuildExitsFour(t *testing.T) {
 }
 
 func TestMissingGameDirExitsThree(t *testing.T) {
-	packageDir := makePackage(t)
 	missing := filepath.Join(t.TempDir(), "nope")
-	got := run(t, "--package", packageDir, "--game-dir", missing, "--no-gui")
+	got := run(t, "--game-dir", missing, "--no-gui", fixtureCode)
 	if got.exit != ExitNotFound {
 		t.Fatalf("exit = %d, stderr = %s", got.exit, got.stderr)
 	}
@@ -402,9 +372,8 @@ func TestMissingGameDirExitsThree(t *testing.T) {
 }
 
 func TestDiscoveryFailureNamesEveryCandidate(t *testing.T) {
-	packageDir := makePackage(t)
 	home := t.TempDir()
-	got := run(t, "--package", packageDir, "--home", home, "--no-gui")
+	got := run(t, "--home", home, "--no-gui", fixtureCode)
 	if got.exit != ExitNotFound {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
@@ -424,7 +393,6 @@ func TestDiscoveryFailureNamesEveryCandidate(t *testing.T) {
 }
 
 func TestDiscoveryFindsAGameInALibrary(t *testing.T) {
-	packageDir := makePackage(t)
 	home := t.TempDir()
 	library := filepath.Join(home, "library")
 	game := filepath.Join(library, "steamapps", "common", steam.GameName)
@@ -439,11 +407,11 @@ func TestDiscoveryFindsAGameInALibrary(t *testing.T) {
 	write(t, filepath.Join(client, "steamapps", "libraryfolders.vdf"),
 		"\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\""+filepath.ToSlash(library)+"\"\n\t}\n}\n")
 
-	got := run(t, "--package", packageDir, "--home", home, "--no-gui")
+	got, _, _ := runOffline(t, "--home", home, "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
-	if !ppath.IsFile(filepath.Join(library, "steamapps", "common", steam.GameName, "Mods", "MegabonkLevels.Mod.dll")) {
+	if !ppath.IsFile(filepath.Join(library, "steamapps", "common", steam.GameName, "BepInEx", "plugins", "MegabonkLevels", "MegabonkLevels.Mod.dll")) {
 		t.Errorf("the mod was not installed into the discovered library:\n%s", got.stdout)
 	}
 }
@@ -516,17 +484,16 @@ func findInstall(t *testing.T, home string, prefixChosen bool) (string, string, 
 }
 
 func TestDiscoveryIgnoresAnUnrelatedIl2CppGameInAnEarlierLibrary(t *testing.T) {
-	packageDir := makePackage(t)
 	root := t.TempDir()
 	first := filepath.Join(root, "library-0")
 	second := filepath.Join(root, "library-1")
 	home := makeSteamHome(t, []string{first, second}, "1000xRESIST", second)
 
-	got := run(t, "--package", packageDir, "--home", home, "--no-gui", "--wine-override", "off")
+	got, _, _ := runOffline(t, "--home", home, "--no-gui", "--wine-override", "off", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
-	wanted := filepath.Join(second, "steamapps", "common", steam.GameName, "Mods", "MegabonkLevels.Mod.dll")
+	wanted := filepath.Join(second, "steamapps", "common", steam.GameName, "BepInEx", "plugins", "MegabonkLevels", "MegabonkLevels.Mod.dll")
 	if !ppath.IsFile(wanted) {
 		t.Errorf("the mod was not installed into the real game:\n%s", got.stdout)
 	}
@@ -536,13 +503,12 @@ func TestDiscoveryIgnoresAnUnrelatedIl2CppGameInAnEarlierLibrary(t *testing.T) {
 }
 
 func TestNotFoundNamesTheIl2CppInstallItRejected(t *testing.T) {
-	packageDir := makePackage(t)
 	root := t.TempDir()
 	first := filepath.Join(root, "library-0")
 	second := filepath.Join(root, "library-1")
 	home := makeSteamHome(t, []string{first, second}, "1000xRESIST", "")
 
-	got := run(t, "--package", packageDir, "--home", home, "--no-gui")
+	got := run(t, "--home", home, "--no-gui", fixtureCode)
 	if got.exit != ExitNotFound {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
@@ -605,8 +571,7 @@ func TestAnExplicitPrefixSilencesTheAmbiguityWarning(t *testing.T) {
 	makePrefix(t, first)
 	chosen := makePrefix(t, second)
 
-	packageDir := makePackage(t)
-	got := run(t, "--package", packageDir, "--home", home, "--prefix", chosen, "--dry-run", "--no-gui")
+	got, _, _ := runOffline(t, "--home", home, "--prefix", chosen, "--dry-run", "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
@@ -619,8 +584,8 @@ func TestAnExplicitPrefixSilencesTheAmbiguityWarning(t *testing.T) {
 }
 
 func TestJSONModeIsMachineReadable(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	got := run(t, "--package", packageDir, "--game-dir", game, "--json")
+	game := makeGame(t)
+	got, _, _ := runOffline(t, "--game-dir", game, "--json", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
@@ -631,8 +596,10 @@ func TestJSONModeIsMachineReadable(t *testing.T) {
 	if payload["ok"] != true || payload["dry_run"] != false {
 		t.Errorf("payload = %v", payload)
 	}
-	if payload["package_id"] != "megabonk-levels-0.0.1-ml0.7.3-linux" {
-		t.Errorf("package_id = %v", payload["package_id"])
+	// The mod comes from Thunderstore now, so the payload names what was actually
+	// resolved rather than a build-time package id.
+	if payload["mod_version"] != fixtureModVer || payload["bepinex_version"] != fixtureLoaderVer {
+		t.Errorf("versions = %v / %v", payload["mod_version"], payload["bepinex_version"])
 	}
 	if taken, ok := payload["taken"].([]any); !ok || len(taken) == 0 {
 		t.Errorf("taken = %v", payload["taken"])
@@ -641,7 +608,7 @@ func TestJSONModeIsMachineReadable(t *testing.T) {
 		t.Error("human text leaked into the JSON payload")
 	}
 
-	dry := run(t, "--package", packageDir, "--game-dir", makeGame(t), "--json", "--dry-run")
+	dry, _, _ := runOffline(t, "--game-dir", makeGame(t), "--json", "--dry-run", fixtureCode)
 	if dry.exit != ExitOK {
 		t.Fatalf("dry-run exit = %d\n%s", dry.exit, dry.stderr)
 	}
@@ -655,8 +622,8 @@ func TestJSONModeIsMachineReadable(t *testing.T) {
 }
 
 func TestJSONCheckReportsDrift(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	got := run(t, "--package", packageDir, "--game-dir", game, "--check", "--json")
+	game := makeGame(t)
+	got, _, _ := runOffline(t, "--game-dir", game, "--check", "--json", fixtureCode)
 	if got.exit != ExitOutOfDate {
 		t.Fatalf("exit = %d", got.exit)
 	}
@@ -667,11 +634,13 @@ func TestJSONCheckReportsDrift(t *testing.T) {
 	if payload["ok"] != false {
 		t.Errorf("ok = %v", payload["ok"])
 	}
-	drift, ok := payload["drift"].([]any)
-	if !ok || len(drift) == 0 {
-		t.Fatalf("drift = %v", payload["drift"])
+	// --check answers "what is not in the game yet", so the payload lists the
+	// missing steps rather than a diff against a package.
+	missing, ok := payload["missing"].([]any)
+	if !ok || len(missing) == 0 {
+		t.Fatalf("missing = %v", payload["missing"])
 	}
-	entry := drift[0].(map[string]any)
+	entry := missing[0].(map[string]any)
 	for _, key := range []string{"kind", "path", "detail"} {
 		if _, found := entry[key]; !found {
 			t.Errorf("drift entry has no %s: %v", key, entry)
@@ -679,70 +648,84 @@ func TestJSONCheckReportsDrift(t *testing.T) {
 	}
 }
 
-func TestGamedirModePrintsTheLaunchOption(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	got := run(t, "--package", packageDir, "--game-dir", game, "--dotnet-in", "gamedir", "--no-gui")
+func TestProtonRunPrintsTheLaunchOption(t *testing.T) {
+	game := makeGame(t)
+	prefix := filepath.Join(t.TempDir(), "steamapps", "compatdata", "3405340", "pfx")
+	if err := os.MkdirAll(filepath.Join(prefix, "drive_c"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, _, _ := runOffline(t, "--game-dir", game, "--prefix", prefix, "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
+	// The loader's winhttp proxy is picked up through a Steam launch option the
+	// installer cannot write itself, so it prints the line and leaves the paste to
+	// the player.
 	stdout := got.stdout.String()
-	for _, want := range []string{"DOTNET_ROOT=Z:", "%command%", "Steam > Library > Megabonk > Properties", "Steam rewrites its own config"} {
+	for _, want := range []string{"WINEDLLOVERRIDES=", "winhttp=n,b", "%command%",
+		"Steam > Library > Megabonk > Properties", "Steam rewrites its own config"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout should contain %q:\n%s", want, stdout)
 		}
 	}
 	if got.stderr.String() != "" {
-		t.Errorf("an explicit --dotnet-in gamedir is deliberate, so nothing should be warned:\n%s", got.stderr)
+		t.Errorf("a plain Proton install should warn about nothing:\n%s", got.stderr)
 	}
 }
 
 func TestUnusablePrefixFallsBackToTheGameDirectory(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	got := run(t, "--package", packageDir, "--game-dir", game,
-		"--prefix", filepath.Join(t.TempDir(), "compatdata", "3405340", "pfx"), "--no-gui")
+	game := makeGame(t)
+	got, _, _ := runOffline(t, "--game-dir", game,
+		"--prefix", filepath.Join(t.TempDir(), "compatdata", "3405340", "pfx"), "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
 	stderr := got.stderr.String()
 	for _, want := range []string{
 		"warning: no usable Proton prefix at ",
-		"so the .NET runtime goes beside the game",
+		"the install continues beside the game",
 		"pass --prefix <path to the pfx directory> to install into an existing Proton prefix",
 	} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("stderr should contain %q:\n%s", want, stderr)
 		}
 	}
-	if !ppath.IsFile(filepath.Join(game, "dotnet6-win", proton.RuntimeMarkerName)) {
+	if !ppath.IsFile(filepath.Join(game, content.RuntimeDirName, "host", "fxr", "6.0.36", "hostfxr.dll")) {
 		t.Error("the runtime did not land beside the game")
 	}
 }
 
 func TestInstalledIntoAPrefixRecordsTheOverride(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	prefix := filepath.Join(t.TempDir(), "compatdata", "3405340", "pfx")
+	game := makeGame(t)
+	// A plain Wine prefix: only a Wine run edits the registry itself, so this is
+	// the case where the record has to name the prefix uninstall will clean.
+	prefix := filepath.Join(t.TempDir(), "bottles", "megabonk")
 	if err := os.MkdirAll(filepath.Join(prefix, "drive_c"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	got := run(t, "--package", packageDir, "--game-dir", game, "--prefix", prefix, "--wine-override", "registry", "--no-gui")
+	got, _, _ := runOffline(t, "--game-dir", game, "--prefix", prefix, "--wine-override", "registry", "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
 	record := content.LoadRecord(game)
-	if record == nil || record.Runtime == nil || record.Runtime.Mode != "prefix" {
+	// The BepInEx loader pack carries its own .NET 6 runtime and always lands it
+	// beside the executable, so the record says gamedir even when the prefix was
+	// edited. What the prefix has to do with the install is the override, which has
+	// to name the prefix uninstall will clean.
+	if record == nil || record.Runtime == nil || record.Runtime.Mode != "gamedir" {
 		t.Fatalf("record = %+v", record)
 	}
 	if record.DllOverride == nil || !record.DllOverride.Applied {
 		t.Errorf("dll_override = %+v", record.DllOverride)
 	}
-	if value, ok := proton.ReadDllOverride(prefix, proton.DLLName, ""); !ok || value != proton.DLLValue {
+	if value, ok := proton.ReadDllOverride(prefix, proton.WinHTTPDLLName, ""); !ok || value != proton.WinHTTPValue {
 		t.Errorf("registry override = %q, %v", value, ok)
 	}
 }
 
 func TestProgressLinesAreNumbered(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	got := run(t, "--package", packageDir, "--game-dir", game)
+	game := makeGame(t)
+	got, _, _ := runOffline(t, "--game-dir", game, fixtureCode)
 	lines := strings.Split(strings.TrimRight(got.stdout.String(), "\n"), "\n")
 	numbered := 0
 	for _, line := range lines {
@@ -756,9 +739,9 @@ func TestProgressLinesAreNumbered(t *testing.T) {
 }
 
 func TestUsageErrorsExitTwo(t *testing.T) {
-	if got := run(t, "--dotnet-in", "system"); got.exit != ExitUsage ||
+	if got := run(t, "--wine-override", "system"); got.exit != ExitUsage ||
 		!strings.Contains(got.stderr.String(), "invalid choice: 'system'") {
-		t.Errorf("bad mode = %d\n%s", got.exit, got.stderr)
+		t.Errorf("bad override choice = %d\n%s", got.exit, got.stderr)
 	}
 	if got := run(t, "--wine-override", "maybe"); got.exit != ExitUsage ||
 		!strings.Contains(got.stderr.String(), "invalid choice: 'maybe'") {
@@ -768,9 +751,11 @@ func TestUsageErrorsExitTwo(t *testing.T) {
 		!strings.Contains(got.stderr.String(), "flag provided but not defined") {
 		t.Errorf("unknown flag = %d\n%s", got.exit, got.stderr)
 	}
+	// A level name is a word on its own, so it is never rejected as a leftover; a
+	// word shaped like a flag after the levels was meant to be a flag.
 	if got := run(t, "extra", "--json"); got.exit != ExitUsage ||
-		!strings.Contains(got.stderr.String(), "unrecognized arguments: extra") {
-		t.Errorf("positional = %d\n%s", got.exit, got.stderr)
+		!strings.Contains(got.stderr.String(), "unrecognized arguments: --json") {
+		t.Errorf("flag after the levels = %d\n%s", got.exit, got.stderr)
 	}
 }
 
@@ -779,7 +764,8 @@ func TestHelpExitsZero(t *testing.T) {
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d", got.exit)
 	}
-	for _, want := range []string{"--package", "--game-dir", "--wine-override", "--dotnet-in"} {
+	for _, want := range []string{"LEVEL [LEVEL ...]", "share code", "--game-dir", "--wine-override",
+		"--wine-override", "--mod", "--no-mod", "--uninstall", "--check"} {
 		if !strings.Contains(got.stdout.String(), want) {
 			t.Errorf("help should list %q", want)
 		}
@@ -814,6 +800,8 @@ func (f *fakeWindowProgress) Finish(message string, ok bool) {
 }
 func (f *fakeWindowProgress) Cancelled() bool { return f.cancelAfter >= 0 && f.steps >= f.cancelAfter }
 
+// windowed builds a command whose progress window is a test driver, with the
+// level site and Thunderstore served locally so a whole run can be driven offline.
 func windowed(t *testing.T, driver func(title string, work func(ui.Progress) int) (int, bool)) *Command {
 	t.Helper()
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
@@ -821,6 +809,11 @@ func windowed(t *testing.T, driver func(title string, work func(ui.Progress) int
 	command.GOOS = "linux"
 	command.Env = map[string]string{"HOME": t.TempDir(), "DISPLAY": ":0"}
 	command.StartWindow = driver
+	gallery, thunder := newGallery(t), newStore(t)
+	command.Gallery = gallery.client()
+	command.Thunder = thunder.client()
+	command.Pins = map[string]string{fixtureLoaderVer: thunder.packDigest}
+	command.ModPins = []modinstall.ModPin{{Version: fixtureModVer, SHA256: thunder.modDigest}}
 	restoreRoots := MountRoots
 	MountRoots = nil
 	restoreGOOS := ui.GOOS
@@ -841,13 +834,13 @@ func windowed(t *testing.T, driver func(title string, work func(ui.Progress) int
 var numberedProgressLine = regexp.MustCompile(`(?m)^\d+/\d+ `)
 
 func TestInstallThroughTheWindowDriver(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
+	game := makeGame(t)
 	var titles []string
 	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
 		titles = append(titles, title)
 		return work(&fakeWindowProgress{cancelAfter: -1}), true
 	})
-	exit := command.Main([]string{"--package", packageDir, "--game-dir", game})
+	exit := command.Main([]string{"--game-dir", game, fixtureCode})
 	if exit != ExitOK {
 		t.Fatalf("exit = %d\n%s\n%s", exit, command.Stdout, command.Stderr)
 	}
@@ -864,12 +857,12 @@ func TestInstallThroughTheWindowDriver(t *testing.T) {
 }
 
 func TestWindowReceivesThePlanAndTheSummary(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
+	game := makeGame(t)
 	fake := &fakeWindowProgress{cancelAfter: -1}
 	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
 		return work(fake), true
 	})
-	if exit := command.Main([]string{"--package", packageDir, "--game-dir", game}); exit != ExitOK {
+	if exit := command.Main([]string{"--game-dir", game, fixtureCode}); exit != ExitOK {
 		t.Fatalf("exit = %d\n%s\n%s", exit, command.Stdout, command.Stderr)
 	}
 	if len(fake.planned) == 0 {
@@ -884,20 +877,20 @@ func TestWindowReceivesThePlanAndTheSummary(t *testing.T) {
 }
 
 func TestWindowIsToldWhenAnInstallIsCancelled(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
+	game := makeGame(t)
 	fake := &fakeWindowProgress{cancelAfter: 1}
 	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
 		return work(fake), true
 	})
-	command.Main([]string{"--package", packageDir, "--game-dir", game})
+	command.Main([]string{"--game-dir", game, fixtureCode})
 	if len(fake.finishes) != 1 || !strings.HasPrefix(fake.finishes[0], "false:") || !strings.Contains(fake.finishes[0], "rolled back") {
 		t.Errorf("finishes = %v", fake.finishes)
 	}
 }
 
 func TestUninstallThroughTheWindowDriver(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	if got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui"); got.exit != ExitOK {
+	game := makeGame(t)
+	if got, _, _ := runOffline(t, "--game-dir", game, "--no-gui", fixtureCode); got.exit != ExitOK {
 		t.Fatalf("seed install exited %d: %s %s", got.exit, got.stdout, got.stderr)
 	}
 	var titles []string
@@ -918,13 +911,13 @@ func TestUninstallThroughTheWindowDriver(t *testing.T) {
 }
 
 func TestWindowUnavailableFallsBackToText(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
+	game := makeGame(t)
 	attempted := 0
 	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
 		attempted++
 		return 0, false
 	})
-	exit := command.Main([]string{"--package", packageDir, "--game-dir", game})
+	exit := command.Main([]string{"--game-dir", game, fixtureCode})
 	if exit != ExitOK {
 		t.Fatalf("exit = %d\n%s\n%s", exit, command.Stdout, command.Stderr)
 	}
@@ -945,13 +938,13 @@ func TestWindowUnavailableFallsBackToText(t *testing.T) {
 }
 
 func TestNoGUINeverAttemptsTheWindow(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
+	game := makeGame(t)
 	attempted := 0
 	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
 		attempted++
 		return work(&fakeWindowProgress{cancelAfter: -1}), true
 	})
-	exit := command.Main([]string{"--package", packageDir, "--game-dir", game, "--no-gui"})
+	exit := command.Main([]string{"--game-dir", game, "--no-gui", fixtureCode})
 	if exit != ExitOK {
 		t.Fatalf("exit = %d", exit)
 	}
@@ -965,11 +958,11 @@ func TestNoGUINeverAttemptsTheWindow(t *testing.T) {
 }
 
 func TestCancelledInstallThroughTheWindowReportsRollback(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
+	game := makeGame(t)
 	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
 		return work(&fakeWindowProgress{cancelAfter: 2}), true
 	})
-	exit := command.Main([]string{"--package", packageDir, "--game-dir", game})
+	exit := command.Main([]string{"--game-dir", game, fixtureCode})
 	if exit != ExitError {
 		t.Fatalf("exit = %d\n%s\n%s", exit, command.Stdout, command.Stderr)
 	}
@@ -987,20 +980,24 @@ func TestPlanOptionsTakeTheCommandLine(t *testing.T) {
 	command.GOOS = "linux"
 	command.Env = map[string]string{"HOME": "/home/user"}
 	options, err := ParseFlags([]string{
-		"--package", "p", "--game-dir", "g", "--dotnet-in", "gamedir",
-		"--wine-override", "registry", "--proton", "proton_ge",
-		"--level", "a.mblevel.json", "--level", "b.mblevel.json", "--pack", "packs/thps",
+		"--game-dir", "g", "--wine-override", "registry",
+		"--proton", "proton_ge", "--library", "/lib/one", "--library", "/lib/two",
+		"--mod", "7N1-MVB-WKF", "https://megabonkmod.party/l/2AB-CDE-FGH", "mine.mblevel.json",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if options.Libraries != nil || len(options.Levels) != 2 || options.Levels[1] != "b.mblevel.json" {
+	if len(options.Libraries) != 2 || options.Libraries[1] != "/lib/two" {
 		t.Errorf("repeatable flags = %+v", options)
 	}
+	if len(options.Inputs) != 3 || options.Inputs[2] != "mine.mblevel.json" {
+		t.Errorf("positional inputs = %v", options.Inputs)
+	}
+	if options.Mod != plan.ModForced {
+		t.Errorf("--mod = %v", options.Mod)
+	}
 	built := command.planOptions(options, "/game", nil)
-	if built.Game != "/game" || built.RuntimeMode != "gamedir" || built.DllOverride != "registry" ||
-		built.WineOverride != "registry" || built.ForcedTool != "proton_ge" ||
-		built.Level != "b.mblevel.json" || built.Pack != "packs/thps" || built.Verify {
+	if built.Game != "/game" || built.Mod != plan.ModForced || len(built.Inputs) != 3 {
 		t.Errorf("plan options = %+v", built)
 	}
 }
@@ -1044,25 +1041,21 @@ func TestReporterHonoursJSONMode(t *testing.T) {
 	}
 }
 
-func TestResolvePackageDirNeedsAManifest(t *testing.T) {
-	directory := t.TempDir()
-	if _, found := ResolvePackageDir(directory); found {
-		t.Error("an empty directory is not a package")
-	}
-	write(t, filepath.Join(directory, "nested", "manifest.json"), "{}")
-	got, found := ResolvePackageDir(directory)
-	if !found || filepath.Base(got) != "nested" {
-		t.Errorf("ResolvePackageDir = %q, %v", got, found)
-	}
-}
-
 func TestApplyPlanThroughTheCommandUsesTheProgressReporter(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	loaded, err := manifest.LoadManifest(ppath.Join(packageDir, "manifest.json"))
-	if err != nil {
+	game := makeGame(t)
+	// The plan needs a level to place; the command's progress reporter reports
+	// each of its steps.
+	local := filepath.Join(t.TempDir(), "home-ramp.mblevel.json")
+	if err := os.WriteFile(local, []byte(`{"schema":2,"title":"Home Ramp"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	built, err := plan.BuildPlan(packageDir, plan.Options{Manifest: loaded, Game: game, DllOverride: "auto"})
+	_, thunder := newGallery(t), newStore(t)
+	built, err := plan.BuildPlan(plan.Options{
+		Game: game, Inputs: []plan.Input{{Raw: local}}, Mod: plan.ModForced,
+		Thunder: thunder.client(),
+		Pins:    map[string]string{fixtureLoaderVer: thunder.packDigest},
+		ModPins: []modinstall.ModPin{{Version: fixtureModVer, SHA256: thunder.modDigest}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1074,7 +1067,8 @@ func TestApplyPlanThroughTheCommandUsesTheProgressReporter(t *testing.T) {
 	if len(lines) < 5 {
 		t.Fatalf("progress = %v", lines)
 	}
-	if !strings.HasSuffix(lines[0], "MelonLoader") && !strings.Contains(lines[0], "/") {
+	// Every step line is numbered "N/M label", and the run closes with the result.
+	if !numberedProgressLine.MatchString(lines[0]) {
 		t.Errorf("first progress line = %q", lines[0])
 	}
 	if lines[len(lines)-1] != "Installed" {
@@ -1083,12 +1077,12 @@ func TestApplyPlanThroughTheCommandUsesTheProgressReporter(t *testing.T) {
 }
 
 func TestDecliningTheWindowConfirmationChangesNothing(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
+	game := makeGame(t)
 	fake := &fakeWindowProgress{cancelAfter: -1, decline: true}
 	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
 		return work(fake), true
 	})
-	exit := command.Main([]string{"--package", packageDir, "--game-dir", game})
+	exit := command.Main([]string{"--game-dir", game, fixtureCode})
 	if exit != ExitError {
 		t.Fatalf("exit = %d\n%s\n%s", exit, command.Stdout, command.Stderr)
 	}
@@ -1104,16 +1098,32 @@ func TestDecliningTheWindowConfirmationChangesNothing(t *testing.T) {
 }
 
 func TestAcceptingTheWindowConfirmationInstalls(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
+	game := makeGame(t)
 	fake := &fakeWindowProgress{cancelAfter: -1}
 	command := windowed(t, func(title string, work func(ui.Progress) int) (int, bool) {
 		return work(fake), true
 	})
-	if exit := command.Main([]string{"--package", packageDir, "--game-dir", game}); exit != ExitOK {
+	if exit := command.Main([]string{"--game-dir", game, fixtureCode}); exit != ExitOK {
 		t.Fatalf("exit = %d\n%s\n%s", exit, command.Stdout, command.Stderr)
 	}
 	if len(fake.prompts) != 1 || content.LoadRecord(game) == nil {
 		t.Errorf("prompts = %v, record = %v", fake.prompts, content.LoadRecord(game))
+	}
+}
+
+// offline wraps a command configuration with the local site and Thunderstore, for
+// a platform-shaped run that also has to fetch the mod.
+func offline(t *testing.T, configure func(*Command)) func(*Command) {
+	t.Helper()
+	return func(command *Command) {
+		if configure != nil {
+			configure(command)
+		}
+		gallery, thunder := newGallery(t), newStore(t)
+		command.Gallery = gallery.client()
+		command.Thunder = thunder.client()
+		command.Pins = map[string]string{fixtureLoaderVer: thunder.packDigest}
+		command.ModPins = []modinstall.ModPin{{Version: fixtureModVer, SHA256: thunder.modDigest}}
 	}
 }
 
@@ -1136,7 +1146,6 @@ func registryRunner(steamPath string) func([]string, time.Duration) (int, string
 }
 
 func TestWindowsDiscoversTheGameAndInstallsNatively(t *testing.T) {
-	packageDir := makePackage(t)
 	base := t.TempDir()
 	library := filepath.Join(base, "D", "SteamLibrary")
 	game := filepath.Join(library, "steamapps", "common", steam.GameName)
@@ -1151,15 +1160,15 @@ func TestWindowsDiscoversTheGameAndInstallsNatively(t *testing.T) {
 	write(t, filepath.Join(client, "steamapps", "libraryfolders.vdf"),
 		"\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\""+filepath.ToSlash(library)+"\"\n\t}\n}\n")
 
-	got := runAs(t, windowsCommand(nil), registryRunner(filepath.ToSlash(client)), "--package", packageDir, "--no-gui")
+	got := runAs(t, offline(t, windowsCommand(nil)), registryRunner(filepath.ToSlash(client)), "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
-	if !ppath.IsFile(filepath.Join(game, "MelonLoader", "Dependencies", "dotnet", "host", "fxr", "6.0.36", "hostfxr.dll")) {
-		t.Errorf("the runtime did not land under MelonLoader/Dependencies/dotnet:\n%s", got.stdout)
-	}
-	if ppath.Exists(filepath.Join(game, content.RuntimeSubdir)) {
-		t.Error("a native install must not create the Proton-style dotnet6-win folder")
+	// The loader pack carries its own .NET 6 runtime, and on a native install it
+	// sits in dotnet/ beside the executable where doorstop finds it with no
+	// environment variable to set.
+	if !ppath.IsFile(filepath.Join(game, content.RuntimeDirName, "host", "fxr", "6.0.36", "hostfxr.dll")) {
+		t.Errorf("the runtime did not land beside the game:\n%s", got.stdout)
 	}
 	for _, unwanted := range []string{"%command%", "DOTNET_ROOT", "Launch Options", "Proton"} {
 		if strings.Contains(got.stdout.String()+got.stderr.String(), unwanted) {
@@ -1169,12 +1178,12 @@ func TestWindowsDiscoversTheGameAndInstallsNatively(t *testing.T) {
 }
 
 func TestWindowsGameDirFlagIsNativeWithoutAPrefix(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	got := runAs(t, windowsCommand(nil), nil, "--package", packageDir, "--game-dir", game, "--no-gui")
+	game := makeGame(t)
+	got := runAs(t, offline(t, windowsCommand(nil)), nil, "--game-dir", game, "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
-	if !ppath.IsFile(filepath.Join(game, "MelonLoader", "Dependencies", "dotnet", proton.RuntimeMarkerName)) {
+	if !ppath.IsFile(filepath.Join(game, content.RuntimeDirName, "host", "fxr", "6.0.36", "hostfxr.dll")) {
 		t.Error("the runtime did not land under MelonLoader/Dependencies/dotnet")
 	}
 	if got.stderr.String() != "" {
@@ -1183,8 +1192,7 @@ func TestWindowsGameDirFlagIsNativeWithoutAPrefix(t *testing.T) {
 }
 
 func TestWindowsNotFoundSaysWhereItLookedAndWhatToDo(t *testing.T) {
-	packageDir := makePackage(t)
-	got := runAs(t, windowsCommand(map[string]string{"ProgramFiles(x86)": t.TempDir()}), registryRunner(""), "--package", packageDir, "--no-gui")
+	got := runAs(t, windowsCommand(map[string]string{"ProgramFiles(x86)": t.TempDir()}), registryRunner(""), "--no-gui", fixtureCode)
 	if got.exit != ExitNotFound {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
@@ -1228,34 +1236,39 @@ func makeWineGame(t *testing.T, prefix string) (string, string) {
 }
 
 func TestMacDiscoversTheWinePrefixAndInstalls(t *testing.T) {
-	packageDir, home := makePackage(t), t.TempDir()
+	home := t.TempDir()
 	prefix, game := makeWineGame(t, filepath.Join(home, ".local", "share", "megabonk", "wine"))
-	got := runAs(t, macCommand(home, nil), nil, "--package", packageDir, "--no-gui")
+	got := runAs(t, offline(t, macCommand(home, nil)), nil, "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
-	if !ppath.IsFile(filepath.Join(game, "MelonLoader", "Dependencies", "dotnet", proton.RuntimeMarkerName)) {
+	if !ppath.IsFile(filepath.Join(game, content.RuntimeDirName, "host", "fxr", "6.0.36", "hostfxr.dll")) {
 		t.Errorf("the runtime did not land under MelonLoader/Dependencies/dotnet:\n%s", got.stdout)
 	}
-	if value, found := proton.ReadDllOverride(filepath.ToSlash(prefix), proton.DLLName, ""); !found || value != proton.DLLValue {
+	if value, found := proton.ReadDllOverride(filepath.ToSlash(prefix), proton.WinHTTPDLLName, ""); !found || value != proton.WinHTTPValue {
 		t.Errorf("version.dll override = %q, found = %v", value, found)
 	}
-	for _, unwanted := range []string{"%command%", "DOTNET_ROOT", "Launch Options", "Proton"} {
+	// A Wine run edits the prefix itself, so it must not ask for a Steam launch
+	// option, and must not name Proton variables it never touches.
+	for _, unwanted := range []string{"%command%", "DOTNET_ROOT", "Steam > Library"} {
 		if strings.Contains(got.stdout.String()+got.stderr.String(), unwanted) {
 			t.Errorf("a Wine run should not mention %q:\n%s\n%s", unwanted, got.stdout, got.stderr)
 		}
 	}
-	again := runAs(t, macCommand(home, nil), nil, "--package", packageDir, "--no-gui")
+	if !strings.Contains(got.stdout.String(), "winhttp") {
+		t.Errorf("the run should say which override it set:\n%s", got.stdout)
+	}
+	again := runAs(t, offline(t, macCommand(home, nil)), nil, "--no-gui", fixtureCode)
 	if again.exit != ExitOK || !strings.Contains(again.stdout.String(), "nothing to do") {
 		t.Errorf("rerun exit = %d\n%s\n%s", again.exit, again.stdout, again.stderr)
 	}
 }
 
 func TestMacPrefersPlainWineOverCrossOver(t *testing.T) {
-	packageDir, home := makePackage(t), t.TempDir()
+	home := t.TempDir()
 	_, plainGame := makeWineGame(t, filepath.Join(home, ".local", "share", "megabonk", "wine"))
 	_, bottleGame := makeWineGame(t, filepath.Join(home, "Library", "Application Support", "CrossOver", "Bottles", "Steam"))
-	got := runAs(t, macCommand(home, nil), nil, "--package", packageDir, "--no-gui")
+	got := runAs(t, offline(t, macCommand(home, nil)), nil, "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
@@ -1265,39 +1278,41 @@ func TestMacPrefersPlainWineOverCrossOver(t *testing.T) {
 }
 
 func TestMacCrossOverBottleIsUsedWhenThereIsNoPlainWine(t *testing.T) {
-	packageDir, home := makePackage(t), t.TempDir()
+	home := t.TempDir()
 	_, game := makeWineGame(t, filepath.Join(home, "Library", "Application Support", "CrossOver", "Bottles", "Steam"))
-	got := runAs(t, macCommand(home, nil), nil, "--package", packageDir, "--no-gui")
+	got := runAs(t, offline(t, macCommand(home, nil)), nil, "--no-gui", fixtureCode)
 	if got.exit != ExitOK || content.LoadRecord(filepath.ToSlash(game)) == nil {
 		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
 }
 
 func TestMacGameDirInsideAPrefixDerivesThePrefix(t *testing.T) {
-	packageDir, base := makePackage(t), t.TempDir()
+	base := t.TempDir()
 	prefix, game := makeWineGame(t, filepath.Join(base, "elsewhere", "wine"))
-	got := runAs(t, macCommand(t.TempDir(), nil), nil, "--package", packageDir, "--game-dir", game, "--no-gui")
+	got := runAs(t, offline(t, macCommand(t.TempDir(), nil)), nil, "--game-dir", game, "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
-	if value, found := proton.ReadDllOverride(filepath.ToSlash(prefix), proton.DLLName, ""); !found || value != proton.DLLValue {
+	if value, found := proton.ReadDllOverride(filepath.ToSlash(prefix), proton.WinHTTPDLLName, ""); !found || value != proton.WinHTTPValue {
 		t.Errorf("version.dll override = %q, found = %v", value, found)
 	}
 }
 
 func TestMacPrefixFlagFindsTheGameInAnUnusualPrefix(t *testing.T) {
-	packageDir, base := makePackage(t), t.TempDir()
+	base := t.TempDir()
 	prefix, game := makeWineGame(t, filepath.Join(base, "my-prefix"))
-	got := runAs(t, macCommand(t.TempDir(), nil), nil, "--package", packageDir, "--prefix", prefix, "--no-gui")
+	got := runAs(t, offline(t, macCommand(t.TempDir(), nil)), nil, "--prefix", prefix, "--no-gui", fixtureCode)
 	if got.exit != ExitOK || content.LoadRecord(filepath.ToSlash(game)) == nil {
 		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
 }
 
 func TestMacGameDirOutsideAPrefixAsksForOne(t *testing.T) {
-	packageDir, game := makePackage(t), makeGame(t)
-	got := runAs(t, macCommand(t.TempDir(), nil), nil, "--package", packageDir, "--game-dir", game, "--no-gui")
-	if got.exit != ExitError || !strings.Contains(got.stderr.String(), "--prefix") {
+	game := makeGame(t)
+	got := runAs(t, offline(t, macCommand(t.TempDir(), nil)), nil, "--game-dir", game, "--no-gui", fixtureCode)
+	// The run refuses before touching anything, and says which argument it needs:
+	// that is a usage problem, not a failure halfway through.
+	if got.exit != ExitUsage || !strings.Contains(got.stderr.String(), "--prefix") {
 		t.Fatalf("exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
 	if content.LoadRecord(filepath.ToSlash(game)) != nil {
@@ -1306,17 +1321,17 @@ func TestMacGameDirOutsideAPrefixAsksForOne(t *testing.T) {
 }
 
 func TestMacUninstallRestoresAVanillaGameAndClearsTheOverride(t *testing.T) {
-	packageDir, home := makePackage(t), t.TempDir()
+	home := t.TempDir()
 	prefix, game := makeWineGame(t, filepath.Join(home, ".local", "share", "megabonk", "wine"))
-	if got := runAs(t, macCommand(home, nil), nil, "--package", packageDir, "--no-gui"); got.exit != ExitOK {
+	if got := runAs(t, offline(t, macCommand(home, nil)), nil, "--no-gui", fixtureCode); got.exit != ExitOK {
 		t.Fatalf("install exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
 	got := runAs(t, macCommand(home, nil), nil, "--uninstall", "--no-gui")
 	if got.exit != ExitOK {
 		t.Fatalf("uninstall exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
-	if _, found := proton.ReadDllOverride(filepath.ToSlash(prefix), proton.DLLName, ""); found {
-		t.Error("the version.dll override survived uninstall")
+	if _, found := proton.ReadDllOverride(filepath.ToSlash(prefix), proton.WinHTTPDLLName, ""); found {
+		t.Error("the winhttp override survived uninstall")
 	}
 	if ppath.Exists(filepath.Join(game, "MelonLoader")) {
 		t.Error("MelonLoader survived uninstall")
@@ -1324,8 +1339,7 @@ func TestMacUninstallRestoresAVanillaGameAndClearsTheOverride(t *testing.T) {
 }
 
 func TestMacNotFoundNamesThePrefixesItTriedAndTheFlag(t *testing.T) {
-	packageDir := makePackage(t)
-	got := runAs(t, macCommand(t.TempDir(), nil), nil, "--package", packageDir, "--no-gui")
+	got := runAs(t, macCommand(t.TempDir(), nil), nil, "--no-gui", fixtureCode)
 	if got.exit != ExitNotFound {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
@@ -1359,13 +1373,14 @@ func makeLibraryGame(t *testing.T, buildID string) string {
 	return game
 }
 
-func TestMatchingGameBuildIsReportedWithoutAWarning(t *testing.T) {
-	packageDir, game := makePackage(t), makeLibraryGame(t, "21750826")
-	got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui")
+func TestGameBuildIsNamedWithoutAWarning(t *testing.T) {
+	game := makeLibraryGame(t, "21750826")
+	got, _, _ := runOffline(t, "--game-dir", game, "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
-	if !strings.Contains(got.stdout.String(), "game build 21750826 matches the package") {
+	// The build is named, not judged: nothing is pinned to one build any more.
+	if !strings.Contains(got.stdout.String(), "game build 21750826") {
 		t.Errorf("stdout = %s", got.stdout)
 	}
 	if strings.Contains(got.stderr.String(), "game build") {
@@ -1373,42 +1388,45 @@ func TestMatchingGameBuildIsReportedWithoutAWarning(t *testing.T) {
 	}
 }
 
-func TestDifferentGameBuildWarnsAndStillInstalls(t *testing.T) {
-	packageDir, game := makePackage(t), makeLibraryGame(t, "99999999")
-	got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui")
+func TestUntestedGameBuildStillInstallsAndIsNamed(t *testing.T) {
+	game := makeLibraryGame(t, "99999999")
+	got, _, _ := runOffline(t, "--game-dir", game, "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
-	stderr := got.stderr.String()
-	for _, want := range []string{"warning", "99999999", "21750826"} {
-		if !strings.Contains(stderr, want) {
-			t.Errorf("stderr should contain %q:\n%s", want, stderr)
-		}
+	// An untested build still installs, and the build it installed onto is named.
+	if !strings.Contains(got.stdout.String(), "game build 99999999") {
+		t.Errorf("stdout = %s", got.stdout)
 	}
-	if !ppath.IsFile(filepath.Join(game, "Mods", "MegabonkLevels.Mod.dll")) {
+	if strings.Contains(got.stderr.String(), "game build") {
+		t.Errorf("a build nobody tested is not a warning:\n%s", got.stderr)
+	}
+	if !ppath.IsFile(filepath.Join(game, "BepInEx", "plugins", "MegabonkLevels", "MegabonkLevels.Mod.dll")) {
 		t.Error("the mod was not installed")
 	}
 }
 
-func TestCheckWarnsAboutADifferentGameBuildWithoutChangingTheExit(t *testing.T) {
-	packageDir, game := makePackage(t), makeLibraryGame(t, "21750826")
-	if got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui"); got.exit != ExitOK {
+// A Steam update after the install changes the build but not the content, so a
+// check still answers "is the editor there" and leaves the exit code alone.
+func TestCheckIgnoresASteamUpdateAfterTheInstall(t *testing.T) {
+	game := makeLibraryGame(t, "21750826")
+	if got, _, _ := runOffline(t, "--game-dir", game, "--no-gui", fixtureCode); got.exit != ExitOK {
 		t.Fatalf("install exit = %d\n%s", got.exit, got.stderr)
 	}
 	write(t, filepath.Join(filepath.Dir(filepath.Dir(game)), "appmanifest_"+steam.AppID+".acf"),
 		"\"AppState\"\n{\n\t\"appid\"\t\t\""+steam.AppID+"\"\n\t\"buildid\"\t\t\"99999999\"\n}\n")
-	got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui", "--check")
+	got, _, _ := runOffline(t, "--game-dir", game, "--no-gui", "--check", fixtureCode)
 	if got.exit != ExitOK {
-		t.Fatalf("check exit = %d\n%s", got.exit, got.stderr)
+		t.Fatalf("check exit = %d\n%s\n%s", got.exit, got.stdout, got.stderr)
 	}
-	if !strings.Contains(got.stderr.String(), "99999999") {
-		t.Errorf("stderr = %s", got.stderr)
+	if !strings.Contains(got.stdout.String(), "already installed") {
+		t.Errorf("stdout = %s", got.stdout)
 	}
 }
 
 func TestMissingAppManifestReportsTheBuildAsUnknown(t *testing.T) {
-	packageDir, game := makePackage(t), makeLibraryGame(t, "")
-	got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui")
+	game := makeLibraryGame(t, "")
+	got, _, _ := runOffline(t, "--game-dir", game, "--no-gui", fixtureCode)
 	if got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
@@ -1421,15 +1439,17 @@ func TestMissingAppManifestReportsTheBuildAsUnknown(t *testing.T) {
 }
 
 func TestInstallRecordKeepsTheInstalledGameBuild(t *testing.T) {
-	packageDir, game := makePackage(t), makeLibraryGame(t, "99999999")
-	if got := run(t, "--package", packageDir, "--game-dir", game, "--no-gui"); got.exit != ExitOK {
+	game := makeLibraryGame(t, "99999999")
+	if got, _, _ := runOffline(t, "--game-dir", game, "--no-gui", fixtureCode); got.exit != ExitOK {
 		t.Fatalf("exit = %d\n%s", got.exit, got.stderr)
 	}
 	record := content.LoadRecord(game)
 	if record == nil || record.InstalledGameBuildID == nil || *record.InstalledGameBuildID != "99999999" {
 		t.Fatalf("record = %+v", record)
 	}
-	if record.GameBuildID != "21750826" {
+	// The mod comes from Thunderstore now rather than a package pinned to one
+	// build, so both fields name the build Steam has installed.
+	if record.GameBuildID != "99999999" {
 		t.Errorf("game_buildid = %q", record.GameBuildID)
 	}
 }

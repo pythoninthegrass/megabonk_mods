@@ -168,3 +168,45 @@ func ExpandUser(p string) string {
 	}
 	return Join(home, p[2:])
 }
+
+// SafeRelative reports whether name is a plain slash-separated relative path that
+// stays inside the directory it is joined to: no drive letter, no backslash that
+// another platform would obey, no NUL, and no part that climbs out.
+func SafeRelative(name string) bool {
+	if name == "" || strings.HasPrefix(name, "/") || strings.Contains(name, "\\") ||
+		strings.Contains(name, ":") || strings.ContainsRune(name, 0) {
+		return false
+	}
+	for _, part := range strings.Split(name, "/") {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+// SanitizeName turns any text into a lowercase folder or file stem the pack
+// loaders accept, or empty when nothing usable is left.
+func SanitizeName(raw string) string {
+	var builder strings.Builder
+	lastHyphen := true
+	for _, r := range strings.ToLower(raw) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '.' || r == '_' {
+			builder.WriteRune(r)
+			lastHyphen = false
+			continue
+		}
+		if !lastHyphen {
+			builder.WriteByte('-')
+			lastHyphen = true
+		}
+	}
+	name := strings.Trim(builder.String(), "-.")
+	if name == "." || name == ".." {
+		return ""
+	}
+	for strings.Contains(name, "--") {
+		name = strings.ReplaceAll(name, "--", "-")
+	}
+	return name
+}

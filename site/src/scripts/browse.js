@@ -13,7 +13,7 @@ import {
   relativeDate,
 } from './gallery.js';
 import { buildFilter, SORT_OPTIONS, sortParam, TAGS } from './levels.js';
-import { pb, PB_URL } from './pb.js';
+import { FILE_URL, pb, PB_URL } from './pb.js';
 import { cacheKey, readCached, writeCached } from './result-cache.js';
 
 const PER_PAGE = 12;
@@ -177,7 +177,7 @@ export default () => ({
   },
 
   creatorUrl,
-  cover: (item, thumb) => coverUrl(PB_URL, item, thumb),
+  cover: (item, thumb) => coverUrl(FILE_URL, item, thumb),
   downloadHref: (code) => downloadUrl(PB_URL, code),
   editUrl,
   excerpt,

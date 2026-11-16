@@ -23,4 +23,11 @@ public class GameBuildIdCheckTests
     {
         Assert.Null(GameBuildIdCheck.MismatchWarning("", "21750826"));
     }
+
+    [Fact]
+    public void MismatchWarning_ReturnsNull_WhenActualBuildIdIsUnknown()
+    {
+        Assert.Null(GameBuildIdCheck.MismatchWarning("21750826", null));
+        Assert.Null(GameBuildIdCheck.MismatchWarning("21750826", ""));
+    }
 }

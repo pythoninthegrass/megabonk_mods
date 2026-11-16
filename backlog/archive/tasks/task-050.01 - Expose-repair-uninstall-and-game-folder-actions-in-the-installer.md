@@ -4,7 +4,7 @@ title: 'Expose repair, uninstall and game-folder actions in the installer'
 status: To Do
 assignee: []
 created_date: '2026-11-07 01:57'
-updated_date: '2026-11-07 01:57'
+updated_date: '2026-11-14 23:03'
 labels:
   - onboarding
 dependencies:
@@ -14,7 +14,6 @@ documentation:
   - docs/player-guide.md
 parent_task_id: TASK-050
 priority: medium
-type: enhancement
 ordinal: 184000
 ---
 
@@ -31,6 +30,12 @@ Extend the existing Go installer window so common lifecycle operations do not re
 - [ ] #3 Repair restores installer-owned drift and uninstall preserves saves, unrelated mods and user-created content according to the documented ownership contract.
 - [ ] #4 Lifecycle tests and GUI verification cover fresh, installed, damaged and missing-record states; player documentation uses the GUI path.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Canceled during 2026-11-14 backlog reconciliation: this task extends the retired standalone Go installer GUI, which cannot install the current BepInEx DLL. Current players use the runtime-only Thunderstore package and a compatible mod manager; legacy platform package commands are internal. Do not implement a second installer lifecycle UI. Manager launch/log documentation remains TASK-062 and in-game folder/error feedback remains TASK-050.03. Archive as canceled, not completed.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
