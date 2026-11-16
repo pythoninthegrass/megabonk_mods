@@ -53,3 +53,19 @@ int32_t f_switch(int32_t x) {
 double f_poly(double x, double y) { return x * x + 2 * x * y - y / 3.0; }
 
 int32_t f_f2i(double x) { return (int32_t)(x > 1e6 ? 1e6 : (x < -1e6 ? -1e6 : x)); }
+
+__attribute__((vector_size(16))) double f_divpd(__attribute__((vector_size(16))) double a,
+                                                __attribute__((vector_size(16))) double b) {
+    return a / b;
+}
+
+__attribute__((vector_size(16))) float f_divps(__attribute__((vector_size(16))) float a,
+                                               __attribute__((vector_size(16))) float b) {
+    return a / b;
+}
+
+__attribute__((vector_size(16))) float f_divps_mem(__attribute__((vector_size(16))) float a, const float *p) {
+    __attribute__((vector_size(16))) float b;
+    for (int i = 0; i < 4; i++) b[i] = p[i];
+    return a / b;
+}

@@ -40,8 +40,12 @@ FUNCTIONS = {
     "f_switch": ("u", "i32"),
     "f_poly": ("dd", "d"),
     "f_f2i": ("d", "i32"),
+    "f_divpd": ("vv", "v"),
+    "f_divps": ("ff", "f"),
+    "f_divps_mem": ("fp", "f"),
 }
 RET_MASK = {"u64": "0xffffffffffffffffull", "u32": "0xffffffffull", "i32": "0xffffffffull", "u8": "0xffull"}
+VEC_LANES = {"v": ("double", 2), "f": ("float", 4)}
 REG = {"rax": 0x0, "rdx": 0x10, "rsp": 0x20, "rsi": 0x30, "rdi": 0x38, "xmm0": 0x1200, "xmm1": 0x1240}
 INT_ARGS = ["rdi", "rsi", "rdx"]
 
@@ -137,6 +141,19 @@ def harness_source(syms):
         "static uint64_t next(void) { lcg = lcg * 6364136223846793005ull + 1442695040888963407ull; return lcg >> 7 ^ lcg << 3; }",
         "static uint64_t pick(void) { uint64_t v = next(); switch (v & 7) { case 0: return v & 0xff; case 1: return -(v & 0xff); case 2: return 0; case 3: return 0x7fffffff; default: return v; } }",
         "static double pickd(void) { return (double)(int64_t)next() / 1e12; }",
+        "static double bitsd(uint64_t b) { double d; memcpy(&d, &b, 8); return d; }",
+        "static float bitsf(uint32_t b) { float f; memcpy(&f, &b, 4); return f; }",
+        "static double pickdv(void) { uint64_t v = next(); switch (v % 8u) {"
+        " case 0: return 0.0; case 1: return -(double)0.0;"
+        " case 2: return bitsd(0x7ff0000000000000ull); case 3: return bitsd(0xfff0000000000000ull);"
+        " case 4: return bitsd(0x7ff8000000000000ull); case 5: return bitsd(0x7ff0000000000001ull);"
+        " default: return (double)(int64_t)v / 1e12; } }",
+        "static float pickfv(void) { uint32_t v = (uint32_t)(next() >> 16); switch (v % 8u) {"
+        " case 0: return 0.0f; case 1: return -(float)0.0f;"
+        " case 2: return bitsf(0x7f800000u); case 3: return bitsf(0xff800000u);"
+        " case 4: return bitsf(0x7fc00000u); case 5: return bitsf(0x7f800001u);"
+        " default: return (float)(int32_t)v / 1e6f; } }",
+        "static float vsrc[4];",
         "static unsigned char reg[8192];",
         "static void reset(void) { memset(reg, 0, sizeof reg); *(uint64_t *)(reg + %d) = (uint64_t)(stack + sizeof stack - 64); }"
         % REG["rsp"],
@@ -147,25 +164,56 @@ def harness_source(syms):
         lines.append(f'printf("run {name}\\n");')
         lines.append("for (int i = 0; i < 2000; i++) {")
         decl, call, setup = [], [], []
+        int_arg, sse_arg = 0, 0
         for idx, kind in enumerate(args):
             if kind == "u":
                 decl.append(f"uint64_t a{idx} = pick();")
-                setup.append(f"*(uint64_t *)(reg + {REG[INT_ARGS[idx]]}) = a{idx};")
+                setup.append(f"*(uint64_t *)(reg + {REG[INT_ARGS[int_arg]]}) = a{idx};")
+                int_arg += 1
                 call.append(f"(a{idx})")
+            elif kind == "p":
+                decl.append("for (int l = 0; l < 4; l++) vsrc[l] = pickfv();")
+                setup.append(f"*(uint64_t *)(reg + {REG[INT_ARGS[int_arg]]}) = (uint64_t)(uintptr_t)vsrc;")
+                int_arg += 1
+                call.append("vsrc")
+            elif kind in VEC_LANES:
+                ty, n = VEC_LANES[kind]
+                pick = "pickdv" if kind == "v" else "pickfv"
+                lanes = ", ".join(f"{pick}()" for _ in range(n))
+                decl.append(f"{ty} t{idx}[{n}] = {{ {lanes} }};")
+                decl.append(
+                    f"__attribute__((vector_size(16))) {ty} a{idx} = {{ {', '.join(f't{idx}[{l}]' for l in range(n))} }};"
+                )
+                setup.append(f"memcpy(reg + {REG[['xmm0', 'xmm1'][sse_arg]]}, &a{idx}, 16);")
+                sse_arg += 1
+                call.append(f"a{idx}")
             else:
-                reg_name = ["xmm0", "xmm1"][idx]
                 decl.append(f"double a{idx} = pickd();")
-                setup.append(f"memcpy(reg + {REG[reg_name]}, &a{idx}, 8);")
+                setup.append(f"memcpy(reg + {REG[['xmm0', 'xmm1'][sse_arg]]}, &a{idx}, 8);")
+                sse_arg += 1
                 call.append(f"a{idx}")
         lines += decl + ["reset();"] + setup + [f"{sub}(reg);"]
-        if ret == "d":
+        if ret in VEC_LANES:
+            ty, n = VEC_LANES[ret]
+            lines.append(f"{ty} got[{n}]; memcpy(got, reg + {REG['xmm0']}, 16);")
+            lines.append(
+                f"{ty} native[{n}]; {ty} __attribute__((vector_size(16))) r = {name}({', '.join(call)}); memcpy(native, &r, 16);"
+            )
+            lines.append("int diff = 0;")
+            lines.append(
+                f"for (int l = 0; l < {n}; l++)"
+                f" if (memcmp(&got[l], &native[l], sizeof ({ty})) && !(got[l] != got[l] && native[l] != native[l])) diff = 1;"
+            )
+            cond = "if (diff)"
+        elif ret == "d":
             lines.append(f"double got; memcpy(&got, reg + {REG['xmm0']}, 8); double want = {name}({', '.join(call)});")
-            lines.append("if (memcmp(&got, &want, 8) != 0 && !(got != got && want != want))")
+            cond = "if (memcmp(&got, &want, 8) != 0 && !(got != got && want != want))"
         else:
             lines.append(
                 f"uint64_t got = *(uint64_t *)(reg + {REG['rax']}) & {RET_MASK[ret]}; uint64_t want = (uint64_t){name}({', '.join(call)}) & {RET_MASK[ret]};"
             )
-            lines.append("if (got != want)")
+            cond = "if (got != want)"
+        lines.append(cond)
         lines.append(f'{{ bad++; printf("{name} mismatch %d\\n", i); break; }}')
         lines.append("}")
     lines += ['printf("bad=%d\\n", bad); return bad != 0; }']

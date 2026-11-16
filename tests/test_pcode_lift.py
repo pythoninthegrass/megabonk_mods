@@ -111,10 +111,163 @@ def test_branchind_is_recorded_as_a_hole():
 
 def test_callother_is_recorded_as_a_hole_with_its_name():
     fn = body(
-        insn(0x1000, 4, op("CALLOTHER", None, "const,5,4", REG_EDI, user="divps")),
+        insn(0x1000, 4, op("CALLOTHER", None, "const,5,4", REG_EDI, user="minps")),
         insn(0x1004, 1, op("RETURN", None, "register,288,8")),
     )
+    assert pl.lift_body(fn).holes == ["CALLOTHER:minps"]
+
+
+REG_XMM0, REG_XMM1, REG_XMM2 = "register,1200,16", "register,1240,16", "register,1280,16"
+XMM0_BYTES, XMM1_BYTES, XMM2_BYTES = 0x1200, 0x1240, 0x1280
+
+
+def packed_div(user, op_id, dst, src, addr=0x1000):
+    """The shape Ghidra gives DIVPS/DIVPD: the destination twice, the source once, 16 bytes each."""
+    return insn(addr, 3, op("CALLOTHER", dst, f"const,{op_id},4", dst, src, user=user))
+
+
+def divided_body(user, op_id, dst=REG_XMM0, src=REG_XMM2):
+    return body(
+        packed_div(user, op_id, dst, src),
+        insn(0x1003, 1, op("RETURN", None, "register,288,8")),
+    )
+
+
+def producer(ir, name):
+    for line in ir.splitlines():
+        if line.strip().startswith(f"{name} ="):
+            return line.strip()
+    raise AssertionError(f"no producer for {name}:\n{ir}")
+
+
+def origin(ir, name, depth=8):
+    """The getelementptr a value ultimately reads from, walking the SSA chain back past loads."""
+    for _ in range(depth):
+        line = producer(ir, name)
+        operands = [t for t in line.split("=", 1)[1].replace(",", " ").split() if t.startswith("%t")]
+        if not operands:
+            return line
+        name = operands[0]
+    raise AssertionError(f"no origin for {name}:\n{ir}")
+
+
+def test_divps_lifts_four_float_lanes_without_a_hole():
+    result = pl.lift_body(divided_body("divps", 97))
+    assert result.holes == []
+    assert result.ir.count("= fdiv float") == 4
+    assert "fdiv double" not in result.ir
+
+
+def test_divpd_lifts_two_double_lanes_without_a_hole():
+    result = pl.lift_body(divided_body("divpd", 96))
+    assert result.holes == []
+    assert result.ir.count("= fdiv double") == 2
+    assert "fdiv float" not in result.ir
+
+
+def test_packed_division_divides_the_destination_by_the_source():
+    result = pl.lift_body(divided_body("divpd", 96))
+    line = next(l for l in result.ir.splitlines() if "fdiv double" in l)
+    dividend, divisor = (t.strip().rstrip(",") for t in line.split("fdiv double")[1].split(","))
+    assert str(XMM0_BYTES) in origin(result.ir, dividend)
+    assert str(XMM2_BYTES) in origin(result.ir, divisor)
+
+
+def test_packed_division_result_lands_back_in_the_destination():
+    result = pl.lift_body(divided_body("divps", 97))
+    stores = [l for l in result.ir.splitlines() if l.strip().startswith("store i128")]
+    assert len(stores) == 1
+    pointer = stores[0].split("ptr")[1].split(",")[0].strip()
+    assert f"i64 {XMM0_BYTES}" in producer(result.ir, pointer)
+
+
+def test_packed_division_from_a_temporary_source_lifts_clean():
+    result = pl.lift_body(divided_body("divpd", 96, src="unique,d600,16"))
+    assert result.holes == []
+    assert result.ir.count("= fdiv double") == 2
+
+
+def unique_offsets(ir):
+    """The %uniq byte offsets a body addresses, in the order it addresses them."""
+    return [int(line.rsplit("i64 ", 1)[1]) for line in ir.splitlines() if "ptr %uniq" in line]
+
+
+def test_unique_subpiece_addresses_its_parent_temp():
+    result = pl.lift_body(
+        body(
+            insn(0x1000, 4, op("COPY", "unique,110b00,16", REG_XMM0)),
+            insn(0x1004, 5, op("COPY", "register,1244,4", "unique,110b04,4")),
+            insn(0x1009, 1, op("RETURN", None, "register,288,8")),
+        )
+    )
+    assert result.holes == []
+    assert unique_offsets(result.ir) == [0, 4]
+
+
+def test_unique_pieces_of_one_temp_share_one_slot():
+    ops = [op("COPY", "unique,110b00,16", REG_XMM0)]
+    ops += [op("COPY", f"register,{0x1240 + 4 * lane:x},4", f"unique,{0x110B00 + 4 * lane:x},4") for lane in (1, 2, 3)]
+    result = pl.lift_body(body(insn(0x1000, 5, *ops), insn(0x1005, 1, op("RETURN", None, "register,288,8"))))
+    assert result.holes == []
+    assert unique_offsets(result.ir) == [0, 4, 8, 12]
+
+
+def test_distant_unique_temps_get_separate_slots():
+    result = pl.lift_body(
+        body(
+            insn(0x1000, 4, op("COPY", "unique,d600,16", REG_XMM0)),
+            insn(0x1004, 4, op("COPY", "unique,d800,16", REG_XMM1)),
+            insn(0x1008, 1, op("RETURN", None, "register,288,8")),
+        )
+    )
+    offsets = unique_offsets(result.ir)
+    assert len(set(offsets)) == 2 and abs(offsets[1] - offsets[0]) >= 16
+
+
+def test_packed_division_of_an_unexpected_width_stays_a_hole():
+    assert pl.lift_body(divided_body("divps", 97, dst="register,1200,32", src="register,1280,32")).holes == ["CALLOTHER:divps"]
+    assert pl.lift_body(divided_body("divps", 97, src="register,1280,8")).holes == ["CALLOTHER:divps"]
+
+
+def test_packed_division_with_an_unmatched_destination_stays_a_hole():
+    fn = body(
+        insn(0x1000, 3, op("CALLOTHER", REG_XMM1, "const,97,4", REG_XMM0, REG_XMM2, user="divps")),
+        insn(0x1003, 1, op("RETURN", None, "register,288,8")),
+    )
     assert pl.lift_body(fn).holes == ["CALLOTHER:divps"]
+
+
+def test_minps_and_maxps_are_still_holes():
+    for user in ("minps", "maxps"):
+        assert pl.lift_body(divided_body(user, 93)).holes == [f"CALLOTHER:{user}"]
+
+
+@requires_llvm
+def test_packed_division_verifies():
+    fn = body(
+        packed_div("divps", 97, REG_XMM0, REG_XMM2),
+        packed_div("divpd", 96, REG_XMM1, "unique,d600,16", addr=0x1003),
+        insn(0x1006, 1, op("RETURN", None, "register,288,8")),
+    )
+    result = pl.lift_body(fn)
+    assert result.holes == []
+    assert verify(pl.module_for([result])).returncode == 0
+
+
+@requires_llvm
+def test_packed_division_compiles_for_arm64(tmp_path):
+    result = pl.lift_body(divided_body("divps", 97))
+    assert result.holes == []
+    ir = pl.module_for([result])
+    obj = tmp_path / "o.o"
+    proc = subprocess.run(
+        [LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", obj, "-"],
+        input=ir,
+        text=True,
+        capture_output=True,
+    )
+    assert proc.returncode == 0 and obj.stat().st_size > 0
+    assert proc.stderr == ""
 
 
 def test_unknown_opcode_is_a_hole_not_a_crash():

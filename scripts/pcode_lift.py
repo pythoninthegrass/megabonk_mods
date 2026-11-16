@@ -48,7 +48,9 @@ FLOAT_UNARY_INTRINSIC = {
 }
 OVERFLOW_INTRINSIC = {"INT_CARRY": "uadd", "INT_SCARRY": "sadd", "INT_SBORROW": "ssub"}
 FLOAT_TYPES = {4: "float", 8: "double"}
-# Ghidra's unique-space offsets are sparse; each distinct one gets a slot wide enough for a 256-bit temporary.
+PACKED_DIVISION = {"divps": (4, 4), "divpd": (2, 8)}
+PACKED_WIDTH = 16
+# Ghidra's unique-space offsets are sparse; a temporary's slot is at least this wide, so it can hold a 256-bit value.
 UNIQUE_STRIDE = 32
 
 
@@ -70,6 +72,17 @@ def parse_varnode(text: str) -> tuple[str, int, int]:
     return space, int(offset, 16), int(size)
 
 
+def is_packed_division(out: str | None, ins: list[str]) -> bool:
+    """DIVPS and DIVPD arrive as destination = destination / source, every varnode 16 bytes wide."""
+    return (
+        out is not None
+        and len(ins) >= 3
+        and parse_varnode(out)[2] == PACKED_WIDTH
+        and ins[1] == out
+        and parse_varnode(ins[2])[2] == PACKED_WIDTH
+    )
+
+
 def itype(size: int) -> str:
     return f"i{size * 8}"
 
@@ -80,7 +93,8 @@ class BodyLifter:
         self.sections = list(sections)
         self.data_sections: set[str] = set()
         self.unmapped = 0
-        self.unique_slots: dict[int, int] = {}
+        self.unique_blocks: list[tuple[int, int, int]] = []
+        self.unique_bytes = 0
         self.last_data: dict | None = None
         self.tables = {t["at"]: t["cases"] for t in fn.get("jt", [])}
         self.start, self.size = fn["start"], fn["size"]
@@ -126,11 +140,22 @@ class BodyLifter:
             return str(offset)
         return f"ptrtoint (ptr {self.data_pointer(offset)} to i64)"
 
-    def slot(self, space: str, offset: int) -> str:
+    def unique_block(self, offset: int, size: int) -> int:
+        """Maps a temporary onto a slot in %uniq, so a sub-varnode lands inside the temp that holds it."""
+        for base, extent, slot in self.unique_blocks:
+            if base <= offset and offset + size <= base + extent:
+                return slot + (offset - base)
+        extent = max(size, UNIQUE_STRIDE)
+        slot = self.unique_bytes
+        self.unique_blocks.append((offset, extent, slot))
+        self.unique_bytes += extent
+        return slot
+
+    def slot(self, space: str, offset: int, size: int) -> str:
         if space == "ram":
             return self.data_pointer(offset)
         if space == "unique":
-            offset = self.unique_slots.setdefault(offset, len(self.unique_slots)) * UNIQUE_STRIDE
+            offset = self.unique_block(offset, size)
         base = "%reg" if space == "register" else "%uniq"
         p = self.tmp()
         self.emit(f"{p} = getelementptr i8, ptr {base}, i64 {offset}")
@@ -145,14 +170,14 @@ class BodyLifter:
         if space not in ("register", "unique", "ram"):
             raise ValueError(f"read from {space} space")
         v = self.tmp()
-        self.emit(f"{v} = load {itype(size)}, ptr {self.slot(space, offset)}, align 1")
+        self.emit(f"{v} = load {itype(size)}, ptr {self.slot(space, offset, size)}, align 1")
         return v
 
     def write(self, text: str, value: str) -> None:
         space, offset, size = parse_varnode(text)
         if space not in ("register", "unique", "ram"):
             raise ValueError(f"write to {space} space")
-        self.emit(f"store {itype(size)} {value}, ptr {self.slot(space, offset)}, align 1")
+        self.emit(f"store {itype(size)} {value}, ptr {self.slot(space, offset, size)}, align 1")
 
     def widen_i1(self, flag: str, size: int) -> str:
         v = self.tmp()
@@ -292,7 +317,12 @@ class BodyLifter:
             self.branch_indirect(insn, k, ins[0])
             return True
         elif name == "CALLOTHER":
-            self.holes.append(f"CALLOTHER:{op.get('user', '?')}")
+            user = op.get("user", "?")
+            lanes = PACKED_DIVISION.get(user)
+            if lanes and is_packed_division(out, ins):
+                self.packed_division(out, ins[2], *lanes)
+            else:
+                self.holes.append(f"CALLOTHER:{user}")
         else:
             self.holes.append(name)
         return False
@@ -339,6 +369,33 @@ class BodyLifter:
         )
         self.emit(f"{flag} = extractvalue {{i{n}, i1}} {pair}, 1")
         self.write(out, self.widen_i1(flag, parse_varnode(out)[2]))
+
+    def lane(self, value: str, total_bits: int, index: int, bits: int) -> str:
+        shifted = value
+        if index:
+            shifted = self.tmp()
+            self.emit(f"{shifted} = lshr i{total_bits} {value}, {index * bits}")
+        return self.fit(shifted, total_bits, bits)
+
+    def packed_division(self, out: str, src: str, lanes: int, lane_bytes: int) -> None:
+        """DIVPS and DIVPD: each lane of the destination is replaced by that lane divided by the source lane."""
+        ft, bits, total = FLOAT_TYPES[lane_bytes], lane_bytes * 8, PACKED_WIDTH * 8
+        dividend, divisor = self.read(out), self.read(src)
+        result = "0"
+        for index in range(lanes):
+            a = self.as_float(self.lane(dividend, total, index, bits), lane_bytes)
+            b = self.as_float(self.lane(divisor, total, index, bits), lane_bytes)
+            quotient = self.tmp()
+            self.emit(f"{quotient} = fdiv {ft} {a}, {b}")
+            piece = self.fit(self.from_float(quotient, lane_bytes), bits, total)
+            if index:
+                shifted = self.tmp()
+                self.emit(f"{shifted} = shl i{total} {piece}, {index * bits}")
+                piece = shifted
+            merged = self.tmp()
+            self.emit(f"{merged} = or i{total} {result}, {piece}")
+            result = merged
+        self.write(out, result)
 
     def float_op(self, name: str, out: str, ins: list[str]) -> None:
         osz, isz = parse_varnode(out)[2], parse_varnode(ins[0])[2]
@@ -517,7 +574,7 @@ class BodyLifter:
                 self.emit("ret void")
         header = f"define void @sub_{self.start:x}(ptr %reg) {{"
         body = "\n".join(self.lines)
-        uniq = f"  %uniq = alloca [{max(len(self.unique_slots), 1) * UNIQUE_STRIDE} x i8], align 16"
+        uniq = f"  %uniq = alloca [{max(self.unique_bytes, UNIQUE_STRIDE)} x i8], align 16"
         ir = f"{header}\n{body}\n}}\n".replace("entry:\n", f"entry:\n{uniq}\n", 1)
         return Lifted(
             self.start,
