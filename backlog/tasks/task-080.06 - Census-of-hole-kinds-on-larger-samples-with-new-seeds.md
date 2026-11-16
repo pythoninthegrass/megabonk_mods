@@ -1,10 +1,10 @@
 ---
 id: TASK-080.06
 title: Census of hole kinds on larger samples with new seeds
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-16T02:09:00Z'
-updated_date: '2026-11-16T06:20:00Z'
+updated_date: '2026-11-16T07:06:00Z'
 labels:
   - lift
   - small-model
@@ -12,6 +12,11 @@ dependencies: []
 references:
   - docs/development.md
   - scripts/lift_probe.py
+  - taskfiles/re.yml
+modified_files:
+  - scripts/lift_probe.py
+  - tests/test_lift_probe.py
+  - docs/development.md
   - taskfiles/re.yml
 parent_task_id: TASK-080
 priority: high
@@ -33,19 +38,19 @@ Out of scope: fixing any hole found. List each new kind with an example body add
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 At least two new seeds are run with a per-class count of 5,000 or more each, using separate output directories, and the seeds and counts are recorded.
-- [ ] #2 A table in the "Lifting the shipped code to arm64" section of docs/development.md compares the seed-80 result with the new seeds: bodies per stage, no-hole percentage per size class, and body counts per hole kind.
-- [ ] #3 Every hole kind that did not appear in the seed-80 sample is listed with one example body start address and its size.
-- [ ] #4 Any run failure (Ghidra timeout, out of memory, verifier or llc crash) is recorded with the body address that caused it, and the driver is not left in a state that silently drops such bodies from the totals; a test covers any driver change.
-- [ ] #5 `task check` passes.
+- [x] #1 At least two new seeds are run with a per-class count of 5,000 or more each, using separate output directories, and the seeds and counts are recorded.
+- [x] #2 A table in the "Lifting the shipped code to arm64" section of docs/development.md compares the seed-80 result with the new seeds: bodies per stage, no-hole percentage per size class, and body counts per hole kind.
+- [x] #3 Every hole kind that did not appear in the seed-80 sample is listed with one example body start address and its size.
+- [x] #4 Any run failure (Ghidra timeout, out of memory, verifier or llc crash) is recorded with the body address that caused it, and the driver is not left in a state that silently drops such bodies from the totals; a test covers any driver change.
+- [x] #5 `task check` passes.
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -63,8 +68,20 @@ Risk: the large class is 19,373 bodies, so 5,000 per seed draws a third of it - 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Driver hardening done test-first (15 new tests in tests/test_lift_probe.py, red before the change, 25 pass now; full suite 2113 passed 1 skipped, ruff clean). scripts/lift_probe.py: reconcile() pairs the requested sample with the Ghidra rows so a body the dump never emitted becomes a recorded row (missing_dump, every stage false) instead of silently shrinking every count; score_body catches lift exceptions and score_tool turns an opt/llc hang, crash or exec failure into an error string naming the tool, while an ordinary exit-1 rejection stays a measurement, not a failure; score_row turns anything else that escapes into a recorded failure; new --tool-timeout (default 120 s) and --ghidra-timeout (default 3600 s, partial dumps salvaged and Ghidra's stdout kept in <out>/ghidra-stdout.txt); bodies.jsonl is streamed as bodies finish so a killed run keeps what it scored. summary.json gains sample.requested, failures, failed_bodies (start, hex, size, class, error), unsampled_rows; main returns 1 when a requested body never reached the scorer.
-Smoke run before the real ones: 15 bodies, seed 81, requested 15, n 15, no failures, exit 0.
+Driver hardening, test-first (tests/test_lift_probe.py now 31 tests; full suite 2120 passed, 1 skipped; ruff clean; task check green).
+
+scripts/lift_probe.py: reconcile() pairs the requested sample with the rows Ghidra emitted, so a body the dump never reached becomes a recorded row (missing_dump, every stage false) instead of silently shrinking every count; score_tool turns an opt or llc hang, crash or exec failure into an error naming the tool while an ordinary exit-1 rejection stays a measurement; score_row records anything else that escapes the scorer; new --tool-timeout (default 120 s) bounds one opt or llc run and --ghidra-timeout (default 3600 s) the whole dump; a Ghidra run that times out or exits non-zero keeps the rows it wrote and leaves its console output in <out>/ghidra-stdout.txt; bodies.jsonl is streamed as bodies finish; summary.json gains sample.requested, failures, failed_bodies (start, hex, size, class, error) and unsampled_rows, and main returns 1 when a requested body never reached the scorer. --extra appends arguments to every opt and llc call.
+
+Verified live: a 6-body real-Ghidra run with --extra=--mcpu=neoverse-n1 scores 6 of 6 with no failures; the same run with --tool-timeout 0 records all 6 as "opt timed out after 0s" in failures and failed_bodies with their addresses while keeping them in the totals, and exits 0 because they reached the scorer.
+
+Census runs, both exit 0, same binary sha256 a86fd434...5ba1 as the seed-80 baseline:
+- seed 81, .tools/lift-probe-81: requested 15,000, scored 15,000, failures {}, unsampled_rows []; no hole 14,838 (98.92%) - tiny 4,899, small 4,954, large 4,985; holes BRANCHIND 152, JUMPTABLE_TARGET 2, CALLOTHER:movmskps 7, CALLOTHER:pshuflw 1.
+- seed 82, .tools/lift-probe-82: requested 15,000, scored 15,000, failures {}, unsampled_rows []; no hole 14,850 (99.00%) - tiny 4,926, small 4,946, large 4,978; holes BRANCHIND 144, JUMPTABLE_TARGET 3, CALLOTHER:movmskps 2, CALLOTHER:pshuflw 1.
+Launched as GHIDRA_HEADLESS_MAXMEM=8G task re:lift-probe with LIFT_PER_CLASS=5000 LIFT_SEED=<s> LIFT_OUT=.tools/lift-probe-<s> LIFT_EXTRA="--r2-per-class 0 --tool-timeout 600", the two seeds in parallel.
+
+Seed 80 baseline (.tools/lift-probe/summary.json): 3,000 bodies, no hole 2,978 (99.27%), tiny 986 / small 992 / large 1,000, holes BRANCHIND 21 and JUMPTABLE_TARGET 1 (0x4dd8a20, 312 B). The 98.5% in the task text is the stale pre-CALLOTHER figure kept in .tools/lift-probe/run.log (2,956).
+
+Three samples cover 30,503 distinct bodies (15.6% of the section). Unchanged across runs: every body decodes, verifies and compiles for arm64; no unmapped constant reference; tail-call bodies 193 / 981 / 1,032; indirect-call bodies 906 / 4,516 / 4,592; arm64 object bytes per x86 byte 9.12 / 9.12 / 9.26.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
@@ -78,3 +95,13 @@ Starting with the driver hardening AC #4 asks for: reconcile + per-body error ca
 
 ---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Two 15,000-body samples (seeds 81 and 82, 5,000 per class, separate output directories) plus the seed-80 baseline are tabulated in the "Lifting the shipped code to arm64" section of docs/development.md: bodies per stage, no-hole share per size class, and body counts per hole kind. Decoding, the LLVM verifier and the arm64 compile stay unanimous across 33,000 body scores; the hole-free figure holds between 98.92% and 99.27%; the large class, thinly sampled at 1,000 before, carries 15 and 22 holes at 5,000.
+
+Two hole kinds seed 80 never showed, both SSE and both unfixed by design: CALLOTHER:movmskps, smallest carrier 0x4906740 at 43 B and largest 0x48da5c0 at 45,834 B (drawn by both seeds), and CALLOTHER:pshuflw at 0x3ab7dc0 and 0x42f4cb0, both 513 B. Each is recorded with its userop name and its body still verifies and compiles.
+
+The probe no longer loses bodies: the driver pairs the sample it asked for with what Ghidra emitted and records the gap with addresses, and names an opt or llc that hangs or crashes instead of aborting the run or calling a rejection a failure. Committed as c31c918.
+<!-- SECTION:FINAL_SUMMARY:END -->
