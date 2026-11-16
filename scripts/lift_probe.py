@@ -23,6 +23,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -46,8 +47,11 @@ TINY_MAX, SMALL_MAX = 63, 512
 TOOL_TIMEOUT = 120
 # Extra opt/llc arguments from --extra, set once by main() and appended to every scoring tool call.
 EXTRA_ARGS: list[str] = []
+# PcodeCache the run reads and extends, or None to always ask Ghidra for every body.
+PCODE_CACHE: PcodeCache | None = None
 GHIDRA_TIMEOUT = 3600
 MISSING_DUMP = "no pcode row from Ghidra"
+CACHE_SCHEMA = "pcode-cache/2"
 
 
 @dataclass(frozen=True)
@@ -120,7 +124,7 @@ def failed_row(start: int, size: int, error: str, missing_dump: bool = False) ->
         "obj_bytes": 0,
         "error": error,
         "missing_dump": missing_dump,
-        "stages": {"decoded": False, "clean": False, "verify": False, "arm64": False},
+        "stages": {"decoded": False, "clean": False, "verify": False, "pipeline": False, "arm64": False, "arm64_pipeline": False},
     }
 
 
@@ -205,7 +209,9 @@ def ghidra_env() -> dict[str, str]:
     return env
 
 
-def dump_pcode(so: Path, fdes: list[Fde], work: Path, timeout: int | None = None, diag: Path | None = None) -> tuple[list[dict], list[dict]]:
+def dump_pcode(
+    so: Path, fdes: list[Fde], work: Path, timeout: int | None = None, diag: Path | None = None
+) -> tuple[list[dict], list[dict]]:
     """Returns the sampled bodies' pcode records and the ELF's loaded sections.
 
     A Ghidra run that dies partway leaves a short pcode file: the rows it wrote are kept and
@@ -251,45 +257,343 @@ def dump_pcode(so: Path, fdes: list[Fde], work: Path, timeout: int | None = None
         raise SystemExit(f"Ghidra produced no pcode:\n{stdout[-1500:]}")
     if not sections.exists():
         raise SystemExit(f"Ghidra produced pcode but no section table:\n{stdout[-1500:]}")
-    return [json.loads(line) for line in pcode.read_text().splitlines()], json.loads(sections.read_text())
+    try:
+        rows = [json.loads(line) for line in pcode.read_text().splitlines()]
+        sections_table = json.loads(sections.read_text())
+    except ValueError as exc:
+        raise SystemExit(f"Ghidra wrote pcode that is not valid JSON ({exc}):\n{stdout[-1500:]}") from exc
+    return rows, sections_table
 
 
 def score_tool(name: str, cmd: list, ir: str, timeout: int) -> tuple[bool, int, str | None]:
-    """Runs one LLVM tool over a body's IR: whether it accepted the body, its object size, and any run failure.
+    """Return acceptance, raw output byte count, and any diagnostic."""
+    accepted, payload, error = run_tool_body(name, cmd, ir, timeout)
+    return accepted, 0 if payload is None else len(payload), error
 
-    A tool that rejects the IR (exit 1) is a measurement; a hang or a crash is a failure and is named.
-    """
+
+def run_tool_body(name: str, cmd: list, ir: str, timeout: int) -> tuple[bool, bytes | None, str | None]:
+    """Run LLVM on stdin, retaining binary stdout and rejection diagnostics."""
+    argv = [*cmd, "-"]
     try:
-        proc = run_tool(cmd, input=ir.encode(), timeout=timeout)
+        proc = run_tool(argv, input=ir.encode(), timeout=timeout)
     except subprocess.TimeoutExpired:
-        return False, 0, f"{name} timed out after {timeout}s"
+        return False, None, f"{name} timed out after {timeout}s"
     except OSError as exc:
-        return False, 0, f"{name} could not run: {exc}"
+        return False, None, f"{name} could not run: {exc}"
     if proc.returncode == 0:
-        return True, len(proc.stdout), None
+        return True, _as_bytes(proc.stdout), None
     if proc.returncode < 0:
-        return False, 0, f"{name} was killed by signal {-proc.returncode}"
+        return False, None, f"{name} was killed by signal {-proc.returncode}"
     if proc.returncode > 1:
-        return False, 0, f"{name} exited {proc.returncode}"
-    return False, 0, None
+        return False, None, f"{name} exited {proc.returncode}"
+    detail = _as_bytes(proc.stderr).decode(errors="replace").strip()
+    return False, None, f"{name} rejected IR: {detail}" if detail else None
 
 
-def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT) -> dict:
-    """Lifts one body and records each stage's outcome; anything that breaks is recorded against the body."""
+def _as_bytes(value) -> bytes:
+    """Reads a subprocess stream as bytes whether the run finished or timed out."""
+    if value is None:
+        return b""
+    return value.encode() if isinstance(value, str) else bytes(value)
+
+
+def ghidra_version() -> str:
+    """The Ghidra build whose analysis produced the cache, so another build recomputes."""
+    try:
+        props = find_ghidra().parent.parent / "Ghidra" / "application.properties"
+        for line in props.read_text().splitlines():
+            if line.startswith("application.version="):
+                return line.split("=", 1)[1].strip()
+    except (OSError, ValueError):
+        pass
+    return "unknown"
+
+
+def dump_script_fingerprint() -> str:
+    """Digest over the dump script's bytes, so an edited LiftDump.java invalidates the cache."""
+    digest = hashlib.sha256()
+    try:
+        for script in sorted(DUMP_SCRIPT_DIR.glob("*.java")):
+            digest.update(script.name.encode())
+            digest.update(script.read_bytes())
+    except OSError:
+        return "unknown"
+    return digest.hexdigest()[:16]
+
+
+def cache_key(digest: str, fdes: list[Fde]) -> str:
+    """Identify an exact sample; Ghidra recovery depends on the whole analysis."""
+    stamp = hashlib.sha256()
+    stamp.update(digest.encode())
+    for fde in fdes:
+        stamp.update(f"{fde.start:x}:{fde.size}\n".encode())
+    return stamp.hexdigest()[:24]
+
+
+def section_record(digest: str, sections: list[dict], key: str | None = None) -> dict:
+    """Bind the companion ELF section table to the same analysis as the bodies."""
+    record = {"sha256": digest, "kind": "sections", "sections": sections}
+    if key is not None:
+        record["cache"] = key
+    return record
+
+
+def cache_header(key: str, digest: str, fingerprint: str, ghidra: str) -> dict:
+    """The record that says which toolchain produced a cache under this key."""
+    return {
+        "kind": "header",
+        "cache": key,
+        "sha256": digest,
+        "schema": CACHE_SCHEMA,
+        "script_fingerprint": fingerprint,
+        "ghidra": ghidra,
+    }
+
+
+def _valid_body(record: dict) -> bool:
+    """Schema check for one pcode record: a malformed row is a miss, never a silent hit."""
+    if not isinstance(record.get("start"), int) or not isinstance(record.get("size"), int):
+        return False
+    if not isinstance(record.get("insns"), list):
+        return False
+    for key in ("undecoded", "sw", "dc"):
+        if key in record and not isinstance(record[key], (int, bool)):
+            return False
+    for key in ("uw", "jt"):
+        if key in record and not isinstance(record[key], list):
+            return False
+    return True
+
+
+class PcodeCache:
+    """Persist one exact Ghidra analysis, never a mixture of partial samples."""
+
+    def __init__(self, path: Path | None, digest: str, by_start: dict[int, dict], key: str | None):
+        self.path, self.digest, self.by_start, self.key = path, digest, by_start, key
+        self.matched: list[int] = []
+        self.missing: list[int] = []
+        self.fresh: list[dict] = []
+        self.sections: list[dict] | None = None
+        self.header: dict | None = None
+        self.rejected = 0
+
+    @classmethod
+    def load(
+        cls,
+        path: Path | None,
+        digest: str,
+        want_key: str | None = None,
+        want_fingerprint: str | None = None,
+        want_ghidra: str | None = None,
+    ) -> PcodeCache:
+        cache = cls(path, digest, {}, want_key)
+        if path is None or not path.exists():
+            return cache
+        try:
+            lines = path.read_text().splitlines()
+        except OSError:
+            return cache
+        for line in lines:
+            try:
+                record = json.loads(line)
+            except ValueError:
+                cache.rejected += 1
+                continue
+            if not isinstance(record, dict) or record.get("sha256") != digest:
+                continue
+            kind = record.get("kind")
+            if want_key is not None and record.get("cache") != want_key:
+                continue
+            if kind == "header":
+                if cache.header is None:
+                    cache.header = record
+                continue
+            if kind == "sections":
+                if cache.sections is None and isinstance(record.get("sections"), list):
+                    cache.sections = record["sections"]
+                continue
+            if _valid_body(record):
+                cache.by_start.setdefault(record["start"], record)
+            else:
+                cache.rejected += 1
+        if not cache._header_matches(want_fingerprint, want_ghidra):
+            cache.by_start, cache.sections, cache.rejected = {}, None, cache.rejected + 1
+        return cache
+
+    def _header_matches(self, want_fingerprint: str | None, want_ghidra: str | None) -> bool:
+        if self.header is None:
+            return False
+        if self.header.get("schema") != CACHE_SCHEMA:
+            return False
+        if want_fingerprint is not None and self.header.get("script_fingerprint") != want_fingerprint:
+            return False
+        if want_ghidra is not None and self.header.get("ghidra") != want_ghidra:
+            return False
+        return True
+
+    @property
+    def complete(self) -> bool:
+        """A hit needs bodies and the section table; a partial cache is never a complete hit."""
+        return bool(self.by_start) and bool(self.sections) and not self.rejected
+
+    def lookup(self, fdes: list[Fde]) -> list[dict]:
+        """Returns the cached records for these bodies, recording the addresses it could not answer."""
+        usable = self.complete and len(self.by_start) == len(fdes) and all(
+            self.by_start.get(f.start, {}).get("size") == f.size for f in fdes
+        )
+        if not usable:
+            self.by_start = {}
+        rows = []
+        for fde in fdes:
+            record = self.by_start.get(fde.start) if usable else None
+            if record is None:
+                self.missing.append(fde.start)
+            else:
+                self.matched.append(fde.start)
+                rows.append({key: value for key, value in record.items() if key not in ("sha256", "cache", "kind")})
+        return rows
+
+    def remember(self, rows: list[dict], sections: list[dict] | None = None) -> None:
+        """Keep fresh rows for scoring and persistence."""
+        if sections is not None:
+            self.sections = sections
+        for row in rows:
+            start = row.get("start")
+            if start in self.missing and start not in self.by_start and _valid_body(row):
+                self.by_start[start] = row
+        self.fresh += [row for row in rows if row.get("start") in self.missing]
+
+    def save(self) -> None:
+        if self.path is None or self.key is None or not self.missing:
+            return
+        records = [cache_header(self.key, self.digest, dump_script_fingerprint(), ghidra_version())]
+        if self.sections is not None:
+            records.append(section_record(self.digest, self.sections, self.key))
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        records += [
+            {"cache": self.key, "sha256": self.digest, **row} for row in self.by_start.values()
+        ]
+        with tempfile.NamedTemporaryFile(mode="w", dir=self.path.parent, delete=False) as sink:
+            temporary = Path(sink.name)
+            try:
+                for record in records:
+                    sink.write(json.dumps(record) + "\n")
+                sink.close()
+                temporary.replace(self.path)
+            finally:
+                temporary.unlink(missing_ok=True)
+
+    def summary(self) -> dict:
+        return {
+            "hits": len(self.matched),
+            "misses": len(self.missing),
+            "rejected_records": self.rejected,
+            "sections": len(self.sections) if self.sections is not None else None,
+            "key": self.key,
+        }
+
+
+def dump_pcode_cached(
+    so: Path,
+    fdes: list[Fde],
+    work: Path,
+    cache: PcodeCache | None,
+    timeout: int | None = None,
+    diag: Path | None = None,
+    dump=None,
+) -> tuple[list[dict], list[dict]]:
+    """Reuse a complete analysis or dump the entire exact sample in one invocation."""
+    dump = dump or globals()["dump_pcode"]
+    if cache is None:
+        return dump(so, fdes, work, timeout=timeout, diag=diag)
+    rows = cache.lookup(fdes)
+    sections = list(cache.sections) if cache.sections is not None else []
+    if cache.missing:
+        dumped, dumped_sections = dump(so, fdes, work, timeout=timeout, diag=diag)
+        sections = list(dumped_sections)
+        cache.remember(dumped, dumped_sections)
+    if not sections and rows:
+        raise SystemExit("pcode cache carried bodies but no ELF section table; refusing to score against no sections")
+    return rows + cache.fresh, sections
+
+
+def llc_arm64(ir: str, tool_timeout: int) -> tuple[bool, int, str | None]:
+    """Assembles a body's IR into an arm64 object, returning its size."""
+    return score_tool(
+        "llc",
+        [LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", "-"] + EXTRA_ARGS,
+        ir,
+        tool_timeout,
+    )
+
+
+def verify_body(ir: str, tool_timeout: int) -> tuple[bool, str | None]:
+    accepted, _, error = score_tool("opt", [LLVM / "opt", "-passes=verify", "-disable-output"] + EXTRA_ARGS, ir, tool_timeout)
+    return accepted, error
+
+
+def optimise_body(ir: str, pipeline: str, tool_timeout: int) -> tuple[bool, bytes | None, str | None]:
+    return run_tool_body(
+        "opt", [LLVM / "opt", f"-passes={pipeline}", "-S", "-o", "-"] + EXTRA_ARGS, ir, tool_timeout
+    )
+
+
+def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT, pipeline: str = "") -> dict:
+    """Record each stage; rejected pipelines never compile fallback unoptimised IR."""
     try:
         lifted = pcode_lift.lift_body(fn, sections)
         ir = pcode_lift.module_for([lifted])
     except Exception as exc:
         return failed_row(fn["start"], fn["size"], f"lift raised {type(exc).__name__}: {exc}")
-    verified, _, verify_error = score_tool(
-        "opt", [LLVM / "opt", "-passes=verify", "-disable-output", "-"] + EXTRA_ARGS, ir, tool_timeout
-    )
-    accepted, obj_bytes, obj_error = score_tool(
-        "llc",
-        [LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", "-", "-"] + EXTRA_ARGS,
-        ir,
-        tool_timeout,
-    )
+    verified, error = verify_body(ir, tool_timeout)
+    ran_pipeline = False
+    if pipeline:
+        passed, optimised, pipeline_error = optimise_body(ir, pipeline, tool_timeout)
+        if not passed or optimised is None:
+            return {
+                **failed_row(fn["start"], fn["size"], pipeline_error or f"opt rejected the pipeline {pipeline}"),
+                "pipeline": pipeline,
+                "holes": lifted.holes,
+                "unmapped_refs": lifted.unmapped_refs,
+                "indirect_calls": lifted.indirect_calls,
+                "tail_calls": lifted.tail_calls,
+                "jump_tables": len(fn.get("jt", [])),
+                "stages": {
+                    "decoded": fn["undecoded"] == 0,
+                    "clean": not lifted.holes,
+                    "verify": verified,
+                    "pipeline": False,
+                    "arm64": False,
+                    "arm64_pipeline": False,
+                },
+            }
+        ir = optimised.decode(errors="replace")
+        ran_pipeline = True
+        after, post_error = verify_body(ir, tool_timeout)
+        verified = verified and after
+        if not after:
+            return {
+                **failed_row(fn["start"], fn["size"], post_error or f"{pipeline} produced IR that fails verify"),
+                "pipeline": pipeline,
+                "holes": lifted.holes,
+                "unmapped_refs": lifted.unmapped_refs,
+                "indirect_calls": lifted.indirect_calls,
+                "tail_calls": lifted.tail_calls,
+                "jump_tables": len(fn.get("jt", [])),
+                "stages": {
+                    "decoded": fn["undecoded"] == 0,
+                    "clean": not lifted.holes,
+                    "verify": verified,
+                    "pipeline": True,
+                    "arm64": False,
+                    "arm64_pipeline": False,
+                },
+            }
+        accepted, obj_bytes, obj_error = llc_arm64(ir, tool_timeout)
+        error = error or obj_error
+    else:
+        accepted, obj_bytes, obj_error = llc_arm64(ir, tool_timeout)
+        error = error or obj_error
     return {
         "start": fn["start"],
         "size": fn["size"],
@@ -299,22 +603,25 @@ def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT)
         "tail_calls": lifted.tail_calls,
         "jump_tables": len(fn.get("jt", [])),
         "obj_bytes": obj_bytes,
-        "error": verify_error or obj_error,
+        "error": error,
+        "pipeline": pipeline or None,
         "stages": {
             "decoded": fn["undecoded"] == 0,
             "clean": not lifted.holes,
             "verify": verified,
+            "pipeline": ran_pipeline,
             "arm64": accepted,
+            "arm64_pipeline": accepted and ran_pipeline,
         },
     }
 
 
-def score_row(row: dict, sections: list[dict], tool_timeout: int) -> dict:
+def score_row(row: dict, sections: list[dict], tool_timeout: int, pipeline: str = "") -> dict:
     """Scores one reconciled row, turning anything that escapes the scorer into a recorded failure."""
     if row.get("error"):
         return row
     try:
-        return score_body(row, sections, tool_timeout)
+        return score_body(row, sections, tool_timeout, pipeline)
     except Exception as exc:
         return failed_row(row["start"], row["size"], f"scoring raised {type(exc).__name__}: {exc}")
 
@@ -352,6 +659,7 @@ def sha256(path: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    started_at = time.monotonic()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("so", nargs="?", type=Path, default=DEFAULT_SO)
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
@@ -367,32 +675,59 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="arguments appended to every opt and llc call, e.g. --extra '--mcpu=neoverse-n1'",
     )
+    ap.add_argument(
+        "--pipeline",
+        default="",
+        help="opt pass pipeline run on each body before llc, e.g. --pipeline 'default<O2>'; empty is today's verify-only behaviour",
+    )
+    ap.add_argument(
+        "--pcode-cache",
+        type=Path,
+        default=None,
+        help="JSONL of Ghidra pcode records keyed on the binary digest, reused across pipeline runs",
+    )
     args = ap.parse_args(argv)
+    global PCODE_CACHE
     EXTRA_ARGS[:] = shlex.split(args.extra)
 
     if not args.so.exists():
         raise SystemExit(f"no ELF at {args.so}")
+    digest = sha256(args.so)
     readelf = run_tool([LLVM / "llvm-readelf", "-S", args.so], text=True).stdout
     window = parse_exec_sections(readelf)[args.section]
     frames = parse_fdes(run_tool([LLVM / "llvm-dwarfdump", "--eh-frame", args.so], text=True).stdout)
     in_section = [f for f in frames if window[0] <= f.start < window[1]]
     sample = stratified_sample(frames, args.per_class, args.seed, *window)
     args.out.mkdir(parents=True, exist_ok=True)
+    # The cache unit is the whole exact sample: same ordered addresses, sizes, dump script and Ghidra build.
+    want_key = cache_key(digest, sample)
+    PCODE_CACHE = PcodeCache.load(args.pcode_cache, digest, want_key, dump_script_fingerprint(), ghidra_version())
+    cache = PCODE_CACHE
+    wanted_cache = cache if cache.path is not None else None
 
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
-        bodies, sections = dump_pcode(args.so, sample, work, timeout=args.ghidra_timeout, diag=args.out)
+        pcode_at = time.monotonic()
+        bodies, sections = dump_pcode_cached(
+            args.so, sample, work, wanted_cache, timeout=args.ghidra_timeout, diag=args.out
+        )
+        pcode_seconds = round(time.monotonic() - pcode_at, 1)
         rows, extras = reconcile(sample, bodies)
         scored: list[dict] = []
+        scored_at = time.monotonic()
         with ThreadPoolExecutor(args.jobs) as pool, (args.out / "bodies.jsonl").open("w") as sink:
-            pending = [pool.submit(score_row, row, sections, args.tool_timeout) for row in rows]
+            pending = [pool.submit(score_row, row, sections, args.tool_timeout, args.pipeline) for row in rows]
             for future in as_completed(pending):
                 row = future.result()
                 scored.append(row)
                 sink.write(json.dumps(row) + "\n")
                 sink.flush()
+        scoring_seconds = round(time.monotonic() - scored_at, 1)
         scored.sort(key=lambda row: row["start"])
         (args.out / "bodies.jsonl").write_text("".join(json.dumps(row) + "\n" for row in scored))
+        if wanted_cache is not None:
+            (args.out / "pcode.jsonl").write_text("".join(json.dumps(row) + "\n" for row in bodies))
+            wanted_cache.save()
         r2 = None
         if args.r2_per_class:
             r2_sample = stratified_sample(frames, args.r2_per_class, args.seed, *window)
@@ -404,8 +739,9 @@ def main(argv: list[str] | None = None) -> int:
     x86_bytes = sum(row["size"] for row in scored_ok)
     obj_ratio = round(sum(row["obj_bytes"] for row in scored_ok) / x86_bytes, 2) if x86_bytes else 0
     summary = {
-        "binary_sha256": sha256(args.so),
+        "binary_sha256": digest,
         "section": args.section,
+        "pipeline": args.pipeline or "none",
         "section_bodies": {name: sum(size_class(f.size) == name for f in in_section) for name in ("tiny", "small", "large")},
         "sample": {"per_class": args.per_class, "seed": args.seed, "requested": len(sample), "n": len(scored)},
         "stages": summarize(scored),
@@ -414,6 +750,13 @@ def main(argv: list[str] | None = None) -> int:
         "failed_bodies": failures,
         "unsampled_rows": [hex(row["start"]) for row in extras],
         "obj_bytes_per_x86_byte": obj_ratio,
+        "object_bytes": sum(row["obj_bytes"] for row in scored_ok),
+        "x86_bytes": sum(fde.size for fde in sample),
+        "compiled_x86_bytes": x86_bytes,
+        "scoring_seconds": scoring_seconds,
+        "pcode_seconds": pcode_seconds,
+        "wall_seconds": round(time.monotonic() - started_at, 1),
+        "pcode_cache": wanted_cache.summary() if wanted_cache is not None else None,
         "unmapped_refs": sum(row["unmapped_refs"] for row in scored),
         "bodies_with_tail_calls": sum(bool(row["tail_calls"]) for row in scored),
         "bodies_with_indirect_calls": sum(bool(row["indirect_calls"]) for row in scored),
