@@ -1,4 +1,7 @@
 #include <stdint.h>
+#ifdef __x86_64__
+#include <xmmintrin.h>
+#endif
 
 uint64_t f_sum(uint64_t n) {
     uint64_t s = 0;
@@ -84,6 +87,18 @@ int64_t f_d2i64(double x) { return (int64_t)x; }
 int32_t f_f2i32(float x) { return (int32_t)x; }
 
 int64_t f_f2i64(float x) { return (int64_t)x; }
+
+uint32_t f_movmskps(__attribute__((vector_size(16))) float a) {
+#ifdef __x86_64__
+    return (uint32_t)_mm_movemask_ps(a);
+#else
+    uint32_t lanes[4];
+    __builtin_memcpy(lanes, &a, 16);
+    uint32_t mask = 0;
+    for (int i = 0; i < 4; i++) mask |= (lanes[i] >> 31) << i;
+    return mask;
+#endif
+}
 
 __attribute__((vector_size(16))) double f_divpd(__attribute__((vector_size(16))) double a,
                                                 __attribute__((vector_size(16))) double b) {

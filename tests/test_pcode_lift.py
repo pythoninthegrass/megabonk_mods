@@ -143,6 +143,97 @@ def packed_body(user, op_id, dst=REG_XMM0, src=REG_XMM2):
     )
 
 
+def movmskps_body(dst=REG_EAX, src=REG_XMM1):
+    return packed_body("movmskps", "a1", dst, src)
+
+
+@pytest.mark.parametrize("dst", [REG_EAX, "register,8,4"])
+@pytest.mark.parametrize("src", [REG_XMM0, REG_XMM1])
+def test_movmskps_writes_a_32_bit_register(dst, src):
+    result = pl.lift_body(movmskps_body(dst, src))
+    assert result.holes == []
+    stores = [line for line in result.ir.splitlines() if line.strip().startswith("store ")]
+    assert len(stores) == 1 and stores[0].strip().startswith("store i32 ")
+    pointer = stores[0].split("ptr")[1].split(",")[0].strip()
+    assert f"ptr %reg, i64 {pl.parse_varnode(dst)[1]}" in producer(result.ir, pointer)
+    assert "load i128" in result.ir
+    assert "load i32" not in result.ir
+
+
+@requires_llvm
+def test_movmskps_verifies():
+    result = pl.lift_body(movmskps_body())
+    assert result.holes == []
+    checked = verify(pl.module_for([result]))
+    assert checked.returncode == 0, checked.stderr
+
+
+@pytest.mark.parametrize(
+    "dst,inputs",
+    [
+        ("register,0,8", ["const,a1,4", "register,0,8", REG_XMM0]),
+        ("register,0,16", ["const,a1,4", "register,0,16", REG_XMM0]),
+        ("unique,100,4", ["const,a1,4", "unique,100,4", REG_XMM0]),
+        (REG_EAX, ["const,a1,4", REG_EAX, "register,1200,8"]),
+        (REG_EAX, ["const,a1,4", REG_EAX, "register,1200,32"]),
+        (REG_EAX, ["const,a1,4", REG_EAX, "unique,d600,16"]),
+        (REG_EAX, ["const,a1,4", REG_EDI, REG_XMM0]),
+        (REG_EAX, ["const,a1,4", REG_XMM0]),
+        (None, ["const,a1,4", REG_EAX, REG_XMM0]),
+    ],
+)
+def test_movmskps_unexpected_shape_stays_a_hole(dst, inputs):
+    fn = body(insn(0x1000, 3, op("CALLOTHER", dst, *inputs, user="movmskps")))
+    assert pl.lift_body(fn).holes == ["CALLOTHER:movmskps"]
+
+
+def movmskps_cases():
+    cases = [[0] * 4]
+    for pattern in (0, 0x7FC01234, 0x7F800001, 0x3F800000, 0x7F800000, 1):
+        cases += [[pattern | (((mask >> lane) & 1) << 31) for lane in range(4)] for mask in range(16)]
+    return cases
+
+
+@requires_llvm
+def test_movmskps_matches_explicit_sign_bit_reference(tmp_path):
+    result = pl.lift_body(movmskps_body())
+    assert result.holes == []
+    cases = movmskps_cases()
+    rows = ",\n".join(
+        "{%s, %d}"
+        % (
+            ", ".join(f"0x{word:08x}u" for word in words),
+            sum(((word >> 31) & 1) << i for i, word in enumerate(words)),
+        )
+        for words in cases
+    )
+    source = tmp_path / "movmskps.c"
+    source.write_text(
+        "#include <stdint.h>\n#include <string.h>\n"
+        "#include <stdio.h>\n"
+        "extern void sub_1000(unsigned char *);\n"
+        f"static const uint32_t cases[][5] = {{{rows}}};\n"
+        "int main(void) { unsigned char reg[8192];\n"
+        "for (unsigned i = 0; i < sizeof cases / sizeof *cases; i++) {\n"
+        "memset(reg, 0xa5, sizeof reg); memcpy(reg + 0x1240, cases[i], 16);\n"
+        "sub_1000(reg); uint32_t got; memcpy(&got, reg, 4);\n"
+        "if (got != cases[i][4]) return 1;\n"
+        "for (unsigned j = 4; j < sizeof reg; j++) {\n"
+        "if (j >= 0x1240 && j < 0x1250) { if (reg[j] != ((const unsigned char *)cases[i])[j - 0x1240]) return 2; }\n"
+        "else if (reg[j] != 0xa5) return 3;\n"
+        '}} puts("ok"); return 0; }\n'
+    )
+    obj = tmp_path / "movmskps.o"
+    proc = subprocess.run(
+        [LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", obj, "-"],
+        input=pl.module_for([result]),
+        text=True,
+        capture_output=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert compile_and_run(tmp_path, source, "arm64", [obj]).strip() == "ok"
+
+
 def producer(ir, name):
     for line in ir.splitlines():
         if line.strip().startswith(f"{name} ="):

@@ -84,6 +84,19 @@ def is_packed_lane_op(out: str | None, ins: list[str]) -> bool:
     )
 
 
+def is_movmskps_op(out: str | None, ins: list[str]) -> bool:
+    """MOVMSKPS repeats a 32-bit register destination before its single XMM source."""
+    return (
+        out is not None
+        and len(ins) == 3
+        and parse_varnode(out)[0] == "register"
+        and parse_varnode(out)[2] == 4
+        and ins[1] == out
+        and parse_varnode(ins[2])[0] == "register"
+        and parse_varnode(ins[2])[2] == PACKED_WIDTH
+    )
+
+
 def itype(size: int) -> str:
     return f"i{size * 8}"
 
@@ -323,6 +336,8 @@ class BodyLifter:
                 self.packed_division(out, ins[2], *PACKED_DIVISION[user])
             elif user in PACKED_MINMAX and is_packed_lane_op(out, ins):
                 self.packed_minmax(out, ins[2], *PACKED_MINMAX[user])
+            elif user == "movmskps" and is_movmskps_op(out, ins):
+                self.packed_sign_mask(out, ins[2])
             else:
                 self.holes.append(f"CALLOTHER:{user}")
         else:
@@ -419,6 +434,16 @@ class BodyLifter:
             self.emit(f"{merged} = or i{total} {result}, {piece}")
             result = merged
         self.write(out, result)
+
+    def packed_sign_mask(self, out: str, src: str) -> None:
+        value = self.read(src)
+        pieces = []
+        for index in range(4):
+            lane = self.lane(value, 128, index, 32)
+            sign = self.tmp()
+            self.emit(f"{sign} = lshr i32 {lane}, 31")
+            pieces.append(sign)
+        self.merge_lanes(out, pieces, 1, 32)
 
     def float_op(self, name: str, out: str, ins: list[str]) -> None:
         osz, isz = parse_varnode(out)[2], parse_varnode(ins[0])[2]

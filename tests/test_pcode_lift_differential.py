@@ -47,6 +47,7 @@ FUNCTIONS = {
     "f_divps_mem": ("fp", "f"),
     "f_minps": ("ff", "f"),
     "f_maxps": ("ff", "f"),
+    "f_movmskps": ("f", "u32"),
 }
 # Returned lane by lane rather than computed, so a lifted version that picked the other
 # source would differ in bits the tolerant comparison below forgives.
@@ -128,6 +129,11 @@ def lift_x86_symbols(tmp_path):
         if name in FUNCTIONS:
             syms[name] = (int(addr, 16), int(size, 16))
     assert set(syms) == set(FUNCTIONS)
+    address, size = syms["f_movmskps"]
+    assembly = run(
+        [LLVM / "llvm-objdump", "-d", f"--start-address={address}", f"--stop-address={address + size}", so]
+    )
+    assert any("movmskps" in line.split() for line in assembly.splitlines())
     ranges = tmp_path / "ranges.txt"
     ranges.write_text("".join(f"{a:x} {s}\n" for a, s in syms.values()))
     env = {**os.environ, "JAVA_HOME": run([JAVA, "where", "java"]).strip(), "GHIDRA_HEADLESS_MAXMEM": "2G"}
@@ -260,7 +266,14 @@ def harness_source(syms):
             elif kind in VEC_LANES:
                 ty, n = VEC_LANES[kind]
                 pick = "pickdv" if kind == "v" else "pickfv"
-                lanes = ", ".join(f"{pick}()" for _ in range(n))
+                if name == "f_movmskps":
+                    lanes = ", ".join(
+                        f"bitsf(i < 48 ? ((uint32_t)((i >> {lane}) & 1) << 31) |"
+                        " (i < 16 ? 0u : (i < 32 ? 0x7fc01234u : 0x7f800001u)) : (uint32_t)next())"
+                        for lane in range(n)
+                    )
+                else:
+                    lanes = ", ".join(f"{pick}()" for _ in range(n))
                 decl.append(f"{ty} t{idx}[{n}] = {{ {lanes} }};")
                 decl.append(
                     f"__attribute__((vector_size(16))) {ty} a{idx} = {{ {', '.join(f't{idx}[{l}]' for l in range(n))} }};"
@@ -316,6 +329,35 @@ def test_lifted_arm64_matches_native_arm64(tmp_path):
     exe = tmp_path / "harness"
     run([LLVM / "clang", "-O1", "-arch", "arm64", "-ffp-contract=off", harness, obj, "-o", exe, "-lm"])
     assert "bad=0" in run([exe], timeout=120)
+
+
+def test_movmskps_reference_matches_x86_instruction(tmp_path):
+    source = tmp_path / "movmskps-x86.c"
+    source.write_text(
+        "#include <stdio.h>\n#include <string.h>\n"
+        + SOURCE.read_text()
+        + """
+int main(void) {
+    uint32_t state = 0x12345678u;
+    for (unsigned i = 0; i < 2000; i++) {
+        uint32_t lanes[4], want = 0;
+        for (unsigned j = 0; j < 4; j++) {
+            state = state * 1664525u + 1013904223u;
+            lanes[j] = i < 48 ? (((i >> j) & 1u) << 31) |
+                (i < 16 ? 0u : (i < 32 ? 0x7fc01234u : 0x7f800001u)) : state;
+            want |= (lanes[j] >> 31) << j;
+        }
+        __attribute__((vector_size(16))) float a;
+        memcpy(&a, lanes, 16);
+        if (f_movmskps(a) != want) return 1;
+    }
+    puts("ok 2000"); return 0;
+}
+"""
+    )
+    exe = tmp_path / "movmskps-x86"
+    run([LLVM / "clang", "-O1", "-arch", "x86_64", source, "-o", exe])
+    assert "ok 2000" in run(["arch", "-x86_64", exe])
 
 
 def test_best_opt_pipeline_preserves_lifted_arm64_semantics(tmp_path):
