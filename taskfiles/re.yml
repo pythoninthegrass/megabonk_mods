@@ -110,6 +110,45 @@ tasks:
           echo "skipping the Linux control leg: set MEGABONK_LINUX_BUILD_RSYNC in .env"
         fi
 
+  elf-shim:
+    desc: "Score the ELF-load-and-shim step: can the shipped Linux runtime be made loadable on macOS"
+    vars:
+      ELF_SHIM_SO: '{{.ELF_SHIM_SO | default ".tools/megabonk-linux-native/Megabonk/GameAssembly.so"}}'
+      ELF_SHIM_OUT: '{{.ELF_SHIM_OUT | default ".tools/elf-shim"}}'
+      ELF_SHIM_ARCHS: '{{.ELF_SHIM_ARCHS | default "x86_64 arm64"}}'
+      ELF_SHIM_EXTRA: '{{.ELF_SHIM_EXTRA | default ""}}'
+    summary: |
+      Usage: task re:elf-shim [ELF_SHIM_SO=<GameAssembly.so>] [ELF_SHIM_OUT=<dir>]
+             [ELF_SHIM_ARCHS="x86_64 arm64"] [ELF_SHIM_EXTRA=--skip-dyld-probe]
+
+       The last unmeasured input behind choosing Route B over Route C. Reads the shipped
+       Linux GameAssembly.so with a stdlib ELF reader, asks the live macOS loader (via
+       scripts/native_bind_probe/symprobe.c) which imports it can actually resolve, and
+       scores four legs: import shim feasibility, glibc version-node binding,
+       relocation translatability, and the load strategy. Nothing launches the runtime.
+
+       Each target architecture in ELF_SHIM_ARCHS is scored separately because Apple
+       silicon's 16 KB pages change whether the PT_LOAD segments can be mapped straight
+       from the file. Writes summary.json per target under ELF_SHIM_OUT-<arch>.
+       --skip-dyld-probe analyses ELF structure only and never reports feasible.
+
+       See the "Loading and shimming the Linux ELF runtime" section in
+       docs/development.md.
+    preconditions:
+      - sh: '[ -f "{{.ELF_SHIM_SO}}" ]'
+        msg: "No Linux GameAssembly.so at {{.ELF_SHIM_SO}}; see docs/development.md for the rsync step that populates .tools/megabonk-linux-native"
+    cmds:
+      - |
+        rc=0
+        for arch in {{.ELF_SHIM_ARCHS}}; do
+          echo "== target $arch =="
+          uv run --script scripts/elf_shim_probe.py \
+            --so "{{.ELF_SHIM_SO}}" \
+            --out "{{.ELF_SHIM_OUT}}-$arch" \
+            --target-arch "$arch" {{.ELF_SHIM_EXTRA}} || rc=1
+        done
+        exit $rc
+
   _install-dotnet:
     internal: true
     desc: "Install the mise-managed dotnet SDK used to run Il2CppDumper"
