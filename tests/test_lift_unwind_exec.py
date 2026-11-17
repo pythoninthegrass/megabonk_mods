@@ -36,6 +36,9 @@ STUBS = {
     "poison",
     "__tls_get_addr",
 }
+REENTER_STUBS = {"native_reenter"}
+REENTER_TYPED = {"native_reenter": ("native_reenter", abi.Signature(("i32",), "i32"))}
+REENTER_EXPORTS = {"f_reenter": abi.Signature(("i32",), "i32")}
 RAW = {
     "_Unwind_RaiseException": "lu_raise_exception",
     "_Unwind_Resume": "lu_resume",
@@ -104,6 +107,18 @@ int main(int argc, char **argv) {
 }
 """
 
+# Extra harness code for the re-entry fixture only; the other fixtures share HARNESS.
+REENTER_HARNESS = HARNESS.replace(
+    "void lu_poison(",
+    "int32_t native_reenter(int32_t x) { return x == 2 ? e_uncaught() : e_catch(x); }\nvoid lu_poison(",
+).replace(
+    '    else if (!strcmp(mode, "tls"))',
+    """    else if (!strcmp(mode, "reenter0")) result = e_reenter(0);
+    else if (!strcmp(mode, "reenter1")) result = e_reenter(1);
+    else if (!strcmp(mode, "reenter2")) result = e_reenter(2);
+    else if (!strcmp(mode, "tls"))""",
+)
+
 
 def run(command, **kwargs):
     result = subprocess.run([str(c) for c in command], capture_output=True, text=True, **kwargs)
@@ -145,6 +160,8 @@ def unwind_executable(tmp_path_factory):
             REPO / "tests/fixtures/lift/unwind.cpp",
             REPO / "tests/fixtures/lift/unwind_runtime.cpp",
             REPO / "tests/fixtures/lift/unwind_stubs.cpp",
+            REPO / "tests/fixtures/lift/unwind_reenter.cpp",
+            REPO / "tests/fixtures/lift/unwind_reenter_stub.cpp",
             "-o",
             so,
         ]
@@ -154,8 +171,8 @@ def unwind_executable(tmp_path_factory):
         fields = line.split()
         if len(fields) == 4 and fields[2] in "TtWw" and int(fields[1], 16):
             symbols[fields[3]] = (int(fields[0], 16), int(fields[1], 16))
-    assert symbols.keys() >= STUBS
-    lifted = {n: v for n, v in symbols.items() if n not in STUBS}
+    assert symbols.keys() >= STUBS | REENTER_STUBS
+    lifted = {n: v for n, v in symbols.items() if n not in STUBS | REENTER_STUBS}
     elf = elf_shim_probe.parse_elf(so)
     raw = so.read_bytes()
     frames = eh.parse_frames(*eh_probe.read_section(elf, raw, ".eh_frame"))
@@ -181,8 +198,8 @@ def unwind_executable(tmp_path_factory):
     run([LLVM / "opt", "-passes=verify", "-disable-output", ir])
     obj = work / "unwind.o"
     run([LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", ir, "-o", obj])
-    exports = [abi.Binding(symbols[n][0], n.replace("f_", "e_", 1), sig) for n, sig in EXPORTS.items()]
-    imports = [abi.Binding(symbols[n][0], native, sig) for n, (native, sig) in TYPED.items()]
+    exports = [abi.Binding(symbols[n][0], n.replace("f_", "e_", 1), sig) for n, sig in {**EXPORTS, **REENTER_EXPORTS}.items()]
+    imports = [abi.Binding(symbols[n][0], native, sig) for n, (native, sig) in {**TYPED, **REENTER_TYPED}.items()]
     raw_imports = [abi.RawBinding(symbols[n][0], native) for n, native in RAW.items()]
     (work / "adapters.c").write_text(
         abi.generate(
@@ -194,7 +211,7 @@ def unwind_executable(tmp_path_factory):
         )
     )
     (work / "tables.c").write_text(lu.render_c(table, except_table, except_base, lu.address_bias(rows)))
-    (work / "harness.c").write_text(HARNESS)
+    (work / "harness.c").write_text(REENTER_HARNESS)
     exe = work / "unwind"
     run(
         [
@@ -229,6 +246,8 @@ def execute(exe, mode):
         ("nested1", "R 1 N 20,10,99 D 0"),
         ("rethrow1", "R 9 N 300,301,3 D 0"),
         ("regs", "R 273 N  D 0"),
+        ("reenter0", "R 7 N 100,2,1,7,101,60 D 0"),
+        ("reenter1", "R 105 N 2,200,1,5,61,60 D 0"),
     ],
 )
 def test_lifted_exceptions_match_the_expected_unwind(unwind_executable, mode, expected):
@@ -256,3 +275,10 @@ def test_each_export_call_gets_its_own_initialised_tls_block(unwind_executable):
     result = execute(unwind_executable, "tls")
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "R 2042 R 2042 N  D 0"
+
+
+@requires_arm64
+def test_an_exception_uncaught_in_a_reentered_export_terminates_without_unwinding_the_outer_frame(unwind_executable):
+    result = execute(unwind_executable, "reenter2")
+    assert result.returncode == -6
+    assert result.stdout.strip() == "ABORT N"
