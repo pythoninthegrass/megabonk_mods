@@ -4,7 +4,7 @@ title: Preserve exception propagation through lifted arm64 code
 status: In Progress
 assignee: []
 created_date: '2026-11-16T19:04:00Z'
-updated_date: '2026-11-17T02:22:00Z'
+updated_date: '2026-11-17T02:28:00Z'
 labels:
   - native-macos
   - arm64
@@ -29,7 +29,7 @@ The census found exception tables on 8,373 game-section bodies and 103,628 landi
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Lifted code matches the shipped reference for caught throws, nested propagation, cleanup/finally execution, rethrow and an uncaught exception's reported outcome.
+- [x] #1 Lifted code matches the shipped reference for caught throws, nested propagation, cleanup/finally execution, rethrow and an uncaught exception's reported outcome.
 - [ ] #2 Exceptions crossing required native/lifted boundaries unwind correctly without corrupting stack or register state.
 - [ ] #3 Required exception-bearing bodies and metadata in the selected runtime image are accounted for; unsupported unwind cases are rejected rather than emitted as apparently runnable code.
 - [x] #4 Regression tests execute on native arm64, include cleanup ordering and failure cases, and docs state the verified unwind contract and coverage.
