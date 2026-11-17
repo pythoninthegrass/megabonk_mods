@@ -59,6 +59,7 @@ typedef struct {
   const char *state_chains[4];
   size_t state_chain_count;
   int skip_init;
+  int expect_throw;
 } Config;
 
 static Config cfg;
@@ -300,6 +301,7 @@ typedef Il2CppClass (*api_class_from_il2cpp_object_t)(Il2CppObject);
 typedef void (*api_set_commandline_arguments_t)(int, const char *const *, const char **);
 typedef void (*api_add_internal_call_t)(const char *, void *);
 typedef void (*api_print_exception_t)(Il2CppObject *);
+typedef void (*api_format_exception_t)(Il2CppObject *, char *, int);
 typedef void *(*api_get_corlib_t)(void);
 typedef void *(*api_domain_get_assemblies_t)(void *, size_t *);
 typedef void *(*api_assembly_get_image_t)(void *);
@@ -336,6 +338,7 @@ static struct {
   api_set_commandline_arguments_t set_commandline_arguments;
   api_add_internal_call_t add_internal_call;
   api_print_exception_t print_exception;
+  api_format_exception_t format_exception;
   api_get_corlib_t get_corlib;
   api_image_get_name_t image_get_name;
   api_domain_get_assemblies_t domain_get_assemblies;
@@ -381,6 +384,7 @@ static void resolve_api(void) {
       (api_set_commandline_arguments_t)sym("il2cpp_set_commandline_arguments");
   api.add_internal_call = (api_add_internal_call_t)sym("il2cpp_add_internal_call");
   api.print_exception = (api_print_exception_t)sym("il2cpp_print_unhandled_exception");
+  api.format_exception = (api_format_exception_t)sym("il2cpp_format_exception");
   api.get_corlib = (api_get_corlib_t)sym("il2cpp_get_corlib");
   api.image_get_name = (api_image_get_name_t)sym("il2cpp_image_get_name");
   api.domain_get_assemblies = (api_domain_get_assemblies_t)sym("il2cpp_domain_get_assemblies");
@@ -751,6 +755,20 @@ static MethodInfo lookup_method(Il2CppClass *class_out, char *label, size_t labe
   return method;
 }
 
+/* Records the thrown exception's class and formatted message as evidence. */
+static void record_thrown_exception(Il2CppObject *exception) {
+  Il2CppClass klass = api.object_get_class ? api.object_get_class(exception) : NULL;
+  const char *name = klass && api.class_get_name ? api.class_get_name(klass) : NULL;
+  const char *ns = klass && api.class_get_namespace ? api.class_get_namespace(klass) : NULL;
+  char qualified[256], message[512];
+  snprintf(qualified, sizeof(qualified), "%s%s%s", ns ? ns : "", ns && ns[0] ? "." : "", name ? name : "?");
+  ev_str("exception_class", qualified);
+  message[0] = '\0';
+  if (api.format_exception) api.format_exception(exception, message, (int)sizeof(message));
+  ev_str("exception_message", message);
+  note("runtime_invoke(%s::%s) threw %s", cfg.invoke_class, cfg.invoke_method, qualified);
+}
+
 /* Calls the candidate through il2cpp_runtime_invoke; writes the value and returns 1. */
 static int invoke_candidate(void **method_slot, char *got_out, size_t got_len, const char **why) {
   MethodInfo method = method_slot && *method_slot ? *method_slot : lookup_method(NULL, NULL, 0);
@@ -766,6 +784,16 @@ static int invoke_candidate(void **method_slot, char *got_out, size_t got_len, c
   ValueSnap snap;
   memset(&snap, 0, sizeof(snap));
   Il2CppObject *boxed = invoke_snapshot(method, cfg.arg_count ? params : NULL, &exception, &snap);
+  if (cfg.expect_throw) {
+    if (!exception) {
+      *why = "expected a throw but the invoke returned";
+      return 0;
+    }
+    record_thrown_exception(exception);
+    snprintf(got_out, got_len, "threw");
+    *why = NULL;
+    return 1;
+  }
   if (exception) {
     note("runtime_invoke(%s::%s) threw", cfg.invoke_class, cfg.invoke_method);
     if (api.print_exception) api.print_exception(exception);
@@ -919,7 +947,7 @@ static int leg2(void) {
     emit(0, why ? why : "invoke failed");
     return 1;
   }
-  if (!values_match(got)) {
+  if (!cfg.expect_throw && !values_match(got)) {
     note("value mismatch: got %s want %s", got, cfg.invoke_expected);
     emit(0, "returned value does not match the expected value");
     return 1;
@@ -1295,7 +1323,8 @@ static void usage(void) {
           "            [--invoke-image I --invoke-class Ns.Cls --invoke-method M]\n"
           "            [--invoke-ret int|float|bool|string --invoke-expected V]\n"
           "            [--invoke-arg k:v ...] [--invoke-arg-type T ...] [--hook SYMBOL]\n"
-          "            [--dlopen-mode auto|now|lazy|lazy_global] [--preload LIB ...] [--skip-init]\n");
+          "            [--dlopen-mode auto|now|lazy|lazy_global] [--preload LIB ...] [--skip-init]\n"
+          "            [--expect-throw]\n");
 }
 
 int main(int argc, char **argv) {
@@ -1366,6 +1395,9 @@ int main(int argc, char **argv) {
       if (cfg.state_chain_count < 4) cfg.state_chains[cfg.state_chain_count++] = token;
     } else if (strcmp(argv[i], "--skip-init") == 0) {
       cfg.skip_init = 1;
+    } else if (strcmp(argv[i], "--expect-throw") == 0) {
+      cfg.expect_throw = 1;
+      used = 1;
     } else {
       usage();
       return 2;
