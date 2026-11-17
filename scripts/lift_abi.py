@@ -191,7 +191,9 @@ def generate(
     raw: list[RawBinding] = (),
     callable_bodies: list[int] = (),
     tls: Tls | None = None,
+    aliases: dict[int, int] | None = None,
 ) -> str:
+    """`aliases` maps an address to the lifted body or binding it forwards to, such as a PLT stub of an image function."""
     raw = list(raw)
     callable_bodies = list(callable_bodies)
     typed = exports + imports
@@ -200,6 +202,12 @@ def generate(
         raise AbiError("duplicate binding address or name")
     if len(set(callable_bodies) | {b.address for b in bindings}) != len(bindings) + len(set(callable_bodies)):
         raise AbiError("duplicate binding address or name")
+    aliases = dict(aliases or {})
+    known = {b.address for b in bindings} | set(callable_bodies)
+    if any(a in known for a in aliases):
+        raise AbiError("duplicate binding address or name")
+    if any(t not in known for t in aliases.values()):
+        raise AbiError("alias target is not a lifted body or binding")
     lines = [
         "#include <stdint.h>",
         "#include <stdlib.h>",
@@ -301,7 +309,9 @@ def generate(
             "  memcpy(reg + 32, &rsp, 8);",
             "}",
         ]
+    for alias, target in aliases.items():
+        lines += [f"void sub_{alias:x}(unsigned char *reg) {{", f"  sub_{target:x}(reg);", "}"]
     lines += ["void lift_dispatch(uint64_t target, unsigned char *reg) {", "  switch (target) {"]
-    lines += [f"  case UINT64_C({a}): sub_{a:x}(reg); return;" for a in [b.address for b in bindings] + callable_bodies]
+    lines += [f"  case UINT64_C({a}): sub_{a:x}(reg); return;" for a in [b.address for b in bindings] + callable_bodies + list(aliases)]
     lines += ["  default: abort();", "  }", "}"]
     return "\n".join(lines) + "\n"

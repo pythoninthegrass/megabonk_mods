@@ -43,3 +43,20 @@ def test_tls_getter_may_not_share_an_address_with_another_binding():
 def test_an_empty_tls_image_is_rejected():
     with pytest.raises(abi.AbiError, match="TLS"):
         abi.Tls(0x1000, b"")
+
+
+def test_an_alias_forwards_to_a_lifted_body_and_is_dispatchable():
+    source = abi.generate([], [], callable_bodies=[0x1000], aliases={0x2000: 0x1000})
+    assert "void sub_2000(unsigned char *reg) {\n  sub_1000(reg);\n}" in source
+    assert "case UINT64_C(8192): sub_2000(reg); return;" in source
+
+
+def test_an_alias_may_not_reuse_a_bound_address():
+    sig = abi.Signature((), "void")
+    with pytest.raises(abi.AbiError, match="duplicate"):
+        abi.generate([abi.Binding(0x2000, "entry", sig)], [], callable_bodies=[0x1000], aliases={0x2000: 0x1000})
+
+
+def test_an_alias_must_name_a_lifted_target():
+    with pytest.raises(abi.AbiError, match="alias"):
+        abi.generate([], [], aliases={0x2000: 0x1000})
