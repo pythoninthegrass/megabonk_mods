@@ -4,7 +4,7 @@ title: Preserve exception propagation through lifted arm64 code
 status: In Progress
 assignee: []
 created_date: '2026-11-16T19:04:00Z'
-updated_date: '2026-11-17T02:06:00Z'
+updated_date: '2026-11-17T02:22:00Z'
 labels:
   - native-macos
   - arm64
@@ -122,4 +122,6 @@ Stock reference: the same fixture sources linked against a stock x86-64 libstdc+
 Finding, not fixed: a code address a body materialises itself (a lea of a function) lowers to ptrtoint of the host @sub_X, while lift_dispatch switches on the file address X, so such a pointer called through dispatch aborts. Relocated data words do not use that path. Held as a strict xfail in tests/test_lift_code_address.py. Existing lifted output is unchanged: the diff to existing tests is empty and task check exits 0 (2,408 passed, 1 skipped, 1 xfailed).
 
 Still open: pad check of the other 8,038 LSDA bodies; seed-81/82 re-score (not started; cold Ghidra dumps); native-boundary decision for AC2; a shipped catch/finally oracle; running any shipped il2cpp body with a typed catch lifted; pointer_type_info and vmi_class_type_info (rejected, unproven); the code-address finding above; the new typed build duplicates the shipped-runtime test's builder and should be folded into a shared helper.
+
+Progress: comparison against the image's own libsupc++ (docs commit after cc7a571; not pushed). The same fixtures, built with g++ on the x86-64 Linux build host and run with the shipped GameAssembly.so preloaded (same SHA-256 as the local copy), bind __cxa_throw, __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __gxx_personality_v0 and the class/si_class/vmi_class type_info vtables to the image (shown with LD_DEBUG=bindings; without the preload they bind to libstdc++); _Unwind_RaiseException stays in libgcc_s, as the image imports it. All 13 cases (6 typed, 7 unwind) give return values, notes and exit status identical to the stock libstdc++ build and to the lifted run. So AC1's cases (caught throws, nested propagation, cleanup, rethrow, uncaught outcome) are now compared against the shipped runtime itself natively. Remaining gap: these are fixture bodies; no shipped il2cpp body with an LSDA has been run lifted. AC1 left unticked; recommend ticking on that basis, maintainer's call. Capture used no game session (Steam and the game were not touched).
 <!-- SECTION:NOTES:END -->
