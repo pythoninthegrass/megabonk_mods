@@ -7,6 +7,7 @@ variadic calls and extended vectors until their ABI classification is implemente
 
 import re
 from dataclasses import dataclass
+from pcode_lift import EH_PENDING_PAD
 
 
 class AbiError(ValueError):
@@ -115,6 +116,17 @@ class Binding:
             raise AbiError(f"invalid or reserved C identifier: {self.name!r}")
 
 
+@dataclass(frozen=True)
+class RawBinding:
+    """A native function that takes the guest register file and owns the guest RSP, such as the unwinder."""
+
+    address: int
+    name: str
+
+    def __post_init__(self):
+        Binding(self.address, self.name, Signature((), "void"))
+
+
 def argument_layout(kinds: tuple[str, ...]) -> tuple[Slot, ...]:
     Signature(kinds, "void")
     integer = sse = stack = 0
@@ -145,8 +157,10 @@ def result_slot(kind: str) -> Slot:
     return Slot("reg", 0x1200 if kind.startswith(("f", "v")) else 0, TYPES[kind][1])
 
 
-def generate(exports: list[Binding], imports: list[Binding]) -> str:
-    bindings = exports + imports
+def generate(exports: list[Binding], imports: list[Binding], raw: list[RawBinding] = ()) -> str:
+    raw = list(raw)
+    typed = exports + imports
+    bindings = typed + raw
     if len({b.address for b in bindings}) != len(bindings) or len({b.name for b in bindings}) != len(bindings):
         raise AbiError("duplicate binding address or name")
     lines = [
@@ -160,10 +174,12 @@ def generate(exports: list[Binding], imports: list[Binding]) -> str:
     ]
     for binding in bindings:
         lines.append(f"extern void sub_{binding.address:x}(unsigned char *reg);")
-    for binding in bindings:
+    for binding in typed:
         sig = binding.signature
         params = ", ".join(f"{TYPES[k][0]} a{i}" for i, k in enumerate(sig.args)) or "void"
         lines.append(f"{TYPES[sig.result][0]} {binding.name}({params});")
+    for binding in raw:
+        lines.append(f"extern void {binding.name}(unsigned char *reg);")
     for binding in exports:
         sig = binding.signature
         params = ", ".join(f"{TYPES[k][0]} a{i}" for i, k in enumerate(sig.args)) or "void"
@@ -185,6 +201,9 @@ def generate(exports: list[Binding], imports: list[Binding]) -> str:
             "  uintptr_t returned_rsp;",
             "  memcpy(&returned_rsp, reg + 32, 8);",
             "  if (returned_rsp != rsp + 8) abort();",
+            "  uint64_t pending;",
+            f"  memcpy(&pending, reg + {EH_PENDING_PAD}, 8);",
+            "  if (pending) abort();",
         ]
         if sig.result != "void":
             slot = result_slot(sig.result)
@@ -218,6 +237,8 @@ def generate(exports: list[Binding], imports: list[Binding]) -> str:
                 f"  memcpy({location(slot)}, &result, {slot.size});",
             ]
         lines += ["  rsp += 8;", "  memcpy(reg + 32, &rsp, 8);", "}"]
+    for binding in raw:
+        lines += [f"void sub_{binding.address:x}(unsigned char *reg) {{", f"  {binding.name}(reg);", "}"]
     lines += ["void lift_dispatch(uint64_t target, unsigned char *reg) {", "  switch (target) {"]
     lines += [f"  case UINT64_C({b.address}): sub_{b.address:x}(reg); return;" for b in bindings]
     lines += ["  default: abort();", "  }", "}"]
