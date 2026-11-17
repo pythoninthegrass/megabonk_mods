@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import struct
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -19,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import eh_probe  # noqa: E402
 import elf_shim_probe  # noqa: E402
 import lift_eh  # noqa: E402
+import lift_probe  # noqa: E402
 import lift_reloc  # noqa: E402
 import lift_unwind  # noqa: E402
 
@@ -56,12 +59,30 @@ def cached_rows(path: Path) -> list[dict]:
     return rows
 
 
+def pad_dump(so: Path, bodies: list[tuple[int, int]], work: Path) -> Path:
+    """Dumps pcode for the given bodies in one Ghidra run, or reuses the dump already in `work`."""
+    pcode = work / "pcode.jsonl"
+    if pcode.exists():
+        return pcode
+    work.mkdir(parents=True, exist_ok=True)
+    # Ghidra rejects a project path with a dot-prefixed element, so the run happens outside .tools.
+    with tempfile.TemporaryDirectory(prefix="eh-pad-dump-") as run_dir:
+        lift_probe.dump_pcode(so, [lift_probe.Fde(a, n) for a, n in bodies], Path(run_dir))
+        shutil.copyfile(Path(run_dir) / "pcode.jsonl", pcode)
+    return pcode
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("so", type=Path, nargs="?", default=DEFAULT_SO)
     ap.add_argument("--section", default="il2cpp")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--pcode-cache", type=Path, help="validated pcode cache whose bodies are checked for missing pads")
+    ap.add_argument(
+        "--dump-pads",
+        action="store_true",
+        help="dump pcode for every LSDA body with Ghidra (reused from <out>/pad-dump when present) and check its pads",
+    )
     args = ap.parse_args(argv)
     elf = elf_shim_probe.parse_elf(args.so)
     raw = args.so.read_bytes()
@@ -79,8 +100,13 @@ def main(argv: list[str] | None = None) -> int:
     report["filters"] = lift_unwind.filter_report(frames, except_table, except_base, lo, hi, plan)
     report["type_words"] = {"patched_words": len(plan.patches), "type_slots": len(plan.slots)}
     report["allowed_personalities"] = sorted(hex(a) for a in allowed)
+    if args.dump_pads:
+        args.pcode_cache = pad_dump(args.so, lift_unwind.lsda_bodies(frames, lo, hi), args.out / "pad-dump")
     if args.pcode_cache:
-        report["dumped_pads"] = lift_unwind.dumped_pad_check(cached_rows(args.pcode_cache), frames, except_table, except_base)
+        rows = cached_rows(args.pcode_cache)
+        report["dumped_pads"] = lift_unwind.dumped_pad_check(rows, frames, except_table, except_base)
+        report["dumped_pads"]["lsda_bodies"] = len(lift_unwind.lsda_bodies(frames, lo, hi))
+        report["dumped_pads"]["not_dumped"] = len(lift_unwind.undumped_lsda_bodies(rows, frames, lo, hi))
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "summary.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(json.dumps(report, indent=2, sort_keys=True))

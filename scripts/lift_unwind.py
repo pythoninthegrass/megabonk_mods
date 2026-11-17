@@ -230,6 +230,17 @@ def dumped_pad_check(rows: list[dict], frames: list[eh.Frame], except_table: byt
     return report
 
 
+def lsda_bodies(frames: list[eh.Frame], lo: int, hi: int) -> list[tuple[int, int]]:
+    """(start, size) of every frame in [lo, hi) that has an LSDA, in address order."""
+    return sorted((f.pc_begin, f.pc_range) for f in frames if f.lsda and lo <= f.pc_begin < hi)
+
+
+def undumped_lsda_bodies(rows: list[dict], frames: list[eh.Frame], lo: int, hi: int) -> list[int]:
+    """Starts of LSDA bodies in [lo, hi) that have no dumped pcode row."""
+    dumped = {row["start"] for row in rows}
+    return [start for start, _ in lsda_bodies(frames, lo, hi) if start not in dumped]
+
+
 def personality_resolver(elf, raw: bytes):
     """Maps a CIE to the guest address of its personality routine through the slot's relocation."""
     dynsym = next((s for s in elf.sections if s.name == ".dynsym"), None)

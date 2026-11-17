@@ -233,3 +233,14 @@ def test_filter_report_counts_bodies_by_the_catch_clauses_they_need():
     frames = frames_for((0x1000, PROLOGUE, offsets[0]), (0x2000, PROLOGUE, offsets[1]), (0x3000, PROLOGUE, offsets[2]), (0x4000, PROLOGUE, None))
     report = lu.filter_report(frames, data, 0x40, 0x1000, 0x5000)
     assert report == {"with_lsda": 3, "catch_all_only": 1, "typed_catch": 1, "exception_spec": 1, "unreadable": 0}
+
+
+def test_lsda_bodies_lists_start_and_size_of_section_frames_with_an_lsda():
+    frames = frames_for((0x500, PROLOGUE, 0x40), (0x2000, PROLOGUE, 0x40), (0x2100, PROLOGUE, None), (0x2200, PROLOGUE, 0x40))
+    assert lu.lsda_bodies(frames, 0x1000, 0x3000) == [(0x2000, 0x40), (0x2200, 0x40)]
+
+
+def test_undumped_lsda_bodies_names_each_one_the_dump_dropped():
+    frames = frames_for((0x2000, PROLOGUE, 0x40), (0x2100, PROLOGUE, 0x40), (0x2200, PROLOGUE, 0x40))
+    rows = [{"start": 0x2100, "size": 0x40, "insns": []}]
+    assert lu.undumped_lsda_bodies(rows, frames, 0x1000, 0x3000) == [0x2000, 0x2200]
