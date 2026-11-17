@@ -1,4 +1,4 @@
-# Outcomes of typed.cpp linked against a stock x86-64 libstdc++ (g++ 14.3.1, libstdc++ 14.3.1-4), driven by typed_reference_main.cpp.
+# Outcomes of typed.cpp on x86-64 Linux, driven by typed_reference_main.cpp: identical with a stock libstdc++ (g++ 14.3.1, libstdc++ 14.3.1-4) and with the shipped image's own libsupc++ preloaded (see docs/development.md).
 # mode|exit status|stdout. Exit 134 is SIGABRT from the terminate handler.
 upcast|0|R 50 N 105,1
 exact|0|R 6 N
