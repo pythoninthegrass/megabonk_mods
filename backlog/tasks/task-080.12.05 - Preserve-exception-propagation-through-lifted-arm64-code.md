@@ -4,7 +4,7 @@ title: Preserve exception propagation through lifted arm64 code
 status: In Progress
 assignee: []
 created_date: '2026-11-16T19:04:00Z'
-updated_date: '2026-11-17 00:42'
+updated_date: '2026-11-17T01:21:00Z'
 labels:
   - native-macos
   - arm64
@@ -34,6 +34,14 @@ The census found exception tables on 8,373 game-section bodies and 103,628 landi
 - [ ] #3 Required exception-bearing bodies and metadata in the selected runtime image are accounted for; unsupported unwind cases are rejected rather than emitted as apparently runnable code.
 - [x] #4 Regression tests execute on native arm64, include cleanup ordering and failure cases, and docs state the verified unwind contract and coverage.
 <!-- AC:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [ ] #1 task check passes
+- [ ] #2 Tests written first for testable logic
+- [ ] #3 Docs updated
+- [ ] #4 Conventional commit with no attribution
+<!-- DOD:END -->
 
 ## Implementation Plan
 
@@ -98,12 +106,6 @@ Measured on the 3,000-body seed-80 cache: per-body hole lists are identical with
 Still open, so acceptance criteria 1, 2 and 3 stay unchecked. AC1: no comparison against the shipped runtime yet. It needs the shipped libsupc++ (personality, __cxa_*) to run lifted, which needs a guest TLS block (__tls_get_addr import) and relocated typeinfo pointers; the fixture personality handles cleanups and catch(...) only, so typed catch is unverified. The ThrowHelper candidate threw on the Linux runtime but its exception class was not recorded and host.c has no mode that records it (approved, not written). AC2: lifted-to-lifted and the export boundary are verified; native code raising through lifted frames is unproven and unsupported, and a native import that re-enters lifted code and throws across it is not tested. AC3: metadata for every body is accounted for; landing pads were checked against dumped pcode for 335 of 8,373 LSDA bodies only. Remaining DoD: tests-first held except where noted in commits (dumped_pad_check was written with its test but not run failing first).
 
 Oracle mode (commit d5f4624, not pushed). host.c gained --expect-throw: a throw from il2cpp_runtime_invoke is the expected outcome, and the host records the exception class and the il2cpp_format_exception message; an invoke that returns instead fails. Tests run host.c against a stub il2cpp runtime (tests/fixtures/bind/il2cpp_stub.c) and failed first for the right reason (unknown flag). scripts/eh_oracle.py captures it over SSH. Measured on the shipped Linux runtime with no game running (no session touched): System.ThrowHelper::ThrowInvalidOperationException_InvalidOperation_NoValue throws System.InvalidOperationException, message 'Nullable object must have a value.'. Found while testing: host.c's argument loop spins forever on a flag that does not set `used` (--skip-init has the same defect); the new flag sets it, --skip-init is untouched. Still open: no shipped method with a catch/finally/rethrow around a throwing call is identified, so cleanup, nested and rethrow have no shipped oracle; the ThrowHelper result is a reference outcome, not a lifted-vs-shipped comparison, because lifting it needs il2cpp runtime state. Steps 2-6 (guest TLS, shipped libsupc++ lifted, full pad check, seed-81/82 re-score, native-boundary decision) not started. Acceptance criteria 1-3 stay unchecked.
-<!-- SECTION:NOTES:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
-<!-- DOD:END -->
+Progress: guest TLS, shipped libsupc++ lifted, typed-catch rejection (commits 7458432, 0e0716c, 15b3911; not pushed). Guest TLS: lift_abi.Tls and tls_image give each export call a private block; one module, local-dynamic shape only (general-dynamic would read a zero offset word, documented). Shipped runtime: scripts/lift_runtime.py finds the 22-body, 2,950-byte closure of the personality, __cxa_throw/rethrow/begin_catch/end_catch/allocate/get_globals by following direct calls, image-exported PLT targets and address-taken functions; all lift with no hole in unwind mode. tests/test_lift_shipped_runtime.py runs them under the guest unwinder with no hand-written runtime and gets the fixture outcomes for caught, nested, rethrow, register restoration and uncaught (terminate, no cleanups). Native by design: terminate/unexpected and their handler getters, the malloc-failure mutex path (one body carries an exception specification), _Unwind_DeleteException (exception_cleanup never runs, objects leak), and __gxx_exception_cleanup (lock-prefixed atomics, bound to an aborting import). Finding: lift_eh.type_filters over the whole il2cpp section shows all 8,373 LSDA bodies need a typed catch (0 catch-all-only, 0 exception specifications). Typed matching needs relocated typeinfo and vtable dispatch, which the unrelocated data sections cannot give, so build_entries now rejects EH_TYPED_CATCH and EH_EXC_SPEC; no shipped body with an LSDA can run lifted yet. Caveats: the expected outcomes are the fixture's C++ semantics, not a run of the shipped x86-64 binary, so AC1 stays unchecked; a mutation check showed the TLS-base handoff into the personality's register file is not exercised, so it was not added. Still open: typeinfo relocation (apply the image's relocations to section images, code pointers as dispatchable guest addresses, data pointers as host addresses), pad check of the other 8,038 LSDA bodies, seed-81/82 re-score (cold Ghidra dumps), native-boundary decision for AC2, shipped catch/finally oracle.
+<!-- SECTION:NOTES:END -->
