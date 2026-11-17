@@ -204,3 +204,12 @@ def test_pad_validation_is_clean_when_every_pad_is_an_instruction_start():
     fn = insn_rows(0x1000, 0x1001, 0x1020)
     lsda = eh.parse_lsda(lsda_bytes([(0, 1, 0x20, 0)]), 0, func_start=0x1000)
     assert eh.pad_holes(fn, lsda) == []
+
+
+def test_a_zero_length_terminator_between_objects_does_not_end_the_section():
+    cie = build_cie()
+    first = build_fde(0, len(cie), 0x1000, 0x40, PROLOGUE)
+    second_offset = len(cie) + len(first) + 4
+    second = build_fde(0, second_offset, 0x2000, 0x20, PROLOGUE)
+    frames = eh.parse_frames(cie + first + b"\0\0\0\0" + second, 0)
+    assert [f.pc_begin for f in frames] == [0x1000, 0x2000]

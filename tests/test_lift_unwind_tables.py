@@ -69,3 +69,75 @@ def test_rendering_refuses_a_table_with_problems():
     table = lu.build_entries(frames_for((0x1000, PROLOGUE, None)), {0x1000, 0x2000}, PERSONALITY)
     with pytest.raises(lu.UnwindTableError, match="EH_NO_FDE"):
         lu.render_c(table, lsda_bytes=b"", lsda_va=0)
+
+
+def test_a_call_free_body_without_a_frame_is_accepted_as_a_leaf():
+    table = lu.build_entries(frames_for((0x1000, PROLOGUE, None)), {0x1000, 0x2000}, PERSONALITY, leaves={0x2000})
+    assert table.problems == []
+    assert [e.pc_begin for e in table.entries] == [0x1000]
+
+
+def test_a_body_with_calls_is_not_excused_by_the_leaf_set_when_it_is_missing_from_it():
+    table = lu.build_entries(frames_for((0x1000, PROLOGUE, None)), {0x1000, 0x2000}, PERSONALITY, leaves={0x3000})
+    assert table.problems == ["EH_NO_FDE:2000"]
+
+
+def fn(*ops, start=0x1000, size=0x10):
+    return {"start": start, "size": size, "insns": [{"a": start, "len": 1, "ops": list(ops)}]}
+
+
+def op(name, *ins):
+    return {"op": name, "out": None, "in": list(ins)}
+
+
+@pytest.mark.parametrize(
+    "ops, leaf",
+    [
+        ([op("COPY")], True),
+        ([op("BRANCH", "ram,1005,8")], True),
+        ([op("CBRANCH", "ram,1008,8", "register,0,1")], True),
+        ([op("CALL", "ram,2000,8")], False),
+        ([op("CALLIND", "register,0,8")], False),
+        ([op("BRANCHIND", "register,0,8")], False),
+        ([op("BRANCH", "ram,3000,8")], False),
+        ([op("CBRANCH", "ram,3000,8", "register,0,1")], False),
+    ],
+)
+def test_leaf_detection_needs_no_call_and_no_branch_leaving_the_body(ops, leaf):
+    assert lu.is_leaf(fn(*ops)) is leaf
+
+
+def call_row(address, length, pushed):
+    return {
+        "a": address,
+        "len": length,
+        "ops": [
+            op("INT_SUB"),
+            {"op": "STORE", "out": None, "in": ["const,1b1,8", "register,20,8", f"const,{pushed:x},8"]},
+            op("CALL", "ram,2000,8"),
+        ],
+    }
+
+
+def test_return_address_bias_is_the_gap_between_pushed_constants_and_real_addresses():
+    rows = [
+        {"start": 0x1000, "size": 0x20, "insns": [call_row(0x1000, 5, 0x101005), call_row(0x1010, 5, 0x101015)]},
+        {"start": 0x2000, "size": 0x20, "insns": [call_row(0x2004, 5, 0x102009)]},
+    ]
+    assert lu.address_bias(rows) == 0x100000
+
+
+def test_bias_is_zero_when_no_body_calls():
+    assert lu.address_bias([fn(op("COPY"))]) == 0
+
+
+def test_inconsistent_return_address_bias_is_an_error():
+    rows = [{"start": 0x1000, "size": 0x20, "insns": [call_row(0x1000, 5, 0x101005), call_row(0x1010, 5, 0x1015)]}]
+    with pytest.raises(lu.UnwindTableError, match="bias"):
+        lu.address_bias(rows)
+
+
+def test_rendered_tables_carry_the_address_bias():
+    table = lu.build_entries(frames_for((0x1000, PROLOGUE, None)), {0x1000}, PERSONALITY)
+    source = lu.render_c(table, lsda_bytes=b"", lsda_va=0, address_bias=0x100000)
+    assert "const uint64_t lu_address_bias = 0x100000ULL;" in source

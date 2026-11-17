@@ -34,3 +34,15 @@ def test_export_aborts_when_an_exception_is_still_pending_on_return():
     assert f"memcpy(&pending, reg + {pl.EH_PENDING_PAD}, 8);" in source
     assert "if (pending) abort();" in source
     assert source.index("if (returned_rsp != rsp + 8) abort();") < source.index("if (pending) abort();")
+
+
+def test_callable_bodies_are_reachable_through_dispatch_without_an_adapter():
+    source = abi.generate([abi.Binding(0x1000, "entry", SIG)], [], callable_bodies=[0x3000])
+    assert "extern void sub_3000(unsigned char *reg);" in source
+    assert "case UINT64_C(12288): sub_3000(reg); return;" in source
+    assert "void sub_3000(unsigned char *reg) {" not in source
+
+
+def test_callable_bodies_cannot_repeat_a_binding_address():
+    with pytest.raises(abi.AbiError, match="duplicate"):
+        abi.generate([abi.Binding(0x1000, "entry", SIG)], [], callable_bodies=[0x1000])

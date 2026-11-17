@@ -29,6 +29,7 @@ extern const lu_fde lu_fdes[];
 extern const uint32_t lu_fde_count;
 extern const lu_row lu_rows[];
 extern const unsigned char lu_lsda_bytes[];
+extern const uint64_t lu_address_bias;
 extern const uint64_t lu_lsda_va;
 extern const uint64_t lu_lsda_size;
 #endif

@@ -157,11 +157,19 @@ def result_slot(kind: str) -> Slot:
     return Slot("reg", 0x1200 if kind.startswith(("f", "v")) else 0, TYPES[kind][1])
 
 
-def generate(exports: list[Binding], imports: list[Binding], raw: list[RawBinding] = ()) -> str:
+def generate(
+    exports: list[Binding],
+    imports: list[Binding],
+    raw: list[RawBinding] = (),
+    callable_bodies: list[int] = (),
+) -> str:
     raw = list(raw)
+    callable_bodies = list(callable_bodies)
     typed = exports + imports
     bindings = typed + raw
     if len({b.address for b in bindings}) != len(bindings) or len({b.name for b in bindings}) != len(bindings):
+        raise AbiError("duplicate binding address or name")
+    if len(set(callable_bodies) | {b.address for b in bindings}) != len(bindings) + len(set(callable_bodies)):
         raise AbiError("duplicate binding address or name")
     lines = [
         "#include <stdint.h>",
@@ -172,8 +180,8 @@ def generate(exports: list[Binding], imports: list[Binding], raw: list[RawBindin
         "typedef double lift_v2f64 __attribute__((vector_size(16)));",
         "typedef uint32_t lift_v4u32 __attribute__((vector_size(16)));",
     ]
-    for binding in bindings:
-        lines.append(f"extern void sub_{binding.address:x}(unsigned char *reg);")
+    for address in [b.address for b in bindings] + callable_bodies:
+        lines.append(f"extern void sub_{address:x}(unsigned char *reg);")
     for binding in typed:
         sig = binding.signature
         params = ", ".join(f"{TYPES[k][0]} a{i}" for i, k in enumerate(sig.args)) or "void"
@@ -240,6 +248,6 @@ def generate(exports: list[Binding], imports: list[Binding], raw: list[RawBindin
     for binding in raw:
         lines += [f"void sub_{binding.address:x}(unsigned char *reg) {{", f"  {binding.name}(reg);", "}"]
     lines += ["void lift_dispatch(uint64_t target, unsigned char *reg) {", "  switch (target) {"]
-    lines += [f"  case UINT64_C({b.address}): sub_{b.address:x}(reg); return;" for b in bindings]
+    lines += [f"  case UINT64_C({a}): sub_{a:x}(reg); return;" for a in [b.address for b in bindings] + callable_bodies]
     lines += ["  default: abort();", "  }", "}"]
     return "\n".join(lines) + "\n"

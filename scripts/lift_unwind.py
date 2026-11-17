@@ -36,13 +36,54 @@ class Table:
     problems: list = field(default_factory=list)
 
 
-def build_entries(frames: list[eh.Frame], lifted_starts: set[int], personality_of: Callable[[eh.Cie], int | None]) -> Table:
+def is_leaf(fn: dict) -> bool:
+    """True when the body calls nothing and leaves only by returning, so it can never sit between a throw and its handler."""
+    lo, hi = fn["start"], fn["start"] + fn["size"]
+    for insn in fn["insns"]:
+        for op in insn["ops"]:
+            name = op["op"]
+            if name in ("CALL", "CALLIND", "BRANCHIND"):
+                return False
+            if name in ("BRANCH", "CBRANCH"):
+                space, offset = op["in"][0].split(",")[:2]
+                if space == "ram" and not lo <= int(offset, 16) < hi:
+                    return False
+    return True
+
+
+def address_bias(rows: list[dict]) -> int:
+    """The constant the dump adds to every return address a CALL pushes, as the gap to the real next address.
+
+    Raw pcode pushes the Ghidra-space address, while the exception tables use file addresses, so the
+    unwinder subtracts this before looking a frame up. All calls must agree, or the tables are refused.
+    """
+    gaps = set()
+    for row in rows:
+        for insn in row["insns"]:
+            ops = insn["ops"]
+            for before, op in zip(ops, ops[1:]):
+                if before["op"] == "STORE" and op["op"] in ("CALL", "CALLIND"):
+                    space, value = before["in"][2].split(",")[:2]
+                    if space == "const":
+                        gaps.add(int(value, 16) - (insn["a"] + insn["len"]))
+    if len(gaps) > 1:
+        raise UnwindTableError(f"return address bias is inconsistent: {sorted(hex(g) for g in gaps)}")
+    return gaps.pop() if gaps else 0
+
+
+def build_entries(
+    frames: list[eh.Frame],
+    lifted_starts: set[int],
+    personality_of: Callable[[eh.Cie], int | None],
+    leaves: frozenset | set = frozenset(),
+) -> Table:
     table = Table()
     by_start = {frame.pc_begin: frame for frame in frames}
     for start in sorted(lifted_starts):
         frame = by_start.get(start)
         if frame is None:
-            table.problems.append(f"EH_NO_FDE:{start:x}")
+            if start not in leaves:
+                table.problems.append(f"EH_NO_FDE:{start:x}")
             continue
         try:
             rows = eh.cfi_rows(frame)
@@ -84,7 +125,7 @@ def personality_resolver(elf, raw: bytes):
     return resolve
 
 
-def render_c(table: Table, lsda_bytes: bytes, lsda_va: int) -> str:
+def render_c(table: Table, lsda_bytes: bytes, lsda_va: int, address_bias: int = 0) -> str:
     if table.problems:
         raise UnwindTableError(f"unwind tables have {len(table.problems)} problems: {table.problems[:5]}")
     rows, fdes = [], []
@@ -104,6 +145,7 @@ def render_c(table: Table, lsda_bytes: bytes, lsda_va: int) -> str:
             f"const uint32_t lu_fde_count = {len(fdes)};",
             "const lu_fde lu_fdes[] = {" + ("\n" + "\n".join(fdes) + "\n" if fdes else "{0}") + "};",
             "const lu_row lu_rows[] = {" + ("\n" + "\n".join(rows) + "\n" if rows else "{0}") + "};",
+            f"const uint64_t lu_address_bias = 0x{address_bias:x}ULL;",
             f"const uint64_t lu_lsda_va = 0x{lsda_va:x}ULL;",
             f"const uint64_t lu_lsda_size = {len(lsda_bytes)};",
             f"const unsigned char lu_lsda_bytes[] = {{{data}}};",

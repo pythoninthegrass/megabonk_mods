@@ -66,7 +66,7 @@ static void unwind_to_caller(const lu_ctx *ctx, lu_ctx *caller) {
     if (row->saved_mask & (1u << reg)) caller->regs[reg] = read_u64(ctx->cfa + (int64_t)row->saved[reg]);
   if (!(row->saved_mask & (1u << LU_RA))) abort();
   caller->regs[LU_RSP] = ctx->cfa;
-  caller->ip = caller->regs[LU_RA];
+  caller->ip = caller->regs[LU_RA] - lu_address_bias;
 }
 
 static int call_personality(const lu_ctx *ctx, int actions, lu_exception *exc) {
@@ -90,7 +90,7 @@ static void start_context(const unsigned char *reg, lu_ctx *ctx) {
   memset(ctx, 0, sizeof *ctx);
   for (int i = 0; i < 16; i++) memcpy(&ctx->regs[i], reg + reg_offset[i], 8);
   uint64_t rsp = ctx->regs[LU_RSP];
-  ctx->ip = read_u64(rsp);
+  ctx->ip = read_u64(rsp) - lu_address_bias;
   ctx->regs[LU_RSP] = rsp + 8;
 }
 
@@ -136,9 +136,9 @@ static int phase2(unsigned char *reg, const lu_ctx *start, lu_exception *exc) {
 }
 
 static void return_value(unsigned char *reg, int value, int installed) {
+  if (installed) return;
   uint64_t result = (uint32_t)value;
   memcpy(reg, &result, 8);
-  if (installed) return;
   uint64_t rsp;
   memcpy(&rsp, reg + 0x20, 8);
   rsp += 8;
@@ -185,3 +185,6 @@ uint64_t lu_get_ip_info(lu_ctx *ctx, int *ip_before_insn) {
 void lu_set_gr(lu_ctx *ctx, int index, uint64_t value) { ctx->regs[index] = value; }
 void lu_set_ip(lu_ctx *ctx, uint64_t value) { ctx->ip = value; }
 uint64_t lu_get_cfa(lu_ctx *ctx) { return ctx->cfa; }
+
+/* A rethrow of an exception that is not being force-unwound is a fresh two-phase raise. */
+void lu_resume_or_rethrow(unsigned char *reg) { lu_raise_exception(reg); }

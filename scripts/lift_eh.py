@@ -83,6 +83,20 @@ def _guard(call, *args, **kwargs):
         raise EhUnsupported(str(error)) from None
 
 
+def _entries(section: bytes):
+    """Yields each entry's offset and body, stepping over the zero terminators linkers leave between objects."""
+    at = 0
+    while at + 4 <= len(section):
+        (length,) = struct.unpack_from("<I", section, at)
+        if length == 0:
+            at += 4
+            continue
+        if length == 0xFFFFFFFF or length < 8 or at + 4 + length > len(section):
+            raise EhUnsupported(f"malformed .eh_frame entry at {at:#x}")
+        yield at, section[at + 4 : at + 4 + length]
+        at += 4 + length
+
+
 def _parse_cie(offset: int, body: bytes, base: int) -> Cie:
     pos = 5
     end = body.index(0, pos)
@@ -126,7 +140,7 @@ def _parse_cie(offset: int, body: bytes, base: int) -> Cie:
 
 def parse_frames(section: bytes, base: int = 0) -> list[Frame]:
     """Every FDE in an `.eh_frame` section, each with its CIE and call-frame instructions."""
-    entries = list(_guard(lambda: list(eh._entries(section))))
+    entries = list(_entries(section))
     cies = {}
     for offset, body in entries:
         if struct.unpack_from("<I", body, 0)[0] == 0:
