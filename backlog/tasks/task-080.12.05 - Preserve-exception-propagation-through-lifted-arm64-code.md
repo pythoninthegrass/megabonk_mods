@@ -4,7 +4,7 @@ title: Preserve exception propagation through lifted arm64 code
 status: In Progress
 assignee: []
 created_date: '2026-11-16T19:04:00Z'
-updated_date: '2026-11-17 00:23'
+updated_date: '2026-11-17 00:42'
 labels:
   - native-macos
   - arm64
@@ -96,6 +96,8 @@ Findings worth keeping. (a) Raw pcode pushes Ghidra-space return addresses (file
 Measured on the 3,000-body seed-80 cache: per-body hole lists are identical with and without unwind mode for all 3,000 (335 LSDA bodies, 4,206 pads, none missing, 484 call-free bodies), 47,050 post-call checks, IR text +2.3%. The seed-81 and seed-82 baselines were not re-scored: their pcode caches no longer exist and a cold Ghidra dump (about 26 minutes each) was not run, so that comparison is still open. Default lifting (unwind off) is untouched, which the existing hole-list tests cover. Whole-image metadata accounting (task re:eh-coverage): 196,137 bodies supported, 0 rejected, 8,373 LSDA bodies all on __gxx_personality_v0, 103,628 pad entries, 84,257 distinct pads.
 
 Still open, so acceptance criteria 1, 2 and 3 stay unchecked. AC1: no comparison against the shipped runtime yet. It needs the shipped libsupc++ (personality, __cxa_*) to run lifted, which needs a guest TLS block (__tls_get_addr import) and relocated typeinfo pointers; the fixture personality handles cleanups and catch(...) only, so typed catch is unverified. The ThrowHelper candidate threw on the Linux runtime but its exception class was not recorded and host.c has no mode that records it (approved, not written). AC2: lifted-to-lifted and the export boundary are verified; native code raising through lifted frames is unproven and unsupported, and a native import that re-enters lifted code and throws across it is not tested. AC3: metadata for every body is accounted for; landing pads were checked against dumped pcode for 335 of 8,373 LSDA bodies only. Remaining DoD: tests-first held except where noted in commits (dumped_pad_check was written with its test but not run failing first).
+
+Oracle mode (commit d5f4624, not pushed). host.c gained --expect-throw: a throw from il2cpp_runtime_invoke is the expected outcome, and the host records the exception class and the il2cpp_format_exception message; an invoke that returns instead fails. Tests run host.c against a stub il2cpp runtime (tests/fixtures/bind/il2cpp_stub.c) and failed first for the right reason (unknown flag). scripts/eh_oracle.py captures it over SSH. Measured on the shipped Linux runtime with no game running (no session touched): System.ThrowHelper::ThrowInvalidOperationException_InvalidOperation_NoValue throws System.InvalidOperationException, message 'Nullable object must have a value.'. Found while testing: host.c's argument loop spins forever on a flag that does not set `used` (--skip-init has the same defect); the new flag sets it, --skip-init is untouched. Still open: no shipped method with a catch/finally/rethrow around a throwing call is identified, so cleanup, nested and rethrow have no shipped oracle; the ThrowHelper result is a reference outcome, not a lifted-vs-shipped comparison, because lifting it needs il2cpp runtime state. Steps 2-6 (guest TLS, shipped libsupc++ lifted, full pad check, seed-81/82 re-score, native-boundary decision) not started. Acceptance criteria 1-3 stay unchecked.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
