@@ -72,28 +72,42 @@ def address_bias(rows: list[dict]) -> int:
     return gaps.pop() if gaps else 0
 
 
-def unrunnable_filters(lsda: int, lsda_tables: list[tuple[bytes, int]]) -> str | None:
-    """The problem name for an LSDA whose catch clauses the lifted runtime cannot match, or None."""
+def unrunnable_filters(lsda: int, lsda_tables: list[tuple[bytes, int]], typed_ok: frozenset | set = frozenset()) -> str | None:
+    """The problem name for an LSDA whose catch clauses the lifted runtime cannot match, or None.
+
+    A typed catch is accepted only for an LSDA in `typed_ok`, the set a type plan proved."""
     for data, base in lsda_tables:
         if base <= lsda < base + len(data):
             try:
                 filters = eh.type_filters(data, lsda - base)
             except eh.EhUnsupported:
                 return "EH_LSDA"
-            if filters.typed:
+            if filters.typed and lsda not in typed_ok:
                 return "EH_TYPED_CATCH"
             return "EH_EXC_SPEC" if filters.specs else None
     return "EH_LSDA"
 
 
-def filter_report(frames: list[eh.Frame], except_table: bytes, except_base: int, lo: int, hi: int) -> dict:
-    """Counts LSDA bodies in [lo, hi) by the catch clauses they need: catch (...) alone, typed, specification."""
+def filter_report(frames: list[eh.Frame], except_table: bytes, except_base: int, lo: int, hi: int, plan=None) -> dict:
+    """Counts LSDA bodies in [lo, hi) by the catch clauses they need: catch (...) alone, typed, specification.
+
+    Given a type plan, typed bodies are also split into those it proved runnable and those it rejected, by reason."""
     report = {"with_lsda": 0, "catch_all_only": 0, "typed_catch": 0, "exception_spec": 0, "unreadable": 0}
     names = {"EH_TYPED_CATCH": "typed_catch", "EH_EXC_SPEC": "exception_spec", "EH_LSDA": "unreadable", None: "catch_all_only"}
     for frame in frames:
         if frame.lsda and lo <= frame.pc_begin < hi:
             report["with_lsda"] += 1
             report[names[unrunnable_filters(frame.lsda, [(except_table, except_base)])]] += 1
+            if plan is not None and unrunnable_filters(frame.lsda, [(except_table, except_base)]) == "EH_TYPED_CATCH":
+                if frame.lsda in plan.proven:
+                    report["typed_runnable"] = report.get("typed_runnable", 0) + 1
+                else:
+                    reason = plan.rejected.get(frame.lsda, "EH_TYPED_UNPLANNED")
+                    rejected = report.setdefault("typed_rejected", {})
+                    rejected[reason] = rejected.get(reason, 0) + 1
+    if plan is not None:
+        report.setdefault("typed_runnable", 0)
+        report.setdefault("typed_rejected", {})
     return report
 
 
@@ -103,9 +117,10 @@ def build_entries(
     personality_of: Callable[[eh.Cie], int | None],
     leaves: frozenset | set = frozenset(),
     lsda_tables: list[tuple[bytes, int]] | None = None,
+    typed_ok: frozenset | set = frozenset(),
 ) -> Table:
-    """`lsda_tables` are (bytes, virtual address) of the exception tables; given, a typed catch or exception
-    specification is a problem, because matching one needs typeinfo the lifted module does not have."""
+    """`lsda_tables` are (bytes, virtual address) of the exception tables; given, an exception specification is a
+    problem, and so is a typed catch unless its LSDA is in `typed_ok`, because matching one needs relocated typeinfo."""
     table = Table()
     by_start = {frame.pc_begin: frame for frame in frames}
     for start in sorted(lifted_starts):
@@ -130,7 +145,7 @@ def build_entries(
             table.problems.append(f"EH_NO_PERSONALITY:{start:x}")
             continue
         if frame.lsda and lsda_tables is not None:
-            problem = unrunnable_filters(frame.lsda, lsda_tables)
+            problem = unrunnable_filters(frame.lsda, lsda_tables, typed_ok)
             if problem:
                 table.problems.append(f"{problem}:{start:x}")
                 continue
@@ -236,7 +251,8 @@ def personality_resolver(elf, raw: bytes):
     return resolve
 
 
-def render_c(table: Table, lsda_bytes: bytes, lsda_va: int, address_bias: int = 0) -> str:
+def render_c(table: Table, lsda_bytes: bytes, lsda_va: int, address_bias: int = 0, type_slots: list | None = None) -> str:
+    """`type_slots` are (type-table entry address, section global, offset of the cell in it, entry width) for each patched entry."""
     if table.problems:
         raise UnwindTableError(f"unwind tables have {len(table.problems)} problems: {table.problems[:5]}")
     rows, fdes = [], []
@@ -250,16 +266,22 @@ def render_c(table: Table, lsda_bytes: bytes, lsda_va: int, address_bias: int = 
             saved = ", ".join(str(row.saved.get(reg, 0)) for reg in range(SAVED_REGISTER_LIMIT))
             rows.append(f"  {{0x{row.pc:x}ULL, {row.cfa_offset}, {row.cfa_register}, 0x{mask:x}, {{{saved}}}}},")
     data = ", ".join(f"0x{b:02x}" for b in lsda_bytes) or "0"
+    slots = type_slots or []
+    sections = sorted({slot[1] for slot in slots})
+    slot_rows = "".join(f"  {{0x{entry - lsda_va:x}ULL, sec_{section} + 0x{offset:x}, {size}}},\n" for entry, section, offset, size in slots)
     return "\n".join(
         [
             '#include "lift_unwind.h"',
+            *[f"extern unsigned char sec_{section}[];" for section in sections],
             f"const uint32_t lu_fde_count = {len(fdes)};",
             "const lu_fde lu_fdes[] = {" + ("\n" + "\n".join(fdes) + "\n" if fdes else "{0}") + "};",
             "const lu_row lu_rows[] = {" + ("\n" + "\n".join(rows) + "\n" if rows else "{0}") + "};",
             f"const uint64_t lu_address_bias = 0x{address_bias:x}ULL;",
             f"const uint64_t lu_lsda_va = 0x{lsda_va:x}ULL;",
             f"const uint64_t lu_lsda_size = {len(lsda_bytes)};",
-            f"const unsigned char lu_lsda_bytes[] = {{{data}}};",
+            f"unsigned char lu_lsda_bytes[] = {{{data}}};",
+            f"const uint32_t lu_type_slot_count = {len(slots)};",
+            "const lu_type_slot lu_type_slots[] = {" + ("\n" + slot_rows if slots else "{0}") + "};",
             "",
         ]
     )

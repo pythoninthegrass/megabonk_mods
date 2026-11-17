@@ -28,8 +28,17 @@ typedef struct {
 extern const lu_fde lu_fdes[];
 extern const uint32_t lu_fde_count;
 extern const lu_row lu_rows[];
-extern const unsigned char lu_lsda_bytes[];
+extern unsigned char lu_lsda_bytes[];
 extern const uint64_t lu_address_bias;
 extern const uint64_t lu_lsda_va;
 extern const uint64_t lu_lsda_size;
+
+typedef struct {
+  uint64_t lsda_offset;
+  const void *cell;
+  uint32_t size;
+} lu_type_slot;
+
+extern const lu_type_slot lu_type_slots[];
+extern const uint32_t lu_type_slot_count;
 #endif

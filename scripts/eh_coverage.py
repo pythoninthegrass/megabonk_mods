@@ -19,12 +19,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import eh_probe  # noqa: E402
 import elf_shim_probe  # noqa: E402
 import lift_eh  # noqa: E402
+import lift_reloc  # noqa: E402
 import lift_unwind  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_SO = REPO / ".tools/megabonk-linux-native/Megabonk/GameAssembly.so"
 DEFAULT_OUT = REPO / ".tools/eh-coverage"
 ALLOWED_PERSONALITY = "__gxx_personality_v0"
+SHF_ALLOC, SHF_EXECINSTR = 2, 4
 
 
 def defined_symbol(elf, raw: bytes, name: str) -> int:
@@ -33,6 +35,15 @@ def defined_symbol(elf, raw: bytes, name: str) -> int:
         if symbol.name == name and symbol.shndx:
             return struct.unpack_from("<Q", raw, dynsym.offset + index * 24 + 8)[0]
     raise SystemExit(f"{elf.path} defines no {name}")
+
+
+def loaded_sections(elf) -> list[dict]:
+    """The allocated sections as the lifter names them: name, address, size and whether they hold code."""
+    return [
+        {"name": s.name, "va": s.addr, "size": s.size, "exec": bool(s.flags & SHF_EXECINSTR)}
+        for s in elf.sections
+        if s.addr and s.flags & SHF_ALLOC
+    ]
 
 
 def cached_rows(path: Path) -> list[dict]:
@@ -61,7 +72,12 @@ def main(argv: list[str] | None = None) -> int:
     resolver = lift_unwind.personality_resolver(elf, raw)
     allowed = {defined_symbol(elf, raw, ALLOWED_PERSONALITY)}
     report = lift_unwind.account(frames, except_table, except_base, resolver, allowed, section.addr, section.addr + section.size)
-    report["filters"] = lift_unwind.filter_report(frames, except_table, except_base, section.addr, section.addr + section.size)
+    lo, hi = section.addr, section.addr + section.size
+    image = lift_reloc.load_image(elf, raw, loaded_sections(elf))
+    lsdas = sorted({f.lsda for f in frames if f.lsda and lo <= f.pc_begin < hi})
+    plan = lift_reloc.plan_types(image, except_table, except_base, lsdas, lift_reloc.PROVEN_CLASSES)
+    report["filters"] = lift_unwind.filter_report(frames, except_table, except_base, lo, hi, plan)
+    report["type_words"] = {"patched_words": len(plan.patches), "type_slots": len(plan.slots)}
     report["allowed_personalities"] = sorted(hex(a) for a in allowed)
     if args.pcode_cache:
         report["dumped_pads"] = lift_unwind.dumped_pad_check(cached_rows(args.pcode_cache), frames, except_table, except_base)

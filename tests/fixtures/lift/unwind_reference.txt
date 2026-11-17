@@ -1,0 +1,9 @@
+# Outcomes of unwind.cpp linked against a stock x86-64 libstdc++ (g++ 14.3.1, libstdc++ 14.3.1-4), driven by unwind_reference_main.cpp.
+# mode|exit status|stdout. Exit 134 is SIGABRT from the terminate handler. The depth suffix is fixed because the stock build has no guest stack.
+catch0|0|R 7 N 100,2,1 D 0
+catch1|0|R 5 N 2,200,1 D 0
+nested0|0|R 0 N 21,20,11,10 D 0
+nested1|0|R 1 N 20,10,99 D 0
+rethrow1|0|R 9 N 300,301,3 D 0
+regs|0|R 273 N  D 0
+uncaught|134|ABORT N

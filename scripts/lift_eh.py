@@ -306,29 +306,56 @@ class TypeFilters:
 TTYPE_SIZES = {0x02: 2, 0x03: 4, 0x04: 8, 0x0A: 2, 0x0B: 4, 0x0C: 8}
 
 
-def type_filters(table: bytes, at: int) -> TypeFilters:
-    """A positive filter with a null type entry is catch (...); a nonzero entry names a type, which needs its typeinfo."""
+@dataclass(frozen=True)
+class TypeEntry:
+    """A catch filter's nonzero type-table entry: where it lies in the table, its width and encoding, and its raw value."""
+
+    filter: int
+    offset: int
+    size: int
+    encoding: int
+    value: int
+
+
+def _filter_walk(table: bytes, at: int):
+    """Yields (filter, entry offset or None, size, encoding) for every filter in an LSDA's action chains, once each."""
     ttype, ttype_base, encoding, pos, end = _header(table, at)
-    typed, specs, seen = set(), set(), set()
+    seen = set()
     for site in _sites(table, encoding, pos, end, 0):
         record = end + site.action - 1 if site.action else None
         while record is not None and record not in seen:
             seen.add(record)
             filter_, after = _guard(eh.read_sleb128, table, record)
             displacement, _ = _guard(eh.read_sleb128, table, after)
-            if filter_ < 0:
-                specs.add(filter_)
-            elif filter_ > 0:
+            if filter_ > 0:
                 if ttype_base is None or ttype & 0x0F not in TTYPE_SIZES:
                     raise EhUnsupported("a catch filter has no readable type table")
                 size = TTYPE_SIZES[ttype & 0x0F]
-                at_entry = ttype_base - filter_ * size
-                if at_entry < 0 or at_entry + size > len(table):
+                entry = ttype_base - filter_ * size
+                if entry < 0 or entry + size > len(table):
                     raise EhUnsupported("a type table entry lies outside the exception table")
-                if int.from_bytes(table[at_entry : at_entry + size], "little"):
-                    typed.add(filter_)
+                yield filter_, entry, size, ttype
+            else:
+                yield filter_, None, 0, ttype
             record = after + displacement if displacement else None
-    return TypeFilters(frozenset(typed), frozenset(specs))
+
+
+def type_entries(table: bytes, at: int) -> list[TypeEntry]:
+    """The nonzero type-table entries an LSDA's catch filters name; a null entry is catch (...) and is left out."""
+    found = []
+    for filter_, entry, size, encoding in _filter_walk(table, at):
+        if entry is not None:
+            value = int.from_bytes(table[entry : entry + size], "little", signed=True)
+            if value:
+                found.append(TypeEntry(filter_, entry, size, encoding, value))
+    return found
+
+
+def type_filters(table: bytes, at: int) -> TypeFilters:
+    """A positive filter with a null type entry is catch (...); a nonzero entry names a type, which needs its typeinfo."""
+    entries = type_entries(table, at)
+    specs = {f for f, entry, _, _ in _filter_walk(table, at) if f < 0}
+    return TypeFilters(frozenset(e.filter for e in entries), frozenset(specs))
 
 
 def pad_holes(fn: dict, lsda: Lsda) -> list[str]:

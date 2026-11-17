@@ -987,20 +987,54 @@ def lift_body(
     return BodyLifter(fn, sections, call_dispatch=call_dispatch, unwind=unwind, pads=pads).run()
 
 
-def section_global(name: str, image: bytes | None) -> str:
+def section_global(name: str, image: bytes | None, patches: tuple = ()) -> str:
     if image is None:
+        if patches:
+            raise ValueError(f"section {name} has relocated words but no image")
         return f"@sec_{name} = external global i8"
-    data = "".join(f"\\{b:02X}" for b in image)
-    return f'@sec_{name} = global [{len(image)} x i8] c"{data}", align 16'
+    if not patches:
+        data = "".join(f"\\{b:02X}" for b in image)
+        return f'@sec_{name} = global [{len(image)} x i8] c"{data}", align 16'
+    types, fields, cursor = [], [], 0
+
+    def bytes_field(chunk: bytes) -> None:
+        types.append(f"[{len(chunk)} x i8]")
+        fields.append(f'[{len(chunk)} x i8] c"' + "".join(f"\\{b:02X}" for b in chunk) + '"')
+
+    for patch in sorted(patches, key=lambda p: p.offset):
+        if patch.offset < cursor:
+            raise ValueError(f"relocated words overlap at {name}+{patch.offset:#x}")
+        if patch.offset + 8 > len(image):
+            raise ValueError(f"relocated word at {name}+{patch.offset:#x} lies past the end of the section")
+        if patch.offset > cursor:
+            bytes_field(image[cursor : patch.offset])
+        if patch.code is not None:
+            types.append("i64")
+            fields.append(f"i64 {patch.code}")
+        else:
+            target, offset = patch.target
+            types.append("ptr")
+            fields.append(f"ptr getelementptr (i8, ptr @sec_{target}, i64 {offset})")
+        cursor = patch.offset + 8
+    if cursor < len(image):
+        bytes_field(image[cursor:])
+    return f"@sec_{name} = global <{{ {', '.join(types)} }}> <{{ {', '.join(fields)} }}>, align 16"
 
 
-def module_for(bodies: list[Lifted], section_images: dict[str, bytes] | None = None) -> str:
+def module_for(bodies: list[Lifted], section_images: dict[str, bytes] | None = None, patches: list | tuple = ()) -> str:
+    """`patches` are relocated words (lift_reloc.Patch); their sections, and any data section they point at, are defined."""
     defined = {b.start for b in bodies}
     externs = set().union(*(b.externs for b in bodies)) - defined if bodies else set()
     decls = set().union(*(b.decls for b in bodies)) if bodies else set()
     parts = sorted(decls)
     sections = set().union(*(b.data_sections for b in bodies)) if bodies else set()
-    parts += [section_global(n, (section_images or {}).get(n)) for n in sorted(sections)]
+    by_section: dict[str, list] = {}
+    for patch in patches:
+        by_section.setdefault(patch.section, []).append(patch)
+        sections.add(patch.section)
+        if patch.target:
+            sections.add(patch.target[0])
+    parts += [section_global(n, (section_images or {}).get(n), by_section.get(n, ())) for n in sorted(sections)]
     parts += [f"declare void @sub_{a:x}(ptr)" for a in sorted(externs)]
     parts += [b.ir for b in bodies]
     return "\n".join(parts) + "\n"

@@ -1,0 +1,8 @@
+# Outcomes of typed.cpp linked against a stock x86-64 libstdc++ (g++ 14.3.1, libstdc++ 14.3.1-4), driven by typed_reference_main.cpp.
+# mode|exit status|stdout. Exit 134 is SIGABRT from the terminate handler.
+upcast|0|R 50 N 105,1
+exact|0|R 6 N
+same|0|R 1005 N
+skip|0|R 5 N 3,2,205
+downcast_misses|0|R 77 N 300
+unmatched|134|ABORT N

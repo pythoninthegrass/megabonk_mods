@@ -172,6 +172,21 @@ void lu_resume(unsigned char *reg) {
   return_value(reg, rc, 1);
 }
 
+/* Points each type-table entry of the LSDA copy at the cell that holds its relocated typeinfo pointer. */
+__attribute__((constructor)) static void lu_patch_type_slots(void) {
+  for (uint32_t i = 0; i < lu_type_slot_count; i++) {
+    unsigned char *entry = lu_lsda_bytes + lu_type_slots[i].lsda_offset;
+    int64_t distance = (int64_t)((const unsigned char *)lu_type_slots[i].cell - entry);
+    if (lu_type_slots[i].size == 4) {
+      if (distance != (int32_t)distance) abort();
+      int32_t narrow = (int32_t)distance;
+      memcpy(entry, &narrow, 4);
+    } else {
+      memcpy(entry, &distance, 8);
+    }
+  }
+}
+
 /* Typed imports used by the lifted personality routine. */
 const void *lu_get_language_specific_data(lu_ctx *ctx) {
   if (!ctx->fde->lsda) return NULL;
