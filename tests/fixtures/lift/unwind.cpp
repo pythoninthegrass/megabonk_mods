@@ -94,3 +94,12 @@ GUEST int f_leak() {
     poison();
     return 0;
 }
+
+static __thread int tls_counter;
+static __thread int tls_seeded = 41;
+
+GUEST int f_tls() {
+    tls_counter++;
+    tls_counter++;
+    return tls_counter * 1000 + ++tls_seeded;
+}

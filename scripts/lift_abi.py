@@ -31,6 +31,8 @@ TYPES = {
     "v2f64": ("lift_v2f64", 16),
     "v4u32": ("lift_v4u32", 16),
 }
+EH_TLS_BASE = 0x1F10
+PT_TLS = 7
 INTEGER_REGS = (0x38, 0x30, 0x10, 0x8, 0x80, 0x88)
 SSE_REGS = tuple(0x1200 + i * 0x40 for i in range(8))
 
@@ -127,6 +129,32 @@ class RawBinding:
         Binding(self.address, self.name, Signature((), "void"))
 
 
+@dataclass(frozen=True)
+class Tls:
+    """The one TLS module of the image: its `__tls_get_addr` and the initial contents of a thread's block."""
+
+    get_addr: int
+    image: bytes
+
+    def __post_init__(self):
+        if not self.image:
+            raise AbiError("TLS image is empty")
+        RawBinding(self.get_addr, "tls_get_addr")
+
+
+def tls_image(elf, raw: bytes) -> bytes | None:
+    """Initial TLS block of an ELF: the initialised data from the file, then zeros up to the segment's memory size."""
+    segments = [s for s in elf.segments if s.type == PT_TLS]
+    if not segments:
+        return None
+    if len(segments) > 1:
+        raise AbiError("more than one TLS segment")
+    seg = segments[0]
+    if seg.filesz > seg.memsz or seg.offset + seg.filesz > len(raw):
+        raise AbiError("TLS segment runs past the end of the file")
+    return raw[seg.offset : seg.offset + seg.filesz] + bytes(seg.memsz - seg.filesz)
+
+
 def argument_layout(kinds: tuple[str, ...]) -> tuple[Slot, ...]:
     Signature(kinds, "void")
     integer = sse = stack = 0
@@ -162,11 +190,12 @@ def generate(
     imports: list[Binding],
     raw: list[RawBinding] = (),
     callable_bodies: list[int] = (),
+    tls: Tls | None = None,
 ) -> str:
     raw = list(raw)
     callable_bodies = list(callable_bodies)
     typed = exports + imports
-    bindings = typed + raw
+    bindings = typed + raw + ([RawBinding(tls.get_addr, "tls_get_addr")] if tls else [])
     if len({b.address for b in bindings}) != len(bindings) or len({b.name for b in bindings}) != len(bindings):
         raise AbiError("duplicate binding address or name")
     if len(set(callable_bodies) | {b.address for b in bindings}) != len(bindings) + len(set(callable_bodies)):
@@ -180,8 +209,11 @@ def generate(
         "typedef double lift_v2f64 __attribute__((vector_size(16)));",
         "typedef uint32_t lift_v4u32 __attribute__((vector_size(16)));",
     ]
-    for address in [b.address for b in bindings] + callable_bodies:
+    for address in [b.address for b in bindings if not (tls and b.address == tls.get_addr)] + callable_bodies:
         lines.append(f"extern void sub_{address:x}(unsigned char *reg);")
+    if tls:
+        image = ", ".join(str(b) for b in tls.image)
+        lines.append(f"static const unsigned char lift_tls_image[{len(tls.image)}] = {{{image}}};")
     for binding in typed:
         sig = binding.signature
         params = ", ".join(f"{TYPES[k][0]} a{i}" for i, k in enumerate(sig.args)) or "void"
@@ -202,6 +234,13 @@ def generate(
             "  uintptr_t rsp = (uintptr_t)sp;",
             "  memcpy(reg + 32, &rsp, 8);",
         ]
+        if tls:
+            lines += [
+                f"  _Alignas(16) unsigned char tls[{len(tls.image)}];",
+                "  memcpy(tls, lift_tls_image, sizeof tls);",
+                "  uintptr_t tls_base = (uintptr_t)tls;",
+                f"  memcpy(reg + {EH_TLS_BASE}, &tls_base, 8);",
+            ]
         for i, slot in enumerate(slots):
             lines.append(f"  memcpy({location(slot)}, &a{i}, {slot.size});")
         lines += [
@@ -247,6 +286,21 @@ def generate(
         lines += ["  rsp += 8;", "  memcpy(reg + 32, &rsp, 8);", "}"]
     for binding in raw:
         lines += [f"void sub_{binding.address:x}(unsigned char *reg) {{", f"  {binding.name}(reg);", "}"]
+    if tls:
+        lines += [
+            f"void sub_{tls.get_addr:x}(unsigned char *reg) {{",
+            "  uint64_t index, base, offset, rsp;",
+            "  memcpy(&index, reg + 0x38, 8);",
+            f"  memcpy(&base, reg + {EH_TLS_BASE}, 8);",
+            "  memcpy(&offset, (const unsigned char *)(uintptr_t)index + 8, 8);",
+            f"  if (!base || offset >= {len(tls.image)}) abort();",
+            "  base += offset;",
+            "  memcpy(reg, &base, 8);",
+            "  memcpy(&rsp, reg + 32, 8);",
+            "  rsp += 8;",
+            "  memcpy(reg + 32, &rsp, 8);",
+            "}",
+        ]
     lines += ["void lift_dispatch(uint64_t target, unsigned char *reg) {", "  switch (target) {"]
     lines += [f"  case UINT64_C({a}): sub_{a:x}(reg); return;" for a in [b.address for b in bindings] + callable_bodies]
     lines += ["  default: abort();", "  }", "}"]

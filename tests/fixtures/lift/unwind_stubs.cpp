@@ -20,3 +20,4 @@ GUEST void native_note(int) { STUB_BODY; }
 GUEST void native_abort() { STUB_BODY; }
 
 GUEST void poison() { STUB_BODY; }
+GUEST void *__tls_get_addr(void *) { STUB_BODY; return 0; }

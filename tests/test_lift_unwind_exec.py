@@ -34,6 +34,7 @@ STUBS = {
     "native_note",
     "native_abort",
     "poison",
+    "__tls_get_addr",
 }
 RAW = {
     "_Unwind_RaiseException": "lu_raise_exception",
@@ -58,6 +59,7 @@ EXPORTS = {
     "f_uncaught": abi.Signature((), "i32"),
     "f_depth": abi.Signature((), "i32"),
     "f_leak": abi.Signature((), "i32"),
+    "f_tls": abi.Signature((), "i32"),
 }
 
 HARNESS = """
@@ -93,6 +95,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(mode, "regs")) result = e_regs(7);
     else if (!strcmp(mode, "uncaught")) result = e_uncaught();
     else if (!strcmp(mode, "leak")) result = e_leak();
+    else if (!strcmp(mode, "tls")) { result = e_tls(); printf("R %ld ", result); result = e_tls(); }
     else return 2;
     printf("R %ld N ", result);
     print_notes();
@@ -134,6 +137,7 @@ def unwind_executable(tmp_path_factory):
             "-fno-rtti",
             "-fexceptions",
             "-funwind-tables",
+            "-ftls-model=local-dynamic",
             "-shared",
             "-fuse-ld=lld",
             "-fno-stack-protector",
@@ -181,7 +185,13 @@ def unwind_executable(tmp_path_factory):
     imports = [abi.Binding(symbols[n][0], native, sig) for n, (native, sig) in TYPED.items()]
     raw_imports = [abi.RawBinding(symbols[n][0], native) for n, native in RAW.items()]
     (work / "adapters.c").write_text(
-        abi.generate(exports, imports, raw_imports, sorted({e.personality for e in table.entries if e.personality}))
+        abi.generate(
+            exports,
+            imports,
+            raw_imports,
+            sorted({e.personality for e in table.entries if e.personality}),
+            tls=abi.Tls(symbols["__tls_get_addr"][0], abi.tls_image(elf, raw)),
+        )
     )
     (work / "tables.c").write_text(lu.render_c(table, except_table, except_base, lu.address_bias(rows)))
     (work / "harness.c").write_text(HARNESS)
@@ -239,3 +249,10 @@ def test_a_pending_exception_that_reaches_an_export_aborts(unwind_executable):
     result = execute(unwind_executable, "leak")
     assert result.returncode == -6
     assert result.stdout.strip() == ""
+
+
+@requires_arm64
+def test_each_export_call_gets_its_own_initialised_tls_block(unwind_executable):
+    result = execute(unwind_executable, "tls")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "R 2042 R 2042 N  D 0"
