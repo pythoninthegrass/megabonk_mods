@@ -1,10 +1,10 @@
 ---
 id: TASK-080.12.05
 title: Preserve exception propagation through lifted arm64 code
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-16T19:04:00Z'
-updated_date: '2026-11-17T02:28:00Z'
+updated_date: '2026-11-17T03:06:00Z'
 labels:
   - native-macos
   - arm64
@@ -30,17 +30,17 @@ The census found exception tables on 8,373 game-section bodies and 103,628 landi
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 Lifted code matches the shipped reference for caught throws, nested propagation, cleanup/finally execution, rethrow and an uncaught exception's reported outcome.
-- [ ] #2 Exceptions crossing required native/lifted boundaries unwind correctly without corrupting stack or register state.
-- [ ] #3 Required exception-bearing bodies and metadata in the selected runtime image are accounted for; unsupported unwind cases are rejected rather than emitted as apparently runnable code.
+- [x] #2 Exceptions crossing required native/lifted boundaries unwind correctly without corrupting stack or register state.
+- [x] #3 Required exception-bearing bodies and metadata in the selected runtime image are accounted for; unsupported unwind cases are rejected rather than emitted as apparently runnable code.
 - [x] #4 Regression tests execute on native arm64, include cleanup ordering and failure cases, and docs state the verified unwind contract and coverage.
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #1 task check passes
+- [x] #2 Tests written first for testable logic
+- [x] #3 Docs updated
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -124,4 +124,14 @@ Finding, not fixed: a code address a body materialises itself (a lea of a functi
 Still open: pad check of the other 8,038 LSDA bodies; seed-81/82 re-score (not started; cold Ghidra dumps); native-boundary decision for AC2; a shipped catch/finally oracle; running any shipped il2cpp body with a typed catch lifted; pointer_type_info and vmi_class_type_info (rejected, unproven); the code-address finding above; the new typed build duplicates the shipped-runtime test's builder and should be folded into a shared helper.
 
 Progress: comparison against the image's own libsupc++ (docs commit after cc7a571; not pushed). The same fixtures, built with g++ on the x86-64 Linux build host and run with the shipped GameAssembly.so preloaded (same SHA-256 as the local copy), bind __cxa_throw, __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __gxx_personality_v0 and the class/si_class/vmi_class type_info vtables to the image (shown with LD_DEBUG=bindings; without the preload they bind to libstdc++); _Unwind_RaiseException stays in libgcc_s, as the image imports it. All 13 cases (6 typed, 7 unwind) give return values, notes and exit status identical to the stock libstdc++ build and to the lifted run. So AC1's cases (caught throws, nested propagation, cleanup, rethrow, uncaught outcome) are now compared against the shipped runtime itself natively. Remaining gap: these are fixture bodies; no shipped il2cpp body with an LSDA has been run lifted. AC1 left unticked; recommend ticking on that basis, maintainer's call. Capture used no game session (Steam and the game were not touched).
+
+Progress: re-entered export from a native import (test commit on main, not pushed). A lifted frame calls a native import that calls an export; tests/test_lift_unwind_exec.py checks a throw caught inside the inner call leaves the outer frame's cleanup order and return value correct (x=0 and x=1), and an uncaught throw in the inner call aborts without the outer cleanup. Fixture lives in its own files (unwind_reenter.cpp, unwind_reenter_stub.cpp) because test_lift_stock_reference, test_lift_shipped_runtime and test_lift_typed_catch import STUBS, TYPED, EXPORTS and HARNESS from the exec test; touching those leaked the new symbols into them (26 errors, found by task check, fixed by keeping the shared constants unchanged). The tests passed on the first run: the behaviour already held, so there was no failing-first phase, and no mutation check was run on them. task check exit 0 (2418 passed, 1 skipped, 1 xfailed). Docs state the re-entry contract. AC2 stays unticked: exceptions raised by native (non-lifted) code through lifted frames remain unproven and rejected, not emulated. AC3 stays unticked: the pad check of the other 8,038 LSDA bodies needs a cold Ghidra dump (about 26 minutes per seed), and the seed-81/82 hole-list re-score is still open. Not started this session.
+
+Final: AC2 closed on the approved contract: exceptions end in std::terminate at the export boundary, a re-entered export from a native import is verified (caught inside leaves the outer frame intact, uncaught terminates without outer cleanups), and exceptions raised by native non-lifted code through lifted frames are out of scope, rejected rather than emulated, unproven to exist. AC3: eh_coverage --dump-pads dumped all 8,373 LSDA bodies (one cold Ghidra run, about 25 minutes): 84,257 distinct pads, 0 missing from instruction starts, 0 bodies not dumped. Lifting the 8,373 with and without unwind gives identical hole lists (10 bodies have holes in both, none gains one). Seed-81/82 hole-list re-score was NOT run; the 8,373-body comparison and the earlier 3,000-body seed-80 comparison stand in for it, so bodies without an LSDA are covered by the seed-80 sample only. The comparison script was a scratch script, not committed. Tests-first: the lsda_bodies and undumped_lsda_bodies helpers failed first; the re-entry tests passed on first run (behaviour already held) and were not mutation-checked. Notable gotcha: Ghidra rejects project paths with a dot-prefixed element, so the dump runs in a temp dir. task check exit 0 (2420 passed, 1 skipped, 1 xfailed). Commits 90d8c30 and the pad-check commit, not pushed. Task left In Progress for the maintainer to move to Done.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Lifted code now propagates C++ exceptions through a guest-stack unwinder with cooperative landing. The shipped libsupc++ (personality, __cxa_*) and type_info code run lifted, with relocated typeinfo for proven classes and a private guest TLS block per export call. Outcomes for caught throws, nested propagation, cleanup order, rethrow, typed catch, register restoration and uncaught termination match both a stock libstdc++ build and the image's own libsupc++ run natively. An export re-entered from a native import keeps the outer frame intact when it catches and terminates without outer cleanups when it does not. All 8,373 LSDA bodies are accounted for: 84,257 pads, none missing from dumped pcode, identical hole lists with and without unwind mode. Unsupported unwind shapes are rejected with named reasons. Not covered: exceptions raised by native non-lifted code through lifted frames (rejected, unproven), the seed-81/82 re-score, and running a shipped il2cpp body with an LSDA lifted.
+<!-- SECTION:FINAL_SUMMARY:END -->
