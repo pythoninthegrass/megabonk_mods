@@ -53,6 +53,9 @@ FLOAT_TYPES = {4: "float", 8: "double"}
 PACKED_DIVISION = {"divps": (4, 4), "divpd": (2, 8)}
 PACKED_MINMAX = {"minps": (4, 4, "olt"), "maxps": (4, 4, "ogt")}
 PACKED_WIDTH = 16
+# Register-file words the guest unwinder and lifted code share: the landing pad to enter (0 when none is pending) and the frame that owns it.
+EH_PENDING_PAD = 0x1F00
+EH_PENDING_CFA = 0x1F08
 # Ghidra's unique-space offsets are sparse; a temporary's slot is at least this wide, so it can hold a 256-bit value.
 UNIQUE_STRIDE = 32
 
@@ -302,9 +305,20 @@ def itype(size: int) -> str:
 
 
 class BodyLifter:
-    def __init__(self, fn: dict, sections: list[dict] | tuple = (), *, call_dispatch: bool = False):
+    def __init__(
+        self,
+        fn: dict,
+        sections: list[dict] | tuple = (),
+        *,
+        call_dispatch: bool = False,
+        unwind: bool = False,
+        pads: frozenset = frozenset(),
+    ):
         self.fn = fn
         self.call_dispatch = call_dispatch
+        self.unwind = unwind
+        self.pads = frozenset(pads)
+        self.call_checks = 0
         self.sections = list(sections)
         self.data_sections: set[str] = set()
         self.unmapped = 0
@@ -731,8 +745,23 @@ class BodyLifter:
             return
         self.externs.add(offset)
         self.emit(f"call void @sub_{offset:x}(ptr %reg)")
+        self.pending_check()
 
-    def call_indirect(self, target: str) -> None:
+    def pending_check(self) -> None:
+        """After a call, leaves the body for the unwind landing block when an exception is pending."""
+        if not self.unwind:
+            return
+        self.call_checks += 1
+        word, flag = self.tmp(), self.tmp()
+        slot = self.tmp()
+        self.emit(f"{slot} = getelementptr i8, ptr %reg, i64 {EH_PENDING_PAD}")
+        self.emit(f"{word} = load i64, ptr {slot}, align 8")
+        self.emit(f"{flag} = icmp ne i64 {word}, 0")
+        resume = f"C{self.call_checks}"
+        self.emit(f"br i1 {flag}, label %EH_LAND, label %{resume}")
+        self.lines.append(f"{resume}:")
+
+    def call_indirect(self, target: str, *, check: bool = True) -> None:
         self.indirect_calls += 1
         if self.call_dispatch:
             value = self.read(target)
@@ -741,6 +770,8 @@ class BodyLifter:
             self.emit(f"call void @lift_dispatch(i64 {value}, ptr %reg)")
         else:
             self.emit(f"call void {self.pointer(target)}(ptr %reg)")
+        if check:
+            self.pending_check()
 
     def branch(self, insn: dict, k: int, target: str) -> bool:
         space, offset, _ = parse_varnode(target)
@@ -839,7 +870,7 @@ class BodyLifter:
                         "rsp_delta": verdict.get("rsp_delta"),
                     }
                 )
-            self.call_indirect(target)
+            self.call_indirect(target, check=False)
             self.emit("ret void")
             return
         if sec is None:
@@ -857,8 +888,43 @@ class BodyLifter:
         arms = " ".join(f"i64 {c}, label %{self.label(c)}" for c in reachable)
         self.emit(f"switch i64 {rebased}, label %{default} [{arms}]")
 
+    def landing_blocks(self) -> None:
+        """Appends the block every post-call check branches to: land on a pad this frame owns, else return."""
+        if not (self.unwind and self.call_checks):
+            return
+
+        def reg_word(name: str, offset: int) -> list[str]:
+            return [
+                f"  %{name}_slot = getelementptr i8, ptr %reg, i64 {offset}",
+                f"  %{name} = load i64, ptr %{name}_slot, align 8",
+            ]
+
+        lines = ["EH_LAND:"]
+        if self.pads:
+            lines += reg_word("eh_owner", EH_PENDING_CFA)
+            lines += ["  %eh_mine = icmp eq i64 %eh_owner, %eh_cfa", "  br i1 %eh_mine, label %EH_DISPATCH, label %EH_RET"]
+            lines += ["EH_DISPATCH:"] + reg_word("eh_pad", EH_PENDING_PAD)
+            arms = " ".join(f"i64 {pad}, label %{self.label(pad)}" for pad in sorted(self.pads))
+            lines += [
+                "  store i64 0, ptr %eh_pad_slot, align 8",
+                f"  switch i64 %eh_pad, label %EH_BAD [{arms}]",
+                "EH_BAD:",
+                "  call void @abort()",
+                "  unreachable",
+            ]
+            self.decls.add("declare void @abort()")
+        else:
+            lines += ["  br label %EH_RET"]
+        lines += ["EH_RET:", "  ret void"]
+        self.lines += lines
+
     def run(self) -> Lifted:
         insns = self.fn["insns"]
+        if self.pads and not self.unwind:
+            self.holes.append("EH_PAD_WITHOUT_UNWIND")
+        elif any(pad not in self.addrs for pad in self.pads):
+            self.holes.append("EH_PAD_NOT_INSN")
+            self.pads = frozenset(pad for pad in self.pads if pad in self.addrs)
         self.pending_tail: list[tuple[str, int | None]] = []
         if not insns:
             self.lines.append("entry:\n  unreachable")
@@ -886,9 +952,14 @@ class BodyLifter:
             else:
                 self.emit(f"call void @sub_{target:x}(ptr %reg)")
                 self.emit("ret void")
+        self.landing_blocks()
         header = f"define void @sub_{self.start:x}(ptr %reg) {{"
         body = "\n".join(self.lines)
         uniq = f"  %uniq = alloca [{max(self.unique_bytes, UNIQUE_STRIDE)} x i8], align 16"
+        if self.unwind and self.call_checks:
+            uniq += "\n  %eh_rsp_slot = getelementptr i8, ptr %reg, i64 32"
+            uniq += "\n  %eh_rsp = load i64, ptr %eh_rsp_slot, align 8"
+            uniq += "\n  %eh_cfa = add i64 %eh_rsp, 8"
         ir = f"{header}\n{body}\n}}\n".replace("entry:\n", f"entry:\n{uniq}\n", 1)
         return Lifted(
             self.start,
@@ -905,8 +976,15 @@ class BodyLifter:
         )
 
 
-def lift_body(fn: dict, sections: list[dict] | tuple = (), *, call_dispatch: bool = False) -> Lifted:
-    return BodyLifter(fn, sections, call_dispatch=call_dispatch).run()
+def lift_body(
+    fn: dict,
+    sections: list[dict] | tuple = (),
+    *,
+    call_dispatch: bool = False,
+    unwind: bool = False,
+    pads: frozenset = frozenset(),
+) -> Lifted:
+    return BodyLifter(fn, sections, call_dispatch=call_dispatch, unwind=unwind, pads=pads).run()
 
 
 def section_global(name: str, image: bytes | None) -> str:
