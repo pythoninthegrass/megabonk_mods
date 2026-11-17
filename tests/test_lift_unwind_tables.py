@@ -141,3 +141,47 @@ def test_rendered_tables_carry_the_address_bias():
     table = lu.build_entries(frames_for((0x1000, PROLOGUE, None)), {0x1000}, PERSONALITY)
     source = lu.render_c(table, lsda_bytes=b"", lsda_va=0, address_bias=0x100000)
     assert "const uint64_t lu_address_bias = 0x100000ULL;" in source
+
+
+def lsda_table(sites):
+    from test_lift_eh import lsda_bytes
+
+    return lsda_bytes(sites)
+
+
+def test_accounting_counts_bodies_pads_and_personalities():
+    frames = frames_for((0x1000, PROLOGUE, 0x0), (0x2000, PROLOGUE, 0x40))
+    table = lsda_table([(0, 4, 0x10, 0), (4, 4, 0x20, 1), (8, 2, 0, 0)])
+    report = lu.account(frames, table, 0x40, PERSONALITY, allowed_personalities={0x9000}, lo=0x1000, hi=0x3000)
+    assert report["bodies"] == 2
+    assert report["with_lsda"] == 1
+    assert (report["pad_entries"], report["distinct_pads"]) == (2, 2)
+    assert report["personalities"] == {"0x9000": 1}
+    assert report["rejected"] == {}
+    assert report["supported"] == 2
+
+
+def test_accounting_rejects_an_unlisted_personality_and_a_pad_outside_the_body():
+    frames = frames_for((0x2000, PROLOGUE, 0x40), (0x3000, PROLOGUE, 0x40))
+    table = lsda_table([(0, 4, 0x10, 0)])
+    outside = lsda_table([(0, 4, 0x900, 0)])
+    report = lu.account(frames, table, 0x40, lambda cie: 0x7777, {0x9000}, 0x2000, 0x4000)
+    assert report["rejected"] == {"EH_PERSONALITY_UNKNOWN": 2}
+    report = lu.account(frames_for((0x2000, PROLOGUE, 0x40)), outside, 0x40, PERSONALITY, {0x9000}, 0x2000, 0x3000)
+    assert report["rejected"] == {"EH_PAD_OUTSIDE": 1}
+    assert report["supported"] == 0
+
+
+def test_accounting_ignores_frames_outside_the_section():
+    frames = frames_for((0x500, PROLOGUE, None), (0x2000, PROLOGUE, None))
+    report = lu.account(frames, b"", 0, PERSONALITY, {0x9000}, 0x1000, 0x3000)
+    assert report["bodies"] == 1
+
+
+def test_dumped_pad_check_counts_bodies_pads_and_holes():
+    frames = frames_for((0x1000, PROLOGUE, 0x40), (0x2000, PROLOGUE, 0x40))
+    table = lsda_table([(0, 4, 0x10, 0), (4, 4, 0x20, 0)])
+    good = {"start": 0x1000, "size": 0x40, "insns": [{"a": 0x1010, "len": 1, "ops": []}, {"a": 0x1020, "len": 1, "ops": []}]}
+    bad = {"start": 0x2000, "size": 0x40, "insns": [{"a": 0x2010, "len": 1, "ops": []}]}
+    report = lu.dumped_pad_check([good, bad, fn(op("COPY"), start=0x3000)], frames, table, 0x40)
+    assert report == {"bodies": 3, "with_lsda": 2, "pads": 4, "missing": 1, "bodies_with_missing": 1}

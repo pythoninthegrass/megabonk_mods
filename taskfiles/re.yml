@@ -282,6 +282,29 @@ tasks:
     cmds:
       - uv run --script scripts/lift_tail_calls.py "{{.LIFT_SO}}" --out "{{.LIFT_OUT}}" {{.LIFT_EXTRA}}
 
+  eh-coverage:
+    desc: "Account for every exception-bearing il2cpp body against the lifted-code unwinder"
+    vars:
+      EH_SO: '{{.EH_SO | default ".tools/megabonk-linux-native/Megabonk/GameAssembly.so"}}'
+      EH_OUT: '{{.EH_OUT | default ".tools/eh-coverage"}}'
+      EH_EXTRA: '{{.EH_EXTRA | default ""}}'
+    summary: |
+      Usage: task re:eh-coverage [EH_SO=<GameAssembly.so>] [EH_OUT=<dir>]
+             [EH_EXTRA="--pcode-cache <file>"]
+
+      Interprets every call-frame description and LSDA in the il2cpp section the way the guest
+      unwinder does and reports each body as supported or rejected under a named reason
+      (unsupported call-frame instruction, CFA register, personality, malformed LSDA, landing
+      pad outside its body). Exits non-zero when any body is rejected. With a validated pcode
+      cache, also counts landing pads missing from the dumped instructions of the bodies the
+      cache holds. Reads bytes only. See "Exception unwinding in lifted code" in
+      docs/development.md.
+    preconditions:
+      - sh: '[ -f "{{.EH_SO}}" ]'
+        msg: "No Linux GameAssembly.so at {{.EH_SO}}; see docs/development.md for the rsync step that populates .tools/megabonk-linux-native"
+    cmds:
+      - uv run --script scripts/eh_coverage.py "{{.EH_SO}}" --out "{{.EH_OUT}}" {{.EH_EXTRA}}
+
   eh-probe:
     desc: "Count how many il2cpp function bodies carry an LSDA and how many landing pads each has"
     vars:

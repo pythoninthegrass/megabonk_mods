@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import lift_eh as eh
 import struct
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -102,6 +103,83 @@ def build_entries(
             continue
         table.entries.append(Entry(start, start + frame.pc_range, frame.lsda or 0, personality or 0, tuple(rows)))
     return table
+
+
+def account(
+    frames: list[eh.Frame],
+    except_table: bytes,
+    except_base: int,
+    personality_of: Callable[[eh.Cie], int | None],
+    allowed_personalities: set[int],
+    lo: int,
+    hi: int,
+) -> dict:
+    """Accounts for every frame in [lo, hi): supported, or rejected under the first reason that applies."""
+    rejected: Counter = Counter()
+    personalities: Counter = Counter()
+    report = {"bodies": 0, "supported": 0, "with_lsda": 0, "pad_entries": 0, "distinct_pads": 0}
+    for frame in frames:
+        if not lo <= frame.pc_begin < hi:
+            continue
+        report["bodies"] += 1
+        try:
+            rows = eh.cfi_rows(frame)
+        except eh.EhUnsupported:
+            rejected["EH_CFI"] += 1
+            continue
+        if any(row.cfa_register not in CFA_REGISTERS for row in rows):
+            rejected["EH_CFA_REGISTER"] += 1
+            continue
+        if any(reg >= SAVED_REGISTER_LIMIT for row in rows for reg in row.saved):
+            rejected["EH_SAVED_REGISTER"] += 1
+            continue
+        if not frame.lsda:
+            report["supported"] += 1
+            continue
+        report["with_lsda"] += 1
+        try:
+            personality = personality_of(frame.cie)
+        except eh.EhUnsupported:
+            personality = None
+        if not personality:
+            rejected["EH_NO_PERSONALITY"] += 1
+            continue
+        if personality not in allowed_personalities:
+            rejected["EH_PERSONALITY_UNKNOWN"] += 1
+            continue
+        try:
+            lsda = eh.parse_lsda(except_table, frame.lsda - except_base, frame.pc_begin)
+        except eh.EhUnsupported:
+            rejected["EH_LSDA"] += 1
+            continue
+        if any(not frame.pc_begin <= pad < frame.pc_begin + frame.pc_range for pad in lsda.pads):
+            rejected["EH_PAD_OUTSIDE"] += 1
+            continue
+        personalities[hex(personality)] += 1
+        report["pad_entries"] += sum(1 for site in lsda.sites if site.pad)
+        report["distinct_pads"] += len(lsda.pads)
+        report["supported"] += 1
+    report["rejected"] = dict(rejected)
+    report["personalities"] = dict(personalities)
+    return report
+
+
+def dumped_pad_check(rows: list[dict], frames: list[eh.Frame], except_table: bytes, except_base: int) -> dict:
+    """Counts landing pads that are not instruction starts in dumped pcode rows, over the bodies that have an LSDA."""
+    by_start = {frame.pc_begin: frame for frame in frames}
+    report = {"bodies": 0, "with_lsda": 0, "pads": 0, "missing": 0, "bodies_with_missing": 0}
+    for row in rows:
+        report["bodies"] += 1
+        frame = by_start.get(row["start"])
+        if frame is None or not frame.lsda:
+            continue
+        report["with_lsda"] += 1
+        lsda = eh.parse_lsda(except_table, frame.lsda - except_base, row["start"])
+        missing = len(eh.pad_holes(row, lsda))
+        report["pads"] += len(lsda.pads)
+        report["missing"] += missing
+        report["bodies_with_missing"] += bool(missing)
+    return report
 
 
 def personality_resolver(elf, raw: bytes):
