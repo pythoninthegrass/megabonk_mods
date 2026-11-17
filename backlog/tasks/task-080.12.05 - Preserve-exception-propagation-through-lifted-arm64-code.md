@@ -1,10 +1,10 @@
 ---
 id: TASK-080.12.05
 title: Preserve exception propagation through lifted arm64 code
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-16T19:04:00Z'
-updated_date: '2026-11-16T23:45:00Z'
+updated_date: '2026-11-17 00:23'
 labels:
   - native-macos
   - arm64
@@ -18,7 +18,6 @@ documentation:
   - docs/development.md
 parent_task_id: TASK-080.12
 priority: high
-type: enhancement
 ordinal: 272000
 ---
 
@@ -33,16 +32,33 @@ The census found exception tables on 8,373 game-section bodies and 103,628 landi
 - [ ] #1 Lifted code matches the shipped reference for caught throws, nested propagation, cleanup/finally execution, rethrow and an uncaught exception's reported outcome.
 - [ ] #2 Exceptions crossing required native/lifted boundaries unwind correctly without corrupting stack or register state.
 - [ ] #3 Required exception-bearing bodies and metadata in the selected runtime image are accounted for; unsupported unwind cases are rejected rather than emitted as apparently runnable code.
-- [ ] #4 Regression tests execute on native arm64, include cleanup ordering and failure cases, and docs state the verified unwind contract and coverage.
+- [x] #4 Regression tests execute on native arm64, include cleanup ordering and failure cases, and docs state the verified unwind contract and coverage.
 <!-- AC:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [ ] #1 task check passes
-- [ ] #2 Tests written first for testable logic
-- [ ] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
-<!-- DOD:END -->
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+PROPOSED, AWAITING MAINTAINER APPROVAL. Nothing below is implemented.
+
+Design A (recommended): keep the shipped libsupc++ lifted unchanged and supply only the _Unwind_* layer, as a guest-stack unwinder with cooperative landing.
+
+1. Lift __gxx_personality_v0, __cxa_throw/begin_catch/end_catch/rethrow and the rest of libsupc++ from the image like any other body. Type matching, catch(...), rethrow and the terminate path are inherited, not reimplemented. The _Unwind_* imports become generated lift_abi imports backed by one native module that works on guest state. The platform-services task must not also provide them.
+2. Guest unwinder. Guest frames are real: raw pcode does CALL's push and RET's pop on the private guest stack, and callee-saved registers are real pushes. _Unwind_RaiseException does the two-phase walk over guest frames using the image's .eh_frame (found via .eh_frame_hdr), a bounded CFI interpreter, and calls the lifted personality through lift_dispatch with a guest _Unwind_Context. Phase 1 reaching the end of the guest stack returns _URC_END_OF_STACK, so __cxa_throw's own code reaches std::terminate, matching the shipped uncaught outcome.
+3. Landing. Native arm64 frames of lifted functions cannot be unwound by the guest unwinder, so landing is cooperative. Phase 2 writes the target frame's register state (RSP/CFA, callee-saved registers recovered from CFI, RAX/RDX selector) into the register file, then records pending {target CFA, pad address} in reserved register-file words and returns normally. Every lifted call site then checks the pending word. A frame that is not the target returns immediately with a native return (no pcode RET, no guest RSP change, since the unwinder already set it). The target frame compares its own entry CFA with the pending one, clears the flag and branches through a generated switch to the pad block. Pads are reached only through that switch, never by a branch.
+4. Emitter. For each body with an FDE and LSDA, the lifter takes the pad set from the LSDA (function start plus call-site offset) and emits the switch; every pad must be an instruction start in the dumped rows. Bodies without an LSDA still get the pending check after calls, because they sit between the throw and the handler. Tail calls and lift_dispatch calls get the same check. Code growth and the cost of the checks are unmeasured; measure on the seed-81/82 samples before committing to it.
+5. Boundaries. Each export call owns a private guest stack, so the guest walk ends at the adapter root. An exception that is not caught inside one export call ends in std::terminate in guest code, never as a pending flag escaping into native frames. A pending flag seen by an export adapter on return is a bug and aborts. Native imports run on the native stack and never take part in the guest walk. Exceptions thrown by native (Unity) code through lifted frames are rejected, not emulated; whether that case exists is unproven.
+6. Guest TLS. __cxa_get_globals calls __tls_get_addr, so each export call also gets a private TLS block and a native __tls_get_addr import. This is a prerequisite for running shipped libsupc++ and is the smallest slice of guest TLS; the general TLS work stays out of scope.
+
+Alternatives considered. B: lift per-call-site pending-flag checks and reimplement the personality in the lifter. Rejected as primary: it duplicates type matching, catch(...) and the __cxa globals, and every difference is a silent divergence. C: LLVM invoke/landingpad over native frames with a custom native personality. Rejected as primary: the native unwinder knows nothing about guest CFA or callee-saved registers, so phase 1 and register restoration would be rebuilt on top of it anyway.
+
+Unsupported-case policy (acceptance criterion 3). The emitter records a hole, and the module is not emitted as runnable, for: a body with an FDE and LSDA whose pad is not an instruction start or not inside the body; LPStart other than omit; a call-site or TType encoding outside the measured set; a personality other than the image's __gxx_personality_v0 or __gcc_personality_v0; a CIE augmentation other than zR or zPLR (including signal frames); CFI opcodes the interpreter does not implement (including DW_CFA expressions, to be measured); an FDE with no lifted body or a lifted LSDA body with no FDE. A coverage report accounts for every one of the 8,373 LSDA bodies and 103,628 pad entries as supported or rejected with a reason, and a test fails if a body is dropped silently.
+
+Test plan, in order, each failing first. (a) Pure tests: LSDA parser against hand-built tables, CFI interpreter against hand-built FDEs, pad-set extraction, hole generation for each unsupported shape above. (b) Native arm64 fixtures built from C with __attribute__((cleanup)): cleanup ordering across two and three frames, a throw with no handler reaching terminate (subprocess, expected abort), nested propagation, register and RSP restoration checked after landing, and an export adapter that sees a stray pending flag. (c) A C++ fixture for typed catch, catch(...), rethrow and finally-style rethrow, using lifted libsupc++ once TLS exists. (d) Shipped-code oracle: the ThrowHelper candidate above, comparing the thrown class between the Linux runtime and the lifted code. (e) Baselines: per-body hole lists for seed-81 and seed-82 must not change for bodies without an LSDA; any change is reported, not adjusted. Existing tests are not edited.
+
+Questions for the maintainer: (1) Approve Design A, including guest TLS for libsupc++ as part of this task? (2) The fixtures cannot be linked on this machine until lld matches llvm; may I reinstall or upgrade the Homebrew lld here? (3) For caught-throw and cleanup oracles, is a new host.c mode that records the thrown exception class acceptable? (4) Is terminate-at-the-export-boundary acceptable as the stated contract for exceptions that would cross an outer native frame?
+
+APPROVED by the maintainer: all four questions answered yes (Design A with minimal guest TLS in this task, lld upgrade, a host.c mode recording the thrown class, terminate at the export boundary). The 'PROPOSED' header above is superseded by this line. Deviations from the plan as written: the C-with-cleanup fixture was replaced by a C++ fixture with a minimal in-fixture libsupc++ and personality, because C cleanup attributes cannot be caught and so cannot exercise phase two to a handler; guest TLS, the shipped-runtime oracle and the seed-81/82 re-score are not done yet.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
@@ -56,4 +72,36 @@ Not yet researched (do not assume): (1) whether Ghidra's pcode dump contains the
 Design guidance, hypotheses and not decisions. The lifted code keeps guest state in a register-file struct, so a native arm64 unwinder cannot walk guest frames, and LLVM invoke/landingpad over those frames looks unlikely to map onto them; an explicit propagation scheme in the lifter (a pending-exception flag checked after each call, branching to the call site's landing pad per the LSDA table, or returning to the caller) fits the register-state ABI better. The unwind design, the unsupported-case policy and how it crosses native and lifted boundaries are a material architectural choice: present the proposed design for maintainer approval before coding, as the interop task did. Acceptance criterion #3 requires unsupported unwind shapes to be rejected, never emitted as apparently runnable code, and the emitter's existing practice of recording a hole rather than guessing is the model.
 
 Process lessons from the previous task in this chain, worth applying here: never rewrite an existing test's expectation to make new behaviour pass (an unattended run did so and the change was caught only in review; the diff to existing tests should stay empty apart from new tests); require positive evidence for any lowering rule, since a necessary condition alone is not enough (balanced rsp is necessary but not sufficient for a tail call); confirm baselines are unchanged by comparing per-body hole lists across the seed-81 and seed-82 draws, which also guards against the lifter silently dropping bodies. The pcode caches for those draws were deleted, so a re-score needs a cold Ghidra dump (about 26 minutes per seed with GHIDRA_HEADLESS_MAXMEM=8G). The final BRANCHIND results are in .tools/lift-probe-tailcall4-{81,82}. Keep original exception metadata local-only; docs must not cite task ids or personal identifiers.
+
+Research findings (feasibility pass, nothing implemented). Throwaway scripts read the seed-80 cache directly and skip its validation; the LSDA parser is a scratch re-use of scripts/eh_probe.py and has not been checked against libgcc's parse_lsda_header.
+
+(1) Landing pads in the dumped pcode: 335 of the 3,000 cached bodies carry an LSDA. They name 4,206 distinct landing pads, and all 4,206 are instruction starts in their own body's rows: 0 pads missing, 0 bodies affected. LPStart is omitted (0xff) in all 8,373 LSDAs across the image, so a pad is function start + call-site offset. This is a 335-body sample, not the whole image: the other 8,038 LSDA bodies are unmeasured.
+
+(2) Personality: the image statically contains libsupc++. The 0x9b9dd8 CIE (9,424 FDEs) personality slot 0x50d8010 has an R_X86_64_64 relocation to the image's own __gxx_personality_v0 at 0x2110c8c (1,022 B, in the il2cpp section). The 0xa71910 CIE (0 FDEs) slot 0x5353a90 relocates to the imported __gcc_personality_v0, so no shipped body uses it. __cxa_throw (0x211144e), __cxa_begin_catch, __cxa_end_catch, __cxa_rethrow, __cxa_allocate_exception and the type-matching code are image code, not platform imports. Only the _Unwind_* family (RaiseException, Resume, Resume_or_Rethrow, DeleteException, GetIPInfo, GetLanguageSpecificData, GetRegionStart, GetDataRelBase, GetTextRelBase, SetGR, SetIP) comes from libgcc_s. __cxa_throw calls _Unwind_RaiseException and, if that returns, __cxa_begin_catch then std::terminate, so an uncaught exception's outcome is terminate. __cxa_get_globals (0x2110910) calls the imported __tls_get_addr, so the shipped runtime needs a guest TLS block. il2cpp_raise_exception (0x20605a0) is an 8-byte tail into the image.
+
+LSDA contents across all 8,373 bodies (scratch parser): TType encoding is 0x9c (indirect, pcrel, sdata8) in all of them. Every body has both cleanup and typed-catch action chains, 8,344 bodies also have a catch(...) clause, 326 distinct typeinfo slots, none with a negative (exception-spec) filter seen. So cleanup-only, catch-all-plus-rethrow and typed matching are all needed; none can be dropped.
+
+(3) Oracle: System.ThrowHelper::ThrowInvalidOperationException_InvalidOperation_NoValue (mscorlib, no arguments, static) runs headless under scripts/native_bind_probe/host.c on the shipped Linux runtime and reports a thrown exception through il2cpp_runtime_invoke's out parameter (RVA 0x3c67850 in that image; Linux RVAs differ from dump.cs). Only the 'threw' result was observed; the exception type and message were not recorded, and host.c currently treats a throw as failure, so an oracle mode that records the thrown class is new work. UnityEngine.Bindings.ThrowHelper.ThrowNullReferenceException(object) and the System.ThrowHelper ArgumentNull/ArgumentOutOfRange overloads are further candidates. Caught-throw, cleanup order and rethrow oracles through shipped managed code still need a body that has a try/catch or try/finally around a throwing call; none identified yet.
+
+(4) Synthetic fixture with a real LSDA: a freestanding C file using __attribute__((cleanup)) compiled with --target=x86_64-linux-gnu -fexceptions emits .gcc_except_table, .eh_frame with a zPLR CIE, real landing pads that finish with _Unwind_Resume, and a __gcc_personality_v0 reference, with no libstdc++. That covers cleanup ordering. A typed catch or catch(...) needs a C++ personality and __cxa_* runtime; the fixture options are a small hand-written one (tests the unwinder with a different personality than the shipped one) or lifting the shipped personality and __cxa_* from the image (needs the guest TLS block). Not yet built.
+
+(5) Native code raising through lifted frames: UnityPlayer.so has a small .gcc_except_table (19 KB, against 1.1 MB in GameAssembly) and imports _Unwind_RaiseException, so it contains some C++ EH. Static data cannot show whether any exception propagates from it through il2cpp frames; il2cpp_runtime_invoke catches inside the image. Treat native-to-lifted propagation as unproven.
+
+BLOCKER on this machine: the Homebrew lld is 21.1.8 and links against llvm 23.1.5's libLLVM, so every clang -fuse-ld=lld link aborts with a dyld missing-symbol error. This includes the existing tests/fixtures/lift/calls.c build in tests/test_lift_abi.py, so that test cannot pass here until lld is reinstalled or upgraded to match llvm. I did not change the Homebrew install; the LSDA fixture check above used an unlinked object.
+
+Progress after approval of the design (commits a204630 to 87ee833 on main, not pushed). Built: lift_eh.py (frame rows, LSDA call sites, pad validation), lift_unwind.py (table builder, return-address bias, leaf rule, coverage accounting), pcode_lift unwind mode (pending-word check after calls, pad switch), lift_abi RawBinding / callable_bodies / export pending guard, scripts/unwind_runtime (guest-stack unwinder), scripts/eh_coverage.py and task re:eh-coverage, docs section 'Exception unwinding in lifted code'. task check: exit 0, 2325 passed, 6 skipped. Existing tests are unchanged (the diff to them is empty); the homebrew lld was upgraded to match llvm so the existing fixture links again (baseline 18 passed before any change).
+
+Findings worth keeping. (a) Raw pcode pushes Ghidra-space return addresses (file address + 0x100000, on both the shipped image and the fixture), so the unwinder needs the bias; lift_unwind.address_bias derives it from the pushed constants and refuses disagreement. (b) Clang with -fexceptions alone emits no frame description for functions it infers nounwind; the fixture needs -funwind-tables, and a call-free body without a frame is accepted as a leaf while a body that calls and has no frame is rejected (EH_NO_FDE). Every il2cpp-section body in the shipped image is FDE-derived so none is affected. (c) The in-image optimizer folds stub results, so fixture stubs must live in their own translation unit. (d) A bug the tests caught: returning the URC code in RAX after install clobbered the exception pointer; the fixture's __cxa_begin_catch now checks the pointer and the test fails if the clobber is reintroduced (shown by reintroducing it once).
+
+Measured on the 3,000-body seed-80 cache: per-body hole lists are identical with and without unwind mode for all 3,000 (335 LSDA bodies, 4,206 pads, none missing, 484 call-free bodies), 47,050 post-call checks, IR text +2.3%. The seed-81 and seed-82 baselines were not re-scored: their pcode caches no longer exist and a cold Ghidra dump (about 26 minutes each) was not run, so that comparison is still open. Default lifting (unwind off) is untouched, which the existing hole-list tests cover. Whole-image metadata accounting (task re:eh-coverage): 196,137 bodies supported, 0 rejected, 8,373 LSDA bodies all on __gxx_personality_v0, 103,628 pad entries, 84,257 distinct pads.
+
+Still open, so acceptance criteria 1, 2 and 3 stay unchecked. AC1: no comparison against the shipped runtime yet. It needs the shipped libsupc++ (personality, __cxa_*) to run lifted, which needs a guest TLS block (__tls_get_addr import) and relocated typeinfo pointers; the fixture personality handles cleanups and catch(...) only, so typed catch is unverified. The ThrowHelper candidate threw on the Linux runtime but its exception class was not recorded and host.c has no mode that records it (approved, not written). AC2: lifted-to-lifted and the export boundary are verified; native code raising through lifted frames is unproven and unsupported, and a native import that re-enters lifted code and throws across it is not tested. AC3: metadata for every body is accounted for; landing pads were checked against dumped pcode for 335 of 8,373 LSDA bodies only. Remaining DoD: tests-first held except where noted in commits (dumped_pad_check was written with its test but not run failing first).
 <!-- SECTION:NOTES:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [ ] #1 task check passes
+- [ ] #2 Tests written first for testable logic
+- [ ] #3 Docs updated
+- [ ] #4 Conventional commit with no attribution
+<!-- DOD:END -->
