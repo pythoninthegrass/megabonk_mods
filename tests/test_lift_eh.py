@@ -213,3 +213,35 @@ def test_a_zero_length_terminator_between_objects_does_not_end_the_section():
     second = build_fde(0, second_offset, 0x2000, 0x20, PROLOGUE)
     frames = eh.parse_frames(cie + first + b"\0\0\0\0" + second, 0)
     assert [f.pc_begin for f in frames] == [0x1000, 0x2000]
+
+
+def hand_lsda(action: int, action_records: bytes, ttype_entries: bytes) -> bytes:
+    """One call site (start 0, size 5, pad 5, `action`), then the action records and the type table."""
+    body = bytes([0x01, 0x04, 0, 5, 5, action]) + action_records + ttype_entries
+    return bytes([0xFF, 0x9B, len(body)]) + body
+
+
+def test_a_catch_all_filter_has_a_null_type_entry_and_is_not_typed():
+    lsda = hand_lsda(1, bytes([1, 0]), struct.pack("<i", 0))
+    assert eh.type_filters(lsda, 0) == eh.TypeFilters(frozenset(), frozenset())
+
+
+def test_a_filter_with_a_nonzero_type_entry_is_a_typed_catch():
+    lsda = hand_lsda(1, bytes([1, 0]), struct.pack("<i", 0x100))
+    assert eh.type_filters(lsda, 0) == eh.TypeFilters(frozenset({1}), frozenset())
+
+
+def test_a_cleanup_only_site_has_no_filters():
+    lsda = hand_lsda(0, b"", b"")
+    assert eh.type_filters(lsda, 0) == eh.TypeFilters(frozenset(), frozenset())
+
+
+def test_a_negative_filter_is_an_exception_specification():
+    lsda = hand_lsda(1, sleb(-1) + bytes([0]), struct.pack("<i", 0x100))
+    assert eh.type_filters(lsda, 0) == eh.TypeFilters(frozenset(), frozenset({-1}))
+
+
+def test_a_chain_of_records_is_followed_to_its_end():
+    records = bytes([1, 1]) + bytes([2, 0])
+    lsda = hand_lsda(1, records, struct.pack("<ii", 0x200, 0))
+    assert eh.type_filters(lsda, 0) == eh.TypeFilters(frozenset({2}), frozenset())

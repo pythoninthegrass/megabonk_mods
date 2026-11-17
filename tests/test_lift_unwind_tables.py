@@ -185,3 +185,51 @@ def test_dumped_pad_check_counts_bodies_pads_and_holes():
     bad = {"start": 0x2000, "size": 0x40, "insns": [{"a": 0x2010, "len": 1, "ops": []}]}
     report = lu.dumped_pad_check([good, bad, fn(op("COPY"), start=0x3000)], frames, table, 0x40)
     assert report == {"bodies": 3, "with_lsda": 2, "pads": 4, "missing": 1, "bodies_with_missing": 1}
+
+
+def typed_table(entry, filter_=1):
+    from test_lift_eh import hand_lsda, sleb
+
+    return hand_lsda(1, sleb(filter_) + bytes([0]), entry.to_bytes(4, "little", signed=True))
+
+
+def test_a_typed_catch_is_rejected_when_the_lsda_tables_are_given():
+    table = lu.build_entries(
+        frames_for((0x1000, PROLOGUE, 0x40)), {0x1000}, PERSONALITY, lsda_tables=[(typed_table(0x100), 0x40)]
+    )
+    assert table.problems == ["EH_TYPED_CATCH:1000"]
+    assert table.entries == []
+
+
+def test_an_exception_specification_is_rejected():
+    table = lu.build_entries(
+        frames_for((0x1000, PROLOGUE, 0x40)), {0x1000}, PERSONALITY, lsda_tables=[(typed_table(0x100, -1), 0x40)]
+    )
+    assert table.problems == ["EH_EXC_SPEC:1000"]
+
+
+def test_a_catch_all_is_accepted_when_the_lsda_tables_are_given():
+    table = lu.build_entries(
+        frames_for((0x1000, PROLOGUE, 0x40)), {0x1000}, PERSONALITY, lsda_tables=[(typed_table(0), 0x40)]
+    )
+    assert table.problems == []
+    assert [e.pc_begin for e in table.entries] == [0x1000]
+
+
+def test_an_lsda_outside_every_given_table_is_a_problem():
+    table = lu.build_entries(frames_for((0x1000, PROLOGUE, 0x9000)), {0x1000}, PERSONALITY, lsda_tables=[(b"\0" * 8, 0x40)])
+    assert table.problems == ["EH_LSDA:1000"]
+
+
+def test_filter_report_counts_bodies_by_the_catch_clauses_they_need():
+    from test_lift_eh import hand_lsda, sleb
+
+    def at(base, filter_, entry):
+        return hand_lsda(1, sleb(filter_) + bytes([0]), entry.to_bytes(4, "little", signed=True))
+
+    tables = [at(0, 1, 0), at(0, 1, 0x100), at(0, -1, 0x100)]
+    data = b"".join(tables)
+    offsets = [0x40, 0x40 + len(tables[0]), 0x40 + len(tables[0]) + len(tables[1])]
+    frames = frames_for((0x1000, PROLOGUE, offsets[0]), (0x2000, PROLOGUE, offsets[1]), (0x3000, PROLOGUE, offsets[2]), (0x4000, PROLOGUE, None))
+    report = lu.filter_report(frames, data, 0x40, 0x1000, 0x5000)
+    assert report == {"with_lsda": 3, "catch_all_only": 1, "typed_catch": 1, "exception_spec": 1, "unreadable": 0}

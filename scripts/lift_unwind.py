@@ -72,12 +72,40 @@ def address_bias(rows: list[dict]) -> int:
     return gaps.pop() if gaps else 0
 
 
+def unrunnable_filters(lsda: int, lsda_tables: list[tuple[bytes, int]]) -> str | None:
+    """The problem name for an LSDA whose catch clauses the lifted runtime cannot match, or None."""
+    for data, base in lsda_tables:
+        if base <= lsda < base + len(data):
+            try:
+                filters = eh.type_filters(data, lsda - base)
+            except eh.EhUnsupported:
+                return "EH_LSDA"
+            if filters.typed:
+                return "EH_TYPED_CATCH"
+            return "EH_EXC_SPEC" if filters.specs else None
+    return "EH_LSDA"
+
+
+def filter_report(frames: list[eh.Frame], except_table: bytes, except_base: int, lo: int, hi: int) -> dict:
+    """Counts LSDA bodies in [lo, hi) by the catch clauses they need: catch (...) alone, typed, specification."""
+    report = {"with_lsda": 0, "catch_all_only": 0, "typed_catch": 0, "exception_spec": 0, "unreadable": 0}
+    names = {"EH_TYPED_CATCH": "typed_catch", "EH_EXC_SPEC": "exception_spec", "EH_LSDA": "unreadable", None: "catch_all_only"}
+    for frame in frames:
+        if frame.lsda and lo <= frame.pc_begin < hi:
+            report["with_lsda"] += 1
+            report[names[unrunnable_filters(frame.lsda, [(except_table, except_base)])]] += 1
+    return report
+
+
 def build_entries(
     frames: list[eh.Frame],
     lifted_starts: set[int],
     personality_of: Callable[[eh.Cie], int | None],
     leaves: frozenset | set = frozenset(),
+    lsda_tables: list[tuple[bytes, int]] | None = None,
 ) -> Table:
+    """`lsda_tables` are (bytes, virtual address) of the exception tables; given, a typed catch or exception
+    specification is a problem, because matching one needs typeinfo the lifted module does not have."""
     table = Table()
     by_start = {frame.pc_begin: frame for frame in frames}
     for start in sorted(lifted_starts):
@@ -101,6 +129,11 @@ def build_entries(
         if frame.lsda and not personality:
             table.problems.append(f"EH_NO_PERSONALITY:{start:x}")
             continue
+        if frame.lsda and lsda_tables is not None:
+            problem = unrunnable_filters(frame.lsda, lsda_tables)
+            if problem:
+                table.problems.append(f"{problem}:{start:x}")
+                continue
         table.entries.append(Entry(start, start + frame.pc_range, frame.lsda or 0, personality or 0, tuple(rows)))
     return table
 

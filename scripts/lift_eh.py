@@ -254,20 +254,26 @@ def row_at(rows: list[Row], pc: int) -> Row:
     return chosen
 
 
-def parse_lsda(table: bytes, at: int, func_start: int) -> Lsda:
-    """Reads one LSDA: call-site records with landing pads resolved against the function start."""
+def _header(table: bytes, at: int) -> tuple[int, int | None, int, int, int]:
+    """Reads an LSDA header: the type-table encoding and base, the call-site encoding, and where the site records run."""
     pos = at
     lpstart, pos = _guard(eh._byte, table, pos)
     if lpstart != eh.DW_EH_PE_omit:
         raise EhUnsupported("an explicit LPStart is not supported")
     ttype, pos = _guard(eh._byte, table, pos)
+    ttype_base = None
     if ttype != eh.DW_EH_PE_omit:
-        _, pos = _guard(eh.read_uleb128, table, pos)
+        offset, pos = _guard(eh.read_uleb128, table, pos)
+        ttype_base = pos + offset
     encoding, pos = _guard(eh._byte, table, pos)
     length, pos = _guard(eh.read_uleb128, table, pos)
     end = pos + length
     if end > len(table):
         raise EhUnsupported("call-site table runs past the end of the exception table")
+    return ttype, ttype_base, encoding, pos, end
+
+
+def _sites(table: bytes, encoding: int, pos: int, end: int, func_start: int) -> tuple:
     sites = []
     while pos < end:
         start, pos = _guard(eh.read_call_site_field, table, pos, encoding)
@@ -279,7 +285,50 @@ def parse_lsda(table: bytes, at: int, func_start: int) -> Lsda:
         sites.append(Site(func_start + start, size, func_start + pad if pad else 0, action))
     if pos != end:
         raise EhUnsupported("call-site table does not fill its length")
-    return Lsda(tuple(sites), frozenset(s.pad for s in sites if s.pad), ttype != eh.DW_EH_PE_omit)
+    return tuple(sites)
+
+
+def parse_lsda(table: bytes, at: int, func_start: int) -> Lsda:
+    """Reads one LSDA: call-site records with landing pads resolved against the function start."""
+    ttype, _, encoding, pos, end = _header(table, at)
+    sites = _sites(table, encoding, pos, end, func_start)
+    return Lsda(sites, frozenset(s.pad for s in sites if s.pad), ttype != eh.DW_EH_PE_omit)
+
+
+@dataclass(frozen=True)
+class TypeFilters:
+    """Filters an LSDA's action chains use: typed catches (a nonzero type entry) and exception specifications."""
+
+    typed: frozenset
+    specs: frozenset
+
+
+TTYPE_SIZES = {0x02: 2, 0x03: 4, 0x04: 8, 0x0A: 2, 0x0B: 4, 0x0C: 8}
+
+
+def type_filters(table: bytes, at: int) -> TypeFilters:
+    """A positive filter with a null type entry is catch (...); a nonzero entry names a type, which needs its typeinfo."""
+    ttype, ttype_base, encoding, pos, end = _header(table, at)
+    typed, specs, seen = set(), set(), set()
+    for site in _sites(table, encoding, pos, end, 0):
+        record = end + site.action - 1 if site.action else None
+        while record is not None and record not in seen:
+            seen.add(record)
+            filter_, after = _guard(eh.read_sleb128, table, record)
+            displacement, _ = _guard(eh.read_sleb128, table, after)
+            if filter_ < 0:
+                specs.add(filter_)
+            elif filter_ > 0:
+                if ttype_base is None or ttype & 0x0F not in TTYPE_SIZES:
+                    raise EhUnsupported("a catch filter has no readable type table")
+                size = TTYPE_SIZES[ttype & 0x0F]
+                at_entry = ttype_base - filter_ * size
+                if at_entry < 0 or at_entry + size > len(table):
+                    raise EhUnsupported("a type table entry lies outside the exception table")
+                if int.from_bytes(table[at_entry : at_entry + size], "little"):
+                    typed.add(filter_)
+            record = after + displacement if displacement else None
+    return TypeFilters(frozenset(typed), frozenset(specs))
 
 
 def pad_holes(fn: dict, lsda: Lsda) -> list[str]:

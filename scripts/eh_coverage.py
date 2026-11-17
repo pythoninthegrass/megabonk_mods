@@ -61,6 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     resolver = lift_unwind.personality_resolver(elf, raw)
     allowed = {defined_symbol(elf, raw, ALLOWED_PERSONALITY)}
     report = lift_unwind.account(frames, except_table, except_base, resolver, allowed, section.addr, section.addr + section.size)
+    report["filters"] = lift_unwind.filter_report(frames, except_table, except_base, section.addr, section.addr + section.size)
     report["allowed_personalities"] = sorted(hex(a) for a in allowed)
     if args.pcode_cache:
         report["dumped_pads"] = lift_unwind.dumped_pad_check(cached_rows(args.pcode_cache), frames, except_table, except_base)
