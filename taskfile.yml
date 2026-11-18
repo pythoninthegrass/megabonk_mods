@@ -27,6 +27,7 @@ includes:
   pocketbase: taskfiles/pocketbase.yml
   setup: taskfiles/setup.yml
   site: taskfiles/site.yml
+  vita: taskfiles/vita.yml
   wine:
     taskfile: taskfiles/wine.yml
     platforms: [darwin]

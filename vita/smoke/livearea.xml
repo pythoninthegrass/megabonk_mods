@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<livearea style="psmobile" format-ver="01.00" content-rev="2">
+    <livearea-background>
+        <image>bg.png</image>
+    </livearea-background>
+    <frame id="frame2">
+        <liveitem default="on">
+            <text valign="bottom" align="left" text-align="left" text-valign="bottom" ellipsis="off">
+                <str color="#ffffff" size="36" bold="on" shadow="on">Megabonk Vita Smoke</str>
+            </text>
+        </liveitem>
+    </frame>
+    <frame id="frame3">
+        <liveitem default="on">
+            <text valign="top" align="left" text-align="left" text-valign="top" ellipsis="off">
+                <str color="#ffffff" size="22" shadow="on">Hardware smoke test</str>
+            </text>
+        </liveitem>
+    </frame>
+</livearea>
