@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import lift_probe as lp
+import re
 import subprocess
 import tempfile
 from lift_image import read_shard, shard_identity, write_shard
@@ -132,8 +133,19 @@ def audit_baseline(so, shards, out, addresses=None):
     """Audits every baseline row with jump tables against the ELF bytes, no Ghidra involved."""
     read = elf_reader(so)
     disassemble = objdump_disassembler(so, lp.LLVM / "llvm-objdump")
-    selected, totals = [], {"rows": 0, "matched": 0, "unverified": 0, "unaudited": 0}
+    selected, totals = [], {
+        "rows": 0,
+        "tables": 0,
+        "matched": 0,
+        "unverified": 0,
+        "unaudited": 0,
+        "extra_direct_edges": 0,
+        "extra_outside_body": 0,
+        "extra_unexplained": 0,
+    }
     for path in sorted(shards.glob("pcode-*.jsonl")):
+        if not re.fullmatch(r"pcode-\d+\.jsonl", path.name):
+            continue
         with path.open() as handle:
             for line in handle:
                 if not line.startswith('{"start": '):
@@ -143,12 +155,13 @@ def audit_baseline(so, shards, out, addresses=None):
                     continue
                 audited = audit_row(lp.Fde(row["start"], row["size"]), row, disassemble, read)
                 totals["rows"] += 1
-                if audited["tables_unaudited"]:
-                    totals["unaudited"] += 1
-                elif audited["tables_unverified"]:
-                    totals["unverified"] += 1
-                else:
-                    totals["matched"] += 1
+                totals["tables"] += len(audited["jt"])
+                totals["unaudited"] += audited["tables_unaudited"]
+                totals["unverified"] += audited["tables_unverified"]
+                totals["matched"] += len(audited["jt"]) - audited["tables_unaudited"] - audited["tables_unverified"]
+                for table in audited["jt"]:
+                    for key in ("extra_direct_edges", "extra_outside_body", "extra_unexplained"):
+                        totals[key] += len(table.get(key, []))
                 selected.append(audited)
     (out / "audit.jsonl").parent.mkdir(parents=True, exist_ok=True)
     (out / "audit.jsonl").write_text("".join(json.dumps(row) + "\n" for row in selected))

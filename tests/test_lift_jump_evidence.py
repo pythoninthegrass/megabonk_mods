@@ -202,6 +202,57 @@ def test_audit_separates_extras_from_another_frame_from_extras_on_the_bodys_own_
     assert audited["extra_unexplained"] == 1
 
 
+def test_audit_baseline_sweeps_every_table_bearing_row_and_tallies_the_extras(tmp_path, monkeypatch):
+    shards = tmp_path / "baseline"
+    shards.mkdir()
+    rows = [
+        {"start": 0x1000, "size": 0x100, "status": "complete", "jt": [{"at": 0x1020, "cases": [0x1030, 0x1040]}]},
+        {
+            "start": 0x2000,
+            "size": 0x100,
+            "status": "complete",
+            "jt": [{"at": 0x1020, "cases": [0x1030, 0x1040, 0x2050]}],
+        },
+        {"start": 0x3000, "size": 0x100, "status": "complete", "jt": [{"at": 0x3020, "cases": [0x3030]}]},
+        {"start": 0x4000, "size": 0x100, "status": "complete", "jt": []},
+    ]
+    (shards / "pcode-0000.jsonl").write_text('{"identity": "x"}\n' + "".join(json.dumps(r) + "\n" for r in rows))
+    monkeypatch.setattr(evidence, "elf_reader", lambda so: (lambda vaddr, n: (0x30).to_bytes(4, "little") + (0x40).to_bytes(4, "little")))
+    monkeypatch.setattr(
+        evidence, "objdump_disassembler", lambda so, objdump: (lambda window: SITE_TEXT if window[1] == 0x1022 else "")
+    )
+
+    totals = evidence.audit_baseline(tmp_path / "GameAssembly.so", shards, tmp_path / "out")
+    assert totals == {
+        "rows": 3,
+        "tables": 3,
+        "matched": 1,
+        "unverified": 1,
+        "unaudited": 1,
+        "extra_direct_edges": 0,
+        "extra_outside_body": 0,
+        "extra_unexplained": 1,
+    }
+    audited = [json.loads(line) for line in (tmp_path / "out" / "audit.jsonl").read_text().splitlines()]
+    assert [row["start"] for row in audited] == [0x1000, 0x2000, 0x3000]
+
+
+def test_audit_baseline_reads_only_shard_files(tmp_path, monkeypatch):
+    shards = tmp_path / "baseline"
+    shards.mkdir()
+    row = {"start": 0x1000, "size": 0x100, "status": "complete", "jt": [{"at": 0x1020, "cases": [0x1030, 0x1040]}]}
+    (shards / "pcode-0000.jsonl").write_text('{"identity": "x"}\n' + json.dumps(row) + "\n")
+    for stray in ("pcode-0000.with-empty-fdes.jsonl", "pcode-0000.jsonl.bak", "scored-0000.jsonl"):
+        (shards / stray).write_text('{"identity": "x"}\n' + json.dumps({**row, "start": 0x9000}) + "\n")
+    monkeypatch.setattr(evidence, "elf_reader", lambda so: (lambda vaddr, n: (0x30).to_bytes(4, "little") + (0x40).to_bytes(4, "little")))
+    monkeypatch.setattr(evidence, "objdump_disassembler", lambda so, objdump: (lambda window: SITE_TEXT))
+
+    totals = evidence.audit_baseline(tmp_path / "GameAssembly.so", shards, tmp_path / "out")
+    assert totals["rows"] == 1
+    audited = [json.loads(line) for line in (tmp_path / "out" / "audit.jsonl").read_text().splitlines()]
+    assert [row["start"] for row in audited] == [0x1000]
+
+
 def test_audit_compares_recovered_cases_with_the_table_bytes_and_keeps_the_extras():
     body = Fde(0x1000, 0x100)
     row = {"start": 0x1000, "size": 0x100, "status": "complete", "jt": [{"at": 0x1020, "cases": [0x1030, 0x1040, 0x900]}]}
