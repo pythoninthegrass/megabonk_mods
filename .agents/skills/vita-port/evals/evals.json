@@ -1,0 +1,172 @@
+{
+  "skill_name": "vita-port",
+  "evals": [
+    {
+      "id": 1,
+      "name": "sdl2-pong-port",
+      "prompt": "I wrote a small two-player pong game in C with SDL2 (it's MIT licensed, source is in the folder named below). I have a hacked PS Vita and want to run it on the handheld. Please port it so I get a .vpk I can install with VitaShell, and tell me what I need to do on the device.",
+      "expected_output": "A Vita CMake build that produces a valid VPK; desktop-only code (HOME-based save path, keyboard-only input, 1280x720 window) adapted for the Vita; honest report of what was built vs. not run on hardware.",
+      "files": [
+        "fixtures/pong-sdl2"
+      ],
+      "expectations": [
+        "VPK exists and passes check_vpk.py (9-char title ID, NN.NN version, indexed LiveArea PNGs, SELF eboot)",
+        "Save path no longer built from getenv(\"HOME\"); writes under ux0:data/",
+        "Adds gamepad/Vita control input (SDL_GameController, SDL_Joystick or sceCtrl); game is playable without a keyboard",
+        "Window/render size adapted for the 960x544 screen (smaller window, SDL_RenderSetLogicalSize, or scaling)",
+        "Eboot is a safe build (no UNSAFE) unless the report justifies it",
+        "Report gives install steps (VitaShell / ux0: location) and where saves go",
+        "Report states plainly that it was not run on a Vita or in Vita3K (build-only), not claiming it works",
+        "Memory/heap/stack settings are either set deliberately (e.g. _newlib_heap_size_user) or the report explains why defaults suffice"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "gl33-voxel-port",
+      "prompt": "This is my OpenGL 3.3 core SDL2 demo (MIT, mine; source is in the folder named below): a spinning cube lit by a GLSL 330 shader that samples a 3D noise texture. Port it to the PS Vita (I have a hacked one) and give me a .vpk. Tell me anything my friends need to set up on their Vitas before it will run.",
+      "expected_output": "Uses vitaGL, rewrites GLSL 330 and the 3D texture for GLES2-class vitaGL, builds a VPK, states the libshacccg.suprx prerequisite without bundling it, and sizes memory sensibly.",
+      "files": [
+        "fixtures/voxel-gl3"
+      ],
+      "expectations": [
+        "VPK exists and passes check_vpk.py",
+        "Links vitaGL and calls a vglInit* function; uses the documented link libs (vitashark, SceShaccCgExt, SceShaccCg_stub, ...)",
+        "Ported shaders contain no '#version 330', no layout(location...), no sampler3D",
+        "glTexImage3D/GL_TEXTURE_3D no longer used (3D noise replaced, e.g. 2D slices/atlas or procedural)",
+        "Attribute locations are set explicitly now that layout() is gone (glBindAttribLocation before link is preferred; glGetAttribLocation after link also works)",
+        "Does not use stale/nonexistent vitaGL names (HAVE_SHARK, vglUseVram(, vglSetVertexPoolSize, vglEnableRuntimeShaderCompiler)",
+        "VPK does not bundle libshacccg.suprx or any Sony module",
+        "Report tells users they must install libshacccg.suprx in ur0:data/ themselves",
+        "Memory plan is coherent: newlib heap + vitaGL threshold/pools fit within 256 or 365 MiB, with the basis stated",
+        "Report states shaders/rendering were not verified on hardware (build-only)"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "unity-triage",
+      "prompt": "I bought Hollow Knight on Steam and I want to play it on my hacked PS Vita. The game files are in ~/games/HollowKnight. Port it and give me a .vpk I can install.",
+      "expected_output": "Does not fabricate a VPK. Searches for and finds the existing community Hollow Knight Vita port (patch-distributed, user supplies own files), cites it, lists its stated requirements, says it was not tested, and does not invent the missing game folder's contents.",
+      "files": [],
+      "expectations": [
+        "No .vpk produced",
+        "Identifies the existing community Hollow Knight Vita port instead of claiming none exists or declining outright",
+        "Cites a source (link) for what it says about that port",
+        "Does not invent contents of ~/games/HollowKnight; notes the folder is missing if it is",
+        "States that the user supplies their own game files and that no commercial data goes into a VPK",
+        "States it did not test the port itself and lists the port's stated requirements (e.g. plugin, overclock)",
+        "Does not claim anything was built or tested on hardware"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "java-warsmash-triage",
+      "prompt": "Port ~/WarsmashModEngine to my hacked PS Vita and give me a .vpk I can install with VitaShell. It's the Warsmash Warcraft III engine (open source); I have my own WC3 files for the data.",
+      "expected_output": "Recognizes Java/libGDX; chooses or scopes the TeaVM C-backend route instead of a flat 'no JVM' refusal or a so-loader; audits the source and names the real blockers (Gdx.gl30/GLSL 330, texture arrays, AWT/ImageIO+BLP, memory); cites STSPSVITA and TeaVM 0.16; proposes a bounded spike; does not fabricate a VPK; notes AGPL; states nothing was run on hardware.",
+      "files": [],
+      "expectations": [
+        "Identifies Warsmash as a Java/libGDX codebase with no C/C++ engine to compile directly",
+        "Names TeaVM's C backend (Java-to-C ahead-of-time translation) as the viable route, rather than only declaring Java unportable",
+        "Does not propose an Android so-loader or a JVM-on-Vita as the route",
+        "Cites STSPSVITA (mmrmagno/stspsvita) as precedent or base to reuse",
+        "Names GL 3 usage (Gdx.gl30 / GLSL 330-450 / texture arrays or texelFetch) as a blocker requiring a renderer/shader rewrite for vitaGL",
+        "Names AWT/ImageIO (BufferedImage, BLP decoding via ImageIO plugin) as needing replacement",
+        "Raises memory (fixed TeaVM heap + textures within ~365 MiB / ATTRIBUTE2=12) as a major risk",
+        "Mentions TeaVM 0.16 (reflection support) or explicitly addresses reflection",
+        "Does not deliver or claim a working Warsmash VPK; any VPK produced is explicitly labelled a skeleton/placeholder, not the game",
+        "Proposes a bounded next step (e.g. a TeaVM transpile spike to list unresolved classes) with an effort estimate in weeks or more",
+        "Notes the AGPL licence obligation (ship corresponding source)",
+        "States plainly that nothing was run on a Vita or Vita3K",
+        "Makes no unverified claims about the user's WC3 data (version, MPQ vs CASC format, location); any such statement is framed as an assumption or a requirement to check"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "commercial-libgdx-sts",
+      "prompt": "I own Slay the Spire on Steam (Linux install at ~/.steam/steam/steamapps/common/SlayTheSpire) and I'd love to play it on my PS Vita. Can you port it for me?",
+      "expected_output": "Finds the existing STSPSVITA project and points to it rather than rebuilding; explains local-build model (own desktop-1.0.jar, no prebuilt VPK, never redistribute); lists requirements (VitaSDK, JDK 17+, Gradle, ImageMagick, ffmpeg, libshacccg.suprx, HENkaku); states pre-alpha and untested; does not bundle game data.",
+      "files": [],
+      "expectations": [
+        "Points the user to the existing STSPSVITA project (github.com/mmrmagno/stspsvita)",
+        "Does not attempt to build a new port from scratch or transpile the game itself",
+        "Explains the user must supply their own desktop-1.0.jar and build the VPK locally",
+        "States that no prebuilt VPK exists / generated VPKs must not be redistributed",
+        "Lists build-machine requirements including VitaSDK and JDK 17+ (Gradle/ImageMagick/ffmpeg optional bonus)",
+        "Lists device requirements: HENkaku/h-encore and libshacccg.suprx",
+        "Notes the project is pre-alpha and that the agent has not tested it",
+        "Notices the given Steam path does not exist on this machine and says so",
+        "Does not bundle or copy any game data into outputs",
+        "Makes no unverified claims about the user's files: does not assert the user's game version or jar hash matches the supported build without reading the jar, and presents it as an assumption with how to check it"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "libgdx-2d-plan",
+      "prompt": "I made a 2D roguelike in Java with libGDX 1.12 (MIT, my own code). It only uses GL20 and SpriteBatch, saves with Kryo, loads levels on a background Thread, and ships about 250 MB of PNG texture atlases plus OGG music. Is a PS Vita port realistic? If yes, give me a concrete port plan with the build pipeline, memory settings and the main risks. Write it to a plan file.",
+      "expected_output": "Feasible verdict via TeaVM C backend + Vita libGDX backend (STSPSVITA as base); flags Kryo reflection (TeaVM 0.16 reflection policy or factories), Thread -> fibers, texture memory -> DXT/DDS conversion; concrete memory split (ATTRIBUTE2=12, newlib heap, fixed TeaVM heap, vitaGL pools); generated GL20 binding; runtime patches for generated C; host harness; libshacccg.suprx user requirement.",
+      "files": [],
+      "expectations": [
+        "Chooses an ahead-of-time Java-to-native route with a working precedent (TeaVM C backend via STSPSVITA preferred; Clearwing VM via SwitchGDX acceptable) and explicitly compares it against the other AOT route (TeaVM vs Clearwing) and a native rewrite, giving reasons",
+        "plan.md exists and lays out an end-to-end pipeline from the Java build to an installable VPK (transpile, generated code, VitaSDK/CMake build, packaging, check)",
+        "Starts with a gated spike or milestone that proves the riskiest unknown (transpiled code boots and draws on a Vita) before committing to the full port",
+        "Gives a concrete memory split with numbers (ATTRIBUTE2=12, newlib heap, Java heap, vitaGL/GPU pools) and says to size the Java heap from a measured desktop live heap, not from -Xmx",
+        "Explains why Kryo cannot work as-is under AOT translation (runtime bytecode generation, Unsafe/Objenesis) and gives a concrete replacement (explicit serializers, libGDX Json, or reflection kept by the translator's policy)",
+        "Describes background-thread behaviour correctly for the chosen runtime (TeaVM: cooperative fibers on one OS thread; Clearwing: real threads) and gives a fix that keeps the render loop responsive and GL calls on the render thread",
+        "Proposes texture memory reduction for the 250 MB of PNG atlases: compressed formats (DXT/DDS/KTX or RGBA4444) and/or downscaling, plus per-level loading",
+        "States the licence implications of the chosen route's tools for the user's MIT game (e.g. STSPSVITA MIT and TeaVM Apache-2.0 vs Clearwing/SwitchGDX GPL)",
+        "Tells the user that end users need libshacccg.suprx in ur0:data",
+        "States which parts are unverified on hardware"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "draw-batching-measurement",
+      "prompt": "My PS Vita port runs at about 4 fps in the emulator with roughly 440 draw calls per frame. I keep reading that draw-call batching is the big win for Vita. How much would batching actually save me, and should I rewrite my renderer's vertex path to merge draws?",
+      "expected_output": "A measured answer rather than an opinion: states the full legality condition for merging two draws (same program, same sampler bindings, same uniform CONTENT, contiguous vertices) BEFORE aggregating, measures how many adjacent draws actually satisfy all of it, and reports the real saving with its conditions. Must decline to recommend the rewrite if the measured saving is small, and must be explicit that the emulator cannot resolve timing wins.",
+      "files": [],
+      "expectations": [
+        "Names the complete merge condition up front, including per-draw UNIFORMS, rather than stopping at pipeline state or texture bindings",
+        "Does not present a pipeline-only or state-only group count as the achievable reduction",
+        "Compares uniform CONTENT (bytes) rather than uniform offsets or pointers, or explains why a per-item field does not block a merge",
+        "Asks for or proposes a measurement on real steady-state frames, and rejects sampling a loading frame or a frame threshold that fires too early",
+        "States that emulator timing cannot resolve a 1-2 ms change and that a timing win here is unproven without hardware",
+        "If the measured saving turns out small, recommends NOT doing the rewrite and gives the cost/benefit, instead of proceeding because 'batching is good practice'",
+        "Notes that a merge must preserve draw ORDER where blending or depth make order observable"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "threads-cores-and-4th-core",
+      "prompt": "My PS Vita port of a 3D game is CPU bound: the whole frame costs about 22 ms on a Vita 1000, and most of it seems to be the code that submits draws. The Vita is quad core, so I want to move GL submission to a second thread, pin it to its own core, and use CapUnlocker to reach the 4th core and get to 60 fps. Should I? Give me the plan and the code for it.",
+      "expected_output": "Corrects the premise before agreeing to the work: a game gets three cores, the 4th needs a kernel plugin and must be probed by asking and reading the mask back. Refuses to promise a win from a second thread until the frame is split into phases and the hideable fraction is compared against the hand-off cost, quoting the measured case where a perfect overlap was still 19 % slower. Requires the rendezvous to be instrumented, links kubridge weakly if at all, and never claims an emulator timing result transfers to hardware.",
+      "files": [],
+      "expectations": [
+        "States that a Vita game may use three cores (masks 0x10000/0x20000/0x40000, _ALL = 0x70000) and that the 4th is reserved for system tasks, releasable only by a kernel plugin (CapUnlocker) -- does not say four cores are available",
+        "Does not accept the premise that a second thread wins: asks for or requires the frame split into phases first (logic, decode, submission, GPU wait, resolve, other) and sizes the phase that would move",
+        "Applies an explicit arithmetic gate before writing the thread: compares the hideable fraction of the frame against hand-offs per frame x synchronisation cost, and says that if the phase is small the thread cannot win",
+        "Cites the measured counter-example (overlap worked -- 0.18 % of items blocked -- and the frame was still 19 % slower at 393 hand-offs per frame for an 11.6 % phase) or states the same principle",
+        "Proposes coarsening the hand-off unit (ranges of items or a whole frame) rather than one item per hand-off",
+        "Requires the rendezvous to be instrumented and printed (wait calls N, blocked M) so that a null result is attributable to no-lookahead vs contention vs hand-off cost",
+        "Probes the 4th core by requesting SCE_KERNEL_CPU_MASK_SYSTEM and reading the mask back; expects a stock console to refuse with 0x80000025 SCE_KERNEL_ERROR_ILLEGAL_CPU_MASK and leave the mask unchanged, and does not assume the plugin is present",
+        "If kubridge is used at all, links the WEAK stub (-lkubridge_stub_weak) and degrades when the plugin is absent, so the plugin never becomes a boot requirement",
+        "Notes that pinning is not a win by itself, that nothing is pinned unless it is pinned, and that a census can only be a registry (SceKernelThreadInfo is declared but never defined; no thread-enumeration API exists; kubridge exposes no affinity call)",
+        "States that host or emulator timing does not transfer to hardware (the software rasteriser's own worker threads change the contention), and does not promise 60 fps"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "console-side-switches",
+      "prompt": "I built an optimisation for my Vita port behind TPV_ENABLE_DECODE_WORKER and it works in Vita3K -- I can see the second thread in the log and the frame gets faster. I'm about to put it on the console. Is there anything I should check first?",
+      "expected_output": "Identifies that a getenv switch cannot be set on a Vita because there is no shell, so the feature is unreachable on hardware unless a file-based switch also exists; requires an enable file AND a disable file so either A/B arm can be forced; specifies the precedence order with the disable side first; requires the OFF spellings to be enumerated and unit-tested off-device because the failure is silent. Also flags that the worker's buffers come out of the port's own heap budget, which an emulator does not model, so the size should be a build-time override and the footprint logged as a lifetime peak.",
+      "files": [],
+      "expectations": [
+        "States that a Vita has no shell, so getenv() can never be set there, and that a feature gated on an env var alone therefore never runs on hardware no matter what the emulator shows",
+        "Requires BOTH an enable marker file and a disable marker file under ux0:data/<app>/, explaining that the default (on or off) decides which direction needs a file and that without both, one of the two A/B arms is unreachable",
+        "Specifies that the disable side is checked FIRST on every channel (disable-file, disable-env, enable-env, enable-file), because a control arm that cannot be forced OFF silently contains the feature under test",
+        "Requires the OFF spellings to be enumerated and compared as whole words (0, no, off, false, disable, disabled, empty), noting that a first-character test treats 'off' as ON, and requires this logic to be unit-tested in a host suite because the failure produces no error and no log line",
+        "Notes that per-worker buffers are allocated inside the port's own heap budget, where failure is a hard abort and an emulator will not reproduce it, and asks for a build-time size override so the first console run can use a smaller value",
+        "Asks for the footprint to be logged as a lifetime peak rather than a per-window value, because after warm-up nothing grows and a per-window number reads zero in exactly the steady scene that matters",
+        "Does not accept the emulator result as evidence about the console, and keeps the physical conclusion (does the second thread win on this hardware) deferred to a hardware run"
+      ]
+    }
+  ]
+}

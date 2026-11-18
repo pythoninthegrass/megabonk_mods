@@ -24,6 +24,13 @@
       "sourceType": "github",
       "skillPath": "skills/disciplines/level-design/SKILL.md",
       "computedHash": ""
+    },
+    "vita-port": {
+      "source": "Yannis100/vita-port-skill",
+      "commit": "ca53ae098d5a82b52386e097b78515bb256d045a",
+      "sourceType": "github",
+      "skillPath": "skills/vita-port/SKILL.md",
+      "computedHash": "814d853c5ea281be665035c9f933720495431d231245dde99f6d8f071fce6e6c"
     }
   }
 }
