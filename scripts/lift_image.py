@@ -295,6 +295,91 @@ def build_shard(index: int, part: list[Fde], ctx: dict) -> list[dict]:
     return scored
 
 
+def select_blockers(report: dict, sha: str, parts: list[list[Fde]]) -> list[tuple[int, list[Fde], list[Fde]]]:
+    verdict = report["verdict"]
+    count = sum(map(len, parts))
+    if (
+        report["binary_sha256"] != sha or report["bodies"] != count
+        or report["scored"] != count or verdict["coverage_complete"] is not True
+    ):
+        raise ValueError("baseline must be a complete report for this image")
+    blocked = verdict["blocking"]
+    starts = set(blocked)
+    selected = []
+    for index, part in enumerate(parts):
+        wanted = [f for f in part if f.start in starts]
+        if wanted:
+            selected.append((index, part, wanted))
+    if sum(len(wanted) for _, _, wanted in selected) != len(starts) or len(starts) != len(blocked):
+        raise ValueError("baseline contains duplicate or unknown blocking addresses")
+    return selected
+
+
+def scoring_fingerprint() -> str:
+    import lift_probe as lp
+
+    stamp = hashlib.sha256()
+    for path in (__file__, lp.__file__, lp.pcode_lift.__file__):
+        stamp.update(Path(path).read_bytes())
+    for tool in ("opt", "llc"):
+        stamp.update(lp.run_tool([lp.LLVM / tool, "--version"], check=True).stdout)
+    return stamp.hexdigest()
+
+
+def score_blocker_shard(index, part, wanted, baseline, ctx, scorer):
+    import lift_probe as lp
+
+    dump_id = shard_identity(ctx["sha"], ctx["fingerprint"], ctx["ghidra"], part, "")
+    cached = read_shard(baseline / f"pcode-{index:04d}.jsonl", dump_id, part, pcode=True)
+    if cached is None:
+        raise ValueError(f"missing or invalid baseline pcode shard {index}; check --shard-size and dump identity")
+    starts = {f.start for f in wanted}
+    rows, sections = [r for r in cached[1:] if r["start"] in starts], cached[0]["sections"]
+    payload = hashlib.sha256(json.dumps([rows, sections], sort_keys=True).encode()).hexdigest()
+    score_id = shard_identity(
+        ctx["sha"], f"{dump_id}:{payload}:{scorer}", ctx["ghidra"], wanted,
+        json.dumps([ctx["pipeline"], ctx["tool_timeout"]]),
+    )
+    path = ctx["out"] / f"blockers-scored-{index:04d}.jsonl"
+    scored = read_shard(path, score_id, wanted)
+    if scored is not None:
+        return scored
+    with lp.ThreadPoolExecutor(ctx["score_jobs"]) as pool:
+        scored = list(pool.map(lambda r: lp.score_row(r, sections, ctx["tool_timeout"], ctx["pipeline"]), rows))
+    write_shard(path, score_id, scored)
+    return scored
+
+
+def score_blockers(baseline: Path, parts: list[list[Fde]], ctx: dict) -> int:
+    import lift_probe as lp
+
+    out = ctx["out"]
+    if out.resolve() == baseline.resolve():
+        raise ValueError("blocker-only output must be separate from the baseline")
+    report = json.loads((baseline / "summary.json").read_text())
+    jobs = select_blockers(report, ctx["sha"], parts)
+    scorer = scoring_fingerprint()
+    rows = sorted(
+        (r for index, part, wanted in jobs for r in score_blocker_shard(index, part, wanted, baseline, ctx, scorer)),
+        key=lambda r: r["start"],
+    )
+    blocking = build_verdict(rows, coverage=False)["blocking"]
+    summary = {
+        "scope": "baseline_blockers_only",
+        "binary_sha256": ctx["sha"],
+        "scorer": scorer,
+        "scored": len(rows),
+        "stages": lp.summarize(rows).get("all", {}),
+        "holes": lp.tally_holes(rows),
+        "failures": lp.tally_failures(rows),
+        "blocking": blocking,
+    }
+    (out / "blockers.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (out / "blockers-summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    print(f"Rescored {len(rows)} baseline blockers; {len(blocking)} still block. No full-image verdict.")
+    return int(bool(blocking))
+
+
 def build(args) -> int:
     import lift_probe as lp
     import time
@@ -324,6 +409,11 @@ def build(args) -> int:
         "tool_timeout": args.tool_timeout,
         "score_jobs": args.score_jobs,
     }
+    if args.blockers_from is not None:
+        try:
+            return score_blockers(args.blockers_from, parts, ctx)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise SystemExit(f"invalid blocker run: {exc}") from exc
     with lp.ThreadPoolExecutor(args.ghidra_jobs) as pool:
         results = list(pool.map(lambda item: build_shard(item[0], item[1], ctx), enumerate(parts)))
     rows = sorted((r for shard in results for r in shard), key=lambda r: r["start"])
@@ -362,8 +452,9 @@ def main(argv: list[str] | None = None) -> int:
 
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("so", nargs="?", type=lp.Path, default=lp.DEFAULT_SO)
-    ap.add_argument("--out", type=lp.Path, default=lp.REPO / ".tools/lift-image")
+    ap.add_argument("--out", type=lp.Path)
     ap.add_argument("--build", action="store_true", help="dump, lift and score every body, resuming finished shards")
+    ap.add_argument("--blockers-from", type=lp.Path, help="rescore only blockers from a completed build using its pcode")
     ap.add_argument("--shard-size", type=int, default=4000)
     ap.add_argument("--ghidra-jobs", type=int, default=5)
     ap.add_argument("--score-jobs", type=int, default=3)
@@ -372,6 +463,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--retry-missing-dump", action="store_true", help="retry only cached bodies missing from a pcode dump")
     ap.add_argument("--pipeline", default="")
     args = ap.parse_args(argv)
+    if args.blockers_from and (not args.build or args.out is None or args.retry_missing_dump):
+        ap.error("--blockers-from requires --build and a separate --out, and cannot retry missing dumps")
+    if args.out is None:
+        args.out = lp.REPO / ".tools/lift-image"
     if not args.so.exists():
         raise SystemExit(f"no ELF at {args.so}")
     if args.build:

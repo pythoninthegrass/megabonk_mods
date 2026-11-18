@@ -168,6 +168,50 @@ def test_a_truncated_shard_file_is_not_reused(tmp_path):
     assert li.read_shard(path, "id1") is None
 
 
+def test_blocker_selection_requires_a_complete_matching_verdict():
+    parts = [[Fde(1, 2)], [Fde(3, 4), Fde(5, 6)]]
+    report = {"binary_sha256": "sha", "bodies": 3, "scored": 3,
+              "verdict": {"coverage_complete": True, "blocking": [5]}}
+    assert li.select_blockers(report, "sha", parts) == [(1, parts[1], [Fde(5, 6)])]
+    for bad in (
+        {**report, "binary_sha256": "other"},
+        {**report, "scored": 2},
+        {**report, "verdict": {"coverage_complete": False, "blocking": [5]}},
+        {**report, "verdict": {"coverage_complete": True, "blocking": [7]}},
+        {**report, "verdict": {"coverage_complete": True, "blocking": [5, 5]}},
+    ):
+        with pytest.raises(ValueError):
+            li.select_blockers(bad, "sha", parts)
+
+
+def test_blocker_shard_reuses_scores_only_for_the_same_scorer(tmp_path, monkeypatch):
+    import lift_probe as lp
+
+    baseline, out = tmp_path / "baseline", tmp_path / "out"
+    baseline.mkdir()
+    out.mkdir()
+    part = [Fde(1, 2), Fde(3, 4)]
+    rows = [{"start": b.start, "size": b.size} for b in part]
+    path = baseline / "pcode-0004.jsonl"
+    identity = li.shard_identity("sha", "dump", "ghidra", part, "")
+    li.write_shard(path, identity, [{"kind": "sections", "sections": []}, *rows])
+    original = path.read_bytes()
+    calls = []
+
+    def score(row, sections, timeout, pipeline):
+        calls.append(row["start"])
+        return row
+
+    monkeypatch.setattr(lp, "score_row", score)
+    ctx = dict(sha="sha", fingerprint="dump", ghidra="ghidra", pipeline="", tool_timeout=10, score_jobs=1, out=out)
+    for scorer in ("first", "first", "changed"):
+        assert li.score_blocker_shard(4, part, part[1:], baseline, ctx, scorer) == rows[1:]
+    assert calls == [3, 3]
+    assert path.read_bytes() == original
+    with pytest.raises(ValueError, match="pcode shard 4"):
+        li.score_blocker_shard(4, part, part[1:], baseline, {**ctx, "fingerprint": "changed"}, "first")
+
+
 @pytest.mark.parametrize("second", [{"start": 1, "size": 2}, {"start": 3, "size": 5}, None])
 @pytest.mark.parametrize("pcode", [False, True])
 def test_a_shard_with_the_wrong_body_inventory_is_not_reused(tmp_path, second, pcode):

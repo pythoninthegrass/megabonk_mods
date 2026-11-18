@@ -2138,6 +2138,14 @@ The body-by-body results are in `bodies.jsonl`; `summary.json` records stage cou
 
 The full run accounted for 259,102 executable bodies: 259,095 nonempty frame records and seven frame-less functions. Six zero-length frame records were excluded. All 259,102 bodies decoded, verified, and compiled for arm64; 256,118 lifted without holes. The other 2,984 blocked the runnable verdict. The most frequent hole labels were `BRANCHIND` (2,527), `CALLOTHER:LOCK` and `CALLOTHER:UNLOCK` (427 each), and `JUMPTABLE_TARGET` (22). A body can contribute multiple labels. The default pipeline produced 581,169,280 bytes of per-body objects from 49,213,349 bytes of x86-64 bodies.
 
+For lifter iteration, rescore only the addresses blocked by a complete baseline. This reads the baseline pcode without launching Ghidra or changing the baseline. Use the baseline's `--shard-size` if it differs from the default. Each completed shard is checkpointed; rerunning skips scores whose pcode, scorer source, LLVM versions, pipeline, and tool timeout still match.
+
+```sh
+task re:lift-image-build LIFT_OUT=.tools/lift-image-blockers -- --blockers-from .tools/lift-image-full
+```
+
+Read `blockers-summary.json` and `blockers.jsonl` in the iteration directory. A zero exit means only that the baseline blockers now pass. To check for regressions and get a full-image verdict, use a fresh output directory seeded with the baseline's validated pcode shards only, and run `task re:lift-image-build` without `--blockers-from`.
+
 The execution fixture in `tests/test_lift_control_flow_exec.py` compares a shipped jump-table predicate and an indirect tail jump to a different shipped body against the same pinned ELF running on Linux x86-64. It sweeps all 82 in-range switch inputs and two out-of-range ones. The arm64 dispatcher aborts for an unresolved address or a malformed target inside a body instead of calling either address.
 
 ### Executing a lifted shipped method
