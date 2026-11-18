@@ -122,6 +122,16 @@ def tally_tables(results: list[dict]) -> dict[str, int]:
     return {"bodies": bodies, "tables": tables}
 
 
+def tally_atomics(results: list[dict]) -> dict[str, int]:
+    """Counts bodies carrying a lowered `lock` region and the locked sites rewritten as atomics."""
+    bodies = sites = 0
+    for result in results:
+        atomics = result.get("atomics", 0)
+        bodies += int(atomics > 0)
+        sites += atomics
+    return {"bodies": bodies, "sites": sites}
+
+
 def tally_branchind(results: list[dict]) -> dict:
     """Counts BRANCHIND sites by the stack-balance verdict: proven, or unproven grouped by reason.
 
@@ -152,6 +162,7 @@ def failed_row(start: int, size: int, error: str, missing_dump: bool = False) ->
         "tail_calls": 0,
         "proven_tail_calls": 0,
         "unproven_branchind": [],
+        "atomics": 0,
         "jump_tables": 0,
         "obj_bytes": 0,
         "error": error,
@@ -616,6 +627,7 @@ def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT,
                 "tail_calls": lifted.tail_calls,
                 "proven_tail_calls": lifted.proven_tail_calls,
                 "unproven_branchind": lifted.unproven_branchind,
+                "atomics": lifted.atomics,
                 "jump_tables": len(fn.get("jt", [])),
                 "stages": {
                     "decoded": fn["undecoded"] == 0,
@@ -640,6 +652,7 @@ def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT,
                 "tail_calls": lifted.tail_calls,
                 "proven_tail_calls": lifted.proven_tail_calls,
                 "unproven_branchind": lifted.unproven_branchind,
+                "atomics": lifted.atomics,
                 "jump_tables": len(fn.get("jt", [])),
                 "stages": {
                     "decoded": fn["undecoded"] == 0,
@@ -664,6 +677,7 @@ def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT,
         "tail_calls": lifted.tail_calls,
         "proven_tail_calls": lifted.proven_tail_calls,
         "unproven_branchind": lifted.unproven_branchind,
+        "atomics": lifted.atomics,
         "jump_tables": len(fn.get("jt", [])),
         "tables_audited": lifted.tables_audited,
         "obj_bytes": obj_bytes,
@@ -821,6 +835,7 @@ def main(argv: list[str] | None = None) -> int:
         "wall_seconds": round(time.monotonic() - started_at, 1),
         "pcode_cache": wanted_cache.summary() if wanted_cache is not None else None,
         "unmapped_refs": sum(row["unmapped_refs"] for row in scored),
+        "atomics": tally_atomics(scored),
         "bodies_with_tail_calls": sum(bool(row["tail_calls"]) for row in scored),
         "bodies_with_indirect_calls": sum(bool(row["indirect_calls"]) for row in scored),
         "r2": r2,

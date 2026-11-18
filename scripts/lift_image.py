@@ -382,6 +382,7 @@ def score_blockers(baseline: Path, parts: list[list[Fde]], ctx: dict) -> int:
         "scored": len(rows),
         "stages": lp.summarize(rows).get("all", {}),
         "holes": lp.tally_holes(rows),
+        "atomics": lp.tally_atomics(rows),
         "failures": lp.tally_failures(rows),
         "blocking": blocking,
     }
@@ -443,6 +444,7 @@ def build(args) -> int:
         "holes": lp.tally_holes(rows),
         "branchind": lp.tally_branchind(rows),
         "tables": lp.tally_tables(rows),
+        "atomics": lp.tally_atomics(rows),
         "failures": lp.tally_failures(rows),
         "object_bytes": sum(r["obj_bytes"] for r in ok),
         "x86_bytes": sum(r["size"] for r in ok),

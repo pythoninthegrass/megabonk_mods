@@ -75,6 +75,7 @@ class Lifted:
     proven_tail_calls: int = 0
     unproven_branchind: list[dict] = field(default_factory=list)
     tables_audited: int = 0
+    atomics: int = 0
 
 
 def parse_varnode(text: str) -> tuple[str, int, int]:
@@ -306,6 +307,275 @@ def itype(size: int) -> str:
     return f"i{size * 8}"
 
 
+DATA_SPACE = 0x1B1
+ATOMIC_WIDTHS = (1, 2, 4, 8, 16)
+ATOMIC_ARITHMETIC = {"INT_ADD": "add", "INT_SUB": "sub", "INT_AND": "and", "INT_OR": "or", "INT_XOR": "xor"}
+ATOMIC_TEST_OPS = frozenset(INT_COMPARE) | {"INT_SUB", "INT_CARRY", "INT_SCARRY", "INT_SBORROW"}
+ATOMIC_OPS = (
+    frozenset(
+        {
+            "COPY",
+            "PIECE",
+            "SUBPIECE",
+            "LOAD",
+            "STORE",
+            "CBRANCH",
+            "BRANCH",
+            "POPCOUNT",
+            "INT_ZEXT",
+            "INT_SEXT",
+            "INT_LEFT",
+            "INT_RIGHT",
+            "INT_SRIGHT",
+            "INT_CARRY",
+            "INT_SCARRY",
+            "INT_SBORROW",
+        }
+    )
+    | frozenset(INT_BINARY)
+    | frozenset(INT_COMPARE)
+)
+ATOMIC_HOISTABLE = (
+    frozenset({"COPY", "PIECE", "SUBPIECE", "INT_ZEXT", "INT_SEXT", "INT_LEFT", "INT_RIGHT", "INT_SRIGHT"})
+    | frozenset(INT_BINARY)
+    | frozenset(INT_COMPARE)
+)
+ATOMIC_RESULT_BASE = 0x7F000000
+NOP = {"op": "NOP", "out": None, "in": []}
+
+
+def width_of(text: str | None) -> int:
+    return parse_varnode(text or "const,0,1")[2]
+
+
+def region_accesses(body: list[dict]) -> list[dict]:
+    """Every read or write of a memory location in a LOCK region, keyed by the varnode naming it."""
+    found: list[dict] = []
+    for i, op in enumerate(body):
+        name, out, ins = op["op"], op.get("out"), op.get("in") or []
+        if name == "LOAD":
+            if len(ins) < 2 or const_of(ins[0]) != DATA_SPACE:
+                return []
+            found.append({"i": i, "key": ins[1], "size": width_of(out), "dest": out})
+        elif name == "STORE":
+            if len(ins) < 3 or const_of(ins[0]) != DATA_SPACE:
+                return []
+            found.append({"i": i, "key": ins[1], "size": width_of(ins[2]), "write": True, "src": ins[2]})
+        elif name == "COPY" and len(ins) == 1 and _space(out or "") == "ram":
+            found.append({"i": i, "key": out, "size": width_of(out), "write": True, "src": ins[0]})
+        elif name == "COPY" and len(ins) == 1 and _space(ins[0]) == "ram":
+            found.append({"i": i, "key": ins[0], "size": width_of(ins[0]), "dest": out})
+        else:
+            for j, text in enumerate(ins):
+                if _space(text) == "ram":
+                    found.append({"i": i, "key": text, "size": width_of(text), "operand": j})
+    return found
+
+
+def _space(text: str) -> str:
+    return text.split(",", 1)[0]
+
+
+def def_of(body: list[dict], text: str, before: int, after: int = 0) -> int | None:
+    for i in range(min(before, len(body)) - 1, max(after, 0) - 1, -1):
+        if body[i].get("out") == text:
+            return i
+    return None
+
+
+def def_window(body: list[dict], text: str, windows: list[tuple[int, int]]) -> int | None:
+    """The op that writes a value, searched through the given index ranges, later ones first."""
+    for after, before in windows:
+        i = def_of(body, text, before, after)
+        if i is not None:
+            return i
+    return None
+
+
+def value_origin(
+    body: list[dict], text: str, before: int, windows: list[tuple[int, int]] | None = None
+) -> tuple[str | None, int | None]:
+    """Where a value comes from: the varnode at the head of its COPY chain, and the op that made it."""
+    for _ in range(16):
+        i = def_window(body, text, windows) if windows else def_of(body, text, before)
+        if i is None:
+            return text, None
+        op = body[i]
+        if op["op"] == "COPY" and len(op.get("in") or []) == 1:
+            text = op["in"][0]
+            continue
+        return text, i
+    return None, None
+
+
+def derived_from(body: list[dict], seeds: list[str], upto: int) -> set[str]:
+    """Varnodes in the region's first ops whose value comes, through any op, from one of the seeds."""
+    closure = set(seeds)
+    for op in body[:upto]:
+        out, ins = op.get("out"), op.get("in") or []
+        if out is None or op["op"] in ("LOAD", "STORE"):
+            continue
+        if any(t in closure for t in ins):
+            closure.add(out)
+    return closure
+
+
+def compared_against(body: list[dict], condition: str, closure: set[str], windows: list[tuple[int, int]]) -> str | None:
+    """The operand a branch compares against the old value, following the condition's def chain."""
+    text = condition
+    for _ in range(16):
+        i = def_window(body, text, windows)
+        if i is None:
+            return None
+        op, ins = body[i], body[i].get("in") or []
+        if op["op"] in ATOMIC_TEST_OPS and len(ins) == 2:
+            sides = [t for t in ins if t in closure]
+            rest = [t for t in ins if t not in closure]
+            if len(sides) == 1 and len(rest) == 1 and _space(rest[0]) != "const":
+                return rest[0]
+        if not ins:
+            return None
+        text = ins[0]
+    return None
+
+
+def def_chain(body: list[dict], texts: list[str], windows: list[tuple[int, int]]) -> list[int]:
+    """Every op that produces any of the values, transitively, through the windows that reach the use."""
+    queue, seen, indices = list(texts), set(texts), set()
+    while queue:
+        i = def_window(body, queue.pop(), windows)
+        if i is None or i in indices:
+            continue
+        indices.add(i)
+        for operand in body[i].get("in") or []:
+            if operand not in seen:
+                seen.add(operand)
+                queue.append(operand)
+    return sorted(indices)
+
+
+def hoistable(body: list[dict], indices: list[int], at: int, dropped: set[int], restored: str | None) -> bool:
+    """Whether these ops may run at `at`: pure, and ordered the same against everything they jump over."""
+    moved = set(indices)
+    for i in indices:
+        op, out = body[i], body[i].get("out")
+        if op["op"] not in ATOMIC_HOISTABLE or out is None or _space(out) != "unique":
+            return False
+        if restored is not None and restored in (op.get("in") or []):
+            return False
+        skipped = [j for j in range(at, i) if j not in moved and j not in dropped]
+        if any(body[j].get("out") == out for j in skipped):
+            return False
+        if out != restored and any(out in (body[j].get("in") or []) for j in skipped):
+            return False
+        for text in op.get("in") or []:
+            d = def_of(body, text, i)
+            if d is not None and d >= at and d not in moved and d not in dropped:
+                return False
+    return True
+
+
+def atomic_region(body: list[dict], sections: list[dict] | tuple, fresh) -> dict | None:
+    """How to lower the ops between a LOCK and an UNLOCK marker, or None to keep the hole.
+
+    The region lowers only when every access names one location through one varnode, exactly one
+    access writes it, and the value stored is an x86 locked arithmetic op or a plain exchange. The
+    plan replaces the access slots; everything else Ghidra emitted, the flags included, lifts
+    unchanged, so the register file at the region's exit is what the dump says it should be.
+    """
+    if not body or any(op["op"] not in ATOMIC_OPS for op in body):
+        return None
+    accesses = region_accesses(body)
+    if not accesses or len({a["key"] for a in accesses}) != 1:
+        return None
+    reads = [a for a in accesses if not a.get("write")]
+    writes = [a for a in accesses if a.get("write")]
+    width = reads[0]["size"] if reads else 0
+    if len(writes) != 1 or not reads or width not in ATOMIC_WIDTHS:
+        return None
+    if any(a["size"] != width for a in accesses) or accesses[0] is not reads[0]:
+        return None
+    branching = [i for i, op in enumerate(body) if op["op"] in ("CBRANCH", "BRANCH")]
+    cas = any(body[i]["op"] == "CBRANCH" for i in branching)
+    if branching and not cas:
+        return None
+    if cas and (len(branching) != 2 or branching[0] != min(branching) or body[branching[1]]["op"] != "BRANCH"):
+        return None
+
+    key, store = accesses[0]["key"], writes[0]
+    space, offset, _ = parse_varnode(key)
+    if space == "ram":
+        if not any(sec["va"] <= offset < sec["va"] + sec["size"] for sec in sections):
+            return None
+        addr = f"cptr,{offset:x},8"
+    else:
+        defs = [i for i, op in enumerate(body) if op.get("out") == key]
+        if len(defs) > 1 or (defs and defs[0] >= accesses[0]["i"]):
+            return None
+        addr = key
+
+    result = fresh(width)
+    at = accesses[0]["i"]
+    if cas:
+        cb = branching[0]
+        if store["i"] < cb or any(a["i"] > store["i"] for a in reads):
+            return None
+        closure = derived_from(body[:cb], [reads[0].get("dest") or key], cb)
+        # Only the prefix before the compare and the arm holding the store reach the store: reads
+        # in the other arm would be read as definitions and feed the atomic a value it discarded.
+        taken, prefix = [(branching[1] + 1, store["i"] + 1)], [(0, cb)]
+        expected = compared_against(body, body[cb]["in"][1], closure, prefix)
+        if expected is None or expected in closure:
+            return None
+        desired, _ = value_origin(body, store["src"], store["i"] + 1, taken + prefix)
+        if desired is None:
+            return None
+        chain_bounds = [(expected, prefix), (desired, taken + prefix)]
+        atomic = {"op": "ATOMIC", "out": result, "in": [addr, expected, desired], "user": "cmpxchg"}
+    else:
+        origin, origin_i = value_origin(body, store["src"], store["i"])
+        if origin is None:
+            return None
+        closure = derived_from(body, [reads[0].get("dest") or key], origin_i if origin_i is not None else len(body))
+        if origin_i is None:
+            opname, operand = "xchg", origin
+        elif body[origin_i]["op"] in ATOMIC_ARITHMETIC and len(body[origin_i].get("in") or []) == 2:
+            sides = [t for t in body[origin_i]["in"] if t in closure]
+            rest = [t for t in body[origin_i]["in"] if t not in closure]
+            if len(sides) != 1 or len(rest) != 1:
+                return None
+            opname, operand = ATOMIC_ARITHMETIC[body[origin_i]["op"]], rest[0]
+        else:
+            return None
+        chain_bounds = [(operand, [(0, (origin_i if origin_i is not None else store["i"]) + 1)])]
+        atomic = {"op": "ATOMIC", "out": result, "in": [addr, operand], "user": opname}
+
+    hoist = sorted({i for text, windows in chain_bounds for i in def_chain(body, [text], windows) if i > at})
+    if hoist and not hoistable(body, hoist, at, {at, store["i"]}, reads[0].get("dest")):
+        return None
+
+    edits = {i: NOP for i in hoist}
+    for a in accesses:
+        if a.get("write"):
+            edits[a["i"]] = NOP
+        elif a["i"] != at:
+            edits[a["i"]] = redirect(body, a, result if a["i"] < store["i"] else store["src"])
+    then = redirect(body, accesses[0], result)
+    return {"at": at, "atomic": {**atomic, "width": width, "then": then}, "edits": edits, "hoist": hoist}
+
+
+def redirect(body: list[dict], access: dict, text: str) -> dict:
+    """The op that stands in for a location read: the value the region should have seen instead."""
+    if "operand" in access:
+        ins = list(body[access["i"]]["in"])
+        ins[access["operand"]] = text
+        return {**body[access["i"]], "in": ins}
+    dest = access.get("dest")
+    if dest is None or dest == text:
+        return NOP
+    return {"op": "COPY", "out": dest, "in": [text]}
+
+
 class BodyLifter:
     def __init__(
         self,
@@ -344,6 +614,14 @@ class BodyLifter:
         self.proof = site_proof(fn)
         self.frame = site_frame(fn)
         self.counter = 0
+        self.atomic_count = 0
+        self.atomics = 0
+        self.varnodes = {
+            text
+            for insn in fn["insns"]
+            for op in insn["ops"]
+            for text in ([op["out"]] if op.get("out") else []) + list(op.get("in") or [])
+        }
         self.addrs = {i["a"] for i in fn["insns"]}
         self.next_addr = {i["a"]: i["a"] + i["len"] for i in fn["insns"]}
 
@@ -565,6 +843,12 @@ class BodyLifter:
                 self.shuffle_low_words(out, ins[2], parse_varnode(ins[3])[1])
             else:
                 self.holes.append(f"CALLOTHER:{user}")
+        elif name == "NOP":
+            pass
+        elif name == "ATOMIC":
+            self.atomic(insn, k, out, ins, op)
+            if op.get("then") is not None:
+                self.lift_op(insn, k, op["then"])
         else:
             self.holes.append(name)
         return False
@@ -949,8 +1233,64 @@ class BodyLifter:
         lines += ["EH_RET:", "  ret void"]
         self.lines += lines
 
+    def atomic_varnode(self, size: int) -> str:
+        """A unique-space slot for an atomic's result, clear of every varnode the body already names."""
+        self.atomic_count += 1
+        offset = ATOMIC_RESULT_BASE + self.atomic_count * UNIQUE_STRIDE
+        while any(t.startswith(f"unique,{offset:x},") for t in self.varnodes):
+            offset += UNIQUE_STRIDE
+        return f"unique,{offset:x},{size}"
+
+    def lower_locks(self, insns: list[dict]) -> list[dict]:
+        """Replaces each LOCK..UNLOCK region the analyzer accepts with one atomic op.
+
+        The rewrite keeps the op count, so the op-index offsets Ghidra's branches carry still land
+        where they did: displaced ops become NOP.
+        """
+        lowered = []
+        for insn in insns:
+            ops = insn["ops"]
+            marks = [i for i, op in enumerate(ops) if op["op"] == "CALLOTHER" and op.get("user") in ("LOCK", "UNLOCK")]
+            if len(marks) != 2 or [ops[i].get("user") for i in marks] != ["LOCK", "UNLOCK"]:
+                lowered.append(insn)
+                continue
+            body = ops[marks[0] + 1 : marks[1]]
+            plan = atomic_region(body, self.sections, self.atomic_varnode)
+            if plan is None:
+                lowered.append(insn)
+                continue
+            base = marks[0] + 1
+            self.atomics += 1
+            new = [NOP if i in marks else op for i, op in enumerate(ops)]
+            for i, replacement in plan["edits"].items():
+                new[base + i] = replacement
+            new[base + plan["at"]] = {**plan["atomic"], "hoist": [body[i] for i in plan["hoist"]]}
+            lowered.append({**insn, "ops": new})
+        return lowered
+
+    def atomic(self, insn: dict, k: int, out: str, ins: list[str], op: dict) -> None:
+        """One x86 locked operation: a sys-scope seq_cst atomic, fenced on both sides."""
+        for hoisted in op.get("hoist") or ():
+            self.lift_op(insn, k, hoisted)
+        ty = itype(op["width"])
+        p = self.pointer(ins[0])
+        self.emit('fence syncscope("sys") seq_cst')
+        if op["user"] == "cmpxchg":
+            pair, old = self.tmp(), self.tmp()
+            self.emit(
+                f'{pair} = cmpxchg ptr {p}, {ty} {self.read(ins[1])}, {ty} {self.read(ins[2])}'
+                ' syncscope("sys") seq_cst seq_cst, align 1'
+            )
+            self.emit(f"{old} = extractvalue {{ {ty}, i1 }} {pair}, 0")
+            self.write(out, old)
+        else:
+            v = self.tmp()
+            self.emit(f'{v} = atomicrmw {op["user"]} ptr {p}, {ty} {self.read(ins[1])} syncscope("sys") seq_cst, align 1')
+            self.write(out, v)
+        self.emit('fence syncscope("sys") seq_cst')
+
     def run(self) -> Lifted:
-        insns = self.fn["insns"]
+        insns = self.lower_locks(self.fn["insns"])
         if self.pads and not self.unwind:
             self.holes.append("EH_PAD_WITHOUT_UNWIND")
         elif any(pad not in self.addrs for pad in self.pads):
@@ -1005,6 +1345,7 @@ class BodyLifter:
             self.proven_tail_calls,
             self.unproven_branchind,
             self.tables_audited,
+            self.atomics,
         )
 
 

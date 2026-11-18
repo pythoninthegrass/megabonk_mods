@@ -107,6 +107,11 @@ def test_tally_tables_counts_bodies_and_tables_lowered_from_the_bytes():
     assert lp.tally_tables(results) == {"bodies": 2, "tables": 3}
 
 
+def test_tally_atomics_counts_bodies_and_locked_sites_lowered():
+    results = [{"atomics": 3}, {}, {"holes": []}, {"atomics": 1}]
+    assert lp.tally_atomics(results) == {"bodies": 2, "sites": 4}
+
+
 def row(start, size, **kw):
     base = {
         "start": start,
@@ -194,12 +199,25 @@ def test_failure_rows_name_each_body_by_address_and_size():
 def healthy_lifted(*_args, **_kw):
     return SimpleNamespace(
         holes=[], unmapped_refs=0, indirect_calls=0, tail_calls=0, proven_tail_calls=0,
-        unproven_branchind=[], tables_audited=0,
+        unproven_branchind=[], tables_audited=0, atomics=0,
     )
 
 
 def body_fn(start=0x4DD8A20, size=312):
     return {"start": start, "size": size, "undecoded": 0, "insns": [], "jt": []}
+
+
+def test_score_body_records_the_atomics_a_body_lowers(monkeypatch):
+    def lowered(*_args, **_kw):
+        return SimpleNamespace(
+            holes=[], unmapped_refs=0, indirect_calls=0, tail_calls=0, proven_tail_calls=0,
+            unproven_branchind=[], tables_audited=0, atomics=3,
+        )
+
+    monkeypatch.setattr(lp.pcode_lift, "lift_body", lowered)
+    monkeypatch.setattr(lp.pcode_lift, "module_for", lambda bodies: "define void @f() { ret void }")
+    monkeypatch.setattr(lp, "run_tool", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, b"obj", b""))
+    assert lp.score_body(body_fn(), [])["atomics"] == 3
 
 
 def test_score_body_records_a_lift_crash_against_the_body(monkeypatch):
