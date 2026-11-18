@@ -241,6 +241,14 @@ tasks:
     cmds:
       - uv run --script scripts/lift_image.py "{{.LIFT_SO}}" --out "{{.LIFT_OUT}}"
 
+  lift-image-build:
+    desc: "Resume the complete-image arm64 lift and report blocking bodies"
+    vars:
+      LIFT_SO: '{{.LIFT_SO | default ".tools/megabonk-linux-native/Megabonk/GameAssembly.so"}}'
+      LIFT_OUT: '{{.LIFT_OUT | default ".tools/lift-image-full"}}'
+    cmds:
+      - uv run scripts/lift_image.py "{{.LIFT_SO}}" --build --out "{{.LIFT_OUT}}" --ghidra-jobs 1 --ghidra-timeout 600 {{.CLI_ARGS}}
+
   lift-holes:
     desc: "Classify the unresolved computed jumps (BRANCHIND, JUMPTABLE_TARGET) left in a lift probe sample"
     vars:
