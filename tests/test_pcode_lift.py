@@ -308,6 +308,258 @@ def test_movmskps_matches_explicit_sign_bit_reference(tmp_path):
     assert compile_and_run(tmp_path, source, "arm64", [obj]).strip() == "ok"
 
 
+MAXPD_ID, MOVMSKPD_ID, PACKSSDW_ID, PSHUFHW_ID = "9a", "a0", "a3", "ba"
+
+
+def maxpd_body(dst=REG_XMM0, src=REG_XMM2):
+    return packed_body("maxpd", MAXPD_ID, dst, src)
+
+
+def packssdw_body(dst=REG_XMM0, src=REG_XMM2):
+    return packed_body("packssdw", PACKSSDW_ID, dst, src)
+
+
+def movmskpd_body(dst=REG_EAX, src=REG_XMM1):
+    return packed_body("movmskpd", MOVMSKPD_ID, dst, src)
+
+
+def pshufhw_body(selector=0x1B, src=REG_XMM0, start=0x1000):
+    return body(
+        insn(start, 5, op("CALLOTHER", REG_XMM0, f"const,{PSHUFHW_ID},4", REG_XMM0, src, f"const,{selector:x},8", user="pshufhw")),
+        insn(start + 5, 1, op("RETURN", None, "register,288,8")),
+        start=start,
+    )
+
+
+PACKED_PAIR_DRIVER = r"""
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+{include}
+{extern}
+static unsigned char reg[8192];
+typedef struct {{ uint32_t a[4]; uint32_t b[4]; }} pair;
+static pair cases[] = {{ {rows} }};
+int main(void) {{
+  for (unsigned i = 0; i < sizeof cases / sizeof *cases; i++) {{
+    memset(reg, 0xa5, sizeof reg);
+    memcpy(reg + {dst_off}, cases[i].a, 16);
+    memcpy(reg + {src_off}, cases[i].b, 16);
+    {operation}
+    uint32_t out[4];
+    memcpy(out, reg + {dst_off}, 16);
+    unsigned rest = 0;
+    for (unsigned j = 0; j < sizeof reg; j++) {{
+      if (j >= {dst_off} && j < {dst_off} + 16u) continue;
+      if (j >= {src_off} && j < {src_off} + 16u) continue;
+      rest = rest * 33u + reg[j];
+    }}
+    printf("%u %08x %08x %08x %08x %08x\n", i, out[0], out[1], out[2], out[3], rest);
+  }}
+  return 0;
+}}
+"""
+
+
+def words(lane_values):
+    return "{" + ", ".join(f"0x{v:08x}u" for v in lane_values) + "}"
+
+
+def compare_packed(tmp_path, result, cases, x86_op, dst_off=0x1200, src_off=0x1280):
+    """Runs each operand pair through the lifted body and through the real instruction on x86-64.
+
+    The checksum of the untouched register file rides along, so a lifted body that writes somewhere
+    it should not shows up as a disagreement rather than as a passing value.
+    """
+    obj = tmp_path / "lifted.o"
+    proc = subprocess.run(
+        [LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", obj, "-"],
+        input=pl.module_for([result]),
+        text=True,
+        capture_output=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    rows = ",\n".join(f"{{{words(a)}, {words(b)}}}" for a, b in cases)
+    outputs = []
+    for arch, operation, include, extern, extra in (
+        ("arm64", "sub_1000(reg);", "", "extern void sub_1000(unsigned char *);", [obj]),
+        ("x86_64", x86_op, "#include <emmintrin.h>", "", []),
+    ):
+        source = tmp_path / f"packed-{arch}.c"
+        source.write_text(
+            PACKED_PAIR_DRIVER.format(
+                include=include, extern=extern, rows=rows, operation=operation, dst_off=dst_off, src_off=src_off
+            )
+        )
+        outputs.append(compile_and_run(tmp_path, source, arch, extra).splitlines())
+    return outputs[0], outputs[1]
+
+
+def doubles(*pair):
+    """The four 32-bit words of two packed doubles, by bit pattern, low lane first."""
+    raw = struct.pack("<2d", *pair)
+    return [int.from_bytes(raw[4 * i : 4 * i + 4], "little") for i in range(4)]
+
+
+MAXPD_CASES = [
+    (doubles(1.0, 3.0), doubles(2.0, 4.0)),
+    (doubles(2.0, 4.0), doubles(1.0, 3.0)),
+    (doubles(0.0, -0.0), doubles(-0.0, 0.0)),
+    (doubles(float("nan"), 1.0), doubles(2.0, 3.0)),
+    (doubles(2.0, 3.0), doubles(float("nan"), 1.0)),
+    (doubles(float("nan"), 1.0), doubles(float("nan"), -1.0)),
+    (doubles(float("inf"), float("-inf")), doubles(float("-inf"), float("inf"))),
+    (doubles(1.7976931348623157e308, 5e-324), doubles(1.7976931348623155e308, 1e-323)),
+    (doubles(-4.5, -4.5), doubles(-4.5, -4.6)),
+    (doubles(0.0, 0.0), doubles(0.0, 0.0)),
+]
+
+
+@requires_llvm
+@requires_rosetta
+def test_maxpd_matches_the_real_instruction(tmp_path):
+    result = pl.lift_body(maxpd_body())
+    assert result.holes == []
+    assert verify(pl.module_for([result])).returncode == 0
+    lifted, native = compare_packed(
+        tmp_path,
+        result,
+        MAXPD_CASES,
+        "__m128d a, b, r; memcpy(&a, reg + 0x1200, 16); memcpy(&b, reg + 0x1280, 16); "
+        "r = _mm_max_pd(a, b); memcpy(reg + 0x1200, &r, 16);",
+    )
+    assert len(lifted) == len(MAXPD_CASES) > 0
+    assert lifted == native
+
+
+@requires_llvm
+@requires_rosetta
+def test_packssdw_matches_the_real_instruction(tmp_path):
+    result = pl.lift_body(packssdw_body())
+    assert result.holes == []
+    assert verify(pl.module_for([result])).returncode == 0
+    edges = [0x7FFFFFFF, 0x80000000, 32767, 32768, 0x7FFF8000, 0xFFFF8000, 0xFFFF7FFF, 1, 0xFFFFFFFF, 0x12345678, 0]
+    cases = [([edges[(i + j) % len(edges)] for j in range(4)], [edges[(i * 3 + j) % len(edges)] for j in range(4)]) for i in range(len(edges))]
+    cases.append(([0x7FFFFFFF] * 4, [0x80000000] * 4))
+    cases.append(([0x80000000] * 4, [0x7FFFFFFF] * 4))
+    lifted, native = compare_packed(
+        tmp_path,
+        result,
+        cases,
+        "__m128i a, b, r; memcpy(&a, reg + 0x1200, 16); memcpy(&b, reg + 0x1280, 16); "
+        "r = _mm_packs_epi32(a, b); memcpy(reg + 0x1200, &r, 16);",
+    )
+    assert len(lifted) == len(cases) > 0
+    assert lifted == native
+
+
+@requires_llvm
+@pytest.mark.parametrize("src", [REG_XMM0, REG_XMM1])
+def test_pshufhw_all_selectors_match_word_reference(tmp_path, src):
+    lifted = [pl.lift_body(pshufhw_body(selector, src, 0x1000 + selector * 16)) for selector in range(256)]
+    assert all(result.holes == [] for result in lifted)
+    ir = pl.module_for(lifted)
+    checked = verify(ir)
+    assert checked.returncode == 0, checked.stderr
+    calls = ", ".join(f"sub_{result.start:x}" for result in lifted)
+    declarations = "\n".join(f"extern void sub_{result.start:x}(unsigned char *);" for result in lifted)
+    source = tmp_path / "pshufhw.c"
+    source.write_text(
+        "#include <stdint.h>\n#include <string.h>\n#include <stdio.h>\n"
+        + declarations
+        + f"\nstatic void (*calls[])(unsigned char *) = {{{calls}}};\n"
+        "int main(void) { unsigned char reg[8192], before[8192];\n"
+        "uint16_t words[8] = {0x1234, 0xabcd, 0x8001, 0x5678, 0xdead, 0xbeef, 0x4321, 0xfedc};\n"
+        "for (unsigned imm = 0; imm < 256; imm++) {\n"
+        "memset(reg, 0xa5, sizeof reg);\n"
+        f"memcpy(reg + {pl.parse_varnode(src)[1]}, words, 16);\n"
+        "memcpy(before, reg, sizeof reg); calls[imm](reg);\n"
+        "uint16_t want[8]; memcpy(want, words, 16);\n"
+        "for (unsigned lane = 0; lane < 4; lane++) want[4 + lane] = words[4 + ((imm >> (2 * lane)) & 3)];\n"
+        "if (memcmp(reg + 0x1200, want, 16)) return 1;\n"
+        "memcpy(before + 0x1200, want, 16);\n"
+        "if (memcmp(reg, before, sizeof reg)) return 2;\n"
+        '} puts("ok 256"); return 0; }\n'
+    )
+    obj = tmp_path / "pshufhw.o"
+    proc = subprocess.run(
+        [LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", obj, "-"],
+        input=ir,
+        text=True,
+        capture_output=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert compile_and_run(tmp_path, source, "arm64", [obj]).strip() == "ok 256"
+
+
+def movmskpd_cases():
+    lanes = [0x0000000000000000, 0x8000000000000000, 0x3FF0000000000000, 0x7FF8000000000000, 0xFFFFFFFFFFFFFFFF]
+    return [
+        (low | (0x8000000000000000 if mask & 1 else 0), high | (0x8000000000000000 if mask & 2 else 0))
+        for low in lanes
+        for high in lanes
+        for mask in range(4)
+    ]
+
+
+@requires_llvm
+def test_movmskpd_matches_explicit_sign_bit_reference(tmp_path):
+    result = pl.lift_body(movmskpd_body())
+    assert result.holes == []
+    rows = ",\n".join(
+        "{0x%016xULL, 0x%016xULL, %d}" % (low, high, (low >> 63) | ((high >> 63) << 1))
+        for low, high in movmskpd_cases()
+    )
+    source = tmp_path / "movmskpd.c"
+    source.write_text(
+        "#include <stdint.h>\n#include <string.h>\n#include <stdio.h>\n"
+        "extern void sub_1000(unsigned char *);\n"
+        f"static const uint64_t cases[][3] = {{{rows}}};\n"
+        "int main(void) { unsigned char reg[8192];\n"
+        "for (unsigned i = 0; i < sizeof cases / sizeof *cases; i++) {\n"
+        "memset(reg, 0xa5, sizeof reg);\n"
+        "memcpy(reg + 0x1240, cases[i], 16); sub_1000(reg);\n"
+        "uint32_t got; memcpy(&got, reg, 4);\n"
+        "if (got != (uint32_t)cases[i][2]) return 1;\n"
+        "for (unsigned j = 4; j < sizeof reg; j++) {\n"
+        "if (j >= 0x1240 && j < 0x1250) { if (reg[j] != ((const unsigned char *)cases[i])[j - 0x1240]) return 2; }\n"
+        "else if (reg[j] != 0xa5) return 3;\n"
+        '}} puts("ok"); return 0; }\n'
+    )
+    obj = tmp_path / "movmskpd.o"
+    proc = subprocess.run(
+        [LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", obj, "-"],
+        input=pl.module_for([result]),
+        text=True,
+        capture_output=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert compile_and_run(tmp_path, source, "arm64", [obj]).strip() == "ok"
+
+
+@pytest.mark.parametrize(
+    "dst, src",
+    [("register,1200,8", REG_XMM2), (REG_XMM0, "register,1280,8"), ("register,1200,8", "register,1280,8")],
+)
+def test_packed_sse_ops_of_an_unexpected_width_stay_holes(dst, src):
+    for user, op_id in (("maxpd", MAXPD_ID), ("packssdw", PACKSSDW_ID)):
+        fn = body(packed_call(user, op_id, dst, src), insn(0x1003, 1, op("RETURN", None, "register,288,8")))
+        assert pl.lift_body(fn).holes == [f"CALLOTHER:{user}"]
+
+
+def test_pshufhw_with_a_non_constant_selector_stays_a_hole():
+    fn = body(
+        insn(0x1000, 5, op("CALLOTHER", REG_XMM0, f"const,{PSHUFHW_ID},4", REG_XMM0, REG_XMM1, "register,12c0,8", user="pshufhw")),
+        insn(0x1005, 1, op("RETURN", None, "register,288,8")),
+    )
+    assert pl.lift_body(fn).holes == ["CALLOTHER:pshufhw"]
+
+
+def test_movmskpd_reading_an_unexpected_width_stays_a_hole():
+    fn = packed_body("movmskpd", MOVMSKPD_ID, REG_EAX, "register,1240,8")
+    assert pl.lift_body(fn).holes == ["CALLOTHER:movmskpd"]
+
+
 def producer(ir, name):
     for line in ir.splitlines():
         if line.strip().startswith(f"{name} ="):

@@ -52,7 +52,7 @@ OVERFLOW_INTRINSIC = {"INT_CARRY": "uadd", "INT_SCARRY": "sadd", "INT_SBORROW": 
 RSP = "register,20,8"
 FLOAT_TYPES = {4: "float", 8: "double"}
 PACKED_DIVISION = {"divps": (4, 4), "divpd": (2, 8)}
-PACKED_MINMAX = {"minps": (4, 4, "olt"), "maxps": (4, 4, "ogt")}
+PACKED_MINMAX = {"minps": (4, 4, "olt"), "maxps": (4, 4, "ogt"), "maxpd": (2, 8, "ogt")}
 PACKED_WIDTH = 16
 # Register-file words the guest unwinder and lifted code share: the landing pad to enter (0 when none is pending) and the frame that owns it.
 EH_PENDING_PAD = 0x1F00
@@ -280,8 +280,8 @@ def is_packed_lane_op(out: str | None, ins: list[str]) -> bool:
     )
 
 
-def is_movmskps_op(out: str | None, ins: list[str]) -> bool:
-    """MOVMSKPS repeats a 32-bit register destination before its single XMM source."""
+def is_movmsk_op(out: str | None, ins: list[str]) -> bool:
+    """MOVMSKPS and MOVMSKPD repeat a 32-bit register destination before their single XMM source."""
     return (
         out is not None
         and len(ins) == 3
@@ -293,8 +293,8 @@ def is_movmskps_op(out: str | None, ins: list[str]) -> bool:
     )
 
 
-def is_pshuflw_op(out: str | None, ins: list[str]) -> bool:
-    """PSHUFLW adds a constant immediate selector to the packed destination/source shape."""
+def is_pshufw_op(out: str | None, ins: list[str]) -> bool:
+    """PSHUFLW and PSHUFHW add a constant immediate selector to the packed destination/source shape."""
     return (
         len(ins) == 4
         and is_packed_lane_op(out, ins)
@@ -837,10 +837,16 @@ class BodyLifter:
                 self.packed_division(out, ins[2], *PACKED_DIVISION[user])
             elif user in PACKED_MINMAX and is_packed_lane_op(out, ins):
                 self.packed_minmax(out, ins[2], *PACKED_MINMAX[user])
-            elif user == "movmskps" and is_movmskps_op(out, ins):
-                self.packed_sign_mask(out, ins[2])
-            elif user == "pshuflw" and is_pshuflw_op(out, ins):
-                self.shuffle_low_words(out, ins[2], parse_varnode(ins[3])[1])
+            elif user == "movmskps" and is_movmsk_op(out, ins):
+                self.packed_sign_mask(out, ins[2], 4, 4)
+            elif user == "movmskpd" and is_movmsk_op(out, ins):
+                self.packed_sign_mask(out, ins[2], 2, 8)
+            elif user == "pshuflw" and is_pshufw_op(out, ins):
+                self.shuffle_words(out, ins[2], parse_varnode(ins[3])[1], high=False)
+            elif user == "pshufhw" and is_pshufw_op(out, ins):
+                self.shuffle_words(out, ins[2], parse_varnode(ins[3])[1], high=True)
+            elif user == "packssdw" and is_packed_lane_op(out, ins):
+                self.packed_pack_signed(out, ins[2])
             else:
                 self.holes.append(f"CALLOTHER:{user}")
         elif name == "NOP":
@@ -944,21 +950,45 @@ class BodyLifter:
             result = merged
         self.write(out, result)
 
-    def shuffle_low_words(self, out: str, src: str, selector: int) -> None:
+    def shuffle_words(self, out: str, src: str, selector: int, high: bool) -> None:
+        """PSHUFLW and PSHUFHW permute one half of the words by the immediate and leave the other half."""
         source = self.read(src)
-        indices = [(selector >> (2 * lane)) & 3 for lane in range(4)] + list(range(4, 8))
+        picked = [(selector >> (2 * lane)) & 3 for lane in range(4)]
+        indices = (list(range(4)) + [4 + word for word in picked]) if high else (picked + list(range(4, 8)))
         pieces = [self.fit(self.lane(source, 128, index, 16), 16, 128) for index in indices]
         self.merge_lanes(out, pieces, 16, 128)
 
-    def packed_sign_mask(self, out: str, src: str) -> None:
+    def packed_sign_mask(self, out: str, src: str, lanes: int, lane_bytes: int) -> None:
+        """MOVMSKPS and MOVMSKPD: one bit of the destination per lane, taken from that lane's sign bit."""
         value = self.read(src)
+        bits, total = lane_bytes * 8, PACKED_WIDTH * 8
         pieces = []
-        for index in range(4):
-            lane = self.lane(value, 128, index, 32)
+        for index in range(lanes):
             sign = self.tmp()
-            self.emit(f"{sign} = lshr i32 {lane}, 31")
-            pieces.append(sign)
+            self.emit(f"{sign} = lshr i{bits} {self.lane(value, total, index, bits)}, {bits - 1}")
+            pieces.append(self.fit(sign, bits, 32))
         self.merge_lanes(out, pieces, 1, 32)
+
+    def packed_pack_signed(self, out: str, src: str) -> None:
+        """PACKSSDW: the destination's dwords saturate into the low words, the source's into the high ones."""
+        first, second = self.read(out), self.read(src)
+        pieces = []
+        for index in range(8):
+            dword = self.lane(first if index < 4 else second, PACKED_WIDTH * 8, index % 4, 32)
+            pieces.append(self.fit(self.fit(self.saturate_word(dword), 32, 16), 16, 128))
+        self.merge_lanes(out, pieces, 16, 128)
+
+    def saturate_word(self, value: str) -> str:
+        """Clamp a signed dword to the signed word range, which is the saturation PACKSSDW applies."""
+        below = self.tmp()
+        self.emit(f"{below} = icmp slt i32 {value}, -32768")
+        clamped = self.tmp()
+        self.emit(f"{clamped} = select i1 {below}, i32 -32768, i32 {value}")
+        above = self.tmp()
+        self.emit(f"{above} = icmp sgt i32 {clamped}, 32767")
+        result = self.tmp()
+        self.emit(f"{result} = select i1 {above}, i32 32767, i32 {clamped}")
+        return result
 
     def float_op(self, name: str, out: str, ins: list[str]) -> None:
         osz, isz = parse_varnode(out)[2], parse_varnode(ins[0])[2]
