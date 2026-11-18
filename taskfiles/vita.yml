@@ -4,6 +4,18 @@ tasks:
   smoke:
     desc: "Build and validate the native Vita smoke-test VPK"
     cmds:
+      - task: build
+        vars: { APP: smoke, BUILD_DIR: '${VITA_SMOKE_BUILD_DIR:-.tools/vita-smoke}' }
+
+  combat:
+    desc: "Build and validate the native Vita combat spike VPK"
+    cmds:
+      - task: build
+        vars: { APP: combat, BUILD_DIR: '${VITA_COMBAT_BUILD_DIR:-.tools/vita-combat}' }
+
+  build:
+    internal: true
+    cmds:
       - |
         export VITASDK="${VITASDK:-$HOME/.local/opt/vitasdk}"
         export PATH="$VITASDK/bin:$PATH"
@@ -11,9 +23,9 @@ tasks:
           echo "VitaSDK 2026.08 with GCC 15.2.0 is required" >&2
           exit 1
         }
-        build="${VITA_SMOKE_BUILD_DIR:-.tools/vita-smoke}"
+        build="{{.BUILD_DIR}}"
         skill=.agents/skills/vita-port/scripts
         uv run --no-project python "$skill/make_placeholder_assets.py" "$build/sce_sys"
-        cmake -S vita/smoke -B "$build" -DCMAKE_BUILD_TYPE=Release
+        cmake -S vita/{{.APP}} -B "$build" -DCMAKE_BUILD_TYPE=Release
         cmake --build "$build"
-        uv run --no-project python "$skill/check_vpk.py" "$build/megabonk-vita-smoke.vpk"
+        uv run --no-project python "$skill/check_vpk.py" "$build/megabonk-vita-{{.APP}}.vpk"
