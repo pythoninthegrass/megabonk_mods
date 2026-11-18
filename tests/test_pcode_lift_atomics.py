@@ -369,7 +369,7 @@ def test_a_fixture_atomic_is_fenced_on_both_sides(entry):
         fences = [j for j, text in enumerate(body) if text == 'fence syncscope("sys") seq_cst']
         assert any(j < i for j in fences), f"{_id(entry)} atomic in {name} has no acquire fence"
         assert any(j > i for j in fences), f"{_id(entry)} atomic in {name} has no release fence"
-        assert "align 1" in body[i], f"{_id(entry)} atomic in {name} is not alignment-tolerant"
+        assert body[i].rstrip().endswith(", align 1"), f"{_id(entry)} atomic in {name} is not alignment-tolerant"
         return
     pytest.fail(f"{_id(entry)} emitted no {_form(entry)}")
 
@@ -584,59 +584,10 @@ def test_a_region_whose_compared_value_is_not_the_memory_value_stays_a_hole():
 
 # --- executed against the x86 flag model ---------------------------------------------------
 
-# macOS has no libatomic: an atomicrmw below its natural alignment lowers to LLVM's own
-# compare-exchange-loop primitive, which Apple ships only in size-suffixed form. The executed
-# cases supply that primitive, so the lowering under test is still LLVM's down to the CAS loop.
-ATOMIC_SHIM = """
-#include <stdint.h>
-#include <string.h>
-
-#define CAS_CASE(T)                                                         \\
-  case sizeof(T): {                                                         \\
-    T old, want;                                                            \\
-    memcpy(&old, expected, sizeof(T));                                      \\
-    memcpy(&want, desired, sizeof(T));                                      \\
-    _Bool ok = __atomic_compare_exchange_n((T *)mem, &old, want, 0, 5, 5);  \\
-    if (!ok)                                                                \\
-      memcpy(expected, &old, sizeof(T));                                    \\
-    return ok;                                                              \\
-  }
-
-#define EXCH_CASE(T)                                                   \\
-  case sizeof(T): {                                                    \\
-    T value, prior;                                                    \\
-    memcpy(&value, val, sizeof(T));                                    \\
-    prior = __atomic_exchange_n((T *)mem, value, 5);                   \\
-    memcpy(ret, &prior, sizeof(T));                                    \\
-    return;                                                            \\
-  }
-
-_Bool shim_compare_exchange(int size, void *mem, void *expected, void *desired, int success, int failure) asm(
-    "___atomic_compare_exchange");
-void shim_exchange(int size, void *mem, void *val, void *ret, int model) asm("___atomic_exchange");
-
-_Bool shim_compare_exchange(int size, void *mem, void *expected, void *desired, int success, int failure) {
-  switch (size) {
-    CAS_CASE(uint8_t)
-    CAS_CASE(uint16_t)
-    CAS_CASE(uint32_t)
-    CAS_CASE(uint64_t)
-    CAS_CASE(unsigned __int128)
-  }
-  __builtin_unreachable();
-}
-
-void shim_exchange(int size, void *mem, void *val, void *ret, int model) {
-  switch (size) {
-    EXCH_CASE(uint8_t)
-    EXCH_CASE(uint16_t)
-    EXCH_CASE(uint32_t)
-    EXCH_CASE(uint64_t)
-    EXCH_CASE(unsigned __int128)
-  }
-  __builtin_unreachable();
-}
-"""
+# The generic primitives an arm64 Apple target gets from its own C runtime. `align 1` makes LLVM
+# lower an atomic to a call to one of these instead of inlining the exclusives, so the executed
+# cases have to resolve them; anything else they reference has no provider here.
+PLATFORM_ATOMICS = {"___atomic_compare_exchange", "___atomic_exchange"}
 
 
 def compile_body(tmp_path, ops, sections=(), images=None, tag="m"):
@@ -650,22 +601,21 @@ def compile_body(tmp_path, ops, sections=(), images=None, tag="m"):
         check=True,
         capture_output=True,
     )
-    shim = tmp_path / "shim.c"
-    shim.write_text(ATOMIC_SHIM)
     lib = tmp_path / f"{tag}.dylib"
-    subprocess.run([LLVM / "clang", "-arch", "arm64", "-shared", obj, shim, "-o", lib], check=True, capture_output=True)
+    subprocess.run([LLVM / "clang", "-arch", "arm64", "-shared", obj, "-o", lib], check=True, capture_output=True)
     undefined = subprocess.run([LLVM / "llvm-nm", "-u", lib], capture_output=True, text=True).stdout.split()
-    assert not [s for s in undefined if "atomic" in s], f"the atomics still need a library: {undefined}"
+    dangling = [s for s in undefined if ("atomic" in s or s.startswith("_aarch64_")) and s not in PLATFORM_ATOMICS]
+    assert not dangling, f"nothing on this platform provides these atomics: {dangling}"
     entry = ctypes.cdll.LoadLibrary(str(lib)).sub_1000
     entry.argtypes, entry.restype = [ctypes.c_void_p], None
     return entry
 
 
-def call(tmp_path, ops, reg, memory=b"", sections=(), images=None):
+def call(tmp_path, ops, reg, memory=b"", sections=(), images=None, shift=0):
     """Run the lifted body over a host buffer standing in for the guest address."""
     entry = compile_body(tmp_path, ops, sections, images)
     raw = (ctypes.c_char * 128)()
-    base = ctypes.addressof(raw) + -ctypes.addressof(raw) % 16
+    base = ctypes.addressof(raw) + -ctypes.addressof(raw) % 16 + shift
     ctypes.memmove(base, memory.ljust(64, b"\0"), 64)
     file = (ctypes.c_char * REG_SIZE)()
     for text, value in reg.items():
@@ -720,6 +670,38 @@ def test_lifted_lock_add_matches_the_x86_result_and_flags(tmp_path, size):
     )
     assert int.from_bytes(memory[:size], "little") == result
     assert flags(file) == want
+
+
+@requires_llvm
+@pytest.mark.parametrize("size,shift", [(4, 1), (4, 3), (8, 1), (8, 3)])
+def test_lifted_lock_add_to_a_word_the_guest_left_unaligned_completes(tmp_path, size, shift):
+    """Runs the emitted sequence over an address the guest did not align, the case `align 1` covers."""
+    bits, addend = size * 8, 0x33
+    old = 0xFFFFFF01
+    result, want = add_flags(old, addend, bits)
+    file, memory = call(
+        tmp_path,
+        arithmetic_memory("add", size),
+        {"register,0,8": MEM - 0x38, f"register,30,{v(size)}": addend},
+        memory=old.to_bytes(size, "little"),
+        shift=shift,
+    )
+    assert int.from_bytes(memory[:size], "little") == result
+    assert flags(file) == want
+
+
+@requires_llvm
+def test_the_atomics_the_lowering_calls_are_exported_by_the_platform_runtime():
+    """`align 1` emits a call to a generic primitive, so the platform has to actually have it."""
+    sdk = subprocess.run(["xcrun", "--show-sdk-path"], capture_output=True, text=True).stdout.strip()
+    stub = Path(sdk) / "usr" / "lib" / "libSystem.tbd"
+    if not stub.exists():
+        pytest.skip(f"needs the macOS SDK export list, not {stub}")
+    exports = stub.read_text()
+    for symbol in sorted(PLATFORM_ATOMICS):
+        # The suffixed forms are prefixes of the generic name, so a plain substring test would pass
+        # on ___atomic_compare_exchange_1 alone.
+        assert re.search(rf"{re.escape(symbol)}(?![A-Za-z0-9_])", exports), f"{symbol} is not exported by {stub}"
 
 
 @requires_llvm
