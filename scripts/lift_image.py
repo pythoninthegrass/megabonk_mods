@@ -243,6 +243,17 @@ def dump_bisecting(part, dump, failure, timeout, retry_base=300, retry_per_body=
     return rows, sections, failed
 
 
+def scored_shard_identity(
+    sha: str, fingerprint: str, ghidra: str, bodies: list[Fde], pipeline: str, tool_timeout: int, scorer: str
+) -> str:
+    """Identity of scored rows: the dump's identity plus everything `score_row` reads beyond the pcode.
+
+    The pcode shard survives a lifter edit; scores must not, or a whole-image verdict can be assembled from
+    rows an older lifter wrote. The tool timeout is part of it too, because a clang or llc timeout is a hole.
+    """
+    return shard_identity(sha, fingerprint, ghidra, bodies, json.dumps([pipeline, tool_timeout, scorer]))
+
+
 def build_shard(index: int, part: list[Fde], ctx: dict) -> list[dict]:
     """Scored rows for one shard, reusing its pcode and scores when their identities still match."""
     import lift_probe as lp
@@ -250,7 +261,10 @@ def build_shard(index: int, part: list[Fde], ctx: dict) -> list[dict]:
 
     out, sha = ctx["out"], ctx["sha"]
     pcode_id = shard_identity(sha, ctx["fingerprint"], ctx["ghidra"], part, "")
-    scored_id = shard_identity(sha, ctx["fingerprint"], ctx["ghidra"], part, ctx["pipeline"])
+    scored_id = scored_shard_identity(
+        sha, ctx["fingerprint"], ctx["ghidra"], part, ctx["pipeline"], ctx["tool_timeout"],
+        ctx.get("scorer") or scoring_fingerprint(),
+    )
     scored = read_shard(out / f"scored-{index:04d}.jsonl", scored_id, part)
     retry = ctx.get("retry_missing_dump", False)
     if scored is not None and not (retry and any(r.get("missing_dump") for r in scored)):
@@ -416,6 +430,7 @@ def build(args) -> int:
         "fingerprint": lp.dump_script_fingerprint(),
         "ghidra": lp.ghidra_version(),
         "pipeline": args.pipeline,
+        "scorer": scoring_fingerprint(),
         "ghidra_timeout": args.ghidra_timeout,
         "retry_missing_dump": args.retry_missing_dump,
         "tool_timeout": args.tool_timeout,

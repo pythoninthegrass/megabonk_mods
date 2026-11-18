@@ -297,6 +297,49 @@ def test_bisect_retries_with_a_timeout_scaled_to_the_part():
     assert calls[0] == (4, 3600) and calls[1] == (2, 304)
 
 
+def test_scored_shard_identity_includes_the_lifter_so_a_changed_lifter_rescores(tmp_path, monkeypatch):
+    """Stale scores are worse than no scores: the pcode cache survives a lifter edit, the scores must not."""
+    import lift_probe as lp
+
+    part = [Fde(1, 1), Fde(2, 1)]
+    sections = [{"name": "s"}]
+    clean = [{"start": 1, "size": 1, "holes": []}, {"start": 2, "size": 1, "holes": []}]
+    blocked = [{"start": 1, "size": 1, "holes": ["BRANCHIND"]}, {"start": 2, "size": 1, "holes": ["BRANCHIND"]}]
+    ctx = dict(out=tmp_path, sha="a", fingerprint="b", ghidra="c", pipeline="", ghidra_timeout=10,
+               score_jobs=1, tool_timeout=10, so=tmp_path / "image.so")
+    li.write_shard(tmp_path / "pcode-0000.jsonl", li.shard_identity("a", "b", "c", part, ""),
+                   [{"kind": "sections", "sections": sections}, {"start": 1, "size": 1}, {"start": 2, "size": 1}])
+
+    monkeypatch.setattr(li, "scoring_fingerprint", lambda: "lifter-v1")
+    monkeypatch.setattr(lp, "score_row", lambda row, *_a, **_k: clean[row["start"] - 1])
+    assert li.build_shard(0, part, ctx) == clean
+
+    monkeypatch.setattr(li, "scoring_fingerprint", lambda: "lifter-v2")
+    monkeypatch.setattr(lp, "score_row", lambda row, *_a, **_k: blocked[row["start"] - 1])
+    assert li.build_shard(0, part, ctx) == blocked
+
+
+def test_a_full_build_refuses_a_scored_shard_from_a_different_lifter(tmp_path, monkeypatch):
+    """The same shard on disk, read back after a lifter edit, is a miss rather than a silent reuse."""
+    part = [Fde(1, 1), Fde(2, 1)]
+    stale = [{"start": 1, "size": 1, "holes": []}, {"start": 2, "size": 1, "holes": []}]
+    monkeypatch.setattr(li, "scoring_fingerprint", lambda: "lifter-v1")
+    first = li.scored_shard_identity("a", "b", "c", part, "", 10, "lifter-v1")
+    li.write_shard(tmp_path / "scored-0000.jsonl", first, stale)
+    second = li.scored_shard_identity("a", "b", "c", part, "", 10, "lifter-v2")
+    assert first != second
+    assert li.read_shard(tmp_path / "scored-0000.jsonl", second, part) is None
+    assert li.read_shard(tmp_path / "scored-0000.jsonl", first, part) == stale
+
+
+def test_scored_shard_identity_changes_with_the_tool_timeout():
+    """`score_row` bounds clang and llc by it, so a cached verdict made under another timeout is not valid."""
+    part = [Fde(1, 1)]
+    keyed = lambda timeout: li.scored_shard_identity("a", "b", "c", part, "", timeout, "scorer")
+    assert keyed(10) != keyed(11)
+    assert keyed(10) == keyed(10)
+
+
 def test_bisect_retries_only_ranges_missing_from_a_partial_dump():
     part = [Fde(i, 1) for i in range(6)]
     calls = []
@@ -322,8 +365,10 @@ def test_missing_dump_cache_can_be_retried_without_discarding_good_rows(tmp_path
     failed = lp.failed_row(2, 1, "old partial dump", missing_dump=True)
     ctx = dict(out=tmp_path, sha="a", fingerprint="b", ghidra="c", pipeline="", ghidra_timeout=10,
                score_jobs=1, tool_timeout=10, so=tmp_path / "image.so", retry_missing_dump=True)
+    monkeypatch.setattr(li, "scoring_fingerprint", lambda: "scorer")
     identity = li.shard_identity("a", "b", "c", part, "")
-    li.write_shard(tmp_path / "scored-0000.jsonl", identity, [body, failed])
+    scored_id = li.scored_shard_identity("a", "b", "c", part, "", 10, "scorer")
+    li.write_shard(tmp_path / "scored-0000.jsonl", scored_id, [body, failed])
     li.write_shard(tmp_path / "pcode-0000.jsonl", identity,
                    [{"kind": "sections", "sections": sections}, body, failed])
 
