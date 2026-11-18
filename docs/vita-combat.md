@@ -22,4 +22,4 @@ Both layouts use the same enemy geometry, initial HP, AI, weapon targeting and v
 
 ## PCH-2000 verification
 
-Version 01.00 installed and launched on a physical PCH-2000. The playtest confirmed independent movement and aim, a single upgrade application, and resumed combat. Both benchmark layouts ran, and Square restored their starting positions. The tested enemy count was not recorded. This version does not capture timing or memory telemetry.
+Version 01.00 installed and launched on a physical PCH-2000. The playtest confirmed independent movement and aim, automatic combat, XP pickup, a single upgrade application, and resumed combat. Both benchmark layouts ran, and Square restored their starting positions. The tester noticed no performance dips, but the enemy count was not recorded and this version does not capture timing or memory telemetry. This observation does not establish the performance threshold.
