@@ -3,12 +3,14 @@ import ghidra.app.cmd.disassemble.DisassembleCommand;
 import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileResults;
 import ghidra.app.script.GhidraScript;
+import ghidra.program.database.function.OverlappingFunctionException;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.pcode.HighFunction;
 import ghidra.program.model.pcode.JumpTable;
+import ghidra.program.model.symbol.SourceType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -53,11 +55,22 @@ public class LiftJumpEvidence extends GhidraScript {
         return out.append("]").toString();
     }
 
+    private Function functionFor(Address entry, AddressSet body, boolean bounded) throws Exception {
+        Function fn = getFunctionAt(entry);
+        if (!bounded) return fn == null ? createFunction(entry, null) : fn;
+        if (fn == null) {
+            return currentProgram.getFunctionManager().createFunction(null, entry, body, SourceType.ANALYSIS);
+        }
+        fn.setBody(body);
+        return fn;
+    }
+
     @Override
     public void run() throws Exception {
         String[] args = getScriptArgs();
         Path out = Path.of(args[1]);
         int timeout = Integer.parseInt(args[2]);
+        boolean bounded = Boolean.parseBoolean(args[4]);
         Address base = currentProgram.getImageBase();
         DecompInterface decomp = new DecompInterface();
         decomp.toggleCCode(Boolean.parseBoolean(args[3]));
@@ -75,14 +88,23 @@ public class LiftJumpEvidence extends GhidraScript {
                 long began = System.nanoTime();
                 Address entry = base.add(start);
                 disassembleBody(entry, size);
-                Function fn = getFunctionAt(entry);
-                if (fn == null) fn = createFunction(entry, null);
+                AddressSet body = new AddressSet(entry, entry.add(size - 1));
+                Function fn = null;
+                String noFunction = "no_function";
+                try {
+                    fn = functionFor(entry, body, bounded);
+                } catch (OverlappingFunctionException ex) {
+                    noFunction = "overlapping_function";
+                }
+                long bodyBytes = fn == null ? 0 : fn.getBody().getNumAddresses();
+                long outsideBytes = fn == null ? 0 : fn.getBody().subtract(body).getNumAddresses();
                 DecompileResults result = fn == null ? null : decomp.decompileFunction(fn, timeout, monitor);
-                String status = result == null ? "no_function" : result.decompileCompleted() ? "complete"
+                String status = result == null ? noFunction : result.decompileCompleted() ? "complete"
                     : result.isTimedOut() ? "function_timeout" : "decompile_failed";
                 long elapsedMs = (System.nanoTime() - began) / 1_000_000;
                 checkpoint(row, "{\"start\":" + start + ",\"size\":" + size + ",\"status\":\"" + status
-                    + "\",\"elapsed_ms\":" + elapsedMs + ",\"jt\":" + tables(result, base.getOffset()) + "}");
+                    + "\",\"elapsed_ms\":" + elapsedMs + ",\"function_bytes\":" + bodyBytes
+                    + ",\"outside_function_bytes\":" + outsideBytes + ",\"jt\":" + tables(result, base.getOffset()) + "}");
                 println("jump-table evidence: 0x" + fields[0] + " " + status + " in " + elapsedMs + " ms");
             }
         } finally {

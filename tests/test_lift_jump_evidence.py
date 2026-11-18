@@ -5,6 +5,18 @@ import lift_jump_evidence as evidence
 from lift_probe import Fde
 
 
+def test_out_of_body_switch_evidence_is_preserved_but_unresolved():
+    body = Fde(0x1000, 8)
+    tables = [{"at": 0x1002, "cases": [0x1004, 0x1008]}, {"at": 0x1010, "cases": [0x1001]}]
+    row = {"start": body.start, "size": body.size, "status": "complete", "jt": tables}
+    assert evidence.check_table_bounds(body, row) == {
+        **row, "status": "unresolved_bounds",
+        "out_of_body": [{"at": 0x1002, "cases": [0x1008]}, {"at": 0x1010, "cases": []}],
+    }
+    clean = {**row, "jt": [{"at": 0x1002, "cases": [0x1007]}]}
+    assert evidence.check_table_bounds(body, clean) == clean
+
+
 def test_a_batch_timeout_names_the_active_body_and_preserves_finished_rows(tmp_path):
     bodies = [Fde(0x1000, 8), Fde(0x2000, 12), Fde(0x3000, 16)]
     calls = []

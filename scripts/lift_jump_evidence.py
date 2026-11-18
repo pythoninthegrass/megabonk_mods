@@ -12,6 +12,21 @@ from pathlib import Path
 SCRIPT = Path(__file__).with_name("lift_jump_evidence") / "LiftJumpEvidence.java"
 
 
+def check_table_bounds(body, row):
+    def inside(address):
+        return body.start <= address < body.start + body.size
+
+    outside = []
+    for table in row["jt"]:
+        cases = [address for address in table["cases"] if not inside(address)]
+        if cases or not inside(table["at"]):
+            outside.append({"at": table["at"], "cases": cases})
+    if not outside:
+        return row
+    status = "unresolved_bounds" if row["status"] == "complete" else row["status"]
+    return {**row, "status": status, "out_of_body": outside}
+
+
 def recover(bodies, out, identity, dump, batch_size):
     out.mkdir(parents=True, exist_ok=True)
     pending, records = [], {}
@@ -40,7 +55,7 @@ def recover(bodies, out, identity, dump, batch_size):
                     row = json.loads(path.read_text())
                     if (row["start"], row["size"]) != (body.start, body.size):
                         raise ValueError(f"unexpected evidence row for {body.start:#x}")
-                    save(body, row)
+                    save(body, check_table_bounds(body, row))
             missing = [body for body in part if body.start not in records]
             if missing:
                 active = work / "active"
@@ -52,7 +67,7 @@ def recover(bodies, out, identity, dump, batch_size):
     return [records[body.start] for body in bodies]
 
 
-def dump_batch(so, part, work, function_timeout, batch_timeout, emit_c, output_log):
+def dump_batch(so, part, work, function_timeout, batch_timeout, emit_c, bounded, output_log):
     ranges = work / "ranges.txt"
     ranges.write_text("".join(f"{b.start:x} {b.size}\n" for b in part))
     project = work / "project"
@@ -60,7 +75,7 @@ def dump_batch(so, part, work, function_timeout, batch_timeout, emit_c, output_l
     cmd = [
         lp.find_ghidra(), project, "evidence", "-import", so.resolve(), "-noanalysis",
         "-scriptPath", SCRIPT.parent, "-postScript", SCRIPT.name, ranges, work,
-        str(function_timeout), str(emit_c).lower(),
+        str(function_timeout), str(emit_c).lower(), str(bounded).lower(),
     ]
     try:
         result = lp.run_tool(cmd, env=lp.ghidra_env(), timeout=batch_timeout, text=True)
@@ -82,6 +97,7 @@ def main():
     parser.add_argument("--batch-timeout", type=int, default=90)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--emit-c", action="store_true", help="enable C output for a comparison run")
+    parser.add_argument("--bounded", action="store_true", help="assign the exact frame range as the Ghidra function body")
     args = parser.parse_args()
     if min(args.function_timeout, args.batch_timeout, args.batch_size) <= 0:
         parser.error("timeouts and batch size must be positive")
@@ -90,14 +106,14 @@ def main():
     bodies = sorted((b for b in frames if b.size > 0 and b.start in selected), key=lambda b: b.start)
     if len(bodies) != len(selected) or {b.start for b in bodies} != selected:
         parser.error("each address must identify exactly one nonempty frame body")
-    settings = json.dumps([args.function_timeout, args.batch_timeout, args.batch_size, args.emit_c])
+    settings = json.dumps([args.function_timeout, args.batch_timeout, args.batch_size, args.emit_c, args.bounded])
     fingerprint = hashlib.sha256(Path(__file__).read_bytes() + SCRIPT.read_bytes()).hexdigest()
     identity = shard_identity(lp.sha256(args.so), fingerprint, lp.ghidra_version(), bodies, settings)
 
     def dump(part, work):
         print(f"Recovering jump tables for: {', '.join(hex(b.start) for b in part)}", flush=True)
         return dump_batch(
-            args.so, part, work, args.function_timeout, args.batch_timeout, args.emit_c,
+            args.so, part, work, args.function_timeout, args.batch_timeout, args.emit_c, args.bounded,
             args.out / f"batch-{part[0].start:x}.log",
         )
 
