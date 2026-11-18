@@ -391,13 +391,14 @@ def test_dump_pcode_keeps_partial_rows_when_ghidra_times_out(tmp_path, monkeypat
     script = fake_ghidra(
         tmp_path,
         'printf \'{"start": 56088976, "size": 8, "basicBlocks": [], "undecoded": 0, "jt": []}\\n\' > "${11}"\n'
+        'printf \'{"start": 56088992\' >> "${11}"\n'
         'echo \'[{"address": 0, "size": 1, "offset": 0, "name": ".text"}]\' > "${12}"\n'
         'echo "analysis pass 3 of 40" >&2\n'
         "sleep 2\n",
     )
     monkeypatch.setattr(lp, "find_ghidra", lambda: str(script))
     killed = []
-    monkeypatch.setattr(os, "kill", lambda pid, sig, *args: killed.append((pid, sig)))
+    monkeypatch.setattr(os, "killpg", lambda pgid, sig: killed.append((pgid, sig)))
     fdes = [lp.Fde(0x357D990, 8), lp.Fde(0x357D9A0, 20)]
 
     rows, sections = lp.dump_pcode(Path("GameAssembly.so"), fdes, work, timeout=1, diag=diag)
@@ -891,3 +892,37 @@ def test_parse_exec_sections_reads_llvm_readelf_table():
         ".text": (0x1D35040, 0x1D35040 + 0x42D941),
         "il2cpp": (0x2162990, 0x2162990 + 0x2CC3AB0),
     }
+
+
+def test_run_tool_timeout_kills_the_whole_process_group(tmp_path):
+    import subprocess as sp
+    import time
+
+    pidfile = tmp_path / "child.pid"
+    script = f"sleep 300 & echo $! > {pidfile}; echo started; wait"
+    try:
+        lp.run_tool(["bash", "-c", script], timeout=2, text=True)
+    except sp.TimeoutExpired as exc:
+        assert "started" in (exc.stdout or "")
+    else:
+        raise AssertionError("expected a timeout")
+    child = pidfile.read_text().strip()
+    for _ in range(50):
+        if sp.run(["ps", "-p", child], capture_output=True).returncode != 0:
+            return
+        time.sleep(0.1)
+    sp.run(["kill", "-9", child])
+    raise AssertionError("the grandchild outlived the timeout")
+
+
+def test_run_tool_returns_output_and_status_without_a_timeout():
+    proc = lp.run_tool(["bash", "-c", "echo out; echo err >&2; exit 3"], text=True)
+    assert (proc.stdout, proc.stderr, proc.returncode) == ("out\n", "err\n", 3)
+
+
+def test_run_tool_check_preserves_failed_output():
+    import subprocess as sp
+
+    with pytest.raises(sp.CalledProcessError) as exc:
+        lp.run_tool(["bash", "-c", "echo failed >&2; exit 3"], text=True, check=True)
+    assert (exc.value.stderr, exc.value.returncode) == ("failed\n", 3)

@@ -20,6 +20,7 @@ import os
 import random
 import re
 import shlex
+import signal
 import subprocess
 import sys
 import tempfile
@@ -201,8 +202,30 @@ def parse_exec_sections(text: str) -> dict[str, tuple[int, int]]:
     return sections
 
 
-def run_tool(cmd: list, **kw) -> subprocess.CompletedProcess:
-    return subprocess.run([str(c) for c in cmd], capture_output=True, **kw)
+def run_tool(cmd: list, timeout: float | None = None, input=None, check: bool = False, **kw) -> subprocess.CompletedProcess:
+    """Run a tool in its own process group so a timeout kills its descendants, not only the launcher."""
+    argv = [str(c) for c in cmd]
+    proc = subprocess.Popen(
+        argv,
+        stdin=subprocess.PIPE if input is not None else None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+        **kw,
+    )
+    try:
+        out, err = proc.communicate(input, timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        out, err = proc.communicate()
+        raise subprocess.TimeoutExpired(argv, timeout, output=out, stderr=err) from None
+    result = subprocess.CompletedProcess(argv, proc.returncode, out, err)
+    if check:
+        result.check_returncode()
+    return result
 
 
 def as_text(value) -> str:
@@ -279,7 +302,12 @@ def dump_pcode(
     if not sections.exists():
         raise SystemExit(f"Ghidra produced pcode but no section table:\n{stdout[-1500:]}")
     try:
-        rows = [json.loads(line) for line in pcode.read_text().splitlines()]
+        rows = []
+        with pcode.open() as stream:
+            for line in stream:
+                if not line.endswith("\n") and (timed_out or note):
+                    break
+                rows.append(json.loads(line))
         sections_table = json.loads(sections.read_text())
     except ValueError as exc:
         raise SystemExit(f"Ghidra wrote pcode that is not valid JSON ({exc}):\n{stdout[-1500:]}") from exc
@@ -558,7 +586,7 @@ def optimise_body(ir: str, pipeline: str, tool_timeout: int) -> tuple[bool, byte
 
 
 def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT, pipeline: str = "") -> dict:
-    """Record each stage; rejected pipelines never compile fallback unoptimised IR."""
+    """Record each stage; rejected pipelines never compile fallback unoptimized IR."""
     try:
         lifted = pcode_lift.lift_body(fn, sections)
         ir = pcode_lift.module_for([lifted])
