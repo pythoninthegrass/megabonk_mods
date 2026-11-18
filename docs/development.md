@@ -2146,6 +2146,16 @@ task re:lift-image-build LIFT_OUT=.tools/lift-image-blockers -- --blockers-from 
 
 Read `blockers-summary.json` and `blockers.jsonl` in the iteration directory. A zero exit means only that the baseline blockers now pass. To check for regressions and get a full-image verdict, use a fresh output directory seeded with the baseline's validated pcode shards only, and run `task re:lift-image-build` without `--blockers-from`.
 
+When a blocker needs fresh jump-table evidence, pass the body start addresses explicitly. This probe disassembles only the requested bodies, leaves the baseline pcode and prior tables untouched, and writes separate per-body checkpoints. It defaults to 5 seconds per function, 90 seconds per Ghidra batch, and eight bodies per batch. A timeout is recorded at the active address; later bodies are still attempted. Rerun the same command to resume, or use a separate output directory with a longer deadline for the timed-out addresses only.
+
+```sh
+uv run scripts/lift_jump_evidence.py --out .tools/lift-jump-evidence 0x4bd70f0 0x2862830
+```
+
+`evidence.jsonl` contains the recovered targets, status, and elapsed time where available. A completed decompilation with no tables is not evidence that an indirect jump is safe to lower. C text is disabled by default; use `--emit-c` in a separate directory to compare table recovery with C generation enabled. This command does not merge evidence into the lifter or replace the full-image dump path.
+
+On five shipped bodies, the table-only run and C-enabled run both took 19.7 seconds and agreed on the target lists. Both recovered the two known tables at their original addresses and timed out on `0x2862830` and `0x28629a0` at the 5-second function deadline, then continued to later bodies. Rerunning from checkpoints took 3.1 seconds without starting Ghidra. The measured gain comes from bounding and isolating slow functions, not from disabling C output.
+
 The execution fixture in `tests/test_lift_control_flow_exec.py` compares a shipped jump-table predicate and an indirect tail jump to a different shipped body against the same pinned ELF running on Linux x86-64. It sweeps all 82 in-range switch inputs and two out-of-range ones. The arm64 dispatcher aborts for an unresolved address or a malformed target inside a body instead of calling either address.
 
 ### Executing a lifted shipped method
