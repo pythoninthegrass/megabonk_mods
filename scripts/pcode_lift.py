@@ -1144,22 +1144,51 @@ class BodyLifter:
         self.tables_audited += 1
         return raw
 
-    def branch_indirect(self, insn: dict, k: int, target: str) -> None:
-        """Lowers a BRANCHIND as a switch, or as an indirect call and a return for a loaded-pointer tail call.
+    def handed_over_target(self, insn: dict, k: int, target: str) -> bool:
+        """True when one COPY from an architectural register, ahead of the site, hands `target` its value.
 
-        `jmp rax` with rsp at its entry value is `call rax` then `ret` only when the target is another
-        function, so rsp balance licenses the rewrite just for a target read from memory.
+        One write in the whole body, none after the site: the value is that copy or the caller's own,
+        and neither is computed, so no dominance check is needed. A `unique` source is refused: that is
+        how the body delivers a value it built itself, which is the computed target this rule rejects.
+        """
+        before: list[dict] = []
+        after: list[dict] = []
+        past = False
+        for here in self.fn["insns"]:
+            if here is insn:
+                before += here["ops"][:k]
+                after += here["ops"][k:]
+                past = True
+                continue
+            (after if past else before).extend(here["ops"])
+        writes = [op for op in before if op.get("out") == target]
+        if len(writes) != 1 or any(op.get("out") == target for op in after):
+            return False
+        op = writes[0]
+        inputs = op.get("in") or []
+        if op["op"] != "COPY" or len(inputs) != 1:
+            return False
+        return parse_varnode(inputs[0])[0] == "register"
+
+    def branch_indirect(self, insn: dict, k: int, target: str) -> None:
+        """Lowers a BRANCHIND as a switch, or as an indirect call and a return for a tail call.
+
+        `jmp rax` with rsp at its entry value is `call rax` then `ret` when the target is another
+        function: a pointer read from memory, or a register the caller handed over.
         """
         cases = self.tables.get(insn["a"])
         sec = self.last_data
         if not cases:
             # A bare `jmp reg` lowers as a call and a return when the target is a loaded pointer (the
-            # original rule), or when rsp is proven at its entry value and the target is read from memory.
-            # The balance alone never licenses it: a frameless switch also has rsp at entry.
+            # original rule), when rsp is proven at its entry value and the target is read from
+            # memory, or when rsp is proven and the target is a register handed over by one COPY.
+            # Balance alone never licenses it: a frameless switch also has rsp at entry.
             load_traced = self.defined_by_load(insn, k, target)
             verdict = self.frame.get(insn["a"], {})
             balanced = verdict.get("reason") == "" and self.defined_by_load(insn, k, target, slots=True)
-            if not (load_traced or balanced):
+            proven = self.proof.get(insn["a"], {}).get("reason") == ""
+            sibling = proven and self.handed_over_target(insn, k, target)
+            if not (load_traced or balanced or sibling):
                 self.unproven_branchind.append(
                     {
                         "a": insn["a"],
@@ -1171,7 +1200,7 @@ class BodyLifter:
                 self.emit("unreachable")
                 return
             self.tail_calls += 1
-            if balanced:
+            if balanced or sibling:
                 self.proven_tail_calls += 1
             else:
                 self.unproven_branchind.append(

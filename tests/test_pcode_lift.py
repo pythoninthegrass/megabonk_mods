@@ -932,6 +932,109 @@ def test_branchind_follows_a_copy_from_a_loaded_temporary():
     assert verify(pl.module_for([result])).returncode == 0
 
 
+@requires_llvm
+def test_branchind_on_a_handed_over_register_at_a_proven_frame_is_a_tail_call():
+    """`mov rbx, rdi ... mov rdi, rdx; jmp rbx`: a tail call through a pointer the caller supplied.
+
+    This is the shape the image's blocked sites ship. The target register is written exactly once,
+    before the jump, by a plain COPY from another register, and rsp is proven at its entry value:
+    the callee returns to our caller, which is what `call reg; ret` does.
+    """
+    fn = body(
+        insn(0x1000, 3, op("COPY", "register,80,8", "register,38,8")),
+        insn(0x1003, 3, op("COPY", "register,38,8", "register,10,8")),
+        insn(0x1006, 2, op("BRANCHIND", None, "register,80,8")),
+    )
+    result = pl.lift_body(fn)
+    assert result.holes == []
+    assert result.tail_calls == 1
+    assert result.proven_tail_calls == 1
+    assert verify(pl.module_for([result])).returncode == 0
+
+
+def test_branchind_on_a_handed_over_register_without_a_proven_frame_stays_a_hole():
+    """The shape alone licenses nothing: a push with no matching pop still refuses the rewrite."""
+    fn = body(
+        insn(0x1000, 3, op("COPY", "register,80,8", "register,38,8")),
+        insn(0x1003, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,8,8")),
+        insn(0x1006, 3, op("COPY", "register,38,8", "register,10,8")),
+        insn(0x1009, 2, op("BRANCHIND", None, "register,80,8")),
+    )
+    assert pl.lift_body(fn).holes == ["BRANCHIND"]
+
+
+def test_branchind_on_a_target_written_twice_before_the_jump_stays_a_hole():
+    fn = body(
+        insn(0x1000, 3, op("COPY", "register,80,8", "register,38,8")),
+        insn(0x1003, 3, op("COPY", "register,80,8", "register,10,8")),
+        insn(0x1006, 2, op("BRANCHIND", None, "register,80,8")),
+    )
+    assert pl.lift_body(fn).holes == ["BRANCHIND"]
+
+
+def test_branchind_on_a_target_written_after_the_jump_stays_a_hole():
+    """A register the body keeps writing is reused storage, not a value handed over for this jump."""
+    fn = body(
+        insn(0x1000, 3, op("COPY", "register,80,8", "register,38,8")),
+        insn(0x1003, 2, op("BRANCHIND", None, "register,80,8")),
+        insn(0x1005, 3, op("COPY", "register,80,8", "register,10,8")),
+    )
+    assert pl.lift_body(fn).holes == ["BRANCHIND"]
+
+
+def test_branchind_on_a_target_copied_from_a_constant_stays_a_hole():
+    fn = body(
+        insn(0x1000, 3, op("COPY", "register,80,8", "const,4000,8")),
+        insn(0x1003, 2, op("BRANCHIND", None, "register,80,8")),
+    )
+    assert pl.lift_body(fn).holes == ["BRANCHIND"]
+
+
+def test_branchind_on_a_target_copied_from_a_computed_temporary_stays_a_hole():
+    """The one write is a COPY, but from a temporary the body built: that is a computed target."""
+    fn = body(
+        insn(
+            0x1000,
+            4,
+            op("INT_ADD", "unique,8e00,8", "register,38,8", "register,10,8"),
+            op("COPY", "register,80,8", "unique,8e00,8"),
+        ),
+        insn(0x1004, 2, op("BRANCHIND", None, "register,80,8")),
+    )
+    result = pl.lift_body(fn)
+    assert result.holes == ["BRANCHIND"]
+    assert result.tail_calls == 0
+
+
+def test_branchind_on_a_target_sign_extended_before_the_jump_stays_a_hole():
+    """A one-operand arithmetic op, so the arity of the operands is not what refuses it."""
+    fn = body(
+        insn(0x1000, 3, op("INT_SEXT", "register,80,8", "register,80,4")),
+        insn(0x1003, 2, op("BRANCHIND", None, "register,80,8")),
+    )
+    assert pl.lift_body(fn).holes == ["BRANCHIND"]
+
+
+def test_branchind_on_a_target_defined_by_an_intrinsic_stays_a_hole():
+    """The image has this shape: a CALLOTHER result jumped through, one operand, never a handover."""
+    fn = body(
+        insn(0x1000, 4, op("CALLOTHER", "register,80,8", "const,57,4", user="rdrand")),
+        insn(0x1004, 2, op("BRANCHIND", None, "register,80,8")),
+    )
+    result = pl.lift_body(fn)
+    assert result.tail_calls == 0
+    assert "BRANCHIND" in result.holes
+
+
+def test_branchind_on_a_target_copied_after_an_untrackable_write_stays_a_hole():
+    fn = body(
+        insn(0x1000, 3, op("COPY", "register,80,8", "register,38,8")),
+        insn(0x1003, 3, op("COPY", REG_RSP, "register,48,8")),
+        insn(0x1006, 2, op("BRANCHIND", None, "register,80,8")),
+    )
+    assert pl.lift_body(fn).holes == ["BRANCHIND"]
+
+
 REG_RSP = "register,20,8"
 
 
