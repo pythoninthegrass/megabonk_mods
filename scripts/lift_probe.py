@@ -112,6 +112,16 @@ def tally_holes(results: list[dict]) -> dict[str, int]:
     return dict(counts)
 
 
+def tally_tables(results: list[dict]) -> dict[str, int]:
+    """Counts bodies whose switch was lowered over decoded table bytes rather than Ghidra's case list."""
+    bodies = tables = 0
+    for result in results:
+        audited = result.get("tables_audited", 0)
+        bodies += int(audited > 0)
+        tables += audited
+    return {"bodies": bodies, "tables": tables}
+
+
 def tally_branchind(results: list[dict]) -> dict:
     """Counts BRANCHIND sites by the stack-balance verdict: proven, or unproven grouped by reason.
 
@@ -585,10 +595,10 @@ def optimise_body(ir: str, pipeline: str, tool_timeout: int) -> tuple[bool, byte
     return run_tool_body("opt", [LLVM / "opt", f"-passes={pipeline}", "-S", "-o", "-"] + EXTRA_ARGS, ir, tool_timeout)
 
 
-def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT, pipeline: str = "") -> dict:
+def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT, pipeline: str = "", evidence=None) -> dict:
     """Record each stage; rejected pipelines never compile fallback unoptimized IR."""
     try:
-        lifted = pcode_lift.lift_body(fn, sections)
+        lifted = pcode_lift.lift_body(fn, sections, evidence=evidence)
         ir = pcode_lift.module_for([lifted])
     except Exception as exc:
         return failed_row(fn["start"], fn["size"], f"lift raised {type(exc).__name__}: {exc}")
@@ -655,6 +665,7 @@ def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT,
         "proven_tail_calls": lifted.proven_tail_calls,
         "unproven_branchind": lifted.unproven_branchind,
         "jump_tables": len(fn.get("jt", [])),
+        "tables_audited": lifted.tables_audited,
         "obj_bytes": obj_bytes,
         "error": error,
         "pipeline": pipeline or None,
@@ -669,12 +680,12 @@ def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT,
     }
 
 
-def score_row(row: dict, sections: list[dict], tool_timeout: int, pipeline: str = "") -> dict:
+def score_row(row: dict, sections: list[dict], tool_timeout: int, pipeline: str = "", evidence=None) -> dict:
     """Scores one reconciled row, turning anything that escapes the scorer into a recorded failure."""
     if row.get("error"):
         return row
     try:
-        return score_body(row, sections, tool_timeout, pipeline)
+        return score_body(row, sections, tool_timeout, pipeline, evidence)
     except Exception as exc:
         return failed_row(row["start"], row["size"], f"scoring raised {type(exc).__name__}: {exc}")
 

@@ -9,6 +9,7 @@ being skipped silently, so a clean `holes` list means every pcode op in the body
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from lift_tables import direct_branch_targets
 
 INT_BINARY = {
     "INT_ADD": "add",
@@ -73,6 +74,7 @@ class Lifted:
     tail_calls: int = 0
     proven_tail_calls: int = 0
     unproven_branchind: list[dict] = field(default_factory=list)
+    tables_audited: int = 0
 
 
 def parse_varnode(text: str) -> tuple[str, int, int]:
@@ -313,6 +315,7 @@ class BodyLifter:
         call_dispatch: bool = False,
         unwind: bool = False,
         pads: frozenset = frozenset(),
+        evidence=None,
     ):
         self.fn = fn
         self.call_dispatch = call_dispatch
@@ -335,6 +338,9 @@ class BodyLifter:
         self.tail_calls = 0
         self.proven_tail_calls = 0
         self.unproven_branchind: list[dict] = []
+        self.evidence = evidence
+        self.tables_audited = 0
+        self.direct: set[int] | None = None
         self.proof = site_proof(fn)
         self.frame = site_frame(fn)
         self.counter = 0
@@ -833,6 +839,27 @@ class BodyLifter:
             target = op["in"][0]
         return False
 
+    def audited_cases(self, site: int, cases: list[int]) -> list[int] | None:
+        """Replaces a case list that runs past the body with the image's own table bytes, when they explain it.
+
+        Accepted only when every byte-decoded case lies in the body and every case Ghidra added beyond
+        the bytes is either a target the body already reaches by a direct branch or code outside the
+        body, which cannot be an edge of it. A case on the body's own code that no branch reaches is
+        the sign of a wrong entry count, so it keeps the hole.
+        """
+        if self.evidence is None:
+            return None
+        raw = self.evidence.raw_cases(sorted(self.addrs), site)
+        if not raw or any(c not in self.addrs for c in raw):
+            return None
+        if self.direct is None:
+            self.direct = direct_branch_targets(self.fn)
+        outside = self.start + self.size
+        if any(c not in self.direct and self.start <= c < outside for c in set(cases) - set(raw)):
+            return None
+        self.tables_audited += 1
+        return raw
+
     def branch_indirect(self, insn: dict, k: int, target: str) -> None:
         """Lowers a BRANCHIND as a switch, or as an indirect call and a return for a loaded-pointer tail call.
 
@@ -882,7 +909,11 @@ class BodyLifter:
         self.emit(f"{rebased} = sub i64 {value}, {bias}")
         reachable = sorted({c for c in cases if c in self.addrs})
         if len(reachable) != len(set(cases)):
-            self.holes.append("JUMPTABLE_TARGET")
+            audited = self.audited_cases(insn["a"], cases)
+            if audited is None:
+                self.holes.append("JUMPTABLE_TARGET")
+            else:
+                reachable = sorted(set(audited))
         default = f"U{insn['a']:x}"
         self.pending_tail.append((default, None))
         arms = " ".join(f"i64 {c}, label %{self.label(c)}" for c in reachable)
@@ -973,6 +1004,7 @@ class BodyLifter:
             self.tail_calls,
             self.proven_tail_calls,
             self.unproven_branchind,
+            self.tables_audited,
         )
 
 
@@ -983,8 +1015,9 @@ def lift_body(
     call_dispatch: bool = False,
     unwind: bool = False,
     pads: frozenset = frozenset(),
+    evidence=None,
 ) -> Lifted:
-    return BodyLifter(fn, sections, call_dispatch=call_dispatch, unwind=unwind, pads=pads).run()
+    return BodyLifter(fn, sections, call_dispatch=call_dispatch, unwind=unwind, pads=pads, evidence=evidence).run()
 
 
 def section_global(name: str, image: bytes | None, patches: tuple = ()) -> str:

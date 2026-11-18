@@ -772,6 +772,76 @@ def test_jump_table_case_outside_the_body_is_a_hole():
     assert pl.lift_body(fn, [RODATA, TEXT]).holes == ["JUMPTABLE_TARGET"]
 
 
+class StubEvidence:
+    def __init__(self, raw):
+        self.raw = raw
+        self.calls = []
+
+    def raw_cases(self, boundaries, site):
+        self.calls.append((tuple(boundaries), site))
+        return self.raw
+
+
+def switch_body(*extra_ops):
+    fn = body(
+        insn(0x1000, 4, op("COPY", "register,0,8", "cptr,5000,8")),
+        insn(0x1004, 2, op("BRANCHIND", None, "register,0,8")),
+        insn(0x1006, 2, op("COPY", REG_EAX, "const,1,4"), op("RETURN", None, "register,288,8")),
+        insn(0x1008, 2, op("COPY", REG_EAX, "const,2,4"), op("RETURN", None, "register,288,8")),
+        insn(0x100a, 5, *extra_ops) if extra_ops else insn(0x100a, 1, op("RETURN", None, "register,288,8")),
+    )
+    fn["jt"] = [{"at": 0x1004, "cases": [0x1006, 0x1008, 0x7000]}]
+    return fn
+
+
+def test_table_bytes_replace_a_case_list_ghidra_padded_with_a_direct_edge():
+    fn = switch_body(op("BRANCH", None, "ram,7000,8"))
+    evidence = StubEvidence([0x1006, 0x1008])
+    result = pl.lift_body(fn, [RODATA, TEXT], evidence=evidence)
+    assert result.holes == []
+    assert result.tables_audited == 1
+    assert evidence.calls == [((0x1000, 0x1004, 0x1006, 0x1008, 0x100A), 0x1004)]
+    assert "switch i64" in result.ir
+    arms = result.ir.split("switch i64")[1].split("[")[1].split("]")[0]
+    assert arms.count("i64 ") == 2
+    assert "28672" not in arms
+
+
+def test_table_bytes_are_refused_when_the_dropped_case_lands_on_the_bodys_own_code():
+    fn = switch_body()
+    fn["jt"] = [{"at": 0x1004, "cases": [0x1006, 0x1008, 0x1005]}]
+    result = pl.lift_body(fn, [RODATA, TEXT], evidence=StubEvidence([0x1006, 0x1008]))
+    assert result.holes == ["JUMPTABLE_TARGET"]
+    assert result.tables_audited == 0
+
+
+def test_table_bytes_replace_a_case_list_ghidra_padded_with_code_from_another_frame():
+    fn = switch_body()
+    fn["jt"] = [{"at": 0x1004, "cases": [0x1006, 0x1008, 0x7000, 0x9000]}]
+    result = pl.lift_body(fn, [RODATA, TEXT], evidence=StubEvidence([0x1006, 0x1008]))
+    assert result.holes == []
+    assert result.tables_audited == 1
+
+
+def test_table_bytes_are_refused_when_they_run_past_the_body_too():
+    fn = switch_body(op("BRANCH", None, "ram,7000,8"))
+    result = pl.lift_body(fn, [RODATA, TEXT], evidence=StubEvidence([0x1006, 0x7000]))
+    assert result.holes == ["JUMPTABLE_TARGET"]
+    assert result.tables_audited == 0
+
+
+def test_table_bytes_are_not_consulted_when_the_case_list_is_already_clean():
+    fn = body(
+        insn(0x1000, 4, op("COPY", "register,0,8", "cptr,5000,8")),
+        insn(0x1004, 2, op("BRANCHIND", None, "register,0,8")),
+        insn(0x1006, 2, op("COPY", REG_EAX, "const,1,4"), op("RETURN", None, "register,288,8")),
+    )
+    fn["jt"] = [{"at": 0x1004, "cases": [0x1006]}]
+    evidence = StubEvidence([0x1006])
+    assert pl.lift_body(fn, [RODATA, TEXT], evidence=evidence).holes == []
+    assert evidence.calls == []
+
+
 def test_sparse_unique_offsets_are_compacted_into_a_small_frame():
     fn = body(
         insn(

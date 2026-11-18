@@ -198,7 +198,7 @@ def test_blocker_shard_reuses_scores_only_for_the_same_scorer(tmp_path, monkeypa
     original = path.read_bytes()
     calls = []
 
-    def score(row, sections, timeout, pipeline):
+    def score(row, sections, timeout, pipeline, evidence=None):
         calls.append(row["start"])
         return row
 
@@ -331,7 +331,7 @@ def test_missing_dump_cache_can_be_retried_without_discarding_good_rows(tmp_path
         assert bodies == [part[1]]
         return [{"start": 2, "size": 1}], sections
 
-    def score(row, sections, timeout, pipeline):
+    def score(row, sections, timeout, pipeline, evidence=None):
         assert row["start"] == 2
         return row
 

@@ -286,7 +286,7 @@ def build_shard(index: int, part: list[Fde], ctx: dict) -> list[dict]:
     def score(row):
         if row["start"] in previous:
             return previous[row["start"]]
-        return lp.score_row(row, sections, ctx["tool_timeout"], ctx["pipeline"])
+        return lp.score_row(row, sections, ctx["tool_timeout"], ctx["pipeline"], table_evidence(ctx))
 
     with lp.ThreadPoolExecutor(ctx["score_jobs"]) as pool:
         scored = list(pool.map(score, rows))
@@ -315,11 +315,22 @@ def select_blockers(report: dict, sha: str, parts: list[list[Fde]]) -> list[tupl
     return selected
 
 
+def table_evidence(ctx: dict):
+    """One lazily-loaded jump-table byte reader per run, shared by every body this shard scores."""
+    if "evidence" not in ctx:
+        import lift_probe as lp
+        from lift_tables import TableEvidence
+
+        ctx["evidence"] = TableEvidence(ctx["so"], lp.LLVM / "llvm-objdump") if ctx.get("so") else None
+    return ctx["evidence"]
+
+
 def scoring_fingerprint() -> str:
     import lift_probe as lp
+    import lift_tables
 
     stamp = hashlib.sha256()
-    for path in (__file__, lp.__file__, lp.pcode_lift.__file__):
+    for path in (__file__, lp.__file__, lp.pcode_lift.__file__, lift_tables.__file__):
         stamp.update(Path(path).read_bytes())
     for tool in ("opt", "llc"):
         stamp.update(lp.run_tool([lp.LLVM / tool, "--version"], check=True).stdout)
@@ -345,7 +356,7 @@ def score_blocker_shard(index, part, wanted, baseline, ctx, scorer):
     if scored is not None:
         return scored
     with lp.ThreadPoolExecutor(ctx["score_jobs"]) as pool:
-        scored = list(pool.map(lambda r: lp.score_row(r, sections, ctx["tool_timeout"], ctx["pipeline"]), rows))
+        scored = list(pool.map(lambda r: lp.score_row(r, sections, ctx["tool_timeout"], ctx["pipeline"], table_evidence(ctx)), rows))
     write_shard(path, score_id, scored)
     return scored
 
@@ -431,6 +442,7 @@ def build(args) -> int:
         "stages": lp.summarize(rows)["all"] if rows else {},
         "holes": lp.tally_holes(rows),
         "branchind": lp.tally_branchind(rows),
+        "tables": lp.tally_tables(rows),
         "failures": lp.tally_failures(rows),
         "object_bytes": sum(r["obj_bytes"] for r in ok),
         "x86_bytes": sum(r["size"] for r in ok),
