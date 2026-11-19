@@ -436,3 +436,26 @@ def test_raw_table_returns_the_guarded_pattern_with_its_decoded_cases():
     assert ev.raw_table([0x20, 0x40], 0x2126CFF) is None
     assert ev.raw_cases([0x20, 0x40], 0x2126CFF) is None
 
+WIDE_COPY_UNBOUND_TEXT = """
+ 4675ba9:   	cmpb	$0x5, %bl
+ 4675bac:   	ja	0x4675be8 <__start_il2cpp+0x2513258>
+ 4675bae:   	movl	%ebx, %eax
+ 4675bb0:   	leaq	-0x3a7bc27(%rip), %rcx  # 0xbf9f90
+ 4675bb7:   	movslq	(%rcx,%rax,4), %rax
+ 4675bbb:   	addq	%rcx, %rax
+ 4675bbe:   	jmpq	*%rax
+"""
+
+
+def test_a_byte_guard_on_another_register_leaves_a_wide_index_unbounded():
+    # The shape the image ships for an enum switch (0x4675ba9): the guard compares %bl while the table is
+    # indexed with %eax, written by a 32-bit movl. A byte bound on %bl says nothing about the top 24 bits
+    # of the index, which are the caller's promise rather than the body's, so a case list taken from this
+    # guard could omit a reachable entry. WIDENED_BOUND_TEXT is the accepted counterpart: there the index
+    # is movzbl of the very byte the guard compared.
+    assert evidence.parse_table_pattern(WIDE_COPY_UNBOUND_TEXT, 0x4675BBE) == {
+        "base": 0xBF9F90,
+        "scale": 4,
+        "count": None,
+    }
+
