@@ -247,8 +247,8 @@ class TableEvidence:
         self._read = None
         self._disassemble = None
 
-    def raw_cases(self, boundaries, site):
-        """Case addresses the table at `site` holds, or None unless the pattern and its case bound are both present."""
+    def raw_table(self, boundaries, site):
+        """The table at `site` as base, entry size, case count and decoded cases, or None when unproven."""
         if self._read is None:
             self._read = elf_reader(self.so)
             self._disassemble = objdump_disassembler(self.so, self.objdump)
@@ -256,6 +256,11 @@ class TableEvidence:
         if pattern is None or pattern["count"] is None:
             return None
         try:
-            return decode_table(pattern, pattern["count"], self._read)
+            return {**pattern, "cases": decode_table(pattern, pattern["count"], self._read)}
         except ValueError:
             return None
+
+    def raw_cases(self, boundaries, site):
+        """Case addresses the table at `site` holds, or None unless the pattern and its case bound are both present."""
+        table = self.raw_table(boundaries, site)
+        return None if table is None else table["cases"]

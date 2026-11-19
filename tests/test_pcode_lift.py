@@ -1501,6 +1501,137 @@ def test_refused_branchind_records_no_table_bytes_without_evidence_or_a_partial_
     assert partial.unproven_branchind[0]["reason"] == "rsp not at entry value"
 
 
+class StubTable:
+    """TableEvidence stand-in answering both the case-list and the pattern-and-cases question."""
+
+    def __init__(self, table):
+        self.table = table
+        self.calls = []
+
+    def raw_table(self, boundaries, site):
+        self.calls.append((tuple(boundaries), site))
+        return self.table
+
+    def raw_cases(self, boundaries, site):
+        table = self.raw_table(boundaries, site)
+        return None if table is None else table["cases"]
+
+
+def dispatch_insn(base="cptr,5010,8", entry="unique,23c00,4", loader=None, scale="const,4,8"):
+    """The op sequence the dump carries for a base-relative jump-table dispatch.
+
+    Copied from 0x3ac553c: the table base copied from a cptr constant, the index scaled by the entry
+    size, the entry loaded and sign-extended, then added to the base to land on the target.
+    """
+    return [
+        op("COPY", "register,10,8", base),
+        op("INT_MULT", "unique,9200,8", "register,0,8", scale),
+        op("INT_ADD", "unique,9400,8", "register,10,8", "unique,9200,8"),
+        loader or op("LOAD", entry, "const,4,4", "unique,9400,8"),
+        op("INT_SEXT", "register,0,8", entry),
+        op("INT_ADD", "register,0,8", "register,0,8", "register,10,8"),
+    ]
+
+
+def dispatch_body(**kw):
+    return body(
+        insn(0x1000, 20, *dispatch_insn(**kw)),
+        insn(0x1014, 2, op("BRANCHIND", None, "register,0,8")),
+        insn(0x1016, 2, op("COPY", REG_EAX, "const,1,4"), op("RETURN", None, "register,288,8")),
+        insn(0x1018, 2, op("COPY", REG_EAX, "const,2,4"), op("RETURN", None, "register,288,8")),
+    )
+
+
+TABLE = {"base": 0x5010, "scale": 4, "count": 2, "cases": [0x1016, 0x1018]}
+
+
+def test_the_images_table_bytes_drive_a_switch_ghidra_left_without_one():
+    result = pl.lift_body(dispatch_body(), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert result.holes == []
+    assert result.evidence_switches == 1
+    assert "switch i64" in result.ir
+    assert "ptr @sec_rodata" in result.ir
+    arms = result.ir.split("switch i64")[1].split("[")[1].split("]")[0]
+    assert arms.count("i64 ") == 2
+    assert "4118" in arms and "4120" in arms
+
+
+@requires_llvm
+def test_a_switch_from_byte_evidence_verifies():
+    result = pl.lift_body(dispatch_body(), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert result.holes == []
+    assert "switch i64" in result.ir
+    assert verify(pl.module_for([result])).returncode == 0
+
+
+def test_an_evidence_switch_is_refused_for_absolute_entries():
+    # Scale 8 entries hold absolute addresses, which the switch's rebasing cannot resolve back to a
+    # dumped address, so the site keeps its hole rather than lowering a switch that never matches.
+    result = pl.lift_body(dispatch_body(), [RODATA, TEXT], evidence=StubTable({**TABLE, "scale": 8}))
+    assert result.holes == ["BRANCHIND"]
+    assert result.evidence_switches == 0
+
+
+def test_an_evidence_switch_is_refused_when_a_case_lands_outside_the_body():
+    result = pl.lift_body(dispatch_body(), [RODATA, TEXT], evidence=StubTable({**TABLE, "cases": [0x1016, 0x7000]}))
+    assert result.holes == ["BRANCHIND"]
+    assert result.evidence_switches == 0
+
+
+def test_an_evidence_switch_is_refused_when_the_base_is_not_the_tables_section():
+    # A target built from a pointer that did not come from the table's own section cannot be rebased
+    # against it, whatever the table bytes say.
+    elsewhere = pl.lift_body(dispatch_body(base="cptr,9000,8"), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert elsewhere.holes == ["BRANCHIND"]
+    assert elsewhere.evidence_switches == 0
+    computed = pl.lift_body(dispatch_body(base="unique,9100,8"), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert computed.holes == ["BRANCHIND"]
+    assert computed.evidence_switches == 0
+
+
+def test_an_evidence_switch_is_refused_unless_the_entry_is_a_table_load():
+    copied = dispatch_insn(loader=op("COPY", "unique,23c00,4", "unique,9400,8"))
+    fn = body(insn(0x1000, 20, *copied), insn(0x1014, 2, op("BRANCHIND", None, "register,0,8")))
+    result = pl.lift_body(fn, [RODATA, TEXT], evidence=StubTable({**TABLE, "cases": [0x1014]}))
+    assert result.holes == ["BRANCHIND"]
+    assert result.evidence_switches == 0
+
+
+def test_an_evidence_switch_is_refused_when_the_index_is_not_scaled_by_the_entry_size():
+    fn = body(
+        insn(
+            0x1000,
+            20,
+            *dispatch_insn(scale="const,8,8"),
+        ),
+        insn(0x1014, 2, op("BRANCHIND", None, "register,0,8")),
+        insn(0x1016, 2, op("COPY", REG_EAX, "const,1,4"), op("RETURN", None, "register,288,8")),
+    )
+    result = pl.lift_body(fn, [RODATA, TEXT], evidence=StubTable({**TABLE, "cases": [0x1016]}))
+    assert result.holes == ["BRANCHIND"]
+    assert result.evidence_switches == 0
+
+
+def test_byte_evidence_never_replaces_a_proven_sibling_tail_call():
+    # The evidence switch is only reached by a site the tail-call gates refuse: a site that already
+    # lowers as a proven tail call keeps that lowering whatever the table bytes say about it.
+    fn = body(
+        insn(0x1000, 3, op("COPY", "register,0,8", "register,30,8")),
+        insn(0x1003, 2, op("BRANCHIND", None, "register,0,8")),
+    )
+    result = pl.lift_body(fn, [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert result.holes == []
+    assert result.tail_calls == 1
+    assert result.evidence_switches == 0
+    assert "switch i64" not in result.ir
+
+
+def test_a_hole_without_evidence_records_no_switch():
+    result = pl.lift_body(dispatch_body(), [RODATA, TEXT])
+    assert result.holes == ["BRANCHIND"]
+    assert result.evidence_switches == 0
+
+
 @requires_llvm
 def test_branchind_on_a_register_loaded_by_an_earlier_instruction_is_a_tail_call():
     fn = body(

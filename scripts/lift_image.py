@@ -459,6 +459,7 @@ def build(args) -> int:
         "holes": lp.tally_holes(rows),
         "branchind": lp.tally_branchind(rows),
         "tables": lp.tally_tables(rows),
+        "evidence_switches": lp.tally_evidence_switches(rows),
         "atomics": lp.tally_atomics(rows),
         "failures": lp.tally_failures(rows),
         "object_bytes": sum(r["obj_bytes"] for r in ok),

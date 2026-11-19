@@ -417,3 +417,22 @@ def test_a_batch_timeout_names_the_active_body_and_preserves_finished_rows(tmp_p
     assert calls == [bodies, bodies[2:]]
     assert evidence.recover(bodies, tmp_path, "new-deadline", dump, batch_size=8) == rows
     assert calls == [bodies, bodies[2:], bodies, bodies[2:]]
+
+def test_raw_table_returns_the_guarded_pattern_with_its_decoded_cases():
+    # The two facts an evidence-driven switch needs at once: the pattern (with its range guard) and the
+    # entries the image holds. A pattern with no guard has no count, and no count means no cases.
+    ev = tables.TableEvidence(Path("GameAssembly.so"), "llvm-objdump")
+    blob = b"".join(o.to_bytes(4, "little", signed=True) for o in [-(0xFB809C - 0x20), 0x20, 0x24, 0x28, 0x2C])
+    ev._disassemble = lambda window: SYMBOL_ANNOTATED_TEXT
+    ev._read = lambda addr, n: blob[addr - 0xFB809C : addr - 0xFB809C + n]
+    assert ev.raw_table([0x20, 0x40], 0x2126CFF) == {
+        "base": 0xFB809C,
+        "scale": 4,
+        "count": 5,
+        "cases": [0x20, 0xFB80BC, 0xFB80C0, 0xFB80C4, 0xFB80C8],
+    }
+    assert ev.raw_cases([0x20, 0x40], 0x2126CFF) == [0x20, 0xFB80BC, 0xFB80C0, 0xFB80C4, 0xFB80C8]
+    ev._disassemble = lambda window: CLOBBERED_BOUND_TEXT
+    assert ev.raw_table([0x20, 0x40], 0x2126CFF) is None
+    assert ev.raw_cases([0x20, 0x40], 0x2126CFF) is None
+

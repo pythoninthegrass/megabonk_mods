@@ -91,6 +91,7 @@ class Lifted:
     proven_tail_calls: int = 0
     unproven_branchind: list[dict] = field(default_factory=list)
     tables_audited: int = 0
+    evidence_switches: int = 0
     atomics: int = 0
 
 
@@ -661,6 +662,7 @@ class BodyLifter:
         self.unproven_branchind: list[dict] = []
         self.evidence = evidence
         self.tables_audited = 0
+        self.evidence_switches = 0
         self.direct: set[int] | None = None
         self.proof = site_proof(fn)
         self.frame = site_frame(fn)
@@ -1443,12 +1445,7 @@ class BodyLifter:
 
         With `slots`, a COPY from a fixed memory slot (a ram-space varnode) also counts as a load.
         """
-        flat = []
-        for earlier in self.fn["insns"]:
-            if earlier is insn:
-                flat += earlier["ops"][:k]
-                break
-            flat += earlier["ops"]
+        flat = self.ops_before(insn, k)
         for op in reversed(flat):
             if op["out"] != target:
                 continue
@@ -1518,6 +1515,88 @@ class BodyLifter:
             return False
         return bool(raw) and all(c in self.addrs for c in raw)
 
+    def ops_before(self, insn: dict, k: int) -> list[dict]:
+        """Every op the body executes ahead of operand k of this instruction, in dump order."""
+        flat: list[dict] = []
+        for earlier in self.fn["insns"]:
+            if earlier is insn:
+                return flat + earlier["ops"][:k]
+            flat += earlier["ops"]
+        return flat
+
+    def index_of(self, ops: list[dict], op: dict) -> int:
+        """Where an op sits in the flattened list, found by identity so equal ops cannot collide."""
+        for i in range(len(ops) - 1, -1, -1):
+            if ops[i] is op:
+                return i
+        return len(ops)
+
+    def last_write(self, ops: list[dict], varnode: str, limit: int | None = None) -> dict | None:
+        """The op that most recently wrote `varnode`, looking no further than `limit` in the list."""
+        for op in reversed(ops[: len(ops) if limit is None else limit]):
+            if op.get("out") == varnode:
+                return op
+        return None
+
+    def table_pointer_chain(self, ops: list[dict], target: str, table_section: dict) -> bool:
+        """Whether the target is built the way the dump builds a base-relative jump-table target.
+
+        entry = LOAD(base + index * entry_size) and target = sext(entry) + base, the base copied whole
+        from the table's own section. That construction is what makes the runtime value a dumped address
+        plus that section's bias, which is the only value the switch's rebasing can resolve; a target
+        assembled any other way keeps its hole rather than lowering a switch that could never match.
+        """
+        joined = self.last_write(ops, target)
+        if not joined or joined["op"] != "INT_ADD" or len(joined.get("in") or []) != 2 or target not in joined["in"]:
+            return False
+        base = next((v for v in joined["in"] if v != target), None)
+        sext = self.last_write(ops, target, self.index_of(ops, joined))
+        if not sext or sext["op"] != "INT_SEXT" or len(sext.get("in") or []) != 1:
+            return False
+        entry = sext["in"][0]
+        load = self.last_write(ops, entry)
+        if not load or load["op"] != "LOAD" or len(load.get("in") or []) != 2 or parse_varnode(entry)[2] != 4:
+            return False
+        slot = self.last_write(ops, load["in"][1])
+        if not slot or slot["op"] != "INT_ADD" or len(slot.get("in") or []) != 2 or base not in slot["in"]:
+            return False
+        scaled = next((v for v in slot["in"] if v != base), None)
+        mult = self.last_write(ops, scaled)
+        if not mult or mult["op"] != "INT_MULT" or len(mult.get("in") or []) != 2:
+            return False
+        if next((const_of(v) for v in mult["in"] if v.startswith("const,")), None) != 4:
+            return False
+        copied = self.last_write(ops, base)
+        if not copied or copied["op"] != "COPY" or len(copied.get("in") or []) != 1:
+            return False
+        source = copied["in"][0]
+        if not source.startswith(("cptr,", "ram,")):
+            return False
+        return self.section_of(int(source.split(",")[1], 16)) is table_section
+
+    def evidence_switch(self, insn: dict, k: int, target: str) -> tuple[list[int], dict] | None:
+        """Cases and bias section for a site Ghidra left without a table, when the image's bytes prove one.
+
+        Only base-relative (4-byte) tables are accepted: their entries are offsets from the table itself,
+        so the bytes in the image say exactly where the dispatch can land. Absolute entries name a
+        runtime address the lifter cannot resolve, so those sites keep their hole.
+        """
+        if self.evidence is None:
+            return None
+        try:
+            table = self.evidence.raw_table(sorted(self.addrs), insn["a"])
+        except Exception:
+            return None
+        if not table or table.get("scale") != 4 or table.get("count") is None or table.get("base") is None:
+            return None
+        cases = table.get("cases") or []
+        if not cases or any(c not in self.addrs for c in cases):
+            return None
+        sec = self.section_of(table["base"])
+        if sec is None or not self.table_pointer_chain(self.ops_before(insn, k), target, sec):
+            return None
+        return sorted(set(cases)), sec
+
     def refusal_reason(self, verdict: dict, table_bytes: bool) -> str:
         """Why a BRANCHIND stayed a hole, in the terms of the gate that actually refused it.
 
@@ -1547,6 +1626,11 @@ class BodyLifter:
             proven = self.proof.get(insn["a"], {}).get("reason") == ""
             sibling = proven and self.handed_over_target(insn, k, target)
             if not (load_traced or balanced or sibling):
+                switched = self.evidence_switch(insn, k, target)
+                if switched is not None:
+                    self.evidence_switches += 1
+                    self.emit_switch(insn, target, *switched)
+                    return
                 table_bytes = self.table_in_the_image(insn["a"])
                 self.unproven_branchind.append(
                     {
@@ -1579,9 +1663,6 @@ class BodyLifter:
             self.holes.append("BRANCHIND")
             self.emit("unreachable")
             return
-        value, bias, rebased = self.read(target), self.tmp(), self.tmp()
-        self.emit(f"{bias} = sub i64 ptrtoint (ptr @sec_{sec['name']} to i64), {sec['va']}")
-        self.emit(f"{rebased} = sub i64 {value}, {bias}")
         reachable = sorted({c for c in cases if c in self.addrs})
         if len(reachable) != len(set(cases)):
             audited = self.audited_cases(insn["a"], cases)
@@ -1589,9 +1670,18 @@ class BodyLifter:
                 self.holes.append("JUMPTABLE_TARGET")
             else:
                 reachable = sorted(set(audited))
+        self.emit_switch(insn, target, reachable, sec)
+
+    def emit_switch(self, insn: dict, target: str, cases: list[int], sec: dict) -> None:
+        """Compares the dispatch value section-relative: a computed target carries the load bias its
+        section's symbol carries, so subtracting that section's own bias recovers the dumped address."""
+        self.data_sections.add(sec["name"])
+        value, bias, rebased = self.read(target), self.tmp(), self.tmp()
+        self.emit(f"{bias} = sub i64 ptrtoint (ptr @sec_{sec['name']} to i64), {sec['va']}")
+        self.emit(f"{rebased} = sub i64 {value}, {bias}")
         default = f"U{insn['a']:x}"
         self.pending_tail.append((default, None))
-        arms = " ".join(f"i64 {c}, label %{self.label(c)}" for c in reachable)
+        arms = " ".join(f"i64 {c}, label %{self.label(c)}" for c in cases)
         self.emit(f"switch i64 {rebased}, label %{default} [{arms}]")
 
     def landing_blocks(self) -> None:
@@ -1741,6 +1831,7 @@ class BodyLifter:
             self.proven_tail_calls,
             self.unproven_branchind,
             self.tables_audited,
+            self.evidence_switches,
             self.atomics,
         )
 

@@ -122,6 +122,16 @@ def tally_tables(results: list[dict]) -> dict[str, int]:
     return {"bodies": bodies, "tables": tables}
 
 
+def tally_evidence_switches(results: list[dict]) -> dict[str, int]:
+    """Counts bodies carrying a switch whose case list came from the image's own table bytes."""
+    bodies = switches = 0
+    for result in results:
+        lowered = result.get("evidence_switches", 0)
+        bodies += int(lowered > 0)
+        switches += lowered
+    return {"bodies": bodies, "switches": switches}
+
+
 def tally_atomics(results: list[dict]) -> dict[str, int]:
     """Counts bodies carrying a lowered `lock` region and the locked sites rewritten as atomics."""
     bodies = sites = 0
@@ -680,6 +690,7 @@ def score_body(fn: dict, sections: list[dict], tool_timeout: int = TOOL_TIMEOUT,
         "atomics": lifted.atomics,
         "jump_tables": len(fn.get("jt", [])),
         "tables_audited": lifted.tables_audited,
+        "evidence_switches": lifted.evidence_switches,
         "obj_bytes": obj_bytes,
         "error": error,
         "pipeline": pipeline or None,

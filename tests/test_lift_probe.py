@@ -102,6 +102,11 @@ def test_tally_holes_counts_each_kind_once_per_body():
     assert lp.tally_holes(results) == {"BRANCHIND": 2, "CALLOTHER:divps": 1}
 
 
+def test_tally_evidence_switches_counts_bodies_and_sites_lowered_from_the_table_bytes():
+    results = [{"evidence_switches": 2}, {}, {"holes": []}, {"evidence_switches": 1}]
+    assert lp.tally_evidence_switches(results) == {"bodies": 2, "switches": 3}
+
+
 def test_tally_tables_counts_bodies_and_tables_lowered_from_the_bytes():
     results = [{"tables_audited": 2}, {}, {"holes": []}, {"tables_audited": 1}]
     assert lp.tally_tables(results) == {"bodies": 2, "tables": 3}
@@ -199,7 +204,7 @@ def test_failure_rows_name_each_body_by_address_and_size():
 def healthy_lifted(*_args, **_kw):
     return SimpleNamespace(
         holes=[], unmapped_refs=0, indirect_calls=0, tail_calls=0, proven_tail_calls=0,
-        unproven_branchind=[], tables_audited=0, atomics=0,
+        unproven_branchind=[], tables_audited=0, evidence_switches=0, atomics=0,
     )
 
 
@@ -211,13 +216,26 @@ def test_score_body_records_the_atomics_a_body_lowers(monkeypatch):
     def lowered(*_args, **_kw):
         return SimpleNamespace(
             holes=[], unmapped_refs=0, indirect_calls=0, tail_calls=0, proven_tail_calls=0,
-            unproven_branchind=[], tables_audited=0, atomics=3,
+            unproven_branchind=[], tables_audited=0, evidence_switches=3, atomics=3,
         )
 
     monkeypatch.setattr(lp.pcode_lift, "lift_body", lowered)
     monkeypatch.setattr(lp.pcode_lift, "module_for", lambda bodies: "define void @f() { ret void }")
     monkeypatch.setattr(lp, "run_tool", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, b"obj", b""))
     assert lp.score_body(body_fn(), [])["atomics"] == 3
+
+
+def test_score_body_records_the_switches_lowered_from_table_bytes(monkeypatch):
+    def lowered(*_args, **_kw):
+        return SimpleNamespace(
+            holes=[], unmapped_refs=0, indirect_calls=0, tail_calls=0, proven_tail_calls=0,
+            unproven_branchind=[], tables_audited=0, evidence_switches=2, atomics=0,
+        )
+
+    monkeypatch.setattr(lp.pcode_lift, "lift_body", lowered)
+    monkeypatch.setattr(lp.pcode_lift, "module_for", lambda bodies: "define void @f() { ret void }")
+    monkeypatch.setattr(lp, "run_tool", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, b"obj", b""))
+    assert lp.score_body(body_fn(), [])["evidence_switches"] == 2
 
 
 def test_score_body_records_a_lift_crash_against_the_body(monkeypatch):
