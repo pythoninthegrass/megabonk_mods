@@ -93,6 +93,28 @@ static void ground(Scene *scene)
     }
 }
 
+static unsigned enemy_color(const CombatEnemy *enemy)
+{
+    switch (enemy->kind) {
+    case COMBAT_ENEMY_BOSS: return 0xffc84bd8;
+    case COMBAT_ENEMY_GHOST: return 0xfff0f0f0;
+    case COMBAT_ENEMY_GREATER_GHOST: return 0xffe8d6b0;
+    case COMBAT_ENEMY_GHOST_PURPLE: return 0xffc8508c;
+    case COMBAT_ENEMY_GHOST_RED: return 0xff3030e0;
+    default: return enemy->hp > 1 ? 0xff6137d8 : 0xff4642f5;
+    }
+}
+
+static void draw_spawner(Scene *scene, const Combat *game)
+{
+    if (game->portal_open) {
+        box(scene, game->spawner, 0, 1.1f, 0.3f, 1.1f, 0xff4a4a4a);
+        box(scene, game->spawner, 0.3f, 0.8f, 3.2f, 0.12f, 0xfff0c040);
+    } else if (!game->boss_spawned) {
+        box(scene, game->spawner, 0, 0.7f, 1.2f, 0.7f, 0xffc84bd8);
+    }
+}
+
 static void draw_world(const Combat *game)
 {
     Scene scene = {
@@ -103,12 +125,16 @@ static void draw_world(const Combat *game)
     if (!scene.vertices)
         return;
     ground(&scene);
+    if (!game->benchmark)
+        draw_spawner(&scene, game);
     for (unsigned i = 0; i < COMBAT_CAPACITY; ++i) {
         if (game->drops[i].active)
             box(&scene, game->drops[i].position, 0.12f, 0.17f, 0.25f, 0.17f, 0xfff0e243);
-        if (game->enemies[i].hp)
-            box(&scene, game->enemies[i].position, 0, 0.31f, 0.95f, 0.31f,
-                game->enemies[i].hp > 1 ? 0xff6137d8 : 0xff4642f5);
+        if (!game->enemies[i].hp)
+            continue;
+        const bool boss = game->enemies[i].kind == COMBAT_ENEMY_BOSS;
+        box(&scene, game->enemies[i].position, 0, boss ? 1.1f : 0.31f, boss ? 3.2f : 0.95f,
+            boss ? 1.1f : 0.31f, enemy_color(&game->enemies[i]));
     }
     box(&scene, game->player, 0, 0.38f, 1.35f, 0.38f, accent);
     CombatVec end = game->shot_ticks ? game->shot_end :
@@ -151,6 +177,10 @@ static void draw_ui(const Combat *game, const CombatView *view)
         vita2d_pgf_draw_text(font, 228, 289, view->choice == COMBAT_HASTE ? accent : paper, 1,
                             "Haste   /   Fire more often");
         vita2d_pgf_draw_text(font, 228, 343, paper, 0.90f, "Up / Down: Choose     Cross: Confirm");
+    } else if (game->phase == COMBAT_EXITED) {
+        panel("RUN COMPLETE");
+        vita2d_pgf_draw_textf(font, 228, 250, accent, 1, "Level %u   /   %u defeated", game->level, game->kills);
+        vita2d_pgf_draw_text(font, 228, 302, paper, 0.90f, "Cross: Play again     Start: Title");
     } else if (game->phase == COMBAT_DEFEAT) {
         panel("RUN OVER");
         vita2d_pgf_draw_textf(font, 228, 250, accent, 1, "Level %u   /   %u defeated", game->level, game->kills);
@@ -166,6 +196,18 @@ static void draw_ui(const Combat *game, const CombatView *view)
     } else {
         vita2d_pgf_draw_textf(font, 30, 45, paper, 0.90f, "HP %u   XP %d/%d   LV %u   DMG %u   SHOT %u TICKS",
                              game->health, game->xp, COMBAT_XP_PER_LEVEL, game->level, game->damage, game->interval);
+        char clock[16];
+        combat_format_clock(combat_timer_ticks(game), clock, sizeof clock);
+        vita2d_draw_rectangle(792, 16, 150, 44, ink);
+        vita2d_pgf_draw_textf(font, 804, 45, game->final_swarm ? 0xff3030e0 : paper, 1, "%s%s",
+                             game->final_swarm ? "SWARM " : "", clock);
+        const char *prompt = combat_can_interact(game) ? "Square: Summon boss" :
+            combat_can_exit(game) ? "Square: Enter portal" :
+            game->portal_open ? "Boss defeated - portal open" : NULL;
+        if (prompt && game->phase == COMBAT_PLAY) {
+            vita2d_draw_rectangle(330, 480, 300, 40, ink);
+            vita2d_pgf_draw_text(font, 346, 508, accent, 0.95f, prompt);
+        }
     }
 }
 

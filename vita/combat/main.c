@@ -60,7 +60,10 @@ static bool handle_buttons(CombatView *view, uint32_t pressed)
             sweep_cancel();
             combat_benchmark(&game, view->count, view->scattered);
         }
-        if (game.phase == COMBAT_DEFEAT && (pressed & SCE_CTRL_CROSS))
+        if (!game.benchmark && (pressed & SCE_CTRL_SQUARE))
+            if (!combat_interact(&game))
+                combat_exit(&game);
+        if ((game.phase == COMBAT_DEFEAT || game.phase == COMBAT_EXITED) && (pressed & SCE_CTRL_CROSS))
             combat_start(&game);
         if (game.phase == COMBAT_UPGRADE) {
             if (pressed & SCE_CTRL_UP)

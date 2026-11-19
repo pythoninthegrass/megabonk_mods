@@ -1,6 +1,7 @@
 #include "combat.h"
 
 #include <math.h>
+#include <stdio.h>
 
 static CombatVec subtract(CombatVec a, CombatVec b)
 {
@@ -35,7 +36,7 @@ float combat_axis(uint8_t raw)
 
 static void initialize(Combat *game)
 {
-    *game = (Combat){.aim = {0, -1}, .damage = 1, .interval = 18, .health = 6, .level = 1};
+    *game = (Combat){.aim = {0, -1}, .spawner = {0, -14}, .damage = 1, .interval = 18, .health = 6, .level = 1};
 }
 
 static CombatVec benchmark_position(unsigned i, bool scattered)
@@ -44,17 +45,66 @@ static CombatVec benchmark_position(unsigned i, bool scattered)
     return scale(position, scattered ? 2.25f : 0.75f);
 }
 
-static void spawn(Combat *game)
+static bool spawn_enemy(Combat *game, unsigned hp, CombatEnemyKind kind)
 {
     for (unsigned i = 0; i < COMBAT_CAPACITY; ++i) {
         if (game->enemies[i].hp)
             continue;
         const unsigned index = game->spawn_index++;
         const float angle = index * 2.399963f;
-        game->enemies[i] = (CombatEnemy){{sinf(angle) * 9, -cosf(angle) * 9}, index % 4 == 3 ? 2 : 1};
+        game->enemies[i] = (CombatEnemy){{sinf(angle) * 9, -cosf(angle) * 9}, hp, kind};
         ++game->live;
-        return;
+        return true;
     }
+    return false;
+}
+
+static void spawn(Combat *game)
+{
+    spawn_enemy(game, game->spawn_index % 4 == 3 ? 2 : 1, COMBAT_ENEMY_NORMAL);
+}
+
+static CombatEnemyKind ghost_kind(unsigned seconds)
+{
+    if (seconds > 720)
+        return COMBAT_ENEMY_GHOST_RED;
+    if (seconds > 360)
+        return COMBAT_ENEMY_GHOST_PURPLE;
+    return seconds > 60 ? COMBAT_ENEMY_GREATER_GHOST : COMBAT_ENEMY_GHOST;
+}
+
+static unsigned ghost_hp(unsigned seconds)
+{
+    const float hp = ceilf(1.3f * exp2f(fminf(seconds / 30.0f, 20.0f)));
+    return (unsigned)hp;
+}
+
+static unsigned swarm_target(unsigned seconds)
+{
+    const float limit = seconds < 120 ? 400.0f : 300.0f;
+    const unsigned target = (unsigned)(50.0f + fminf(seconds * 2.5f, limit));
+    return target < COMBAT_CAPACITY ? target : COMBAT_CAPACITY;
+}
+
+static void swarm_spawn(Combat *game)
+{
+    const unsigned seconds = game->swarm_ticks / COMBAT_HZ;
+    const unsigned target = swarm_target(seconds);
+    while (game->live < target && spawn_enemy(game, ghost_hp(seconds), ghost_kind(seconds)))
+        ;
+}
+
+static void advance_stage_clock(Combat *game)
+{
+    if (game->final_swarm)
+        ++game->swarm_ticks;
+    else if (game->ticks >= COMBAT_STAGE_TICKS)
+        game->final_swarm = true;
+}
+
+unsigned combat_timer_ticks(const Combat *game)
+{
+    return game->final_swarm ? game->swarm_ticks : game->ticks;
 }
 
 void combat_start(Combat *game)
@@ -73,7 +123,7 @@ bool combat_benchmark(Combat *game, unsigned count, bool scattered)
     game->scattered = scattered;
     game->live = count;
     for (unsigned i = 0; i < count; ++i)
-        game->enemies[i] = (CombatEnemy){benchmark_position(i, scattered), 1};
+        game->enemies[i] = (CombatEnemy){benchmark_position(i, scattered), 1, COMBAT_ENEMY_NORMAL};
     return true;
 }
 
@@ -93,12 +143,24 @@ static void collect_xp(Combat *game)
         CombatDrop *drop = &game->drops[i];
         if (drop->active && length_squared(subtract(drop->position, game->player)) < 1.44f) {
             drop->active = false;
-            if (++game->xp == COMBAT_XP_PER_LEVEL) {
+            if (++game->xp >= COMBAT_XP_PER_LEVEL) {
                 game->phase = COMBAT_UPGRADE;
                 return;
             }
         }
     }
+}
+
+static void collect_all_xp(Combat *game)
+{
+    for (unsigned i = 0; i < COMBAT_CAPACITY; ++i) {
+        if (game->drops[i].active) {
+            game->drops[i].active = false;
+            ++game->xp;
+        }
+    }
+    if (game->xp >= COMBAT_XP_PER_LEVEL)
+        game->phase = COMBAT_UPGRADE;
 }
 
 static void fire(Combat *game)
@@ -129,8 +191,15 @@ static void fire(Combat *game)
         return;
     }
     ++game->kills;
-    if (game->benchmark) {
-        *enemy = (CombatEnemy){benchmark_position(target, game->scattered), 1};
+    if (enemy->kind == COMBAT_ENEMY_BOSS) {
+        enemy->hp = 0;
+        --game->live;
+        game->boss_defeated = game->portal_open = true;
+        collect_all_xp(game);
+        if (game->ticks < COMBAT_STAGE_TICKS - COMBAT_BOSS_GRACE_TICKS)
+            game->ticks = COMBAT_STAGE_TICKS - COMBAT_BOSS_GRACE_TICKS;
+    } else if (game->benchmark) {
+        *enemy = (CombatEnemy){benchmark_position(target, game->scattered), 1, COMBAT_ENEMY_NORMAL};
     } else {
         drop_xp(game, enemy->position);
         enemy->hp = 0;
@@ -176,12 +245,56 @@ void combat_tick(Combat *game, CombatInput input)
         collect_xp(game);
         if (game->phase != COMBAT_PLAY)
             return;
-        if (game->ticks % COMBAT_HZ == 0 && game->live < 60)
+        advance_stage_clock(game);
+        if (game->final_swarm) {
+            if (game->swarm_ticks % (COMBAT_HZ / 2) == 0)
+                swarm_spawn(game);
+        } else if (!game->boss_defeated && game->ticks % COMBAT_HZ == 0 && game->live < 60) {
             spawn(game);
+        }
     }
     chase(game);
     if (game->phase == COMBAT_PLAY && (!game->cooldown || !--game->cooldown))
         fire(game);
+}
+
+bool combat_can_interact(const Combat *game)
+{
+    return game->phase == COMBAT_PLAY && !game->boss_spawned && length_squared(subtract(game->spawner, game->player)) <= 25;
+}
+
+void combat_format_clock(unsigned ticks, char *out, unsigned size)
+{
+    const unsigned seconds = ticks / COMBAT_HZ;
+    snprintf(out, size, "%u:%02u", seconds / 60, seconds % 60);
+}
+
+bool combat_interact(Combat *game)
+{
+    if (!combat_can_interact(game))
+        return false;
+    for (unsigned i = 0; i < COMBAT_CAPACITY; ++i) {
+        if (game->enemies[i].hp)
+            continue;
+        game->enemies[i] = (CombatEnemy){game->spawner, COMBAT_BOSS_HP, COMBAT_ENEMY_BOSS};
+        game->boss_spawned = true;
+        ++game->live;
+        return true;
+    }
+    return false;
+}
+
+bool combat_can_exit(const Combat *game)
+{
+    return game->phase == COMBAT_PLAY && game->portal_open && length_squared(subtract(game->spawner, game->player)) <= 25;
+}
+
+bool combat_exit(Combat *game)
+{
+    if (!combat_can_exit(game))
+        return false;
+    game->phase = COMBAT_EXITED;
+    return true;
 }
 
 bool combat_choose(Combat *game, CombatUpgrade choice)
