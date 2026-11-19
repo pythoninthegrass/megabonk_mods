@@ -1421,6 +1421,86 @@ def test_branchind_on_a_computed_register_with_an_unbalanced_frame_stays_a_hole(
     assert pl.lift_body(fn).holes == ["BRANCHIND"]
 
 
+def test_refused_branchind_with_a_proven_frame_names_the_handover_shape():
+    # rsp is proven at its entry value here, so the frame pass has nothing to complain about: the site
+    # is refused because its target is computed. The record has to say that, not a frame failure.
+    fn = body(
+        insn(0x1000, 3, op("INT_ADD", "register,0,8", "register,0,8", "const,8,8")),
+        insn(0x1003, 2, op("BRANCHIND", None, "register,0,8")),
+    )
+    result = pl.lift_body(fn)
+    assert result.holes == ["BRANCHIND"]
+    assert result.unproven_branchind[0]["reason"] == "frame proven, handover shape refused"
+    assert result.unproven_branchind[0]["rsp_delta"] == 0
+
+
+def test_refused_branchind_names_a_missing_table_when_the_image_bytes_decode_one():
+    # The same shape, but the image's own bytes say the target is a jump-table dispatch: the cause of
+    # the hole is the table Ghidra never recovered, and that is what the record has to say.
+    fn = body(
+        insn(0x1000, 3, op("INT_ADD", "register,0,8", "register,0,8", "const,8,8")),
+        insn(0x1003, 2, op("BRANCHIND", None, "register,0,8")),
+        insn(0x1005, 2, op("COPY", REG_EAX, "const,1,4"), op("RETURN", None, "register,288,8")),
+        insn(0x1007, 2, op("COPY", REG_EAX, "const,2,4"), op("RETURN", None, "register,288,8")),
+    )
+    result = pl.lift_body(fn, [RODATA, TEXT], evidence=StubEvidence([0x1005, 0x1007]))
+    assert result.holes == ["BRANCHIND"]
+    assert result.unproven_branchind[0]["reason"] == "jump table not in the dump"
+
+
+def test_refused_branchind_reports_a_table_only_when_the_bytes_decode_a_complete_one():
+    # A table with a case outside the body explains nothing, so the refusal is still the handover shape.
+    fn = body(
+        insn(0x1000, 3, op("INT_ADD", "register,0,8", "register,0,8", "const,8,8")),
+        insn(0x1003, 2, op("BRANCHIND", None, "register,0,8")),
+        insn(0x1005, 2, op("COPY", REG_EAX, "const,1,4"), op("RETURN", None, "register,288,8")),
+    )
+    result = pl.lift_body(fn, [RODATA, TEXT], evidence=StubEvidence([0x1005, 0x9000]))
+    assert result.unproven_branchind[0]["reason"] == "frame proven, handover shape refused"
+
+
+def test_refused_branchind_keeps_the_frame_verdict_when_a_path_really_is_missing():
+    # A BRANCHIND no instruction in the body can reach: the frame pass is the one with the complaint,
+    # and its own wording has to survive into the record.
+    fn = body(
+        insn(0x1000, 3, op("BRANCH", None, "ram,1003,8")),
+        insn(0x1003, 1, op("RETURN", None, "register,288,8")),
+        insn(0x1004, 2, op("BRANCHIND", None, "register,0,8")),
+    )
+    result = pl.lift_body(fn)
+    assert result.holes == ["BRANCHIND"]
+    assert result.unproven_branchind[0]["reason"] == "no path in the dump reaches the site"
+
+
+def test_refused_branchind_reports_a_frame_verdict_and_the_table_bytes_together():
+    # The shape the Unity.Mathematics dispatches have: rsp is off its entry value, so the frame pass has
+    # the complaint, and the image's bytes still say the target is a jump-table dispatch. Both belong
+    # in the record: the reason is what the frame pass saw, table_bytes is what the image says.
+    fn = body(
+        insn(0x1000, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,8,8")),
+        insn(0x1003, 3, op("INT_ADD", "register,0,8", "register,0,8", "const,8,8")),
+        insn(0x1006, 2, op("BRANCHIND", None, "register,0,8")),
+        insn(0x1008, 2, op("COPY", REG_EAX, "const,1,4"), op("RETURN", None, "register,288,8")),
+        insn(0x100a, 2, op("COPY", REG_EAX, "const,2,4"), op("RETURN", None, "register,288,8")),
+    )
+    result = pl.lift_body(fn, [RODATA, TEXT], evidence=StubEvidence([0x1008, 0x100A]))
+    assert result.unproven_branchind[0]["reason"] == "rsp not at entry value"
+    assert result.unproven_branchind[0]["table_bytes"] is True
+
+
+def test_refused_branchind_records_no_table_bytes_without_evidence_or_a_partial_decode():
+    fn = body(
+        insn(0x1000, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,8,8")),
+        insn(0x1003, 3, op("INT_ADD", "register,0,8", "register,0,8", "const,8,8")),
+        insn(0x1006, 2, op("BRANCHIND", None, "register,0,8")),
+        insn(0x1008, 2, op("COPY", REG_EAX, "const,1,4"), op("RETURN", None, "register,288,8")),
+    )
+    assert pl.lift_body(fn, [RODATA, TEXT]).unproven_branchind[0]["table_bytes"] is False
+    partial = pl.lift_body(fn, [RODATA, TEXT], evidence=StubEvidence([0x1008, 0x9000]))
+    assert partial.unproven_branchind[0]["table_bytes"] is False
+    assert partial.unproven_branchind[0]["reason"] == "rsp not at entry value"
+
+
 @requires_llvm
 def test_branchind_on_a_register_loaded_by_an_earlier_instruction_is_a_tail_call():
     fn = body(

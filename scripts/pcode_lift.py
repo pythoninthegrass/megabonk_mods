@@ -1508,6 +1508,26 @@ class BodyLifter:
             return False
         return parse_varnode(inputs[0])[0] == "register"
 
+    def table_in_the_image(self, site: int) -> bool:
+        """True when the image's own bytes decode a complete in-body table for a site the dump has none for."""
+        if self.evidence is None:
+            return False
+        try:
+            raw = self.evidence.raw_cases(sorted(self.addrs), site)
+        except Exception:
+            return False
+        return bool(raw) and all(c in self.addrs for c in raw)
+
+    def refusal_reason(self, verdict: dict, table_bytes: bool) -> str:
+        """Why a BRANCHIND stayed a hole, in the terms of the gate that actually refused it.
+
+        The frame pass speaks only when it has a complaint; an empty reason means it proved the site,
+        so what follows has to name the target-shape gate instead of borrowing the frame pass's wording.
+        """
+        if verdict.get("reason"):
+            return verdict["reason"]
+        return "jump table not in the dump" if table_bytes else "frame proven, handover shape refused"
+
     def branch_indirect(self, insn: dict, k: int, target: str) -> None:
         """Lowers a BRANCHIND as a switch, or as an indirect call and a return for a tail call.
 
@@ -1527,11 +1547,13 @@ class BodyLifter:
             proven = self.proof.get(insn["a"], {}).get("reason") == ""
             sibling = proven and self.handed_over_target(insn, k, target)
             if not (load_traced or balanced or sibling):
+                table_bytes = self.table_in_the_image(insn["a"])
                 self.unproven_branchind.append(
                     {
                         "a": insn["a"],
-                        "reason": verdict.get("reason") or "no path in the dump reaches the site",
+                        "reason": self.refusal_reason(verdict, table_bytes),
                         "rsp_delta": verdict.get("rsp_delta"),
+                        "table_bytes": table_bytes,
                     }
                 )
                 self.holes.append("BRANCHIND")
@@ -1541,11 +1563,13 @@ class BodyLifter:
             if balanced or sibling:
                 self.proven_tail_calls += 1
             else:
+                table_bytes = self.table_in_the_image(insn["a"])
                 self.unproven_branchind.append(
                     {
                         "a": insn["a"],
-                        "reason": verdict.get("reason") or "no path in the dump reaches the site",
+                        "reason": self.refusal_reason(verdict, table_bytes),
                         "rsp_delta": verdict.get("rsp_delta"),
+                        "table_bytes": table_bytes,
                     }
                 )
             self.call_indirect(target, check=False)
