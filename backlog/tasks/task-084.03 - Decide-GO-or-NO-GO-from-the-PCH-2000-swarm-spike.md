@@ -1,10 +1,10 @@
 ---
 id: TASK-084.03
 title: Decide GO or NO-GO from the PCH-2000 swarm spike
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-18T06:02:00Z'
-updated_date: '2026-11-18T23:57:00Z'
+updated_date: '2026-11-19T03:22:00Z'
 labels:
   - ps-vita
   - vita-spike
@@ -29,15 +29,15 @@ An empty arena, emulator run or reduced-density demo does not establish full-por
 - [x] #1 Before benchmarking, record a minimum meaningful swarm density and gameplay checks against the pinned reference; use 240 enemies as a desktop comparison point, not an assumed Vita pass threshold.
 - [x] #2 At 960×544 and stock clocks on a physical PCH-2000, repeat gathered/scattered runs with matched counts up through 240 or the first documented hardware limit. Record workload, duration, counts, p95/p99, hitches and peak MAIN/CDRAM.
 - [x] #3 Record GO only if the representative gathered workload meets p95 ≤33.3 ms within 256 MiB MAIN and 112 MiB CDRAM and preserves the agreed combat feel and upgrade flow; otherwise record NO-GO or leave the gate open while evidence is missing.
-- [ ] #4 On NO-GO, stop port work and mark every post-gate subtask Done with all ACs unchecked and a 'Not implemented — NO-GO' summary linking to this decision. Close the parent without checking full-port delivery.
+- [ ] #4 Not applicable: the verdict is GO, so this NO-GO disposition was never triggered. On NO-GO, stop port work and mark every post-gate subtask Done with all ACs unchecked and a 'Not implemented — NO-GO' summary linking to this decision. Close the parent without checking full-port delivery.
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 task check passes
-- [ ] #2 Tests written first for testable logic
+- [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
-- [ ] #4 Conventional commit with no attribution
+- [x] #4 Conventional commit with no attribution
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -88,3 +88,13 @@ Bounds (capacity minus minimum free, counting every byte missing from the first 
 
 Verdict: GO. p95 16.730-16.732 ms against 33.3 ms with zero hitches and missed vblanks at the approved 96-enemy Gathered workload, memory inside both limits by the bounds above, and ordinary Play checks confirmed by the maintainer on build 01.02. Clocks of 333/222/111/111 MHz are an assumption (treated as default at the maintainer's direction), not independently verified. Details in docs/vita-combat.md under Memory accounting and Gate verdict. task check passes. AC 4 applies to NO-GO only and is not triggered. Downstream subtasks are not started and need separate approval; changes are uncommitted.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+GO. At 960x544 and stock clocks on a physical PCH-2000, the approved representative workload (96 live enemies, minimum 33 gathered within eight Vita units) held p95 16.730-16.732 ms and p99 16.735-16.738 ms across six trials of 307 intervals each, with zero hitches, missed vblanks or framebuffer confirmation errors. Matched scattered layouts held zero near-player density, so each pair is a real contrast rather than a relabeling. MAIN/CDRAM fit both limits by upper bounds that do not depend on the unmeasured MAIN capacity: at most 26 MiB / 23 MiB against the documented budgets, at most 135 MiB / 39 MiB against the largest possible pools, leaving at least 230 MiB MAIN and 89 MiB CDRAM of headroom. Ordinary Play checks on combat build 01.02 — independent movement and aim, automatic combat while evading, XP pickup, and a normal-UI upgrade that applied once and resumed combat — cover the agreed combat feel and upgrade flow.
+
+Recorded limits of the verdict: clock state (333/222/111/111 MHz) is an assumption kept at the maintainer's direction, not an independently verified Default mode, though the readback rules out an overclock and an underclock would only make the gate harder; presentation is vsync-locked, so the pass signal is zero missed vblanks over 1,842 intervals plus the density contrast rather than p95 margin; and the graybox carries placeholder assets, so the verdict establishes headroom at this density, not that the shipped game holds 60 fps.
+
+Host tests for nearest-rank p95/p99, strict hitch thresholds, incomplete-window rejection and matched-pair density contrast were written red-to-green before the sweep was wired into the VPK. AC 4 is a NO-GO disposition and does not apply. Work is committed as aa3d6db, 08e75b8, a01f355 and d8eda33. Downstream subtasks 084.04-084.07 remain To Do and need separate approval.
+<!-- SECTION:FINAL_SUMMARY:END -->
