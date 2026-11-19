@@ -59,6 +59,10 @@ EH_PENDING_PAD = 0x1F00
 EH_PENDING_CFA = 0x1F08
 # Ghidra's unique-space offsets are sparse; a temporary's slot is at least this wide, so it can hold a 256-bit value.
 UNIQUE_STRIDE = 32
+# Host-only byte blocks in %uniq, for the CALLOTHER helpers that hand back a pointer instead of a value.
+HELPER_RESULT_BASE = 0x900000
+CPUID_RESULT_BYTES = 16
+RDRAND_RESULT_BYTES = 8
 
 
 @dataclass
@@ -301,6 +305,38 @@ def is_pshufw_op(out: str | None, ins: list[str]) -> bool:
         and parse_varnode(ins[3])[0] == "const"
         and 0 <= parse_varnode(ins[3])[1] <= 0xFF
     )
+
+
+def is_helper_call(ins: list[str]) -> bool:
+    """Ghidra's model intrinsics carry their own opcode constant as the only operand."""
+    return len(ins) == 1 and parse_varnode(ins[0])[0] == "const"
+
+
+def is_undefined_opcode(out: str | None, ins: list[str], following: dict | None) -> bool:
+    """An undefined opcode is modelled as a helper whose result the very next op jumps through."""
+    return (
+        out is not None
+        and is_helper_call(ins)
+        and following is not None
+        and following["op"] == "BRANCHIND"
+        and (following.get("in") or [None])[0] == out
+    )
+
+
+def is_cpuid_op(out: str | None, ins: list[str]) -> bool:
+    """CPUID reads the leaf from EAX and hands back a pointer to the four result dwords."""
+    return (
+        out is not None
+        and parse_varnode(out)[2] == 8
+        and len(ins) == 2
+        and parse_varnode(ins[0])[0] == "const"
+        and parse_varnode(ins[1])[0] in ("register", "unique")
+    )
+
+
+def is_rdrand_op(out: str | None, ins: list[str]) -> bool:
+    """RDRAND writes the 32-bit destination EAX receives, from a single opcode constant."""
+    return out is not None and parse_varnode(out)[2] == 4 and is_helper_call(ins)
 
 
 def itype(size: int) -> str:
@@ -597,6 +633,9 @@ class BodyLifter:
         self.unmapped = 0
         self.unique_blocks: list[tuple[int, int, int]] = []
         self.unique_bytes = 0
+        self.helper_count = 0
+        self.trapped = False
+        self.rdrand_call: tuple[int, str, str] | None = None
         self.last_data: dict | None = None
         self.tables = {t["at"]: t["cases"] for t in fn.get("jt", [])}
         self.start, self.size = fn["start"], fn["size"]
@@ -624,6 +663,7 @@ class BodyLifter:
         }
         self.addrs = {i["a"] for i in fn["insns"]}
         self.next_addr = {i["a"]: i["a"] + i["len"] for i in fn["insns"]}
+        self.branch_targets = self.collect_targets(fn["insns"])
 
     def tmp(self) -> str:
         self.counter += 1
@@ -723,6 +763,26 @@ class BodyLifter:
         if nxt < self.start + self.size:
             self.holes.append("GAP")
         return None
+
+    def target_addr(self, text: str, insn: dict, k: int) -> int | None:
+        """The address a branch operand names, or None when it is not an address in this body."""
+        space, offset, size = parse_varnode(text)
+        if space == "const":
+            signed = offset - (1 << (size * 8)) if offset >> (size * 8 - 1) else offset
+            return insn["a"] if k + signed < len(insn["ops"]) else self.next_addr[insn["a"]]
+        return offset if offset in self.addrs else None
+
+    def collect_targets(self, insns: list[dict]) -> set[int]:
+        """Every address a branch can land on, so code the guest cannot reach can be proved dead."""
+        targets = set()
+        for insn in insns:
+            for k, op in enumerate(insn["ops"]):
+                if op["op"] not in ("BRANCH", "CBRANCH") or not op.get("in"):
+                    continue
+                addr = self.target_addr(op["in"][0], insn, k)
+                if addr is not None:
+                    targets.add(addr)
+        return targets
 
     def jump_target(self, text: str, insn: dict, k: int) -> str | None:
         space, offset, size = parse_varnode(text)
@@ -847,6 +907,16 @@ class BodyLifter:
                 self.shuffle_words(out, ins[2], parse_varnode(ins[3])[1], high=True)
             elif user == "packssdw" and is_packed_lane_op(out, ins):
                 self.packed_pack_signed(out, ins[2])
+            elif user in ("monitorx", "mwaitx") and out is None and is_helper_call(ins):
+                self.advisory_wait(out, ins)
+            elif user.startswith("cpuid") and is_cpuid_op(out, ins):
+                self.cpuid_helper(out, ins[1])
+            elif user == "rdrand" and is_rdrand_op(out, ins):
+                self.rdrand(insn, out)
+            elif user == "rdrandIsValid" and out is not None and parse_varnode(out)[2] == 1 and is_helper_call(ins):
+                self.rdrand_flag(insn, out)
+            elif user == "invalidInstructionException":
+                return self.undefined_opcode(insn, k, out, ins)
             else:
                 self.holes.append(f"CALLOTHER:{user}")
         elif name == "NOP":
@@ -1092,6 +1162,67 @@ class BodyLifter:
             self.emit(f"call void {self.pointer(target)}(ptr %reg)")
         if check:
             self.pending_check()
+
+    def advisory_wait(self, out: str | None, ins: list[str]) -> None:
+        """MONITORX and MWAITX are address-monitor hints, and neither result is read; dropping one is what
+        a host without them does, so a spin loop still spins."""
+
+    def helper_pointer(self, size: int) -> str:
+        """A byte block in %uniq for a helper's result, clear of every varnode the body names."""
+        self.helper_count += 1
+        offset = HELPER_RESULT_BASE + self.helper_count * UNIQUE_STRIDE
+        while any(t.startswith(f"unique,{offset:x},") for t in self.varnodes):
+            offset += UNIQUE_STRIDE
+        return self.slot("unique", offset, size)
+
+    def cpuid_helper(self, out: str, leaf: str) -> None:
+        """CPUID's model returns a pointer to four dwords; the runtime fills them in as the leaf dictates."""
+        self.decls.add("declare void @lift_cpuid(i64, ptr)")
+        buf = self.helper_pointer(CPUID_RESULT_BYTES)
+        value = self.fit(self.read(leaf), parse_varnode(leaf)[2] * 8, 64)
+        self.emit(f"call void @lift_cpuid(i64 {value}, ptr {buf})")
+        addr = self.tmp()
+        self.emit(f"{addr} = ptrtoint ptr {buf} to i64")
+        self.write(out, addr)
+
+    def rdrand_pair(self, insn: dict) -> tuple[str, str]:
+        """RDRAND and its validity flag are two model ops over one host call, so the second reuses the first."""
+        if self.rdrand_call and self.rdrand_call[0] == insn["a"]:
+            return self.rdrand_call[1], self.rdrand_call[2]
+        self.decls.add("declare zeroext i1 @lift_rdrand(ptr)")
+        buf = self.helper_pointer(RDRAND_RESULT_BYTES)
+        ok = self.tmp()
+        self.emit(f"{ok} = call zeroext i1 @lift_rdrand(ptr {buf})")
+        value = self.tmp()
+        self.emit(f"{value} = load i64, ptr {buf}, align 1")
+        self.rdrand_call = (insn["a"], value, ok)
+        return value, ok
+
+    def rdrand(self, insn: dict, out: str) -> None:
+        value, _ = self.rdrand_pair(insn)
+        self.write(out, self.fit(value, RDRAND_RESULT_BYTES * 8, parse_varnode(out)[2] * 8))
+
+    def rdrand_flag(self, insn: dict, out: str) -> None:
+        _, ok = self.rdrand_pair(insn)
+        self.write(out, self.widen_i1(ok, parse_varnode(out)[2]))
+
+    def undefined_opcode(self, insn: dict, k: int, out: str | None, ins: list[str]) -> bool:
+        """An undefined opcode traps, so the block ends there and the model's fabricated jump dies with it.
+
+        The guest never continues past the instruction, so the code after it is dead only if nothing else
+        can branch into it; the jump target the model invented is its own artifact, not a control transfer.
+        """
+        ops = insn["ops"]
+        dead_from = self.next_addr[insn["a"]]
+        live = any(addr >= dead_from for addr in self.branch_targets | self.pads)
+        if live or not is_undefined_opcode(out, ins, ops[k + 1] if k + 1 < len(ops) else None):
+            self.holes.append("CALLOTHER:invalidInstructionException")
+            return False
+        self.decls.add("declare void @llvm.trap()")
+        self.emit("call void @llvm.trap()")
+        self.terminate(None)
+        self.trapped = True
+        return True
 
     def branch(self, insn: dict, k: int, target: str) -> bool:
         space, offset, _ = parse_varnode(target)
@@ -1362,12 +1493,17 @@ class BodyLifter:
             self.lines.append(f"entry:\n  br label %{self.label(insns[0]['a'])}")
         for insn in insns:
             ops = insn["ops"]
+            if insn["a"] in self.branch_targets | self.pads:
+                self.trapped = False
             if not ops:
                 self.lines.append(f"{self.label(insn['a'])}:")
                 self.terminate(self.next_label({**insn, "ops": [None]}, 0))
                 continue
             for k, op in enumerate(ops):
                 self.lines.append(f"{self.label(insn['a'], k)}:")
+                if self.trapped:
+                    self.emit("unreachable")
+                    continue
                 try:
                     ended = self.lift_op(insn, k, op)
                 except (ValueError, KeyError, IndexError, TypeError) as exc:

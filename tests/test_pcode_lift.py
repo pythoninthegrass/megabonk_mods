@@ -560,6 +560,283 @@ def test_movmskpd_reading_an_unexpected_width_stays_a_hole():
     assert pl.lift_body(fn).holes == ["CALLOTHER:movmskpd"]
 
 
+CPUID_ID, RDRAND_ID, RDRAND_VALID_ID, MONITORX_ID, MWAITX_ID, INVALID_ID = "2d", "67c", "67d", "f", "d", "57"
+
+
+def invalid_insn(addr=0x208BB6D):
+    """The dump's model of an undefined instruction: a helper result that the very next op jumps through."""
+    return insn(
+        addr,
+        2,
+        op("CALLOTHER", "unique,d5d00,8", f"const,{INVALID_ID},4", user="invalidInstructionException"),
+        op("BRANCHIND", None, "unique,d5d00,8"),
+    )
+
+
+def invalid_body(start=0x208BB6D, tail=True):
+    insns = [insn(start - 5, 5, op("COPY", "register,0,8", "const,7,8")), invalid_insn(start)]
+    if tail:
+        insns += [
+            insn(start + 2, 4, op("COPY", "register,8,8", "const,1,8")),
+            insn(start + 6, 1, op("RETURN", None, "register,288,8")),
+        ]
+    return body(*insns, start=start - 5)
+
+
+def test_invalid_instruction_lowers_to_a_trap():
+    result = pl.lift_body(invalid_body())
+    assert result.holes == []
+    assert result.unproven_branchind == []
+    assert "call void @llvm.trap()" in result.ir
+    assert verify(pl.module_for([result])).returncode == 0
+
+
+def test_invalid_instruction_trap_ends_the_block():
+    """Nothing the guest would never execute survives: the dead tail and its jump are gone."""
+    ir = pl.lift_body(invalid_body()).ir
+    assert "store i64 1," not in ir
+
+
+def test_a_live_branch_target_after_the_trap_keeps_it_a_hole():
+    fn = body(
+        insn(
+            0x208BB60,
+            5,
+            op("INT_EQUAL", "unique,10,1", "register,0,8", "const,3,8"),
+            op("CBRANCH", None, "ram,208bb71,8", "unique,10,1"),
+            op("BRANCH", None, "ram,208bb73,8"),
+        ),
+        invalid_insn(0x208BB6D),
+        insn(0x208BB6F, 2, op("COPY", "register,8,8", "const,1,8")),
+        insn(0x208BB71, 2, op("RETURN", None, "register,288,8")),
+        start=0x208BB60,
+    )
+    # Refusing the trap leaves the model's jump unlowered too: both blockers stay, neither is silently absorbed.
+    assert pl.lift_body(fn).holes == ["CALLOTHER:invalidInstructionException", "BRANCHIND"]
+
+
+def test_a_trap_whose_result_the_jump_does_not_read_stays_a_hole():
+    """The jump the trap absorbs has to be the one that jumps through the helper's own result."""
+    fn = body(
+        insn(
+            0x208BB6D,
+            1,
+            op("COPY", "register,38,8", "unique,9f8,8"),
+            op("CALLOTHER", "unique,9f0,8", f"const,{INVALID_ID},4", user="invalidInstructionException"),
+            op("BRANCHIND", None, "unique,9f8,8"),
+        ),
+        start=0x208BB6D,
+    )
+    assert pl.lift_body(fn).holes == ["CALLOTHER:invalidInstructionException", "BRANCHIND"]
+
+
+def test_an_invalid_instruction_result_used_as_data_stays_a_hole():
+    fn = body(
+        insn(
+            0x208BB6D,
+            2,
+            op("CALLOTHER", "unique,d5d00,8", f"const,{INVALID_ID},4", user="invalidInstructionException"),
+            op("INT_ADD", "register,0,8", "unique,d5d00,8", "const,1,8"),
+        ),
+        insn(0x208BB6F, 1, op("RETURN", None, "register,288,8")),
+    )
+    assert pl.lift_body(fn).holes == ["CALLOTHER:invalidInstructionException"]
+
+
+def monitorx_insn(addr=0x2092944):
+    return insn(addr, 4, op("CALLOTHER", None, f"const,{MONITORX_ID},4", user="monitorx"))
+
+
+def hint_body(hints=True):
+    ops = []
+    if hints:
+        ops += [
+            op("CALLOTHER", None, f"const,{MONITORX_ID},4", user="monitorx"),
+            op("CALLOTHER", None, f"const,{MWAITX_ID},4", user="mwaitx"),
+        ]
+    ops.append(op("COPY", "register,0,8", "register,38,8"))
+    return body(
+        insn(0x2092940, 4, *ops),
+        insn(0x2092944, 4, op("COPY", "register,8,8", "const,2,8")),
+        insn(0x2092948, 1, op("RETURN", None, "register,288,8")),
+        start=0x2092940,
+    )
+
+
+def test_monitorx_and_mwaitx_are_dropped():
+    result = pl.lift_body(hint_body())
+    assert result.holes == []
+    assert "monitorx" not in result.ir and "mwaitx" not in result.ir
+    assert "store i64" in result.ir
+
+
+def operations(ir):
+    """The emitted instructions, ignoring the per-op labels and fallthroughs every body carries."""
+    lines = []
+    for line in ir.splitlines():
+        line = line.strip()
+        if not line or line.endswith(":") or line.startswith("br label"):
+            continue
+        lines.append(line)
+    return lines
+
+
+def test_the_dropped_hints_emit_not_even_an_instruction():
+    """Dropping means the same code a host without those instructions runs, not a call to something else."""
+    assert operations(pl.lift_body(hint_body()).ir) == operations(pl.lift_body(hint_body(hints=False)).ir)
+
+
+def test_a_monitorx_that_returns_something_stays_a_hole():
+    fn = body(
+        insn(0x2092944, 4, op("CALLOTHER", "register,0,8", f"const,{MONITORX_ID},4", user="monitorx")),
+        insn(0x2092948, 1, op("RETURN", None, "register,288,8")),
+    )
+    assert pl.lift_body(fn).holes == ["CALLOTHER:monitorx"]
+
+
+CPUID_BUFFER = "unique,7c900,8"
+
+
+def cpuid_body(user="cpuid", leaf="register,0,4"):
+    """The switch arm and the four dwords the model reads back out of the helper's result block."""
+    return body(
+        insn(
+            0x2153D33,
+            4,
+            op("INT_EQUAL", "unique,7ca00,1", leaf, "const,0,4"),
+            op("CBRANCH", None, "const,21,4", "unique,7ca00,1"),
+            op("CALLOTHER", CPUID_BUFFER, f"const,{CPUID_ID},4", leaf, user=user),
+            op("BRANCH", None, "const,21,4"),
+            op("LOAD", "unique,7eb00,4", "const,1b1,8", CPUID_BUFFER),
+            op("INT_ZEXT", "register,0,8", "unique,7eb00,4"),
+            op("INT_ADD", "unique,7ed00,8", CPUID_BUFFER, "const,4,8"),
+            op("LOAD", "unique,7ee00,4", "const,1b1,8", "unique,7ed00,8"),
+            op("INT_ZEXT", "register,18,8", "unique,7ee00,4"),
+            op("INT_ADD", "unique,7f000,8", CPUID_BUFFER, "const,8,8"),
+            op("LOAD", "unique,7f100,4", "const,1b1,8", "unique,7f000,8"),
+            op("INT_ZEXT", "register,10,8", "unique,7f100,4"),
+            op("INT_ADD", "unique,7f300,8", CPUID_BUFFER, "const,c,8"),
+            op("LOAD", "unique,7f400,4", "const,1b1,8", "unique,7f300,8"),
+            op("INT_ZEXT", "register,8,8", "unique,7f400,4"),
+        ),
+        insn(0x2153D37, 1, op("RETURN", None, "register,288,8")),
+        start=0x2153D33,
+    )
+
+
+def cpuid_argument_line(ir):
+    """The last definition the helper's leaf argument is built from, so the test can see which register fed it."""
+    lines = ir.splitlines()
+    call = next(line for line in lines if "call void @lift_cpuid" in line)
+    temp = call.split("i64 ", 1)[1].split(",")[0]
+    line = next(row for row in lines if row.strip().startswith(f"{temp} ="))
+    while True:
+        right_hand_side = line.partition("=")[2]
+        operands = [token for token in right_hand_side.replace(",", " ").split() if token.startswith("%")]
+        defined = [o for o in operands if any(row.strip().startswith(f"{o} =") for row in lines)]
+        if not defined:
+            return line
+        line = next(row for row in lines if row.strip().startswith(f"{defined[-1]} ="))
+
+
+def test_cpuid_calls_the_host_helper_and_reads_the_result_block():
+    result = pl.lift_body(cpuid_body())
+    assert result.holes == []
+    assert "declare void @lift_cpuid(i64, ptr)" in result.decls
+    assert "call void @lift_cpuid(i64" in result.ir
+    assert cpuid_argument_line(result.ir).endswith("i64 0")
+    buffer = next(line for line in result.ir.splitlines() if "call void @lift_cpuid" in line).rsplit("ptr ", 1)[1].rstrip(")")
+    address = next(row for row in result.ir.splitlines() if f"= ptrtoint ptr {buffer} to i64" in row).split(" =")[0].strip()
+    assert any(f"store i64 {address}," in row for row in result.ir.splitlines())
+    assert verify(pl.module_for([result])).returncode == 0
+
+
+def test_cpuid_passes_the_selected_leaf_to_the_helper():
+    first, second = (pl.lift_body(cpuid_body(leaf=leaf)).ir for leaf in ("register,0,4", "register,8,4"))
+    assert cpuid_argument_line(first).endswith("i64 0")
+    assert cpuid_argument_line(second).endswith("i64 8")
+
+
+def uniq_slots(ir):
+    """Maps each pointer temp to the %uniq slot it addresses."""
+    slots = {}
+    for line in ir.splitlines():
+        line = line.strip()
+        if line.startswith("%") and "getelementptr i8, ptr %uniq" in line:
+            name, _, right = line.partition(" =")
+            slots[name.strip()] = int(right.rsplit("i64 ", 1)[1])
+    return slots
+
+
+def test_the_helper_result_block_avoids_the_body_own_temporaries():
+    """The block is handed to the runtime as a pointer, so nothing in the body may write through it."""
+    fn = body(
+        insn(
+            0x2153D33,
+            5,
+            op("CALLOTHER", "unique,900020,8", f"const,{CPUID_ID},4", "register,0,4", user="cpuid"),
+            op("COPY", "unique,900020,8", "register,0,8"),
+        ),
+        start=0x2153D33,
+    )
+    result = pl.lift_body(fn)
+    slots = uniq_slots(result.ir)
+    buffer = next(line for line in result.ir.splitlines() if "call void @lift_cpuid" in line)
+    buffer = buffer.rsplit("ptr ", 1)[1].rstrip(")")
+    written = [line.rsplit("ptr ", 1)[1].rstrip(", align 1") for line in result.ir.splitlines() if " store " in line]
+    assert slots[buffer] not in [slots[temp] for temp in written]
+
+
+def test_cpuid_of_an_unexpected_shape_stays_a_hole():
+    for out, extra in (("unique,7c900,4", []), (CPUID_BUFFER, ["const,1,4"])):
+        fn = body(
+            insn(0x2153D33, 4, op("CALLOTHER", out, f"const,{CPUID_ID},4", "register,0,4", *extra, user="cpuid")),
+            insn(0x2153D37, 1, op("RETURN", None, "register,288,8")),
+        )
+        assert pl.lift_body(fn).holes == ["CALLOTHER:cpuid"]
+
+
+def rdrand_body(start=0x2153CE9):
+    return body(
+        insn(
+            start,
+            6,
+            op("CALLOTHER", "register,0,4", f"const,{RDRAND_ID},4", user="rdrand"),
+            op("CALLOTHER", "register,200,1", f"const,{RDRAND_VALID_ID},4", user="rdrandIsValid"),
+            op("COPY", "register,20b,1", "const,0,1"),
+            op("INT_ZEXT", "register,30,8", "register,30,4"),
+        ),
+        insn(start + 6, 1, op("RETURN", None, "register,288,8")),
+        start=start,
+    )
+
+
+def test_rdrand_calls_the_host_helper_once_and_sets_the_flag():
+    result = pl.lift_body(rdrand_body())
+    assert result.holes == []
+    assert result.ir.count("call zeroext i1 @lift_rdrand(ptr") == 1
+    assert "declare zeroext i1 @lift_rdrand(ptr)" in result.decls
+    assert verify(pl.module_for([result])).returncode == 0
+
+
+def test_rdrand_alone_and_the_valid_flag_alone_both_lower():
+    for op_index, name in ((0, "rdrand"), (1, "rdrandIsValid")):
+        insn_row = rdrand_body()["insns"][0]
+        ops = [insn_row["ops"][op_index], insn_row["ops"][-1]]
+        fn = body(insn(0x2153CE9, 6, *ops), insn(0x2153CEF, 1, op("RETURN", None, "register,288,8")))
+        result = pl.lift_body(fn)
+        assert result.holes == [], name
+        assert result.ir.count("call zeroext i1 @lift_rdrand(ptr") == 1
+
+
+def test_rdrand_of_an_unexpected_result_width_stays_a_hole():
+    fn = body(
+        insn(0x2153CE9, 6, op("CALLOTHER", "register,0,8", f"const,{RDRAND_ID},4", user="rdrand")),
+        insn(0x2153CEF, 1, op("RETURN", None, "register,288,8")),
+    )
+    assert pl.lift_body(fn).holes == ["CALLOTHER:rdrand"]
+
+
 def producer(ir, name):
     for line in ir.splitlines():
         if line.strip().startswith(f"{name} ="):
