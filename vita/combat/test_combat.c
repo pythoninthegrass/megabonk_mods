@@ -1,3 +1,4 @@
+#include "character.h"
 #include "combat.h"
 
 #include <assert.h>
@@ -11,7 +12,7 @@ static void movement_and_aim(void)
     assert(game.live > 0);
     combat_tick(&game, (CombatInput){.move = {1, 1}, .aim = {-1, 0}});
     assert(game.player.x > 0 && game.player.z > 0);
-    assert(fabsf(hypotf(game.player.x, game.player.z) - 0.10f) < 0.001f);
+    assert(fabsf(hypotf(game.player.x, game.player.z) - 0.13f) < 0.001f);
     assert(game.aim.x == -1 && game.aim.z == 0);
     combat_tick(&game, (CombatInput){0});
     assert(game.aim.x == -1 && game.aim.z == 0);
@@ -231,8 +232,29 @@ static void portal_exit(void)
     assert(game.phase == COMBAT_PLAY && !game.portal_open);
 }
 
+static void tony_mczoom_data(void)
+{
+    const CombatCharacter *tony = &COMBAT_TONY_MCZOOM;
+    assert(!strcmp(tony->name, "Tony McZoom"));
+    assert(combat_character_health(tony) == 70);
+    assert(fabsf(combat_character_speed_scale(tony) - 1.3f) < 0.0001f);
+    assert(tony->shield == 10 && tony->pickup_range == 3);
+    const CombatWeapon *weapon = &tony->weapon;
+    assert(!strcmp(weapon->name, "Wireless Dagger"));
+    assert(weapon->damage == 9 && weapon->knockback == 0.4f && weapon->crit_chance == 0);
+    assert(weapon->projectiles == 1 && weapon->bounces == 1 && weapon->can_bounce);
+    assert(weapon->attack_duration == 2.5f && weapon->max_duration == 8);
+    assert(weapon->projectile_speed == 0.75f && weapon->end_cooldown == 0.5f);
+    assert(weapon->burst_time == 1.1f && weapon->min_burst_interval == 0.02f);
+    assert(weapon->spawn_range == 40 && weapon->only_when_enemies_close);
+    Combat game;
+    combat_start(&game);
+    assert(game.character == tony);
+}
+
 int main(void)
 {
+    tony_mczoom_data();
     portal_exit();
     clock_and_prompt();
     boss_opens_portal();

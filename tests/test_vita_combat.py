@@ -16,6 +16,7 @@ def test_vita_combat_simulation(tmp_path):
             "-Werror",
             str(SOURCE / "test_combat.c"),
             str(SOURCE / "combat.c"),
+            str(SOURCE / "character.c"),
             "-lm",
             "-o",
             str(binary),

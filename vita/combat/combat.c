@@ -24,6 +24,8 @@ static void advance(CombatVec *p, CombatVec direction, float amount)
     p->z += direction.z * amount;
 }
 
+static const float PLAYER_SPEED = 0.1f;
+
 float combat_axis(uint8_t raw)
 {
     const int offset = (int)raw - 128;
@@ -36,7 +38,7 @@ float combat_axis(uint8_t raw)
 
 static void initialize(Combat *game)
 {
-    *game = (Combat){.aim = {0, -1}, .spawner = {0, -14}, .damage = 1, .interval = 18, .health = 6, .level = 1};
+    *game = (Combat){.character = &COMBAT_TONY_MCZOOM, .aim = {0, -1}, .spawner = {0, -14}, .damage = 1, .interval = 18, .health = 6, .level = 1};
 }
 
 static CombatVec benchmark_position(unsigned i, bool scattered)
@@ -231,7 +233,8 @@ void combat_tick(Combat *game, CombatInput input)
         return;
     ++game->ticks;
     float speed = length_squared(input.move);
-    advance(&game->player, input.move, speed > 1 ? 0.1f / sqrtf(speed) : 0.1f);
+    const float step = PLAYER_SPEED * combat_character_speed_scale(game->character);
+    advance(&game->player, input.move, speed > 1 ? step / sqrtf(speed) : step);
     game->player.x = fmaxf(-COMBAT_ARENA, fminf(COMBAT_ARENA, game->player.x));
     game->player.z = fmaxf(-COMBAT_ARENA, fminf(COMBAT_ARENA, game->player.z));
     float aim = length_squared(input.aim);

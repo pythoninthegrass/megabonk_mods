@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "character.h"
+
 enum { COMBAT_HZ = 60, COMBAT_CAPACITY = 240, COMBAT_XP_PER_LEVEL = 4, COMBAT_ARENA = 40, COMBAT_BOSS_HP = 60, COMBAT_STAGE_TICKS = 600 * COMBAT_HZ,
        COMBAT_BOSS_GRACE_TICKS = 10 * COMBAT_HZ };
 
@@ -17,6 +19,7 @@ typedef enum { COMBAT_PLAY, COMBAT_UPGRADE, COMBAT_DEFEAT, COMBAT_EXITED } Comba
 typedef enum { COMBAT_POWER, COMBAT_HASTE, COMBAT_UPGRADE_COUNT } CombatUpgrade;
 
 typedef struct {
+    const CombatCharacter *character;
     CombatEnemy enemies[COMBAT_CAPACITY];
     CombatDrop drops[COMBAT_CAPACITY];
     CombatVec player, aim, shot_end, spawner;

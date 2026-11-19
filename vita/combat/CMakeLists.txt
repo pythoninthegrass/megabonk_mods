@@ -3,7 +3,7 @@ set(CMAKE_TOOLCHAIN_FILE "$ENV{VITASDK}/share/vita.toolchain.cmake" CACHE FILEPA
 project(megabonk_vita_combat C)
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
-add_executable(vita-combat main.c combat.c render.c benchmark.c sweep.c)
+add_executable(vita-combat main.c combat.c character.c render.c benchmark.c sweep.c)
 set_target_properties(vita-combat PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED YES)
 target_compile_options(vita-combat PRIVATE -Wall -Wextra -Werror -ffp-contract=off)
 target_link_options(vita-combat PRIVATE -Wl,--wrap=sceDisplaySetFrameBuf,--wrap=sceDisplayWaitVblankStart)
