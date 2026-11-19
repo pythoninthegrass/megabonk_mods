@@ -51,6 +51,18 @@ OVERFLOW_INTRINSIC = {"INT_CARRY": "uadd", "INT_SCARRY": "sadd", "INT_SBORROW": 
 # Ghidra's register-space offset for rsp in the x86-64 language definition.
 RSP = "register,20,8"
 FLOAT_TYPES = {4: "float", 8: "double"}
+# The 80-bit x87 encoding: sign at 79, exponent at 64..78, explicit integer bit at 63, fraction below it.
+X87 = 10
+X87_SIGN_BIT = 79
+X87_INT_BIT = 1 << 63
+X87_QUIET_BIT = 1 << 62
+X87_FRACTION_BITS = (1 << 63) - 1
+X87_MAGNITUDE_BITS = (1 << 79) - 1
+X87_EXPONENT_MAX = (1 << 15) - 1
+X87_BIAS = 16383
+X87_PREDICATES = {"FLOAT_NAN": 1, "FLOAT_EQUAL": 2, "FLOAT_LESS": 2}
+SINGLE_MANTISSA_MASK = (1 << 23) - 1
+SINGLE_FRACTION_SHIFT = 63 - 23
 PACKED_DIVISION = {"divps": (4, 4), "divpd": (2, 8)}
 PACKED_MINMAX = {"minps": (4, 4, "olt"), "maxps": (4, 4, "ogt"), "maxpd": (2, 8, "ogt")}
 PACKED_WIDTH = 16
@@ -1062,6 +1074,9 @@ class BodyLifter:
 
     def float_op(self, name: str, out: str, ins: list[str]) -> None:
         osz, isz = parse_varnode(out)[2], parse_varnode(ins[0])[2]
+        if X87 in (osz, isz):
+            self.x87_op(name, out, ins, osz, isz)
+            return
         for size in (osz, isz):
             if size not in FLOAT_TYPES and name not in ("INT2FLOAT", "TRUNC", "FLOAT_NAN") + tuple(FLOAT_COMPARE):
                 raise ValueError(f"float width {size}")
@@ -1127,6 +1142,168 @@ class BodyLifter:
             result = self.tmp()
             self.emit(f"{result} = select i1 {bad}, {itype(osz)} {-limit}, {itype(osz)} {v}")
             self.write(out, result)
+
+    def x87_op(self, name: str, out: str, ins: list[str], osz: int, isz: int) -> None:
+        """The 80-bit shapes the pinned image contains; every other width-10 op stays a hole."""
+        shape = (name, osz, isz, len(ins))
+        if shape == ("FLOAT2FLOAT", X87, 4, 1):
+            self.write(out, self.fit(self.x87_from_single(self.read(ins[0])), 128, 80))
+        elif shape == ("INT2FLOAT", X87, 4, 1):
+            self.write(out, self.fit(self.x87_from_int(self.read(ins[0])), 128, 80))
+        elif name in X87_PREDICATES and (osz, isz) == (1, X87) and len(ins) == X87_PREDICATES[name]:
+            values = [self.fit(self.read(text), 80, 128) for text in ins]
+            if name == "FLOAT_NAN":
+                flag = self.x87_unordered(self.x87_parts(values[0]))
+            elif name == "FLOAT_EQUAL":
+                flag = self.x87_equal(*values)
+            else:
+                flag = self.x87_less(*values)
+            self.write(out, self.widen_i1(flag, osz))
+        else:
+            raise ValueError(f"float width {X87}")
+
+    def calc(self, ty: str, opcode: str, left: str, right: str) -> str:
+        v = self.tmp()
+        self.emit(f"{v} = {opcode} {ty} {left}, {right}")
+        return v
+
+    def test(self, ty: str, left: str, predicate: str, right: str) -> str:
+        v = self.tmp()
+        self.emit(f"{v} = icmp {predicate} {ty} {left}, {right}")
+        return v
+
+    def pick(self, flag: str, ty: str, if_true: str, if_false: str) -> str:
+        v = self.tmp()
+        self.emit(f"{v} = select i1 {flag}, {ty} {if_true}, {ty} {if_false}")
+        return v
+
+    def field(self, value: str, shift: int, mask: int) -> str:
+        """One field of an i128-held 80-bit encoding."""
+        return self.calc("i128", "and", self.calc("i128", "lshr", value, str(shift)), str(mask))
+
+    def leading_zeros(self, value: str) -> str:
+        v = self.tmp()
+        self.decls.add("declare i64 @llvm.ctlz.i64(i64, i1)")
+        self.emit(f"{v} = call i64 @llvm.ctlz.i64(i64 {value}, i1 false)")
+        return v
+
+    def x87_from_single(self, bits: str) -> str:
+        """FLDS: the single's payload sits at the top of the 63-bit fraction, subnormals renormalize."""
+        sign = self.calc("i32", "lshr", bits, "31")
+        exponent = self.field_of_single(bits, 23, 0xFF)
+        payload = self.calc("i32", "and", bits, str(SINGLE_MANTISSA_MASK))
+        empty = self.test("i32", payload, "eq", "0")
+        unbiased = self.test("i32", exponent, "eq", "0")
+        saturated = self.test("i32", exponent, "eq", str(0xFF))
+        lead = self.leading_zeros(self.fit(payload, 32, 64))
+        top = self.calc("i64", "sub", "63", lead)
+        scaled = self.calc("i128", "shl", self.fit(payload, 32, 128), str(SINGLE_FRACTION_SHIFT))
+        normal_mantissa = self.calc("i128", "or", str(X87_INT_BIT), scaled)
+        quiet_mantissa = self.calc("i128", "or", normal_mantissa, str(X87_QUIET_BIT))
+        denormal_mantissa = self.calc("i128", "shl", self.fit(payload, 32, 128), self.fit(lead, 64, 128))
+        normal_exponent = self.calc("i128", "add", self.fit(exponent, 32, 128), str(X87_BIAS - 127))
+        denormal_exponent = self.calc("i128", "add", self.fit(top, 64, 128), str(X87_BIAS - 149))
+        is_nan = self.calc("i1", "and", saturated, self.negate(empty))
+        is_denormal = self.calc("i1", "and", unbiased, self.negate(empty))
+        is_normal = self.calc("i1", "and", self.negate(unbiased), self.negate(saturated))
+        mantissa = self.pick(
+            is_nan,
+            "i128",
+            quiet_mantissa,
+            self.pick(
+                saturated,
+                "i128",
+                str(X87_INT_BIT),
+                self.pick(
+                    is_normal,
+                    "i128",
+                    normal_mantissa,
+                    self.pick(is_denormal, "i128", denormal_mantissa, "0"),
+                ),
+            ),
+        )
+        exponent_field = self.pick(
+            saturated,
+            "i128",
+            str(X87_EXPONENT_MAX),
+            self.pick(
+                is_normal,
+                "i128",
+                normal_exponent,
+                self.pick(is_denormal, "i128", denormal_exponent, "0"),
+            ),
+        )
+        sign_field = self.calc("i128", "shl", self.fit(sign, 32, 128), str(X87_SIGN_BIT))
+        return self.calc("i128", "or", self.calc("i128", "or", sign_field, self.calc("i128", "shl", exponent_field, "64")), mantissa)
+
+    def field_of_single(self, bits: str, shift: int, mask: int) -> str:
+        return self.calc("i32", "and", self.calc("i32", "lshr", bits, str(shift)), str(mask))
+
+    def x87_from_int(self, value: str) -> str:
+        """FILD: a 32-bit integer is exact at this width, so the mantissa is its magnitude with the top bit at 63."""
+        negative = self.test("i32", value, "slt", "0")
+        wide = self.fit(value, 32, 64, signed=True)
+        magnitude = self.pick(negative, "i64", self.calc("i64", "sub", "0", wide), wide)
+        lead = self.leading_zeros(magnitude)
+        top = self.calc("i64", "sub", "63", lead)
+        zero = self.test("i64", magnitude, "eq", "0")
+        mantissa = self.pick(
+            zero,
+            "i128",
+            "0",
+            self.calc("i128", "shl", self.fit(magnitude, 64, 128), self.fit(lead, 64, 128)),
+        )
+        exponent = self.pick(zero, "i128", "0", self.calc("i128", "add", self.fit(top, 64, 128), str(X87_BIAS)))
+        sign_field = self.calc("i128", "shl", self.pick(negative, "i128", "1", "0"), str(X87_SIGN_BIT))
+        return self.calc("i128", "or", self.calc("i128", "or", sign_field, self.calc("i128", "shl", exponent, "64")), mantissa)
+
+    def x87_parts(self, value: str) -> dict:
+        """Sign, exponent, explicit integer bit, fraction and the magnitude without its sign."""
+        return {
+            "sign": self.calc("i128", "lshr", value, str(X87_SIGN_BIT)),
+            "exponent": self.field(value, 64, X87_EXPONENT_MAX),
+            "integer": self.field(value, 63, 1),
+            "fraction": self.calc("i128", "and", value, str(X87_FRACTION_BITS)),
+            "magnitude": self.calc("i128", "and", value, str(X87_MAGNITUDE_BITS)),
+        }
+
+    def negate(self, flag: str) -> str:
+        return self.calc("i1", "xor", flag, "true")
+
+    def x87_unordered(self, parts: dict) -> str:
+        """The encodings x87 refuses to order: a set exponent without its integer bit, or an all-ones exponent with a payload."""
+        all_ones = self.test("i128", parts["exponent"], "eq", str(X87_EXPONENT_MAX))
+        set_exponent = self.test("i128", parts["exponent"], "ne", "0")
+        no_integer = self.test("i128", parts["integer"], "eq", "0")
+        payload = self.test("i128", parts["fraction"], "ne", "0")
+        unsupported = self.calc("i1", "and", set_exponent, no_integer)
+        special = self.calc("i1", "and", all_ones, self.calc("i1", "or", payload, no_integer))
+        return self.calc("i1", "or", unsupported, special)
+
+    def x87_ordered(self, left: dict, right: dict) -> str:
+        return self.calc("i1", "and", self.negate(self.x87_unordered(left)), self.negate(self.x87_unordered(right)))
+
+    def x87_equal(self, left: str, right: str) -> str:
+        a, b = self.x87_parts(left), self.x87_parts(right)
+        same_magnitude = self.test("i128", a["magnitude"], "eq", b["magnitude"])
+        both_zero = self.test("i128", a["magnitude"], "eq", "0")
+        same_sign = self.test("i128", a["sign"], "eq", b["sign"])
+        ordered = self.x87_ordered(a, b)
+        return self.calc("i1", "and", ordered, self.calc("i1", "and", same_magnitude, self.calc("i1", "or", both_zero, same_sign)))
+
+    def x87_less(self, left: str, right: str) -> str:
+        """Ordered less-than over sign-magnitude fields, with -0 and +0 equal."""
+        a, b = self.x87_parts(left), self.x87_parts(right)
+        negative = self.test("i128", a["sign"], "ne", "0")
+        lower = self.pick(negative, "i128", b["magnitude"], a["magnitude"])
+        higher = self.pick(negative, "i128", a["magnitude"], b["magnitude"])
+        apart = self.test("i128", a["sign"], "ne", b["sign"])
+        apart_by_sign = self.pick(apart, "i1", negative, self.test("i128", lower, "ult", higher))
+        equal_magnitude = self.test("i128", a["magnitude"], "eq", b["magnitude"])
+        nonzero = self.test("i128", a["magnitude"], "ne", "0")
+        other_positive = self.test("i128", b["sign"], "eq", "0")
+        minus_first = self.calc("i1", "and", negative, self.calc("i1", "and", other_positive, nonzero))
+        return self.calc("i1", "and", self.x87_ordered(a, b), self.pick(equal_magnitude, "i1", minus_first, apart_by_sign))
 
     def call_direct(self, target: str) -> None:
         space, offset, _ = parse_varnode(target)
