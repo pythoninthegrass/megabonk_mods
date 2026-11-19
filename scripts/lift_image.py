@@ -397,6 +397,7 @@ def score_blockers(baseline: Path, parts: list[list[Fde]], ctx: dict) -> int:
         "stages": lp.summarize(rows).get("all", {}),
         "holes": lp.tally_holes(rows),
         "atomics": lp.tally_atomics(rows),
+        "evidence_switches": lp.tally_evidence_switches(rows),
         "failures": lp.tally_failures(rows),
         "blocking": blocking,
     }
