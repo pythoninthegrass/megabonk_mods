@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "character.h"
+#include "upgrades.h"
 
 enum { COMBAT_HZ = 60, COMBAT_CAPACITY = 240, COMBAT_XP_PER_LEVEL = 4, COMBAT_ARENA = 40, COMBAT_BOSS_HP = 60, COMBAT_STAGE_TICKS = 600 * COMBAT_HZ,
        COMBAT_BOSS_GRACE_TICKS = 10 * COMBAT_HZ };
@@ -16,13 +17,17 @@ typedef enum { COMBAT_ENEMY_NORMAL, COMBAT_ENEMY_BOSS, COMBAT_ENEMY_GHOST, COMBA
 typedef struct { CombatVec position; unsigned hp; CombatEnemyKind kind; } CombatEnemy;
 typedef struct { CombatVec position; bool active; } CombatDrop;
 typedef enum { COMBAT_PLAY, COMBAT_UPGRADE, COMBAT_DEFEAT, COMBAT_EXITED } CombatPhase;
-typedef enum { COMBAT_POWER, COMBAT_HASTE, COMBAT_UPGRADE_COUNT } CombatUpgrade;
 
 typedef struct {
     const CombatCharacter *character;
     CombatEnemy enemies[COMBAT_CAPACITY];
     CombatDrop drops[COMBAT_CAPACITY];
+    UpgradeState upgrades;
+    UpgradeOffer offers[UPGRADE_OFFERS];
+    UpgradeRng rng;
     CombatVec player, aim, shot_end, spawner;
+    float pickup_radius_squared;
+    unsigned offer_count;
     CombatPhase phase;
     unsigned swarm_ticks, ticks, live, damage, interval, cooldown, shot_ticks, hit_cooldown, health;
     int xp;
@@ -40,6 +45,7 @@ bool combat_interact(Combat *game);
 bool combat_can_exit(const Combat *game);
 bool combat_exit(Combat *game);
 void combat_format_clock(unsigned ticks, char *out, unsigned size);
-bool combat_choose(Combat *game, CombatUpgrade choice);
+bool combat_choose(Combat *game, unsigned choice);
+void combat_seed(Combat *game, uint32_t seed);
 
 #endif

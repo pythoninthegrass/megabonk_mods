@@ -4,7 +4,7 @@ title: Complete a full Forest run on PS Vita
 status: In Progress
 assignee: []
 created_date: '2026-11-18T06:02:00Z'
-updated_date: '2026-11-19T06:47:00Z'
+updated_date: '2026-11-19T06:56:00Z'
 labels:
   - ps-vita
   - vita-delivery
@@ -78,4 +78,8 @@ Device check (2026-11-19, PCH-2000): after the boss kill the swarm began after t
 Portal exit (uncommitted, host-tested, VPK builds, not yet installed): after the boss dies, Square within 5 units of the portal ends the run with a RUN COMPLETE summary (COMBAT_EXITED; Cross restarts). OpenBonk's non-final portal loads the next stage (InteractablePortal.DoLoadNextStage); the slice has no next stage, so the summary stands in for it and mirrors the completesExternalRun path (stats screen).
 
 Device check (2026-11-19, PCH-2000): portal exit works as designed (prompt, Square, RUN COMPLETE, Cross restart). Still uncommitted.
+
+Character data (committed f448e1f, host-tested, VPK builds, not installed): vita/combat/character.c holds Tony McZoom and Wireless Dagger values read from the pinned build; move speed x1.3 applied. Health 70, shield, pickup range and the dagger are staged until Forest enemy HP/damage are ported (native units would break the spike balance). The dagger is a bouncing projectile, not the spike's hitscan beam, so it needs a projectile simulation. WeaponData.baseStats read back as raw garbage through query_objects; upgrade modifiers list is raw ids only (see docs/vita-combat.md).
+
+Upgrade offers (host-tested, VPK builds, not installed): vita/combat/upgrades.c ports OpenBonk's offer rules (3 distinct offers, new-vs-owned draw, luck-weighted rarity, rarity multipliers, weapon 1-2 modifier rule, stat formula with tome accumulators); replaces the spike's Power/Haste menu. Pool is the dagger plus 13 enabled non-achievement tomes read from the pinned build; 2 tome slots. Effects wired: move speed, attack speed (shot interval), pickup range. Everything else is accumulated and displayed only. Open: achievement-locked tomes assumed unavailable on a fresh profile; other weapons not offered; tome raw values (e.g. Regen Flat 40) unverified against in-game text.
 <!-- SECTION:NOTES:END -->

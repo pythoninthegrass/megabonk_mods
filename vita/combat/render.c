@@ -172,11 +172,18 @@ static void draw_ui(const Combat *game, const CombatView *view)
             vita2d_pgf_draw_text(font, 228, 362, paper, 0.86f, sweep_status());
     } else if (game->phase == COMBAT_UPGRADE) {
         panel("CHOOSE AN UPGRADE");
-        vita2d_pgf_draw_text(font, 228, 251, view->choice == COMBAT_POWER ? accent : paper, 1,
-                            "Power   /   +1 weapon damage");
-        vita2d_pgf_draw_text(font, 228, 289, view->choice == COMBAT_HASTE ? accent : paper, 1,
-                            "Haste   /   Fire more often");
-        vita2d_pgf_draw_text(font, 228, 343, paper, 0.90f, "Up / Down: Choose     Cross: Confirm");
+        vita2d_draw_rectangle(196, 394, 568, 66, ink);
+        static const char *const rarity_names[RARITY_COUNT] = {"NEW", "Common", "Uncommon", "Rare", "Epic", "Legendary"};
+        for (unsigned i = 0; i < game->offer_count; ++i) {
+            const UpgradeOffer *offer = &game->offers[i];
+            char effect[96];
+            upgrades_describe(offer, effect, sizeof effect);
+            const unsigned y = 242 + i * 62;
+            vita2d_pgf_draw_textf(font, 228, y, view->choice == i ? accent : paper, 1, "%s   /   %s",
+                                  upgrade_name(offer->id), rarity_names[offer->rarity]);
+            vita2d_pgf_draw_text(font, 228, y + 24, view->choice == i ? accent : paper, 0.82f, effect);
+        }
+        vita2d_pgf_draw_text(font, 228, 436, paper, 0.90f, "Up / Down: Choose     Cross: Confirm");
     } else if (game->phase == COMBAT_EXITED) {
         panel("RUN COMPLETE");
         vita2d_pgf_draw_textf(font, 228, 250, accent, 1, "Level %u   /   %u defeated", game->level, game->kills);

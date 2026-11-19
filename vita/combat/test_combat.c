@@ -1,5 +1,6 @@
 #include "character.h"
 #include "combat.h"
+#include "upgrades.h"
 
 #include <assert.h>
 #include <math.h>
@@ -35,16 +36,38 @@ static void fight_and_upgrade(void)
         assert(!game.drops[0].active);
         game.player = (CombatVec){0, 0};
     }
-    assert(game.phase == COMBAT_UPGRADE);
+    assert(game.phase == COMBAT_UPGRADE && game.offer_count == UPGRADE_OFFERS);
     unsigned ticks = game.ticks;
     combat_tick(&game, (CombatInput){.move = {1, 0}});
     assert(game.ticks == ticks && game.player.x == 0);
-    assert(!combat_choose(&game, COMBAT_UPGRADE_COUNT));
-    assert(combat_choose(&game, COMBAT_POWER));
-    assert(!combat_choose(&game, COMBAT_POWER));
-    assert(game.damage == 2 && game.level == 2 && game.phase == COMBAT_PLAY);
+    assert(!combat_choose(&game, UPGRADE_OFFERS));
+    game.offers[0] = (UpgradeOffer){.id = UPGRADE_TOME_COOLDOWN, .modifier_count = 1,
+        .modifiers = {{STAT_ATTACK_SPEED, MODIFY_ADDITION, 0.075f}}};
+    assert(combat_choose(&game, 0));
+    assert(!combat_choose(&game, 0));
+    assert(game.upgrades.level[UPGRADE_TOME_COOLDOWN] == 1 && game.interval == 17);
+    assert(game.level == 2 && game.xp == 0 && game.phase == COMBAT_PLAY);
     combat_tick(&game, (CombatInput){.move = {1, 0}});
     assert(game.ticks == ticks + 1 && game.player.x > 0);
+}
+
+static void stat_effects(void)
+{
+    Combat game;
+    combat_start(&game);
+    assert(game.interval == 18 && fabsf(game.pickup_radius_squared - 1.44f) < 0.001f);
+    game.phase = COMBAT_UPGRADE;
+    game.offers[0] = (UpgradeOffer){.id = UPGRADE_TOME_AGILITY, .modifier_count = 1,
+        .modifiers = {{STAT_MOVE_SPEED, MODIFY_ADDITION, 0.15f}}};
+    game.offer_count = 1;
+    assert(combat_choose(&game, 0));
+    combat_tick(&game, (CombatInput){.move = {1, 0}});
+    assert(fabsf(game.player.x - 0.145f) < 0.001f);
+    game.phase = COMBAT_UPGRADE;
+    game.offers[0] = (UpgradeOffer){.id = UPGRADE_TOME_COOLDOWN, .rarity = RARITY_LEGENDARY, .modifier_count = 1,
+        .modifiers = {{STAT_ATTACK_SPEED, MODIFY_ADDITION, 10}}};
+    assert(combat_choose(&game, 0));
+    assert(game.interval == 6);
 }
 
 static void benchmark_layouts(void)
@@ -52,7 +75,7 @@ static void benchmark_layouts(void)
     Combat normal, gathered, scattered, reset;
     combat_start(&normal);
     assert(!normal.benchmark);
-    assert(!combat_choose(&normal, COMBAT_POWER));
+    assert(!combat_choose(&normal, 0));
     assert(!combat_benchmark(&gathered, 0, false));
     assert(!combat_benchmark(&gathered, COMBAT_CAPACITY + 1, false));
     assert(combat_benchmark(&gathered, COMBAT_CAPACITY, false));
@@ -254,6 +277,7 @@ static void tony_mczoom_data(void)
 
 int main(void)
 {
+    stat_effects();
     tony_mczoom_data();
     portal_exit();
     clock_and_prompt();

@@ -36,9 +36,38 @@ float combat_axis(uint8_t raw)
     return 0;
 }
 
+static const float BASE_INTERVAL = 18;
+static const float PICKUP_UNITS_PER_STAT = 0.15f;
+static const unsigned MIN_INTERVAL = 6;
+
+static void refresh_stats(Combat *game)
+{
+    const float attack_speed = upgrades_stat(&game->upgrades, game->character, STAT_ATTACK_SPEED);
+    const unsigned interval = (unsigned)lroundf(BASE_INTERVAL / attack_speed);
+    game->interval = interval < MIN_INTERVAL ? MIN_INTERVAL : interval;
+    const float radius = upgrades_stat(&game->upgrades, game->character, STAT_PICKUP_RANGE) * PICKUP_UNITS_PER_STAT;
+    game->pickup_radius_squared = radius * radius;
+}
+
 static void initialize(Combat *game)
 {
-    *game = (Combat){.character = &COMBAT_TONY_MCZOOM, .aim = {0, -1}, .spawner = {0, -14}, .damage = 1, .interval = 18, .health = 6, .level = 1};
+    const uint32_t seed = game->rng.state;
+    *game = (Combat){.character = &COMBAT_TONY_MCZOOM, .aim = {0, -1}, .spawner = {0, -14}, .damage = 1, .health = 6, .level = 1,
+                     .rng = {seed}};
+    upgrades_init(&game->upgrades);
+    refresh_stats(game);
+}
+
+void combat_seed(Combat *game, uint32_t seed)
+{
+    game->rng.state = seed;
+}
+
+static void open_upgrade_menu(Combat *game)
+{
+    game->phase = COMBAT_UPGRADE;
+    const float luck = upgrades_stat(&game->upgrades, game->character, STAT_LUCK);
+    game->offer_count = upgrades_roll(&game->upgrades, &game->rng, luck, game->offers);
 }
 
 static CombatVec benchmark_position(unsigned i, bool scattered)
@@ -143,10 +172,10 @@ static void collect_xp(Combat *game)
 {
     for (unsigned i = 0; i < COMBAT_CAPACITY; ++i) {
         CombatDrop *drop = &game->drops[i];
-        if (drop->active && length_squared(subtract(drop->position, game->player)) < 1.44f) {
+        if (drop->active && length_squared(subtract(drop->position, game->player)) < game->pickup_radius_squared) {
             drop->active = false;
             if (++game->xp >= COMBAT_XP_PER_LEVEL) {
-                game->phase = COMBAT_UPGRADE;
+                open_upgrade_menu(game);
                 return;
             }
         }
@@ -162,7 +191,7 @@ static void collect_all_xp(Combat *game)
         }
     }
     if (game->xp >= COMBAT_XP_PER_LEVEL)
-        game->phase = COMBAT_UPGRADE;
+        open_upgrade_menu(game);
 }
 
 static void fire(Combat *game)
@@ -233,7 +262,7 @@ void combat_tick(Combat *game, CombatInput input)
         return;
     ++game->ticks;
     float speed = length_squared(input.move);
-    const float step = PLAYER_SPEED * combat_character_speed_scale(game->character);
+    const float step = PLAYER_SPEED * upgrades_stat(&game->upgrades, game->character, STAT_MOVE_SPEED);
     advance(&game->player, input.move, speed > 1 ? step / sqrtf(speed) : step);
     game->player.x = fmaxf(-COMBAT_ARENA, fminf(COMBAT_ARENA, game->player.x));
     game->player.z = fmaxf(-COMBAT_ARENA, fminf(COMBAT_ARENA, game->player.z));
@@ -300,14 +329,12 @@ bool combat_exit(Combat *game)
     return true;
 }
 
-bool combat_choose(Combat *game, CombatUpgrade choice)
+bool combat_choose(Combat *game, unsigned choice)
 {
-    if (game->phase != COMBAT_UPGRADE || (choice != COMBAT_POWER && choice != COMBAT_HASTE))
+    if (game->phase != COMBAT_UPGRADE || choice >= game->offer_count)
         return false;
-    if (choice == COMBAT_POWER)
-        ++game->damage;
-    else if (game->interval > 6)
-        game->interval -= 3;
+    upgrades_apply(&game->upgrades, &game->offers[choice]);
+    refresh_stats(game);
     ++game->level;
     game->xp = 0;
     game->phase = COMBAT_PLAY;

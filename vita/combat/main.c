@@ -47,6 +47,7 @@ static bool handle_buttons(CombatView *view, uint32_t pressed)
             view->screen = SCREEN_BENCHMARK;
         } else if (pressed & SCE_CTRL_CROSS) {
             combat_start(&game);
+            combat_seed(&game, (uint32_t)sceKernelGetProcessTimeWide());
             view->screen = SCREEN_RUN;
         }
         break;
@@ -66,10 +67,10 @@ static bool handle_buttons(CombatView *view, uint32_t pressed)
         if ((game.phase == COMBAT_DEFEAT || game.phase == COMBAT_EXITED) && (pressed & SCE_CTRL_CROSS))
             combat_start(&game);
         if (game.phase == COMBAT_UPGRADE) {
-            if (pressed & SCE_CTRL_UP)
-                view->choice = COMBAT_POWER;
-            if (pressed & SCE_CTRL_DOWN)
-                view->choice = COMBAT_HASTE;
+            if ((pressed & SCE_CTRL_UP) && view->choice > 0)
+                --view->choice;
+            if ((pressed & SCE_CTRL_DOWN) && view->choice + 1 < game.offer_count)
+                ++view->choice;
             if (pressed & SCE_CTRL_CROSS)
                 combat_choose(&game, view->choice);
         }
@@ -111,7 +112,7 @@ int main(void)
                 accumulator -= TICK_UNITS;
                 combat_tick(&game, input);
                 if (game.phase == COMBAT_UPGRADE)
-                    view.choice = COMBAT_POWER;
+                    view.choice = 0;
             }
         } else {
             accumulator = 0;
