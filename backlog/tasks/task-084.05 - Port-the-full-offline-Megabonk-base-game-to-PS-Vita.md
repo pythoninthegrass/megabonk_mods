@@ -4,13 +4,16 @@ title: Port the full offline Megabonk base game to PS Vita
 status: To Do
 assignee: []
 created_date: '2026-11-18T06:02:00Z'
-updated_date: '2026-11-18T06:02:00Z'
+updated_date: '2026-11-19T08:21:00Z'
 labels:
   - ps-vita
   - vita-delivery
 dependencies:
   - TASK-084.04
   - TASK-084.03
+references:
+  - 'https://github.com/pythoninthegrass/megabonk_data'
+  - ~/git/megabonk_data
 documentation:
   - .agents/skills/vita-port/SKILL.md
 parent_task_id: TASK-084

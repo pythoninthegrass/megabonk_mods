@@ -4,10 +4,13 @@ title: Build a differential verification harness against the frozen shipped buil
 status: To Do
 assignee: []
 created_date: '2026-11-16 00:31'
+updated_date: '2026-11-19T08:21:00Z'
 labels: []
 dependencies: []
 references:
   - docs/development.md
+  - 'https://github.com/pythoninthegrass/megabonk_data'
+  - ~/git/megabonk_data
 modified_files:
   - scripts/
   - tests/

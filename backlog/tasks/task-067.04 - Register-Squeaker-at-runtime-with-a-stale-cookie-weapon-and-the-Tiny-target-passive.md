@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-11-12T22:18:00Z'
-updated_date: '2026-11-13T05:18:00Z'
+updated_date: '2026-11-19T08:21:00Z'
 labels:
   - character
   - bepinex
@@ -18,6 +18,8 @@ references:
   - src/MegabonkLevels.Mod/character_screen_patch.cs
   - src/MegabonkLevels.Mod/character_policy.cs
   - src/MegabonkLevels.Mod/pack_prefabs.cs
+  - 'https://github.com/pythoninthegrass/megabonk_data'
+  - ~/git/megabonk_data
 documentation:
   - docs/characters.md
   - docs/development.md

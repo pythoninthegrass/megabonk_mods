@@ -4,6 +4,7 @@ title: 'Add Squeaker, a playable mouse character'
 status: To Do
 assignee: []
 created_date: '2026-11-12T22:18:00Z'
+updated_date: '2026-11-19T08:21:00Z'
 labels:
   - character
 dependencies: []
@@ -11,6 +12,8 @@ references:
   - tools/simple_mouse.blend
   - src/MegabonkLevels.Mod/character_override.cs
   - src/MegabonkLevels.Mod/character_screen_patch.cs
+  - 'https://github.com/pythoninthegrass/megabonk_data'
+  - ~/git/megabonk_data
 documentation:
   - docs/development.md
   - docs/asset-bundles.md
