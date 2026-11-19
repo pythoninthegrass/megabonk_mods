@@ -13,6 +13,22 @@ tasks:
       - task: build
         vars: { APP: combat, BUILD_DIR: '${VITA_COMBAT_BUILD_DIR:-.tools/vita-combat}' }
 
+  combat:deploy:
+    desc: "Build, stage, and reinstall the combat VPK on the explicitly selected Vita"
+    cmds:
+      - |
+        : "${VITA_COMBAT_SSH:?Set VITA_COMBAT_SSH to the selected Vita SSH user and host}"
+        case "$VITA_COMBAT_SSH" in -*|*[!a-zA-Z0-9.@_-]*) exit 2 ;; esac
+      - task: combat
+      - |
+        build="${VITA_COMBAT_BUILD_DIR:-.tools/vita-combat}"
+        remote="/ux0/downloads/megabonk-vita-combat-$(date -u +%Y%m%dT%H%M%SZ).vpk"
+        artifact="$build/megabonk-vita-combat.vpk"
+        case "$artifact" in *[!a-zA-Z0-9_./\ -]*) exit 2 ;; esac
+        printf 'put "%s" "%s"\n' "$artifact" "$remote" |
+          /usr/bin/sftp -S /usr/bin/ssh -F /dev/null -o BatchMode=yes -o ConnectTimeout=10 -b - -- "$VITA_COMBAT_SSH"
+        /usr/bin/ssh -F /dev/null -o BatchMode=yes -o ConnectTimeout=10 -- "$VITA_COMBAT_SSH" "vpk install --reinstall $remote"
+
   build:
     internal: true
     cmds:

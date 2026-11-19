@@ -1,4 +1,5 @@
 #include "render.h"
+#include "sweep.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -140,7 +141,9 @@ static void draw_ui(const Combat *game, const CombatView *view)
         vita2d_pgf_draw_textf(font, 228, 249, accent, 1, "%u enemies   /   %s", view->count,
                              view->scattered ? "Scattered" : "Gathered");
         vita2d_pgf_draw_text(font, 228, 290, paper, 0.90f, "Left / Right: Count     Up / Down: Layout");
-        vita2d_pgf_draw_text(font, 228, 330, paper, 0.90f, "Cross: Run     Circle: Back");
+        vita2d_pgf_draw_text(font, 228, 322, paper, 0.85f, "Cross: Run     Triangle: Full sweep     Square: Gate check");
+        if (*sweep_status())
+            vita2d_pgf_draw_text(font, 228, 362, paper, 0.86f, sweep_status());
     } else if (game->phase == COMBAT_UPGRADE) {
         panel("CHOOSE AN UPGRADE");
         vita2d_pgf_draw_text(font, 228, 251, view->choice == COMBAT_POWER ? accent : paper, 1,
@@ -157,8 +160,9 @@ static void draw_ui(const Combat *game, const CombatView *view)
         return;
     vita2d_draw_rectangle(18, 16, 560, 44, ink);
     if (game->benchmark) {
-        vita2d_pgf_draw_textf(font, 30, 45, paper, 0.90f, "BENCHMARK  %s   /   %u live   /   Square: Reset",
-                             game->scattered ? "Scattered" : "Gathered", game->live);
+        vita2d_pgf_draw_textf(font, 30, 45, paper, 0.90f, "BENCHMARK  %s   /   %u live   /   %s",
+                             game->scattered ? "Scattered" : "Gathered", game->live,
+                             *sweep_status() ? sweep_status() : "Square: Reset");
     } else {
         vita2d_pgf_draw_textf(font, 30, 45, paper, 0.90f, "HP %u   XP %d/%d   LV %u   DMG %u   SHOT %u TICKS",
                              game->health, game->xp, COMBAT_XP_PER_LEVEL, game->level, game->damage, game->interval);
