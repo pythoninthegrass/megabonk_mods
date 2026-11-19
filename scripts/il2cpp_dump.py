@@ -4,12 +4,13 @@ install: Il2CppDumper's net7 build run under the mise-managed dotnet 10 SDK
 with roll-forward, since the system has no standalone net7 runtime.
 
   mise exec dotnet@10.0.108 -- dotnet Il2CppDumper.dll \
-      <GameAssembly.dll> <global-metadata.dat> <outdir>
+      <GameAssembly.dll or GameAssembly.so> <global-metadata.dat> <outdir>
   (with DOTNET_ROLL_FORWARD=LatestMajor in the environment)
 
-Usage: uv run scripts/il2cpp_dump.py
+Usage: uv run scripts/il2cpp_dump.py [--game DIR] [--out DIR]
 """
 
+import argparse
 import os
 import subprocess
 import sys
@@ -22,8 +23,15 @@ OUTPUT_DIR = REPO_ROOT / ".tools" / "il2cpp_dump"
 DOTNET_SDK = "dotnet@10.0.108"
 
 
+ASSEMBLY_NAMES = ("GameAssembly.dll", "GameAssembly.so")
+
+
 def game_assembly_path(game: Path | None = None) -> Path:
-    return (game or gp.game_dir()) / "GameAssembly.dll"
+    base = game or gp.game_dir()
+    for name in ASSEMBLY_NAMES:
+        if (base / name).is_file():
+            return base / name
+    return base / ASSEMBLY_NAMES[0]
 
 
 def global_metadata_path(game: Path | None = None) -> Path:
@@ -74,8 +82,16 @@ def run_dump(
     )
 
 
-def main() -> int:
-    run_dump()
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Run Il2CppDumper over a GameAssembly/metadata pair.")
+    parser.add_argument(
+        "--game",
+        type=Path,
+        help="game directory holding GameAssembly.dll/.so and <name>_Data/il2cpp_data/Metadata",
+    )
+    parser.add_argument("--out", type=Path, default=OUTPUT_DIR, help="directory for dump.cs and friends")
+    args = parser.parse_args(argv)
+    run_dump(game=args.game, outdir=args.out)
     return 0
 
 

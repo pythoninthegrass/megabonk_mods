@@ -15,6 +15,50 @@ tasks:
     cmds:
       - uv run scripts/il2cpp_dump.py
 
+  linux-metadata:
+    desc: "Rsync the native Linux build's global-metadata.dat into the mirrored game dir"
+    summary: |
+      Usage: task re:linux-metadata
+
+      Fetches Megabonk_Data/il2cpp_data/Metadata/global-metadata.dat from the same
+      player box and directory as re:shaders-pull (MEGABONK_LINUX_BUILD_RSYNC in the
+      gitignored .env) into .tools/megabonk-linux-native/Megabonk/, the layout
+      re:dump-linux expects. Il2CppDumper pairs a metadata file with one build:
+      a name it prints is only as good as that pairing, so the recipe prints both
+      hashes and the GameAssembly.so hash must match the pinned image before any
+      name is trusted. See "Cross-checking the lift against an external
+      reconstruction" in docs/development.md.
+    preconditions:
+      - sh: '[ -n "${MEGABONK_LINUX_BUILD_RSYNC:-}" ]'
+        msg: "Set MEGABONK_LINUX_BUILD_RSYNC in .env to <host>:<path>/Megabonk/"
+    cmds:
+      - mkdir -p .tools/megabonk-linux-native/Megabonk/Megabonk_Data/il2cpp_data/Metadata
+      - rsync -a "$MEGABONK_LINUX_BUILD_RSYNC"Megabonk_Data/il2cpp_data/Metadata/global-metadata.dat
+        .tools/megabonk-linux-native/Megabonk/Megabonk_Data/il2cpp_data/Metadata/
+      - shasum -a 256 .tools/megabonk-linux-native/Megabonk/GameAssembly.so
+        .tools/megabonk-linux-native/Megabonk/Megabonk_Data/il2cpp_data/Metadata/global-metadata.dat
+
+  dump-linux:
+    desc: "Regenerate Il2CppDumper output into .tools/il2cpp_dump_linux/ from the mirrored Linux build"
+    summary: |
+      Usage: task re:dump-linux [LINUX_GAME=<dir>] [LINUX_OUT=<dir>]
+
+      The same Il2CppDumper run as re:dump, over the pinned native Linux
+      GameAssembly.so plus the metadata that shipped beside it. This is the dump
+      whose RVAs address the scored image; the Windows dump.cs from re:dump does
+      not. Needs task re:linux-metadata first.
+    deps: [_install-dotnet]
+    vars:
+      LINUX_GAME: '{{.LINUX_GAME | default ".tools/megabonk-linux-native/Megabonk"}}'
+      LINUX_OUT: '{{.LINUX_OUT | default ".tools/il2cpp_dump_linux"}}'
+    preconditions:
+      - sh: '[ -f "{{.LINUX_GAME}}/GameAssembly.so" ] || [ -f "{{.LINUX_GAME}}/GameAssembly.dll" ]'
+        msg: "No GameAssembly under {{.LINUX_GAME}}; see docs/development.md for the rsync step"
+      - sh: '[ -f "{{.LINUX_GAME}}/Megabonk_Data/il2cpp_data/Metadata/global-metadata.dat" ]'
+        msg: "No global-metadata.dat beside the mirrored build; run task re:linux-metadata"
+    cmds:
+      - uv run scripts/il2cpp_dump.py --game "{{.LINUX_GAME}}" --out "{{.LINUX_OUT}}"
+
   shaders-metal:
     desc: "Translate every shipped GLSL program to MSL and score the Metal compile pass rate"
     vars:
@@ -248,6 +292,32 @@ tasks:
       LIFT_OUT: '{{.LIFT_OUT | default ".tools/lift-image-full"}}'
     cmds:
       - uv run scripts/lift_image.py "{{.LIFT_SO}}" --build --out "{{.LIFT_OUT}}" --ghidra-jobs 1 --ghidra-timeout 600 {{.CLI_ARGS}}
+
+  lift-names:
+    desc: "Name scored lift bodies by joining the Linux dump.cs RVAs to their body starts"
+    summary: |
+      Usage: task re:lift-names [NAMES_DUMP=<dump.cs>] [NAMES_BODIES=<bodies.jsonl>]
+             [NAMES_OUT=<names.jsonl>]
+
+      The ELF's .symtab names nothing inside the il2cpp section, so a body is only
+      legible through metadata: dump.cs lists every managed method with its RVA, and
+      an RVA equal to a body start names that body. Prints the named/clean/blocked
+      counts and one line per blocked body, and writes the blocked rows as JSONL to
+      NAMES_OUT. NAMES_DUMP must be the Linux dump from task re:dump-linux: names
+      come from global-metadata.dat, so a dump of another build labels bodies wrongly.
+      See scripts/lift_names.py.
+    vars:
+      NAMES_DUMP: '{{.NAMES_DUMP | default ".tools/il2cpp_dump_linux/dump.cs"}}'
+      NAMES_BODIES: '{{.NAMES_BODIES | default ".tools/lift-image-full-v5/bodies.jsonl"}}'
+      NAMES_OUT: '{{.NAMES_OUT | default ".tools/lift-image-full-v5/names-blocked.json"}}'
+    preconditions:
+      - sh: '[ -f "{{.NAMES_DUMP}}" ]'
+        msg: "No dump.cs at {{.NAMES_DUMP}}; run task re:linux-metadata then task re:dump-linux"
+      - sh: '[ -f "{{.NAMES_BODIES}}" ]'
+        msg: "No bodies.jsonl at {{.NAMES_BODIES}}; run task re:lift-image-build first"
+    cmds:
+      - uv run scripts/lift_names.py --dump "{{.NAMES_DUMP}}" --bodies "{{.NAMES_BODIES}}"
+        --out "{{.NAMES_OUT}}" --blocked-only
 
   lift-holes:
     desc: "Classify the unresolved computed jumps (BRANCHIND, JUMPTABLE_TARGET) left in a lift probe sample"
