@@ -185,6 +185,29 @@ def result_slot(kind: str) -> Slot:
     return Slot("reg", 0x1200 if kind.startswith(("f", "v")) else 0, TYPES[kind][1])
 
 
+# Runtime symbols lifted bodies call for instructions the host cannot execute; weak so an embedder can supply a measured one.
+HOST_HELPERS = [
+    "typedef struct { uint32_t eax, ebx, ecx, edx; } lift_cpuid_leaf;",
+    "__attribute__((weak)) int lift_cpuid_leaf_at(uint64_t leaf, lift_cpuid_leaf *out) {",
+    "  (void)leaf; (void)out;",
+    "  return 0;",
+    "}",
+    "__attribute__((weak)) void lift_cpuid(uint64_t leaf, uint32_t *out) {",
+    "  lift_cpuid_leaf v = {0, 0, 0, 0};",
+    "  if (!lift_cpuid_leaf_at(leaf, &v)) { v.eax = v.ebx = v.ecx = v.edx = 0; }",
+    "  out[0] = v.eax; out[1] = v.ebx; out[2] = v.edx; out[3] = v.ecx;",
+    "}",
+    "__attribute__((weak)) _Bool lift_rdrand(uint64_t *out) {",
+    "  static uint64_t state = UINT64_C(0x2545F4914F6CDD1D);",
+    "  uint64_t z = state += UINT64_C(0x9E3779B97F4A7C15);",
+    "  z = (z ^ (z >> 30)) * UINT64_C(0xBF58476D1CE4E5B9);",
+    "  z = (z ^ (z >> 27)) * UINT64_C(0x94D049BB133111EB);",
+    "  *out = z ^ (z >> 31);",
+    "  return 1;",
+    "}",
+]
+
+
 def generate(
     exports: list[Binding],
     imports: list[Binding],
@@ -311,6 +334,7 @@ def generate(
         ]
     for alias, target in aliases.items():
         lines += [f"void sub_{alias:x}(unsigned char *reg) {{", f"  sub_{target:x}(reg);", "}"]
+    lines += HOST_HELPERS
     lines += ["void lift_dispatch(uint64_t target, unsigned char *reg) {", "  switch (target) {"]
     lines += [f"  case UINT64_C({a}): sub_{a:x}(reg); return;" for a in [b.address for b in bindings] + callable_bodies + list(aliases)]
     lines += ["  default: abort();", "  }", "}"]
