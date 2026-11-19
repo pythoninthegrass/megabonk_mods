@@ -1538,12 +1538,13 @@ class BodyLifter:
                 return op
         return None
 
-    def table_pointer_chain(self, ops: list[dict], target: str, table_section: dict) -> bool:
+    def table_pointer_chain(self, ops: list[dict], target: str, table_base: int) -> bool:
         """Whether the target is built the way the dump builds a base-relative jump-table target.
 
-        entry = LOAD(base + index * entry_size) and target = sext(entry) + base, the base copied whole
-        from the table's own section. That construction is what makes the runtime value a dumped address
-        plus that section's bias, which is the only value the switch's rebasing can resolve; a target
+        entry = LOAD(base + index * entry_size) and target = sext(entry) + base, the base an address
+        constant (cptr) equal to the decoded table's own base. A ram source is a load of the value stored
+        there, not an address. That construction is what makes the runtime value a dumped address plus
+        that section's bias, which is the only value the switch's rebasing can resolve; a target
         assembled any other way keeps its hole rather than lowering a switch that could never match.
         """
         joined = self.last_write(ops, target)
@@ -1570,9 +1571,7 @@ class BodyLifter:
         if not copied or copied["op"] != "COPY" or len(copied.get("in") or []) != 1:
             return False
         source = copied["in"][0]
-        if not source.startswith(("cptr,", "ram,")):
-            return False
-        return self.section_of(int(source.split(",")[1], 16)) is table_section
+        return source.startswith("cptr,") and int(source.split(",")[1], 16) == table_base
 
     def evidence_switch(self, insn: dict, k: int, target: str) -> tuple[list[int], dict] | None:
         """Cases and bias section for a site Ghidra left without a table, when the image's bytes prove one.
@@ -1593,9 +1592,25 @@ class BodyLifter:
         if not cases or any(c not in self.addrs for c in cases):
             return None
         sec = self.section_of(table["base"])
-        if sec is None or not self.table_pointer_chain(self.ops_before(insn, k), target, sec):
+        if sec is None or not self.guard_dominates(table.get("window"), insn["a"]):
+            return None
+        if not self.table_pointer_chain(self.ops_before(insn, k), target, table["base"]):
             return None
         return sorted(set(cases)), sec
+
+    def guard_dominates(self, window: int | None, site: int) -> bool:
+        """Whether nothing enters the span from `window` to the jump except by running it from its first instruction.
+
+        An edge landing after the bound compare skips the guard the case list rests on, and one landing
+        after the base load skips the definition the chain reads. With no such edge the span is
+        straight-line, so the dump-order last write of each chain value is the one that reaches the jump.
+        """
+        if window is None:
+            return False
+        if self.direct is None:
+            self.direct = direct_branch_targets(self.fn)
+        entries = self.direct.union(*self.tables.values())
+        return not any(window < target <= site for target in entries)
 
     def refusal_reason(self, verdict: dict, table_bytes: bool) -> str:
         """Why a BRANCHIND stayed a hole, in the terms of the gate that actually refused it.

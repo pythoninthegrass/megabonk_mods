@@ -430,6 +430,7 @@ def test_raw_table_returns_the_guarded_pattern_with_its_decoded_cases():
         "scale": 4,
         "count": 5,
         "cases": [0x20, 0xFB80BC, 0xFB80C0, 0xFB80C4, 0xFB80C8],
+        "window": 0x2126CDF,
     }
     assert ev.raw_cases([0x20, 0x40], 0x2126CFF) == [0x20, 0xFB80BC, 0xFB80C0, 0xFB80C4, 0xFB80C8]
     ev._disassemble = lambda window: CLOBBERED_BOUND_TEXT
@@ -459,3 +460,13 @@ def test_a_byte_guard_on_another_register_leaves_a_wide_index_unbounded():
         "count": None,
     }
 
+
+
+def test_raw_table_names_the_first_instruction_of_the_guarded_span():
+    # The span runs from the earlier of the bound compare and the table-base lea to the jump; a lea
+    # ahead of the compare starts it, which is where a loop-invariant base is loaded.
+    ev = tables.TableEvidence(Path("GameAssembly.so"), "llvm-objdump")
+    blob = b"".join(o.to_bytes(4, "little", signed=True) for o in [0, 4, 8, 12, 16])
+    ev._read = lambda addr, n: blob[addr - 0xFB9E0C : addr - 0xFB9E0C + n]
+    ev._disassemble = lambda window: FAR_TABLE_TEXT
+    assert ev.raw_table([0x20, 0x40], 0x2159D75)["window"] == 0x2159D43

@@ -105,6 +105,16 @@ def _bounds_index(lines, guard, entry_load, index, operand):
 
 def parse_table_pattern(text, site):
     """Reads the jump-table base, entry size and case count off the lea/movslq/add/jmp sequence at one site."""
+    pattern = match_table_pattern(text, site)
+    return None if pattern is None else {key: value for key, value in pattern.items() if key != "window"}
+
+
+def match_table_pattern(text, site):
+    """The table pattern plus `window`, the address of the earlier of its bound compare and base lea.
+
+    A guarded dispatch is only straight-line code from `window` to the jump, so a caller can refuse a
+    site that something else branches into.
+    """
     lines = []
     for line in text.splitlines():
         match = re.match(r"^\s*([0-9a-f]+):\s*(.*)$", line)
@@ -141,7 +151,7 @@ def parse_table_pattern(text, site):
                 table = None
             if not table:
                 continue
-            count = None
+            count, window = None, None
             for m in range(j - 1, max(k - 10, -1), -1):
                 bound = re.fullmatch(r"cmp[bwlq]?\s+\$(0x[0-9a-f]+),\s*(.+)", lines[m][1])
                 taken = m + 1 < j and re.fullmatch(r"ja(?:e)?\s+\S+.*", lines[m + 1][1])
@@ -152,8 +162,9 @@ def parse_table_pattern(text, site):
                     continue
                 entries = int(bound.group(1), 16) + 1
                 count = entries if entries <= MAX_CASES else None
+                window = min(lines[k][0], lines[m][0]) if count is not None else None
                 break
-            return {"base": int(table.group(2), 16), "scale": scale, "count": count}
+            return {"base": int(table.group(2), 16), "scale": scale, "count": count, "window": window}
     return None
 
 
@@ -248,11 +259,11 @@ class TableEvidence:
         self._disassemble = None
 
     def raw_table(self, boundaries, site):
-        """The table at `site` as base, entry size, case count and decoded cases, or None when unproven."""
+        """The table at `site` as base, entry size, case count, decoded cases and guarded window, or None when unproven."""
         if self._read is None:
             self._read = elf_reader(self.so)
             self._disassemble = objdump_disassembler(self.so, self.objdump)
-        pattern = parse_table_pattern(self._disassemble(window_for(boundaries, site)), site)
+        pattern = match_table_pattern(self._disassemble(window_for(boundaries, site)), site)
         if pattern is None or pattern["count"] is None:
             return None
         try:

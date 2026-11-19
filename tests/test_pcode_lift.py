@@ -1533,16 +1533,19 @@ def dispatch_insn(base="cptr,5010,8", entry="unique,23c00,4", loader=None, scale
     ]
 
 
-def dispatch_body(**kw):
-    return body(
-        insn(0x1000, 20, *dispatch_insn(**kw)),
+def dispatch_body(extra=(), jt=(), **kw):
+    fn = body(
+        insn(0x1000, 4, op("COPY", "register,38,4", "const,0,4")),
+        insn(0x1004, 16, *dispatch_insn(**kw)),
         insn(0x1014, 2, op("BRANCHIND", None, "register,0,8")),
         insn(0x1016, 2, op("COPY", REG_EAX, "const,1,4"), op("RETURN", None, "register,288,8")),
         insn(0x1018, 2, op("COPY", REG_EAX, "const,2,4"), op("RETURN", None, "register,288,8")),
+        *extra,
     )
+    return {**fn, "jt": list(jt)}
 
 
-TABLE = {"base": 0x5010, "scale": 4, "count": 2, "cases": [0x1016, 0x1018]}
+TABLE = {"base": 0x5010, "scale": 4, "count": 2, "cases": [0x1016, 0x1018], "window": 0x1000}
 
 
 def test_the_images_table_bytes_drive_a_switch_ghidra_left_without_one():
@@ -1587,6 +1590,52 @@ def test_an_evidence_switch_is_refused_when_the_base_is_not_the_tables_section()
     computed = pl.lift_body(dispatch_body(base="unique,9100,8"), [RODATA, TEXT], evidence=StubTable(TABLE))
     assert computed.holes == ["BRANCHIND"]
     assert computed.evidence_switches == 0
+
+
+def test_an_evidence_switch_is_refused_when_the_base_is_not_the_tables_own_address():
+    # Another address in the same section is not the decoded table: the dispatch would read a different table.
+    result = pl.lift_body(dispatch_body(base="cptr,5014,8"), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert result.holes == ["BRANCHIND"]
+    assert result.evidence_switches == 0
+
+
+def test_an_evidence_switch_is_refused_when_the_base_is_read_from_memory():
+    # A ram COPY loads the value stored at that address, so it names a pointer, not the table.
+    result = pl.lift_body(dispatch_body(base="ram,5010,8"), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert result.holes == ["BRANCHIND"]
+    assert result.evidence_switches == 0
+
+
+def side_entry(target, at=0x101A):
+    return insn(at, 2, op("CBRANCH", None, f"ram,{target:x},8", "unique,25400,1"))
+
+
+def test_an_evidence_switch_is_refused_when_a_branch_enters_after_the_guard():
+    # An edge into the span between the guard and the dispatch skips the bound the case list rests on.
+    result = pl.lift_body(dispatch_body(extra=[side_entry(0x1004)]), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert result.holes == ["BRANCHIND"]
+    assert result.evidence_switches == 0
+    at_dispatch = pl.lift_body(dispatch_body(extra=[side_entry(0x1014)]), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert at_dispatch.holes == ["BRANCHIND"]
+    assert at_dispatch.evidence_switches == 0
+
+
+def test_an_evidence_switch_is_refused_when_a_jump_table_case_enters_after_the_guard():
+    result = pl.lift_body(dispatch_body(jt=[{"at": 0x9000, "cases": [0x1004]}]), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert result.holes == ["BRANCHIND"]
+    assert result.evidence_switches == 0
+
+
+def test_an_evidence_switch_accepts_a_branch_that_enters_at_the_start_of_the_guarded_span():
+    result = pl.lift_body(dispatch_body(extra=[side_entry(0x1000)]), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert result.holes == []
+    assert result.evidence_switches == 1
+
+
+def test_an_evidence_switch_is_refused_without_a_guarded_span():
+    result = pl.lift_body(dispatch_body(), [RODATA, TEXT], evidence=StubTable({**TABLE, "window": None}))
+    assert result.holes == ["BRANCHIND"]
+    assert result.evidence_switches == 0
 
 
 def test_an_evidence_switch_is_refused_unless_the_entry_is_a_table_load():
