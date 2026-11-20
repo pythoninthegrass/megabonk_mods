@@ -318,7 +318,9 @@ async def test_log_tail_returns_matching_lines(tmp_path, monkeypatch) -> None:
     harness = setup_harness(tmp_path, monkeypatch)
     log = harness.parent / "BepInEx" / "LogOutput.log"
     log.parent.mkdir(parents=True, exist_ok=True)
-    log.write_text("[Info : BepInEx] boot\n[Info :MegabonkLevels] DevHarness: enabled\n[Info :MegabonkLevels] KillFloor: armed\nnoise\n[Info :MegabonkLevels] KillFloor: disarmed\n")
+    log.write_text(
+        "[Info : BepInEx] boot\n[Info :MegabonkLevels] DevHarness: enabled\n[Info :MegabonkLevels] KillFloor: armed\nnoise\n[Info :MegabonkLevels] KillFloor: disarmed\n"
+    )
     stop = start_fake_mod(harness, lambda p: ok_result(p))
     try:
         async with Client(mcp_server.mcp) as client:
@@ -381,7 +383,11 @@ INPUT_TOOL_CASES = [
         {"command": "mouse", "action": "click", "x": 960, "y": 540, "button": 1},
     ),
     ("mouse", {"action": "clear"}, {"command": "mouse", "action": "clear"}),
-    ("mouse", {"action": "scroll", "delta": 2, "x": 5, "y": 6}, {"command": "mouse", "action": "scroll", "x": 5, "y": 6, "delta": 2}),
+    (
+        "mouse",
+        {"action": "scroll", "delta": 2, "x": 5, "y": 6},
+        {"command": "mouse", "action": "scroll", "x": 5, "y": 6, "delta": 2},
+    ),
     ("mouse", {"action": "scroll", "delta": -1}, {"command": "mouse", "action": "scroll", "delta": -1}),
     ("material_dump", {}, {"command": "material-dump"}),
     ("material_dump", {"object": "Warehouse"}, {"command": "material-dump", "object": "Warehouse"}),
@@ -444,7 +450,9 @@ async def test_interact_without_a_type_is_a_tool_error_and_sends_nothing(tmp_pat
     assert seen == []
 
 
-@pytest.mark.parametrize("args", [{"action": "shuffle"}, {"action": "track"}, {"action": "track", "track": 0}, {"action": "next", "track": 2}])
+@pytest.mark.parametrize(
+    "args", [{"action": "shuffle"}, {"action": "track"}, {"action": "track", "track": 0}, {"action": "next", "track": 2}]
+)
 async def test_music_with_bad_arguments_is_a_tool_error_and_sends_nothing(tmp_path, monkeypatch, args) -> None:
     harness = setup_harness(tmp_path, monkeypatch)
     seen = []
@@ -1033,7 +1041,9 @@ async def test_relaunch_tool_forwards_the_overrides(tmp_path, monkeypatch) -> No
     setup_harness(tmp_path, monkeypatch)
     seen = {}
 
-    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2):
+    def fake_relaunch(
+        harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2
+    ):
         seen["overrides"] = overrides
         seen["spawns"] = spawns
         seen["invulnerable"] = invulnerable
@@ -1058,7 +1068,9 @@ async def test_relaunch_tool_forwards_an_unseeded_load(tmp_path, monkeypatch) ->
     setup_harness(tmp_path, monkeypatch)
     seen = {}
 
-    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2):
+    def fake_relaunch(
+        harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2
+    ):
         seen["overrides"] = overrides
         return True
 
@@ -1086,7 +1098,9 @@ async def test_relaunch_tool_no_level_passes_no_level_path(tmp_path, monkeypatch
     setup_harness(tmp_path, monkeypatch)
     seen = {}
 
-    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2):
+    def fake_relaunch(
+        harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2
+    ):
         seen["level"] = level
         return True
 
@@ -1108,7 +1122,9 @@ async def test_relaunch_tool_applies_the_spawn_and_invulnerable_settings(tmp_pat
     monkeypatch.setenv("MEGABONK_RELAUNCH_FEATHERS", "0")
     seen = {}
 
-    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2):
+    def fake_relaunch(
+        harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2
+    ):
         seen["spawns"] = spawns
         seen["invulnerable"] = invulnerable
         seen["feathers"] = feathers
@@ -1130,7 +1146,9 @@ async def test_relaunch_tool_applies_the_spawn_and_invulnerable_settings(tmp_pat
 async def test_relaunch_tool_error_carries_the_failing_log_line(tmp_path, monkeypatch) -> None:
     setup_harness(tmp_path, monkeypatch)
 
-    def fake_relaunch(harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2):
+    def fake_relaunch(
+        harness, game_dir, level, timeout, task, on_step, on_error, overrides=None, spawns=True, invulnerable=False, feathers=2
+    ):
         on_error("relaunch: the level failed to load: LevelLoader: load failed: no MapData found for map=32")
         return False
 

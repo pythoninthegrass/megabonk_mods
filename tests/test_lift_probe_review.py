@@ -114,11 +114,12 @@ def test_cold_and_warm_scoring_agree_on_real_sections(tmp_path):
     fdes = [lp.Fde(0x1000, 64)]
     sections = [{"name": "il2cpp", "va": 0x1000, "size": 0x9000}, {"name": "_rodata", "va": 0x20000, "size": 0x400}]
     record = {
-        "start": 0x1000, "size": 64, "undecoded": 0, "jt": [],
+        "start": 0x1000,
+        "size": 64,
+        "undecoded": 0,
+        "jt": [],
         "insns": [
-            {"a": 0x1000, "len": 1, "m": "mov", "ops": [
-                {"op": "COPY", "out": "register,0,8", "in": ["ram,20000,8"]}
-            ]},
+            {"a": 0x1000, "len": 1, "m": "mov", "ops": [{"op": "COPY", "out": "register,0,8", "in": ["ram,20000,8"]}]},
             {"a": 0x1001, "len": 1, "m": "ret", "ops": [{"op": "RETURN", "out": None, "in": []}]},
         ],
     }

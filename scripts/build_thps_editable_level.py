@@ -48,7 +48,12 @@ def piece_edits(pieces, defaults):
                 raise ValueError(f"nonpositive attachment scale on {owner}")
             if child["catalogId"].startswith("bundle:thps/"):
                 support = child["sourceInstance"]
-                if support not in by_asset or support in supports or support in assets or child["catalogId"] != f"bundle:thps/{by_asset[support]['catalogAsset']}":
+                if (
+                    support not in by_asset
+                    or support in supports
+                    or support in assets
+                    or child["catalogId"] != f"bundle:thps/{by_asset[support]['catalogAsset']}"
+                ):
                     raise ValueError(f"missing, duplicate or nested support {support}")
                 supports.add(support)
     edits, next_id = [], 0
@@ -83,7 +88,9 @@ def build_level():
     manifest = json.loads((PACK / "manifest.json").read_text())
     level["packKitVersions"] = {"thps": manifest["kitVersion"]}
     pieces, defaults = read_inputs()
-    kit_assets = {asset for asset in manifest["assets"] if any(asset.startswith(prefix) for prefix in manifest["kitAssetPrefixes"])}
+    kit_assets = {
+        asset for asset in manifest["assets"] if any(asset.startswith(prefix) for prefix in manifest["kitAssetPrefixes"])
+    }
     if {piece["catalogAsset"] for piece in pieces["pieces"] if piece["catalogAsset"]} != kit_assets:
         raise ValueError("manifest kit assets and pieces.json disagree")
     level["edits"] = piece_edits(pieces, defaults) + legacy.radio_edits() + legacy.collectible_edits()

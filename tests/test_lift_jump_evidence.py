@@ -13,7 +13,8 @@ def test_out_of_body_switch_evidence_is_preserved_but_unresolved():
     tables = [{"at": 0x1002, "cases": [0x1004, 0x1008]}, {"at": 0x1010, "cases": [0x1001]}]
     row = {"start": body.start, "size": body.size, "status": "complete", "jt": tables}
     assert evidence.check_table_bounds(body, row) == {
-        **row, "status": "unresolved_bounds",
+        **row,
+        "status": "unresolved_bounds",
         "out_of_body": [{"at": 0x1002, "cases": [0x1008]}, {"at": 0x1010, "cases": []}],
     }
     clean = {**row, "jt": [{"at": 0x1002, "cases": [0x1007]}]}
@@ -50,9 +51,7 @@ FAR_TABLE_TEXT = """
  2159d75:   \tjmpq\t*%rax
 """
 
-STALE_TABLE_TEXT = FAR_TABLE_TEXT.replace(
-    " 2159d68:   \tmovzbl\t0x5c(%rsp,%r13), %eax", " 2159d68:   \tmovq\t%rbx, %r15"
-)
+STALE_TABLE_TEXT = FAR_TABLE_TEXT.replace(" 2159d68:   \tmovzbl\t0x5c(%rsp,%r13), %eax", " 2159d68:   \tmovq\t%rbx, %r15")
 
 NO_GUARD_TEXT = """
  2126cdf:   \tcmpb\t$0x4, 0x5c(%rsp,%r13)
@@ -217,9 +216,11 @@ def test_audit_baseline_sweeps_every_table_bearing_row_and_tallies_the_extras(tm
         {"start": 0x4000, "size": 0x100, "status": "complete", "jt": []},
     ]
     (shards / "pcode-0000.jsonl").write_text('{"identity": "x"}\n' + "".join(json.dumps(r) + "\n" for r in rows))
-    monkeypatch.setattr(evidence, "elf_reader", lambda so: (lambda vaddr, n: (0x30).to_bytes(4, "little") + (0x40).to_bytes(4, "little")))
     monkeypatch.setattr(
-        evidence, "objdump_disassembler", lambda so, objdump: (lambda window: SITE_TEXT if window[1] == 0x1022 else "")
+        evidence, "elf_reader", lambda so: lambda vaddr, n: (0x30).to_bytes(4, "little") + (0x40).to_bytes(4, "little")
+    )
+    monkeypatch.setattr(
+        evidence, "objdump_disassembler", lambda so, objdump: lambda window: SITE_TEXT if window[1] == 0x1022 else ""
     )
 
     totals = evidence.audit_baseline(tmp_path / "GameAssembly.so", shards, tmp_path / "out")
@@ -244,8 +245,10 @@ def test_audit_baseline_reads_only_shard_files(tmp_path, monkeypatch):
     (shards / "pcode-0000.jsonl").write_text('{"identity": "x"}\n' + json.dumps(row) + "\n")
     for stray in ("pcode-0000.with-empty-fdes.jsonl", "pcode-0000.jsonl.bak", "scored-0000.jsonl"):
         (shards / stray).write_text('{"identity": "x"}\n' + json.dumps({**row, "start": 0x9000}) + "\n")
-    monkeypatch.setattr(evidence, "elf_reader", lambda so: (lambda vaddr, n: (0x30).to_bytes(4, "little") + (0x40).to_bytes(4, "little")))
-    monkeypatch.setattr(evidence, "objdump_disassembler", lambda so, objdump: (lambda window: SITE_TEXT))
+    monkeypatch.setattr(
+        evidence, "elf_reader", lambda so: lambda vaddr, n: (0x30).to_bytes(4, "little") + (0x40).to_bytes(4, "little")
+    )
+    monkeypatch.setattr(evidence, "objdump_disassembler", lambda so, objdump: lambda window: SITE_TEXT)
 
     totals = evidence.audit_baseline(tmp_path / "GameAssembly.so", shards, tmp_path / "out")
     assert totals["rows"] == 1
@@ -290,7 +293,13 @@ def test_audit_starts_the_disassembly_window_at_a_known_instruction_boundary():
     body = Fde(0x1000, 0x200)
 
     def row_for(insns, at):
-        return {"start": 0x1000, "size": 0x200, "status": "complete", "insns": [{"a": a} for a in insns], "jt": [{"at": at, "cases": [0x1030]}]}
+        return {
+            "start": 0x1000,
+            "size": 0x200,
+            "status": "complete",
+            "insns": [{"a": a} for a in insns],
+            "jt": [{"at": at, "cases": [0x1030]}],
+        }
 
     windows = []
 
@@ -347,7 +356,9 @@ def test_unverified_extras_are_explained_when_the_body_branches_there_directly()
 
     def row_with(ops, extra=0x900):
         return {
-            "start": 0x1000, "size": 0x100, "status": "complete",
+            "start": 0x1000,
+            "size": 0x100,
+            "status": "complete",
             "insns": [{"a": 0x1020, "ops": ops}, {"a": 0x1030, "ops": []}, {"a": 0x1040, "ops": []}],
             "jt": [{"at": 0x1020, "cases": [0x1030, 0x1040, extra]}],
         }
@@ -418,6 +429,7 @@ def test_a_batch_timeout_names_the_active_body_and_preserves_finished_rows(tmp_p
     assert evidence.recover(bodies, tmp_path, "new-deadline", dump, batch_size=8) == rows
     assert calls == [bodies, bodies[2:], bodies, bodies[2:]]
 
+
 def test_raw_table_returns_the_guarded_pattern_with_its_decoded_cases():
     # The two facts an evidence-driven switch needs at once: the pattern (with its range guard) and the
     # entries the image holds. A pattern with no guard has no count, and no count means no cases.
@@ -436,6 +448,7 @@ def test_raw_table_returns_the_guarded_pattern_with_its_decoded_cases():
     ev._disassemble = lambda window: CLOBBERED_BOUND_TEXT
     assert ev.raw_table([0x20, 0x40], 0x2126CFF) is None
     assert ev.raw_cases([0x20, 0x40], 0x2126CFF) is None
+
 
 WIDE_COPY_UNBOUND_TEXT = """
  4675ba9:   	cmpb	$0x5, %bl
@@ -459,7 +472,6 @@ def test_a_byte_guard_on_another_register_leaves_a_wide_index_unbounded():
         "scale": 4,
         "count": None,
     }
-
 
 
 def test_raw_table_names_the_first_instruction_of_the_guarded_span():

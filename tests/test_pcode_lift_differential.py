@@ -132,9 +132,7 @@ def lift_x86_symbols(tmp_path):
     assert set(syms) == set(FUNCTIONS)
     for name, mnemonic in (("f_movmskps", "movmskps"), ("f_pshuflw", "pshuflw")):
         address, size = syms[name]
-        assembly = run(
-            [LLVM / "llvm-objdump", "-d", f"--start-address={address}", f"--stop-address={address + size}", so]
-        )
+        assembly = run([LLVM / "llvm-objdump", "-d", f"--start-address={address}", f"--stop-address={address + size}", so])
         assert any(mnemonic in line.split() for line in assembly.splitlines())
     ranges = tmp_path / "ranges.txt"
     ranges.write_text("".join(f"{a:x} {s}\n" for a, s in syms.values()))

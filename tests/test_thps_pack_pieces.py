@@ -44,7 +44,9 @@ def test_manifest_keeps_the_pinned_version_and_warehouse_first() -> None:
 
 @needs_sidecar
 def test_manifest_lists_unique_canonical_assets_in_instance_order() -> None:
-    expected = ["Warehouse"] + list(dict.fromkeys(piece["catalogAsset"] for piece in sidecar()["pieces"] if piece["catalogAsset"]))
+    expected = ["Warehouse"] + list(
+        dict.fromkeys(piece["catalogAsset"] for piece in sidecar()["pieces"] if piece["catalogAsset"])
+    )
     assert manifest()["assets"] == expected
 
 
@@ -53,7 +55,7 @@ def test_sidecar_accounts_for_source_instances_and_added_sections() -> None:
     assets = [entry["asset"] for entry in sidecar()["pieces"]]
     source = [piece for piece in sidecar()["pieces"] if piece["kind"] == "source"]
     assert list(dict.fromkeys(piece["sourceId"] for piece in source)) == [piece.id for piece in inventory_pieces()]
-    assert assets[len(source):] == ADDED_ASSETS + roof_sections()
+    assert assets[len(source) :] == ADDED_ASSETS + roof_sections()
     assert len(set(assets)) == len(assets)
     assert not any(asset.startswith("added-roof-quad-") for asset in manifest()["assets"])
 
@@ -96,12 +98,24 @@ def test_positions_are_the_recorded_pivots_in_world_space() -> None:
     for entry in sidecar()["pieces"]:
         position, pivot = entry["position"], entry["pivot"]
         for axis in range(3):
-            assert position[axis] == pytest.approx(pivot[axis] * WAREHOUSE_SCALE + WAREHOUSE_POSITION[axis], abs=1e-3), entry["asset"]
+            assert position[axis] == pytest.approx(pivot[axis] * WAREHOUSE_SCALE + WAREHOUSE_POSITION[axis], abs=1e-3), entry[
+                "asset"
+            ]
 
 
 @needs_sidecar
 def test_placements_record_finite_rotations_and_positive_scales() -> None:
-    riding = {"main-transition", "wall-transition", "outer-bank", "bank-end", "hip", "hip-apron", "roll-in", "kicker", "convex-tip"}
+    riding = {
+        "main-transition",
+        "wall-transition",
+        "outer-bank",
+        "bank-end",
+        "hip",
+        "hip-apron",
+        "roll-in",
+        "kicker",
+        "convex-tip",
+    }
     for entry in sidecar()["pieces"]:
         assert all(math.isfinite(value) for value in entry["rotation"])
         assert all(math.isfinite(value) and value > 0 for value in entry["scale"])

@@ -178,7 +178,13 @@ def test_other_problems_still_block_alongside_an_already_published_version():
 
 
 def test_artifact_inputs_exclude_tooling_for_release_decisions():
-    assert not release_affects_package({"scripts/check_thunderstore_package.py": ["+x"], ".github/workflows/thunderstore.yml": ["+x"], "taskfiles/package.yml": ["+x"]})
+    assert not release_affects_package(
+        {
+            "scripts/check_thunderstore_package.py": ["+x"],
+            ".github/workflows/thunderstore.yml": ["+x"],
+            "taskfiles/package.yml": ["+x"],
+        }
+    )
 
 
 def write_archive(tmp_path, content=b"zip bytes", checksum=None):
@@ -223,7 +229,13 @@ def test_synchronized_versions_cover_every_package_version_source():
 
 
 def test_synchronized_versions_report_a_mismatch(tmp_path):
-    for relative in ("thunderstore.toml", "pyproject.toml", "pkg/manifest.json", "src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj", "src/MegabonkLevels.Mod/megabonk_levels_mod.cs"):
+    for relative in (
+        "thunderstore.toml",
+        "pyproject.toml",
+        "pkg/manifest.json",
+        "src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj",
+        "src/MegabonkLevels.Mod/megabonk_levels_mod.cs",
+    ):
         target = tmp_path / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes((ROOT / relative).read_bytes())
@@ -240,7 +252,13 @@ def set_manifest_version(root, version):
 
 
 def copy_version_sources(tmp_path):
-    for relative in ("thunderstore.toml", "pyproject.toml", "pkg/manifest.json", "src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj", "src/MegabonkLevels.Mod/megabonk_levels_mod.cs"):
+    for relative in (
+        "thunderstore.toml",
+        "pyproject.toml",
+        "pkg/manifest.json",
+        "src/MegabonkLevels.Mod/MegabonkLevels.Mod.csproj",
+        "src/MegabonkLevels.Mod/megabonk_levels_mod.cs",
+    ):
         target = tmp_path / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes((ROOT / relative).read_bytes())

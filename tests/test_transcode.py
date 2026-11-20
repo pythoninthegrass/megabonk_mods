@@ -151,7 +151,9 @@ def test_encode_writes_through_a_temporary_file_and_renames(tmp_path: Path, monk
     assert list(tmp_path.glob(".Song.part*")) == []
 
 
-def test_encode_warns_about_a_tag_the_mp3_lost(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_encode_warns_about_a_tag_the_mp3_lost(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     source = tmp_path / "Song.flac"
     source.write_bytes(b"fLaC")
 
@@ -216,7 +218,9 @@ def test_main_reports_errors_on_stderr_with_exit_1(tmp_path: Path, capsys: pytes
     assert "no such file" in capsys.readouterr().err
 
 
-def test_main_rejects_a_bad_vbr_quality_before_calling_ffmpeg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_main_rejects_a_bad_vbr_quality_before_calling_ffmpeg(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     source = tmp_path / "Song.flac"
     source.write_bytes(b"fLaC")
     monkeypatch.setattr(transcode, "VBR_QUALITY", "v0")
@@ -230,7 +234,9 @@ def test_main_rejects_a_bad_vbr_quality_before_calling_ffmpeg(tmp_path: Path, mo
     assert "MEGABONK_MP3_VBR_QUALITY" in capsys.readouterr().err
 
 
-def test_main_transcodes_and_prints_the_tags_it_kept(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_main_transcodes_and_prints_the_tags_it_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     source = tmp_path / "Goldfinger - Superman.flac"
     source.write_bytes(b"fLaC")
     monkeypatch.setattr(transcode, "VBR_QUALITY", "0")

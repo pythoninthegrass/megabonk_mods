@@ -59,8 +59,15 @@ def top_shapes(draws: Sequence[Draw], limit: int = TOP_SHAPES) -> list[dict[str,
     """Submission shapes ranked by the vertices they put on the GPU, which is what a mesh costs per frame."""
     shapes = []
     for (indices, instances), count in draw_histogram(draws).items():
-        shapes.append({"drawCalls": count, "indicesPerDraw": indices, "instances": instances,
-                       "vertices": indices * instances * count, "verticesPerDraw": indices * instances})
+        shapes.append(
+            {
+                "drawCalls": count,
+                "indicesPerDraw": indices,
+                "instances": instances,
+                "vertices": indices * instances * count,
+                "verticesPerDraw": indices * instances,
+            }
+        )
     shapes.sort(key=lambda shape: -shape["vertices"])
     return shapes[:limit]
 
@@ -79,8 +86,16 @@ def gpu_totals(samples: Iterable[tuple[int, float]], top: int = TOP_EVENTS) -> d
 def draw_records(draws: Sequence[Draw], samples: Iterable[tuple[int, float]]) -> list[dict[str, Any]]:
     """One row per draw with its measured GPU duration, so attribution can be sliced offline without the GPU again."""
     measured = dict(samples)
-    return [{"eventId": draw.event_id, "name": draw.name, "indices": draw.indices, "instances": draw.instances,
-             "gpuUSec": round(measured.get(draw.event_id, 0.0) * 1e6, 2)} for draw in draws]
+    return [
+        {
+            "eventId": draw.event_id,
+            "name": draw.name,
+            "indices": draw.indices,
+            "instances": draw.instances,
+            "gpuUSec": round(measured.get(draw.event_id, 0.0) * 1e6, 2),
+        }
+        for draw in draws
+    ]
 
 
 def shape_totals(draws: Sequence[Draw], samples: Iterable[tuple[int, float]]) -> list[dict[str, Any]]:
@@ -92,9 +107,17 @@ def shape_totals(draws: Sequence[Draw], samples: Iterable[tuple[int, float]]) ->
     totals = []
     for (indices, instances), values in grouped.items():
         total = sum(values)
-        totals.append({"drawCalls": len(values), "indicesPerDraw": indices, "instances": instances,
-                       "vertices": indices * instances * len(values), "gpuUSec": round(total, 2),
-                       "meanUSec": round(total / len(values), 2), "minUSec": round(min(values), 2)})
+        totals.append(
+            {
+                "drawCalls": len(values),
+                "indicesPerDraw": indices,
+                "instances": instances,
+                "vertices": indices * instances * len(values),
+                "gpuUSec": round(total, 2),
+                "meanUSec": round(total / len(values), 2),
+                "minUSec": round(min(values), 2),
+            }
+        )
     totals.sort(key=lambda shape: -shape["gpuUSec"])
     return totals
 
@@ -182,7 +205,7 @@ def structured_draws(capture) -> tuple[list[Draw], dict[str, int]]:
         return [], {}
     draws: list[Draw] = []
     api: dict[str, int] = {}
-    for chunk in (data.chunks or []):
+    for chunk in data.chunks or []:
         for node in walk_chunks(chunk):
             name = str(node.name)
             if name.startswith("vk"):
@@ -193,7 +216,9 @@ def structured_draws(capture) -> tuple[list[Draw], dict[str, int]]:
             child = node.FindChild(count_field)
             instances = node.FindChild("instanceCount")
             indices = child.AsInt() if child is not None else 0
-            draws.append(Draw(len(draws) + 1, int(indices or 0), max(1, int(instances.AsInt()) if instances is not None else 1), name))
+            draws.append(
+                Draw(len(draws) + 1, int(indices or 0), max(1, int(instances.AsInt()) if instances is not None else 1), name)
+            )
     return draws, api
 
 
@@ -235,9 +260,16 @@ def render_targets(replay: Any, limit: int = 6) -> list[dict[str, Any]]:
         width = int(getattr(resource, "width", 0) or 0)
         height = int(getattr(resource, "height", 0) or 0)
         if width * height >= 200000:
-            targets.append({"width": width, "height": height, "depth": int(getattr(resource, "depth", 0) or 0),
-                            "arraySize": int(getattr(resource, "arraysize", 1) or 1),
-                            "type": str(resource.type), "name": str(resource.name)[:40]})
+            targets.append(
+                {
+                    "width": width,
+                    "height": height,
+                    "depth": int(getattr(resource, "depth", 0) or 0),
+                    "arraySize": int(getattr(resource, "arraysize", 1) or 1),
+                    "type": str(resource.type),
+                    "name": str(resource.name)[:40],
+                }
+            )
     targets.sort(key=lambda target: -(target["width"] * target["height"]))
     return targets[:limit]
 
@@ -293,9 +325,16 @@ def read_capture(path: str, options: argparse.Namespace, rd: Any) -> dict[str, A
 
         actions = flatten(controller.GetRootActions())
         indexed = getattr(rd.ActionFlags, "Indexed", None)
-        draws = [Draw(action.eventId, action.numIndices, max(1, action.numInstances),
-                      "vkCmdDrawIndexed" if indexed and action.flags & indexed else "vkCmdDraw")
-                 for action in actions if is_draw(rd, action)]
+        draws = [
+            Draw(
+                action.eventId,
+                action.numIndices,
+                max(1, action.numInstances),
+                "vkCmdDrawIndexed" if indexed and action.flags & indexed else "vkCmdDraw",
+            )
+            for action in actions
+            if is_draw(rd, action)
+        ]
         report["actions"] = len(actions)
         report["markers"] = sorted({str(action.customName) for action in actions if getattr(action, "customName", "")})[:40]
         report["renderTargets"] = render_targets(controller)
@@ -378,8 +417,19 @@ def main(argv: list[str] | None = None) -> int:
         with open(options.json, "w", encoding="utf-8") as handle:
             json.dump(reports, handle, indent=1)
     for report in reports:
-        keys = ("capture", "ok", "error", "driver", "mode", "drawCalls", "instancedDraws", "instances",
-                "verticesSubmitted", "gpuFrameTotalUSec", "perEnemy")
+        keys = (
+            "capture",
+            "ok",
+            "error",
+            "driver",
+            "mode",
+            "drawCalls",
+            "instancedDraws",
+            "instances",
+            "verticesSubmitted",
+            "gpuFrameTotalUSec",
+            "perEnemy",
+        )
         print(json.dumps({key: report[key] for key in keys if key in report}))
     return 0 if reports and all(report.get("ok") for report in reports) else 1
 

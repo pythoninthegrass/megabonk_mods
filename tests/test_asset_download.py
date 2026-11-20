@@ -32,9 +32,7 @@ class RecordingBytesIO(io.BytesIO):
         return super().read(size)
 
 
-def http_error(
-    code: int, location: str | None = None, body: bytes = b"<html>sign in</html>"
-) -> urllib.error.HTTPError:
+def http_error(code: int, location: str | None = None, body: bytes = b"<html>sign in</html>") -> urllib.error.HTTPError:
     headers = email.message.Message()
     if location:
         headers["Location"] = location

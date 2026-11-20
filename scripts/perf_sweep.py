@@ -105,7 +105,7 @@ def control_plan(counts: list[int] | tuple[int, ...], repeats: int, control: str
     windows: list[tuple[str, int, bool]] = []
     for count in counts:
         for repeat in range(1, repeats + 1):
-            for is_armed in ((False, True) if repeat % 2 else (True, False)):
+            for is_armed in (False, True) if repeat % 2 else (True, False):
                 windows.append((f"count_{count}_{armed if is_armed else base}_r{repeat}", count, is_armed))
     return windows
 
@@ -217,7 +217,7 @@ def render_plan(counts: list[int] | tuple[int, ...], repeats: int) -> list[tuple
     windows: list[tuple[str, int, bool]] = []
     for count in counts:
         for repeat in range(1, repeats + 1):
-            for render_on in ((True, False) if repeat % 2 else (False, True)):
+            for render_on in (True, False) if repeat % 2 else (False, True):
                 arm = "rendon" if render_on else "rendoff"
                 windows.append((f"count_{count}_{arm}_r{repeat}", count, render_on))
     return windows
@@ -508,7 +508,9 @@ class Sweeper:
         current = self.perf("status")["enemiesLast"]
         if target - current > 0:
             spawned = self.perf("spawn", count=target - current)
-            self.log_line(f"  spawn: asked={spawned['requested']} got={spawned['spawned']} pool={spawned['enemies']}/{spawned['poolMax']}")
+            self.log_line(
+                f"  spawn: asked={spawned['requested']} got={spawned['spawned']} pool={spawned['enemies']}/{spawned['poolMax']}"
+            )
         if self.args.density == "strung":
             self.send(hb.build_teleport_command(position=list(strung_position(origin, self.args.strung_offset))))
             time.sleep(0.5)
@@ -643,11 +645,7 @@ class Sweeper:
             )
 
         repeats = self.args.render_arms or self.args.physics_arms or self.args.anim_arms
-        windows = (
-            control_plan(self.args.counts, repeats, self.args.control)
-            if self.args.control
-            else plan(self.args.counts)
-        )
+        windows = control_plan(self.args.counts, repeats, self.args.control) if self.args.control else plan(self.args.counts)
         if self.args.control:
             for other in CONTROLS:
                 if other != self.args.control:
@@ -705,7 +703,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="gathered stands the swarm at the player; strung spawns it there and walks the player --strung-offset "
         "away before the window, so contact-dependent cost falls out of the A/B",
     )
-    parser.add_argument("--strung-offset", type=float, default=DEFAULT_STRUNG_OFFSET, help="world units along +X for --density strung")
+    parser.add_argument(
+        "--strung-offset", type=float, default=DEFAULT_STRUNG_OFFSET, help="world units along +X for --density strung"
+    )
     parser.add_argument("--captures", type=int, default=0, help="RenderDoc frames to trigger inside each window (0 = none)")
     parser.add_argument("--capture-dir", type=Path, default=DEFAULT_CAPTURE_DIR, help="where RenderDoc writes .rdc files")
     parser.add_argument(
@@ -752,7 +752,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--seconds must be positive")
     if args.strung_offset < 0:
         parser.error("--strung-offset must be 0 or greater")
-    arm_flags = (("--render-arms", "render", args.render_arms), ("--physics-arms", "physics", args.physics_arms), ("--anim-arms", "animation", args.anim_arms))
+    arm_flags = (
+        ("--render-arms", "render", args.render_arms),
+        ("--physics-arms", "physics", args.physics_arms),
+        ("--anim-arms", "animation", args.anim_arms),
+    )
     for flag, _, value in arm_flags:
         if value is not None and value < 1:
             parser.error(f"{flag} must be 1 or more")

@@ -16,8 +16,12 @@ ST0, ST1 = "register,1100,10", "register,1110,10"
 NAN_A, NAN_B, EQ, LT = "unique,5e200,1", "unique,5e300,1", "unique,5e500,1", "unique,5e700,1"
 I80_TMP, STORE_SRC = "unique,e5100,10", "unique,db00,10"
 DATA, PTR = "const,1b1,4", "register,18,8"
+
+
 def ret(addr):
     return hp.insn(addr, 1, hp.op("RETURN", None, "register,288,8"))
+
+
 FLOAT_AT, INT_AT = "ram,1000,4", "ram,1008,4"
 SECTIONS = [{"name": "pdata", "va": 0x1000, "size": 64, "exec": False}]
 
@@ -286,9 +290,7 @@ def differential_bodies():
 def run_builtin(tmp_path, name, source, arch, argv=()):
     path, exe = tmp_path / f"{name}.c", tmp_path / name
     path.write_text(source)
-    proc = subprocess.run(
-        [hp.LLVM / "clang", "-O0", "-arch", arch, "-o", str(exe), str(path)], text=True, capture_output=True
-    )
+    proc = subprocess.run([hp.LLVM / "clang", "-O0", "-arch", arch, "-o", str(exe), str(path)], text=True, capture_output=True)
     assert proc.returncode == 0, proc.stderr
     prefix = [] if arch == "arm64" else ["arch", "-x86_64"]
     result = subprocess.run([*prefix, str(exe), *argv], text=True, capture_output=True)

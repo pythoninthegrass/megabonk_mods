@@ -46,6 +46,7 @@ Usage:
 
 Exit status: 0 written; 2 usage or input error.
 """
+
 from __future__ import annotations
 
 import argparse

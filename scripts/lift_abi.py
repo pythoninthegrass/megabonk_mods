@@ -336,6 +336,8 @@ def generate(
         lines += [f"void sub_{alias:x}(unsigned char *reg) {{", f"  sub_{target:x}(reg);", "}"]
     lines += HOST_HELPERS
     lines += ["void lift_dispatch(uint64_t target, unsigned char *reg) {", "  switch (target) {"]
-    lines += [f"  case UINT64_C({a}): sub_{a:x}(reg); return;" for a in [b.address for b in bindings] + callable_bodies + list(aliases)]
+    lines += [
+        f"  case UINT64_C({a}): sub_{a:x}(reg); return;" for a in [b.address for b in bindings] + callable_bodies + list(aliases)
+    ]
     lines += ["  default: abort();", "  }", "}"]
     return "\n".join(lines) + "\n"

@@ -85,7 +85,10 @@ def test_gui_handoff_uses_resolved_watcher_and_private_runtime_environment(monke
     log.parent.mkdir(parents=True)
     log.write_text("previous boot")
     launch = lg.Launch(["/Wine App/wine", "C:\\Game\\Megabonk.exe"], {"WINEPREFIX": "/prefix"}, log.parent.parent, log)
-    lg.spawn_in_gui(launch, {"WINEPREFIX": "/prefix", "PATH": "/bin", "MEGABONK_DEV": "true", "SSH_AUTH_SOCK": "/secret", "API_TOKEN": "secret"})
+    lg.spawn_in_gui(
+        launch,
+        {"WINEPREFIX": "/prefix", "PATH": "/bin", "MEGABONK_DEV": "true", "SSH_AUTH_SOCK": "/secret", "API_TOKEN": "secret"},
+    )
     assert calls[-1][1:3] == ["bootstrap", "gui/501"]
     path = Path(calls[-1][3])
     config = plistlib.loads(path.read_bytes())

@@ -48,8 +48,19 @@ def test_damage_cli_rejects_invalid_amount(amount) -> None:
 @pytest.mark.parametrize(
     "action",
     [
-        "status", "play", "decode", "pitch", "lowpass", "detach", "native-info", "native-tone", "native-play",
-        "radio-next", "seek", "menu-music", "stage-music",
+        "status",
+        "play",
+        "decode",
+        "pitch",
+        "lowpass",
+        "detach",
+        "native-info",
+        "native-tone",
+        "native-play",
+        "radio-next",
+        "seek",
+        "menu-music",
+        "stage-music",
     ],
 )
 def test_music_probe_action_does_not_replace_subcommand(action: str) -> None:
@@ -741,10 +752,7 @@ def test_steam_ready_detail_names_the_loaded_shim_and_the_failed_init_switch() -
         ok, detail = run.steam_ready_detail(game / "harness", 5)
 
         assert ok is False
-        assert detail == (
-            "not ready (steam-not-running) "
-            "[steam=false, session=false, library=stub, failInitEnv=true]"
-        )
+        assert detail == ("not ready (steam-not-running) [steam=false, session=false, library=stub, failInitEnv=true]")
 
 
 def test_steam_ready_detail_omits_evidence_an_older_mod_does_not_report() -> None:
@@ -782,7 +790,9 @@ def test_wait_for_steamworks_ready_times_out_without_an_answer() -> None:
 
 def test_wait_for_steamworks_ready_reports_offline_after_the_grace_period() -> None:
     clock = iter(range(100))
-    assert run.wait_for_steamworks_ready(lambda: "not-ready", timeout=60, sleep=lambda _: None, now=lambda: next(clock)) == "offline"
+    assert (
+        run.wait_for_steamworks_ready(lambda: "not-ready", timeout=60, sleep=lambda _: None, now=lambda: next(clock)) == "offline"
+    )
 
 
 def test_wait_for_steamworks_ready_still_becomes_ready_within_the_grace() -> None:
@@ -823,8 +833,20 @@ def proc(pid: int, *argv: str, environ: dict[str, str] | None = None) -> run.Pro
 
 def test_find_game_pids_matches_only_the_game_executable() -> None:
     table = [
-        proc(6308, "C:\\windows\\system32\\winemenubuilder.exe", "-w", "-u", "C:\\users\\crossover\\Start Menu\\Programs\\Steam\\Megabonk.url"),
-        proc(87328, "/Applications/CrossOver.app/lib/wine/winewrapper.exe", "--run", "--", "/home/<user>/Steam/common/Megabonk/Megabonk.exe"),
+        proc(
+            6308,
+            "C:\\windows\\system32\\winemenubuilder.exe",
+            "-w",
+            "-u",
+            "C:\\users\\crossover\\Start Menu\\Programs\\Steam\\Megabonk.url",
+        ),
+        proc(
+            87328,
+            "/Applications/CrossOver.app/lib/wine/winewrapper.exe",
+            "--run",
+            "--",
+            "/home/<user>/Steam/common/Megabonk/Megabonk.exe",
+        ),
         proc(87663, "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\Megabonk.exe"),
         proc(87667, "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\UnityCrashHandler64.exe", "--attach", "1580"),
         proc(90001, "bash", "-c", "cd /x && wine --cx-app Megabonk.exe"),
@@ -914,11 +936,11 @@ def fake_clock():
 
 
 def test_request_press_retries_a_transient_refusal_until_the_press_lands() -> None:
-    request, calls = scripted_request(
-        [press_refusal("the death screen's Confirm button is not active")] * 3 + [PRESS_DONE]
-    )
+    request, calls = scripted_request([press_refusal("the death screen's Confirm button is not active")] * 3 + [PRESS_DONE])
     clock, sleep = fake_clock()
-    outcome, result = run.request_press(Path("h"), {"command": "press-death-confirm"}, 5, wait=15, request=request, sleep=sleep, clock=clock)
+    outcome, result = run.request_press(
+        Path("h"), {"command": "press-death-confirm"}, 5, wait=15, request=request, sleep=sleep, clock=clock
+    )
     assert (outcome, result) == PRESS_DONE
     assert len(calls) == 4
 
@@ -979,7 +1001,9 @@ def test_request_result_prints_nothing(capsys) -> None:
         assert out.out == "" and out.err == ""
 
 
-def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_verdict="ready", kill_floor=True, unsupported=False, load_failed=False):
+def relaunch_stubs(
+    monkeypatch, *, harness_ready=True, steam_verdict="ready", kill_floor=True, unsupported=False, load_failed=False
+):
     calls = []
     monkeypatch.setattr(run, "quit_game", lambda h, t, **kwargs: calls.append("quit") or True)
     monkeypatch.setattr(run, "launch_game", lambda task: calls.append(("launch", task)) or True)
@@ -987,7 +1011,9 @@ def relaunch_stubs(monkeypatch, *, harness_ready=True, steam_verdict="ready", ki
     monkeypatch.setattr(run, "wait_for_wineserver_to_exit", lambda timeout=15.0: calls.append("wineserver") or True)
     monkeypatch.setattr(run, "clear_harness_queue", lambda h: calls.append("clear") or None)
     monkeypatch.setattr(run, "reap_wine_leftovers_on_host", lambda **kwargs: calls.append("reap") or None)
-    monkeypatch.setattr(run, "wait_for_steamworks_ready", lambda probe, timeout, alive=None: calls.append("steam") or steam_verdict)
+    monkeypatch.setattr(
+        run, "wait_for_steamworks_ready", lambda probe, timeout, alive=None: calls.append("steam") or steam_verdict
+    )
     monkeypatch.setattr(run, "send", lambda h, payload, t: calls.append(("send", payload["command"])) or True)
 
     def wait_log(log, line, newer, timeout, alive=None):
@@ -1049,7 +1075,18 @@ def test_relaunch_continues_past_a_not_ready_steamworks_on_an_offline_run(monkey
     assert ok is True
     assert errors == []
     assert "relaunch: Steamworks not ready (offline run); continuing" in steps
-    assert calls == ["quit", "wineserver", "clear", ("launch", "game:run"), ("log", "DevHarness: enabled"), "steam", ("send", "load-level"), ("log", "KillFloor: armed"), ("send", "item"), ("send", "editor")]
+    assert calls == [
+        "quit",
+        "wineserver",
+        "clear",
+        ("launch", "game:run"),
+        ("log", "DevHarness: enabled"),
+        "steam",
+        ("send", "load-level"),
+        ("log", "KillFloor: armed"),
+        ("send", "item"),
+        ("send", "editor"),
+    ]
 
 
 def test_relaunch_fails_when_the_wineserver_never_exits(monkeypatch) -> None:
@@ -1064,7 +1101,9 @@ def test_relaunch_fails_when_the_wineserver_never_exits(monkeypatch) -> None:
 def test_relaunch_reports_the_game_exiting_during_startup(monkeypatch) -> None:
     relaunch_stubs(monkeypatch, harness_ready=False)
     errors = []
-    ok = run.relaunch(Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=errors.append, is_alive=lambda: False)
+    ok = run.relaunch(
+        Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=errors.append, is_alive=lambda: False
+    )
     assert ok is False
     assert errors == ["relaunch: game exited during startup (see /g/BepInEx/LogOutput.log)"]
 
@@ -1074,9 +1113,7 @@ def test_game_exited_error_appends_the_wine_log_tail(tmp_path, monkeypatch) -> N
     log = tmp_path / "BepInEx" / "wine-latest.log"
     log.parent.mkdir(parents=True)
     log.write_text(
-        "0024:err:module:import_dll Library foo.dll not found\n"
-        "\n"
-        "wine: game process exited with status -11\n",
+        "0024:err:module:import_dll Library foo.dll not found\n\nwine: game process exited with status -11\n",
         encoding="utf-8",
     )
     message = run.game_exited_error(tmp_path)
@@ -1168,7 +1205,9 @@ def test_resolve_relaunch_diag_reads_the_setting() -> None:
 
 def test_relaunch_leaves_no_game_or_wine_processes_after_a_failure(monkeypatch) -> None:
     calls = relaunch_stubs(monkeypatch, harness_ready=False)
-    ok = run.relaunch(Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=lambda m: None, is_alive=lambda: False)
+    ok = run.relaunch(
+        Path("/h"), Path("/g"), None, 5, "game:run", on_step=lambda m: None, on_error=lambda m: None, is_alive=lambda: False
+    )
     assert ok is False
     assert calls[-2:] == ["force_kill", "reap"]
 
@@ -1219,9 +1258,7 @@ def test_relaunch_sets_two_feathers_before_entering_the_editor(monkeypatch) -> N
 
 def test_relaunch_with_zero_feathers_sends_no_item_command(monkeypatch) -> None:
     calls = relaunch_stubs(monkeypatch)
-    run.relaunch(
-        Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None, feathers=0
-    )
+    run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None, feathers=0)
     assert ("send", "item") not in calls
 
 
@@ -1258,9 +1295,7 @@ def test_relaunch_with_spawns_disabled_sends_spawns_off_before_entering_the_edit
     sent = []
     relaunch_stubs(monkeypatch)
     monkeypatch.setattr(run, "send", lambda h, payload, t: sent.append(payload) or True)
-    run.relaunch(
-        Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None, spawns=False
-    )
+    run.relaunch(Path("/h"), Path("/g"), Path("/l"), 5, "game:run", on_step=lambda m: None, on_error=lambda m: None, spawns=False)
     assert sent[-3:] == [
         {"command": "item", "name": "Feathers", "amount": 2},
         {"command": "spawns", "enabled": False},
@@ -1454,7 +1489,10 @@ def test_material_dump_command_carries_the_optional_object() -> None:
     assert run.build_material_dump_command() == {"command": "material-dump"}
     assert run.build_material_dump_command("Warehouse") == {"command": "material-dump", "object": "Warehouse"}
     assert run.material_dump_payload(run.parse_args(["material-dump"])) == {"command": "material-dump"}
-    assert run.material_dump_payload(run.parse_args(["material-dump", "Warehouse"])) == {"command": "material-dump", "object": "Warehouse"}
+    assert run.material_dump_payload(run.parse_args(["material-dump", "Warehouse"])) == {
+        "command": "material-dump",
+        "object": "Warehouse",
+    }
 
 
 def test_level_commands_carry_the_optional_level() -> None:
@@ -1478,7 +1516,9 @@ def test_new_level_command_carries_only_the_given_options() -> None:
         "size": 9,
     }
     assert run.new_level_payload(run.parse_args(["new-level"])) == {"command": "new-level"}
-    assert run.new_level_payload(run.parse_args(["new-level", "arena", "--map", "64", "--stage", "1", "--tier", "2", "--size", "9"])) == {
+    assert run.new_level_payload(
+        run.parse_args(["new-level", "arena", "--map", "64", "--stage", "1", "--tier", "2", "--size", "9"])
+    ) == {
         "command": "new-level",
         "level": "arena",
         "map": 64,
@@ -1680,8 +1720,12 @@ def test_find_wine_leftovers_attributes_a_prefix_from_argv_in_either_separator_s
 
 def test_find_wine_leftovers_attributes_a_proton_stub_by_its_compat_data_path() -> None:
     """Proton exports no WINEPREFIX for the processes it spawns; STEAM_COMPAT_DATA_PATH names the directory holding pfx."""
-    ours = proc(1, "C:\\windows\\system32\\winedevice.exe", environ={"STEAM_COMPAT_DATA_PATH": "/steam/steamapps/compatdata/3405340"})
-    foreign = proc(2, "C:\\windows\\system32\\regedit.exe", environ={"STEAM_COMPAT_DATA_PATH": "/steam/steamapps/compatdata/999999/"})
+    ours = proc(
+        1, "C:\\windows\\system32\\winedevice.exe", environ={"STEAM_COMPAT_DATA_PATH": "/steam/steamapps/compatdata/3405340"}
+    )
+    foreign = proc(
+        2, "C:\\windows\\system32\\regedit.exe", environ={"STEAM_COMPAT_DATA_PATH": "/steam/steamapps/compatdata/999999/"}
+    )
     leftovers = run.find_wine_leftovers([ours, foreign], WINE_PREFIX)
     assert leftovers.stubs == [1]
     assert leftovers.others == [2]
@@ -1867,7 +1911,9 @@ def test_reap_wine_leftovers_on_host_escalates_survivors_after_the_grace(monkeyp
     signaled: list[tuple[int, int]] = []
     monkeypatch.setattr(os, "kill", lambda pid, sig: signaled.append((pid, sig)))
     forced: list[str] = []
-    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit", prefix="auto", table=None: forced.append(context) or 0)
+    monkeypatch.setattr(
+        run, "force_kill_wine_leftovers", lambda context="quit", prefix="auto", table=None: forced.append(context) or 0
+    )
     run.reap_wine_leftovers_on_host("Darwin", sleep=lambda _: None, table=lambda: WINE_IDLE_TABLE, prefix=WINE_PREFIX)
     assert [sig for _, sig in signaled] == [15] * 6
     assert forced == ["quit"]
@@ -1886,11 +1932,12 @@ def test_reap_wine_leftovers_on_host_reaps_on_linux(monkeypatch) -> None:
 def test_reap_wine_leftovers_on_host_skips_the_grace_when_nothing_runs(monkeypatch) -> None:
     slept: list[float] = []
     forced: list[str] = []
-    monkeypatch.setattr(run, "force_kill_wine_leftovers", lambda context="quit", prefix="auto", table=None: forced.append(context) or 0)
+    monkeypatch.setattr(
+        run, "force_kill_wine_leftovers", lambda context="quit", prefix="auto", table=None: forced.append(context) or 0
+    )
     run.reap_wine_leftovers_on_host("Darwin", sleep=slept.append, table=lambda: [], prefix=WINE_PREFIX)
     assert slept == []
     assert forced == []
-
 
 
 def fake_proc(root: Path, entries: dict[int, tuple[list[str], dict[str, str] | None]]) -> Path:
@@ -1906,10 +1953,13 @@ def fake_proc(root: Path, entries: dict[int, tuple[list[str], dict[str, str] | N
 
 
 def test_read_process_table_proc_reads_argv_and_environ_verbatim(tmp_path) -> None:
-    root = fake_proc(tmp_path / "proc", {
-        7: (["C:\\windows\\system32\\conhost.exe", "--server", "0x84"], {"WINEPREFIX": "/a b/pfx"}),
-        8: (["/usr/bin/steam", "-silent"], {}),
-    })
+    root = fake_proc(
+        tmp_path / "proc",
+        {
+            7: (["C:\\windows\\system32\\conhost.exe", "--server", "0x84"], {"WINEPREFIX": "/a b/pfx"}),
+            8: (["/usr/bin/steam", "-silent"], {}),
+        },
+    )
     (root / "9").mkdir()
     (root / "kthreadd").mkdir()
     assert sorted(run.read_process_table_proc(root)) == [
@@ -1944,7 +1994,9 @@ def test_read_process_table_ps_reads_open_files_of_windows_processes_only(monkey
         calls.append(cmd)
         if cmd[0] == "lsof":
             return subprocess.CompletedProcess(cmd, 1, stdout=lsof_out)
-        return subprocess.CompletedProcess(cmd, 0, stdout="  10 C:\\windows\\system32\\services.exe\n  11 /sbin/launchd\n  12 C:\\game\\a.exe\n")
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout="  10 C:\\windows\\system32\\services.exe\n  11 /sbin/launchd\n  12 C:\\game\\a.exe\n"
+        )
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     table = run.read_process_table_ps()
@@ -1985,6 +2037,7 @@ def test_process_table_prefers_proc_on_linux_and_falls_back_to_ps(tmp_path, monk
 
 def test_process_enumeration_shells_out_for_nothing_on_linux(monkeypatch) -> None:
     """The reaper must not depend on which coreutils family the host has: no ps, no pgrep, no pkill."""
+
     def forbidden(*args, **kwargs):
         raise AssertionError(f"unexpected subprocess call: {args}")
 
@@ -2178,7 +2231,6 @@ def test_relaunch_forwards_the_client_flags_to_the_quit(monkeypatch) -> None:
 GAME_DIR_PATH = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Megabonk\\Megabonk.exe"
 
 
-
 def test_find_harness_pids_matches_game_dir_processes() -> None:
     table = [
         windows_process(5, GAME_DIR_PATH),
@@ -2369,7 +2421,10 @@ def test_relaunch_fails_fast_when_the_level_fails_to_load(monkeypatch) -> None:
 
 
 def test_build_load_level_command_adds_the_character_when_named() -> None:
-    assert run.build_load_level_command("p", character="calcium") == {**run.build_command("load-level", "p"), "character": "calcium"}
+    assert run.build_load_level_command("p", character="calcium") == {
+        **run.build_command("load-level", "p"),
+        "character": "calcium",
+    }
 
 
 def test_build_load_level_command_without_overrides_matches_the_plain_command() -> None:
@@ -2455,7 +2510,21 @@ def test_relaunch_forwards_the_overrides_to_the_load(monkeypatch) -> None:
 
 @pytest.mark.parametrize(
     "verb",
-    ["report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health", "census", "render", "physics", "animation"],
+    [
+        "report",
+        "status",
+        "start",
+        "reset",
+        "spawn",
+        "timescale",
+        "toggle",
+        "vsync",
+        "health",
+        "census",
+        "render",
+        "physics",
+        "animation",
+    ],
 )
 def test_perf_verb_is_a_subcommand_argument(verb: str) -> None:
     args = run.parse_args(["perf", verb])

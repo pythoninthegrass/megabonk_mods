@@ -398,33 +398,48 @@ def test_the_render_arms_read_the_same_way_through_the_general_payload() -> None
 
 
 def test_a_freeze_that_kinematicised_nothing_at_a_population_is_suspect() -> None:
-    reason = perf_sweep.control_suspect_reason({"_controlArm": "physkin", "_controlState": {"rigidbodiesKinematic": 0}}, control="physics", target=240)
+    reason = perf_sweep.control_suspect_reason(
+        {"_controlArm": "physkin", "_controlState": {"rigidbodiesKinematic": 0}}, control="physics", target=240
+    )
 
     assert reason == "the physics freeze kinematicised no rigidbodies at 240 enemies"
 
 
 def test_a_freeze_that_kinematicised_bodies_with_no_enemies_is_suspect() -> None:
-    reason = perf_sweep.control_suspect_reason({"_controlArm": "physkin", "_controlState": {"rigidbodiesKinematic": 6}}, control="physics", target=0)
+    reason = perf_sweep.control_suspect_reason(
+        {"_controlArm": "physkin", "_controlState": {"rigidbodiesKinematic": 6}}, control="physics", target=0
+    )
 
     assert reason == "the physics freeze kinematicised 6 rigidbodies with no enemies alive"
 
 
 def test_a_baseline_physics_window_still_holding_kinematic_bodies_is_suspect() -> None:
-    reason = perf_sweep.control_suspect_reason({"_controlArm": "physbase", "_controlState": {"rigidbodiesKinematic": 240}}, control="physics", target=240)
+    reason = perf_sweep.control_suspect_reason(
+        {"_controlArm": "physbase", "_controlState": {"rigidbodiesKinematic": 240}}, control="physics", target=240
+    )
 
     assert reason == "the physics freeze still kinematicised 240 rigidbodies with the solver asked for"
 
 
 def test_a_healthy_physics_ab_is_not_suspect() -> None:
     assert (
-        perf_sweep.control_suspect_reason({"_controlArm": "physkin", "_controlState": {"rigidbodiesKinematic": 240}}, control="physics", target=240)
+        perf_sweep.control_suspect_reason(
+            {"_controlArm": "physkin", "_controlState": {"rigidbodiesKinematic": 240}}, control="physics", target=240
+        )
         is None
     )
     assert (
-        perf_sweep.control_suspect_reason({"_controlArm": "physbase", "_controlState": {"rigidbodiesKinematic": 0}}, control="physics", target=240)
+        perf_sweep.control_suspect_reason(
+            {"_controlArm": "physbase", "_controlState": {"rigidbodiesKinematic": 0}}, control="physics", target=240
+        )
         is None
     )
-    assert perf_sweep.control_suspect_reason({"_controlArm": "physbase", "_controlState": {"rigidbodiesKinematic": 0}}, control="physics", target=0) is None
+    assert (
+        perf_sweep.control_suspect_reason(
+            {"_controlArm": "physbase", "_controlState": {"rigidbodiesKinematic": 0}}, control="physics", target=0
+        )
+        is None
+    )
 
 
 def test_an_animation_cull_that_stopped_nothing_at_a_population_is_suspect() -> None:
@@ -465,8 +480,14 @@ def test_one_armed_control_in_a_window_is_not_suspect() -> None:
     only_mine = {"physicsFreeze": {"armed": True}, "animationCull": {"armed": False}, "renderCull": {"armed": False}}
 
     assert perf_sweep.other_control_suspect_reason(only_mine, "physics") is None
-    assert perf_sweep.other_control_suspect_reason({"renderCull": {"armed": True}, "physicsFreeze": {"armed": False}}, "render") is None
-    assert perf_sweep.other_control_suspect_reason({"physicsFreeze": {"armed": True}, "renderCull": {"armed": False}}, "render") is not None
+    assert (
+        perf_sweep.other_control_suspect_reason({"renderCull": {"armed": True}, "physicsFreeze": {"armed": False}}, "render")
+        is None
+    )
+    assert (
+        perf_sweep.other_control_suspect_reason({"physicsFreeze": {"armed": True}, "renderCull": {"armed": False}}, "render")
+        is not None
+    )
 
 
 def test_the_freeze_and_the_animation_cull_report_their_own_cost_per_frame() -> None:

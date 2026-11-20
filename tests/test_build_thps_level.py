@@ -18,7 +18,6 @@ needs_extract = pytest.mark.skipif(
 )
 
 
-
 def ops_of(edits: list[dict], op_type: str) -> list[dict]:
     return [e for e in edits if e["opType"] == op_type]
 
@@ -79,7 +78,11 @@ def test_the_level_authors_the_kill_floor_it_always_had() -> None:
 @needs_extract
 def test_the_level_keeps_the_mesh_object_and_the_radio_ahead_of_the_collectibles() -> None:
     places = [payload(e)["catalogId"] for e in b.build_level()["edits"]]
-    assert places.index(f"bundle:{b.PACK_ID}/{b.WAREHOUSE_ASSET}") < places.index("interactable/boombox") < places.index("interactable/chest")
+    assert (
+        places.index(f"bundle:{b.PACK_ID}/{b.WAREHOUSE_ASSET}")
+        < places.index("interactable/boombox")
+        < places.index("interactable/chest")
+    )
 
 
 def test_local_to_world_maps_block_corner_to_cell_corner() -> None:
@@ -90,39 +93,6 @@ def test_local_to_world_maps_block_corner_to_cell_corner() -> None:
 def test_cell_of_local_returns_block_cell_index() -> None:
     assert b.cell_of_local(8, 34) == (0, 0)
     assert b.cell_of_local(98, 67) == (2, 1)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 @needs_extract
@@ -148,9 +118,6 @@ def test_rails_sit_inside_the_inner_arena() -> None:
         cz = round((pos["z"] - b.local_to_world(0, 0)[1]) / b.TILE - 0.5)
         assert 0 <= cx < b.INNER_X
         assert 0 <= cz < b.INNER_Z
-
-
-
 
 
 @needs_extract
@@ -192,7 +159,11 @@ def test_build_level_allows_only_calcium_and_tony_mczoom() -> None:
 
 @needs_extract
 def test_the_radio_is_one_boombox_placed_in_the_arena_beside_the_player_spawn() -> None:
-    places = [payload(e) for e in b.build_level()["edits"] if e["opType"] == "object.place" and payload(e)["catalogId"] == "interactable/boombox"]
+    places = [
+        payload(e)
+        for e in b.build_level()["edits"]
+        if e["opType"] == "object.place" and payload(e)["catalogId"] == "interactable/boombox"
+    ]
     assert len(places) == 1
     pos = places[0]["position"]
     assert "hidden" not in places[0]
@@ -351,9 +322,6 @@ def test_collectibles_stay_inside_the_arena_and_clear_of_the_player_spawn() -> N
         assert max(abs(c.x - sx), abs(c.z - sz)) >= b.SPAWN_CLEARANCE, c.code
 
 
-
-
-
 def warehouse_place() -> dict:
     places = [payload(e) for e in b.warehouse_edits()]
     assert len(places) == 1
@@ -372,9 +340,6 @@ def test_warehouse_is_one_uniformly_scaled_thps_pack_placement() -> None:
     assert place["scale"] == {"x": b.WAREHOUSE_SCALE, "y": b.WAREHOUSE_SCALE, "z": b.WAREHOUSE_SCALE}
     assert place["rotation"] == {"x": 0.0, "y": 0.0, "z": 0.0}
     assert place["position"]["y"] == b.WAREHOUSE_LIFT
-
-
-
 
 
 def test_warehouse_is_lifted_above_the_ground_level_tiles_but_below_the_player_spawn() -> None:
@@ -399,17 +364,8 @@ def test_inner_arena_is_no_larger_than_the_warehouse_needs_by_a_tile() -> None:
     assert depth > (b.INNER_Z - 1) * b.TILE
 
 
-
-
-
-
-
-
 def test_pack_version_is_the_warehouse_release() -> None:
     assert b.PACK_VERSION == "2.0.21"
-
-
-
 
 
 def boss_spawner() -> dict:
@@ -453,9 +409,6 @@ def test_boss_spawner_arch_faces_across_the_floor() -> None:
 
 def test_boss_spawner_hides_the_pillar_mesh_and_its_collider() -> None:
     assert boss_spawner()["hiddenChildren"] == ["BottomPiece", "Collider"]
-
-
-
 
 
 @needs_extract
@@ -597,7 +550,9 @@ def test_rail_along_pitches_a_falling_lip_and_keeps_its_bar_on_the_lip() -> None
 
 def test_each_coping_rail_is_a_hidden_game_rail_after_the_mesh_rails() -> None:
     placed = [payload(e) for e in b.rail_edits()]
-    assert [(p["position"]["x"], p["position"]["y"], p["position"]["z"]) for p in placed[len(b.MESH_RAILS) :]] == [r[0] for r in b.COPING_RAILS]
+    assert [(p["position"]["x"], p["position"]["y"], p["position"]["z"]) for p in placed[len(b.MESH_RAILS) :]] == [
+        r[0] for r in b.COPING_RAILS
+    ]
     assert [p["rotation"]["z"] for p in placed[len(b.MESH_RAILS) :]] == [r[3] for r in b.COPING_RAILS]
 
 
@@ -750,7 +705,16 @@ def test_build_level_guarantees_one_of_each_special_shrine_and_skews_chest_luck_
 
 
 def test_the_shrine_spots_include_the_ones_the_level_designer_chose() -> None:
-    assert {(30, 2, 71), (41, 10, -41), (173, 28, 27), (22, 6, 4), (79, 10, 103), (178, 10, -32), (178, 10, 123), (139, 38, -123)} <= set(b.SHRINE_SPOTS)
+    assert {
+        (30, 2, 71),
+        (41, 10, -41),
+        (173, 28, 27),
+        (22, 6, 4),
+        (79, 10, 103),
+        (178, 10, -32),
+        (178, 10, 123),
+        (139, 38, -123),
+    } <= set(b.SHRINE_SPOTS)
     assert not {(81, 30, -98), (139, 30, -98), (41, 2, 0)} & set(b.SHRINE_SPOTS)
 
 

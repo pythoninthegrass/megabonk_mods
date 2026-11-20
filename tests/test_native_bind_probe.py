@@ -83,8 +83,12 @@ class TestCandidates:
         )
         assert float_candidate.invoke_args == ("f:1.0",)
         string_candidate = make_candidate(
-            class_name="String", method="Concat", ret="string", param_types=("string", "string"),
-            args=("mega", "bonk"), expected="megabonk",
+            class_name="String",
+            method="Concat",
+            ret="string",
+            param_types=("string", "string"),
+            args=("mega", "bonk"),
+            expected="megabonk",
         )
         assert string_candidate.invoke_args == ("s:mega", "s:bonk")
         bool_candidate = make_candidate(
@@ -132,15 +136,7 @@ class TestPreflight:
         assert any("GameAssembly" in problem for problem in problems)
 
     def test_missing_metadata_is_a_problem(self, runtime_bundle):
-        (
-            runtime_bundle
-            / "Contents"
-            / "Resources"
-            / "Data"
-            / "il2cpp_data"
-            / "Metadata"
-            / "global-metadata.dat"
-        ).unlink()
+        (runtime_bundle / "Contents" / "Resources" / "Data" / "il2cpp_data" / "Metadata" / "global-metadata.dat").unlink()
         problems = nbp.preflight_checks(
             "macos",
             bundle=runtime_bundle,
@@ -244,9 +240,7 @@ class TestCommandValidation:
 
 class TestHostCommand:
     def test_compile_command_targets_one_arch_and_fails_loudly(self, tmp_path):
-        command = nbp.build_host_command(
-            tmp_path / "host.c", tmp_path / "host_x86_64", arch="x86_64", platform="macos"
-        )
+        command = nbp.build_host_command(tmp_path / "host.c", tmp_path / "host_x86_64", arch="x86_64", platform="macos")
         assert command[0] == "/usr/bin/clang"
         assert "-arch" in command and "x86_64" in command
         assert "-Wall" in command and "-Werror" in command
@@ -280,9 +274,7 @@ class TestHostCommand:
         nbp.validate_invocation(command, timeout=120)
 
     def test_host_command_carries_the_dylib_and_leg(self, tmp_path):
-        command = nbp.host_argv(
-            tmp_path / "host", dylib=tmp_path / "GameAssembly.dylib", data_dir=tmp_path / "data", leg="leg1"
-        )
+        command = nbp.host_argv(tmp_path / "host", dylib=tmp_path / "GameAssembly.dylib", data_dir=tmp_path / "data", leg="leg1")
         assert command[0] == str(tmp_path / "host")
         assert command[command.index("--dylib") + 1] == str(tmp_path / "GameAssembly.dylib")
         assert command[command.index("--leg") + 1] == "leg1"
@@ -705,9 +697,7 @@ class TestPlayerControl:
 
 class TestLinuxControlLeg:
     def test_linux_build_pull_excludes_loader_and_managed_trees(self, tmp_path):
-        command = nbp.linux_build_pull_command(
-            tmp_path / "build", "the-player-host", "~/Steam/steamapps/common/Megabonk"
-        )
+        command = nbp.linux_build_pull_command(tmp_path / "build", "the-player-host", "~/Steam/steamapps/common/Megabonk")
         assert command[0] == "/usr/bin/rsync"
         joined = " ".join(command)
         assert "--exclude" in joined and "BepInEx" in joined
@@ -851,11 +841,7 @@ class TestDefaultCandidates:
         assert rows[0]["found"] is True
 
     def test_ladder_reaches_a_game_authored_static_method(self):
-        game = [
-            candidate
-            for candidate in nbp.DEFAULT_CANDIDATES
-            if candidate.image == "Assembly-CSharp.dll"
-        ]
+        game = [candidate for candidate in nbp.DEFAULT_CANDIDATES if candidate.image == "Assembly-CSharp.dll"]
         assert game, "the ladder needs a candidate from the game's own assembly"
         assert all(candidate.param_types == () for candidate in game)
         assert all(candidate.expected == "" for candidate in game)
@@ -1152,9 +1138,7 @@ class TestDlopenModes:
 
 class TestLinuxControlLegSetup:
     def test_sync_copies_the_driver_and_host_source_to_the_player(self):
-        command = nbp.linux_probe_sync_command(
-            Path("/repo/scripts"), "the-player-host", "~/task071-probe"
-        )
+        command = nbp.linux_probe_sync_command(Path("/repo/scripts"), "the-player-host", "~/task071-probe")
         assert command[0] == "/usr/bin/rsync"
         joined = " ".join(command)
         assert "/repo/scripts/" in joined
@@ -1250,8 +1234,18 @@ class TestRemoteOnlyControl:
                 "overall": "pass",
                 "legs": {"leg1": {"status": "pass"}, "leg2": {"status": "pass"}},
                 "attempts": [
-                    {"arch": "x86_64", "leg": "leg2", "status": "pass", "candidate": "Assembly-CSharp.dll!ExplorerUtility::IsLinux()"},
-                    {"arch": "x86_64", "leg": "leg2", "status": "fail", "candidate": "Rewired_Core.dll!Rewired.Utils.MathTools::Abs(int)"},
+                    {
+                        "arch": "x86_64",
+                        "leg": "leg2",
+                        "status": "pass",
+                        "candidate": "Assembly-CSharp.dll!ExplorerUtility::IsLinux()",
+                    },
+                    {
+                        "arch": "x86_64",
+                        "leg": "leg2",
+                        "status": "fail",
+                        "candidate": "Rewired_Core.dll!Rewired.Utils.MathTools::Abs(int)",
+                    },
                 ],
             }
         )
@@ -1289,9 +1283,7 @@ class TestRemoteOnlyControl:
         return {
             "overall": "pass",
             "legs": {"leg1": {"status": "pass"}},
-            "attempts": [
-                {"arch": "x86_64", "leg": "leg2", "status": "pass", "candidate": "mscorlib.dll!System.Math::Abs(int)"}
-            ],
+            "attempts": [{"arch": "x86_64", "leg": "leg2", "status": "pass", "candidate": "mscorlib.dll!System.Math::Abs(int)"}],
             "runs": [{"leg": "leg1"}],
         }
 
@@ -1326,7 +1318,15 @@ class TestAttemptRows:
 
     def test_report_carries_the_ladder(self):
         report = nbp.build_report(
-            [{"arch": "x86_64", "leg": "leg2", "status": "pass", "candidate": "mscorlib.dll!System.Math::Abs(int)", "evidence": {}}],
+            [
+                {
+                    "arch": "x86_64",
+                    "leg": "leg2",
+                    "status": "pass",
+                    "candidate": "mscorlib.dll!System.Math::Abs(int)",
+                    "evidence": {},
+                }
+            ],
             platform="macos",
             arches=["x86_64"],
             runtime=Path("/tmp/GameAssembly.dylib"),

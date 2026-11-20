@@ -72,7 +72,10 @@ def test_stage_for_program_prefers_the_type_name_over_the_source() -> None:
         ("ERROR: 1:3: 'gl_TexCoord[0]' : undeclared identifier", "fixed-function-output"),
         ("ERROR: 1:5: 'unity_ObjectToWorld' : undeclared identifier", "undeclared-identifier"),
         ("ERROR: 1:19: 'non-opaque uniforms outside a block' : not allowed when using GLSL for Vulkan", "loose-uniform"),
-        ("ERROR: 1:19: 'hlslcc_mtx4x4unity_ObjectToWorld' : non-opaque uniform variables need a layout(location=L)", "loose-uniform"),
+        (
+            "ERROR: 1:19: 'hlslcc_mtx4x4unity_ObjectToWorld' : non-opaque uniform variables need a layout(location=L)",
+            "loose-uniform",
+        ),
         ("ERROR: 1:2: 'mediump' : syntax error: precision", "precision"),
         ("ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point", "entry-point"),
         ("ERROR: 1:12: '}' : syntax error, unexpected RIGHT_BRACE", "syntax"),
@@ -195,14 +198,27 @@ def test_request_extensions_inserts_requires_after_the_version_line() -> None:
 
     patched = smp.request_extensions(source, ["GL_EXT_geometry_shader4"]).decode()
 
-    assert patched.splitlines()[:3] == ["#version 330 core", "#extension GL_EXT_geometry_shader4 : require", "precision highp float;"]
+    assert patched.splitlines()[:3] == [
+        "#version 330 core",
+        "#extension GL_EXT_geometry_shader4 : require",
+        "precision highp float;",
+    ]
     assert smp.request_extensions(source, []) == source
 
 
 def test_classify_names_the_two_mechanical_failure_shapes() -> None:
-    assert smp.classify("metal", "error: 'buffer' attribute parameter is out of bounds: must be between 0 and 30") == "resource-limit"
-    assert smp.classify("glslang", "'gl_Layer' : required extension not requested: Possible extensions include:") == "missing-extension"
-    assert smp.classify("spirv", "SPIRV-Cross threw an exception: Multisampled array textures are supported from 2.1.") == "msl-version-too-low"
+    assert (
+        smp.classify("metal", "error: 'buffer' attribute parameter is out of bounds: must be between 0 and 30")
+        == "resource-limit"
+    )
+    assert (
+        smp.classify("glslang", "'gl_Layer' : required extension not requested: Possible extensions include:")
+        == "missing-extension"
+    )
+    assert (
+        smp.classify("spirv", "SPIRV-Cross threw an exception: Multisampled array textures are supported from 2.1.")
+        == "msl-version-too-low"
+    )
 
 
 def test_metal_command_compiles_for_macos_without_linking() -> None:

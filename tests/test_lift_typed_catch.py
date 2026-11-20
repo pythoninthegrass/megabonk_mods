@@ -22,7 +22,10 @@ from dataclasses import replace
 PROVEN = rl.PROVEN_CLASSES
 # The vtable slots the personality (is_pointer_p, do_catch) and do_catch/do_upcast (upcast overloads) call through.
 DISPATCHED_SLOTS = (4, 6, 7, 8)
-EXPORTS = {name: abi.Signature(("i32",), "i32") for name in ("f_upcast", "f_exact", "f_same", "f_skip", "f_downcast_misses", "f_unmatched")}
+EXPORTS = {
+    name: abi.Signature(("i32",), "i32")
+    for name in ("f_upcast", "f_exact", "f_same", "f_skip", "f_downcast_misses", "f_unmatched")
+}
 TYPED_PLT = {**shipped.TYPED_PLT, "strcmp": ("native_strcmp", abi.Signature(("ptr", "ptr"), "i32"))}
 HARNESS = """
 #include "adapters.c"
@@ -148,7 +151,14 @@ def typed_build(tmp_path_factory):
     fimage = rl.load_image(elf, raw, sections)
     linker = {name: (simage, address) for name, address in vtables.items()}
 
-    plan = rl.plan_types(fimage, except_table, except_base, [f.lsda for f in frames if f.lsda and f.pc_begin in f_by_start and f.pc_begin in {a for a, _ in lifted.values()}], PROVEN, linker)
+    plan = rl.plan_types(
+        fimage,
+        except_table,
+        except_base,
+        [f.lsda for f in frames if f.lsda and f.pc_begin in f_by_start and f.pc_begin in {a for a, _ in lifted.values()}],
+        PROVEN,
+        linker,
+    )
     splan = rl.plan_types(simage, sexcept, sexcept_base, [f.lsda for a in reached.bodies if (f := s_by_start[a]).lsda], PROVEN)
     assert plan.rejected == {} and splan.rejected == {}
 
@@ -184,7 +194,11 @@ def typed_build(tmp_path_factory):
     images = base.section_images(elf, raw, sections, bodies)
     simages = base.section_images(selfelf, sraw, ssections_named, shipped_bodies)
     images.update(section_bytes(elf, raw, sections, {n for n in needed if any(s["name"] == n for s in sections)} - images.keys()))
-    simages.update(section_bytes(selfelf, sraw, ssections_named, {n for n in needed if any(s["name"] == n for s in ssections_named)} - simages.keys()))
+    simages.update(
+        section_bytes(
+            selfelf, sraw, ssections_named, {n for n in needed if any(s["name"] == n for s in ssections_named)} - simages.keys()
+        )
+    )
     ir = work / "module.ll"
     ir.write_text(pl.module_for(bodies + shipped_bodies, {**images, **simages}, patches))
     base.run([base.LLVM / "opt", "-passes=verify", "-disable-output", ir])
@@ -217,7 +231,9 @@ def typed_build(tmp_path_factory):
         f'void native_unsupported_{i}(void) {{ fprintf(stderr, "unsupported import {n}\\n"); abort(); }}\n'
         for i, n in enumerate(unsupported, 1)
     )
-    callable_bodies = sorted((set(reached.bodies) | {a for a, _ in lifted.values()}) - {b.address for b in exports + imports + raw_imports})
+    callable_bodies = sorted(
+        (set(reached.bodies) | {a for a, _ in lifted.values()}) - {b.address for b in exports + imports + raw_imports}
+    )
     (work / "adapters.c").write_text(
         abi.generate(
             exports,
@@ -232,7 +248,12 @@ def typed_build(tmp_path_factory):
     shipped_offset = fixture_offset + len(except_table)
     combined = lu.Table(
         [
-            replace(e, lsda=e.lsda - except_base + fixture_offset if e.pc_begin in f_by_start else e.lsda - sexcept_base + shipped_offset)
+            replace(
+                e,
+                lsda=e.lsda - except_base + fixture_offset
+                if e.pc_begin in f_by_start
+                else e.lsda - sexcept_base + shipped_offset,
+            )
             if e.lsda
             else e
             for e in table.entries

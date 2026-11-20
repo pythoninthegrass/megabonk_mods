@@ -174,8 +174,11 @@ STEAM_CLIENT_BASENAMES = frozenset({"steam", "steam.sh"})
 STEAM_FLATPAK_ID = "com.valvesoftware.Steam"
 STEAM_SHUTDOWN_REQUEST = "steam://shutdownsteam"
 STEAM_EXIT_TIMEOUT_SECONDS = 10.0
+
+
 def example_forest_level() -> Path:
     return repo_root() / "levels" / "example-forest.mblevel.json"
+
 
 Lookup = Callable[[str], str | None]
 
@@ -402,7 +405,9 @@ def add_load_overrides(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--tier", type=int, help="replace the level's tier")
     parser.add_argument("--seed", type=int, help="replace the level's debug seed")
     parser.add_argument("--no-seed", action="store_true", help="let the game roll its own seed instead of forcing the level's")
-    parser.add_argument("--character", help="character for the run when MEGABONK_DEV is on: calcium, tonymczoom or squeaker (default tonymczoom)")
+    parser.add_argument(
+        "--character", help="character for the run when MEGABONK_DEV is on: calcium, tonymczoom or squeaker (default tonymczoom)"
+    )
 
 
 def add_client_flags(parser: argparse.ArgumentParser) -> None:
@@ -412,7 +417,9 @@ def add_client_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def load_overrides(args: argparse.Namespace) -> dict[str, object]:
-    overrides: dict[str, object] = {k: v for k in ("map", "stage", "tier", "seed", "character") if (v := getattr(args, k, None)) is not None}
+    overrides: dict[str, object] = {
+        k: v for k in ("map", "stage", "tier", "seed", "character") if (v := getattr(args, k, None)) is not None
+    }
     if getattr(args, "no_seed", False):
         overrides["unseeded"] = True
     return overrides
@@ -500,7 +507,21 @@ def build_heartbeat_command(enabled: bool) -> dict[str, object]:
     return {"command": "heartbeat", "enabled": enabled}
 
 
-PERF_ACTIONS = ("report", "status", "start", "reset", "spawn", "timescale", "toggle", "vsync", "health", "census", "render", "physics", "animation")
+PERF_ACTIONS = (
+    "report",
+    "status",
+    "start",
+    "reset",
+    "spawn",
+    "timescale",
+    "toggle",
+    "vsync",
+    "health",
+    "census",
+    "render",
+    "physics",
+    "animation",
+)
 PERF_MAX_ENEMIES = 300
 PERF_MIN_TIME_SCALE = 0.05
 PERF_MAX_TIME_SCALE = 20.0
@@ -554,7 +575,9 @@ def perf_time_scale(value: str) -> float:
     try:
         scale = float(value)
     except ValueError as error:
-        raise argparse.ArgumentTypeError(f"time scale must be a number from {PERF_MIN_TIME_SCALE} to {PERF_MAX_TIME_SCALE}") from error
+        raise argparse.ArgumentTypeError(
+            f"time scale must be a number from {PERF_MIN_TIME_SCALE} to {PERF_MAX_TIME_SCALE}"
+        ) from error
     if not PERF_MIN_TIME_SCALE <= scale <= PERF_MAX_TIME_SCALE:
         raise argparse.ArgumentTypeError(f"time scale must be a number from {PERF_MIN_TIME_SCALE} to {PERF_MAX_TIME_SCALE}")
     return scale
@@ -1231,6 +1254,7 @@ def quit_game(
     stop_menu: bool = False,
 ) -> bool:
     """Ask the game to quit and block until its process is gone; a game that is not running counts as quit. A game whose main thread stopped polling (an editor left idle can have its window suspended) never answers, so it is force-killed. The Steam client and the menu input service outlive the game by design, so they are only torn down when asked for."""
+
     def finish() -> bool:
         reap_wine_leftovers_on_host()
         if stop_menu:
@@ -1439,18 +1463,30 @@ def menu_remote(args: argparse.Namespace, commands: list | None) -> int:
     if commands is not None:
         command.append("-")
         command += ["--settle", str(args.settle)]
-    for flag, value in (("--game-dir", args.game_dir), ("--socket", args.socket), ("--display", args.display), ("--out", remote_out)):
+    for flag, value in (
+        ("--game-dir", args.game_dir),
+        ("--socket", args.socket),
+        ("--display", args.display),
+        ("--out", remote_out),
+    ):
         if value is not None:
             command += [flag, str(value)]
     if args.no_gamepad:
         command.append("--no-gamepad")
     ssh = ["ssh", "-oBatchMode=yes", "--", args.host]
     budget = args.timeout * (len(commands or []) + 2) + 10
-    result = subprocess.run([*ssh, f"cd {directory} && {shlex.join(command)}"],
-                            input=json.dumps(commands) if commands is not None else "", text=True, timeout=budget, check=False)
+    result = subprocess.run(
+        [*ssh, f"cd {directory} && {shlex.join(command)}"],
+        input=json.dumps(commands) if commands is not None else "",
+        text=True,
+        timeout=budget,
+        check=False,
+    )
     if result.returncode or remote_out is None:
         return result.returncode
-    download = subprocess.run([*ssh, f"cd {directory} && cat -- {shlex.quote(remote_out)}"], capture_output=True, timeout=args.timeout, check=False)
+    download = subprocess.run(
+        [*ssh, f"cd {directory} && cat -- {shlex.quote(remote_out)}"], capture_output=True, timeout=args.timeout, check=False
+    )
     if download.returncode or not download.stdout.startswith(PNG_SIGNATURE):
         raise RuntimeError("menu: remote screenshot download failed or did not contain a PNG")
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -1480,14 +1516,24 @@ def start_menu_service(args: argparse.Namespace, path: Path) -> bool:
     child = None
     if shutil.which("systemd-run"):
         unit = f"megabonk-menu-{uuid.uuid4().hex}"
-        launch = ["systemd-run", "--user", "--collect", "--quiet", f"--unit={unit}",
-                  f"--working-directory={Path.cwd()}", f"--property=StandardOutput=append:{log}", "--property=StandardError=inherit"]
+        launch = [
+            "systemd-run",
+            "--user",
+            "--collect",
+            "--quiet",
+            f"--unit={unit}",
+            f"--working-directory={Path.cwd()}",
+            f"--property=StandardOutput=append:{log}",
+            "--property=StandardError=inherit",
+        ]
         if os.environ.get("XAUTHORITY"):
             launch += [f"--setenv=XAUTHORITY={os.environ['XAUTHORITY']}"]
         try:
             launched = subprocess.run([*launch, *command], capture_output=True, text=True, timeout=args.timeout, check=False)
             if launched.returncode:
-                raise RuntimeError(f"menu: user service launch failed: {launched.stderr}; a running systemd user manager is required")
+                raise RuntimeError(
+                    f"menu: user service launch failed: {launched.stderr}; a running systemd user manager is required"
+                )
         except BaseException:
             try:
                 subprocess.run(["systemctl", "--user", "stop", unit], capture_output=True, timeout=5, check=False)
@@ -1496,7 +1542,9 @@ def start_menu_service(args: argparse.Namespace, path: Path) -> bool:
             raise
     else:
         with log.open("ab") as output:
-            child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
+            child = subprocess.Popen(
+                command, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, start_new_session=True
+            )
     deadline = time.monotonic() + args.timeout
     try:
         while (child is None or child.poll() is None) and time.monotonic() < deadline:
@@ -1535,8 +1583,10 @@ def run_menu(args: argparse.Namespace) -> int:
     if args.menu_action == "start":
         return 0 if start_menu_service(args, path) else 1
     if args.menu_action == "serve":
+
         def terminate(_signum, _frame):
             raise KeyboardInterrupt
+
         previous = signal.signal(signal.SIGTERM, terminate)
         try:
             serve_menu(path, display=args.display or os.environ.get("DISPLAY"), gamepad=not args.no_gamepad)
@@ -1582,8 +1632,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         command = menu_sub.add_parser(verb)
         command.add_argument("--host", help="SSH host; runs the target checkout, never the local game")
         command.add_argument("--remote-repo", help="repository path on the SSH host; ~/ is supported")
-        command.add_argument("--remote-python", default=".venv/bin/python", help="single interpreter path in the remote checkout's environment")
-        command.add_argument("--socket", type=Path, help="target input service socket (default: XDG_RUNTIME_DIR or ~/.cache, under megabonk-menu)")
+        command.add_argument(
+            "--remote-python", default=".venv/bin/python", help="single interpreter path in the remote checkout's environment"
+        )
+        command.add_argument(
+            "--socket", type=Path, help="target input service socket (default: XDG_RUNTIME_DIR or ~/.cache, under megabonk-menu)"
+        )
         command.add_argument("--display", help="target game's X11 display; start defaults to the target DISPLAY")
         command.add_argument("--no-gamepad", action="store_true", help="start keyboard/mouse only, without a virtual controller")
         command.add_argument("--game-dir", type=Path, help="target game directory for diagnostics/screenshots")
@@ -1594,10 +1648,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             command.add_argument("--out", type=Path, help="screenshot path on this machine, downloaded when --host is used")
     sub.add_parser("enable")
     sub.add_parser("disable")
-    sub.add_parser("clear-console-log", help="delete the console's persisted history and scrollback so the next launch starts empty")
+    sub.add_parser(
+        "clear-console-log", help="delete the console's persisted history and scrollback so the next launch starts empty"
+    )
     quit_parser = sub.add_parser("quit")
     add_client_flags(quit_parser)
-    teardown_parser = sub.add_parser("teardown", help="quit the game, reap the Wine leftovers, and stop the clients a run leaves behind")
+    teardown_parser = sub.add_parser(
+        "teardown", help="quit the game, reap the Wine leftovers, and stop the clients a run leaves behind"
+    )
     add_client_flags(teardown_parser)
     sub.add_parser("freeze")
     sub.add_parser("resume")
@@ -1610,11 +1668,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     music = sub.add_parser("music", help="control level music: play, pause, next, prev, track <n>, list, now")
     music.add_argument("music_action", metavar="action", choices=MUSIC_ACTIONS)
     music.add_argument("track", nargs="?", type=int, help="1-based track number, for the track action")
-    kill_enemies = sub.add_parser("kill-enemies", help="kill the nearest enemy, all enemies or all bosses through the game's own damage path")
+    kill_enemies = sub.add_parser(
+        "kill-enemies", help="kill the nearest enemy, all enemies or all bosses through the game's own damage path"
+    )
     kill_enemies.add_argument("target", choices=KILL_ENEMY_TARGETS)
     damage = sub.add_parser("damage", help="apply 1–99 damage through the game, bypassing shield; nonlethal by default")
     damage.add_argument("amount", type=damage_amount)
-    damage.add_argument("--nonlethal", action=argparse.BooleanOptionalAction, default=True, help="preserve at least 1 HP; --no-nonlethal can end the run")
+    damage.add_argument(
+        "--nonlethal",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="preserve at least 1 HP; --no-nonlethal can end the run",
+    )
     sub.add_parser("steam-ready")
     sub.add_parser("state")
     console = sub.add_parser("console", help="run one console line without opening the overlay")
@@ -1635,11 +1700,21 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     perf = sub.add_parser("perf")
     perf.add_argument("perf_action", choices=list(PERF_ACTIONS))
     perf.add_argument("--count", type=perf_count, help=f"enemies to spawn around the player (1-{PERF_MAX_ENEMIES}), for 'spawn'")
-    perf.add_argument("--value", type=perf_time_scale, help=f"time scale to hold ({PERF_MIN_TIME_SCALE}-{PERF_MAX_TIME_SCALE}) for 'timescale'; omit to release it")
+    perf.add_argument(
+        "--value",
+        type=perf_time_scale,
+        help=f"time scale to hold ({PERF_MIN_TIME_SCALE}-{PERF_MAX_TIME_SCALE}) for 'timescale'; omit to release it",
+    )
     perf.add_argument("--target", help="for 'toggle': a tick name (KillFloor), a patch probe (EnemyManager.Update), or all")
-    perf.add_argument("--enable", action="store_true", help="with 'toggle', 'vsync', 'render', 'physics' or 'animation', turn the target on")
-    perf.add_argument("--disable", action="store_true", help="with 'toggle', 'vsync', 'render', 'physics' or 'animation', turn the target off")
-    perf.add_argument("--hp", type=perf_hp, help=f"player hit points to park the player at (1-{PERF_MAX_PLAYER_HP}), for 'health'")
+    perf.add_argument(
+        "--enable", action="store_true", help="with 'toggle', 'vsync', 'render', 'physics' or 'animation', turn the target on"
+    )
+    perf.add_argument(
+        "--disable", action="store_true", help="with 'toggle', 'vsync', 'render', 'physics' or 'animation', turn the target off"
+    )
+    perf.add_argument(
+        "--hp", type=perf_hp, help=f"player hit points to park the player at (1-{PERF_MAX_PLAYER_HP}), for 'health'"
+    )
     editor = sub.add_parser("editor")
     editor.add_argument("state", choices=["on", "off"])
     camera = sub.add_parser("camera")
@@ -1674,7 +1749,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     query_objects = sub.add_parser("query-objects")
     query_objects.add_argument("type", help="UnityEngine.Object type name, e.g. MapData")
     query_objects.add_argument("--fields", nargs="*", metavar="FIELD", help="public fields to read besides name")
-    query_objects.add_argument("--depth", type=query_depth, help=f"expand nested assets this many levels deep (0-{MAX_QUERY_DEPTH})")
+    query_objects.add_argument(
+        "--depth", type=query_depth, help=f"expand nested assets this many levels deep (0-{MAX_QUERY_DEPTH})"
+    )
     click_widget = sub.add_parser("click-widget")
     click_widget.add_argument("name")
     teleport = sub.add_parser("teleport")
@@ -1684,12 +1761,19 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     item.add_argument("name", help="EItem member, case-sensitive, e.g. Mirror")
     item.add_argument("amount", type=int, nargs="?", help="set the amount to this exact number; omit to read it")
     grind_slide = sub.add_parser("grind-slide")
-    grind_slide.add_argument("state", choices=["on", "off", "auto"], help="hold the slide button, release it, or read the real device again")
-    sub.add_parser("fall-damage", help="report the player's fall-damage inputs: thresholds, FallDamageReduction, fall speed, and both characters' stored values")
+    grind_slide.add_argument(
+        "state", choices=["on", "off", "auto"], help="hold the slide button, release it, or read the real device again"
+    )
+    sub.add_parser(
+        "fall-damage",
+        help="report the player's fall-damage inputs: thresholds, FallDamageReduction, fall speed, and both characters' stored values",
+    )
     dismiss = sub.add_parser("dismiss-levelup")
     dismiss.add_argument("--choice", type=int, default=0, help="zero-based index of the offered upgrade")
     dismiss_offers = sub.add_parser("dismiss-offers")
-    dismiss_offers.add_argument("--choice", type=int, default=None, help="zero-based index of the offered upgrade to pick instead of closing the window")
+    dismiss_offers.add_argument(
+        "--choice", type=int, default=None, help="zero-based index of the offered upgrade to pick instead of closing the window"
+    )
     dismiss_offers.add_argument("--skip", action="store_true", help="skip the level-up window without choosing; only valid there")
     interact = sub.add_parser("interact")
     interact.add_argument("--type", help="only interactables whose class or object name contains this substring, e.g. Magnet")
@@ -1987,7 +2071,19 @@ def unity_crash_handler_diag(game_dir: Path, diag: bool) -> None:
             handler.replace(disabled)
         os.environ["MEGABONK_WINEDEBUG_EXTRA"] = "+seh"
         subprocess.run(
-            [str(wine_bin()), "reg", "add", "HKCU\\Software\\Wine\\WineDbg", "/v", "ShowCrashDialog", "/t", "REG_DWORD", "/d", "0", "/f"],
+            [
+                str(wine_bin()),
+                "reg",
+                "add",
+                "HKCU\\Software\\Wine\\WineDbg",
+                "/v",
+                "ShowCrashDialog",
+                "/t",
+                "REG_DWORD",
+                "/d",
+                "0",
+                "/f",
+            ],
             env={**os.environ, "WINEPREFIX": str(resolve_wine_prefix())},
             capture_output=True,
             check=False,
@@ -2033,7 +2129,9 @@ def relaunch(
         on_step("relaunch: waiting for harness")
         grace_until = time.monotonic() + GAME_STARTUP_GRACE_SECONDS
         starting_up = lambda: is_alive() or time.monotonic() < grace_until
-        if wait_for_log_line(latest_log_path(game_dir), HARNESS_ENABLED_LINE, launched, relaunch_timeout(timeout), alive=starting_up):
+        if wait_for_log_line(
+            latest_log_path(game_dir), HARNESS_ENABLED_LINE, launched, relaunch_timeout(timeout), alive=starting_up
+        ):
             return None
         return game_exited_error(game_dir) if not is_alive() else "relaunch: harness did not become ready"
 

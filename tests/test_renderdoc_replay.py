@@ -109,7 +109,14 @@ def test_draw_records_attaches_the_measured_duration_to_each_draw() -> None:
 def test_render_targets_lists_the_largest_colour_targets_first() -> None:
     class Resource:
         def __init__(self, width, height, name):
-            self.width, self.height, self.depth, self.arraysize, self.type, self.name = width, height, 1, 1, "ShaderResource", name
+            self.width, self.height, self.depth, self.arraysize, self.type, self.name = (
+                width,
+                height,
+                1,
+                1,
+                "ShaderResource",
+                name,
+            )
 
     class Replay:
         def GetResources(self):

@@ -37,9 +37,7 @@ def anyio_backend() -> str:
 @pytest.fixture(autouse=True)
 def forbid_real_process_kill(monkeypatch: pytest.MonkeyPatch) -> None:
     def guard(pid: int, sig: int, *args: object) -> None:
-        raise AssertionError(
-            f"test reached os.kill({pid}, {sig}); stub it with monkeypatch.setattr(os, 'kill', ...)"
-        )
+        raise AssertionError(f"test reached os.kill({pid}, {sig}); stub it with monkeypatch.setattr(os, 'kill', ...)")
 
     monkeypatch.setattr(os, "kill", guard)
 
@@ -88,6 +86,5 @@ def pytest_runtest_makereport(item, call):
         return report
     report.outcome = "skipped"
     _, lineno, _ = item.reportinfo()
-    report.longrepr = (str(item.path), lineno or 0,
-                       f"{culprit} is a gitignored build product; run `task thps` to produce it")
+    report.longrepr = (str(item.path), lineno or 0, f"{culprit} is a gitignored build product; run `task thps` to produce it")
     return report

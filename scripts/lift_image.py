@@ -192,7 +192,9 @@ def read_shard(path: Path, identity: str, bodies: list[Fde] | None = None, *, pc
     if not isinstance(header, dict) or header.get("identity") != identity or header.get("count") != len(rows):
         return None
     if pcode and (
-        not rows or not isinstance(rows[0], dict) or rows[0].get("kind") != "sections"
+        not rows
+        or not isinstance(rows[0], dict)
+        or rows[0].get("kind") != "sections"
         or not isinstance(rows[0].get("sections"), list)
     ):
         return None
@@ -262,7 +264,12 @@ def build_shard(index: int, part: list[Fde], ctx: dict) -> list[dict]:
     out, sha = ctx["out"], ctx["sha"]
     pcode_id = shard_identity(sha, ctx["fingerprint"], ctx["ghidra"], part, "")
     scored_id = scored_shard_identity(
-        sha, ctx["fingerprint"], ctx["ghidra"], part, ctx["pipeline"], ctx["tool_timeout"],
+        sha,
+        ctx["fingerprint"],
+        ctx["ghidra"],
+        part,
+        ctx["pipeline"],
+        ctx["tool_timeout"],
         ctx.get("scorer") or scoring_fingerprint(),
     )
     scored = read_shard(out / f"scored-{index:04d}.jsonl", scored_id, part)
@@ -313,8 +320,10 @@ def select_blockers(report: dict, sha: str, parts: list[list[Fde]]) -> list[tupl
     verdict = report["verdict"]
     count = sum(map(len, parts))
     if (
-        report["binary_sha256"] != sha or report["bodies"] != count
-        or report["scored"] != count or verdict["coverage_complete"] is not True
+        report["binary_sha256"] != sha
+        or report["bodies"] != count
+        or report["scored"] != count
+        or verdict["coverage_complete"] is not True
     ):
         raise ValueError("baseline must be a complete report for this image")
     blocked = verdict["blocking"]
@@ -362,7 +371,10 @@ def score_blocker_shard(index, part, wanted, baseline, ctx, scorer):
     rows, sections = [r for r in cached[1:] if r["start"] in starts], cached[0]["sections"]
     payload = hashlib.sha256(json.dumps([rows, sections], sort_keys=True).encode()).hexdigest()
     score_id = shard_identity(
-        ctx["sha"], f"{dump_id}:{payload}:{scorer}", ctx["ghidra"], wanted,
+        ctx["sha"],
+        f"{dump_id}:{payload}:{scorer}",
+        ctx["ghidra"],
+        wanted,
         json.dumps([ctx["pipeline"], ctx["tool_timeout"]]),
     )
     path = ctx["out"] / f"blockers-scored-{index:04d}.jsonl"
@@ -370,7 +382,9 @@ def score_blocker_shard(index, part, wanted, baseline, ctx, scorer):
     if scored is not None:
         return scored
     with lp.ThreadPoolExecutor(ctx["score_jobs"]) as pool:
-        scored = list(pool.map(lambda r: lp.score_row(r, sections, ctx["tool_timeout"], ctx["pipeline"], table_evidence(ctx)), rows))
+        scored = list(
+            pool.map(lambda r: lp.score_row(r, sections, ctx["tool_timeout"], ctx["pipeline"], table_evidence(ctx)), rows)
+        )
     write_shard(path, score_id, scored)
     return scored
 

@@ -33,7 +33,9 @@ def test_the_filter_report_splits_typed_bodies_into_runnable_and_rejected_by_rea
     data = TYPED + TYPED + TYPED
     each = len(TYPED)
     frames = frames_for((0x1000, PROLOGUE, BASE), (0x2000, PROLOGUE, BASE + each), (0x3000, PROLOGUE, BASE + 2 * each))
-    plan = rl.TypePlan(proven={BASE}, rejected={BASE + each: "EH_TYPED_CATCH", BASE + 2 * each: "EH_TYPEINFO_RELOC:RELOC_TYPE:GLOB_DAT"})
+    plan = rl.TypePlan(
+        proven={BASE}, rejected={BASE + each: "EH_TYPED_CATCH", BASE + 2 * each: "EH_TYPEINFO_RELOC:RELOC_TYPE:GLOB_DAT"}
+    )
     report = lu.filter_report(frames, data, BASE, 0x1000, 0x5000, plan)
     assert report["typed_catch"] == 3
     assert report["typed_runnable"] == 1

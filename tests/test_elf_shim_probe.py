@@ -18,9 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import elf_shim_probe as esp
 
 SHIPPED_SO = esp.REPO / ".tools/megabonk-linux-native/Megabonk/GameAssembly.so"
-requires_shipped_so = pytest.mark.skipif(
-    not SHIPPED_SO.exists(), reason=f"shipped Linux runtime absent at {SHIPPED_SO}"
-)
+requires_shipped_so = pytest.mark.skipif(not SHIPPED_SO.exists(), reason=f"shipped Linux runtime absent at {SHIPPED_SO}")
 # The import legs ask the live macOS loader what it can resolve, so they can only be
 # scored on macOS with a compiler present.
 requires_loader = pytest.mark.skipif(
@@ -118,9 +116,7 @@ class TestProbeMacOsLoader:
     def test_parses_the_three_field_contract(self, monkeypatch):
         def fake_run(cmd, capture_output, text, check):
             assert cmd[0] == "/tmp/symprobe"
-            return subprocess.CompletedProcess(
-                cmd, 0, "malloc\t0x100\tdefault\ngettext\t0x0\tnone\n", ""
-            )
+            return subprocess.CompletedProcess(cmd, 0, "malloc\t0x100\tdefault\ngettext\t0x0\tnone\n", "")
 
         monkeypatch.setattr(esp.subprocess, "run", fake_run)
         out = esp.probe_macos_loader(Path("/tmp/symprobe"), ["malloc", "gettext"])
@@ -135,9 +131,7 @@ class TestProbeMacOsLoader:
             return subprocess.CompletedProcess(cmd, 0, "", "")
 
         monkeypatch.setattr(esp.subprocess, "run", fake_run)
-        esp.probe_macos_loader(
-            Path("/tmp/symprobe"), ["iconv_open"], ("/usr/lib/libiconv.2.dylib",)
-        )
+        esp.probe_macos_loader(Path("/tmp/symprobe"), ["iconv_open"], ("/usr/lib/libiconv.2.dylib",))
         cmd = seen["cmd"]
         assert cmd[1:4] == ["--lib", "/usr/lib/libiconv.2.dylib", "iconv_open"]
 
@@ -186,8 +180,7 @@ class TestClassification:
         assert cls["bucket_counts"]["unclassified"] == 0
 
     def test_an_unnamed_import_without_a_rule_fails_the_table(self):
-        elf = make_elf(undefined=["weird_linux_only_call"],
-                       relocs=[rela(8, "GLOB_DAT", 1)])
+        elf = make_elf(undefined=["weird_linux_only_call"], relocs=[rela(8, "GLOB_DAT", 1)])
         cls = esp.classify(elf, resolved_none(["weird_linux_only_call"]))
         assert cls["buckets"]["unclassified"] == ["weird_linux_only_call"]
         assert cls["live_unclassified"] == ["weird_linux_only_call"]
@@ -199,9 +192,7 @@ class TestClassification:
         assert cls["dead_unclassified"] == ["weird_linux_only_call"]
 
     def test_a_defined_symbol_reference_does_not_count_as_an_import(self):
-        elf = make_elf(
-            undefined=["malloc"], defined=["SomeLocal"], relocs=[rela(0x10, "64", 2)]
-        )
+        elf = make_elf(undefined=["malloc"], defined=["SomeLocal"], relocs=[rela(0x10, "64", 2)])
         cls = esp.classify(elf, resolved_default("malloc"))
         assert cls["referenced_by_reloc"] == 0
 
@@ -228,9 +219,7 @@ class TestClassification:
     def test_the_stat_family_needs_a_struct_translating_trampoline(self):
         elf = make_elf(undefined=["__xstat64", "__fxstat64", "__lxstat64"])
         cls = esp.classify(elf, resolved_none(["__xstat64", "__fxstat64", "__lxstat64"]))
-        assert sorted(cls["buckets"]["compat-required"]) == [
-            "__fxstat64", "__lxstat64", "__xstat64"
-        ]
+        assert sorted(cls["buckets"]["compat-required"]) == ["__fxstat64", "__lxstat64", "__xstat64"]
 
     def test_a_recipe_library_that_lacks_the_symbol_is_a_blocker(self):
         """The compat table may not claim a library that does not actually export it."""
@@ -275,18 +264,24 @@ class TestClassification:
 
     def test_underscore_only_resolution_is_counted_separately(self):
         elf = make_elf(undefined=["malloc"])
-        cls = esp.classify(
-            elf, {"malloc": {"addr": "0x1", "source": "underscore"}}
-        )
+        cls = esp.classify(elf, {"malloc": {"addr": "0x1", "source": "underscore"}})
         assert cls["resolved_by_underscore_only"] == 1
         assert cls["resolved_by_loader"] == 1
 
     def test_weak_entries_are_counted_apart_from_global_ones(self):
         elf = esp.Elf(
-            path=Path("/tmp/x.so"), e_type=esp.ET_DYN, machine=esp.EM_X86_64, entry=0,
-            sections=[], segments=[], dynamic={}, dynamic_list={},
+            path=Path("/tmp/x.so"),
+            e_type=esp.ET_DYN,
+            machine=esp.EM_X86_64,
+            entry=0,
+            sections=[],
+            segments=[],
+            dynamic={},
+            dynamic_list={},
             dynsyms=[sym("malloc", bind=1), sym("_ITM_RU1", bind=2)],
-            relocs=[], verneed={}, soname="",
+            relocs=[],
+            verneed={},
+            soname="",
         )
         cls = esp.classify(elf, resolved_default("malloc"))
         assert cls["weak_entries"] == 1
@@ -309,7 +304,7 @@ class TestCuratedTables:
         }
         names = list(groups)
         for i, a in enumerate(names):
-            for b in names[i + 1:]:
+            for b in names[i + 1 :]:
                 assert not (groups[a] & groups[b]), f"{a} and {b} both claim {groups[a] & groups[b]}"
 
     def test_alias_targets_are_plain_c_names(self):
@@ -364,7 +359,8 @@ class TestLeg1Imports:
 class TestLeg2AbiNodes:
     def test_version_binding_alone_is_not_an_obstacle(self):
         elf = make_elf(
-            undefined=["memcpy"], verneed={3: "GLIBC_2.14"},
+            undefined=["memcpy"],
+            verneed={3: "GLIBC_2.14"},
             relocs=[rela(8, "JUMP_SLOT", 1)],
         )
         elf.dynsyms[1] = esp.Dynsym("memcpy", 1, 2, 0, 3)
@@ -374,8 +370,7 @@ class TestLeg2AbiNodes:
         assert leg["metrics"]["live_bound_to_a_node"] == 1
 
     def test_a_live_import_stranded_on_a_version_node_fails(self):
-        elf = make_elf(undefined=["mystery"], verneed={3: "GLIBC_2.17"},
-                       relocs=[rela(8, "JUMP_SLOT", 1)])
+        elf = make_elf(undefined=["mystery"], verneed={3: "GLIBC_2.17"}, relocs=[rela(8, "JUMP_SLOT", 1)])
         elf.dynsyms[1] = esp.Dynsym("mystery", 1, 2, 0, 3)
         cls = esp.classify(elf, resolved_none(["mystery"]))
         leg = esp.leg_abi_nodes(elf, cls)
@@ -388,8 +383,7 @@ class TestLeg2AbiNodes:
         assert leg["checks"]["version_nodes_recorded"] is False
 
     def test_an_executable_stack_is_reported_not_assumed(self):
-        segments = [seg(esp.PT_LOAD, 4, 0, 0, 0x1000, 0x1000),
-                    seg(esp.PT_GNU_STACK, 7, 0, 0, 0, 0)]
+        segments = [seg(esp.PT_LOAD, 4, 0, 0, 0x1000, 0x1000), seg(esp.PT_GNU_STACK, 7, 0, 0, 0, 0)]
         elf = make_elf(segments=segments)
         leg = esp.leg_abi_nodes(elf, esp.classify(elf, {}))
         assert leg["metrics"]["gnu_stack_executable"] is True
@@ -397,8 +391,7 @@ class TestLeg2AbiNodes:
 
 class TestLeg3Relocs:
     def test_classified_types_with_no_copy_relocs_pass(self):
-        elf = make_elf(relocs=[rela(8, "RELATIVE", 0, 0x100), rela(16, "JUMP_SLOT", 1)],
-                       undefined=["malloc"])
+        elf = make_elf(relocs=[rela(8, "RELATIVE", 0, 0x100), rela(16, "JUMP_SLOT", 1)], undefined=["malloc"])
         leg = esp.leg_relocs(elf, esp.classify(elf, resolved_default("malloc")))
         assert leg["pass"] is True
         assert leg["metrics"]["by_type"]["RELATIVE"] == 1
@@ -411,9 +404,18 @@ class TestLeg3Relocs:
 
     def test_an_unknown_relocation_type_is_a_blocker(self):
         elf = esp.Elf(
-            path=Path("/tmp/x.so"), e_type=esp.ET_DYN, machine=esp.EM_X86_64, entry=0,
-            sections=[], segments=[], dynamic={}, dynamic_list={}, dynsyms=[],
-            relocs=[esp.Rela(8, 4096, 0, 0, ".rela.dyn")], verneed={}, soname="",
+            path=Path("/tmp/x.so"),
+            e_type=esp.ET_DYN,
+            machine=esp.EM_X86_64,
+            entry=0,
+            sections=[],
+            segments=[],
+            dynamic={},
+            dynamic_list={},
+            dynsyms=[],
+            relocs=[esp.Rela(8, 4096, 0, 0, ".rela.dyn")],
+            verneed={},
+            soname="",
         )
         leg = esp.leg_relocs(elf, esp.classify(elf, {}))
         assert leg["pass"] is False
@@ -447,9 +449,7 @@ class TestLeg4LoadStrategy:
     def test_incongruent_segments_are_a_blocker(self):
         segments = [seg(esp.PT_LOAD, 4, 0x100, 0, 0x1000, 0x1000)]
         elf = make_elf(segments=segments + [seg(esp.PT_TLS, 4, 0, 0, 0, 16)])
-        leg = esp.leg_load_strategy(
-            elf, esp.classify(elf, {}), esp.leg_relocs(elf, esp.classify(elf, {})), "x86_64"
-        )
+        leg = esp.leg_load_strategy(elf, esp.classify(elf, {}), esp.leg_relocs(elf, esp.classify(elf, {})), "x86_64")
         assert leg["checks"]["segments_are_mappable_without_copying"] is False
         assert any("copied into anonymous pages" in b for b in leg["blockers"])
 
@@ -461,8 +461,7 @@ class TestLeg4LoadStrategy:
         assert any("IRELATIVE" in b for b in leg["blockers"])
 
     def test_an_oversized_tls_segment_is_a_blocker(self):
-        elf = make_elf(segments=[seg(esp.PT_LOAD, 4, 0, 0, 0x1000, 0x1000),
-                                 seg(esp.PT_TLS, 4, 0, 0, 0, 0x8000)])
+        elf = make_elf(segments=[seg(esp.PT_LOAD, 4, 0, 0, 0x1000, 0x1000), seg(esp.PT_TLS, 4, 0, 0, 0, 0x8000)])
         cls = esp.classify(elf, {})
         leg = esp.leg_load_strategy(elf, cls, esp.leg_relocs(elf, cls))
         assert leg["pass"] is False
@@ -487,8 +486,7 @@ class TestLeg4LoadStrategy:
 @pytest.fixture(scope="module")
 def analysis_report(tmp_path_factory):
     """ELF-level facts only: the import legs cannot be scored without the loader."""
-    return esp.run_probe(SHIPPED_SO, tmp_path_factory.mktemp("elf-shim-analysis"),
-                         skip_dyld=True)
+    return esp.run_probe(SHIPPED_SO, tmp_path_factory.mktemp("elf-shim-analysis"), skip_dyld=True)
 
 
 @pytest.fixture(scope="module")
@@ -585,8 +583,7 @@ class TestCommandLine:
         assert "no such ELF" in capsys.readouterr().err
 
     def test_the_target_arch_is_recorded_in_the_artifact(self, tmp_path):
-        esp.main(["--so", str(SHIPPED_SO), "--out", str(tmp_path), "--skip-dyld-probe",
-                  "--target-arch", "arm64"])
+        esp.main(["--so", str(SHIPPED_SO), "--out", str(tmp_path), "--skip-dyld-probe", "--target-arch", "arm64"])
         payload = json.loads((tmp_path / "summary.json").read_text())
         assert payload["target_arch"] == "arm64"
         assert payload["legs"]["leg4_load_strategy"]["metrics"]["target_page_size"] == 16384

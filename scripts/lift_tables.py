@@ -211,20 +211,20 @@ _READERS: dict[str, object] = {}
 
 def _load_elf_reader(path):
     data = Path(path).read_bytes()
-    phoff, = struct.unpack_from("<Q", data, 0x20)
+    (phoff,) = struct.unpack_from("<Q", data, 0x20)
     phentsize, phnum = struct.unpack_from("<HH", data, 0x36)
     loads = []
     for index in range(phnum):
         off = phoff + index * phentsize
         if struct.unpack_from("<I", data, off)[0] == 1:
             offset, vaddr = struct.unpack_from("<QQ", data, off + 8)
-            filesz, = struct.unpack_from("<Q", data, off + 32)
+            (filesz,) = struct.unpack_from("<Q", data, off + 32)
             loads.append((vaddr, offset, filesz))
 
     def read(vaddr, n):
         for base, offset, size in loads:
             if base <= vaddr and vaddr + n <= base + size:
-                return data[offset + vaddr - base: offset + vaddr - base + n]
+                return data[offset + vaddr - base : offset + vaddr - base + n]
         raise ValueError(f"0x{vaddr:x} is not backed by file bytes")
 
     return read
@@ -237,8 +237,12 @@ def objdump_disassembler(so, objdump):
         if window not in cache:
             result = subprocess.run(
                 [
-                    str(objdump), "-d", "--no-show-raw-insn",
-                    f"--start-address={window[0]:#x}", f"--stop-address={window[1]:#x}", str(so),
+                    str(objdump),
+                    "-d",
+                    "--no-show-raw-insn",
+                    f"--start-address={window[0]:#x}",
+                    f"--stop-address={window[1]:#x}",
+                    str(so),
                 ],
                 capture_output=True,
                 text=True,

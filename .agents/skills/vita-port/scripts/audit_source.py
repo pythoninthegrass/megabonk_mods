@@ -6,6 +6,7 @@ It is a grep, not a compiler: expect false positives (comments, ifdef'd-out code
 
 Usage: audit_source.py <dir> [--max-hits N] [--json]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -15,7 +16,26 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-EXTS = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".glsl", ".vert", ".frag", ".vs", ".fs", ".m", ".mm", ".java", ".kt"}
+EXTS = {
+    ".c",
+    ".cc",
+    ".cpp",
+    ".cxx",
+    ".h",
+    ".hh",
+    ".hpp",
+    ".hxx",
+    ".inl",
+    ".glsl",
+    ".vert",
+    ".frag",
+    ".vs",
+    ".fs",
+    ".m",
+    ".mm",
+    ".java",
+    ".kt",
+}
 JVM_EXTS = {".java", ".kt"}
 SKIP_DIRS = {".git", "build", "third_party", "thirdparty", "extern", "external", "vendor", "node_modules", ".svn"}
 
@@ -56,22 +76,43 @@ RULES: dict[str, tuple[str, str, list[str]]] = {
     "filesystem / paths": (
         "medium",
         "write only to ux0:data/<app>/; app0: is read-only and is the cwd; avoid getenv(HOME), XDG paths, std::filesystem tricks",
-        [r"\bgetenv\s*\(\s*\"(HOME|XDG_\w+|APPDATA|USERPROFILE)\"", r"\bstd::filesystem\b", r"\bgetpwuid\b", r"\brealpath\s*\(", r"\bsymlink\s*\("],
+        [
+            r"\bgetenv\s*\(\s*\"(HOME|XDG_\w+|APPDATA|USERPROFILE)\"",
+            r"\bstd::filesystem\b",
+            r"\bgetpwuid\b",
+            r"\brealpath\s*\(",
+            r"\bsymlink\s*\(",
+        ],
     ),
     "OpenGL beyond vitaGL (GL 3+ / desktop)": (
         "high",
         "vitaGL is ES 2.0-class: no 3D textures, MRT, glTexStorage, fences, geometry/compute shaders, transform feedback; rewrite or drop the feature",
         [
-            r"glTexImage3D|glTexStorage[123]D|glTexSubImage3D", r"glDrawBuffers\b", r"glFenceSync|glClientWaitSync",
-            r"GL_GEOMETRY_SHADER|GL_COMPUTE_SHADER|GL_TESS_", r"glDispatchCompute", r"glBeginTransformFeedback",
-            r"glBindFragDataLocation", r"glVertexAttribIPointer", r"glPrimitiveRestartIndex|GL_PRIMITIVE_RESTART",
-            r"glLogicOp\b", r"glGetTexImage\b", r"glDrawArraysIndirect|glMultiDraw\w*Indirect",
+            r"glTexImage3D|glTexStorage[123]D|glTexSubImage3D",
+            r"glDrawBuffers\b",
+            r"glFenceSync|glClientWaitSync",
+            r"GL_GEOMETRY_SHADER|GL_COMPUTE_SHADER|GL_TESS_",
+            r"glDispatchCompute",
+            r"glBeginTransformFeedback",
+            r"glBindFragDataLocation",
+            r"glVertexAttribIPointer",
+            r"glPrimitiveRestartIndex|GL_PRIMITIVE_RESTART",
+            r"glLogicOp\b",
+            r"glGetTexImage\b",
+            r"glDrawArraysIndirect|glMultiDraw\w*Indirect",
         ],
     ),
     "GLSL needing a rewrite for GLSL ES 1.00": (
         "medium",
         "vitaGL translates ES-1.00-style GLSL; rewrite #version 130+ shaders: attribute/varying, texture2D, gl_FragColor, no layout()",
-        [r"#\s*version\s+(1[3-9]\d|[2-4]\d\d)", r"\blayout\s*\(", r"\btexelFetch\b", r"\btextureSize\b", r"\bflat\s+(in|out)\b", r"\buniform\s+\w*Block\b|\bstd140\b"],
+        [
+            r"#\s*version\s+(1[3-9]\d|[2-4]\d\d)",
+            r"\blayout\s*\(",
+            r"\btexelFetch\b",
+            r"\btextureSize\b",
+            r"\bflat\s+(in|out)\b",
+            r"\buniform\s+\w*Block\b|\bstd140\b",
+        ],
     ),
     "fixed-function / legacy GL (works in vitaGL, check flags)": (
         "info",
@@ -101,17 +142,33 @@ RULES: dict[str, tuple[str, str, list[str]]] = {
     "Java: desktop-only APIs TeaVM cannot translate": (
         "high",
         "replace or stub (classpath shadowing): AWT/Swing/ImageIO (write a plain-Java image decoder), NIO channels/mmap, JNI/System.loadLibrary",
-        [r"\bjava\.awt\.|\bjavax\.swing\.|\bjavax\.imageio\.", r"\bBufferedImage\b|\bImageIO\.", r"\bFileChannel\b|\bMappedByteBuffer\b|\bjava\.nio\.channels\.", r"\bSystem\.loadLibrary\s*\("],
+        [
+            r"\bjava\.awt\.|\bjavax\.swing\.|\bjavax\.imageio\.",
+            r"\bBufferedImage\b|\bImageIO\.",
+            r"\bFileChannel\b|\bMappedByteBuffer\b|\bjava\.nio\.channels\.",
+            r"\bSystem\.loadLibrary\s*\(",
+        ],
     ),
     "Java: reflection (needs TeaVM 0.16 + reflection policy)": (
         "medium",
         "TeaVM 0.16 C supports method/constructor reflection, forName, newInstance, Proxy if the reflection policy keeps the classes; 0.15 had fields only (use factories)",
-        [r"\bClass\.forName\s*\(", r"\.newInstance\s*\(", r"\.getDeclared(Method|Constructor)s?\s*\(|\.getMethods?\s*\(", r"\bjava\.lang\.reflect\.(Method|Constructor|Proxy)\b", r"\bcom\.thoughtworks\.xstream\b|\bcom\.esotericsoftware\.kryo\b"],
+        [
+            r"\bClass\.forName\s*\(",
+            r"\.newInstance\s*\(",
+            r"\.getDeclared(Method|Constructor)s?\s*\(|\.getMethods?\s*\(",
+            r"\bjava\.lang\.reflect\.(Method|Constructor|Proxy)\b",
+            r"\bcom\.thoughtworks\.xstream\b|\bcom\.esotericsoftware\.kryo\b",
+        ],
     ),
     "Java: runtime class loading / bytecode generation": (
         "high",
         "no JIT and no class loading under AOT: remove ASM/ByteBuddy/cglib, defineClass, script engines (Nashorn, Rhino, Groovy, LuaJ JSE compiler)",
-        [r"\bdefineClass\s*\(", r"\bnew\s+URLClassLoader\b", r"\borg\.objectweb\.asm\b|\bnet\.bytebuddy\b|\bnet\.sf\.cglib\b|\bjavassist\b", r"\bjavax\.script\.|\borg\.mozilla\.javascript\b|\bgroovy\.lang\b"],
+        [
+            r"\bdefineClass\s*\(",
+            r"\bnew\s+URLClassLoader\b",
+            r"\borg\.objectweb\.asm\b|\bnet\.bytebuddy\b|\bnet\.sf\.cglib\b|\bjavassist\b",
+            r"\bjavax\.script\.|\borg\.mozilla\.javascript\b|\bgroovy\.lang\b",
+        ],
     ),
     "Java: GL 3 through libGDX": (
         "high",

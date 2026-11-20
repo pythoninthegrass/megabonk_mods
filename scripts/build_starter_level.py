@@ -22,7 +22,9 @@ def prop(catalog: str, rotation_x: float = 270) -> str:
     return catalog
 
 
-FOREST, DESERT, DUNGEON, GRAVEYARD, HELL = (f"{biome}/stage0/randomMapObjects/" for biome in ("forest", "desert", "dungeon", "graveyard", "hell"))
+FOREST, DESERT, DUNGEON, GRAVEYARD, HELL = (
+    f"{biome}/stage0/randomMapObjects/" for biome in ("forest", "desert", "dungeon", "graveyard", "hell")
+)
 TREE, LOG, BUSH, ROCK = prop(FOREST + "0/0"), prop(FOREST + "1/0"), prop(FOREST + "2/0"), prop(FOREST + "3/1", 0)
 RUIN = "forest/stage0/stageTilePrefabs/flat/"
 for _i in range(3):
@@ -41,39 +43,95 @@ HELL_WALLS = [prop(HELL + f"7/{i}") for i in range(4)]
 # Per-zone scatter as (catalog, scale); a scale is the prefab's native scale times a factor chosen so the prop reads at this level's cell size.
 SCATTER = {
     "forest": [(TREE, 2.5), (BUSH, 1.8), (ROCK, 1.8)],
-    "desert": [(prop(DESERT + "3/0"), 3.5), (prop(DESERT + "3/1"), 3.5), (prop(DESERT + "5/0"), 3), (prop(DESERT + "5/1"), 3), (prop(DESERT + "6/0"), 3)]
+    "desert": [
+        (prop(DESERT + "3/0"), 3.5),
+        (prop(DESERT + "3/1"), 3.5),
+        (prop(DESERT + "5/0"), 3),
+        (prop(DESERT + "5/1"), 3),
+        (prop(DESERT + "6/0"), 3),
+    ]
     + [(prop(DESERT + f"2/{i}"), 4) for i in (0, 1, 2, 3, 5, 6)],
-    "dungeon": [(prop(DUNGEON + "0/0"), 4), (prop(DUNGEON + "0/1"), 4), (prop(DUNGEON + "1/0"), 4), (prop(DUNGEON + "2/0"), 4), (prop(DUNGEON + "2/1", 0), 6)]
+    "dungeon": [
+        (prop(DUNGEON + "0/0"), 4),
+        (prop(DUNGEON + "0/1"), 4),
+        (prop(DUNGEON + "1/0"), 4),
+        (prop(DUNGEON + "2/0"), 4),
+        (prop(DUNGEON + "2/1", 0), 6),
+    ]
     + [(prop(DUNGEON + "3/0"), 3.5), (prop(DUNGEON + "3/0"), 3.5), (prop(DUNGEON + "4/0", 0), 3)],
     "graveyard": [(prop(GRAVEYARD + f"0/{i}"), 2.5) for i in range(3)]
-    + [(prop("graveyard/randomObjectsOverride/5/0"), 2.5), (prop("graveyard/randomObjectsOverride/5/0"), 2.5), (prop("graveyard/randomObjectsOverride/1/0"), 2.5),
-       (prop("graveyard/randomObjectsOverride/2/0"), 2.2), (prop("graveyard/randomObjectsOverride/3/0"), 2.5), (prop("graveyard/randomObjectsOverride/4/0"), 2.5),
-       (prop(GRAVEYARD + "4/0"), 2), (prop(GRAVEYARD + "6/0"), 2), (prop(GRAVEYARD + "6/1"), 2), (prop(GRAVEYARD + "7/0"), 2.5), (prop(GRAVEYARD + "5/0"), 2.5)],
+    + [
+        (prop("graveyard/randomObjectsOverride/5/0"), 2.5),
+        (prop("graveyard/randomObjectsOverride/5/0"), 2.5),
+        (prop("graveyard/randomObjectsOverride/1/0"), 2.5),
+        (prop("graveyard/randomObjectsOverride/2/0"), 2.2),
+        (prop("graveyard/randomObjectsOverride/3/0"), 2.5),
+        (prop("graveyard/randomObjectsOverride/4/0"), 2.5),
+        (prop(GRAVEYARD + "4/0"), 2),
+        (prop(GRAVEYARD + "6/0"), 2),
+        (prop(GRAVEYARD + "6/1"), 2),
+        (prop(GRAVEYARD + "7/0"), 2.5),
+        (prop(GRAVEYARD + "5/0"), 2.5),
+    ],
     "hell": [(prop(HELL + f"2/{i}", 0), 4) for i in (0, 1, 2, 3, 4, 5)]
-    + [(FIRE, 3.5), (FIRE, 3.5)] + [(prop(HELL + f"4/{i}"), 5) for i in range(3)] + [(prop(HELL + f"5/{i}"), 5) for i in range(2)] + [(prop(HELL + "6/0"), 5)]
+    + [(FIRE, 3.5), (FIRE, 3.5)]
+    + [(prop(HELL + f"4/{i}"), 5) for i in range(3)]
+    + [(prop(HELL + f"5/{i}"), 5) for i in range(2)]
+    + [(prop(HELL + "6/0"), 5)]
     + [(prop(HELL + f"6/{i}"), 6) for i in (1, 2, 3)],
 }
 # Each zone's density per interior cell; the map's perimeter cells always get two props so the island is framed.
 DENSITY = {"forest": 0.4, "desert": 0.9, "dungeon": 1.0, "graveyard": 1.0, "hell": 1.0}
 # The first prop on each perimeter cell, as (catalog, scale).
-EDGE_LEAD = {"forest": (TREE, 2.5), "desert": (DESERT + "5/0", 3), "dungeon": (DUNGEON + "4/0", 3), "graveyard": (GRAVEYARD + "0/0", 2.5), "hell": (HELL + "4/0", 5)}
+EDGE_LEAD = {
+    "forest": (TREE, 2.5),
+    "desert": (DESERT + "5/0", 3),
+    "dungeon": (DUNGEON + "4/0", 3),
+    "graveyard": (GRAVEYARD + "0/0", 2.5),
+    "hell": (HELL + "4/0", 5),
+}
 # Ramp cells: (height at the low edge, uphill side).
 RAMPS = {
-    (5, 4): (0, "west"), (4, 5): (1, "north"), (5, 8): (2, "east"), (8, 7): (3, "south"),
-    (2, 2): (-1, "east"), (1, 4): (-1, "north"), (1, 8): (0, "north"), (3, 8): (0, "north"),
-    (9, 2): (0, "east"), (10, 7): (1, "north"), (9, 10): (1, "east"), (11, 11): (2, "east"),
-    (11, 5): (0, "north"), (12, 5): (0, "north"),
-    (11, 3): (0, "west"), (12, 1): (0, "south"),
+    (5, 4): (0, "west"),
+    (4, 5): (1, "north"),
+    (5, 8): (2, "east"),
+    (8, 7): (3, "south"),
+    (2, 2): (-1, "east"),
+    (1, 4): (-1, "north"),
+    (1, 8): (0, "north"),
+    (3, 8): (0, "north"),
+    (9, 2): (0, "east"),
+    (10, 7): (1, "north"),
+    (9, 10): (1, "east"),
+    (11, 11): (2, "east"),
+    (11, 5): (0, "north"),
+    (12, 5): (0, "north"),
+    (11, 3): (0, "west"),
+    (12, 1): (0, "south"),
 }
 # Flat cells of the hill's spiral ring; the summit sits inside it.
 HILL = {
-    (4, 4): 1, (6, 4): 0, (7, 4): 0, (8, 4): 0, (4, 6): 2, (4, 7): 2, (4, 8): 2,
-    (6, 8): 3, (7, 8): 3, (8, 8): 3, (8, 6): 4, (8, 5): 4,
+    (4, 4): 1,
+    (6, 4): 0,
+    (7, 4): 0,
+    (8, 4): 0,
+    (4, 6): 2,
+    (4, 7): 2,
+    (4, 8): 2,
+    (6, 8): 3,
+    (7, 8): 3,
+    (8, 8): 3,
+    (8, 6): 4,
+    (8, 5): 4,
 }
 SUMMIT_CELLS = [(x, z) for x in (5, 6, 7) for z in (5, 6, 7)]
 DISTRICTS = {
-    "spawn meadow": (3, 9, 0, 3), "west gully": (0, 2, 0, 4), "west ridge": (0, 2, 5, 11),
-    "north ruins": (3, 9, 9, 11), "east highland": (10, 12, 8, 11), "east pen": (10, 12, 0, 7),
+    "spawn meadow": (3, 9, 0, 3),
+    "west gully": (0, 2, 0, 4),
+    "west ridge": (0, 2, 5, 11),
+    "north ruins": (3, 9, 9, 11),
+    "east highland": (10, 12, 8, 11),
+    "east pen": (10, 12, 0, 7),
     "spiral": (4, 8, 4, 8),
 }
 ZONE_DISTRICTS = {"graveyard": "west gully", "dungeon": "north ruins", "hell": "east pen", "desert": "east highland"}
@@ -88,12 +146,33 @@ MINIBOSS_POOL = ["MinibossPig", "MinibossGolem", "MinibossGolemSand", "MinibossS
 CHESTS = [(0, 0), (0, 11), (6, 11), (12, 11), (12, 0), (4, 7), (12, 9), (8, 1)]
 FREE_CHEST = (4, 1)
 SHRINE_CELLS = [
-    (8, 3), (3, 3), (4, 0), (9, 0),
-    (0, 2), (1, 0), (0, 4), (2, 3), (1, 2),
-    (0, 6), (2, 6), (1, 10), (2, 11), (0, 8),
-    (4, 10), (8, 10), (6, 9), (8, 11),
-    (10, 9), (10, 11), (11, 8), (12, 10),
-    (10, 0), (10, 4), (10, 6), (11, 6), (12, 7),
+    (8, 3),
+    (3, 3),
+    (4, 0),
+    (9, 0),
+    (0, 2),
+    (1, 0),
+    (0, 4),
+    (2, 3),
+    (1, 2),
+    (0, 6),
+    (2, 6),
+    (1, 10),
+    (2, 11),
+    (0, 8),
+    (4, 10),
+    (8, 10),
+    (6, 9),
+    (8, 11),
+    (10, 9),
+    (10, 11),
+    (11, 8),
+    (12, 10),
+    (10, 0),
+    (10, 4),
+    (10, 6),
+    (11, 6),
+    (12, 7),
 ]
 GUARANTEED_CHARGE_SHRINES = 5
 MOAI_RANGE = [3, 5]
@@ -118,7 +197,12 @@ def height(x: int, z: int) -> int:
 
 def meadow_rect() -> dict:
     x0, x1, z0, z1 = DISTRICTS["spawn meadow"]
-    return {"minX": 40 * (x0 - CENTER) - 20, "maxX": 40 * (x1 - CENTER) + 20, "minZ": 40 * (z0 - CENTER) - 20, "maxZ": 40 * (z1 - CENTER) + 20}
+    return {
+        "minX": 40 * (x0 - CENTER) - 20,
+        "maxX": 40 * (x1 - CENTER) + 20,
+        "minZ": 40 * (z0 - CENTER) - 20,
+        "maxZ": 40 * (z1 - CENTER) + 20,
+    }
 
 
 def point(x: int, z: int, dx: float = 0, dz: float = 0, lift: float = 0) -> list[float]:
@@ -196,7 +280,16 @@ def build_edits(spawn: list[float], boss: list[float], shrine_spots: list[list[f
 
     for x in range(WIDTH):
         for z in range(DEPTH):
-            if (x, z) in RAMPS or (x, z) == (10, 1) or 4 <= x <= 8 and 4 <= z <= 8 or 4 <= x <= 8 and z <= 3 or COURT_CELLS[0] <= x <= COURT_CELLS[1] and COURT_CELLS[2] <= z <= COURT_CELLS[3]:
+            if (
+                (x, z) in RAMPS
+                or (x, z) == (10, 1)
+                or 4 <= x <= 8
+                and 4 <= z <= 8
+                or 4 <= x <= 8
+                and z <= 3
+                or COURT_CELLS[0] <= x <= COURT_CELLS[1]
+                and COURT_CELLS[2] <= z <= COURT_CELLS[3]
+            ):
                 continue
             zone = zone_of(x, z)
             edge = x in (0, WIDTH - 1) or z in (0, DEPTH - 1)
@@ -232,14 +325,20 @@ def build_level() -> dict:
         "title": "Bramblecrown Hill",
         "description": "A bramble-ringed hill with a ruined watchpost on its crown. Follow the fence line to the foot of the hill and climb the spiral path.",
         "mapDescription": "Five visual districts around one tall hill, with Forest gameplay throughout. Explore compact loops for chests and shrines, a walled lava court, or the spiral to the summit. The seed fixes custom shrine plans and boss picks, not combat or loot. No extra packs needed.",
-        "baseline": "none", "map": 1, "stageIndex": 0, "tier": 0, "seed": 0, "packs": {},
+        "baseline": "none",
+        "map": 1,
+        "stageIndex": 0,
+        "tier": 0,
+        "seed": 0,
+        "packs": {},
         "fallDamageFreeHeight": 40,
         "grid": {"width": WIDTH, "depth": DEPTH, "cells": cells},
         "spawn": {"position": spawn, "rotation": [0, 0, 0]},
         "bossSpawner": {"position": boss, "rotation": [0, 180, 0]},
         "shrineSpots": shrine_spots,
         "guaranteedShrineKinds": ["charge"] * GUARANTEED_CHARGE_SHRINES,
-        "extraShrines": 2, "extraShrinesMax": 3,
+        "extraShrines": 2,
+        "extraShrinesMax": 3,
         "extraShrineKinds": ["charge", "magnet", "greed"],
         "shrineKindRanges": {"moai": MOAI_RANGE, "shadyGuy": SHADY_GUY_RANGE},
         "shrineGuarantees": [{"kind": kind, **meadow_rect(), "outside": True} for kind in ("moai", "shadyGuy")],
@@ -251,7 +350,10 @@ def build_level() -> dict:
         ]
         + [dict(zip(("material", "minX", "maxX", "minZ", "maxZ"), ("m_crypt_Floor", *COURT_CELLS), strict=True))]
         + [dict(zip(("material", "minX", "maxX", "minZ", "maxZ"), ("LavaCrypt", *band), strict=True)) for band in LAVA_BANDS],
-        "lavaZones": [dict(zip(("minX", "maxX", "minZ", "maxZ", "damage", "interval"), (*band, LAVA_DAMAGE, LAVA_INTERVAL), strict=True)) for band in LAVA_BANDS],
+        "lavaZones": [
+            dict(zip(("minX", "maxX", "minZ", "maxZ", "damage", "interval"), (*band, LAVA_DAMAGE, LAVA_INTERVAL), strict=True))
+            for band in LAVA_BANDS
+        ],
         "bossPool": BOSS_POOL,
         "minibossPool": MINIBOSS_POOL,
         "edits": build_edits(spawn, boss, shrine_spots),
@@ -265,15 +367,47 @@ def artwork() -> Image.Image:
     draw.polygon([(0, 270), (170, 180), (340, 270), (570, 200), (850, 290), (1080, 205), (1080, 720), (0, 720)], fill="#305c56")
     draw.polygon([(0, 440), (260, 340), (500, 430), (780, 330), (1080, 420), (1080, 720), (0, 720)], fill="#548267")
     draw.polygon([(0, 560), (260, 480), (500, 550), (760, 470), (1080, 530), (1080, 720), (0, 720)], fill="#80a375")
-    tiers = [(120, 640, 960, 620, "#4d7a60"), (210, 560, 870, 540, "#5f9068"), (300, 480, 780, 460, "#72a574"), (390, 400, 690, 380, "#86b67e")]
+    tiers = [
+        (120, 640, 960, 620, "#4d7a60"),
+        (210, 560, 870, 540, "#5f9068"),
+        (300, 480, 780, 460, "#72a574"),
+        (390, 400, 690, 380, "#86b67e"),
+    ]
     for left, base, right, _, colour in tiers:
         top = base - 95
         draw.polygon([(left, base), (left + 55, top), (right - 55, top), (right, base)], fill=colour)
         draw.polygon([(left, base), (left + 55, top), (left + 55, top + 22), (left + 18, base)], fill="#3b6450")
     draw.polygon([(465, 305), (615, 305), (640, 400), (440, 400)], fill="#9bc58a")
-    path = [(540, 700), (540, 640), (360, 600), (330, 560), (700, 540), (760, 470), (420, 455), (400, 400), (650, 385), (640, 330)]
+    path = [
+        (540, 700),
+        (540, 640),
+        (360, 600),
+        (330, 560),
+        (700, 540),
+        (760, 470),
+        (420, 455),
+        (400, 400),
+        (650, 385),
+        (640, 330),
+    ]
     draw.line(path, fill="#d0c795", width=14, joint="curve")
-    draw.polygon([(505, 305), (505, 215), (518, 215), (518, 232), (534, 232), (534, 210), (550, 210), (550, 232), (568, 232), (568, 222), (582, 222), (582, 305)], fill="#bec6b0")
+    draw.polygon(
+        [
+            (505, 305),
+            (505, 215),
+            (518, 215),
+            (518, 232),
+            (534, 232),
+            (534, 210),
+            (550, 210),
+            (550, 232),
+            (568, 232),
+            (568, 222),
+            (582, 222),
+            (582, 305),
+        ],
+        fill="#bec6b0",
+    )
     draw.polygon([(550, 232), (568, 232), (568, 222), (582, 222), (582, 305), (550, 305)], fill="#899f8d")
     draw.rounded_rectangle((525, 262, 546, 304), radius=10, fill="#24483f")
     draw.polygon([(790, 650), (810, 570), (950, 570), (970, 650)], fill="#808b83")
@@ -283,8 +417,28 @@ def artwork() -> Image.Image:
     draw.line([(970, 650), (950, 570), (950, 548)], fill="#404c4b", width=12)
     for x, y, scale in [(70, 430, 1.4), (200, 470, 1), (990, 480, 1.3), (1050, 410, 1.6), (90, 670, 1.8), (1000, 680, 1.7)]:
         draw.rectangle((x - 8 * scale, y - 30 * scale, x + 8 * scale, y + 65 * scale), fill="#345244")
-        draw.polygon([(x, y - 150 * scale), (x - 65 * scale, y - 15 * scale), (x - 38 * scale, y - 24 * scale), (x - 82 * scale, y + 32 * scale), (x + 75 * scale, y + 32 * scale), (x + 38 * scale, y - 25 * scale), (x + 58 * scale, y - 15 * scale)], fill="#214f43")
-        draw.polygon([(x, y - 150 * scale), (x, y + 32 * scale), (x - 82 * scale, y + 32 * scale), (x - 38 * scale, y - 24 * scale), (x - 65 * scale, y - 15 * scale)], fill="#386b51")
+        draw.polygon(
+            [
+                (x, y - 150 * scale),
+                (x - 65 * scale, y - 15 * scale),
+                (x - 38 * scale, y - 24 * scale),
+                (x - 82 * scale, y + 32 * scale),
+                (x + 75 * scale, y + 32 * scale),
+                (x + 38 * scale, y - 25 * scale),
+                (x + 58 * scale, y - 15 * scale),
+            ],
+            fill="#214f43",
+        )
+        draw.polygon(
+            [
+                (x, y - 150 * scale),
+                (x, y + 32 * scale),
+                (x - 82 * scale, y + 32 * scale),
+                (x - 38 * scale, y - 24 * scale),
+                (x - 65 * scale, y - 15 * scale),
+            ],
+            fill="#386b51",
+        )
     draw.rectangle((0, 0, 1080, 140), fill="#102d31")
     draw.text((54, 31), "BRAMBLECROWN HILL", font=ImageFont.load_default(size=56), fill="#f3edcf")
     draw.text((57, 100), "MEADOWS / RIDGES / ONE SPIRAL PATH TO THE SUMMIT", font=ImageFont.load_default(size=18), fill="#a3c5ac")

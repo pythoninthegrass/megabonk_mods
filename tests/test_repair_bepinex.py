@@ -179,7 +179,8 @@ def test_relative_doorstop_config_is_left_alone(game, pack):
 
 def test_absolute_doorstop_pointing_elsewhere_is_left_and_reported(game, pack):
     (game / "doorstop_config.ini").write_text(
-        "[General]\ntarget_assembly=C:\\shared\\BepInExPack\\core\\BepInEx.Unity.IL2CPP.dll\n", encoding="utf-8")
+        "[General]\ntarget_assembly=C:\\shared\\BepInExPack\\core\\BepInEx.Unity.IL2CPP.dll\n", encoding="utf-8"
+    )
 
     actions = repair.repair(game, pack)
 

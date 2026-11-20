@@ -209,9 +209,7 @@ def test_an_exception_specification_is_rejected():
 
 
 def test_a_catch_all_is_accepted_when_the_lsda_tables_are_given():
-    table = lu.build_entries(
-        frames_for((0x1000, PROLOGUE, 0x40)), {0x1000}, PERSONALITY, lsda_tables=[(typed_table(0), 0x40)]
-    )
+    table = lu.build_entries(frames_for((0x1000, PROLOGUE, 0x40)), {0x1000}, PERSONALITY, lsda_tables=[(typed_table(0), 0x40)])
     assert table.problems == []
     assert [e.pc_begin for e in table.entries] == [0x1000]
 
@@ -230,7 +228,9 @@ def test_filter_report_counts_bodies_by_the_catch_clauses_they_need():
     tables = [at(0, 1, 0), at(0, 1, 0x100), at(0, -1, 0x100)]
     data = b"".join(tables)
     offsets = [0x40, 0x40 + len(tables[0]), 0x40 + len(tables[0]) + len(tables[1])]
-    frames = frames_for((0x1000, PROLOGUE, offsets[0]), (0x2000, PROLOGUE, offsets[1]), (0x3000, PROLOGUE, offsets[2]), (0x4000, PROLOGUE, None))
+    frames = frames_for(
+        (0x1000, PROLOGUE, offsets[0]), (0x2000, PROLOGUE, offsets[1]), (0x3000, PROLOGUE, offsets[2]), (0x4000, PROLOGUE, None)
+    )
     report = lu.filter_report(frames, data, 0x40, 0x1000, 0x5000)
     assert report == {"with_lsda": 3, "catch_all_only": 1, "typed_catch": 1, "exception_spec": 1, "unreadable": 0}
 

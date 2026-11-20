@@ -53,8 +53,13 @@ class Builder:
         return self
 
 
-def cie(augmentation: str, lsda_encoding: int | None, pointer_encoding: int,
-        personality: int = 0x11223344, personality_encoding: int = INDIRECT_PCREL_SDATA4) -> bytes:
+def cie(
+    augmentation: str,
+    lsda_encoding: int | None,
+    pointer_encoding: int,
+    personality: int = 0x11223344,
+    personality_encoding: int = INDIRECT_PCREL_SDATA4,
+) -> bytes:
     """A version 1 CIE whose augmentation data follows the order of the augmentation string."""
     body = Builder().u8(1).raw(augmentation.encode() + b"\0").uleb(1).u8(0x78).u8(16)
     aug = bytearray()
@@ -68,8 +73,7 @@ def cie(augmentation: str, lsda_encoding: int | None, pointer_encoding: int,
     return struct.pack("<I", len(body.bytes) + 4) + struct.pack("<I", 0) + bytes(body.bytes)
 
 
-def fde(cie_at: int, entry_at: int, pc_range: int, lsda: int | None,
-        lsda_encoding: int = UDATA4) -> bytes:
+def fde(cie_at: int, entry_at: int, pc_range: int, lsda: int | None, lsda_encoding: int = UDATA4) -> bytes:
     """An FDE with a pcrel code pointer of zero delta and, if any, one LSDA pointer field."""
     body = Builder().u32(entry_at + 4 - cie_at).s32(0).u32(pc_range)
     if lsda is None:
@@ -90,9 +94,16 @@ def entry_bytes(fields: int, start: int, length: int, pad: int, action: int) -> 
     return (out.uleb(action)).bytes
 
 
-def call_site_table(entries: list[tuple[int, int, int]], *, ttype: int = OMIT, ttype_offset: int = 0x40,
-                    lpstart: int = OMIT, action: int = 0, fields: int = ULEB128,
-                    terminated: bool = False) -> bytes:
+def call_site_table(
+    entries: list[tuple[int, int, int]],
+    *,
+    ttype: int = OMIT,
+    ttype_offset: int = 0x40,
+    lpstart: int = OMIT,
+    action: int = 0,
+    fields: int = ULEB128,
+    terminated: bool = False,
+) -> bytes:
     """A complete LSDA as libgcc writes it: two encodings and a TType offset, then the call-site
     encoding and length, then entries that each carry an action field and a final zero entry."""
     header = Builder().u8(lpstart)
@@ -131,9 +142,9 @@ def lsda_at(table: Builder, at: int, entries: list[tuple[int, int, int]], **kw) 
 TABLE = Builder()
 LSDA_ONE_PAD = lsda_at(TABLE, 0, [(4, 4, 0x20), (10, 4, 0)])
 LSDA_THREE_PADS = lsda_at(TABLE, 0x20, [(1, 4, 0x30), (8, 4, 0x34), (20, 4, 0x40)], ttype=0x02)
-LSDA_FIVE_PADS = lsda_at(TABLE, 0x40, [(i, 4, pad) for i, pad in
-                                       zip((2, 9, 16, 23, 30), (0x50, 0x58, 0x60, 0x68, 0x70))],
-                         lpstart=UDATA4)
+LSDA_FIVE_PADS = lsda_at(
+    TABLE, 0x40, [(i, 4, pad) for i, pad in zip((2, 9, 16, 23, 30), (0x50, 0x58, 0x60, 0x68, 0x70))], lpstart=UDATA4
+)
 LSDA_WIDE_FIELDS = lsda_at(TABLE, 0x80, [(4, 4, 0x60), (12, 4, 0x64)], fields=UDATA4)
 LSDA_REPEAT_PAD = lsda_at(TABLE, 0xC0, [(2, 4, 0x70), (9, 4, 0x70), (16, 4, 0x70)])
 LSDA_BYTES = bytes(TABLE.bytes)
@@ -250,8 +261,7 @@ def test_parse_frames_reads_pc_and_lsda():
     frames = ep.parse_frames(FRAMES, EH_BASE)
     assert len(frames) == 3
     assert frames[0] == ep.Frame(EH_BASE + FDE_NO_LSDA_AT + 8, 0x10, None, "zR", 0)
-    assert frames[1] == ep.Frame(EH_BASE + FDE_WITH_LSDA_AT + 8, 0x40, LSDA_ONE_PAD, "zPLR",
-                                 CIE_PLR_AT)
+    assert frames[1] == ep.Frame(EH_BASE + FDE_WITH_LSDA_AT + 8, 0x40, LSDA_ONE_PAD, "zPLR", CIE_PLR_AT)
     assert frames[2].lsda is None
 
 
@@ -351,8 +361,7 @@ def test_pad_buckets_name_the_ranges_the_report_uses():
 
 
 def test_bodies_keeps_only_frames_starting_in_the_section():
-    frames = [ep.Frame(0x100, 0x10, None, "zR", 0), ep.Frame(0x200, 0x10, 0x9000, "zPLR", 0),
-              ep.Frame(0x300, 0, None, "zR", 0)]
+    frames = [ep.Frame(0x100, 0x10, None, "zR", 0), ep.Frame(0x200, 0x10, 0x9000, "zPLR", 0), ep.Frame(0x300, 0, None, "zR", 0)]
     assert ep.bodies(frames, 0x200, 0x300) == [ep.Body(0x200, 0x10, 0x9000, "zPLR")]
 
 
@@ -377,8 +386,7 @@ def test_measure_breaks_lsda_presence_down_by_size_class():
 
 
 def test_measure_flags_an_lsda_pointer_outside_the_except_table():
-    got = ep.measure([ep.Body(0x100, 10, TABLE_BASE + len(LSDA_BYTES) + 8, "zPLR")],
-                     LSDA_BYTES, TABLE_BASE)
+    got = ep.measure([ep.Body(0x100, 10, TABLE_BASE + len(LSDA_BYTES) + 8, "zPLR")], LSDA_BYTES, TABLE_BASE)
     assert got["lsda_outside_table"] == 1
     assert got["with_lsda"] == 1
     assert got["pad_distribution"] == {"none": 0, "one": 0, "two-four": 0, "five-plus": 0}
@@ -386,8 +394,7 @@ def test_measure_flags_an_lsda_pointer_outside_the_except_table():
 
 def test_measure_counts_a_shared_lsda_once():
     """Two bodies can be described by one table, so tables and bodies are counted apart."""
-    got = ep.measure([ep.Body(0x100, 10, LSDA_ONE_PAD, "zPLR"),
-                      ep.Body(0x200, 20, LSDA_ONE_PAD, "zPLR")], LSDA_BYTES, TABLE_BASE)
+    got = ep.measure([ep.Body(0x100, 10, LSDA_ONE_PAD, "zPLR"), ep.Body(0x200, 20, LSDA_ONE_PAD, "zPLR")], LSDA_BYTES, TABLE_BASE)
     assert (got["with_lsda"], got["distinct_lsdas"]) == (2, 1)
 
 

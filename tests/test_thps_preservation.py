@@ -11,6 +11,7 @@ needs_extract = pytest.mark.skipif(
     not (b.NODES_PATH.exists() and b.OBJ_PATH.exists()), reason="needs the extraction under .tools/thps1/warehouse"
 )
 
+
 @needs_extract
 def test_shipped_warehouse_matches_preservation_baseline() -> None:
     assert p.check() == []
@@ -42,7 +43,8 @@ def test_inventory_hashes_bytes_and_reports_all_missing_files(tmp_path: Path) ->
 def test_required_pack_inventory_allows_additive_assets_but_not_removed_legacy_asset() -> None:
     manifest = {"id": "thps", "version": "2.0.21", "assets": ["Warehouse", "NewRamp"]}
     assert p.pack_inventory(manifest, ["bundle:thps/Warehouse", "bundle:thps/04_Superman"]) == {
-        "bundle:thps/Warehouse": True, "bundle:thps/04_Superman": "AudioClip"
+        "bundle:thps/Warehouse": True,
+        "bundle:thps/04_Superman": "AudioClip",
     }
     manifest["assets"].remove("Warehouse")
     assert p.pack_inventory(manifest, ["bundle:thps/Warehouse"])["bundle:thps/Warehouse"] is False
@@ -95,7 +97,9 @@ def test_refresh_refuses_missing_assets_or_generator_drift(tmp_path, monkeypatch
     baseline_path.write_text("do not overwrite")
     monkeypatch.setattr(p, "BASELINE_PATH", baseline_path)
     monkeypatch.setattr(sys, "argv", ["check", "--refresh"])
-    monkeypatch.setattr(p, "snapshot", lambda *args: {"level": "original", "assets": {"mesh": None if missing else {"sha256": "hash"}}})
+    monkeypatch.setattr(
+        p, "snapshot", lambda *args: {"level": "original", "assets": {"mesh": None if missing else {"sha256": "hash"}}}
+    )
     monkeypatch.setattr(p, "regenerate", lambda: generated)
     with pytest.raises(SystemExit) as error:
         p.main()

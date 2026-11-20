@@ -162,9 +162,7 @@ def _header(response, name: str) -> str | None:
 def _reject_page(url: str, response) -> None:
     content_type = (_header(response, "Content-Type") or "").split(";")[0].strip().lower()
     if content_type in PAGE_TYPES:
-        raise MissingAsset(
-            f"{url} served {content_type}, which is a login or captive-portal page rather than the archive"
-        )
+        raise MissingAsset(f"{url} served {content_type}, which is a login or captive-portal page rather than the archive")
 
 
 def _read_body(url: str, response, max_bytes: int) -> bytes:
@@ -198,9 +196,7 @@ def _stay_on_host(original: str, current: str, location: str | None, allowed_hos
     except ValueError as exc:
         raise MissingAsset(f"{original} redirects to {target}, which is not a usable URL: {exc}") from exc
     if hop != _host(original) and not _allowed_host(hop[0], allowed_hosts):
-        raise MissingAsset(
-            f"{original} redirects to {target} on a different host: the download stays on {_host(original)[0]}"
-        )
+        raise MissingAsset(f"{original} redirects to {target} on a different host: the download stays on {_host(original)[0]}")
     return target
 
 

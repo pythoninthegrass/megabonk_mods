@@ -462,7 +462,12 @@ def test_a_new_account_cannot_claim_admin_through_its_create_body(api, admin):
     status, _, user = api.json(
         "POST",
         "/api/collections/users/records",
-        {"email": f"sneaky-{uuid.uuid4().hex[:6]}@example.test", "password": "user-password-1", "passwordConfirm": "user-password-1", "admin": True},
+        {
+            "email": f"sneaky-{uuid.uuid4().hex[:6]}@example.test",
+            "password": "user-password-1",
+            "passwordConfirm": "user-password-1",
+            "admin": True,
+        },
         admin,
     )
     assert status == 200 and user["admin"] is False
@@ -821,7 +826,9 @@ def test_rate_limits_are_on_by_default_and_trust_the_forwarded_for_header(tmp_pa
 def test_default_rules_carry_their_limits(tmp_path):
     process, client = start_service(tmp_path, free_port(), {"PB_RATE_LIMITS_ENABLED": ""})
     try:
-        rules = {rule["label"]: (rule["maxRequests"], rule["duration"]) for rule in rate_limit_settings(client)["rateLimits"]["rules"]}
+        rules = {
+            rule["label"]: (rule["maxRequests"], rule["duration"]) for rule in rate_limit_settings(client)["rateLimits"]["rules"]
+        }
         assert rules == {
             "*:auth": (2, 3),
             "*:create": (20, 5),
@@ -864,7 +871,9 @@ LEVELS_LIST = "/api/collections/levels/records"
 
 
 def test_a_client_over_its_limit_gets_429(tmp_path):
-    process, client = start_service(tmp_path, free_port(), {"PB_RATE_LIMITS_ENABLED": "true", "PB_RATE_LIMIT_RULES": f"{LEVELS_LIST} 3 60"})
+    process, client = start_service(
+        tmp_path, free_port(), {"PB_RATE_LIMITS_ENABLED": "true", "PB_RATE_LIMIT_RULES": f"{LEVELS_LIST} 3 60"}
+    )
     try:
         assert statuses(client, LEVELS_LIST, 5) == [200, 200, 200, 429, 429]
     finally:
@@ -872,7 +881,9 @@ def test_a_client_over_its_limit_gets_429(tmp_path):
 
 
 def test_each_forwarded_client_has_its_own_budget(tmp_path):
-    process, client = start_service(tmp_path, free_port(), {"PB_RATE_LIMITS_ENABLED": "true", "PB_RATE_LIMIT_RULES": f"{LEVELS_LIST} 2 60"})
+    process, client = start_service(
+        tmp_path, free_port(), {"PB_RATE_LIMITS_ENABLED": "true", "PB_RATE_LIMIT_RULES": f"{LEVELS_LIST} 2 60"}
+    )
     try:
         assert statuses(client, LEVELS_LIST, 3, {"X-Forwarded-For": "203.0.113.1"}) == [200, 200, 429]
         assert statuses(client, LEVELS_LIST, 2, {"X-Forwarded-For": "203.0.113.2"}) == [200, 200]
@@ -882,7 +893,9 @@ def test_each_forwarded_client_has_its_own_budget(tmp_path):
 
 def test_a_specific_rule_wins_over_a_prefix_rule_whatever_their_order(tmp_path):
     for index, rules in enumerate((f"/api/ 300 10, {LEVELS_LIST} 2 60", f"{LEVELS_LIST} 2 60, /api/ 300 10")):
-        process, client = start_service(tmp_path / str(index), free_port(), {"PB_RATE_LIMITS_ENABLED": "true", "PB_RATE_LIMIT_RULES": rules})
+        process, client = start_service(
+            tmp_path / str(index), free_port(), {"PB_RATE_LIMITS_ENABLED": "true", "PB_RATE_LIMIT_RULES": rules}
+        )
         try:
             assert statuses(client, LEVELS_LIST, 3) == [200, 200, 429], rules
             assert statuses(client, "/api/collections/users/auth-methods", 5) == [200] * 5, rules
@@ -891,7 +904,9 @@ def test_a_specific_rule_wins_over_a_prefix_rule_whatever_their_order(tmp_path):
 
 
 def test_superusers_are_never_rate_limited(tmp_path):
-    process, client = start_service(tmp_path, free_port(), {"PB_RATE_LIMITS_ENABLED": "true", "PB_RATE_LIMIT_RULES": "/api/settings 1 60"})
+    process, client = start_service(
+        tmp_path, free_port(), {"PB_RATE_LIMITS_ENABLED": "true", "PB_RATE_LIMIT_RULES": "/api/settings 1 60"}
+    )
     try:
         token = admin_token(client)
         assert [client.request("GET", "/api/settings", token)[0] for _ in range(3)] == [200, 200, 200]

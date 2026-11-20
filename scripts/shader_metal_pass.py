@@ -52,7 +52,15 @@ STAGES = ("glslang", "spirv", "metal")
 SKIP_NAMES = {"app.info", "boot.config", "RuntimeInitializeOnLoads.json", "ScriptingAssemblies.json"}
 TARGET_VERSION = "450 core"
 TOOL_TIMEOUT_SECONDS = 120
-STAGE_SUFFIX = {"vert": ".vert", "frag": ".frag", "geom": ".geom", "comp": ".comp", "hull": ".tesc", "domain": ".tese", "other": ".glsl"}
+STAGE_SUFFIX = {
+    "vert": ".vert",
+    "frag": ".frag",
+    "geom": ".geom",
+    "comp": ".comp",
+    "hull": ".tesc",
+    "domain": ".tese",
+    "other": ".glsl",
+}
 STAGE_FLAGS = {"vert": "vert", "frag": "frag", "geom": "geom", "comp": "comp", "hull": "tesc", "domain": "tese", "other": "vert"}
 GUARD_STAGES = {
     "VERTEX": "vert",
@@ -81,7 +89,10 @@ RULES: dict[str, tuple[tuple[str, re.Pattern[str]], ...]] = {
         ("version", re.compile(r"#version|Version unsupported|version .* not supported", re.I)),
         ("extension", re.compile(r"#extension|extension .*not supported|unsupported extension", re.I)),
         ("texture-sampling", re.compile(r"\b(texture[123]D\w*|textureCube\w*|shadow2D\w*|sampler[12]D\w*)\b", re.I)),
-        ("fixed-function-output", re.compile(r"\bgl_(FragColor|FragData|TexCoord|Vertex|Normal|FogFragCoord|ClipVertex|SecondaryColor)\b", re.I)),
+        (
+            "fixed-function-output",
+            re.compile(r"\bgl_(FragColor|FragData|TexCoord|Vertex|Normal|FogFragCoord|ClipVertex|SecondaryColor)\b", re.I),
+        ),
         ("entry-point", re.compile(r"entry point", re.I)),
         ("precision", re.compile(r"precision", re.I)),
         ("loose-uniform", re.compile(r"non-opaque uniform", re.I)),
@@ -183,7 +194,15 @@ def stage_for_program(program_type: str, source: str) -> str:
     if stage:
         return stage
     lowered = program_type.lower().replace("_", "")
-    for needle, candidate in (("vertex", "vert"), ("fragment", "frag"), ("pixel", "frag"), ("geometry", "geom"), ("compute", "comp"), ("hull", "hull"), ("domain", "domain")):
+    for needle, candidate in (
+        ("vertex", "vert"),
+        ("fragment", "frag"),
+        ("pixel", "frag"),
+        ("geometry", "geom"),
+        ("compute", "comp"),
+        ("hull", "hull"),
+        ("domain", "domain"),
+    ):
         if needle in lowered:
             return candidate
     return stage_from_source(source)
@@ -211,7 +230,19 @@ def classify(stage: str, diagnostic: str) -> str:
 def glslang_command(binary: str, source: str, target: str, stage: str, target_env: str = "opengl") -> list[str]:
     """glslangValidator argv: SPIR-V for one stage; opengl semantics accept the shipped loose uniforms."""
     head = [binary] + (["-V"] if target_env.startswith("vulkan") else [])
-    return [*head, "--target-env", target_env, "--auto-map-bindings", "--auto-map-locations", "-S", STAGE_FLAGS[stage], "--quiet", "-o", target, source]
+    return [
+        *head,
+        "--target-env",
+        target_env,
+        "--auto-map-bindings",
+        "--auto-map-locations",
+        "-S",
+        STAGE_FLAGS[stage],
+        "--quiet",
+        "-o",
+        target,
+        source,
+    ]
 
 
 def spirv_command(binary: str, source: str, target: str, msl_version: str | None = None) -> list[str]:
@@ -519,7 +550,9 @@ def shader_chunks(data_dir: Path, platform: int | None, stats: dict):
                 if platform is not None and chunk_platform != platform:
                     continue
                 try:
-                    raw = CompressionHelper.decompress_lz4(blob[offsets[index] : offsets[index] + lengths[index]], decompressed[index])
+                    raw = CompressionHelper.decompress_lz4(
+                        blob[offsets[index] : offsets[index] + lengths[index]], decompressed[index]
+                    )
                 except Exception:
                     stats["lz4_failures"] = stats.get("lz4_failures", 0) + 1
                     continue
@@ -531,7 +564,14 @@ def extract_programs(data_dir: Path, platform: int | None, normalize: bool) -> t
     """Reads every baked Shader and returns its GLSL programs plus extraction diagnostics."""
     programs: list[dict] = []
     seen: set[str] = set()
-    stats = {"shader_objects": 0, "chunks": 0, "glsl_chunks": 0, "shaders_with_glsl": 0, "programs_extracted": 0, "ids_collided": 0}
+    stats = {
+        "shader_objects": 0,
+        "chunks": 0,
+        "glsl_chunks": 0,
+        "shaders_with_glsl": 0,
+        "programs_extracted": 0,
+        "ids_collided": 0,
+    }
     shaders_with_glsl: set[str] = set()
     for shader, chunk_platform, raw in shader_chunks(data_dir, platform, stats):
         if not looks_like_glsl(raw):
@@ -609,7 +649,9 @@ def score(
 
     spirv_path = stem.with_suffix(".spv")
     if "glslang" in enabled:
-        glslang = partial(glslang_command, binaries["glslang"], target=str(spirv_path), stage=program["stage"], target_env=target_env)
+        glslang = partial(
+            glslang_command, binaries["glslang"], target=str(spirv_path), stage=program["stage"], target_env=target_env
+        )
         ok, diagnostic, output = run_tool(glslang(source=str(source_path)))
         if not ok and retry_extensions and "required extension not requested" in output:
             extensions = suggested_extensions(output)
@@ -667,19 +709,36 @@ def resolve_binaries(args: argparse.Namespace) -> dict[str, str]:
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="shader_metal_pass", description="Score GLSL to Metal translation failure rates for a native Linux build.")
+    parser = argparse.ArgumentParser(
+        prog="shader_metal_pass", description="Score GLSL to Metal translation failure rates for a native Linux build."
+    )
     parser.add_argument("build", help="native Linux build root, or its Megabonk_Data directory")
     parser.add_argument("--out", default=None, help="output directory (default: <repo>/.tools/shaders-metal)")
     parser.add_argument("--json", dest="json_path", default=None, help="summary path (default: <out>/summary.json)")
     parser.add_argument("--stages", default=",".join(STAGES), help="comma list of glslang,spirv,metal to run")
-    parser.add_argument("--platform", type=int, default=None, help="only read this platform chunk id (15 is the GLSL source chunk)")
+    parser.add_argument(
+        "--platform", type=int, default=None, help="only read this platform chunk id (15 is the GLSL source chunk)"
+    )
     parser.add_argument("--limit", type=int, default=None, help="score at most N programs (smoke runs)")
     parser.add_argument("--jobs", type=int, default=None, help="parallel compiler processes (default: 2x CPUs)")
-    parser.add_argument("--no-normalize", action="store_true", help="score the shipped GLSL verbatim instead of raising it to #version 450")
-    parser.add_argument("--glslang-target-env", choices=("opengl", "vulkan1.0"), default="opengl", help="glslang semantics; opengl keeps the shipped loose uniforms legal")
-    parser.add_argument("--msl-version", default="20100", help="spirv-cross MSL target (empty to omit; 2.1 unlocks multisampled array textures)")
-    parser.add_argument("--no-retry-extensions", action="store_true", help="do not re-ask glslang with the extensions its error names")
-    parser.add_argument("--no-compact-bindings", action="store_true", help="do not renumber the sparse bindings --auto-map-bindings produces")
+    parser.add_argument(
+        "--no-normalize", action="store_true", help="score the shipped GLSL verbatim instead of raising it to #version 450"
+    )
+    parser.add_argument(
+        "--glslang-target-env",
+        choices=("opengl", "vulkan1.0"),
+        default="opengl",
+        help="glslang semantics; opengl keeps the shipped loose uniforms legal",
+    )
+    parser.add_argument(
+        "--msl-version", default="20100", help="spirv-cross MSL target (empty to omit; 2.1 unlocks multisampled array textures)"
+    )
+    parser.add_argument(
+        "--no-retry-extensions", action="store_true", help="do not re-ask glslang with the extensions its error names"
+    )
+    parser.add_argument(
+        "--no-compact-bindings", action="store_true", help="do not renumber the sparse bindings --auto-map-bindings produces"
+    )
     parser.add_argument("--resume", action="store_true", help="reuse cached results for unchanged program sources")
     parser.add_argument("--fresh", action="store_true", help="delete the output directory before running")
     parser.add_argument("--glslang", default=None, help="glslangValidator binary override")
@@ -708,7 +767,10 @@ def main(argv: list[str] | None = None) -> int:
         if not programs:
             raise ShaderPassError(f"no GLSL programs found under {data_dir}; check --platform")
         write_sources(programs, out_dir)
-        write_manifest([{key: value for key, value in program.items() if not key.startswith("_")} for program in programs], out_dir / "manifest.json")
+        write_manifest(
+            [{key: value for key, value in program.items() if not key.startswith("_")} for program in programs],
+            out_dir / "manifest.json",
+        )
 
         cache_path = out_dir / "cache.jsonl"
         cached_keys = load_cache(cache_path) if args.resume else {}
@@ -721,20 +783,44 @@ def main(argv: list[str] | None = None) -> int:
             futures = {}
             for program in programs:
                 cached = cached_records.get(program["id"])
-                if cached and cached.get("source_key") == program["source_key"] and cached_keys.get(program["id"]) == program["source_key"]:
-                    results.append({key: cached.get(key) for key in ("id", "shader", "unit", "stage", "version", "platform", "source_bytes", "source_key", "source_path", "preprocess", "fixes", *STAGES)})
+                if (
+                    cached
+                    and cached.get("source_key") == program["source_key"]
+                    and cached_keys.get(program["id"]) == program["source_key"]
+                ):
+                    results.append(
+                        {
+                            key: cached.get(key)
+                            for key in (
+                                "id",
+                                "shader",
+                                "unit",
+                                "stage",
+                                "version",
+                                "platform",
+                                "source_bytes",
+                                "source_key",
+                                "source_path",
+                                "preprocess",
+                                "fixes",
+                                *STAGES,
+                            )
+                        }
+                    )
                     continue
-                futures[pool.submit(
-                    score,
-                    program,
-                    out_dir,
-                    binaries,
-                    enabled,
-                    args.glslang_target_env,
-                    args.msl_version or None,
-                    not args.no_retry_extensions,
-                    not args.no_compact_bindings,
-                )] = program
+                futures[
+                    pool.submit(
+                        score,
+                        program,
+                        out_dir,
+                        binaries,
+                        enabled,
+                        args.glslang_target_env,
+                        args.msl_version or None,
+                        not args.no_retry_extensions,
+                        not args.no_compact_bindings,
+                    )
+                ] = program
             for future in concurrent.futures.as_completed(futures):
                 program = futures[future]
                 try:

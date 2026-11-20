@@ -190,9 +190,7 @@ def test_verdicts_are_the_documented_set():
 
 
 def test_emitter_sites_calls_a_load_defined_target_a_tail_call():
-    assert lt.emitter_sites(load_jump_body(), SECTIONS) == [
-        {"a": 0x216_3007, "tail_call": True, "table": False}
-    ]
+    assert lt.emitter_sites(load_jump_body(), SECTIONS) == [{"a": 0x216_3007, "tail_call": True, "table": False}]
 
 
 def test_emitter_sites_honours_a_recovered_table_at_the_site():

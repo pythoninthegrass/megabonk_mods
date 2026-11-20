@@ -32,7 +32,10 @@ def legacy_paths() -> list[str]:
     extraction = ROOT / ".tools/thps1/warehouse"
     source = [extraction / name for name in ("warehouse.obj", "warehouse.mtl", "warehouse_nodes.json")]
     textures = sorted(extraction.glob("*.png"))
-    generated = [ROOT / PACK_ASSETS / name for name in ("Warehouse.prefab", "Warehouse.asset", "WarehouseCollision.asset", "04_Superman.mp3")]
+    generated = [
+        ROOT / PACK_ASSETS / name
+        for name in ("Warehouse.prefab", "Warehouse.asset", "WarehouseCollision.asset", "04_Superman.mp3")
+    ]
     generated += sorted((ROOT / PACK_ASSETS).glob("Warehouse_*.mat"))
     generated += sorted((ROOT / PACK_ASSETS / "WarehouseTextures").glob("*.png"))
     paths = source + textures + generated + [Path(str(path) + ".meta") for path in generated]
@@ -41,7 +44,9 @@ def legacy_paths() -> list[str]:
 
 
 def pack_inventory(manifest: dict, references: list[str]) -> dict:
-    return {ref: "AudioClip" if ref == "bundle:thps/04_Superman" else ref.split("/", 1)[1] in manifest["assets"] for ref in references}
+    return {
+        ref: "AudioClip" if ref == "bundle:thps/04_Superman" else ref.split("/", 1)[1] in manifest["assets"] for ref in references
+    }
 
 
 def snapshot(paths: list[str]) -> dict:
@@ -95,14 +100,23 @@ def differences(expected, actual, path: str = "") -> list[str]:
     if path.endswith("level"):
         import difflib
 
-        return [f"{path}: bytes changed\n" + "".join(difflib.unified_diff(expected.splitlines(keepends=True), actual.splitlines(keepends=True), fromfile="baseline", tofile=path))]
+        return [
+            f"{path}: bytes changed\n"
+            + "".join(
+                difflib.unified_diff(
+                    expected.splitlines(keepends=True), actual.splitlines(keepends=True), fromfile="baseline", tofile=path
+                )
+            )
+        ]
     return [f"{path}: {expected!r} -> {actual!r}"]
 
 
 def regenerate() -> str:
     with tempfile.TemporaryDirectory(prefix="thps-preservation-") as directory:
         out = Path(directory) / "thps.mblevel.json"
-        subprocess.run([sys.executable, str(ROOT / "scripts/build_thps_level.py"), str(out)], check=True, capture_output=True, text=True)
+        subprocess.run(
+            [sys.executable, str(ROOT / "scripts/build_thps_level.py"), str(out)], check=True, capture_output=True, text=True
+        )
         return out.read_bytes().decode("utf-8")
 
 

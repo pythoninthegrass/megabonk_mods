@@ -96,8 +96,10 @@ def launch_context_header(argv: list[str], env: dict[str, str]) -> str:
         tty = "none"
     interesting = sorted(name for name in env if name.startswith(WATCH_ENV_PREFIXES))
     pairs = " ".join(f"{name}={env[name]!r}" for name in interesting) or "(none)"
-    return (f"watch: launched pid={os.getpid()} ppid={os.getppid()} session={os.getsid(0)} cwd={os.getcwd()} tty={tty}\n"
-            f"watch: argv={' '.join(argv)}\nwatch: env {pairs}\n")
+    return (
+        f"watch: launched pid={os.getpid()} ppid={os.getppid()} session={os.getsid(0)} cwd={os.getcwd()} tty={tty}\n"
+        f"watch: argv={' '.join(argv)}\nwatch: env {pairs}\n"
+    )
 
 
 def watch_launch(log: Path, argv: list[str]) -> int:
@@ -129,9 +131,21 @@ def gui_job_label(launch: Launch) -> str:
 
 
 GUI_ENV_NAMES = {
-    "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "USER", "LOGNAME",
-    "MEGABONK_DEV", "MEGABONK_KILL_FLOOR_HEARTBEAT", "MEGABONK_CELL_LOG", "MEGABONK_RING_DIAG",
-    "MEGABONK_DEV_STAGE_OVERRIDE", "MEGABONK_DEV_TERRAIN_SEED", "MEGABONK_EVIDENCE_DIR",
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "USER",
+    "LOGNAME",
+    "MEGABONK_DEV",
+    "MEGABONK_KILL_FLOOR_HEARTBEAT",
+    "MEGABONK_CELL_LOG",
+    "MEGABONK_RING_DIAG",
+    "MEGABONK_DEV_STAGE_OVERRIDE",
+    "MEGABONK_DEV_TERRAIN_SEED",
+    "MEGABONK_EVIDENCE_DIR",
     "MEGABONK_STEAM_FAIL_INIT",
 }
 GUI_ENV_PREFIXES = ("WINE", "DOTNET_", "DYLD_", "MVK_", "DXVK_", "Steam")
@@ -168,7 +182,9 @@ def spawn_in_gui(launch: Launch, env: dict[str, str]) -> None:
         config = {
             "Label": label,
             "ProgramArguments": watcher_argv(launch) if launch.log else launch.argv,
-            "EnvironmentVariables": {key: value for key, value in env.items() if key in GUI_ENV_NAMES or key.startswith(GUI_ENV_PREFIXES)},
+            "EnvironmentVariables": {
+                key: value for key, value in env.items() if key in GUI_ENV_NAMES or key.startswith(GUI_ENV_PREFIXES)
+            },
             "RunAtLoad": True,
             "LimitLoadToSessionType": "Aqua",
             "StandardInPath": "/dev/null",

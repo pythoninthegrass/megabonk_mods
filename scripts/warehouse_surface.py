@@ -232,12 +232,23 @@ def _is_ridge(p: Vec, q: Vec, a: Face, b: Face, min_slope: float) -> bool:
 
 def _is_deck_lip(p: Vec, q: Vec, a: Face, b: Face, min_slope: float) -> bool:
     ramp, deck = (a, b) if _slope_degrees(a[0]) >= _slope_degrees(b[0]) else (b, a)
-    return _slope_degrees(ramp[0]) > min_slope and _slope_degrees(ramp[0]) < WALL_SLOPE and _slope_degrees(deck[0]) < FLAT_SLOPE and _below_edge(p, q, ramp[1]) and not _below_edge(p, q, deck[1])
+    return (
+        _slope_degrees(ramp[0]) > min_slope
+        and _slope_degrees(ramp[0]) < WALL_SLOPE
+        and _slope_degrees(deck[0]) < FLAT_SLOPE
+        and _below_edge(p, q, ramp[1])
+        and not _below_edge(p, q, deck[1])
+    )
 
 
 def _is_ledge_top(p: Vec, q: Vec, a: Face, b: Face, min_slope: float) -> bool:
     wall, deck = (a, b) if _slope_degrees(a[0]) >= _slope_degrees(b[0]) else (b, a)
-    return _slope_degrees(wall[0]) >= LEDGE_WALL_SLOPE and _slope_degrees(deck[0]) < FLAT_SLOPE and _below_edge(p, q, wall[1]) and not _below_edge(p, q, deck[1])
+    return (
+        _slope_degrees(wall[0]) >= LEDGE_WALL_SLOPE
+        and _slope_degrees(deck[0]) < FLAT_SLOPE
+        and _below_edge(p, q, wall[1])
+        and not _below_edge(p, q, deck[1])
+    )
 
 
 def _distinct_faces(faces: list[Face]) -> list[Face]:
@@ -259,7 +270,12 @@ def _edges_where(triangles: list[Triangle], max_grade: float, min_slope: float, 
     for (p, q), faces in shared.items():
         faces = _distinct_faces(faces)
         run = math.hypot(q[0] - p[0], q[2] - p[2])
-        if len(faces) == 2 and run >= 0.1 and abs(p[1] - q[1]) <= max_grade * run and any(test(p, q, *faces, min_slope) for test in tests):
+        if (
+            len(faces) == 2
+            and run >= 0.1
+            and abs(p[1] - q[1]) <= max_grade * run
+            and any(test(p, q, *faces, min_slope) for test in tests)
+        ):
             edges.append((p, q))
     return edges
 
@@ -282,12 +298,16 @@ def _merged(edges: list[tuple[Vec, Vec]], min_length: float) -> list[tuple[Vec, 
     return [r for r in runs if math.dist(*r) >= min_length]
 
 
-def ridge_runs(triangles: list[Triangle], min_length: float = 2.0, min_slope: float = 20.0, max_grade: float = RIDGE_MAX_GRADE) -> list[tuple[Vec, Vec]]:
+def ridge_runs(
+    triangles: list[Triangle], min_length: float = 2.0, min_slope: float = 20.0, max_grade: float = RIDGE_MAX_GRADE
+) -> list[tuple[Vec, Vec]]:
     """Edges rising or falling at most `max_grade` where two faces fall away from each other, one at least `min_slope` degrees steep, merged into straight runs of at least `min_length`."""
     return _merged(_edges_where(triangles, max_grade, min_slope, (_is_ridge,)), min_length)
 
 
-def lip_runs(triangles: list[Triangle], min_length: float = 2.0, min_slope: float = 20.0, max_grade: float = RIDGE_MAX_GRADE) -> list[tuple[Vec, Vec]]:
+def lip_runs(
+    triangles: list[Triangle], min_length: float = 2.0, min_slope: float = 20.0, max_grade: float = RIDGE_MAX_GRADE
+) -> list[tuple[Vec, Vec]]:
     """Ridge edges plus the top of a ramp that meets a flat deck, merged into straight runs of at least `min_length`."""
     return _merged(_edges_where(triangles, max_grade, min_slope, (_is_ridge, _is_deck_lip)), min_length)
 
@@ -311,7 +331,9 @@ def unity_mesh_triangles(text: str) -> list[Triangle]:
     return [(positions[indices[i]], positions[indices[i + 1]], positions[indices[i + 2]]) for i in range(0, len(indices), 3)]
 
 
-def ground_gaps(triangles: list[Triangle], x_range: tuple[float, float], z_range: tuple[float, float], step: float) -> list[tuple[float, float]]:
+def ground_gaps(
+    triangles: list[Triangle], x_range: tuple[float, float], z_range: tuple[float, float], step: float
+) -> list[tuple[float, float]]:
     """Grid points over the x and z ranges (inclusive) that no upward-facing triangle covers, so something above them falls past the mesh."""
     nx = int((x_range[1] - x_range[0]) / step + EPSILON) + 1
     nz = int((z_range[1] - z_range[0]) / step + EPSILON) + 1

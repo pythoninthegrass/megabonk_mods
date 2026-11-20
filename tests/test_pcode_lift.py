@@ -20,8 +20,7 @@ requires_llvm = pytest.mark.skipif(not (LLVM / "opt").exists(), reason="LLVM too
 
 
 requires_rosetta = pytest.mark.skipif(
-    not (LLVM / "clang").exists()
-    or subprocess.run(["arch", "-x86_64", "/bin/echo"], capture_output=True).returncode != 0,
+    not (LLVM / "clang").exists() or subprocess.run(["arch", "-x86_64", "/bin/echo"], capture_output=True).returncode != 0,
     reason="needs the LLVM toolchain and an x86-64 runtime to compare against",
 )
 
@@ -215,7 +214,9 @@ def test_pshuflw_all_selectors_match_word_reference(tmp_path, src):
     obj = tmp_path / "pshuflw.o"
     proc = subprocess.run(
         [LLVM / "llc", "-O2", "-mtriple=arm64-apple-macosx", "-filetype=obj", "-o", obj, "-"],
-        input=ir, text=True, capture_output=True,
+        input=ir,
+        text=True,
+        capture_output=True,
     )
     assert proc.returncode == 0, proc.stderr
     assert compile_and_run(tmp_path, source, "arm64", [obj]).strip() == "ok 256"
@@ -325,7 +326,9 @@ def movmskpd_body(dst=REG_EAX, src=REG_XMM1):
 
 def pshufhw_body(selector=0x1B, src=REG_XMM0, start=0x1000):
     return body(
-        insn(start, 5, op("CALLOTHER", REG_XMM0, f"const,{PSHUFHW_ID},4", REG_XMM0, src, f"const,{selector:x},8", user="pshufhw")),
+        insn(
+            start, 5, op("CALLOTHER", REG_XMM0, f"const,{PSHUFHW_ID},4", REG_XMM0, src, f"const,{selector:x},8", user="pshufhw")
+        ),
         insn(start + 5, 1, op("RETURN", None, "register,288,8")),
         start=start,
     )
@@ -439,7 +442,10 @@ def test_packssdw_matches_the_real_instruction(tmp_path):
     assert result.holes == []
     assert verify(pl.module_for([result])).returncode == 0
     edges = [0x7FFFFFFF, 0x80000000, 32767, 32768, 0x7FFF8000, 0xFFFF8000, 0xFFFF7FFF, 1, 0xFFFFFFFF, 0x12345678, 0]
-    cases = [([edges[(i + j) % len(edges)] for j in range(4)], [edges[(i * 3 + j) % len(edges)] for j in range(4)]) for i in range(len(edges))]
+    cases = [
+        ([edges[(i + j) % len(edges)] for j in range(4)], [edges[(i * 3 + j) % len(edges)] for j in range(4)])
+        for i in range(len(edges))
+    ]
     cases.append(([0x7FFFFFFF] * 4, [0x80000000] * 4))
     cases.append(([0x80000000] * 4, [0x7FFFFFFF] * 4))
     lifted, native = compare_packed(
@@ -507,8 +513,7 @@ def test_movmskpd_matches_explicit_sign_bit_reference(tmp_path):
     result = pl.lift_body(movmskpd_body())
     assert result.holes == []
     rows = ",\n".join(
-        "{0x%016xULL, 0x%016xULL, %d}" % (low, high, (low >> 63) | ((high >> 63) << 1))
-        for low, high in movmskpd_cases()
+        "{0x%016xULL, 0x%016xULL, %d}" % (low, high, (low >> 63) | ((high >> 63) << 1)) for low, high in movmskpd_cases()
     )
     source = tmp_path / "movmskpd.c"
     source.write_text(
@@ -549,7 +554,9 @@ def test_packed_sse_ops_of_an_unexpected_width_stay_holes(dst, src):
 
 def test_pshufhw_with_a_non_constant_selector_stays_a_hole():
     fn = body(
-        insn(0x1000, 5, op("CALLOTHER", REG_XMM0, f"const,{PSHUFHW_ID},4", REG_XMM0, REG_XMM1, "register,12c0,8", user="pshufhw")),
+        insn(
+            0x1000, 5, op("CALLOTHER", REG_XMM0, f"const,{PSHUFHW_ID},4", REG_XMM0, REG_XMM1, "register,12c0,8", user="pshufhw")
+        ),
         insn(0x1005, 1, op("RETURN", None, "register,288,8")),
     )
     assert pl.lift_body(fn).holes == ["CALLOTHER:pshufhw"]
@@ -929,7 +936,9 @@ def test_distant_unique_temps_get_separate_slots():
 
 
 def test_packed_division_of_an_unexpected_width_stays_a_hole():
-    assert pl.lift_body(packed_body("divps", DIVPS_ID, dst="register,1200,32", src="register,1280,32")).holes == ["CALLOTHER:divps"]
+    assert pl.lift_body(packed_body("divps", DIVPS_ID, dst="register,1200,32", src="register,1280,32")).holes == [
+        "CALLOTHER:divps"
+    ]
     assert pl.lift_body(packed_body("divps", DIVPS_ID, src="register,1280,8")).holes == ["CALLOTHER:divps"]
 
 
@@ -980,8 +989,8 @@ def packed_minmax_reference(first, second, lanes, lane_bytes, lower):
     out = bytearray()
     for index in range(lanes):
         at = index * lane_bytes
-        a, = struct.unpack_from(fmt, first, at)
-        b, = struct.unpack_from(fmt, second, at)
+        (a,) = struct.unpack_from(fmt, first, at)
+        (b,) = struct.unpack_from(fmt, second, at)
         first_wins = (a < b) if lower else (a > b)
         out += first[at : at + lane_bytes] if first_wins else second[at : at + lane_bytes]
     return bytes(out)
@@ -1038,9 +1047,7 @@ int main(void) {{
 
 def packed_driver(cases, sse, extern, call, got):
     rows = ", ".join(f"0x{w:016x}" for case in cases for w in struct.unpack("<6Q", b"".join(case)))
-    return PACKED_DRIVER.format(
-        sse=sse, extern=extern, call=call, got=got, rows=rows, dst=XMM0_BYTES, src=XMM2_BYTES
-    )
+    return PACKED_DRIVER.format(sse=sse, extern=extern, call=call, got=got, rows=rows, dst=XMM0_BYTES, src=XMM2_BYTES)
 
 
 def run_packed_on(tmp_path, source, arch, extra=()):
@@ -1127,10 +1134,9 @@ def test_minps_in_the_shape_the_binary_uses_lifts_clean():
 
 
 def test_packed_minmax_of_an_unexpected_width_stays_a_hole():
-    assert (
-        pl.lift_body(packed_body("minps", MINPS_ID, dst="register,1200,32", src="register,1280,32")).holes
-        == ["CALLOTHER:minps"]
-    )
+    assert pl.lift_body(packed_body("minps", MINPS_ID, dst="register,1200,32", src="register,1280,32")).holes == [
+        "CALLOTHER:minps"
+    ]
     assert pl.lift_body(packed_body("maxps", MAXPS_ID, src="register,1280,8")).holes == ["CALLOTHER:maxps"]
 
 
@@ -1177,10 +1183,7 @@ def test_packed_minmax_returns_the_second_source_for_nan_and_signed_zero(tmp_pat
 
     The wanted bits are written out rather than derived: the second vector, payload and sign included.
     """
-    cases = [
-        (lanes_of([first] * 4), lanes_of([second] * 4), lanes_of([second] * 4))
-        for first, second in SECOND_SOURCE
-    ]
+    cases = [(lanes_of([first] * 4), lanes_of([second] * 4), lanes_of([second] * 4)) for first, second in SECOND_SOURCE]
     assert run_packed_lifted(tmp_path, pl.lift_body(packed_body(user, op_id)), cases) == []
 
 
@@ -1317,7 +1320,7 @@ def switch_body(*extra_ops):
         insn(0x1004, 2, op("BRANCHIND", None, "register,0,8")),
         insn(0x1006, 2, op("COPY", REG_EAX, "const,1,4"), op("RETURN", None, "register,288,8")),
         insn(0x1008, 2, op("COPY", REG_EAX, "const,2,4"), op("RETURN", None, "register,288,8")),
-        insn(0x100a, 5, *extra_ops) if extra_ops else insn(0x100a, 1, op("RETURN", None, "register,288,8")),
+        insn(0x100A, 5, *extra_ops) if extra_ops else insn(0x100A, 1, op("RETURN", None, "register,288,8")),
     )
     fn["jt"] = [{"at": 0x1004, "cases": [0x1006, 0x1008, 0x7000]}]
     return fn
@@ -1481,7 +1484,7 @@ def test_refused_branchind_reports_a_frame_verdict_and_the_table_bytes_together(
         insn(0x1003, 3, op("INT_ADD", "register,0,8", "register,0,8", "const,8,8")),
         insn(0x1006, 2, op("BRANCHIND", None, "register,0,8")),
         insn(0x1008, 2, op("COPY", REG_EAX, "const,1,4"), op("RETURN", None, "register,288,8")),
-        insn(0x100a, 2, op("COPY", REG_EAX, "const,2,4"), op("RETURN", None, "register,288,8")),
+        insn(0x100A, 2, op("COPY", REG_EAX, "const,2,4"), op("RETURN", None, "register,288,8")),
     )
     result = pl.lift_body(fn, [RODATA, TEXT], evidence=StubEvidence([0x1008, 0x100A]))
     assert result.unproven_branchind[0]["reason"] == "rsp not at entry value"
@@ -2079,32 +2082,93 @@ INDEF32, INDEF64 = -2147483648, -(2**63)
 SNAN64, QUIET_NAN_NEG = 0x7FF0000000000001, 0xFFF8000000000000
 
 # Every expectation below is truncation toward zero, not floor: -0.9999999 gives 0.
-DOUBLE_TO_I32 = cases(8, 4, [
-    (0.0, 0), (-0.0, 0), (1.5, 1), (-1.5, -1), (0.9999999, 0), (-0.9999999, 0),
-    (2147483647.0, 2147483647), (2147483647.5, 2147483647),
-    (-2147483648.0, INDEF32), (-2147483648.5, INDEF32), (-2147483649.0, INDEF32),
-    (2147483648.0, INDEF32), (1e18, INDEF32),
-    (float("inf"), INDEF32), (float("-inf"), INDEF32), (float("nan"), INDEF32),
-    (0x7FF8000000000000, INDEF32), (QUIET_NAN_NEG, INDEF32), (SNAN64, INDEF32),
-])
-DOUBLE_TO_I64 = cases(8, 8, [
-    (0.0, 0), (-0.0, 0), (0.5, 0), (-0.5, 0), (1.5, 1), (-1.5, -1), (1e18, 10**18),
-    (2.0**62, 2**62), (9223372036854774784.0, 9223372036854774784),
-    (-2.0**63, INDEF64), (-9223372036854776832.0, INDEF64),
-    (2.0**63, INDEF64), (float("inf"), INDEF64), (float("-inf"), INDEF64),
-    (float("nan"), INDEF64), (SNAN64, INDEF64),
-])
-FLOAT_TO_I32 = cases(4, 4, [
-    (0.0, 0), (-0.0, 0), (0.5, 0), (-0.5, 0), (1.5, 1), (-1.5, -1), (100000.0, 100000),
-    (2147483392.0, 2147483392), (-2147483648.0, INDEF32), (-2147483904.0, INDEF32),
-    (2147483648.0, INDEF32), (3e9, INDEF32), (float("inf"), INDEF32), (float("-inf"), INDEF32),
-    (float("nan"), INDEF32), (0x7F800001, INDEF32),
-])
-FLOAT_TO_I64 = cases(4, 8, [
-    (0.0, 0), (-0.0, 0), (-0.5, 0), (1.5, 1), (-1.5, -1), (2.0**62, 2**62), (1e18, 999999984306749440),
-    (-2.0**63, INDEF64), (2.0**63, INDEF64), (float("inf"), INDEF64),
-    (float("-inf"), INDEF64), (float("nan"), INDEF64),
-])
+DOUBLE_TO_I32 = cases(
+    8,
+    4,
+    [
+        (0.0, 0),
+        (-0.0, 0),
+        (1.5, 1),
+        (-1.5, -1),
+        (0.9999999, 0),
+        (-0.9999999, 0),
+        (2147483647.0, 2147483647),
+        (2147483647.5, 2147483647),
+        (-2147483648.0, INDEF32),
+        (-2147483648.5, INDEF32),
+        (-2147483649.0, INDEF32),
+        (2147483648.0, INDEF32),
+        (1e18, INDEF32),
+        (float("inf"), INDEF32),
+        (float("-inf"), INDEF32),
+        (float("nan"), INDEF32),
+        (0x7FF8000000000000, INDEF32),
+        (QUIET_NAN_NEG, INDEF32),
+        (SNAN64, INDEF32),
+    ],
+)
+DOUBLE_TO_I64 = cases(
+    8,
+    8,
+    [
+        (0.0, 0),
+        (-0.0, 0),
+        (0.5, 0),
+        (-0.5, 0),
+        (1.5, 1),
+        (-1.5, -1),
+        (1e18, 10**18),
+        (2.0**62, 2**62),
+        (9223372036854774784.0, 9223372036854774784),
+        (-(2.0**63), INDEF64),
+        (-9223372036854776832.0, INDEF64),
+        (2.0**63, INDEF64),
+        (float("inf"), INDEF64),
+        (float("-inf"), INDEF64),
+        (float("nan"), INDEF64),
+        (SNAN64, INDEF64),
+    ],
+)
+FLOAT_TO_I32 = cases(
+    4,
+    4,
+    [
+        (0.0, 0),
+        (-0.0, 0),
+        (0.5, 0),
+        (-0.5, 0),
+        (1.5, 1),
+        (-1.5, -1),
+        (100000.0, 100000),
+        (2147483392.0, 2147483392),
+        (-2147483648.0, INDEF32),
+        (-2147483904.0, INDEF32),
+        (2147483648.0, INDEF32),
+        (3e9, INDEF32),
+        (float("inf"), INDEF32),
+        (float("-inf"), INDEF32),
+        (float("nan"), INDEF32),
+        (0x7F800001, INDEF32),
+    ],
+)
+FLOAT_TO_I64 = cases(
+    4,
+    8,
+    [
+        (0.0, 0),
+        (-0.0, 0),
+        (-0.5, 0),
+        (1.5, 1),
+        (-1.5, -1),
+        (2.0**62, 2**62),
+        (1e18, 999999984306749440),
+        (-(2.0**63), INDEF64),
+        (2.0**63, INDEF64),
+        (float("inf"), INDEF64),
+        (float("-inf"), INDEF64),
+        (float("nan"), INDEF64),
+    ],
+)
 SHAPES = {(8, 4): DOUBLE_TO_I32, (8, 8): DOUBLE_TO_I64, (4, 4): FLOAT_TO_I32, (4, 8): FLOAT_TO_I64}
 EVERY_SHAPE = pytest.mark.parametrize("src,dst", sorted(SHAPES))
 
@@ -2124,9 +2188,7 @@ X86_CONVERT = {
 
 def compile_and_run(tmp_path, source, arch, extra=()):
     exe = tmp_path / f"run-{arch}"
-    proc = subprocess.run(
-        [LLVM / "clang", "-O1", "-arch", arch, *extra, "-o", exe, source], text=True, capture_output=True
-    )
+    proc = subprocess.run([LLVM / "clang", "-O1", "-arch", arch, *extra, "-o", exe, source], text=True, capture_output=True)
     assert proc.returncode == 0, proc.stderr
     argv = [str(exe)] if arch == "arm64" else ["arch", "-x86_64", str(exe)]
     return subprocess.run(argv, text=True, capture_output=True).stdout
@@ -2214,9 +2276,7 @@ def test_trunc_verifies(src, dst):
 @requires_llvm
 @EVERY_SHAPE
 def test_trunc_gives_the_integer_indefinite_value_where_x86_does(tmp_path, src, dst):
-    mismatches = compare_conversion(
-        tmp_path, pl.lift_body(trunc_body(src, dst)), src, dst, SHAPES[(src, dst)], "arm64", None
-    )
+    mismatches = compare_conversion(tmp_path, pl.lift_body(trunc_body(src, dst)), src, dst, SHAPES[(src, dst)], "arm64", None)
     assert mismatches == []
 
 
@@ -2225,7 +2285,5 @@ def test_trunc_gives_the_integer_indefinite_value_where_x86_does(tmp_path, src, 
 def test_the_expectation_tables_match_the_real_x86_instruction(tmp_path, src, dst):
     """Native arm64 saturates where x86 returns the integer indefinite value, so the tables
     above need an oracle that is not arm64: this runs the instruction itself."""
-    mismatches = compare_conversion(
-        tmp_path, None, src, dst, SHAPES[(src, dst)], "x86_64", X86_CONVERT[(src, dst)]
-    )
+    mismatches = compare_conversion(tmp_path, None, src, dst, SHAPES[(src, dst)], "x86_64", X86_CONVERT[(src, dst)])
     assert mismatches == []

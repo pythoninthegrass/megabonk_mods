@@ -203,8 +203,15 @@ def test_failure_rows_name_each_body_by_address_and_size():
 
 def healthy_lifted(*_args, **_kw):
     return SimpleNamespace(
-        holes=[], unmapped_refs=0, indirect_calls=0, tail_calls=0, proven_tail_calls=0,
-        unproven_branchind=[], tables_audited=0, evidence_switches=0, atomics=0,
+        holes=[],
+        unmapped_refs=0,
+        indirect_calls=0,
+        tail_calls=0,
+        proven_tail_calls=0,
+        unproven_branchind=[],
+        tables_audited=0,
+        evidence_switches=0,
+        atomics=0,
     )
 
 
@@ -215,8 +222,15 @@ def body_fn(start=0x4DD8A20, size=312):
 def test_score_body_records_the_atomics_a_body_lowers(monkeypatch):
     def lowered(*_args, **_kw):
         return SimpleNamespace(
-            holes=[], unmapped_refs=0, indirect_calls=0, tail_calls=0, proven_tail_calls=0,
-            unproven_branchind=[], tables_audited=0, evidence_switches=3, atomics=3,
+            holes=[],
+            unmapped_refs=0,
+            indirect_calls=0,
+            tail_calls=0,
+            proven_tail_calls=0,
+            unproven_branchind=[],
+            tables_audited=0,
+            evidence_switches=3,
+            atomics=3,
         )
 
     monkeypatch.setattr(lp.pcode_lift, "lift_body", lowered)
@@ -228,8 +242,15 @@ def test_score_body_records_the_atomics_a_body_lowers(monkeypatch):
 def test_score_body_records_the_switches_lowered_from_table_bytes(monkeypatch):
     def lowered(*_args, **_kw):
         return SimpleNamespace(
-            holes=[], unmapped_refs=0, indirect_calls=0, tail_calls=0, proven_tail_calls=0,
-            unproven_branchind=[], tables_audited=0, evidence_switches=2, atomics=0,
+            holes=[],
+            unmapped_refs=0,
+            indirect_calls=0,
+            tail_calls=0,
+            proven_tail_calls=0,
+            unproven_branchind=[],
+            tables_audited=0,
+            evidence_switches=2,
+            atomics=0,
         )
 
     monkeypatch.setattr(lp.pcode_lift, "lift_body", lowered)
@@ -356,7 +377,9 @@ def drive_main(tmp_path, monkeypatch, dumped):
 
     monkeypatch.setattr(lp, "run_tool", run)
     monkeypatch.setattr(lp, "dump_pcode", lambda so_, fdes, work, **kw: (dumped, []))
-    monkeypatch.setattr(lp, "score_body", lambda r, sections, tool_timeout, pipeline="", evidence=None: row(r["start"], r["size"]))
+    monkeypatch.setattr(
+        lp, "score_body", lambda r, sections, tool_timeout, pipeline="", evidence=None: row(r["start"], r["size"])
+    )
     rc = lp.main([str(so), "--out", str(out), "--per-class", "1", "--seed", "5", "--r2-per-class", "0"])
     return rc, out, json.loads((out / "summary.json").read_text())
 
@@ -634,7 +657,9 @@ def drive_pipeline_main(tmp_path, monkeypatch, argv_extra):
     monkeypatch.setattr(lp, "run_tool", run)
     monkeypatch.setattr(lp, "dump_pcode", fake_dump)
     monkeypatch.setattr(lp, "dump_pcode_cached", fake_dump_pcode_cached)
-    monkeypatch.setattr(lp, "score_body", lambda r, sections, tool_timeout, pipeline="", evidence=None: row(r["start"], r["size"]))
+    monkeypatch.setattr(
+        lp, "score_body", lambda r, sections, tool_timeout, pipeline="", evidence=None: row(r["start"], r["size"])
+    )
     monkeypatch.setattr(lp, "EXTRA_ARGS", [])
     monkeypatch.setattr(lp, "PCODE_CACHE", None)
     argv = [str(so), "--out", str(out), "--per-class", "1", "--seed", "5", "--r2-per-class", "0", "--jobs", "1"]

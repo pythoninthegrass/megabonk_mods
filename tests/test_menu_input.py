@@ -8,24 +8,48 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-@pytest.mark.parametrize("command", [
-    ["key", "KEY_ENTER"], ["key", "KEY_F12"], ["pad", "BTN_SOUTH"], ["axis", "ABS_HAT0Y", -1],
-    ["axis", "ABS_X", 32767], ["axis", "ABS_Z", 255], ["move", 0, 1080], ["click"],
-    {"command": "query-objects", "type": "MapSelectionUi", "fields": ["runConfig"]},
-    {"command": "state"},
-])
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["key", "KEY_ENTER"],
+        ["key", "KEY_F12"],
+        ["pad", "BTN_SOUTH"],
+        ["axis", "ABS_HAT0Y", -1],
+        ["axis", "ABS_X", 32767],
+        ["axis", "ABS_Z", 255],
+        ["move", 0, 1080],
+        ["click"],
+        {"command": "query-objects", "type": "MapSelectionUi", "fields": ["runConfig"]},
+        {"command": "state"},
+    ],
+)
 def test_valid_menu_commands(command):
     assert menu_input.validate_batch([command]) == [command]
 
 
-@pytest.mark.parametrize("batch", [
-    {}, "[]", [None], [["unknown"]], [["click", "extra"]], [["key", "KEY_UNKNOWN"]],
-    [["pad", "KEY_ENTER"]], [["axis", "ABS_Z", -1]], [["axis", "ABS_X", 32768]],
-    [["axis", "ABS_HAT0X", 2]], [["axis", "ABS_X", True]], [["move", -1, 2]],
-    [["move", 1.5, 2]], [["move", True, 2]], [{"command": "load-level", "path": "x"}],
-    [{"command": "query-objects", "type": "Foo", "fields": "name"}],
-    [{"command": "state", "unexpected": True}], [["click"]] * 257,
-])
+@pytest.mark.parametrize(
+    "batch",
+    [
+        {},
+        "[]",
+        [None],
+        [["unknown"]],
+        [["click", "extra"]],
+        [["key", "KEY_UNKNOWN"]],
+        [["pad", "KEY_ENTER"]],
+        [["axis", "ABS_Z", -1]],
+        [["axis", "ABS_X", 32768]],
+        [["axis", "ABS_HAT0X", 2]],
+        [["axis", "ABS_X", True]],
+        [["move", -1, 2]],
+        [["move", 1.5, 2]],
+        [["move", True, 2]],
+        [{"command": "load-level", "path": "x"}],
+        [{"command": "query-objects", "type": "Foo", "fields": "name"}],
+        [{"command": "state", "unexpected": True}],
+        [["click"]] * 257,
+    ],
+)
 def test_invalid_menu_batches_fail_before_input(batch):
     with pytest.raises(ValueError):
         menu_input.validate_batch(batch)
@@ -47,7 +71,18 @@ class FakeDevice:
 
 
 def fake_evdev(fail_after=None):
-    names = ["EV_KEY", "EV_REL", "EV_ABS", "REL_X", "REL_Y", *menu_input.KEYS, *menu_input.BUTTONS, *menu_input.AXES, "BTN_LEFT", "BTN_RIGHT"]
+    names = [
+        "EV_KEY",
+        "EV_REL",
+        "EV_ABS",
+        "REL_X",
+        "REL_Y",
+        *menu_input.KEYS,
+        *menu_input.BUTTONS,
+        *menu_input.AXES,
+        "BTN_LEFT",
+        "BTN_RIGHT",
+    ]
     codes = dict(enumerate(dict.fromkeys(names)))
     codes = {name: code for code, name in codes.items()}
     devices = []
@@ -72,8 +107,10 @@ def test_taps_release_even_when_sleep_is_interrupted():
     with pytest.raises(KeyboardInterrupt):
         devices.perform(["pad", "BTN_SOUTH"])
     assert created[2].events == [
-        (evdev.ecodes.EV_KEY, evdev.ecodes.BTN_SOUTH, 1), "syn",
-        (evdev.ecodes.EV_KEY, evdev.ecodes.BTN_SOUTH, 0), "syn",
+        (evdev.ecodes.EV_KEY, evdev.ecodes.BTN_SOUTH, 1),
+        "syn",
+        (evdev.ecodes.EV_KEY, evdev.ecodes.BTN_SOUTH, 0),
+        "syn",
     ]
     devices.close()
     assert all(device.closed for device in created)
@@ -150,8 +187,10 @@ def test_axis_pulse_returns_to_neutral():
     devices = menu_input.InputDevices(evdev=evdev, sleep=lambda _: None)
     devices.perform(["axis", "ABS_HAT0Y", -1])
     assert created[2].events == [
-        (evdev.ecodes.EV_ABS, evdev.ecodes.ABS_HAT0Y, -1), "syn",
-        (evdev.ecodes.EV_ABS, evdev.ecodes.ABS_HAT0Y, 0), "syn",
+        (evdev.ecodes.EV_ABS, evdev.ecodes.ABS_HAT0Y, -1),
+        "syn",
+        (evdev.ecodes.EV_ABS, evdev.ecodes.ABS_HAT0Y, 0),
+        "syn",
     ]
     devices.close()
 

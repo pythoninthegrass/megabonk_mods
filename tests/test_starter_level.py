@@ -123,10 +123,18 @@ def test_large_map_has_many_charge_shrines_on_well_spaced_spots():
     assert set(level["guaranteedShrineKinds"]) == {"charge"}
     assert level["shrineKindRanges"] == {"moai": [3, 5], "shadyGuy": [2, 3]}
     assert (level["extraShrines"], level["extraShrinesMax"]) == (2, 3)
-    planned = [len(level["guaranteedShrineKinds"]) + level["extraShrines"] + sum(low for low, _ in level["shrineKindRanges"].values()),
-               len(level["guaranteedShrineKinds"]) + level["extraShrinesMax"] + sum(high for _, high in level["shrineKindRanges"].values())]
+    planned = [
+        len(level["guaranteedShrineKinds"]) + level["extraShrines"] + sum(low for low, _ in level["shrineKindRanges"].values()),
+        len(level["guaranteedShrineKinds"])
+        + level["extraShrinesMax"]
+        + sum(high for _, high in level["shrineKindRanges"].values()),
+    ]
     assert planned == [12, 16]
-    most = len(level["guaranteedShrineKinds"]) + level["extraShrinesMax"] + sum(high for _, high in level["shrineKindRanges"].values())
+    most = (
+        len(level["guaranteedShrineKinds"])
+        + level["extraShrinesMax"]
+        + sum(high for _, high in level["shrineKindRanges"].values())
+    )
     assert len(spots) >= most + 2
     cells = {(cell["x"], cell["z"]): cell for cell in level["grid"]["cells"]}
     assert all("slope" not in cells[round(x / 40 + starter().CENTER), round(z / 40 + starter().CENTER)] for x, _, z in spots)
@@ -156,7 +164,11 @@ def test_every_placed_prop_uses_its_native_upright_rotation():
     chests = [p for p in payloads if p["catalogId"].startswith("interactable/chest")]
     assert len(chests) >= 9
     assert all(p["rotation"]["x"] == 270 for p in chests)
-    assert all(module.NATIVE_ROTATION_X[p["catalogId"]] == 270 for p in payloads if p["catalogId"] in (module.TREE, module.LOG, module.BUSH))
+    assert all(
+        module.NATIVE_ROTATION_X[p["catalogId"]] == 270
+        for p in payloads
+        if p["catalogId"] in (module.TREE, module.LOG, module.BUSH)
+    )
 
 
 def test_level_is_a_composite_of_all_five_biomes_one_per_zone():
@@ -166,7 +178,11 @@ def test_level_is_a_composite_of_all_five_biomes_one_per_zone():
     assert {catalog.split("/")[0] for catalog, _ in placed} >= {"forest", "desert", "dungeon", "graveyard", "hell"}
     for biome, district in module.ZONE_DISTRICTS.items():
         x0, x1, z0, z1 = module.DISTRICTS[district]
-        inside = [c for c, pos in placed if x0 <= round(pos["x"] / 40 + module.CENTER) <= x1 and z0 <= round(pos["z"] / 40 + module.CENTER) <= z1]
+        inside = [
+            c
+            for c, pos in placed
+            if x0 <= round(pos["x"] / 40 + module.CENTER) <= x1 and z0 <= round(pos["z"] / 40 + module.CENTER) <= z1
+        ]
         native = [c for c in inside if c.startswith(biome + "/")]
         assert len(native) >= 6, f"{district} has {len(native)} {biome} props"
         assert len(native) >= len(inside) / 2 - 2, f"{district} is mostly not {biome}"
@@ -194,7 +210,13 @@ def test_lava_pool_sits_in_the_hell_pen_clear_of_everything_placed_or_walked():
     for zone in zones:
         assert x0 <= zone["minX"] <= zone["maxX"] <= x1 and z0 <= zone["minZ"] <= zone["maxZ"] <= z1
         cells |= {(x, z) for x in range(zone["minX"], zone["maxX"] + 1) for z in range(zone["minZ"], zone["maxZ"] + 1)}
-        assert {"material": "LavaCrypt", "minX": zone["minX"], "maxX": zone["maxX"], "minZ": zone["minZ"], "maxZ": zone["maxZ"]} in level["groundZones"]
+        assert {
+            "material": "LavaCrypt",
+            "minX": zone["minX"],
+            "maxX": zone["maxX"],
+            "minZ": zone["minZ"],
+            "maxZ": zone["maxZ"],
+        } in level["groundZones"]
     keep_clear = set(module.RAMPS) | set(module.CHESTS) | {module.FREE_CHEST, module.SPAWN_CELL} | set(module.SHRINE_CELLS)
     assert not cells & keep_clear
     for edit in level["edits"]:
@@ -219,7 +241,9 @@ def test_lava_court_has_dry_landings_bypass_walls_and_walkable_escape():
     reached = walk_distances(dry, module.SPAWN_CELL)
     assert all(pos in reached for pos in module.CHESTS)
     assert (11, 1) in reached and (11, 3) in reached, "landings lack dry bypass"
-    walls = [json.loads(e["payload"])["position"] for e in level["edits"] if json.loads(e["payload"])["catalogId"] in module.HELL_WALLS]
+    walls = [
+        json.loads(e["payload"])["position"] for e in level["edits"] if json.loads(e["payload"])["catalogId"] in module.HELL_WALLS
+    ]
     for z in (1, 2, 3, 4):
         for x in (10.5, 12.5):
             if (x, z) in ((10.5, 1), (10.5, 3), (12.5, 1)):
@@ -285,7 +309,11 @@ def test_summit_tower_bases_stay_two_units_inside_the_supported_plateau():
     module = starter()
     # Conservative live renderer footprints relative to each ruin's origin at its authored yaw.
     footprints = {"0": (-15.7, 1.4, -16.5, 0.5, 270), "1": (-21.3, 21.6, -23.4, 20.2, 0), "2": (-10.1, 20.2, -11.8, 18.5, 90)}
-    towers = [json.loads(e["payload"]) for e in module.build_level()["edits"] if json.loads(e["payload"])["catalogId"].startswith(module.RUIN)]
+    towers = [
+        json.loads(e["payload"])
+        for e in module.build_level()["edits"]
+        if json.loads(e["payload"])["catalogId"].startswith(module.RUIN)
+    ]
     assert len(towers) == 3
     for tower in towers:
         min_x, max_x, min_z, max_z, yaw = footprints[tower["catalogId"].rsplit("/", 1)[1]]

@@ -56,7 +56,7 @@ def tail_call_body(start=0x216_3000):
         insn(start, 4, op("INT_ADD", "unique,300,8", REG, "const,0x20,8")),
         insn(start + 4, 3, op("LOAD", "unique,308,8", "unique,300,8")),
         insn(start + 7, 4, op("INT_AND", "unique,316,8", "unique,308,8", "const,0xfffffffffffffff8,8")),
-        insn(start + 0xb, 6, op("BRANCHIND", None, "unique,316,8")),
+        insn(start + 0xB, 6, op("BRANCHIND", None, "unique,316,8")),
         start=start,
     )
 
@@ -76,7 +76,7 @@ def untraceable_body(start=0x216_5000, jt=()):
         insn(start, 5, op("POPCOUNT", "unique,500,8", IDX)),
         insn(start + 5, 4, op("INT_EQUAL", "unique,508,1", IDX, "const,0,4")),
         insn(start + 9, 6, op("CBRANCH", None, f"ram,{start + 0x15:x},8", "unique,508,1")),
-        insn(start + 0xf, 2, op("BRANCHIND", None, "unique,500,8")),
+        insn(start + 0xF, 2, op("BRANCHIND", None, "unique,500,8")),
         insn(start + 0x15, 1, op("RETURN", None, "register,288,8")),
         start=start,
         size=0x16,
@@ -199,7 +199,7 @@ def test_trace_load_follows_a_copy_chain_to_the_load():
         insn(0x1000, 4, op("INT_ADD", "unique,20,8", REG, "const,0x20,8")),
         insn(0x1004, 3, op("LOAD", "unique,30,8", "unique,20,8")),
         insn(0x1007, 3, op("COPY", "unique,40,8", "unique,30,8")),
-        insn(0x100a, 6, op("BRANCHIND", None, "unique,40,8")),
+        insn(0x100A, 6, op("BRANCHIND", None, "unique,40,8")),
     )
     trace = lh.trace_load(lh.flatten(fn), 3, "unique,40,8")
     assert trace.kind == "load"
@@ -333,7 +333,7 @@ def test_classify_body_calls_a_relocated_slot_an_indirect_call_target():
 
 
 def test_classify_body_keeps_an_untraceable_target_as_other_and_records_the_sequence():
-    disasm = {0x216_5000: "popcnt rax, ecx", 0x216_500f: "jmp rax"}
+    disasm = {0x216_5000: "popcnt rax, ecx", 0x216_500F: "jmp rax"}
     result = lh.classify_body(untraceable_body(), SECTIONS, {}, disasm)
     assert result["category"] == "other"
     assert result["sites"][0]["x86"] == ["popcnt rax, ecx", "jmp rax"]

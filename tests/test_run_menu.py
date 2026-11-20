@@ -57,9 +57,23 @@ def test_remote_quoting_stdin_and_failed_ssh_no_download(monkeypatch):
         return subprocess.CompletedProcess(command, 23)
 
     monkeypatch.setattr(run.subprocess, "run", invoke)
-    args = run.parse_args(["menu", "drive", '[["key","KEY_ENTER"]]', "--host", "wm2",
-                           "--remote-repo", "/home/test/repo with 'quotes'", "--remote-python", "/venv with spaces/python",
-                           "--game-dir", "/game; echo bad", "--out", "shot.png"])
+    args = run.parse_args(
+        [
+            "menu",
+            "drive",
+            '[["key","KEY_ENTER"]]',
+            "--host",
+            "wm2",
+            "--remote-repo",
+            "/home/test/repo with 'quotes'",
+            "--remote-python",
+            "/venv with spaces/python",
+            "--game-dir",
+            "/game; echo bad",
+            "--out",
+            "shot.png",
+        ]
+    )
     assert run.menu_remote(args, [["key", "KEY_ENTER"]]) == 23
     command, options = calls[0]
     assert command[:4] == ["ssh", "-oBatchMode=yes", "--", "wm2"]
@@ -172,7 +186,9 @@ def test_start_uses_user_service_to_survive_ssh_logout(monkeypatch, tmp_path):
 
 def test_refused_user_service_is_reported_without_fallback(monkeypatch, tmp_path):
     monkeypatch.setattr(run.shutil, "which", lambda _: "/usr/bin/systemd-run")
-    monkeypatch.setattr(run.subprocess, "run", lambda command, **kwargs: subprocess.CompletedProcess(command, 1, stderr="No user bus"))
+    monkeypatch.setattr(
+        run.subprocess, "run", lambda command, **kwargs: subprocess.CompletedProcess(command, 1, stderr="No user bus")
+    )
     monkeypatch.setattr(run.subprocess, "Popen", lambda *args, **kwargs: pytest.fail("must not silently fall back"))
     args = run.parse_args(["menu", "start"])
     with pytest.raises(RuntimeError, match="No user bus"):

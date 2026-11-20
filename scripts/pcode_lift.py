@@ -1236,7 +1236,9 @@ class BodyLifter:
             ),
         )
         sign_field = self.calc("i128", "shl", self.fit(sign, 32, 128), str(X87_SIGN_BIT))
-        return self.calc("i128", "or", self.calc("i128", "or", sign_field, self.calc("i128", "shl", exponent_field, "64")), mantissa)
+        return self.calc(
+            "i128", "or", self.calc("i128", "or", sign_field, self.calc("i128", "shl", exponent_field, "64")), mantissa
+        )
 
     def field_of_single(self, bits: str, shift: int, mask: int) -> str:
         return self.calc("i32", "and", self.calc("i32", "lshr", bits, str(shift)), str(mask))
@@ -1291,7 +1293,9 @@ class BodyLifter:
         both_zero = self.test("i128", a["magnitude"], "eq", "0")
         same_sign = self.test("i128", a["sign"], "eq", b["sign"])
         ordered = self.x87_ordered(a, b)
-        return self.calc("i1", "and", ordered, self.calc("i1", "and", same_magnitude, self.calc("i1", "or", both_zero, same_sign)))
+        return self.calc(
+            "i1", "and", ordered, self.calc("i1", "and", same_magnitude, self.calc("i1", "or", both_zero, same_sign))
+        )
 
     def x87_less(self, left: str, right: str) -> str:
         """Ordered less-than over sign-magnitude fields, with -0 and +0 equal."""

@@ -117,7 +117,9 @@ EAST_LEDGE_LIPS = (
 COPING_LIPS = MAIN_PIPE_LIPS + WALL_PIPE_LIPS + LEDGE_LIPS + START_PIPE_LIPS + EAST_LEDGE_LIPS
 
 
-def rail_along(start: tuple[float, float, float], end: tuple[float, float, float]) -> tuple[tuple[float, float, float], float, float, float]:
+def rail_along(
+    start: tuple[float, float, float], end: tuple[float, float, float]
+) -> tuple[tuple[float, float, float], float, float, float]:
     """The (position, yaw, scale, pitch) of a rail/0 whose bar runs from start to end."""
     dx, dy, dz = end[0] - start[0], end[1] - start[1], end[2] - start[2]
     run = math.hypot(dx, dz)

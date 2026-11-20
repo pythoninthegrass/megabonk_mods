@@ -52,7 +52,12 @@ SUPPORTS = {
     "piece-kicker-north-board": ("piece-kicker-north-frame",),
     "piece-kicker-south-board": ("piece-kicker-south-frame",),
     "piece-room-floor": ("piece-room-underside-box",),
-    "piece-room-roof": ("piece-room-chain-north", "piece-room-chain-south", "piece-room-brace-north-outer", "piece-room-brace-south-outer"),
+    "piece-room-roof": (
+        "piece-room-chain-north",
+        "piece-room-chain-south",
+        "piece-room-brace-north-outer",
+        "piece-room-brace-south-outer",
+    ),
 }
 
 
@@ -74,7 +79,11 @@ def local_transform(owner, position, rotation, scale):
     child_scale = [scale] * 3 if isinstance(scale, (float, int)) else scale
     local_position = [dot(row, sub(position, owner["position"])) / size for row, size in zip(inverse, owner_scale, strict=True)]
     local_rotation = unity_euler(matmul(inverse, euler_matrix(*rotation)))
-    return {"position": dict(zip("xyz", local_position, strict=True)), "rotation": dict(zip("xyz", local_rotation, strict=True)), "scale": dict(zip("xyz", [a / b for a, b in zip(child_scale, owner_scale, strict=True)], strict=True))}
+    return {
+        "position": dict(zip("xyz", local_position, strict=True)),
+        "rotation": dict(zip("xyz", local_rotation, strict=True)),
+        "scale": dict(zip("xyz", [a / b for a, b in zip(child_scale, owner_scale, strict=True)], strict=True)),
+    }
 
 
 def world_transform(owner, local):
@@ -82,7 +91,11 @@ def world_transform(owner, local):
     owner_scale = owner.get("scale", [SCALE] * 3)
     position = tuple(local["position"][axis] * size for axis, size in zip("xyz", owner_scale, strict=True))
     angles = unity_euler(matmul(rotation, euler_matrix(*(local["rotation"][axis] for axis in "xyz"))))
-    return {"position": [dot(row, position) + offset for row, offset in zip(rotation, owner["position"], strict=True)], "rotation": angles, "scale": [local["scale"][axis] * size for axis, size in zip("xyz", owner_scale, strict=True)]}
+    return {
+        "position": [dot(row, position) + offset for row, offset in zip(rotation, owner["position"], strict=True)],
+        "rotation": angles,
+        "scale": [local["scale"][axis] * size for axis, size in zip("xyz", owner_scale, strict=True)],
+    }
 
 
 def source_bounds():
@@ -110,7 +123,12 @@ def build():
     assets = {}
 
     def add(owner, name, catalog, position, rotation, scale, hidden=False, start=None, end=None):
-        child = {"name": name, "catalogId": catalog, "localTransform": local_transform(pieces[owner], position, rotation, scale), "hidden": hidden}
+        child = {
+            "name": name,
+            "catalogId": catalog,
+            "localTransform": local_transform(pieces[owner], position, rotation, scale),
+            "hidden": hidden,
+        }
         if start is not None:
             child.update(start=list(start), end=list(end))
         assets.setdefault(owner, []).append(child)

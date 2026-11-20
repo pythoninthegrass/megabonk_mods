@@ -150,9 +150,7 @@ CLASS_LINE = re.compile(
     r"^(?:public|internal)\s+(?:(?:static|sealed|abstract|partial|readonly|ref|nested)\s+)*"
     r"(?:class|struct|interface|enum)\s+([A-Za-z_0-9`.+<>]+)"
 )
-METHOD_LINE = re.compile(
-    r"^\s*public static (?P<ret>[A-Za-z_0-9.<>\[\]]+) (?P<name>[A-Za-z_0-9_.]+)\((?P<params>[^)]*)\) \{ \}$"
-)
+METHOD_LINE = re.compile(r"^\s*public static (?P<ret>[A-Za-z_0-9.<>\[\]]+) (?P<name>[A-Za-z_0-9_.]+)\((?P<params>[^)]*)\) \{ \}$")
 RVA_LINE = re.compile(r"// RVA: (0x[0-9A-Fa-f]+)")
 REDACTIONS = (
     (re.compile(r"/(?:Users|home)/[^/\s]+"), "<home>"),
@@ -236,10 +234,7 @@ class Candidate:
 
     @property
     def invoke_args(self) -> tuple[str, ...]:
-        return tuple(
-            f"{ARG_KINDS.get(type_, 's')}:{value}"
-            for type_, value in zip(self.param_types, self.args)
-        )
+        return tuple(f"{ARG_KINDS.get(type_, 's')}:{value}" for type_, value in zip(self.param_types, self.args))
 
 
 DEFAULT_CANDIDATES = (
@@ -250,7 +245,16 @@ DEFAULT_CANDIDATES = (
     Candidate("mscorlib.dll", "System", "String", "Concat", "string", ("string", "string"), ("mega", "bonk"), "megabonk"),
     Candidate("UnityEngine.CoreModule.dll", "UnityEngine", "Mathf", "Abs", "int", ("int",), ("-5",), "5"),
     Candidate("Rewired_Core.dll", "Rewired.Utils", "MathTools", "Abs", "int", ("int",), ("-42",), "42"),
-    Candidate("Assembly-CSharp.dll", "Assets.Scripts.Inventory__Items__Pickups", "InventoryUtility", "GetWeaponMaxLevel", "int", (), (), ""),
+    Candidate(
+        "Assembly-CSharp.dll",
+        "Assets.Scripts.Inventory__Items__Pickups",
+        "InventoryUtility",
+        "GetWeaponMaxLevel",
+        "int",
+        (),
+        (),
+        "",
+    ),
     Candidate("Assembly-CSharp.dll", "", "ExplorerUtility", "IsLinux", "bool", (), (), ""),
     Candidate("Assembly-CSharp.dll", "Assets.Scripts.Managers", "MapController", "GetStageIndex", "int", (), (), ""),
 )
@@ -291,7 +295,11 @@ def clang_binary(platform: str) -> Path:
 
 
 def host_arch() -> str:
-    return "arm64" if subprocess.run(["/usr/bin/uname", "-sm"], capture_output=True, text=True).stdout.startswith("Darwin arm64") else "x86_64"
+    return (
+        "arm64"
+        if subprocess.run(["/usr/bin/uname", "-sm"], capture_output=True, text=True).stdout.startswith("Darwin arm64")
+        else "x86_64"
+    )
 
 
 def have_rosetta() -> bool:
@@ -660,7 +668,9 @@ def run_host(argv: list[str], leg: str, *, log_path: Path | None = None, timeout
     run = run_from_output(leg, completed, argv)
     if log_path is not None:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_path.write_text(f"$ {' '.join(str(part) for part in argv)}\n--- stdout ---\n{completed.stdout or ''}\n--- stderr ---\n{completed.stderr or ''}\n")
+        log_path.write_text(
+            f"$ {' '.join(str(part) for part in argv)}\n--- stdout ---\n{completed.stdout or ''}\n--- stderr ---\n{completed.stderr or ''}\n"
+        )
     return run
 
 
@@ -767,9 +777,7 @@ def chainloader_conclusion(legs: dict) -> dict:
     }
 
 
-def select_candidates(
-    candidates: list[Candidate] | tuple[Candidate, ...], only: list[str] | tuple[str, ...]
-) -> list[Candidate]:
+def select_candidates(candidates: list[Candidate] | tuple[Candidate, ...], only: list[str] | tuple[str, ...]) -> list[Candidate]:
     """Ladder subset whose label mentions one of the patterns; empty patterns keep all."""
     patterns = [pattern for pattern in only if pattern]
     if not patterns:
@@ -914,8 +922,10 @@ def resolve_paths(
             raise ProbeError(f"no bundle at {bundle}")
         if not runtime.is_file():
             raise ProbeError(f"no GameAssembly.dylib under {bundle}/Contents/Frameworks")
-        resolved_metadata = Path(metadata_dir).expanduser() if metadata_dir else (
-            bundle / "Contents" / "Resources" / "Data" / "il2cpp_data" / "Metadata"
+        resolved_metadata = (
+            Path(metadata_dir).expanduser()
+            if metadata_dir
+            else (bundle / "Contents" / "Resources" / "Data" / "il2cpp_data" / "Metadata")
         )
     elif dylib is not None:
         bundle = None
@@ -1085,8 +1095,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.linux_target and not (args.linux_host and args.dylib and args.metadata):
         print(
-            "error: --linux-target needs --linux-host, --dylib and --metadata "
-            "(rsync the shipped Linux build first)",
+            "error: --linux-target needs --linux-host, --dylib and --metadata (rsync the shipped Linux build first)",
             file=sys.stderr,
         )
         return 2
@@ -1140,9 +1149,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: no host source at {source}", file=sys.stderr)
         return 2
 
-    candidates = select_candidates(
-        list(DEFAULT_CANDIDATES[: args.limit] if args.limit else DEFAULT_CANDIDATES), args.only
-    )
+    candidates = select_candidates(list(DEFAULT_CANDIDATES[: args.limit] if args.limit else DEFAULT_CANDIDATES), args.only)
     dump_path = Path(args.dump).expanduser()
     candidate_rows: list[dict] = []
     if dump_path.is_file():
@@ -1192,11 +1199,7 @@ def main(argv: list[str] | None = None) -> int:
                 linux["status"] = "crash"
                 linux["signature"] = redact(str(error))
             else:
-                linux.update(
-                    linux_result_from_remote(
-                        completed.returncode, completed.stdout or "", completed.stderr or ""
-                    )
-                )
+                linux.update(linux_result_from_remote(completed.returncode, completed.stdout or "", completed.stderr or ""))
 
     runs: list[dict] = []
 
@@ -1213,7 +1216,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         if skip_init:
             argv_host.append("--skip-init")
-        log = paths.out_dir / "logs" / f"{arch}_{leg}_{(invoke.method if invoke else 'x')}_{hook or 'x'}{'.skipinit' if skip_init else ''}.log"
+        log = (
+            paths.out_dir
+            / "logs"
+            / f"{arch}_{leg}_{(invoke.method if invoke else 'x')}_{hook or 'x'}{'.skipinit' if skip_init else ''}.log"
+        )
         run = run_host(argv_host, leg, log_path=log)
         run["arch"] = arch
         if invoke is not None:

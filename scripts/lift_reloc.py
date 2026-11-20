@@ -14,8 +14,20 @@ from dataclasses import dataclass, field
 
 R_X86_64_64, R_X86_64_RELATIVE = 1, 8
 RELOC_NAMES = {
-    0: "NONE", 1: "64", 2: "PC32", 3: "GOT32", 4: "PLT32", 5: "COPY", 6: "GLOB_DAT", 7: "JUMP_SLOT",
-    8: "RELATIVE", 9: "GOTPCREL", 16: "DTPMOD64", 17: "DTPOFF64", 18: "TPOFF64", 37: "IRELATIVE",
+    0: "NONE",
+    1: "64",
+    2: "PC32",
+    3: "GOT32",
+    4: "PLT32",
+    5: "COPY",
+    6: "GLOB_DAT",
+    7: "JUMP_SLOT",
+    8: "RELATIVE",
+    9: "GOTPCREL",
+    16: "DTPMOD64",
+    17: "DTPOFF64",
+    18: "TPOFF64",
+    37: "IRELATIVE",
 }
 PCREL_INDIRECT = 0x90 | 0x10
 WORD = 8

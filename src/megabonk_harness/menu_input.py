@@ -10,11 +10,27 @@ from contextlib import ExitStack
 from pathlib import Path
 
 KEYS = ("KEY_ENTER", "KEY_ESC", "KEY_UP", "KEY_DOWN", "KEY_LEFT", "KEY_RIGHT", "KEY_TAB", "KEY_SPACE", "KEY_F12")
-BUTTONS = ("BTN_SOUTH", "BTN_EAST", "BTN_NORTH", "BTN_WEST", "BTN_START", "BTN_SELECT", "BTN_TL", "BTN_TR", "BTN_THUMBL", "BTN_THUMBR")
+BUTTONS = (
+    "BTN_SOUTH",
+    "BTN_EAST",
+    "BTN_NORTH",
+    "BTN_WEST",
+    "BTN_START",
+    "BTN_SELECT",
+    "BTN_TL",
+    "BTN_TR",
+    "BTN_THUMBL",
+    "BTN_THUMBR",
+)
 AXES = {
-    "ABS_X": (-32768, 32767), "ABS_Y": (-32768, 32767),
-    "ABS_RX": (-32768, 32767), "ABS_RY": (-32768, 32767),
-    "ABS_HAT0X": (-1, 1), "ABS_HAT0Y": (-1, 1), "ABS_Z": (0, 255), "ABS_RZ": (0, 255),
+    "ABS_X": (-32768, 32767),
+    "ABS_Y": (-32768, 32767),
+    "ABS_RX": (-32768, 32767),
+    "ABS_RY": (-32768, 32767),
+    "ABS_HAT0X": (-1, 1),
+    "ABS_HAT0Y": (-1, 1),
+    "ABS_Z": (0, 255),
+    "ABS_RZ": (0, 255),
 }
 MAX_MESSAGE = 65536
 
@@ -27,10 +43,14 @@ def validate_batch(commands: object) -> list:
             kind = command.get("command")
             if kind in ("state", "steam-ready") and set(command) == {"command"}:
                 continue
-            if (kind == "query-objects" and set(command) <= {"command", "type", "fields"}
-                    and isinstance(command.get("type"), str) and command["type"].strip()
-                    and isinstance(command.get("fields", []), list)
-                    and all(isinstance(field, str) and field for field in command.get("fields", []))):
+            if (
+                kind == "query-objects"
+                and set(command) <= {"command", "type", "fields"}
+                and isinstance(command.get("type"), str)
+                and command["type"].strip()
+                and isinstance(command.get("fields", []), list)
+                and all(isinstance(field, str) and field for field in command.get("fields", []))
+            ):
                 continue
             raise ValueError("menu: diagnostic must be state, steam-ready or query-objects with a type and fields array")
         if not isinstance(command, list) or not command:
@@ -65,8 +85,17 @@ def move_pointer(display: str | None, x: int, y: int) -> None:
     lib.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
     lib.XDefaultRootWindow.restype = ctypes.c_ulong
     lib.XDisplayWidth.argtypes = lib.XDisplayHeight.argtypes = [ctypes.c_void_p, ctypes.c_int]
-    lib.XWarpPointer.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_int, ctypes.c_int,
-                                ctypes.c_uint, ctypes.c_uint, ctypes.c_int, ctypes.c_int]
+    lib.XWarpPointer.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_uint,
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
     lib.XFlush.argtypes = lib.XCloseDisplay.argtypes = [ctypes.c_void_p]
     connection = lib.XOpenDisplay(display.encode())
     if not connection:
@@ -100,13 +129,22 @@ class InputDevices:
             self.mouse = create({e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT], e.EV_REL: [e.REL_X, e.REL_Y]}, name="Megabonk menu mouse")
             self.pad = None
             if gamepad:
-                axes = [(getattr(e, name), evdev.AbsInfo(0, low, high, 16 if low == -32768 else 0,
-                                                        128 if low == -32768 else 0, 0)) for name, (low, high) in AXES.items()]
-                self.pad = create({e.EV_KEY: [getattr(e, name) for name in BUTTONS], e.EV_ABS: axes},
-                                  name="Microsoft X-Box 360 pad", vendor=0x045e, product=0x028e, version=0x0114)
+                axes = [
+                    (getattr(e, name), evdev.AbsInfo(0, low, high, 16 if low == -32768 else 0, 128 if low == -32768 else 0, 0))
+                    for name, (low, high) in AXES.items()
+                ]
+                self.pad = create(
+                    {e.EV_KEY: [getattr(e, name) for name in BUTTONS], e.EV_ABS: axes},
+                    name="Microsoft X-Box 360 pad",
+                    vendor=0x045E,
+                    product=0x028E,
+                    version=0x0114,
+                )
         except (ImportError, OSError) as error:
             self.close()
-            raise RuntimeError(f"menu: cannot create uinput devices: {error}; install Linux evdev and grant this user /dev/uinput access") from error
+            raise RuntimeError(
+                f"menu: cannot create uinput devices: {error}; install Linux evdev and grant this user /dev/uinput access"
+            ) from error
         except BaseException:
             self.close()
             raise
@@ -161,7 +199,9 @@ def request(path: Path, command: object, timeout: float) -> dict:
             connection.sendall(json.dumps(command).encode() + b"\n")
             reply = read_message(connection)
         except OSError as error:
-            raise RuntimeError(f"menu: input service unavailable at {path}: {error}; run 'run.py menu start' on the target") from error
+            raise RuntimeError(
+                f"menu: input service unavailable at {path}: {error}; run 'run.py menu start' on the target"
+            ) from error
     if not isinstance(reply, dict) or reply.get("ok") is not True:
         raise RuntimeError(f"menu: {reply.get('error') if isinstance(reply, dict) else 'invalid service reply'}")
     return reply.get("result", {})

@@ -11,6 +11,7 @@ Exit code 0 = no errors (warnings allowed), 1 = errors.
 
 Usage: check_vpk.py game.vpk
 """
+
 from __future__ import annotations
 
 import re

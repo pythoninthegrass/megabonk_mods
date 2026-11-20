@@ -170,8 +170,7 @@ def test_a_truncated_shard_file_is_not_reused(tmp_path):
 
 def test_blocker_selection_requires_a_complete_matching_verdict():
     parts = [[Fde(1, 2)], [Fde(3, 4), Fde(5, 6)]]
-    report = {"binary_sha256": "sha", "bodies": 3, "scored": 3,
-              "verdict": {"coverage_complete": True, "blocking": [5]}}
+    report = {"binary_sha256": "sha", "bodies": 3, "scored": 3, "verdict": {"coverage_complete": True, "blocking": [5]}}
     assert li.select_blockers(report, "sha", parts) == [(1, parts[1], [Fde(5, 6)])]
     for bad in (
         {**report, "binary_sha256": "other"},
@@ -305,10 +304,22 @@ def test_scored_shard_identity_includes_the_lifter_so_a_changed_lifter_rescores(
     sections = [{"name": "s"}]
     clean = [{"start": 1, "size": 1, "holes": []}, {"start": 2, "size": 1, "holes": []}]
     blocked = [{"start": 1, "size": 1, "holes": ["BRANCHIND"]}, {"start": 2, "size": 1, "holes": ["BRANCHIND"]}]
-    ctx = dict(out=tmp_path, sha="a", fingerprint="b", ghidra="c", pipeline="", ghidra_timeout=10,
-               score_jobs=1, tool_timeout=10, so=tmp_path / "image.so")
-    li.write_shard(tmp_path / "pcode-0000.jsonl", li.shard_identity("a", "b", "c", part, ""),
-                   [{"kind": "sections", "sections": sections}, {"start": 1, "size": 1}, {"start": 2, "size": 1}])
+    ctx = dict(
+        out=tmp_path,
+        sha="a",
+        fingerprint="b",
+        ghidra="c",
+        pipeline="",
+        ghidra_timeout=10,
+        score_jobs=1,
+        tool_timeout=10,
+        so=tmp_path / "image.so",
+    )
+    li.write_shard(
+        tmp_path / "pcode-0000.jsonl",
+        li.shard_identity("a", "b", "c", part, ""),
+        [{"kind": "sections", "sections": sections}, {"start": 1, "size": 1}, {"start": 2, "size": 1}],
+    )
 
     monkeypatch.setattr(li, "scoring_fingerprint", lambda: "lifter-v1")
     monkeypatch.setattr(lp, "score_row", lambda row, *_a, **_k: clean[row["start"] - 1])
@@ -363,14 +374,23 @@ def test_missing_dump_cache_can_be_retried_without_discarding_good_rows(tmp_path
     sections = [{"name": "s"}]
     body = {"start": 1, "size": 1}
     failed = lp.failed_row(2, 1, "old partial dump", missing_dump=True)
-    ctx = dict(out=tmp_path, sha="a", fingerprint="b", ghidra="c", pipeline="", ghidra_timeout=10,
-               score_jobs=1, tool_timeout=10, so=tmp_path / "image.so", retry_missing_dump=True)
+    ctx = dict(
+        out=tmp_path,
+        sha="a",
+        fingerprint="b",
+        ghidra="c",
+        pipeline="",
+        ghidra_timeout=10,
+        score_jobs=1,
+        tool_timeout=10,
+        so=tmp_path / "image.so",
+        retry_missing_dump=True,
+    )
     monkeypatch.setattr(li, "scoring_fingerprint", lambda: "scorer")
     identity = li.shard_identity("a", "b", "c", part, "")
     scored_id = li.scored_shard_identity("a", "b", "c", part, "", 10, "scorer")
     li.write_shard(tmp_path / "scored-0000.jsonl", scored_id, [body, failed])
-    li.write_shard(tmp_path / "pcode-0000.jsonl", identity,
-                   [{"kind": "sections", "sections": sections}, body, failed])
+    li.write_shard(tmp_path / "pcode-0000.jsonl", identity, [{"kind": "sections", "sections": sections}, body, failed])
 
     def dump(so, bodies, work, **kwargs):
         assert bodies == [part[1]]

@@ -9,6 +9,7 @@ Creates:  icon0.png (128x128), pic0.png (960x544),
           livearea/contents/bg.png (840x500), livearea/contents/startup.png (280x158),
           livearea/contents/template.xml (unless one exists)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -39,9 +40,7 @@ def chunk(tag: bytes, data: bytes) -> bytes:
 def write_indexed_png(path: Path, w: int, h: int, c0: tuple, c1: tuple) -> None:
     """Vertical gradient between c0 and c1 using a 64-entry palette."""
     n = 64
-    palette = b"".join(
-        bytes(int(c0[k] + (c1[k] - c0[k]) * i / (n - 1)) for k in range(3)) for i in range(n)
-    )
+    palette = b"".join(bytes(int(c0[k] + (c1[k] - c0[k]) * i / (n - 1)) for k in range(3)) for i in range(n))
     rows = []
     for y in range(h):
         idx = min(n - 1, y * n // h)

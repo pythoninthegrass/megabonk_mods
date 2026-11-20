@@ -83,9 +83,9 @@ def dump_cached(so: Path, bodies: dict[int, int], cache_dir: Path, work: Path) -
     import json
     import lift_probe as lp
 
-    key = hashlib.sha256(
-        json.dumps([lp.sha256(so), sorted(bodies.items()), lp.dump_script_fingerprint()]).encode()
-    ).hexdigest()[:24]
+    key = hashlib.sha256(json.dumps([lp.sha256(so), sorted(bodies.items()), lp.dump_script_fingerprint()]).encode()).hexdigest()[
+        :24
+    ]
     cached = cache_dir / f"{key}.json"
     if cached.exists():
         record = json.loads(cached.read_text())

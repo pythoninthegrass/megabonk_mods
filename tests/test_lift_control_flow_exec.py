@@ -32,14 +32,16 @@ def control_flow_executable(tmp_path_factory):
     images = base.section_images(elf_shim_probe.parse_elf(SHIPPED), SHIPPED.read_bytes(), sections, bodies.values())
     ir.write_text(pl.module_for(list(bodies.values()), images))
     shim = work / "shim.c"
-    shim.write_text(abi.generate(
-        [
-            abi.Binding(THUNK, "lifted_thunk", abi.Signature(("ptr", "ptr", "u64"), "u32")),
-            abi.Binding(SWITCH, "lifted_switch", abi.Signature(("u32",), "u8")),
-        ],
-        [],
-        callable_bodies=[TARGET],
-    ))
+    shim.write_text(
+        abi.generate(
+            [
+                abi.Binding(THUNK, "lifted_thunk", abi.Signature(("ptr", "ptr", "u64"), "u32")),
+                abi.Binding(SWITCH, "lifted_switch", abi.Signature(("u32",), "u8")),
+            ],
+            [],
+            callable_bodies=[TARGET],
+        )
+    )
     exe = work / "control_flow"
     base.run([base.LLVM / "opt", "-passes=verify", "-disable-output", ir])
     base.run([base.LLVM / "clang", "-arch", "arm64", "-O2", ir, shim, FIXTURES / "control_flow.c", "-o", exe])

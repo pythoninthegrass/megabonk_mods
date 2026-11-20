@@ -1,10 +1,10 @@
 """Decide whether a Thunderstore package build or publication is allowed, without uploading anything.
 
-    uv run scripts/thunderstore_release_gate.py gate --tag v0.2.0     # package=true|false for a release
-    uv run scripts/thunderstore_release_gate.py versions              # every version source agrees
-    uv run scripts/thunderstore_release_gate.py guard --event release --tag v0.2.0 [--prerelease]
-    uv run scripts/thunderstore_release_gate.py record <zip>          # write <zip>.sha256
-    uv run scripts/thunderstore_release_gate.py checksum <zip>        # verify against <zip>.sha256
+uv run scripts/thunderstore_release_gate.py gate --tag v0.2.0     # package=true|false for a release
+uv run scripts/thunderstore_release_gate.py versions              # every version source agrees
+uv run scripts/thunderstore_release_gate.py guard --event release --tag v0.2.0 [--prerelease]
+uv run scripts/thunderstore_release_gate.py record <zip>          # write <zip>.sha256
+uv run scripts/thunderstore_release_gate.py checksum <zip>        # verify against <zip>.sha256
 """
 
 import argparse
@@ -107,7 +107,11 @@ def previous_stable_tag(tag: str, tags: Iterable[str]) -> str | None:
     if current is None:
         return None
     ceiling = tuple(map(int, current.groups()))
-    older = [(tuple(map(int, match.groups())), name) for name in tags if (match := STABLE_TAG.match(name)) and tuple(map(int, match.groups())) < ceiling]
+    older = [
+        (tuple(map(int, match.groups())), name)
+        for name in tags
+        if (match := STABLE_TAG.match(name)) and tuple(map(int, match.groups())) < ceiling
+    ]
     return max(older)[1] if older else None
 
 
@@ -159,7 +163,9 @@ def verify_checksum(archive: Path, record: Path) -> list[str]:
 def synchronized_versions(root: Path = ROOT) -> dict[str, str]:
     package = tomllib.loads((root / "thunderstore.toml").read_text(encoding="utf-8"))
     python = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    plugin = re.search(r'BepInPlugin\("megabonklevels.runtime", "[^"]+", "([^"]+)"\)', (root / PLUGIN).read_text(encoding="utf-8"))
+    plugin = re.search(
+        r'BepInPlugin\("megabonklevels.runtime", "[^"]+", "([^"]+)"\)', (root / PLUGIN).read_text(encoding="utf-8")
+    )
     return {
         "thunderstore": package["package"]["versionNumber"],
         "manifest": json.loads((root / "pkg/manifest.json").read_text(encoding="utf-8"))["version_number"],
@@ -185,7 +191,10 @@ def _cmd_gate(args: argparse.Namespace) -> int:
     base = previous_stable_tag(args.tag, _git("tag", "--list").split())
     eligible = True if base is None else release_affects_package(changed_between(base, args.tag))
     print(f"package={'true' if eligible else 'false'}")
-    print(f"gate: {args.tag} vs {base or 'no earlier stable tag'}: {'package build' if eligible else 'no package change'}", file=sys.stderr)
+    print(
+        f"gate: {args.tag} vs {base or 'no earlier stable tag'}: {'package build' if eligible else 'no package change'}",
+        file=sys.stderr,
+    )
     return 0
 
 

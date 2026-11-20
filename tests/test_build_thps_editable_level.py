@@ -27,7 +27,12 @@ def test_assembly_covers_geometry_once_and_snapshots_paths():
 
 def test_recorded_transforms_and_monotonic_reserved_ids():
     pieces, defaults = kit.read_inputs()
-    supports = {child["sourceInstance"] for children in defaults["instances"].values() for child in children if child["catalogId"].startswith("bundle:thps/")}
+    supports = {
+        child["sourceInstance"]
+        for children in defaults["instances"].values()
+        for child in children
+        if child["catalogId"].startswith("bundle:thps/")
+    }
     entries = [piece for piece in pieces["pieces"] if piece["module"] != "suppressed-post" and piece["asset"] not in supports]
     next_id = 0
     for root, piece in zip(placements(kit.piece_edits(pieces, defaults)), entries, strict=True):
@@ -40,7 +45,10 @@ def test_recorded_transforms_and_monotonic_reserved_ids():
     assert next_id == len(entries) + 63
 
 
-@pytest.mark.parametrize("failure", ["duplicate", "missing_owner", "missing_support", "double_owner", "schema", "nonfinite", "child_scale", "suppressed_owner"])
+@pytest.mark.parametrize(
+    "failure",
+    ["duplicate", "missing_owner", "missing_support", "double_owner", "schema", "nonfinite", "child_scale", "suppressed_owner"],
+)
 def test_invalid_sidecars_fail_explicitly(failure):
     pieces, defaults = copy.deepcopy(kit.read_inputs())
     assets = defaults["instances"]

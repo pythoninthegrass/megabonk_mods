@@ -37,17 +37,16 @@ def audit_row(body, row, disassemble, read):
                 entry["missing_cases"] = [case for case in raw if case not in table["cases"]]
                 entry["extra_direct_edges"] = [case for case in extras if case in direct]
                 rest = [case for case in extras if case not in direct]
-                entry["extra_outside_body"] = [
-                    case for case in rest if not body.start <= case < body.start + body.size
-                ]
-                entry["extra_unexplained"] = [
-                    case for case in rest if body.start <= case < body.start + body.size
-                ]
+                entry["extra_outside_body"] = [case for case in rest if not body.start <= case < body.start + body.size]
+                entry["extra_unexplained"] = [case for case in rest if body.start <= case < body.start + body.size]
                 unexplained += len(entry["extra_unexplained"])
         tables.append(entry)
     return {
-        **row, "jt": tables,
-        "tables_unverified": unverified, "tables_unaudited": unaudited, "extra_unexplained": unexplained,
+        **row,
+        "jt": tables,
+        "tables_unverified": unverified,
+        "tables_unaudited": unaudited,
+        "extra_unexplained": unexplained,
     }
 
 
@@ -114,9 +113,21 @@ def dump_batch(so, part, work, function_timeout, batch_timeout, emit_c, bounded,
     project = work / "project"
     project.mkdir()
     cmd = [
-        lp.find_ghidra(), project, "evidence", "-import", so.resolve(), "-noanalysis",
-        "-scriptPath", SCRIPT.parent, "-postScript", SCRIPT.name, ranges, work,
-        str(function_timeout), str(emit_c).lower(), str(bounded).lower(),
+        lp.find_ghidra(),
+        project,
+        "evidence",
+        "-import",
+        so.resolve(),
+        "-noanalysis",
+        "-scriptPath",
+        SCRIPT.parent,
+        "-postScript",
+        SCRIPT.name,
+        ranges,
+        work,
+        str(function_timeout),
+        str(emit_c).lower(),
+        str(bounded).lower(),
     ]
     try:
         result = lp.run_tool(cmd, env=lp.ghidra_env(), timeout=batch_timeout, text=True)
@@ -133,16 +144,19 @@ def audit_baseline(so, shards, out, addresses=None):
     """Audits every baseline row with jump tables against the ELF bytes, no Ghidra involved."""
     read = elf_reader(so)
     disassemble = objdump_disassembler(so, lp.LLVM / "llvm-objdump")
-    selected, totals = [], {
-        "rows": 0,
-        "tables": 0,
-        "matched": 0,
-        "unverified": 0,
-        "unaudited": 0,
-        "extra_direct_edges": 0,
-        "extra_outside_body": 0,
-        "extra_unexplained": 0,
-    }
+    selected, totals = (
+        [],
+        {
+            "rows": 0,
+            "tables": 0,
+            "matched": 0,
+            "unverified": 0,
+            "unaudited": 0,
+            "extra_direct_edges": 0,
+            "extra_outside_body": 0,
+            "extra_unexplained": 0,
+        },
+    )
     for path in sorted(shards.glob("pcode-*.jsonl")):
         if not re.fullmatch(r"pcode-\d+\.jsonl", path.name):
             continue
@@ -201,7 +215,13 @@ def main():
     def dump(part, work):
         print(f"Recovering jump tables for: {', '.join(hex(b.start) for b in part)}", flush=True)
         return dump_batch(
-            args.so, part, work, args.function_timeout, args.batch_timeout, args.emit_c, args.bounded,
+            args.so,
+            part,
+            work,
+            args.function_timeout,
+            args.batch_timeout,
+            args.emit_c,
+            args.bounded,
             args.out / f"batch-{part[0].start:x}.log",
         )
 

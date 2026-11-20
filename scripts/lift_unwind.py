@@ -279,7 +279,9 @@ def render_c(table: Table, lsda_bytes: bytes, lsda_va: int, address_bias: int = 
     data = ", ".join(f"0x{b:02x}" for b in lsda_bytes) or "0"
     slots = type_slots or []
     sections = sorted({slot[1] for slot in slots})
-    slot_rows = "".join(f"  {{0x{entry - lsda_va:x}ULL, sec_{section} + 0x{offset:x}, {size}}},\n" for entry, section, offset, size in slots)
+    slot_rows = "".join(
+        f"  {{0x{entry - lsda_va:x}ULL, sec_{section} + 0x{offset:x}, {size}}},\n" for entry, section, offset, size in slots
+    )
     return "\n".join(
         [
             '#include "lift_unwind.h"',

@@ -21,7 +21,9 @@ CACHE = Path(__file__).resolve().parents[1] / ".tools/vendor-cache" / PACK_NAME
 LOG_FILE = Path(__file__).resolve().parents[1] / ".tools/logs/bepinex-repair.log"
 METADATA = (".doorstop_version", "changelog.txt")
 PREREQUISITES = (
-    "Megabonk.exe", "winhttp.dll", "doorstop_config.ini",
+    "Megabonk.exe",
+    "winhttp.dll",
+    "doorstop_config.ini",
     "BepInEx/core/BepInEx.Unity.IL2CPP.dll",
 )
 DOORSTOP_FILE = "doorstop_config.ini"
@@ -45,12 +47,18 @@ def payload(body: bytes) -> dict[str, bytes]:
             prefix = "BepInExPack/"
             if not member.filename.startswith(prefix) or member.is_dir():
                 continue
-            name = member.filename[len(prefix):]
+            name = member.filename[len(prefix) :]
             if name not in METADATA and not name.startswith("dotnet/"):
                 continue
             path = PurePosixPath(name)
-            if (path.is_absolute() or ".." in path.parts or "\\" in name or ":" in name
-                    or stat.S_ISLNK(member.external_attr >> 16) or name.casefold() in seen):
+            if (
+                path.is_absolute()
+                or ".." in path.parts
+                or "\\" in name
+                or ":" in name
+                or stat.S_ISLNK(member.external_attr >> 16)
+                or name.casefold() in seen
+            ):
                 raise ValueError(f"Unsafe or duplicate archive member: {name}")
             total += member.file_size
             if total > 400 * 1024 * 1024:

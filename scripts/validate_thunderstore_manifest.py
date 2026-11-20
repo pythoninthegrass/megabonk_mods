@@ -212,7 +212,9 @@ CHAR_FIELDS = (
 )
 
 
-def _char_problems(value: Any, max_length: int | None, allow_blank: bool, validators: tuple[Callable[[str], list[str]], ...] = ()) -> list[str]:
+def _char_problems(
+    value: Any, max_length: int | None, allow_blank: bool, validators: tuple[Callable[[str], list[str]], ...] = ()
+) -> list[str]:
     """DRF 3.14 CharField.run_validation followed by Field.run_validation, as a message list."""
     if value is None:
         return [MAY_NOT_BE_NULL]
@@ -224,7 +226,9 @@ def _char_problems(value: Any, max_length: int | None, allow_blank: bool, valida
     errors = [TOO_MANY_CHARACTERS.format(max_length=max_length)] if max_length is not None and len(value) > max_length else []
     if "\x00" in value:
         errors.append(NULL_CHARACTERS)
-    errors += [SURROGATE_CHARACTERS.format(code_point=ord(character)) for character in value if 0xD800 <= ord(character) <= 0xDFFF][:1]
+    errors += [
+        SURROGATE_CHARACTERS.format(code_point=ord(character)) for character in value if 0xD800 <= ord(character) <= 0xDFFF
+    ][:1]
     return errors + [message for validate in validators for message in validate(value)]
 
 
@@ -249,7 +253,9 @@ def _installer_problems(entry: Any) -> dict:
     return {"identifier": problems} if problems else {}
 
 
-def _list_problems(value: Any, *, allow_empty: bool, min_length: int | None, max_length: int | None, child: Callable[[Any], Any]) -> dict | list[str]:
+def _list_problems(
+    value: Any, *, allow_empty: bool, min_length: int | None, max_length: int | None, child: Callable[[Any], Any]
+) -> dict | list[str]:
     """ListField.to_internal_value plus the length validators DRF appends; child errors win, as in DRF."""
     if value is None:
         return [MAY_NOT_BE_NULL]
@@ -304,10 +310,14 @@ def serializer_problems(document: Any, *, namespace: str) -> dict:
     errors["dependencies"] = (
         [REQUIRED]
         if "dependencies" not in document
-        else _list_problems(document["dependencies"], allow_empty=True, min_length=None, max_length=1000, child=_dependency_problems)
+        else _list_problems(
+            document["dependencies"], allow_empty=True, min_length=None, max_length=1000, child=_dependency_problems
+        )
     )
     if "installers" in document:
-        errors["installers"] = _list_problems(document["installers"], allow_empty=False, min_length=1, max_length=100, child=_installer_problems)
+        errors["installers"] = _list_problems(
+            document["installers"], allow_empty=False, min_length=1, max_length=100, child=_installer_problems
+        )
         if not errors["installers"] and (duplicated := _duplicated_identifier(document["installers"])):
             errors["non_field_errors"] = [f"Duplicate use of installer {duplicated}"]
     errors = {key: value for key, value in errors.items() if value}
@@ -355,7 +365,9 @@ def package_exists(namespace: str, name: str, version_number: str | None = None,
     return None if outcome == UNREACHABLE else False
 
 
-def namespace_packages(namespace: str, community: str = "megabonk", *, base: str = THUNDERSTORE_BASE) -> tuple[bool | None, list[str]]:
+def namespace_packages(
+    namespace: str, community: str = "megabonk", *, base: str = THUNDERSTORE_BASE
+) -> tuple[bool | None, list[str]]:
     """Whether the site knows this team namespace, and the package names it lists under it."""
     outcome, payload = _get_json(f"{base}/api/cyberstorm/listing/{community}/{namespace}/")
     if outcome != OK or not isinstance(payload, dict):
@@ -363,7 +375,9 @@ def namespace_packages(namespace: str, community: str = "megabonk", *, base: str
     return True, [str(entry.get("name", "")) for entry in payload.get("results") or []]
 
 
-def online_problems(document: Any, *, namespace: str, community: str = "megabonk", base: str = THUNDERSTORE_BASE) -> tuple[list[str], list[str]]:
+def online_problems(
+    document: Any, *, namespace: str, community: str = "megabonk", base: str = THUNDERSTORE_BASE
+) -> tuple[list[str], list[str]]:
     """The database-backed checks as (problems, notes); a note is something that could not be confirmed."""
     if not isinstance(document, dict):
         return [], []
@@ -392,7 +406,9 @@ def online_problems(document: Any, *, namespace: str, community: str = "megabonk
             if known is None:
                 notes.append(f"thunderstore.io could not be reached to list {namespace}")
             elif known is False:
-                notes.append(f"no team namespace {namespace!r} on thunderstore.io yet: {NAMESPACE_NOT_FOUND} until it has a package")
+                notes.append(
+                    f"no team namespace {namespace!r} on thunderstore.io yet: {NAMESPACE_NOT_FOUND} until it has a package"
+                )
             elif any(existing.casefold() == name.casefold() and existing != name for existing in names):
                 problems.append(f"manifest.json non_field_errors: {DIFFERENT_CAPITALIZATION}")
     if document.get("installers"):
@@ -434,9 +450,13 @@ def check(path: Path, namespace: str, online: bool) -> tuple[list[str], list[str
 def main() -> int:
     """Run one check over a manifest and report it the way the site's page does."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("manifest", nargs="?", type=Path, default=ROOT / "pkg" / "manifest.json", help="manifest.json or a built package ZIP")
+    parser.add_argument(
+        "manifest", nargs="?", type=Path, default=ROOT / "pkg" / "manifest.json", help="manifest.json or a built package ZIP"
+    )
     parser.add_argument("--team", help="namespace to validate under (default: thunderstore.toml [package].namespace)")
-    parser.add_argument("--online", action="store_true", help="resolve dependencies and check for a published version against thunderstore.io")
+    parser.add_argument(
+        "--online", action="store_true", help="resolve dependencies and check for a published version against thunderstore.io"
+    )
     parser.add_argument("--json", action="store_true", dest="as_json", help="emit machine-readable output")
     args = parser.parse_args()
 

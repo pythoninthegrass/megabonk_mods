@@ -87,7 +87,10 @@ def test_renovate_covers_each_runtime_and_inline_python():
     assert config["lockFileMaintenance"]["schedule"] == config["schedule"]
 
 
-@pytest.mark.skipif(not UPSTREAM.is_dir() or shutil.which("node") is None, reason="Install local release-please as documented to run upstream-updater integration")
+@pytest.mark.skipif(
+    not UPSTREAM.is_dir() or shutil.which("node") is None,
+    reason="Install local release-please as documented to run upstream-updater integration",
+)
 def test_upstream_updaters_bump_product_versions_without_touching_dependencies(tmp_path):
     config = json.loads((ROOT / "release-please-config.json").read_text())
     files = {entry["path"] for entry in config["packages"]["."]["extra-files"]} | {"pyproject.toml", "go/go.mod"}
@@ -118,7 +121,9 @@ for (const e of config.packages['.']['extra-files']) {
 }
 for (const e of mergeUpdates(updates)) update(e.path, e.updater);
 """
-    subprocess.run(["node", "-e", script, str(UPSTREAM), str(tmp_path), json.dumps(config)], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["node", "-e", script, str(UPSTREAM), str(tmp_path), json.dumps(config)], check=True, capture_output=True, text=True
+    )
     assert set(product_versions(tmp_path).values()) == {"0.2.3"}
     before_lock = tomllib.loads((ROOT / "uv.lock").read_text())
     after_lock = tomllib.loads((tmp_path / "uv.lock").read_text())
@@ -132,5 +137,11 @@ for (const e of mergeUpdates(updates)) update(e.path, e.updater);
     for name in ("pyproject.toml", "thunderstore.toml"):
         before = tomllib.loads((ROOT / name).read_text())
         after = tomllib.loads((tmp_path / name).read_text())
-        assert before["project" if name == "pyproject.toml" else "package"]["dependencies"] == after["project" if name == "pyproject.toml" else "package"]["dependencies"]
-    assert ET.parse(ROOT / PROJECT).getroot().find("ItemGroup/PackageReference").attrib == ET.parse(tmp_path / PROJECT).getroot().find("ItemGroup/PackageReference").attrib
+        assert (
+            before["project" if name == "pyproject.toml" else "package"]["dependencies"]
+            == after["project" if name == "pyproject.toml" else "package"]["dependencies"]
+        )
+    assert (
+        ET.parse(ROOT / PROJECT).getroot().find("ItemGroup/PackageReference").attrib
+        == ET.parse(tmp_path / PROJECT).getroot().find("ItemGroup/PackageReference").attrib
+    )

@@ -100,10 +100,22 @@ def test_bad_names(name):
 @pytest.mark.parametrize(
     ("version", "messages"),
     [
-        ("1.2", ["Version numbers must follow the Major.Minor.Patch format (e.g. 1.45.320)", "Version 1.2 should be written as 1.2.0"]),
+        (
+            "1.2",
+            [
+                "Version numbers must follow the Major.Minor.Patch format (e.g. 1.45.320)",
+                "Version 1.2 should be written as 1.2.0",
+            ],
+        ),
         ("01.2.3", ["Version 01.2.3 should be written as 1.2.3"]),
-        ("1.2.3.4", ["Version numbers must follow the Major.Minor.Patch format (e.g. 1.45.320)", "invalid version number '1.2.3.4'"]),
-        ("v1.2.3", ["Version numbers must follow the Major.Minor.Patch format (e.g. 1.45.320)", "invalid version number 'v1.2.3'"]),
+        (
+            "1.2.3.4",
+            ["Version numbers must follow the Major.Minor.Patch format (e.g. 1.45.320)", "invalid version number '1.2.3.4'"],
+        ),
+        (
+            "v1.2.3",
+            ["Version numbers must follow the Major.Minor.Patch format (e.g. 1.45.320)", "invalid version number 'v1.2.3'"],
+        ),
         ("", ["This field may not be blank."]),
     ],
 )
@@ -131,7 +143,18 @@ def test_accepted_urls(url):
     assert check(website_url=url) == []
 
 
-@pytest.mark.parametrize("url", ("not a url", "ftp://example.com/", "mailto:a@b.com", "//example.com", "https://example", "https://exa mple.com", "https://exa\tmple.com"))
+@pytest.mark.parametrize(
+    "url",
+    (
+        "not a url",
+        "ftp://example.com/",
+        "mailto:a@b.com",
+        "//example.com",
+        "https://example",
+        "https://exa mple.com",
+        "https://exa\tmple.com",
+    ),
+)
 def test_rejected_urls(url):
     assert check(website_url=url) == ["manifest.json website_url: Enter a valid URL."]
 
@@ -157,7 +180,9 @@ def test_dependency_references(dependency, message):
 
 
 def test_dependency_list_shape():
-    assert check(dependencies="Mythic-TestMod-1.1.0") == ['manifest.json dependencies: Expected a list of items but got type "str".']
+    assert check(dependencies="Mythic-TestMod-1.1.0") == [
+        'manifest.json dependencies: Expected a list of items but got type "str".'
+    ]
     assert check(dependencies=None) == ["manifest.json dependencies: This field may not be null."]
     assert check(dependencies=[]) == []
     assert check(dependencies=[None]) == ["manifest.json dependencies 0: This field may not be null."]
@@ -190,9 +215,13 @@ def test_installers_are_optional_and_checked_for_shape():
     assert check(installers=[{"identifier": "r2modman"}]) == []
     assert check(installers=[]) == ["manifest.json installers: This list may not be empty."]
     assert check(installers=[{}]) == ["manifest.json installers 0 identifier: This field is required."]
-    assert check(installers=["r2modman"]) == ["manifest.json installers 0 non_field_errors: Invalid data. Expected a mapping, but got str."]
+    assert check(installers=["r2modman"]) == [
+        "manifest.json installers 0 non_field_errors: Invalid data. Expected a mapping, but got str."
+    ]
     assert check(installers=[{"identifier": 7}]) == ["manifest.json installers 0 identifier: Not a valid string."]
-    assert check(installers=[{"identifier": "a"}, {"identifier": "a"}]) == ["manifest.json non_field_errors: Duplicate use of installer a"]
+    assert check(installers=[{"identifier": "a"}, {"identifier": "a"}]) == [
+        "manifest.json non_field_errors: Duplicate use of installer a"
+    ]
 
 
 def test_too_many_installers():
@@ -202,7 +231,9 @@ def test_too_many_installers():
 
 
 def test_no_team_selected():
-    assert problems(manifest(), team="") == ["manifest.json non_field_errors: Unable to validate package when no team is selected"]
+    assert problems(manifest(), team="") == [
+        "manifest.json non_field_errors: Unable to validate package when no team is selected"
+    ]
 
 
 @pytest.mark.parametrize("team", ("_leading", "trailing_", "has space", "x" * 65))
@@ -218,10 +249,16 @@ def test_serializer_errors_keep_the_drf_field_nesting():
 def test_reference_parses_from_the_right():
     # Upstream cannot tell where a dashed namespace ends, so the name is always the last component.
     reference = vtm.PackageReference.parse("Dash-Ed-Team-Mythic-TestMod-1.1.0")
-    assert (reference.namespace, reference.name, str(reference)) == ("Dash-Ed-Team-Mythic", "TestMod", "Dash-Ed-Team-Mythic-TestMod-1.1.0")
+    assert (reference.namespace, reference.name, str(reference)) == (
+        "Dash-Ed-Team-Mythic",
+        "TestMod",
+        "Dash-Ed-Team-Mythic-TestMod-1.1.0",
+    )
 
 
-@pytest.mark.parametrize(("given", "canonical"), [("1.2.3", "1.2.3"), ("1.2", "1.2.0"), ("0.0.0", "0.0.0"), ("10.20.30", "10.20.30")])
+@pytest.mark.parametrize(
+    ("given", "canonical"), [("1.2.3", "1.2.3"), ("1.2", "1.2.0"), ("0.0.0", "0.0.0"), ("10.20.30", "10.20.30")]
+)
 def test_version_canonical_form(given, canonical):
     assert vtm.Version(given).canonical() == canonical
 

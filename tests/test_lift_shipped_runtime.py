@@ -254,7 +254,12 @@ def shipped_executable(tmp_path_factory):
     shipped_offset = fixture_offset + len(except_table)
     combined = lu.Table(
         [
-            replace(e, lsda=e.lsda - except_base + fixture_offset if e.pc_begin in f_by_start else e.lsda - sexcept_base + shipped_offset)
+            replace(
+                e,
+                lsda=e.lsda - except_base + fixture_offset
+                if e.pc_begin in f_by_start
+                else e.lsda - sexcept_base + shipped_offset,
+            )
             if e.lsda
             else e
             for e in table.entries

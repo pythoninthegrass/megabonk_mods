@@ -60,9 +60,7 @@ def test_census_of_a_body_with_no_indirect_jump_is_clean():
 def test_main_exits_zero_when_a_site_is_proven(tmp_path):
     out = tmp_path / "probe"
     out.mkdir()
-    (out / "bodies.jsonl").write_text(
-        json.dumps({"start": 0x1000, "proven_tail_calls": 1, "unproven_branchind": []}) + "\n"
-    )
+    (out / "bodies.jsonl").write_text(json.dumps({"start": 0x1000, "proven_tail_calls": 1, "unproven_branchind": []}) + "\n")
     assert br.main([str(out), "--write"]) == 0
     assert (out / "branchind.json").exists()
 

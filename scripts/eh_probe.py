@@ -90,8 +90,9 @@ def pointer_size(encoding: int, address_size: int = 8) -> int | None:
         raise EhError(f"unknown pointer encoding {encoding:#04x}") from None
 
 
-def read_encoded_pointer(data: bytes, at: int, encoding: int, *, base: int | None = None,
-                         address_size: int = 8, resolve: bool = True) -> tuple[int, int]:
+def read_encoded_pointer(
+    data: bytes, at: int, encoding: int, *, base: int | None = None, address_size: int = 8, resolve: bool = True
+) -> tuple[int, int]:
     """Decodes an encoded pointer at `at`; `base` replaces the address it is relative to.
 
     An indirect encoding names a slot holding the pointer. Without a loaded image that slot
@@ -181,7 +182,7 @@ def _entries(eh_frame: bytes):
         body = at + 4
         if body + length > len(eh_frame):
             raise EhError("an .eh_frame entry runs past the end of the section")
-        yield at, eh_frame[body:body + length]
+        yield at, eh_frame[body : body + length]
         at = body + length
 
 
@@ -209,7 +210,7 @@ def _parse_cie(offset: int, body: bytes, base: int, address_size: int) -> Cie:
     aug_len, pos = read_uleb128(body, pos)
     if pos + aug_len > len(body):
         raise EhError("a CIE augmentation data length runs past the end")
-    aug = body[pos:pos + aug_len]
+    aug = body[pos : pos + aug_len]
     cursor = 0
     lsda_encoding = None
     pointer_encoding = None
@@ -221,8 +222,8 @@ def _parse_cie(offset: int, body: bytes, base: int, address_size: int) -> Cie:
             encoding = aug[cursor]
             cursor += 1
             personality_slot, cursor = read_encoded_pointer(
-                aug, cursor, encoding, base=base + offset + 4 + pos + cursor,
-                address_size=address_size, resolve=False)
+                aug, cursor, encoding, base=base + offset + 4 + pos + cursor, address_size=address_size, resolve=False
+            )
         elif char == "L":
             lsda_encoding = aug[cursor]
             cursor += 1
@@ -236,9 +237,11 @@ def _parse_cie(offset: int, body: bytes, base: int, address_size: int) -> Cie:
 
 def parse_cies(eh_frame: bytes, base: int = 0, address_size: int = 8) -> dict[int, Cie]:
     """Every CIE in the section, keyed by the offset an FDE's backward pointer resolves to."""
-    cies = {offset: _parse_cie(offset, body, base, address_size)
-            for offset, body in _entries(eh_frame)
-            if struct.unpack_from("<I", body, 0)[0] == 0}
+    cies = {
+        offset: _parse_cie(offset, body, base, address_size)
+        for offset, body in _entries(eh_frame)
+        if struct.unpack_from("<I", body, 0)[0] == 0
+    }
     if not cies:
         raise EhError(".eh_frame holds no CIE")
     return cies
@@ -263,20 +266,19 @@ def parse_frames(eh_frame: bytes, base: int = 0, address_size: int = 8) -> list[
         if cie.pointer_encoding is None:
             raise EhError(f"CIE {cie.offset:#x} carries no R augmentation, so its pointer width is unknown")
         pos = 4
-        pc_begin, pos = read_encoded_pointer(body, pos, cie.pointer_encoding,
-                                             base=base + entry + 4 + pos,
-                                             address_size=address_size)
+        pc_begin, pos = read_encoded_pointer(
+            body, pos, cie.pointer_encoding, base=base + entry + 4 + pos, address_size=address_size
+        )
         # The range is the code pointer's own fixed-width form without its application bits:
         # .eh_frame does not use the ULEB128 range of .debug_frame.
-        pc_range, pos = read_encoded_pointer(body, pos, cie.pointer_encoding & 0x0F,
-                                             address_size=address_size)
+        pc_range, pos = read_encoded_pointer(body, pos, cie.pointer_encoding & 0x0F, address_size=address_size)
         lsda = None
         if cie.augmentation.startswith("z"):
             aug_len, pos = read_uleb128(body, pos)
             if cie.lsda_encoding not in (None, DW_EH_PE_omit) and aug_len:
-                lsda, _ = read_encoded_pointer(body, pos, cie.lsda_encoding,
-                                               base=base + entry + 4 + pos,
-                                               address_size=address_size)
+                lsda, _ = read_encoded_pointer(
+                    body, pos, cie.lsda_encoding, base=base + entry + 4 + pos, address_size=address_size
+                )
                 if lsda == 0:
                     lsda = None
         frames.append(Frame(pc_begin, pc_range, lsda, cie.augmentation, cie.offset))
@@ -285,8 +287,7 @@ def parse_frames(eh_frame: bytes, base: int = 0, address_size: int = 8) -> list[
 
 def bodies(frames: list[Frame], lo: int, hi: int) -> list[Body]:
     """The function bodies of one section: FDEs whose first instruction lies in [lo, hi)."""
-    return [Body(f.pc_begin, f.pc_range, f.lsda, f.augmentation)
-            for f in frames if lo <= f.pc_begin < hi and f.pc_range > 0]
+    return [Body(f.pc_begin, f.pc_range, f.lsda, f.augmentation) for f in frames if lo <= f.pc_begin < hi and f.pc_range > 0]
 
 
 def read_call_site_field(data: bytes, at: int, encoding: int) -> tuple[int, int]:
@@ -403,7 +404,7 @@ def read_section(elf: elf_shim_probe.Elf, raw: bytes, name: str) -> tuple[bytes,
         raise EhError(f"{elf.path} has no {name} section")
     if section.offset + section.size > len(raw):
         raise EhError(f"{name} runs past the end of the file")
-    return raw[section.offset:section.offset + section.size], section.addr
+    return raw[section.offset : section.offset + section.size], section.addr
 
 
 def run_probe(so: Path, section: str = "il2cpp") -> dict:
@@ -420,58 +421,66 @@ def run_probe(so: Path, section: str = "il2cpp") -> dict:
     per_cie = Counter(f.cie_offset for f in frames)
     sampled = bodies(frames, target.addr, target.addr + target.size)
     report = measure(sampled, except_table, except_base)
-    report.update({
-        "binary": str(so),
-        "binary_sha256": hashlib.sha256(raw).hexdigest(),
-        "section": section,
-        "section_addr": hex(target.addr),
-        "section_bytes": target.size,
-        "eh_frame_bytes": len(eh_frame),
-        "eh_frame_fdes": len(frames),
-        "except_table_bytes": len(except_table),
-        "cies": [
-            {
-                "offset": hex(cie.offset),
-                "version": cie.version,
-                "augmentation": cie.augmentation,
-                "lsda_encoding": None if cie.lsda_encoding is None else hex(cie.lsda_encoding),
-                "pointer_encoding": hex(cie.pointer_encoding),
-                "personality_slot": None if cie.personality_slot is None else hex(cie.personality_slot),
-                "fdes": per_cie[cie.offset],
-            }
-            for cie in sorted(cies.values(), key=lambda c: c.offset)
-        ],
-    })
+    report.update(
+        {
+            "binary": str(so),
+            "binary_sha256": hashlib.sha256(raw).hexdigest(),
+            "section": section,
+            "section_addr": hex(target.addr),
+            "section_bytes": target.size,
+            "eh_frame_bytes": len(eh_frame),
+            "eh_frame_fdes": len(frames),
+            "except_table_bytes": len(except_table),
+            "cies": [
+                {
+                    "offset": hex(cie.offset),
+                    "version": cie.version,
+                    "augmentation": cie.augmentation,
+                    "lsda_encoding": None if cie.lsda_encoding is None else hex(cie.lsda_encoding),
+                    "pointer_encoding": hex(cie.pointer_encoding),
+                    "personality_slot": None if cie.personality_slot is None else hex(cie.personality_slot),
+                    "fdes": per_cie[cie.offset],
+                }
+                for cie in sorted(cies.values(), key=lambda c: c.offset)
+            ],
+        }
+    )
     return report
 
 
 def render(report: dict) -> str:
     """The census as lines a person reads: per-class presence, then the landing-pad spread."""
-    lines = [f"{report['section']}: {report['bodies']} bodies "
-             f"({report['section_bytes']} B) in {report['binary']}"]
+    lines = [f"{report['section']}: {report['bodies']} bodies ({report['section_bytes']} B) in {report['binary']}"]
     for name in SIZE_CLASSES:
         row = report["by_class"][name]
         share = 100.0 * row["with_lsda"] / row["bodies"] if row["bodies"] else 0.0
-        lines.append(f"  {name:6s} bodies {row['bodies']:8d}  with LSDA {row['with_lsda']:8d} "
-                     f"({share:5.1f}%)  with landing pads {row['with_pads']:8d}")
-    lines.append(f"  {'all':6s} bodies {report['bodies']:8d}  with LSDA {report['with_lsda']:8d} "
-                 f"({report['distinct_lsdas']} distinct tables)  without {report['without_lsda']:8d} "
-                 f"  outside the table {report['lsda_outside_table']}")
+        lines.append(
+            f"  {name:6s} bodies {row['bodies']:8d}  with LSDA {row['with_lsda']:8d} "
+            f"({share:5.1f}%)  with landing pads {row['with_pads']:8d}"
+        )
+    lines.append(
+        f"  {'all':6s} bodies {report['bodies']:8d}  with LSDA {report['with_lsda']:8d} "
+        f"({report['distinct_lsdas']} distinct tables)  without {report['without_lsda']:8d} "
+        f"  outside the table {report['lsda_outside_table']}"
+    )
     spread = "  ".join(f"{name} {report['pad_distribution'][name]}" for name in PAD_BUCKETS)
     lines.append(f"  landing pads per body: {spread}")
-    lines.append(f"  call sites {report['call_sites']}, landing pad entries {report['landing_pads']}, "
-                 f"distinct pads {report['distinct_pads']}, largest body {report['max_pads']} pads")
+    lines.append(
+        f"  call sites {report['call_sites']}, landing pad entries {report['landing_pads']}, "
+        f"distinct pads {report['distinct_pads']}, largest body {report['max_pads']} pads"
+    )
     for cie in report["cies"]:
-        lines.append(f"  CIE {cie['offset']} \"{cie['augmentation']}\" LSDA encoding "
-                     f"{cie['lsda_encoding'] or '-'} R {cie['pointer_encoding']} "
-                     f"personality slot {cie['personality_slot'] or '-'}: {cie['fdes']} FDEs")
+        lines.append(
+            f"  CIE {cie['offset']} \"{cie['augmentation']}\" LSDA encoding "
+            f"{cie['lsda_encoding'] or '-'} R {cie['pointer_encoding']} "
+            f"personality slot {cie['personality_slot'] or '-'}: {cie['fdes']} FDEs"
+        )
     return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("so", type=Path, nargs="?", default=DEFAULT_SO,
-                    help="Linux GameAssembly.so to analyse")
+    ap.add_argument("so", type=Path, nargs="?", default=DEFAULT_SO, help="Linux GameAssembly.so to analyse")
     ap.add_argument("--section", default="il2cpp", help="code section to census (default il2cpp)")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT, help="artifact directory")
     ap.add_argument("--json", action="store_true", help="print the report as JSON instead of a table")

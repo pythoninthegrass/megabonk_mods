@@ -147,9 +147,7 @@ def audit_body(fn: dict, row: dict, sections: list[dict], relocs: dict[int, int]
         "holes": row.get("holes", []),
         "decompiler": view,
         "verdict": verdict(view, sites),
-        "reasons": verdict_reasons(
-            view, sites, tables, row.get("tail_calls", 0), (fn["start"], fn["start"] + fn["size"])
-        ),
+        "reasons": verdict_reasons(view, sites, tables, row.get("tail_calls", 0), (fn["start"], fn["start"] + fn["size"])),
         "sites": sites,
     }
 
@@ -211,13 +209,14 @@ def main(argv: list[str] | None = None) -> int:
         "tail_call_sites": len(tail_sites),
         "by_verdict": {name: counts.get(name, 0) for name in VERDICTS},
         "sites_the_decompiler_declined_on": sum(
-            1 for result in results for site in result["sites"] if site["tail_call"] and site["a"] in result["decompiler"]["unrecoverable"]
+            1
+            for result in results
+            for site in result["sites"]
+            if site["tail_call"] and site["a"] in result["decompiler"]["unrecoverable"]
         ),
         "disagreeing_starts": [f"0x{result['start']:x}" for result in results if result["verdict"] == "disagrees"],
         "mixed_starts": [f"0x{result['start']:x}" for result in results if result["verdict"] == "mixed"],
-        "beyond_body_starts": [
-            f"0x{result['start']:x}" for result in results if result["verdict"] == "switch beyond body"
-        ],
+        "beyond_body_starts": [f"0x{result['start']:x}" for result in results if result["verdict"] == "switch beyond body"],
         "no_tail_call_starts": [f"0x{result['start']:x}" for result in results if result["verdict"] == "no tail call"],
     }
     (args.out / "tail_calls_summary.json").write_text(json.dumps(summary, indent=2) + "\n")

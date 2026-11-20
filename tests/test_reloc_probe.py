@@ -21,12 +21,14 @@ import elf_shim_probe as esp
 import reloc_probe as rp
 
 SHIPPED_SO = esp.REPO / ".tools/megabonk-linux-native/Megabonk/GameAssembly.so"
-requires_shipped_so = pytest.mark.skipif(
-    not SHIPPED_SO.exists(), reason=f"shipped Linux runtime absent at {SHIPPED_SO}"
-)
+requires_shipped_so = pytest.mark.skipif(not SHIPPED_SO.exists(), reason=f"shipped Linux runtime absent at {SHIPPED_SO}")
 
-RO, RW, RX, RWX = rp.SHF_ALLOC, rp.SHF_ALLOC | rp.SHF_WRITE, rp.SHF_ALLOC | rp.SHF_EXECINSTR, (
-    rp.SHF_ALLOC | rp.SHF_WRITE | rp.SHF_EXECINSTR)
+RO, RW, RX, RWX = (
+    rp.SHF_ALLOC,
+    rp.SHF_ALLOC | rp.SHF_WRITE,
+    rp.SHF_ALLOC | rp.SHF_EXECINSTR,
+    (rp.SHF_ALLOC | rp.SHF_WRITE | rp.SHF_EXECINSTR),
+)
 
 TEXT_BASE = 0x1400
 BODY_ONE = rp.Body(0x1400, 0x1440)
@@ -72,7 +74,7 @@ def test_an_exact_body_start_is_a_function_entry():
 
 def test_an_address_inside_a_body_is_a_function_interior():
     assert address_map().bucket(0x1420) == "function_interior"
-    assert address_map().bucket(0x157f) == "function_interior"
+    assert address_map().bucket(0x157F) == "function_interior"
 
 
 def test_a_body_end_is_not_inside_the_body_it_ends():
@@ -102,7 +104,7 @@ def test_a_no_bits_section_is_bss():
 
 
 def test_memory_in_a_segment_with_no_section_is_other_loaded():
-    assert address_map().bucket(0x2f00) == "other_loaded"
+    assert address_map().bucket(0x2F00) == "other_loaded"
 
 
 def test_an_address_in_no_segment_is_outside():
@@ -112,8 +114,11 @@ def test_an_address_in_no_segment_is_outside():
 
 def test_writable_wins_over_executable_for_a_shared_section():
     """A W+X section holds data the program writes, which is the case that matters here."""
-    amap = address_map(sections=(section(".shm", rp.SHT_PROGBITS, RWX, 0x3000, 0x100),),
-                       loads=(segment(rp.PF_R | rp.PF_W, 0x3000, 0x100),), bodies=())
+    amap = address_map(
+        sections=(section(".shm", rp.SHT_PROGBITS, RWX, 0x3000, 0x100),),
+        loads=(segment(rp.PF_R | rp.PF_W, 0x3000, 0x100),),
+        bodies=(),
+    )
     assert amap.bucket(0x3010) == "writable_data"
 
 
@@ -155,24 +160,36 @@ def test_classify_pairs_each_relocation_with_its_slot_and_bucket():
 
 
 def test_classify_names_an_unknown_slot_section_as_none():
-    got = rp.classify([rela(0x2f00, 0x1010)], address_map())
+    got = rp.classify([rela(0x2F00, 0x1010)], address_map())
     assert [(t.slot_section, t.bucket) for t in got] == [(None, "read_only_data")]
 
 
 def build_elf(relocs):
-    return esp.Elf(Path("fixture.so"), esp.ET_DYN, esp.EM_X86_64, 0, list(SECTIONS),
-                   list(LOADS), {}, {}, [], relocs, {}, "fixture.so")
+    return esp.Elf(
+        Path("fixture.so"), esp.ET_DYN, esp.EM_X86_64, 0, list(SECTIONS), list(LOADS), {}, {}, [], relocs, {}, "fixture.so"
+    )
 
 
 def test_measure_counts_every_relative_relocation_once_per_bucket():
-    relocs = [rela(0x2010, 0x1400), rela(0x2018, 0x1520), rela(0x2020, 0x1010),
-              rela(0x2028, 0x2410), rela(0x2030, 0x1600), rela(0x2038, 0x2f00),
-              rela(0x2040, 0x9000)]
+    relocs = [
+        rela(0x2010, 0x1400),
+        rela(0x2018, 0x1520),
+        rela(0x2020, 0x1010),
+        rela(0x2028, 0x2410),
+        rela(0x2030, 0x1600),
+        rela(0x2038, 0x2F00),
+        rela(0x2040, 0x9000),
+    ]
     report = rp.measure(build_elf(relocs), rp.bodies([frame(0x1400, 0x40), frame(0x1500, 0x80)]))
     assert report["relative_relocs"] == 7
     assert report["buckets"] == {
-        "function_entry": 1, "function_interior": 1, "read_only_data": 1,
-        "writable_data": 0, "bss": 1, "other_loaded": 2, "outside": 1,
+        "function_entry": 1,
+        "function_interior": 1,
+        "read_only_data": 1,
+        "writable_data": 0,
+        "bss": 1,
+        "other_loaded": 2,
+        "outside": 1,
     }
     assert sum(report["buckets"].values()) == report["relative_relocs"]
 
@@ -185,14 +202,13 @@ def test_measure_counts_only_relative_relocations():
 
 
 def test_measure_breaks_the_relocations_down_by_the_slot_section():
-    relocs = [rela(0x2010, 0x1400), rela(0x2018, 0x1400), rela(0x2210, 0x1500),
-              rela(0x2310, 0x1010)]
+    relocs = [rela(0x2010, 0x1400), rela(0x2018, 0x1400), rela(0x2210, 0x1500), rela(0x2310, 0x1010)]
     report = rp.measure(build_elf(relocs), rp.bodies([frame(0x1400, 0x40), frame(0x1500, 0x80)]))
     assert report["by_slot_section"] == {".data": 2, ".data.rel.ro": 1, ".got": 1}
 
 
 def test_measure_splits_other_loaded_between_code_without_a_frame_and_unsectioned():
-    relocs = [rela(0x2010, 0x1600), rela(0x2018, 0x1700), rela(0x2020, 0x2f00)]
+    relocs = [rela(0x2010, 0x1600), rela(0x2018, 0x1700), rela(0x2020, 0x2F00)]
     report = rp.measure(build_elf(relocs), rp.bodies([frame(0x1400, 0x40)]))
     assert report["buckets"]["other_loaded"] == 3
     assert report["other_loaded_detail"] == {"executable_no_frame": 2, "unsectioned": 1}
@@ -205,8 +221,9 @@ def test_measure_reports_a_total_that_disagrees_with_the_documented_figure():
 
 
 def test_measure_checks_hold_over_a_fixture_covering_every_bucket():
-    relocs = [rela(0x2010 + 8 * i, target) for i, target in
-              enumerate((0x1400, 0x1520, 0x1010, 0x2010, 0x2410, 0x1600, 0x2f00, 0x9000))]
+    relocs = [
+        rela(0x2010 + 8 * i, target) for i, target in enumerate((0x1400, 0x1520, 0x1010, 0x2010, 0x2410, 0x1600, 0x2F00, 0x9000))
+    ]
     report = rp.measure(build_elf(relocs), rp.bodies([frame(0x1400, 0x40), frame(0x1500, 0x80)]))
     assert report["checks"]["every_relocation_classified"] is True
     assert report["checks"]["entry_targets_are_body_starts"] is True
@@ -222,7 +239,7 @@ def test_measure_flags_buckets_that_do_not_account_for_every_relocation(monkeypa
 
 
 def test_measure_flags_a_code_slot_no_section_describes():
-    report = rp.measure(build_elf([rela(0x2f00, 0x1400)]), rp.bodies([frame(0x1400, 0x40)]))
+    report = rp.measure(build_elf([rela(0x2F00, 0x1400)]), rp.bodies([frame(0x1400, 0x40)]))
     assert report["checks"]["slots_all_in_known_sections"] is False
     assert report["slots_without_section"] == 1
 

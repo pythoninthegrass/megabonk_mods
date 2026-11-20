@@ -32,38 +32,109 @@ PAGE_SIZE_BY_ARCH = {"x86_64": 4096, "arm64": 16384}
 PT_LOAD, PT_DYNAMIC, PT_TLS, PT_GNU_RELRO, PT_GNU_STACK = 1, 2, 7, 0x6474E550, 0x6474E552
 SHT_RELA, SHT_REL = 4, 9
 DT_NAMES = {
-    1: "NEEDED", 2: "PLTRELSZ", 3: "PLTGOT", 5: "STRTAB", 6: "SYMTAB", 7: "RELA",
-    8: "RELASZ", 9: "RELAENT", 10: "STRSZ", 11: "SYMENT", 12: "INIT", 13: "FINI",
-    14: "SONAME", 17: "REL", 18: "RELSZ", 20: "PLTREL", 23: "JMPREL", 24: "BIND_NOW",
-    25: "INIT_ARRAY", 26: "FINI_ARRAY", 27: "INIT_ARRAYSZ", 28: "FINI_ARRAYSZ",
-    29: "RUNPATH", 30: "FLAGS", 0x6FFFFFFB: "FLAGS_1", 0x6FFFFEF5: "GNU_HASH",
-    0x6FFFFFFE: "VERNEED", 0x6FFFFFFF: "VERNEEDNUM",
+    1: "NEEDED",
+    2: "PLTRELSZ",
+    3: "PLTGOT",
+    5: "STRTAB",
+    6: "SYMTAB",
+    7: "RELA",
+    8: "RELASZ",
+    9: "RELAENT",
+    10: "STRSZ",
+    11: "SYMENT",
+    12: "INIT",
+    13: "FINI",
+    14: "SONAME",
+    17: "REL",
+    18: "RELSZ",
+    20: "PLTREL",
+    23: "JMPREL",
+    24: "BIND_NOW",
+    25: "INIT_ARRAY",
+    26: "FINI_ARRAY",
+    27: "INIT_ARRAYSZ",
+    28: "FINI_ARRAYSZ",
+    29: "RUNPATH",
+    30: "FLAGS",
+    0x6FFFFFFB: "FLAGS_1",
+    0x6FFFFEF5: "GNU_HASH",
+    0x6FFFFFFE: "VERNEED",
+    0x6FFFFFFF: "VERNEEDNUM",
 }
 R_X86_64_NAMES = {
-    0: "NONE", 1: "64", 2: "PC32", 3: "GOT32", 4: "PLT32", 5: "COPY", 6: "GLOB_DAT",
-    7: "JUMP_SLOT", 8: "RELATIVE", 9: "GOTPCREL", 10: "32", 11: "32S", 12: "16",
-    13: "PC16", 14: "8", 15: "PC8", 16: "DTPMOD64", 17: "DTPOFF64", 18: "TPOFF64",
-    19: "TLSGD", 20: "TLSLD", 21: "DTPOFF32", 22: "GOTTPOFF", 23: "TPOFF32",
-    24: "PC64", 25: "GOTOFF64", 26: "GOTPC32", 27: "GOT64", 28: "GOTPCREL64",
-    29: "GOTPC64", 30: "GOTPLT64", 31: "PLTOFF64", 32: "SIZE32", 33: "SIZE64",
-    34: "GOTPC32_TLSDESC", 35: "TLSDESC_CALL", 36: "REX_GOTPCRELX", 37: "IRELATIVE",
+    0: "NONE",
+    1: "64",
+    2: "PC32",
+    3: "GOT32",
+    4: "PLT32",
+    5: "COPY",
+    6: "GLOB_DAT",
+    7: "JUMP_SLOT",
+    8: "RELATIVE",
+    9: "GOTPCREL",
+    10: "32",
+    11: "32S",
+    12: "16",
+    13: "PC16",
+    14: "8",
+    15: "PC8",
+    16: "DTPMOD64",
+    17: "DTPOFF64",
+    18: "TPOFF64",
+    19: "TLSGD",
+    20: "TLSLD",
+    21: "DTPOFF32",
+    22: "GOTTPOFF",
+    23: "TPOFF32",
+    24: "PC64",
+    25: "GOTOFF64",
+    26: "GOTPC32",
+    27: "GOT64",
+    28: "GOTPCREL64",
+    29: "GOTPC64",
+    30: "GOTPLT64",
+    31: "PLTOFF64",
+    32: "SIZE32",
+    33: "SIZE64",
+    34: "GOTPC32_TLSDESC",
+    35: "TLSDESC_CALL",
+    36: "REX_GOTPCRELX",
+    37: "IRELATIVE",
 }
 
 # glibc spellings that exist on macOS under another name, or with no 64-bit suffix
 # because the native call is already 64-bit. Each is a trampoline, not a rewrite.
 ALIAS_SYMBOLS = {
-    "open64": "open", "fopen64": "fopen", "ftruncate64": "ftruncate", "lseek64": "lseek",
-    "mmap64": "mmap", "readdir64": "readdir",
-    "getrlimit64": "getrlimit", "stat64": "stat", "fstat64": "fstat", "lstat64": "lstat",
+    "open64": "open",
+    "fopen64": "fopen",
+    "ftruncate64": "ftruncate",
+    "lseek64": "lseek",
+    "mmap64": "mmap",
+    "readdir64": "readdir",
+    "getrlimit64": "getrlimit",
+    "stat64": "stat",
+    "fstat64": "fstat",
+    "lstat64": "lstat",
 }
 # glibc reserves the underscored _l spelling; macOS exports the POSIX one without it.
 LOCALE_ALIAS_SYMBOLS = {
-    "__iswctype_l": "iswctype_l", "__strcoll_l": "strcoll_l", "__strxfrm_l": "strxfrm_l",
-    "__wcscoll_l": "wcscoll_l", "__wcsxfrm_l": "wcsxfrm_l", "__strftime_l": "strftime_l",
-    "__wcsftime_l": "wcsftime_l", "__strtod_l": "strtod_l", "__strtof_l": "strtof_l",
-    "__strtold_l": "strtold_l", "__towlower_l": "towlower_l", "__towupper_l": "towupper_l",
-    "__wctype_l": "wctype_l", "__nl_langinfo_l": "nl_langinfo_l",
-    "__newlocale": "newlocale", "__freelocale": "freelocale", "__duplocale": "duplocale",
+    "__iswctype_l": "iswctype_l",
+    "__strcoll_l": "strcoll_l",
+    "__strxfrm_l": "strxfrm_l",
+    "__wcscoll_l": "wcscoll_l",
+    "__wcsxfrm_l": "wcsxfrm_l",
+    "__strftime_l": "strftime_l",
+    "__wcsftime_l": "wcsftime_l",
+    "__strtod_l": "strtod_l",
+    "__strtof_l": "strtof_l",
+    "__strtold_l": "strtold_l",
+    "__towlower_l": "towlower_l",
+    "__towupper_l": "towupper_l",
+    "__wctype_l": "wctype_l",
+    "__nl_langinfo_l": "nl_langinfo_l",
+    "__newlocale": "newlocale",
+    "__freelocale": "freelocale",
+    "__duplocale": "duplocale",
 }
 # Present in the macOS loader but not interchangeable with the Linux contract.
 ABI_DIVERGENT = {
@@ -137,19 +208,62 @@ LOADER_OWNED = {
 }
 # Weak and optional by ABI: absent is a legal answer on Linux too, so a stub is honest.
 WEAK_NOOP = {
-    "_ITM_RU1", "_ITM_RU8", "_ITM_addUserCommitAction", "_ITM_deregisterTMCloneTable",
-    "_ITM_memcpyRnWt", "_ITM_memcpyRtWn", "_ITM_registerTMCloneTable",
-    "_ZGTtdlPv", "_ZGTtnam", "__gcc_personality_v0",
+    "_ITM_RU1",
+    "_ITM_RU8",
+    "_ITM_addUserCommitAction",
+    "_ITM_deregisterTMCloneTable",
+    "_ITM_memcpyRnWt",
+    "_ITM_memcpyRtWn",
+    "_ITM_registerTMCloneTable",
+    "_ZGTtdlPv",
+    "_ZGTtnam",
+    "__gcc_personality_v0",
 }
 # No macOS answer and no shim that could honestly stand in. Anything live here fails
 # the spike, so this list is the route's kill switch and stays short on purpose.
 UNIMPLEMENTABLE: dict[str, str] = {}
 
 MATH_SYMBOLS = {
-    "acos", "acosf", "asin", "asinf", "atan", "atan2", "atan2f", "atanf", "cabs", "ceil",
-    "ceilf", "cos", "cosf", "cosh", "difftime", "div", "exp", "exp2f", "expf", "floor",
-    "floorf", "fmod", "fmodf", "ldexpf", "log", "log10", "log10f", "logf", "modf", "pow",
-    "powf", "sin", "sinf", "sinh", "sqrt", "sqrtf", "tan", "tanf", "tanh", "isnan",
+    "acos",
+    "acosf",
+    "asin",
+    "asinf",
+    "atan",
+    "atan2",
+    "atan2f",
+    "atanf",
+    "cabs",
+    "ceil",
+    "ceilf",
+    "cos",
+    "cosf",
+    "cosh",
+    "difftime",
+    "div",
+    "exp",
+    "exp2f",
+    "expf",
+    "floor",
+    "floorf",
+    "fmod",
+    "fmodf",
+    "ldexpf",
+    "log",
+    "log10",
+    "log10f",
+    "logf",
+    "modf",
+    "pow",
+    "powf",
+    "sin",
+    "sinf",
+    "sinh",
+    "sqrt",
+    "sqrtf",
+    "tan",
+    "tanf",
+    "tanh",
+    "isnan",
     "__divdc3",
 }
 RELOC_HANDLERS = {
@@ -271,9 +385,7 @@ def parse_elf(path: Path) -> Elf:
 
     segments = []
     for i in range(phnum):
-        t, flags, off, va, _, filesz, memsz, align = struct.unpack_from(
-            "<IIQQQQQQ", data, phoff + i * phentsize
-        )
+        t, flags, off, va, _, filesz, memsz, align = struct.unpack_from("<IIQQQQQQ", data, phoff + i * phentsize)
         segments.append(Segment(t, flags, off, va, filesz, memsz, align))
     loads = [s for s in segments if s.type == PT_LOAD]
 
@@ -340,9 +452,7 @@ def parse_elf(path: Path) -> Elf:
     dynsyms: list[Dynsym] = []
     for i in range(symtab.size // 24):
         nm, info, _other, shndx = struct.unpack_from("<IBBH", data, symtab.offset + i * 24)
-        dynsyms.append(
-            Dynsym(cstr(str_off + nm), info >> 4, info & 0xF, shndx, vers[i] if i < len(vers) else 0)
-        )
+        dynsyms.append(Dynsym(cstr(str_off + nm), info >> 4, info & 0xF, shndx, vers[i] if i < len(vers) else 0))
 
     relocs: list[Rela] = []
     for sec in sections:
@@ -358,8 +468,7 @@ def parse_elf(path: Path) -> Elf:
     soname = ""
     if "SONAME" in dynamic:
         soname = cstr(str_off + dynamic["SONAME"])
-    return Elf(path, e_type, machine, entry, sections, segments, dynamic, dynamic_list,
-               dynsyms, relocs, verneed, soname)
+    return Elf(path, e_type, machine, entry, sections, segments, dynamic, dynamic_list, dynsyms, relocs, verneed, soname)
 
 
 def build_symprobe(cc: str = "cc") -> Path:
@@ -369,9 +478,7 @@ def build_symprobe(cc: str = "cc") -> Path:
     return out
 
 
-def probe_macos_loader(
-    symprobe: Path, names: list[str], libs: tuple[str, ...] = ()
-) -> dict[str, dict[str, str | None]]:
+def probe_macos_loader(symprobe: Path, names: list[str], libs: tuple[str, ...] = ()) -> dict[str, dict[str, str | None]]:
     """Ask the macOS loader which spellings of each name actually resolve.
 
     dyld's dlsym accepts the unadorned ELF name, so the underscore Mach-O adds is a
@@ -385,13 +492,11 @@ def probe_macos_loader(
     pre = [arg for lib in libs for arg in ("--lib", lib)]
     chunk = 400
     for start in range(0, len(names), chunk):
-        batch = names[start:start + chunk]
+        batch = names[start : start + chunk]
         query: list[str] = []
         for n in batch:
             query.append(n)
-        proc = subprocess.run(
-            [str(symprobe), *pre, *query], capture_output=True, text=True, check=True
-        )
+        proc = subprocess.run([str(symprobe), *pre, *query], capture_output=True, text=True, check=True)
         found: dict[str, tuple[str, str]] = {}
         for line in proc.stdout.splitlines():
             parts = line.split("\t")
@@ -424,8 +529,14 @@ def classify(
     undefined = elf.undefined()
     names = sorted({s.name for s in undefined})
     buckets: dict[str, list[str]] = {
-        "system": [], "alias": [], "locale-alias": [], "compat-required": [],
-        "abi-divergent": [], "weak-noop": [], "loader-owned": [], "unclassified": [],
+        "system": [],
+        "alias": [],
+        "locale-alias": [],
+        "compat-required": [],
+        "abi-divergent": [],
+        "weak-noop": [],
+        "loader-owned": [],
+        "unclassified": [],
         "not-probed": [],
     }
     detail: dict[str, dict[str, Any]] = {}
@@ -460,11 +571,9 @@ def classify(
         elif loader_probed:
             bucket, why = "unclassified", "no macOS answer and no rule covers it"
         else:
-            bucket, why = ("not-probed",
-                           "no curated rule and the loader was never asked, so it is unscored")
+            bucket, why = ("not-probed", "no curated rule and the loader was never asked, so it is unscored")
         buckets[bucket].append(name)
-        detail[name] = {"bucket": bucket, "live": live_ref, "macos_addr": addr,
-                        "source": source, "why": why}
+        detail[name] = {"bucket": bucket, "live": live_ref, "macos_addr": addr, "source": source, "why": why}
     live_counts = Counter(detail[n]["bucket"] for n in names if detail[n]["live"])
     live_symbols = sum(1 for n in names if detail[n]["live"])
     return {
@@ -472,12 +581,10 @@ def classify(
         "undefined_entries": len(undefined),
         "weak_entries": sum(1 for s in undefined if s.bind == 2),
         "resolved_by_loader": sum(1 for n in names if detail[n]["macos_addr"]),
-        "resolved_by_underscore_only": sum(
-            1 for n in names if detail[n]["source"] == "underscore"),
+        "resolved_by_underscore_only": sum(1 for n in names if detail[n]["source"] == "underscore"),
         "referenced_by_reloc": live_symbols,
         "loader_probed": loader_probed,
-        "unconsulted_recipes": sorted(
-            n for n in names if n in COMPAT_LIBS and not loader_probed),
+        "unconsulted_recipes": sorted(n for n in names if n in COMPAT_LIBS and not loader_probed),
         "buckets": {k: sorted(v) for k, v in buckets.items()},
         "bucket_counts": {k: len(v) for k, v in buckets.items()},
         "live_bucket_counts": dict(live_counts),
@@ -491,8 +598,12 @@ def classify(
 def leg_imports(elf: Elf, cls: dict[str, Any]) -> dict[str, Any]:
     blockers = cls["live_unclassified"]
     unprobed = cls["live_not_probed"]
-    shim_work = (cls["bucket_counts"]["alias"] + cls["bucket_counts"]["locale-alias"]
-                 + cls["bucket_counts"]["compat-required"] + cls["bucket_counts"]["abi-divergent"])
+    shim_work = (
+        cls["bucket_counts"]["alias"]
+        + cls["bucket_counts"]["locale-alias"]
+        + cls["bucket_counts"]["compat-required"]
+        + cls["bucket_counts"]["abi-divergent"]
+    )
     checks = {
         "e_type_is_dynamically_loaded": elf.e_type == ET_DYN,
         "machine_is_x86_64": elf.machine == EM_X86_64,
@@ -515,9 +626,9 @@ def leg_imports(elf: Elf, cls: dict[str, Any]) -> dict[str, Any]:
             "live_bucket_counts": cls["live_bucket_counts"],
         },
         "blockers": (
-            sorted(set(blockers)) if cls["loader_probed"]
-            else [f"{len(unprobed)} live imports were never offered to the loader: "
-                  "run without --skip-dyld-probe"]
+            sorted(set(blockers))
+            if cls["loader_probed"]
+            else [f"{len(unprobed)} live imports were never offered to the loader: run without --skip-dyld-probe"]
         ),
         "dead_but_unclassified": cls["dead_unclassified"],
         "pass": all(checks.values()),
@@ -586,14 +697,8 @@ def leg_relocs(elf: Elf, cls: dict[str, Any]) -> dict[str, Any]:
     unknown = sorted(t for t in census if t.startswith("UNKNOWN"))
     sym_named = sum(1 for r in elf.relocs if r.sym and elf.name_of(r.sym))
     undefined_names = {s.name for s in elf.undefined()}
-    referenced_imports = sorted({
-        elf.name_of(r.sym) for r in elf.relocs
-        if r.sym and elf.name_of(r.sym) in undefined_names
-    })
-    unclassified_refs = sorted(
-        name for name in referenced_imports
-        if cls["detail"].get(name, {}).get("bucket") == "unclassified"
-    )
+    referenced_imports = sorted({elf.name_of(r.sym) for r in elf.relocs if r.sym and elf.name_of(r.sym) in undefined_names})
+    unclassified_refs = sorted(name for name in referenced_imports if cls["detail"].get(name, {}).get("bucket") == "unclassified")
     checks = {
         "every_reloc_type_has_a_handler": not missing and not unknown,
         "no_copy_relocations": census.get(COPY_RELOC, 0) == 0,
@@ -615,8 +720,7 @@ def leg_relocs(elf: Elf, cls: dict[str, Any]) -> dict[str, Any]:
             "by_type": dict(census),
             "by_section": dict(by_section),
             "with_symbol_reference": sym_named,
-            "relocs_referencing_imports": sum(
-                1 for r in elf.relocs if r.sym and elf.name_of(r.sym) in undefined_names),
+            "relocs_referencing_imports": sum(1 for r in elf.relocs if r.sym and elf.name_of(r.sym) in undefined_names),
             "distinct_imports_referenced": len(referenced_imports),
             "handlers": {t: RELOC_HANDLERS[t] for t in sorted(RELOC_HANDLERS)},
             "unclassified_types": unknown,
@@ -627,9 +731,7 @@ def leg_relocs(elf: Elf, cls: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def leg_load_strategy(
-    elf: Elf, cls: dict[str, Any], reloc_leg: dict[str, Any], target_arch: str = "x86_64"
-) -> dict[str, Any]:
+def leg_load_strategy(elf: Elf, cls: dict[str, Any], reloc_leg: dict[str, Any], target_arch: str = "x86_64") -> dict[str, Any]:
     tls = [s for s in elf.segments if s.type == PT_TLS]
     relro = [s for s in elf.segments if s.type == PT_GNU_RELRO]
     aligns = sorted({s.align for s in elf.loads})
@@ -644,15 +746,10 @@ def leg_load_strategy(
     code_bytes = (text.size if text else 0) + (il2cpp.size if il2cpp else 0)
     page = PAGE_SIZE_BY_ARCH.get(target_arch, 4096)
     align_ok = all(a <= page for a in aligns)
-    congruent = [
-        {"segment": hex(s.vaddr), "congruent": (s.vaddr - s.offset) % page == 0}
-        for s in elf.loads
-    ]
+    congruent = [{"segment": hex(s.vaddr), "congruent": (s.vaddr - s.offset) % page == 0} for s in elf.loads]
     all_congruent = all(c["congruent"] for c in congruent)
     direct = sum(1 for s in elf.loads if s.offset % page == 0 and s.vaddr % page == 0)
-    exports = sum(
-        1 for s in elf.dynsyms if s.shndx and s.bind in (1, 2) and s.name.startswith("il2cpp_")
-    )
+    exports = sum(1 for s in elf.dynsyms if s.shndx and s.bind in (1, 2) and s.name.startswith("il2cpp_"))
 
     checks = {
         "position_independent": elf.e_type == ET_DYN,
@@ -663,10 +760,7 @@ def leg_load_strategy(
         "relocs_classified": reloc_leg["pass"],
     }
     self_relocate = checks["position_independent"] and checks["relocs_classified"]
-    strategy = (
-        "map the PT_LOAD segments and self-relocate" if self_relocate
-        else "translate to a Mach-O dylib and dlopen"
-    )
+    strategy = "map the PT_LOAD segments and self-relocate" if self_relocate else "translate to a Mach-O dylib and dlopen"
     if self_relocate and not checks["segments_are_mappable_without_copying"]:
         strategy += " by copying pages into anonymous mappings, not mapping the file"
     facts = {
@@ -693,9 +787,7 @@ def leg_load_strategy(
     }
     blockers = []
     if not align_ok:
-        blockers.append(
-            f"PT_LOAD alignment {[hex(a) for a in aligns]} exceeds the {target_arch} page size {page}"
-        )
+        blockers.append(f"PT_LOAD alignment {[hex(a) for a in aligns]} exceeds the {target_arch} page size {page}")
     elif not all_congruent:
         blockers.append(
             f"p_vaddr and p_offset diverge mod {page}, so the segments cannot be mapped "
@@ -734,8 +826,7 @@ def run_probe(
     if skip_dyld:
         resolved = {n: {"addr": None, "source": "none"} for n in names}
     else:
-        resolved = probe_macos_loader(
-            symprobe or build_symprobe(cc), names, tuple(sorted(set(COMPAT_LIBS.values()))))
+        resolved = probe_macos_loader(symprobe or build_symprobe(cc), names, tuple(sorted(set(COMPAT_LIBS.values()))))
     cls = classify(elf, resolved, loader_probed=not skip_dyld)
     legs = {
         "leg1_imports": leg_imports(elf, cls),
@@ -748,9 +839,14 @@ def run_probe(
         "binary": str(so),
         "binary_bytes": so.stat().st_size,
         "elf": {
-            "e_type": elf.e_type, "machine": elf.machine, "entry": hex(elf.entry),
-            "soname": elf.soname, "sections": len(elf.sections), "segments": len(elf.segments),
-            "dynsyms": len(elf.dynsyms), "needed": elf.dynamic_list.get("NEEDED", []),
+            "e_type": elf.e_type,
+            "machine": elf.machine,
+            "entry": hex(elf.entry),
+            "soname": elf.soname,
+            "sections": len(elf.sections),
+            "segments": len(elf.segments),
+            "dynsyms": len(elf.dynsyms),
+            "needed": elf.dynamic_list.get("NEEDED", []),
         },
         "host": {"platform": sys.platform, "python": sys.version.split()[0]},
         "target_arch": target_arch,
@@ -776,14 +872,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cc", default="cc", help="C compiler for the loader probe")
     ap.add_argument("--skip-dyld-probe", action="store_true", help="analyse without consulting the loader")
     ap.add_argument("--symprobe", type=Path, default=None, help="prebuilt symprobe binary")
-    ap.add_argument("--target-arch", choices=sorted(PAGE_SIZE_BY_ARCH), default="x86_64",
-                    help="architecture the loaded image would run on (page size differs)")
+    ap.add_argument(
+        "--target-arch",
+        choices=sorted(PAGE_SIZE_BY_ARCH),
+        default="x86_64",
+        help="architecture the loaded image would run on (page size differs)",
+    )
     args = ap.parse_args(argv)
     if not args.so.exists():
         print(f"no such ELF: {args.so}", file=sys.stderr)
         return 2
-    report = run_probe(args.so, args.out, args.cc, args.skip_dyld_probe, args.symprobe,
-                       args.target_arch)
+    report = run_probe(args.so, args.out, args.cc, args.skip_dyld_probe, args.symprobe, args.target_arch)
     (args.out / "summary.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     for name, leg in report["legs"].items():
         mark = "pass" if leg["pass"] else "FAIL"

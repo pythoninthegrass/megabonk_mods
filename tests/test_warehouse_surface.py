@@ -105,7 +105,12 @@ def test_ridge_runs_merges_collinear_edges_into_one_run() -> None:
 
 
 def test_ridge_runs_ignores_a_valley_a_flat_floor_and_a_gentle_ridge() -> None:
-    valley = [((0, 0, 0), (10, 0, 0), (0, 4, -1)), ((10, 0, 0), (10, 4, -1), (0, 4, -1)), ((0, 0, 0), (0, 4, 1), (10, 0, 0)), ((10, 0, 0), (0, 4, 1), (10, 4, 1))]
+    valley = [
+        ((0, 0, 0), (10, 0, 0), (0, 4, -1)),
+        ((10, 0, 0), (10, 4, -1), (0, 4, -1)),
+        ((0, 0, 0), (0, 4, 1), (10, 0, 0)),
+        ((10, 0, 0), (0, 4, 1), (10, 4, 1)),
+    ]
     assert ws.ridge_runs(valley) == []
     assert ws.ridge_runs([FLOOR, FLOOR_FAR]) == []
     assert ws.ridge_runs(gable(0, 10, ridge=0.2)) == []

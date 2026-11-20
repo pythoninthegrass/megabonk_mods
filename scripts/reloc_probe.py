@@ -43,8 +43,7 @@ PF_R = 0x4
 PF_W = 0x2
 
 DOCUMENTED_RELATIVE = 466_320
-BUCKETS = ("function_entry", "function_interior", "read_only_data", "writable_data",
-           "bss", "other_loaded", "outside")
+BUCKETS = ("function_entry", "function_interior", "read_only_data", "writable_data", "bss", "other_loaded", "outside")
 OTHER_LOADED_KINDS = ("executable_no_frame", "unsectioned")
 
 # Bytes a compiler puts at the start of a body: REX and push/pop, the ALU and mov forms,
@@ -53,15 +52,39 @@ OTHER_LOADED_KINDS = ("executable_no_frame", "unsectioned")
 # bytes this set does not explain, so the list is something a reader can audit, not a
 # number the probe quietly trusts.
 INSTRUCTION_STARTS = frozenset(
-    set(range(0x40, 0x60))                      # REX, push, pop
-    | {0x00, 0x01, 0x02, 0x03, 0x08, 0x09, 0x0A, 0x0B, 0x10, 0x11, 0x18, 0x19, 0x20, 0x21,
-       0x28, 0x29, 0x30, 0x31, 0x38, 0x39, 0x3B, 0x3D, 0x3E, 0x3F}   # add/or/adc/sbb/and/sub/xor/cmp
-    | {0x63, 0x68, 0x69, 0x6A, 0x6B, 0x6D, 0x70, 0x74, 0x75, 0x7C, 0x7D}   # movsx, push, imul, jcc
-    | {0x80, 0x81, 0x83, 0x84, 0x85, 0x88, 0x89, 0x8A, 0x8B, 0x8D, 0x8F}   # group, test, mov, lea
-    | {0x90, 0x98, 0x9C, 0xB0, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xBB, 0xBE, 0xBF}   # nop, mov imm
-    | {0xC0, 0xC1, 0xC3, 0xC6, 0xC7, 0xC9, 0xCC, 0xD7, 0xE8, 0xE9, 0xEB}   # shifts, ret, leave, call, jmp
-    | {0xF2, 0xF3, 0xF4, 0xF6, 0xF7, 0xFF}      # prefixes, hlt, test group, jmp/call group
-    | {0x0F, 0x66}                              # two-byte escapes, operand size
+    set(range(0x40, 0x60))  # REX, push, pop
+    | {
+        0x00,
+        0x01,
+        0x02,
+        0x03,
+        0x08,
+        0x09,
+        0x0A,
+        0x0B,
+        0x10,
+        0x11,
+        0x18,
+        0x19,
+        0x20,
+        0x21,
+        0x28,
+        0x29,
+        0x30,
+        0x31,
+        0x38,
+        0x39,
+        0x3B,
+        0x3D,
+        0x3E,
+        0x3F,
+    }  # add/or/adc/sbb/and/sub/xor/cmp
+    | {0x63, 0x68, 0x69, 0x6A, 0x6B, 0x6D, 0x70, 0x74, 0x75, 0x7C, 0x7D}  # movsx, push, imul, jcc
+    | {0x80, 0x81, 0x83, 0x84, 0x85, 0x88, 0x89, 0x8A, 0x8B, 0x8D, 0x8F}  # group, test, mov, lea
+    | {0x90, 0x98, 0x9C, 0xB0, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xBB, 0xBE, 0xBF}  # nop, mov imm
+    | {0xC0, 0xC1, 0xC3, 0xC6, 0xC7, 0xC9, 0xCC, 0xD7, 0xE8, 0xE9, 0xEB}  # shifts, ret, leave, call, jmp
+    | {0xF2, 0xF3, 0xF4, 0xF6, 0xF7, 0xFF}  # prefixes, hlt, test group, jmp/call group
+    | {0x0F, 0x66}  # two-byte escapes, operand size
 )
 
 
@@ -151,8 +174,7 @@ class AddressMap:
         return self._names[addr]
 
     def in_segment(self, addr: int) -> bool:
-        return any(seg.vaddr <= addr < seg.vaddr + seg.memsz for seg in self.loads
-                   if seg.type == PT_LOAD)
+        return any(seg.vaddr <= addr < seg.vaddr + seg.memsz for seg in self.loads if seg.type == PT_LOAD)
 
     def bucket(self, addr: int) -> str:
         if addr in self.starts:
@@ -218,12 +240,11 @@ def entry_prologue_shapes(rows, elf, raw: bytes | None) -> dict:
         except elf_shim_probe.ElfError:
             unreadable += 1
             continue
-        head = raw[at:at + 4]
+        head = raw[at : at + 4]
         if head == b"\x00\x00\x00\x00":
             padding += 1
         first_bytes[head[0]] += 1
-    unexplained = {f"{byte:02x}": count for byte, count in first_bytes.items()
-                   if byte not in INSTRUCTION_STARTS}
+    unexplained = {f"{byte:02x}": count for byte, count in first_bytes.items() if byte not in INSTRUCTION_STARTS}
     return {
         "targets": sum(first_bytes.values()),
         "distinct_first_bytes": len(first_bytes),
@@ -241,8 +262,7 @@ def measure(elf, ranges: tuple[Body, ...], raw: bytes | None = None) -> dict:
     rows = classify(relative, mapping)
     report_shapes = entry_prologue_shapes(rows, elf, raw)
     buckets = Counter(row.bucket for row in rows)
-    other_kinds = Counter(mapping.other_loaded_kind(row.address) for row in rows
-                          if row.bucket == "other_loaded")
+    other_kinds = Counter(mapping.other_loaded_kind(row.address) for row in rows if row.bucket == "other_loaded")
     slots_without_section = sum(1 for row in rows if row.slot_section is None)
     starts = frozenset(body.start for body in ranges)
     return {
@@ -252,10 +272,8 @@ def measure(elf, ranges: tuple[Body, ...], raw: bytes | None = None) -> dict:
         "documented_relative": DOCUMENTED_RELATIVE,
         "buckets": {name: buckets.get(name, 0) for name in BUCKETS},
         "other_loaded_detail": {name: other_kinds.get(name, 0) for name in OTHER_LOADED_KINDS},
-        "by_slot_section": dict(Counter(row.slot_section for row in rows
-                                        if row.slot_section).most_common()),
-        "by_target_section": dict(Counter(name for row in rows
-                                          if (name := mapping.section_name(row.address))).most_common()),
+        "by_slot_section": dict(Counter(row.slot_section for row in rows if row.slot_section).most_common()),
+        "by_target_section": dict(Counter(name for row in rows if (name := mapping.section_name(row.address))).most_common()),
         "distinct_targets": len({row.address for row in rows}),
         "bodies": len(ranges),
         "overlapping_bodies": count_overlaps(ranges),
@@ -264,10 +282,10 @@ def measure(elf, ranges: tuple[Body, ...], raw: bytes | None = None) -> dict:
         "checks": {
             "total_matches_documented": len(relative) == DOCUMENTED_RELATIVE,
             "every_relocation_classified": sum(buckets.get(n, 0) for n in BUCKETS) == len(relative),
-            "entry_targets_are_body_starts": all(
-                row.address in starts for row in rows if row.bucket == "function_entry"),
+            "entry_targets_are_body_starts": all(row.address in starts for row in rows if row.bucket == "function_entry"),
             "interior_targets_are_not_body_starts": all(
-                row.address not in starts for row in rows if row.bucket == "function_interior"),
+                row.address not in starts for row in rows if row.bucket == "function_interior"
+            ),
             "slots_all_in_known_sections": slots_without_section == 0,
             "entry_targets_are_not_padding": report_shapes["zero_padding_targets"] == 0,
         },
@@ -293,31 +311,37 @@ def run_probe(path: Path) -> dict:
 
 
 def render(report: dict) -> str:
-    lines = [f"{report['relative_relocs']} relative relocations "
-             f"(documented {report['documented_relative']}) of "
-             f"{report['relative_relocs'] + report['relocations_excluded']} total in "
-             f"{report['binary']}"]
+    lines = [
+        f"{report['relative_relocs']} relative relocations "
+        f"(documented {report['documented_relative']}) of "
+        f"{report['relative_relocs'] + report['relocations_excluded']} total in "
+        f"{report['binary']}"
+    ]
     for name, count in report["buckets"].items():
         share = count / report["relative_relocs"] if report["relative_relocs"] else 0.0
         lines.append(f"  {name:18s} {count:8d}  {share:6.1%}")
     detail = ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in report["other_loaded_detail"].items())
     lines.append(f"  other loaded: {detail}")
     shapes = report["entry_prologue_shapes"]
-    lines.append(f"  entry targets open on {shapes['distinct_first_bytes']} distinct first "
-                 f"bytes, {shapes['zero_padding_targets']} of them zero padding"
-                 + (", unreadable " + str(shapes["unreadable"]) if shapes["unreadable"] else "")
-                 + (f", unexplained {shapes['unexplained_first_bytes']}"
-                    if shapes["unexplained_first_bytes"] else ""))
-    lines.append("  slots by holding section: "
-                 + ", ".join(f"{name} {count}" for name, count in
-                             list(report["by_slot_section"].items())[:6]))
-    lines.append("  targets by section: "
-                 + ", ".join(f"{name} {count}" for name, count in
-                             list(report["by_target_section"].items())[:6]))
-    lines.append(f"  {report.get('frame_records', report['bodies'])} .eh_frame records fold to "
-                 f"{report['bodies']} function bodies, "
-                 f"{report['overlapping_bodies']} overlap, "
-                 f"{report['distinct_targets']} distinct target addresses")
+    lines.append(
+        f"  entry targets open on {shapes['distinct_first_bytes']} distinct first "
+        f"bytes, {shapes['zero_padding_targets']} of them zero padding"
+        + (", unreadable " + str(shapes["unreadable"]) if shapes["unreadable"] else "")
+        + (f", unexplained {shapes['unexplained_first_bytes']}" if shapes["unexplained_first_bytes"] else "")
+    )
+    lines.append(
+        "  slots by holding section: "
+        + ", ".join(f"{name} {count}" for name, count in list(report["by_slot_section"].items())[:6])
+    )
+    lines.append(
+        "  targets by section: " + ", ".join(f"{name} {count}" for name, count in list(report["by_target_section"].items())[:6])
+    )
+    lines.append(
+        f"  {report.get('frame_records', report['bodies'])} .eh_frame records fold to "
+        f"{report['bodies']} function bodies, "
+        f"{report['overlapping_bodies']} overlap, "
+        f"{report['distinct_targets']} distinct target addresses"
+    )
     failed = [name for name, ok in report["checks"].items() if not ok]
     lines.append(f"  checks: {'all passed' if not failed else 'FAILED ' + ', '.join(failed)}")
     return "\n".join(lines)
@@ -325,8 +349,7 @@ def render(report: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("so", type=Path, nargs="?", default=DEFAULT_SO,
-                    help="Linux GameAssembly.so to analyse")
+    ap.add_argument("so", type=Path, nargs="?", default=DEFAULT_SO, help="Linux GameAssembly.so to analyse")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT, help="artifact directory")
     ap.add_argument("--json", action="store_true", help="print the report as JSON instead of a table")
     args = ap.parse_args(argv)
