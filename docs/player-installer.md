@@ -1,14 +1,16 @@
 # Player installer
 
-**Legacy reference:** this format belongs to the old MelonLoader-only runtime,
-which is not retained in the public history. It cannot install the current BepInEx DLL. Use the
+**Legacy reference:** the MelonLoader-only runtime and its vendored player
+package are no longer built or shipped. The current BepInEx installer installs the
+mod, levels and packs from the site and Thunderstore at run time, so its
+distributable carries only the binary and a README. Use the
 [player guide](player-guide.md) and [Thunderstore package](thunderstore.md) for
-Megabonk Level Editor; the old platform package tasks are internal in current
-source and reject direct CLI invocation.
+Megabonk Level Editor; `task package:linux`, `package:windows` and `package:macos`
+now build that thin zip.
 
-The player-facing download: a folder a Linux player unzips and runs `./megabonk-installer` in, which installs MelonLoader, the MegabonkLevels mod, the .NET 6 runtime it needs, and any levels or packs the package carries. This doc is the contract between the two halves — the **package** the build produces and the **installer** that consumes it — plus the Linux-specific behaviour that contract cannot express.
+The player-facing download: a folder a player unzips and runs `./megabonk-installer` in, which installs the level editor mod, the levels and the packs they need from the site and Thunderstore at run time. This doc is the contract between the two halves — the **package** the build produces and the **installer** that consumes it — plus the Linux-specific behaviour that contract cannot express.
 
-The installer is one static Go binary per platform, built from `go/` by `task installer:build` and shipped inside the package, so a player needs nothing else: no Python, no uv, no repo checkout, no .NET SDK, no Wine installation. The package builder and verifier (`scripts/build_player_package.py`, `task package:check`) are Python and share a small contract module with the installer, `scripts/package_contract/`: the manifest schema in `manifest.py` and the pack checks in `packs.py`. The installer parses the same manifest in `go/internal/manifest`.
+The installer is one static Go binary per platform, built from `go/` by `task installer:build` and shipped inside the package, so a player needs nothing else: no Python, no uv, no repo checkout, no .NET SDK, no Wine installation. The package builder and verifier (`scripts/installer_package.py`, `task package:check`) are Python and write a zip holding exactly the installer binary and a README.
 
 ## Linux player setup
 
@@ -19,7 +21,7 @@ switch on Fedora; editing Steam's configuration alone did not. Launch vanilla
 once to create the prefix, choose **DX11 - Recommended**, then quit the game
 before installing. `-force-d3d11` in Steam's Launch Options pins that renderer.
 
-Unzip the player package and run `./megabonk-installer`.
+Unzip the installer and run `./megabonk-installer`.
 Packages are currently built with `task package:linux`; a published player
 download URL is not yet available. No separate Wine install is needed with
 Steam Proton. For a game whose prefix is in a different Steam library, pass
@@ -33,11 +35,11 @@ directory (append `/pfx`). See [the gamepadui guide](gamepadui.md#install-launch
 for measurement, package transfer, and remote launch commands.
 
 ```sh
-cd /path/to/unzipped-player-package
+cd /path/to/unzipped-installer
 G=/media/sdcard/SteamLibrary/steamapps/common/Megabonk
 P="$HOME/.local/share/Steam/steamapps/compatdata/3405340/pfx"
-./megabonk-installer --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry
-./megabonk-installer --game-dir "$G" --prefix "$P" --dotnet-in prefix --wine-override registry --check
+./megabonk-installer --game-dir "$G" --prefix "$P" --wine-override registry
+./megabonk-installer --game-dir "$G" --prefix "$P" --wine-override registry --check
 ```
 
 `--check` must exit 0 and report that the install matches the package. Start
@@ -66,45 +68,15 @@ megabonk-levels-<mod>-ml<melonloader>-linux/
 └── content/packs/<pack-id>/      bundle + manifest.json (+ attachments.json) per pack
 ```
 
-`megabonk-installer` is the only entry point a player needs: a static binary, so there is no interpreter to choose and nothing to put on a path. It takes the levels to install as arguments and finds everything else itself — the mod and its loader from Thunderstore, the level files from `megabonkmod.party`. The builder copies the platform's binary from `.tools/installer/` and marks it executable; a package build without `--installer-binary` fails, and a missing file is a missing input that points at `task installer:build`.
+`megabonk-installer` is the only entry point a player needs: a static binary, so there is no interpreter to choose and nothing to put on a path. It takes the levels to install as arguments and finds everything else itself — the mod and its loader from Thunderstore, the level files from `megabonkmod.party`. The builder copies the platform's binary from `.tools/installer/` and marks it executable; a zip build without `--installer-binary` fails, and a missing file is a missing input that points at `task installer:build`.
 
-## The manifest
+## What ships in the zip
 
-`manifest.json` is a JSON object with `schema` `megabonk-player-package/1`. `load_manifest` in `scripts/package_contract/manifest.py` (the builder's side) and `LoadManifest` in `go/internal/manifest` (the installer's) refuse anything they cannot use, naming the missing or bad key rather than failing later during the install.
+`task package:linux`, `package:windows` and `package:macos` write a zip holding exactly two entries: the platform installer binary and a `README.txt` that says how to run it on that platform and what the installer fetches. There is no manifest, no `vendor/`, no bundled mod DLL, level or pack: the installer resolves all of that at run time, so the distributable is the same size and shape regardless of what content the site offers. `task package:check` reads a built zip and refuses anything but those two entries.
 
-| Key | Meaning |
-| --- | --- |
-| `schema` | `megabonk-player-package/1`. An unknown schema is an error, not a warning: an old installer must not half-install a package from a newer build. |
-| `platform` | The OS this package targets: `linux` or `windows`. Both installers accept either value; the manifest differs only in this key. |
-| `package_id` | Name in the install record and in `--check` output. |
-| `mod_version`, `melonloader_version`, `game_buildid` | Recorded at install time and echoed back by `--check` and `--uninstall`. `game_buildid` is the depot build id the shipped levels were authored against (`GAME_BUILD_ID` in `scripts/build_thps_level.py`), so a package and a level file agree about which game they expect. |
-| `generated` | UTC timestamp of the build. Set `SOURCE_DATE_EPOCH` for a byte-identical rebuild. |
-| `verified_on` | Distro/version pairs this package was actually tested on. Empty means untested, and it is not a claim of support. |
-| `vendors` | The archives under `vendor/`. |
-| `files` | Every file to place, and where. |
+## What the installer fetches
 
-### vendors
-
-Each entry needs `name`, `url`, `sha256`, `kind`, `version`.
-
-`name` is the **filename under `vendor/`**, not a display name — the installer resolves an archive as `vendor/<name>`. `kind` is the lookup key: the installer asks for `manifest.vendor("melonloader")` and `manifest.vendor("dotnet")`, so a package that omits either kind is rejected before anything is copied. Only those two kinds exist today: MelonLoader's Windows release archive, and a base Windows x64 .NET 6 runtime.
-
-Both archives are the **Windows** ones on purpose, even though the target is Linux: MelonLoader's native Linux build cannot load the native Linux game build, so the whole stack is the Windows stack running under Proton.
-
-`url` is provenance, not a download instruction: the installer never goes to the network. It verifies the copy under `vendor/` against `sha256` and stops if it does not match.
-
-### files
-
-Each entry needs `path` (relative to the package root), `sha256`, and `dest` (relative to the game directory). Destinations follow what the game and the mod actually read:
-
-| Content | `dest` | Why there |
-| --- | --- | --- |
-| Mod DLL | `Mods/MegabonkLevels.Mod.dll` | Where MelonLoader loads mods from. |
-| Managed dependencies (NLayer) | `UserLibs/NLayer.dll` | MelonLoader's probe path for third-party assemblies. |
-| Levels | `UserData/Levels/<name>.mblevel.json` | `LiveEditPatch.LevelsDirectoryPath()` lists titled levels from here, and Map Selection shows them beside the native maps. A level anywhere else is invisible to the player. |
-| Packs | `UserData/LevelPacks/<id>/{<bundle>,manifest.json,attachments.json}` | `PackPrefabs` loads packs from this layout; see [asset-bundles.md](asset-bundles.md). |
-
-Bundled content is ordinary `files[]` entries, so nothing in the schema is special about it: the same digest check covers it, and `--uninstall` removes it by the same record that removes the mod.
+The distributable ships no `manifest.json` and no `vendor/` archives. Under the retired MelonLoader-era package a `manifest.json` with `schema` `megabonk-player-package/1` listed the vendored MelonLoader and .NET archives and the mod files, each with a sha256, and the installer refused anything it could not use before copying. None of that ships now. The installer resolves everything at run time instead: the mod and its BepInEx loader pack from Thunderstore, and the levels and their packs from `megabonkmod.party`, verified against the digests and file lists the site and Thunderstore return for the exact version named. The download rules, the cache under `~/.cache/megabonk-levels`, and the pack validation are described under "Installing the mod from Thunderstore" and "Levels and packs from the command line" below.
 
 ### Where content lands
 
@@ -121,9 +93,9 @@ Bundled content is ordinary `files[]` entries, so nothing in the schema is speci
 
 `InstallPackFromZip` unpacks a pack archive into `UserData/LevelPacks/<id>/`. Nothing is written until the archive as a whole is proven: every member name is vetted against the pack folder, so a name that climbs out of it, uses a drive letter or a backslash separator, or is absolute is refused outright; each member is then read through and checked against the size and checksum its header declares. The unpacked folder must pass `ValidatePackSource`, the same rules the game applies, before the install is accepted. A refusal leaves no pack folder behind, and an accepted install replaces the folder wholesale rather than merging into it. Members outside the `<id>/` folder, and inside it but not a manifest, attachments sidecar or bundle, are not installed. The check runs before the destination is touched, so a truncated or tampered download never replaces a pack folder the game is already showing.
 
-Zip extraction lives in `go/internal/zipx`. Its `Extract` is what the loader and .NET runtime archives are unpacked with, and `ExtractMember` is the shared member copy the pack install builds on, so zip-slip protection is written once rather than per caller. `Extract` walks every member name against the resolved destination before writing any of them, which is why a run that refuses leaves nothing behind, and `ExtractMember` caps the copy at a positive limit so a member whose declared size lies cannot fill the disk.
+Zip extraction lives in `go/internal/zipx`. Its `Extract` is what a fetched loader or pack archive is unpacked with, and `ExtractMember` is the shared member copy the pack install builds on, so zip-slip protection is written once rather than per caller. `Extract` walks every member name against the resolved destination before writing any of them, which is why a run that refuses leaves nothing behind, and `ExtractMember` caps the copy at a positive limit so a member whose declared size lies cannot fill the disk.
 
-`verify_package` checks every `vendor/<name>` and `files[].path` against its digest and returns a message per problem — missing file or checksum mismatch — which is what `task package:check` runs.
+`task package:check` runs `scripts/installer_package.py`, which reads a built distributable zip and reports a message per problem — an entry other than the platform's installer binary and `README.txt`, or either one missing — and exits 1 on any of them.
 
 ## Install record
 
@@ -153,7 +125,7 @@ Every platform's installer — the same Go binary, built as `megabonk-installer`
 5. **Plan it.** The levels, their sidecar images, the packs they need, and the optional mod become a list of steps. A pack several levels need appears once; a pack already installed at the version every level asks for is skipped; a pack the site does not host is a warning, not a failure, and the level still installs.
 6. **Fetch into staging.** Every download and every content file is written into a staging folder the game cannot read. Nothing in the game directory changes while this happens, so a plan the player walks away from, cancels, or that fails halfway leaves the game exactly as it was: the run rolls back what it placed and reports what it could not restore.
 7. **Commit the plan.** Staged files move into `UserData/Levels/` and `UserData/LevelPacks/` in the order the plan promised, replacing a pack folder whole so a pack that changed version keeps no stale bundle.
-8. **Install the mod** from Thunderstore when asked for or when the game lacks one: the BepInEx loader pack, its .NET 6 runtime in `dotnet/` beside the executable, and the plugin under `BepInEx/plugins/MegabonkLevels/`. Where a loader and plugin set are already in place but not this installer's, only the platform override is applied — a foreign install is never rewritten.
+8. **Install the mod** from Thunderstore when asked for or when the game lacks one: the BepInEx loader pack, whose archive carries the .NET runtime under `dotnet/` beside the executable, and the plugin under `BepInEx/plugins/MegabonkLevels/`. Where a loader and plugin set are already in place but not this installer's, only the platform override is applied — a foreign install is never rewritten.
 9. **Apply the `winhttp` override** where a Wine or Proton prefix needs it. Native Windows has none; a Proton run prints the Steam launch option instead of writing one.
 10. **Write the install record**, which drives `--check` and `--uninstall`.
 11. **Report** what was done and what was not, as numbered `N/M label` lines or a progress window. A failure exits nonzero with a message that says what to do.
@@ -175,14 +147,14 @@ task package:linux
 task package:linux MOD_VERSION=0.4.2
 ```
 
-`scripts/build_player_package.py` builds the mod, assembles everything into `.tools/player-package/`, and writes a distributable zip beside it.
+`task package:linux` builds the linux/amd64 Go installer through `installer:build` and writes `megabonk-installer-<version>-linux.zip` into `.tools/installer-dist/` (override with `OUTPUT`). The zip holds exactly the installer binary and a `README.txt`; the mod DLL, the levels, the packs and the loader are fetched by the installer at run time from the site and Thunderstore, so the build never touches Thunderstore, bundles no content, and needs no vendored MelonLoader or .NET archive. Set `SOURCE_DATE_EPOCH` for a byte-identical zip. `scripts/installer_package.py` writes the zip and `task package:check` verifies it: it fails on any entry other than the binary and the README, and each platform task runs it on what it just built.
 
 Two choices are intentional:
 
 - **The default is Bramblecrown Hill only.** The package tasks name `bramblecrown-hill.mblevel.json`, bringing its original selection illustration and biome icon, with no packs or music. See [Starter level](starter-level.md) for the content inventory, first-edit tutorial and packaged smoke test. `levels/` also holds development fixtures, so there is no directory-wide bundling. Explicit `LEVELS` and `PACKS` overrides still support local packages; the lower-level builder bundles only files named with `--level` and `--pack`. A `.local.mblevel.json` is skipped even when named. Matching thumbnail and `.biome` sidecars are ordinary hashed manifest files, installed beside the level, repaired by a rerun and removed with it on uninstall. Images that match no bundled level stay out.
-- **Packs come from two places, the way `task pack:install` assembles them**: the built AssetBundle from `.tools/bundles/<platform>/<pack>` and the manifest (plus optional attachments) from `unity/pack-authoring/packs/<pack>/`. `--pack-platform` picks the bundle; `windows` is right on Linux because the game runs the Windows build. Staged packs are validated with `validate_pack_source` (`scripts/package_contract/packs.py`), which reproduces the game's own rules — required `id`/`name`/`author`/`version`/`assets` fields, `id` matching the folder name, a bundle file present, and a `pack-attachments/1` sidecar when there is one — so a broken pack fails the build instead of landing in the Warehouse as a placeholder.
+- **Packs come from the site at run time**: each level's record names the packs it needs and their versions, and the installer fetches the pack zips laid out for `UserData/LevelPacks/`. Nothing about a pack is staged at build time; the download is what `ValidatePackSource` checks before an install is accepted.
 
-Vendor archives are taken from `.tools/vendor-cache/` and only verified there, never downloaded unless you pass `--allow-download` (`ALLOW_DOWNLOAD=true` to the task, which forwards it). The build writes into a staging directory and swaps it in at the end, so a failure leaves the previous package untouched.
+The builder writes into a staging directory and swaps the finished zip in at the end, so a failure leaves the previous build untouched. The zip is deterministic — sorted entries, fixed timestamps, modes 0755 for the installer binary and 0644 for the README — so two builds of the same binary are byte-identical once `SOURCE_DATE_EPOCH` is pinned.
 
 When a download does happen it goes through `scripts/asset_download.py`, the only code in `scripts/` that touches the network (a test pins that). The rules: https only, TLS 1.2 floor with certificate verification; the status is checked before the body is read, so a 404, a login or captive-portal page, or an empty body reads as a missing asset rather than a checksum mismatch, and nothing poisoned ever lands in the cache; the body is capped, and an archive whose digest does not match the manifest pin is refused before it is cached. Redirects stay on the original host except for an explicit CDN allowance — GitHub release assets hand off to `release-assets.githubusercontent.com` and dotnetcli to azureedge/microsoft hosts — so an off-list redirect is refused as a missing asset. `install_melonloader.py` uses the same fetcher. The `url` in a manifest entry stays provenance for the player side: the installer itself never downloads.
 
@@ -195,7 +167,7 @@ task package:windows
 task package:windows MOD_VERSION=0.4.2
 ```
 
-`task package:windows` builds the mod and the `windows/amd64` Go installer, then runs `scripts/build_player_package.py --platform windows --installer-binary <exe>`. The package has the same `vendor/`, `content/` and `manifest.json` layout as the Linux one with `"platform": "windows"`, but the binary is `install.exe`. It lands in `.tools/player-package-windows/` (override with `OUTPUT_WINDOWS`), with `megabonk-levels-<mod>-ml<loader>-windows.zip` beside it. Windows players unzip it and run `install.exe LEVEL...`: the installer takes its levels from the command line, not from the folder it happens to sit in.
+`task package:windows` builds the `windows/amd64` Go installer through `installer:build` and writes `megabonk-installer-<version>-windows.zip` into `.tools/installer-dist/`. The zip holds exactly `megabonk-installer.exe` and a `README.txt`. Windows players unzip it and run the exe: the installer discovers Steam through the registry, takes its levels and packs from the command line, and fetches the mod, loader and content from the site and Thunderstore at run time. It has no prefix, no `version.dll` override and no launch option; every write is inside the game directory. The BepInEx doorstop and its bundled .NET runtime arrive with the loader pack the installer fetches, not with the download.
 
 On native Windows the installer finds Steam through `HKCU\Software\Valve\Steam` (then `HKLM\...\WOW6432Node\Valve\Steam` and the Program Files default) and reads `libraryfolders.vdf` for libraries on other drives. It has no prefix, no `version.dll` override and no launch option; every write is inside the game directory. MelonLoader's bootstrap otherwise installs .NET 6 machine-wide under Program Files on first launch, so the installer pre-seeds the vendored runtime into `MelonLoader/Dependencies/dotnet`, the path the loader itself uses; it then logs `Using HostFXR Path: <game>\MelonLoader\Dependencies\dotnet\host\fxr\6.0.36\hostfxr.dll` and runs no runtime installer. `--uninstall` also removes the files the loader creates at first launch (`UserData/Loader.cfg`, and `Plugins/`, `UserData/Levels`, `UserData/LevelPacks`, `UserData` when empty), so the game returns to vanilla while a player's own plugins, preferences and levels stay.
 
@@ -209,7 +181,7 @@ task package:macos MOD_VERSION=0.4.2
 APPLE_SIGNING_IDENTITY="<Developer ID Application identity>" NOTARY_PROFILE=<notarytool keychain profile> task package:macos
 ```
 
-`task package:macos` builds the mod in Release and the `darwin/arm64` Go installer, then runs `scripts/build_player_package.py --platform macos --installer-binary <binary>`. The package has the same `vendor/`, `content/` and `manifest.json` layout as the others with `"platform": "macos"`, and carries a bare `megabonk-installer` binary with no extension and no wrapper script, mode 0755 in the zip. It lands in `.tools/player-package-macos/` (override with `OUTPUT_MACOS`), with `megabonk-levels-<mod>-ml<loader>-macos.zip` beside it. Only Apple silicon is built: no Intel Mac was available to test an `amd64` binary.
+`task package:macos` builds the `darwin/arm64` Go installer through `installer:build` and writes `megabonk-installer-<version>-macos.zip` into `.tools/installer-dist/`. The zip holds exactly the bare `megabonk-installer` binary (no extension, mode 0755) and a `README.txt`; the mod, loader and content are fetched at run time. Only Apple silicon is built: no Intel Mac was available to test an `amd64` binary.
 
 Megabonk has no macOS build, so the player runs the **Windows build under Wine** and the installer works inside that prefix. It does not install Wine, create a prefix or log into Steam: Steam and Megabonk must already be installed in a Wine prefix, and the game started once. The player runs `./megabonk-installer LEVEL...` from the unzipped folder.
 
@@ -266,18 +238,7 @@ Steam keeps the prefix at `<library>/steamapps/compatdata/<appid>/pfx` **in the 
 
 ### .NET placement and the launch option
 
-MelonLoader's Il2Cpp support needs a .NET 6 runtime, and the vendored one is the Windows build. It goes in one of two places:
-
-- `--dotnet-in prefix` (the default) extracts it to `<prefix>/drive_c/Program Files/dotnet`, inside the Proton prefix, where Windows .NET finds it on its own and the player changes nothing.
-- `--dotnet-in gamedir` extracts it to a `dotnet6-win` directory beside the game executable, for when the prefix is not writable or not usable. The installer then prints the Steam launch option to paste:
-
-```sh
-DOTNET_ROOT=Z:\path\to\game\dotnet6-win %command%
-```
-
-`Z:` is Proton's drive letter for the filesystem root, so the path after it is the ordinary Unix path. The installer **never edits `localconfig.vdf`**: Steam rewrites that file while it runs and a concurrent write loses. It prints the exact line and leaves the paste to the player.
-
-`UsablePrefix` checks for `drive_c`, which Steam creates on the first Proton launch — so the fallback to `gamedir` mode fires when the player has not launched the game yet under Proton, and the warning tells them the launch option is coming.
+The BepInEx loader pack carries its own .NET runtime under `dotnet/` beside the executable, so the installer ships and extracts no separate runtime and writes no `DOTNET_ROOT` launch option. Under plain Wine and CrossOver it applies the `winhttp` proxy override into the prefix; a Proton run prints the Steam launch option instead and the player pastes it.
 
 ### The winhttp override
 
@@ -362,7 +323,7 @@ Cancel, or closing the window, once the run has started is only a request: the e
 Automated, in `task check`:
 
 - Go: `task installer:test` runs gofmt, `go vet` and the unit tests under `go/internal`: plan, prefix selection, VDF and Steam discovery, manifest rules, level and pack installs, the shared zip extraction, the install record's round trip, record-driven uninstall, cancellation and the text reporter. Every test works in a temporary directory and none reaches the network.
-- Python: `tests/test_build_player_package.py`, `tests/test_package_manifest.py` and `tests/test_package_packs.py` cover assembly for all three platforms, the manifest round-trip and `verify_package` on built packages, deterministic zips, vendor download handling and pack validation.
+- Python: `tests/test_installer_package.py` covers the thin zip builder and its check for all three platforms: the entries and their modes, the README text, deterministic output under `SOURCE_DATE_EPOCH`, and `package:check` refusing any entry other than the binary and the README.
 
 Run against the real binaries when the installer was ported, using the Python installer it replaced as the oracle (it is no longer in the repository):
 
@@ -370,7 +331,7 @@ Run against the real binaries when the installer was ported, using the Python in
 - The four library layouts discovery has to survive ran as a non-root user in `fedora:42` and `ubuntu:24.04` with no network: a single library holding Megabonk beside an unrelated Il2Cpp title that sorts first, the same library with no Megabonk at all, the game on removable media with the live prefix in the home library, and two other libraries each with a usable prefix. The decoy keeps its own digest through every install, the report names the Il2Cpp install it refused with its reason, the SD-card install writes the .NET runtime into the home library's prefix and says so, and the two-prefix case prints both candidates with the `--prefix` hint and falls back to `gamedir` mode until `--prefix` picks one.
 - `windows/amd64` runs the same lifecycle in the dockurr/windows Windows 11 guest. `windows_path` keeps an existing drive letter and only prefixes `Z:` for drive-less paths, so the `DOTNET_ROOT` launch option legitimately differs between a Linux host run and a native Windows run.
 - On the AlmaLinux 10.2 maintainer host's real layout (Flatpak Steam with the root relocated to `/media/steam`, the stale unmounted library still in `libraryfolders.vdf`, and the native install present) the installer reports `Flatpak Steam may only read: /media/steam`, finds the relocated root through its Flatpak grant, skips the unmounted library, and refuses the native build with exit 4 and the Windows-build steps.
-- The download path runs against the real vendors: both pinned archives, the GitHub MelonLoader release and the dotnetcli .NET 6 runtime, download through their cross-host redirects with digests matching the pins, a real GitHub 404 reads as a missing asset, plain http and an off-list redirect host are refused, and a 404 leaves nothing in the cache; a cold-cache `--allow-download` rebuilds the whole package from scratch.
+- The download path runs against the real vendors: the BepInEx loader pack and the level and pack archives download through their cross-host redirects with digests matching their pins, a real 404 reads as a missing asset, plain http and an off-list redirect host are refused, and a 404 leaves nothing in the cache.
 
 Live-game evidence below was gathered with the Python installer that this one replaced, and has not been repeated with the Go binary:
 
