@@ -635,9 +635,14 @@ class BodyLifter:
         unwind: bool = False,
         pads: frozenset = frozenset(),
         evidence=None,
+        trap_holes: bool = False,
+        entries: frozenset | None = None,
     ):
         self.fn = fn
         self.call_dispatch = call_dispatch
+        self.trap_holes = trap_holes
+        self.entries = entries
+        self.hole_stubs: dict[str, int] = {}
         self.unwind = unwind
         self.pads = frozenset(pads)
         self.call_checks = 0
@@ -810,6 +815,20 @@ class BodyLifter:
             return self.label(offset)
         return None
 
+    def mid_body_target(self, offset: int) -> bool:
+        """Whether a direct transfer lands inside another body: known entries, and not a body start or a PLT stub."""
+        if self.entries is None or offset in self.entries:
+            return False
+        sec = self.section_of(offset)
+        return not (sec is not None and sec["name"].lstrip("._").startswith("plt"))
+
+    def emit_hole(self, site: int) -> None:
+        """Ends the block at an unresolved jump: a logging noreturn call when trap_holes is set, else unreachable."""
+        if self.trap_holes:
+            self.decls.add("declare void @lift_hole(i64, i64) noreturn")
+            self.emit(f"call void @lift_hole(i64 {self.start}, i64 {site})")
+        self.emit("unreachable")
+
     def terminate(self, target: str | None) -> None:
         self.emit(f"br label %{target}" if target else "unreachable")
 
@@ -817,6 +836,11 @@ class BodyLifter:
         """Emits one op; returns True when the op ended the block."""
         name, out, ins = op["op"], op["out"], op.get("in") or []
         sz = lambda t: parse_varnode(t)[2]
+        if name == "INT_ADD" and sorted(parse_varnode(t)[0] for t in ins) == ["cptr", "register"]:
+            # The dump marks a LEA constant inside the image as an address and rebases it; added to a register it is an integer displacement.
+            self.holes.append("CPTR_DISPLACEMENT")
+            self.emit_hole(insn["a"])
+            return True
         if name == "COPY":
             self.write(out, self.read(ins[0]))
         elif name in INT_BINARY:
@@ -896,7 +920,7 @@ class BodyLifter:
         elif name == "CBRANCH":
             return self.cbranch(insn, k, ins)
         elif name == "CALL":
-            self.call_direct(ins[0])
+            return self.call_direct(ins[0], insn)
         elif name == "CALLIND":
             self.call_indirect(ins[0])
         elif name == "RETURN":
@@ -1311,14 +1335,20 @@ class BodyLifter:
         minus_first = self.calc("i1", "and", negative, self.calc("i1", "and", other_positive, nonzero))
         return self.calc("i1", "and", self.x87_ordered(a, b), self.pick(equal_magnitude, "i1", minus_first, apart_by_sign))
 
-    def call_direct(self, target: str) -> None:
+    def call_direct(self, target: str, insn: dict) -> bool:
+        """Emits a direct call; returns True when the call was a hole that ended the block."""
         space, offset, _ = parse_varnode(target)
         if space != "ram":
             self.holes.append("CALL_TARGET")
-            return
+            return False
+        if self.mid_body_target(offset):
+            self.holes.append("MID_BODY_TARGET")
+            self.emit_hole(insn["a"])
+            return True
         self.externs.add(offset)
         self.emit(f"call void @sub_{offset:x}(ptr %reg)")
         self.pending_check()
+        return False
 
     def pending_check(self) -> None:
         """After a call, leaves the body for the unwind landing block when an exception is pending."""
@@ -1413,12 +1443,16 @@ class BodyLifter:
         if label:
             self.emit(f"br label %{label}")
         elif space == "ram" and not (self.start <= offset < self.start + self.size):
+            if self.mid_body_target(offset):
+                self.holes.append("MID_BODY_TARGET")
+                self.emit_hole(insn["a"])
+                return True
             self.externs.add(offset)
             self.emit(f"call void @sub_{offset:x}(ptr %reg)")
             self.emit("ret void")
         else:
             self.holes.append("UNDECODED_TARGET")
-            self.emit("unreachable")
+            self.emit_hole(insn["a"])
         return True
 
     def cbranch(self, insn: dict, k: int, ins: list[str]) -> bool:
@@ -1427,11 +1461,17 @@ class BodyLifter:
             space, offset, _ = parse_varnode(ins[0])
             if space == "ram" and not (self.start <= offset < self.start + self.size):
                 stub = f"X{insn['a']:x}_{k}"
-                self.externs.add(offset)
-                self.pending_tail = getattr(self, "pending_tail", []) + [(stub, offset)]
+                if self.mid_body_target(offset):
+                    self.holes.append("MID_BODY_TARGET")
+                    self.hole_stubs[stub] = insn["a"]
+                    self.pending_tail = getattr(self, "pending_tail", []) + [(stub, None)]
+                else:
+                    self.externs.add(offset)
+                    self.pending_tail = getattr(self, "pending_tail", []) + [(stub, offset)]
                 taken = stub
             else:
                 self.holes.append("UNDECODED_TARGET")
+                self.hole_stubs[f"X{insn['a']:x}_{k}"] = insn["a"]
                 self.pending_tail = getattr(self, "pending_tail", []) + [(f"X{insn['a']:x}_{k}", None)]
                 taken = f"X{insn['a']:x}_{k}"
         fall = self.next_label(insn, k)
@@ -1660,7 +1700,7 @@ class BodyLifter:
                     }
                 )
                 self.holes.append("BRANCHIND")
-                self.emit("unreachable")
+                self.emit_hole(insn["a"])
                 return
             self.tail_calls += 1
             if balanced or sibling:
@@ -1680,7 +1720,7 @@ class BodyLifter:
             return
         if sec is None:
             self.holes.append("BRANCHIND")
-            self.emit("unreachable")
+            self.emit_hole(insn["a"])
             return
         reachable = sorted({c for c in cases if c in self.addrs})
         if len(reachable) != len(set(cases)):
@@ -1824,7 +1864,10 @@ class BodyLifter:
         for stub, target in self.pending_tail:
             self.lines.append(f"{stub}:")
             if target is None:
-                self.emit("unreachable")
+                if stub in self.hole_stubs:
+                    self.emit_hole(self.hole_stubs[stub])
+                else:
+                    self.emit("unreachable")
             else:
                 self.emit(f"call void @sub_{target:x}(ptr %reg)")
                 self.emit("ret void")
@@ -1863,8 +1906,19 @@ def lift_body(
     unwind: bool = False,
     pads: frozenset = frozenset(),
     evidence=None,
+    trap_holes: bool = False,
+    entries: frozenset | None = None,
 ) -> Lifted:
-    return BodyLifter(fn, sections, call_dispatch=call_dispatch, unwind=unwind, pads=pads, evidence=evidence).run()
+    return BodyLifter(
+        fn,
+        sections,
+        call_dispatch=call_dispatch,
+        unwind=unwind,
+        pads=pads,
+        evidence=evidence,
+        trap_holes=trap_holes,
+        entries=entries,
+    ).run()
 
 
 def section_global(name: str, image: bytes | None, patches: tuple = ()) -> str:
@@ -1873,12 +1927,17 @@ def section_global(name: str, image: bytes | None, patches: tuple = ()) -> str:
             raise ValueError(f"section {name} has relocated words but no image")
         return f"@sec_{name} = external global i8"
     if not patches:
+        if not any(image):
+            return f"@sec_{name} = global [{len(image)} x i8] zeroinitializer, align 16"
         data = "".join(f"\\{b:02X}" for b in image)
         return f'@sec_{name} = global [{len(image)} x i8] c"{data}", align 16'
     types, fields, cursor = [], [], 0
 
     def bytes_field(chunk: bytes) -> None:
         types.append(f"[{len(chunk)} x i8]")
+        if not any(chunk):
+            fields.append(f"[{len(chunk)} x i8] zeroinitializer")
+            return
         fields.append(f'[{len(chunk)} x i8] c"' + "".join(f"\\{b:02X}" for b in chunk) + '"')
 
     for patch in sorted(patches, key=lambda p: p.offset):
@@ -1891,6 +1950,9 @@ def section_global(name: str, image: bytes | None, patches: tuple = ()) -> str:
         if patch.code is not None:
             types.append("i64")
             fields.append(f"i64 {patch.code}")
+        elif patch.function is not None:
+            types.append("ptr")
+            fields.append(f"ptr @sub_{patch.function:x}")
         else:
             target, offset = patch.target
             types.append("ptr")
@@ -1901,13 +1963,22 @@ def section_global(name: str, image: bytes | None, patches: tuple = ()) -> str:
     return f"@sec_{name} = global <{{ {', '.join(types)} }}> <{{ {', '.join(fields)} }}>, align 16"
 
 
-def module_for(bodies: list[Lifted], section_images: dict[str, bytes] | None = None, patches: list | tuple = ()) -> str:
-    """`patches` are relocated words (lift_reloc.Patch); their sections, and any data section they point at, are defined."""
+def module_for(
+    bodies: list[Lifted],
+    section_images: dict[str, bytes] | None = None,
+    patches: list | tuple = (),
+    sections: list | tuple = (),
+) -> str:
+    """`patches` are relocated words (lift_reloc.Patch); their sections, and any data section they point at, are defined.
+
+    `sections` names further sections to define, for a module that holds the data the bodies' modules leave external.
+    """
     defined = {b.start for b in bodies}
     externs = set().union(*(b.externs for b in bodies)) - defined if bodies else set()
+    externs |= {p.function for p in patches if p.function is not None} - defined
     decls = set().union(*(b.decls for b in bodies)) if bodies else set()
     parts = sorted(decls)
-    sections = set().union(*(b.data_sections for b in bodies)) if bodies else set()
+    sections = set(sections) | (set().union(*(b.data_sections for b in bodies)) if bodies else set())
     by_section: dict[str, list] = {}
     for patch in patches:
         by_section.setdefault(patch.section, []).append(patch)

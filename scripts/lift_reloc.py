@@ -12,7 +12,7 @@ from __future__ import annotations
 import lift_eh as eh
 from dataclasses import dataclass, field
 
-R_X86_64_64, R_X86_64_RELATIVE = 1, 8
+R_X86_64_64, R_X86_64_GLOB_DAT, R_X86_64_JUMP_SLOT, R_X86_64_RELATIVE = 1, 6, 7, 8
 RELOC_NAMES = {
     0: "NONE",
     1: "64",
@@ -77,12 +77,13 @@ class Image:
 
 @dataclass(frozen=True)
 class Patch:
-    """One relocated word: where it lies, and its value as a dispatchable guest code address or a (section, offset) target."""
+    """One relocated word: where it lies, and its value as a dispatchable guest code address, a (section, offset) target or the lifted body (`function`) at a guest address."""
 
     section: str
     offset: int
     code: int | None
     target: tuple | None
+    function: int | None = None
 
 
 @dataclass(frozen=True)
@@ -190,6 +191,65 @@ def plan_types(image: Image, table: bytes, base: int, lsdas: list[int], proven: 
         plan.proven.add(lsda)
         plan.patches.update(patches)
         plan.slots.extend(slots)
+    return plan
+
+
+@dataclass
+class ImagePlan:
+    """Every relocated word of an image: patches ordered by section and offset, plus what cannot be patched, by site address."""
+
+    patches: list = field(default_factory=list)
+    unbound: dict = field(default_factory=dict)
+    rejected: dict = field(default_factory=dict)
+
+
+def _plan_target(image: Image, reloc: Reloc) -> tuple[int | None, str | None]:
+    """The address a word relocates to, or the undefined symbol's name when only the embedder can bind it."""
+    if reloc.type == R_X86_64_RELATIVE:
+        return reloc.addend, None
+    if reloc.type in (R_X86_64_64, R_X86_64_GLOB_DAT, R_X86_64_JUMP_SLOT):
+        symbol = image.symbols[reloc.sym]
+        if not symbol.defined:
+            return None, symbol.name
+        return symbol.value + (reloc.addend if reloc.type == R_X86_64_64 else 0), None
+    raise RelocError(f"RELOC_TYPE:{RELOC_NAMES.get(reloc.type, reloc.type)}")
+
+
+def plan_image(image: Image, bodies: frozenset | set) -> ImagePlan:
+    """Plans a patch for every relocated word, pointing code at the lifted body (`bodies`, by start address) and data at its section.
+
+    An undefined symbol is recorded in `unbound` for the embedder to bind. A word that targets the middle of a body,
+    a PLT stub, an unmapped address, or uses a relocation type not handled here is rejected by site address.
+    """
+    plan = ImagePlan()
+    for address, reloc in image.relocs.items():
+        try:
+            if address in image.duplicates:
+                raise RelocError(f"RELOC_AMBIGUOUS:{address:x}")
+            site = image.section_of(address)
+            if site is None:
+                raise RelocError(f"RELOC_SITE_UNMAPPED:{address:x}")
+            target, name = _plan_target(image, reloc)
+            if name is not None:
+                plan.unbound[address] = name
+                continue
+            destination = image.section_of(target)
+            if destination is None:
+                destination = next((s for s in image.sections if not s["exec"] and s["va"] + s["size"] == target), None)
+                if destination is None:
+                    raise RelocError(f"RELOC_TARGET_UNMAPPED:{target:x}")
+            offset = address - site["va"]
+            if not destination["exec"]:
+                plan.patches.append(Patch(site["name"], offset, None, (destination["name"], target - destination["va"])))
+            elif target in bodies:
+                plan.patches.append(Patch(site["name"], offset, None, None, function=target))
+            elif destination["name"].lstrip("._").startswith("plt"):
+                raise RelocError(f"RELOC_PLT_TARGET:{target:x}")
+            else:
+                raise RelocError(f"RELOC_MID_BODY:{target:x}")
+        except RelocError as error:
+            plan.rejected[address] = str(error)
+    plan.patches.sort(key=lambda p: (p.section, p.offset))
     return plan
 
 

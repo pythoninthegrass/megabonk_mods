@@ -59,3 +59,42 @@ def test_render_c_carries_each_type_slot_as_an_lsda_offset_and_a_section_cell():
 def test_render_c_without_slots_has_an_empty_slot_table():
     source = lu.render_c(lu.Table(), bytes(8), 0, 0)
     assert "const uint32_t lu_type_slot_count = 0;" in source
+
+
+def test_a_function_patch_holds_the_host_function_and_declares_it():
+    module = pl.module_for([], IMAGES, [rl.Patch("data", 8, None, None, function=0x1234)])
+    assert "ptr @sub_1234" in module
+    assert "declare void @sub_1234(ptr)" in module
+
+
+def test_a_function_patch_to_a_body_in_the_module_is_not_redeclared():
+    body = pl.lift_body({"start": 0x1234, "size": 1, "insns": [{"a": 0x1234, "len": 1, "m": "x", "ops": []}]})
+    module = pl.module_for([body], IMAGES, [rl.Patch("data", 8, None, None, function=0x1234)])
+    assert "declare void @sub_1234(ptr)" not in module
+
+
+@pytest.mark.skipif(not (LLVM / "opt").exists(), reason="needs LLVM")
+def test_a_module_with_a_function_patch_verifies(tmp_path):
+    ir = tmp_path / "m.ll"
+    ir.write_text(pl.module_for([], IMAGES, [rl.Patch("data", 8, None, None, function=0x1234)]))
+    subprocess.run([LLVM / "opt", "-passes=verify", "-disable-output", ir], check=True)
+
+
+def test_a_zero_filled_section_is_a_zeroinitializer_not_a_byte_literal():
+    module = pl.module_for([], {"bss": bytes(4096)}, sections=["bss"])
+    assert "@sec_bss = global [4096 x i8] zeroinitializer, align 16" in module
+
+
+def test_a_zero_run_between_patched_words_is_a_zeroinitializer_chunk():
+    module = pl.module_for([], {"data": bytes(64)}, [rl.Patch("data", 0, None, None, function=0x10)])
+    assert "[56 x i8] zeroinitializer" in module
+
+
+def test_a_requested_section_is_defined_without_a_body_or_patch_naming_it():
+    module = pl.module_for([], IMAGES, sections=["rodata"])
+    assert "@sec_rodata = global [16 x i8]" in module
+    assert "@sec_data" not in module
+
+
+def test_a_requested_section_with_no_image_stays_external():
+    assert "@sec_tbss = external global i8" in pl.module_for([], {}, sections=["tbss"])

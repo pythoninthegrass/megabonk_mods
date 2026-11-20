@@ -116,6 +116,128 @@ def test_branchind_is_recorded_as_a_hole():
     assert pl.lift_body(fn).holes == ["BRANCHIND"]
 
 
+def test_branchind_hole_calls_the_logging_trap_when_asked():
+    fn = body(insn(0x1000, 2, op("BRANCHIND", None, "register,0,8")))
+    result = pl.lift_body(fn, trap_holes=True)
+    assert result.holes == ["BRANCHIND"]
+    assert "call void @lift_hole(i64 4096, i64 4096)" in result.ir
+    assert "declare void @lift_hole(i64, i64) noreturn" in pl.module_for([result])
+
+
+def test_holes_stay_a_bare_unreachable_by_default():
+    fn = body(insn(0x1000, 2, op("BRANCHIND", None, "register,0,8")))
+    assert "lift_hole" not in pl.lift_body(fn).ir
+
+
+def test_undecoded_branch_target_calls_the_logging_trap_when_asked():
+    fn = body(insn(0x1000, 5, op("BRANCH", None, "ram,1003,8")), insn(0x1005, 1, op("RETURN", None, "register,288,8")))
+    result = pl.lift_body(fn, trap_holes=True)
+    assert result.holes == ["UNDECODED_TARGET"]
+    assert "call void @lift_hole(i64 4096, i64 4096)" in result.ir
+
+
+def test_undecoded_conditional_target_calls_the_logging_trap_when_asked():
+    fn = body(
+        insn(0x1000, 5, op("CBRANCH", None, "ram,1003,8", "unique,100,1")),
+        insn(0x1005, 1, op("RETURN", None, "register,288,8")),
+    )
+    result = pl.lift_body(fn, trap_holes=True)
+    assert result.holes == ["UNDECODED_TARGET"]
+    assert "call void @lift_hole(i64 4096, i64 4096)" in result.ir
+
+
+@requires_llvm
+def test_trap_hole_module_verifies():
+    fn = body(insn(0x1000, 2, op("BRANCHIND", None, "register,0,8")))
+    assert verify(pl.module_for([pl.lift_body(fn, trap_holes=True)])).returncode == 0
+
+
+ENTRIES = frozenset({0x1000, 0x2000})
+PLT = [{"name": "_plt", "va": 0x3000, "size": 0x100, "exec": True}]
+
+
+def transfer(kind, target):
+    ret = insn(0x1005, 1, op("RETURN", None, "register,288,8"))
+    if kind == "CBRANCH":
+        return body(insn(0x1000, 5, op("CBRANCH", None, f"ram,{target:x},8", "unique,100,1")), ret)
+    return body(insn(0x1000, 5, op(kind, None, f"ram,{target:x},8")), ret)
+
+
+@pytest.mark.parametrize("kind", ["CALL", "BRANCH", "CBRANCH"])
+def test_a_transfer_into_the_middle_of_another_body_is_a_hole_when_entries_are_known(kind):
+    result = pl.lift_body(transfer(kind, 0x2003), entries=ENTRIES, trap_holes=True)
+    assert result.holes == ["MID_BODY_TARGET"]
+    assert "@sub_2003" not in result.ir and result.externs == set()
+    assert "call void @lift_hole(i64 4096, i64 4096)" in result.ir
+
+
+@pytest.mark.parametrize("kind", ["CALL", "BRANCH", "CBRANCH"])
+def test_a_transfer_to_another_body_start_stays_a_call(kind):
+    result = pl.lift_body(transfer(kind, 0x2000), entries=ENTRIES)
+    assert result.holes == [] and "@sub_2000" in result.ir
+
+
+@pytest.mark.parametrize("kind", ["CALL", "BRANCH", "CBRANCH"])
+def test_a_transfer_to_a_plt_stub_is_not_a_mid_body_target(kind):
+    result = pl.lift_body(transfer(kind, 0x3010), PLT, entries=ENTRIES)
+    assert result.holes == [] and "@sub_3010" in result.ir
+
+
+@pytest.mark.parametrize("kind", ["CALL", "BRANCH", "CBRANCH"])
+def test_without_entries_a_transfer_is_never_second_guessed(kind):
+    assert pl.lift_body(transfer(kind, 0x2003)).holes == []
+
+
+@requires_llvm
+@pytest.mark.parametrize("kind", ["CALL", "BRANCH", "CBRANCH"])
+def test_a_mid_body_hole_module_verifies(kind):
+    fn = transfer(kind, 0x2003)
+    assert verify(pl.module_for([pl.lift_body(fn, entries=ENTRIES, trap_holes=True)])).returncode == 0
+
+
+DISPLACEMENT_SECTIONS = [
+    {"name": "text", "va": 0x1000, "size": 0x2000, "exec": True},
+    {"name": "data", "va": 0x4000, "size": 0x100, "exec": False},
+]
+
+
+def cptr_add(*operands):
+    return body(
+        insn(0x1000, 7, op("INT_ADD", "register,0,8", *operands)),
+        insn(0x1007, 1, op("RETURN", None, "register,288,8")),
+    )
+
+
+@pytest.mark.parametrize("operands", [("register,30,8", "cptr,2000,8"), ("cptr,2000,8", "register,30,8")])
+@pytest.mark.parametrize("target", [0x2000, 0x4010])
+def test_a_register_plus_a_cptr_is_a_displacement_hole_not_a_pointer(operands, target):
+    fn = cptr_add(*[o.replace("2000", f"{target:x}") for o in operands])
+    result = pl.lift_body(fn, DISPLACEMENT_SECTIONS, trap_holes=True)
+    assert result.holes == ["CPTR_DISPLACEMENT"]
+    assert f"@sub_{target:x}" not in result.ir and "@sec_" not in result.ir
+    assert "call void @lift_hole(i64 4096, i64 4096)" in result.ir
+
+
+def test_a_cptr_copy_is_still_an_address():
+    fn = body(
+        insn(0x1000, 7, op("COPY", "register,0,8", "cptr,2000,8")),
+        insn(0x1007, 1, op("RETURN", None, "register,288,8")),
+    )
+    result = pl.lift_body(fn, DISPLACEMENT_SECTIONS)
+    assert result.holes == [] and "@sub_2000" in result.ir
+
+
+def test_a_cptr_plus_a_constant_is_still_an_address():
+    fn = cptr_add("cptr,2000,8", "const,8,8")
+    assert pl.lift_body(fn, DISPLACEMENT_SECTIONS).holes == []
+
+
+@requires_llvm
+def test_a_displacement_hole_module_verifies():
+    fn = cptr_add("register,30,8", "cptr,2000,8")
+    assert verify(pl.module_for([pl.lift_body(fn, DISPLACEMENT_SECTIONS, trap_holes=True)])).returncode == 0
+
+
 def test_callother_is_recorded_as_a_hole_with_its_name():
     fn = body(
         insn(0x1000, 4, op("CALLOTHER", None, "const,5,4", REG_EDI, user="lzcnt")),

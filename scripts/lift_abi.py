@@ -205,6 +205,18 @@ HOST_HELPERS = [
     "  *out = z ^ (z >> 31);",
     "  return 1;",
     "}",
+    "__attribute__((weak, noreturn)) void lift_hole(uint64_t body, uint64_t site) {",
+    '  const char *path = getenv("LIFT_HOLE_LOG");',
+    '  fprintf(stderr, "lift_hole: body 0x%llx site 0x%llx\\n", (unsigned long long)body, (unsigned long long)site);',
+    "  if (path) {",
+    '    FILE *log = fopen(path, "a");',
+    "    if (log) {",
+    '      fprintf(log, "lift_hole: body 0x%llx site 0x%llx\\n", (unsigned long long)body, (unsigned long long)site);',
+    "      fclose(log);",
+    "    }",
+    "  }",
+    "  abort();",
+    "}",
 ]
 
 
@@ -233,6 +245,7 @@ def generate(
         raise AbiError("alias target is not a lifted body or binding")
     lines = [
         "#include <stdint.h>",
+        "#include <stdio.h>",
         "#include <stdlib.h>",
         "#include <string.h>",
         '_Static_assert(sizeof(void *) == 8, "the lifted ABI requires 64-bit pointers");',

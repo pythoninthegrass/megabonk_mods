@@ -144,3 +144,99 @@ def test_type_entries_report_each_nonzero_filter_with_the_entry_offset():
     entries = eh.type_entries(lsda, 0)
     assert [e.filter for e in entries] == [2]
     assert entries[0].value == 0x200 and entries[0].offset == len(lsda) - 8
+
+
+PLAN_SECTIONS = SECTIONS + [{"name": "plt", "va": 0x2000, "size": 0x100, "exec": True}]
+BODIES = frozenset({0x1234, 0x1800})
+
+
+def plan_of(relocs, symbols=(), sections=PLAN_SECTIONS):
+    img = rl.Image(
+        sections=sections,
+        relocs={offset: rl.Reloc(*rest) for offset, *rest in relocs},
+        symbols=list(symbols),
+    )
+    return rl.plan_image(img, BODIES)
+
+
+def test_a_relative_word_to_a_body_start_becomes_a_function_patch():
+    plan = plan_of([(0x4300, rl.R_X86_64_RELATIVE, 0, 0x1234)])
+    assert plan.patches == [rl.Patch("data", 0x300, None, None, function=0x1234)]
+    assert plan.rejected == {} and plan.unbound == {}
+
+
+def test_a_relative_word_to_data_becomes_a_section_patch():
+    plan = plan_of([(0x4300, rl.R_X86_64_RELATIVE, 0, 0x4208)])
+    assert plan.patches == [rl.Patch("data", 0x300, None, ("data", 0x208))]
+
+
+def test_a_relative_word_into_the_middle_of_a_body_is_rejected_by_address():
+    plan = plan_of([(0x4300, rl.R_X86_64_RELATIVE, 0, 0x1235)])
+    assert plan.patches == []
+    assert plan.rejected == {0x4300: "RELOC_MID_BODY:1235"}
+
+
+def test_a_relative_word_to_a_plt_stub_is_rejected_by_name():
+    plan = plan_of([(0x4300, rl.R_X86_64_RELATIVE, 0, 0x2010)])
+    assert plan.rejected == {0x4300: "RELOC_PLT_TARGET:2010"}
+
+
+def test_a_relative_word_to_a_ghidra_named_plt_stub_is_rejected_by_name():
+    sections = [s if s["name"] != "plt" else {**s, "name": "_plt"} for s in PLAN_SECTIONS]
+    plan = plan_of([(0x4300, rl.R_X86_64_RELATIVE, 0, 0x2010)], sections=sections)
+    assert plan.rejected == {0x4300: "RELOC_PLT_TARGET:2010"}
+
+
+def test_a_64_word_against_a_defined_code_symbol_adds_the_addend_and_names_the_body():
+    symbols = [rl.Sym("", 0, 0, False), rl.Sym("fn", 0x1200, 8, True)]
+    plan = plan_of([(0x4300, rl.R_X86_64_64, 1, 0x34)], symbols)
+    assert plan.patches == [rl.Patch("data", 0x300, None, None, function=0x1234)]
+
+
+@pytest.mark.parametrize("kind", [rl.R_X86_64_64, rl.R_X86_64_GLOB_DAT, rl.R_X86_64_JUMP_SLOT])
+def test_an_undefined_symbol_is_left_unbound_not_patched_or_rejected(kind):
+    symbols = [rl.Sym("", 0, 0, False), rl.Sym("memcpy", 0, 0, False)]
+    plan = plan_of([(0x4300, kind, 1, 0)], symbols)
+    assert plan.unbound == {0x4300: "memcpy"}
+    assert plan.patches == [] and plan.rejected == {}
+
+
+def test_a_glob_dat_word_against_a_defined_symbol_takes_the_symbol_value():
+    symbols = [rl.Sym("", 0, 0, False), rl.Sym("vt", 0x4100, 88, True)]
+    plan = plan_of([(0x4300, rl.R_X86_64_GLOB_DAT, 1, 0)], symbols)
+    assert plan.patches == [rl.Patch("data", 0x300, None, ("data", 0x100))]
+
+
+def test_an_unhandled_relocation_type_is_rejected_by_name():
+    plan = plan_of([(0x4300, 16, 0, 0)])
+    assert plan.rejected == {0x4300: "RELOC_TYPE:DTPMOD64"}
+
+
+def test_a_word_with_a_second_relocation_is_rejected_as_ambiguous():
+    img = rl.Image(PLAN_SECTIONS, {0x4300: rl.Reloc(rl.R_X86_64_RELATIVE, 0, 0x4208)}, [], duplicates={0x4300})
+    assert rl.plan_image(img, BODIES).rejected == {0x4300: "RELOC_AMBIGUOUS:4300"}
+
+
+def test_a_site_outside_every_section_is_rejected():
+    plan = plan_of([(0x9000, rl.R_X86_64_RELATIVE, 0, 0x4208)])
+    assert plan.rejected == {0x9000: "RELOC_SITE_UNMAPPED:9000"}
+
+
+def test_a_target_outside_every_section_is_rejected():
+    plan = plan_of([(0x4300, rl.R_X86_64_RELATIVE, 0, 0x9000)])
+    assert plan.rejected == {0x4300: "RELOC_TARGET_UNMAPPED:9000"}
+
+
+def test_a_target_one_past_the_end_of_a_data_section_points_at_that_end():
+    plan = plan_of([(0x4300, rl.R_X86_64_RELATIVE, 0, 0x5000)])
+    assert plan.patches == [rl.Patch("data", 0x300, None, ("data", 0x1000))]
+
+
+def test_a_target_one_past_the_end_of_a_code_section_is_still_rejected():
+    plan = plan_of([(0x4300, rl.R_X86_64_RELATIVE, 0, 0x2000)], sections=SECTIONS)
+    assert plan.rejected == {0x4300: "RELOC_TARGET_UNMAPPED:2000"}
+
+
+def test_the_patches_come_out_ordered_by_section_then_offset():
+    plan = plan_of([(0x4310, rl.R_X86_64_RELATIVE, 0, 0x1234), (0x4300, rl.R_X86_64_RELATIVE, 0, 0x4208)])
+    assert [p.offset for p in plan.patches] == [0x300, 0x310]
