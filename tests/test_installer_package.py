@@ -36,7 +36,9 @@ def test_zip_name_carries_the_version_and_platform():
     assert zip_name("dev", "macos") == "megabonk-installer-dev-macos.zip"
 
 
-@pytest.mark.parametrize("platform,member", [("linux", "megabonk-installer"), ("windows", "megabonk-installer.exe"), ("macos", "megabonk-installer")])
+@pytest.mark.parametrize(
+    "platform,member", [("linux", "megabonk-installer"), ("windows", "megabonk-installer.exe"), ("macos", "megabonk-installer")]
+)
 def test_the_binary_is_named_for_its_platform(tmp_path, platform, member):
     binary(tmp_path / "installer")
     out = build_zip(tmp_path / "installer", tmp_path / "out.zip", platform=platform, version="dev")
@@ -62,7 +64,9 @@ def test_the_readme_says_how_to_run_it_and_what_it_installs(tmp_path):
     assert "Windows" in readme
 
 
-@pytest.mark.parametrize("platform,wanted", [("linux", "./megabonk-installer"), ("windows", "megabonk-installer.exe"), ("macos", "xattr")])
+@pytest.mark.parametrize(
+    "platform,wanted", [("linux", "./megabonk-installer"), ("windows", "megabonk-installer.exe"), ("macos", "xattr")]
+)
 def test_each_platform_readme_names_its_own_run_command(tmp_path, platform, wanted):
     binary(tmp_path / "installer")
     out = build_zip(tmp_path / "installer", tmp_path / "out.zip", platform=platform, version="dev")
@@ -79,7 +83,20 @@ def builder_code() -> str:
 
 def test_the_builder_never_names_content_or_vendor_inputs():
     source = builder_code()
-    for forbidden in ["melonloader", "dotnet", "vendor", "thunderstore", "mod.dll", "levels/", "userlibs", "bepinex", "requests", "urllib", "sha256", "manifest.json"]:
+    for forbidden in [
+        "melonloader",
+        "dotnet",
+        "vendor",
+        "thunderstore",
+        "mod.dll",
+        "levels/",
+        "userlibs",
+        "bepinex",
+        "requests",
+        "urllib",
+        "sha256",
+        "manifest.json",
+    ]:
         assert forbidden not in source, f"the builder must not reference {forbidden}"
 
 
@@ -101,8 +118,12 @@ def test_an_unknown_platform_is_refused(tmp_path):
 
 def test_the_zip_is_reproducible_for_a_fixed_epoch(tmp_path):
     binary(tmp_path / "installer")
-    first = build_zip(tmp_path / "installer", tmp_path / "a.zip", platform="linux", version="dev", env={"SOURCE_DATE_EPOCH": "1700000000"})
-    second = build_zip(tmp_path / "installer", tmp_path / "b.zip", platform="linux", version="dev", env={"SOURCE_DATE_EPOCH": "1700000000"})
+    first = build_zip(
+        tmp_path / "installer", tmp_path / "a.zip", platform="linux", version="dev", env={"SOURCE_DATE_EPOCH": "1700000000"}
+    )
+    second = build_zip(
+        tmp_path / "installer", tmp_path / "b.zip", platform="linux", version="dev", env={"SOURCE_DATE_EPOCH": "1700000000"}
+    )
     assert first.read_bytes() == second.read_bytes()
     with zipfile.ZipFile(first) as archive:
         assert {info.date_time for info in archive.infolist()} == {(2023, 11, 14, 22, 13, 20)}
@@ -110,8 +131,12 @@ def test_the_zip_is_reproducible_for_a_fixed_epoch(tmp_path):
 
 def test_a_different_epoch_changes_the_zip(tmp_path):
     binary(tmp_path / "installer")
-    first = build_zip(tmp_path / "installer", tmp_path / "a.zip", platform="linux", version="dev", env={"SOURCE_DATE_EPOCH": "1700000000"})
-    second = build_zip(tmp_path / "installer", tmp_path / "b.zip", platform="linux", version="dev", env={"SOURCE_DATE_EPOCH": "1600000000"})
+    first = build_zip(
+        tmp_path / "installer", tmp_path / "a.zip", platform="linux", version="dev", env={"SOURCE_DATE_EPOCH": "1700000000"}
+    )
+    second = build_zip(
+        tmp_path / "installer", tmp_path / "b.zip", platform="linux", version="dev", env={"SOURCE_DATE_EPOCH": "1600000000"}
+    )
     assert first.read_bytes() != second.read_bytes()
 
 
@@ -146,7 +171,13 @@ def test_check_reports_any_extra_entry(tmp_path):
 
 @pytest.mark.parametrize(
     "member",
-    ["vendor/MelonLoader.x64.zip", "content/levels/thps.mblevel.json", "manifest.json", "dotnet/runtime.zip", "BepInEx/plugins/x.dll"],
+    [
+        "vendor/MelonLoader.x64.zip",
+        "content/levels/thps.mblevel.json",
+        "manifest.json",
+        "dotnet/runtime.zip",
+        "BepInEx/plugins/x.dll",
+    ],
 )
 def test_check_reports_each_kind_of_stray_content(tmp_path, member):
     binary(tmp_path / "installer")
@@ -231,14 +262,28 @@ def test_main_returns_zero_for_a_built_zip(tmp_path, capsys):
 
 def test_build_main_writes_the_named_zip_and_prints_it(tmp_path, capsys):
     source = binary(tmp_path / ".tools/installer/megabonk-installer-linux-amd64")
-    code = module.main(["build", "--installer-binary", str(source), "--out-dir", str(tmp_path / "dist"), "--platform", "linux", "--version", "0.4.2"])
+    code = module.main(
+        [
+            "build",
+            "--installer-binary",
+            str(source),
+            "--out-dir",
+            str(tmp_path / "dist"),
+            "--platform",
+            "linux",
+            "--version",
+            "0.4.2",
+        ]
+    )
     assert code == 0
     assert (tmp_path / "dist" / "megabonk-installer-0.4.2-linux.zip").is_file()
     assert "megabonk-installer-0.4.2-linux.zip" in capsys.readouterr().out
 
 
 def test_build_main_reports_a_missing_binary_as_exit_three(tmp_path, capsys):
-    code = module.main(["build", "--installer-binary", str(tmp_path / "gone"), "--out-dir", str(tmp_path / "dist"), "--platform", "linux"])
+    code = module.main(
+        ["build", "--installer-binary", str(tmp_path / "gone"), "--out-dir", str(tmp_path / "dist"), "--platform", "linux"]
+    )
     assert code == 3
     assert "installer binary" in capsys.readouterr().err
 
@@ -247,7 +292,19 @@ def test_the_script_runs_as_a_program(tmp_path):
     script = Path(__file__).resolve().parents[1] / "scripts/installer_package.py"
     source = binary(tmp_path / "installer")
     result = subprocess.run(
-        ["uv", "run", "python", str(script), "build", "--installer-binary", str(source), "--out-dir", str(tmp_path / "dist"), "--platform", "linux"],
+        [
+            "uv",
+            "run",
+            "python",
+            str(script),
+            "build",
+            "--installer-binary",
+            str(source),
+            "--out-dir",
+            str(tmp_path / "dist"),
+            "--platform",
+            "linux",
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -268,7 +325,9 @@ def test_the_script_runs_as_a_program(tmp_path):
 def test_build_main_refuses_a_directory_as_the_binary(tmp_path, capsys):
     directory = tmp_path / "installer-dir"
     directory.mkdir()
-    code = module.main(["build", "--installer-binary", str(directory), "--out-dir", str(tmp_path / "dist"), "--platform", "macos"])
+    code = module.main(
+        ["build", "--installer-binary", str(directory), "--out-dir", str(tmp_path / "dist"), "--platform", "macos"]
+    )
     assert code == 3
     assert "installer binary" in capsys.readouterr().err
 

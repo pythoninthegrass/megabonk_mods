@@ -94,7 +94,9 @@ def test_missing_required_file(package_files, name):
     assert any("missing" in p and name in p for p in check_package(write_zip(root, files), root))
 
 
-@pytest.mark.parametrize("name", ["Assembly-CSharp.dll", "dotnet/coreclr.dll", "UserData/Levels/thps.mblevel.json", "../escape", ".env"])
+@pytest.mark.parametrize(
+    "name", ["Assembly-CSharp.dll", "dotnet/coreclr.dll", "UserData/Levels/thps.mblevel.json", "../escape", ".env"]
+)
 def test_unexpected_files_rejected(package_files, name):
     root, files = package_files
     files[name] = b"unshippable"
