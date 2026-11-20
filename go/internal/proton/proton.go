@@ -1,115 +1,36 @@
-// Package proton is the Proton side of the install: where .NET 6 goes in a
-// prefix, the Wine DllOverrides entry MelonLoader needs, and which Proton tool
-// to run. MelonLoader hooks an Il2Cpp game through a version.dll next to the
-// executable, which Wine only loads when the registry says it is native, and
-// the Il2Cpp interop needs a .NET 6 runtime the prefix can find. Both are
-// prefix state, so the installer writes them itself rather than relying on a
-// first launch to do it.
+// Package proton writes the Wine DllOverrides entry a prefix needs, the state
+// the installer cannot leave to a first launch because it is prefix state rather
+// than game-folder state.
 package proton
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/pythoninthegrass/megabonk_mods/installer/internal/ppath"
-	"github.com/pythoninthegrass/megabonk_mods/installer/internal/zipx"
 )
 
 const (
-	// RuntimeMarkerName records which .NET version sits in the runtime folder.
-	RuntimeMarkerName = "MegabonkLevels.dotnet_version"
-	// DLLName is the DLL Wine must load natively for MelonLoader to hook in.
-	DLLName = "version"
-	// DLLValue is the DllOverrides value that makes Wine load it.
-	DLLValue = "native,builtin"
 	// DllOverridesSection is the registry section DllOverrides lives in.
 	DllOverridesSection = `Software\Wine\DllOverrides`
-	// RuntimeHost is the file that proves a runtime version is really there.
-	RuntimeHost = "hostfxr.dll"
-
-	dotnetFolder = "drive_c/Program Files/dotnet"
-	hostfxrDir   = "host/fxr"
-	commandShell = "%command%"
 )
-
-// Error is a Proton or Wine step that could not be completed.
-type Error struct{ message string }
-
-func (e *Error) Error() string { return e.message }
-
-func fail(format string, args ...any) error {
-	return &Error{message: fmt.Sprintf(format, args...)}
-}
 
 // Runner runs a command with an environment and reports its exit code; tests
 // inject their own.
 type Runner func(argv []string, env map[string]string) int
 
-// WindowsPath is a Unix path as Wine sees it through the Z: drive.
-func WindowsPath(path string) string {
-	text := path
-	if drivePath.MatchString(text) {
-		return strings.ToUpper(text[:1]) + ":" + strings.ReplaceAll(text[2:], "/", `\`)
-	}
-	return "Z:" + strings.ReplaceAll(text, "/", `\`)
-}
-
-// RuntimeTarget is the standard .NET folder inside a prefix.
-func RuntimeTarget(prefix string) string { return ppath.Join(prefix, dotnetFolder) }
-
-// RuntimeInstalled reports whether a .NET runtime of exactly this version sits
-// at target: the marker has to say so and hostfxr.dll has to be there.
-func RuntimeInstalled(target, version string) bool {
-	marker := ppath.Join(target, RuntimeMarkerName)
-	if !ppath.IsFile(marker) {
-		return false
-	}
-	text, err := ppath.ReadTextReplace(marker)
-	if err != nil || strings.TrimSpace(text) != version {
-		return false
-	}
-	return ppath.IsFile(ppath.Join(target, hostfxrDir, version, RuntimeHost))
-}
-
-// ExtractRuntime unpacks a Windows .NET runtime archive and marks it installed.
-func ExtractRuntime(archive, target, version string) error {
-	if err := zipx.Extract(archive, target); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(target, 0o755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(ppath.Join(target, RuntimeMarkerName), []byte(version), 0o644); err != nil {
-		return err
-	}
-	return nil
-}
-
-// RemoveRuntime deletes an extracted runtime; true when something was removed.
-func RemoveRuntime(target string) bool {
-	if !ppath.Exists(target) {
-		return false
-	}
-	_ = os.RemoveAll(target)
-	return !ppath.Exists(target)
-}
-
 // UserRegPath is the prefix's registry file.
 func UserRegPath(prefix string) string { return ppath.Join(prefix, "user.reg") }
 
 var (
-	drivePath   = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
 	entryLine   = regexp.MustCompile(`^"([^"]+)"\s*=\s*(?:\([^)]*\)\s*)?"(.*)"\s*$`)
 	sectionLine = regexp.MustCompile(`^\[(.+)\](?:\s+\d+)?\s*$`)
-	numbers     = regexp.MustCompile(`\d+`)
 )
 
 func normaliseSection(section string) string {
@@ -357,180 +278,4 @@ func clearInRegistry(prefix, name, section string) {
 		out = append(out, line)
 	}
 	_ = os.WriteFile(UserRegPath(prefix), []byte(strings.Join(out, "\n")+"\n"), 0o644)
-}
-
-// ProtonRoots are Steam's own Proton builds plus any compatibility tool the
-// user dropped in.
-func ProtonRoots(library string) []string {
-	tools := []string{}
-	for _, directory := range []string{ppath.Join(library, "steamapps", "common"), ppath.Join(library, "compatibilitytools.d")} {
-		if !ppath.IsDir(directory) {
-			continue
-		}
-		entries, err := os.ReadDir(directory)
-		if err != nil {
-			continue
-		}
-		names := make([]string, 0, len(entries))
-		for _, entry := range entries {
-			names = append(names, entry.Name())
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			child := ppath.Join(directory, name)
-			if ppath.IsDir(child) && strings.HasPrefix(strings.ToLower(name), "proton") {
-				tools = append(tools, child)
-			}
-		}
-	}
-	return tools
-}
-
-func versionKey(tool string) []int {
-	var numbersFound []int
-	for _, match := range numbers.FindAllString(ppath.Name(tool), -1) {
-		number, err := strconv.Atoi(match)
-		if err != nil {
-			continue
-		}
-		numbersFound = append(numbersFound, number)
-	}
-	return numbersFound
-}
-
-// compareVersionKeys is Python's tuple comparison: element-wise, and a shorter
-// key is smaller when it is a prefix of the longer one.
-func compareVersionKeys(left, right []int) int {
-	for index := 0; index < len(left) && index < len(right); index++ {
-		if left[index] != right[index] {
-			if left[index] < right[index] {
-				return -1
-			}
-			return 1
-		}
-	}
-	switch {
-	case len(left) < len(right):
-		return -1
-	case len(left) > len(right):
-		return 1
-	}
-	return 0
-}
-
-func normaliseToken(text string) string {
-	return strings.Trim(regexp.MustCompile(`[^a-z0-9]+`).ReplaceAllString(strings.ToLower(text), "_"), "_")
-}
-
-func matchesForced(tool, forced string) bool {
-	needle := normaliseToken(forced)
-	haystack := normaliseToken(ppath.Name(tool))
-	if needle == "" {
-		return false
-	}
-	for _, token := range strings.Split(needle, "_") {
-		if !containsToken(strings.Split(haystack, "_"), token) && !strings.Contains(haystack, token) {
-			return false
-		}
-	}
-	return true
-}
-
-func containsToken(tokens []string, wanted string) bool {
-	for _, token := range tokens {
-		if token == wanted {
-			return true
-		}
-	}
-	return false
-}
-
-// PickProton is the compatibility tool to use: the forced one when named, else
-// the newest numbered Proton. "" means there is none.
-func PickProton(library, forced string) string {
-	tools := ProtonRoots(library)
-	if len(tools) == 0 {
-		return ""
-	}
-	if forced != "" {
-		var matches []string
-		for _, tool := range tools {
-			if matchesForced(tool, forced) {
-				matches = append(matches, tool)
-			}
-		}
-		if len(matches) == 0 {
-			return ""
-		}
-		needle := normaliseToken(forced)
-		best := matches[0]
-		for _, tool := range matches[1:] {
-			if forcedKeyBetter(tool, best, needle) {
-				best = tool
-			}
-		}
-		return best
-	}
-	best := tools[0]
-	for _, tool := range tools[1:] {
-		if keyBetter(tool, best) {
-			best = tool
-		}
-	}
-	return best
-}
-
-func keyBetter(tool, best string) bool {
-	return compareToolKeys(ppath.Name(tool), ppath.Name(best), nil) > 0
-}
-
-func forcedKeyBetter(tool, best, needle string) bool {
-	return compareToolKeys(ppath.Name(tool), ppath.Name(best), &needle) > 0
-}
-
-// compareToolKeys is Python's max key: an optional "the name starts with the
-// forced prefix" bool, then the numeric version, then the name.
-func compareToolKeys(left, right string, needle *string) int {
-	if needle != nil {
-		l := startsWithNeedle(left, *needle)
-		r := startsWithNeedle(right, *needle)
-		if l != r {
-			if l {
-				return 1
-			}
-			return -1
-		}
-	}
-	if order := compareVersionKeys(versionKey(left), versionKey(right)); order != 0 {
-		return order
-	}
-	return strings.Compare(left, right)
-}
-
-func startsWithNeedle(name, needle string) bool {
-	return strings.HasPrefix(strings.ReplaceAll(strings.ToLower(name), "-", "_"), needle)
-}
-
-// ProtonWineBin is the wine binary inside a Proton tool, for registry edits.
-func ProtonWineBin(tool string) string {
-	binDir := ppath.Join(tool, "files", "bin")
-	for _, name := range []string{"wine64", "wine"} {
-		if candidate := ppath.Join(binDir, name); ppath.IsFile(candidate) {
-			return candidate
-		}
-	}
-	return ""
-}
-
-// LaunchOption is the Steam launch option that points .NET at a runtime outside
-// the prefix.
-func LaunchOption(runtimeDir string, extra ...string) string {
-	assignments := append([]string{"DOTNET_ROOT=" + WindowsPath(runtimeDir)}, extra...)
-	return strings.Join(append(assignments, commandShell), " ")
-}
-
-// UsablePrefix reports whether Steam has created this prefix yet; it does so on
-// the first Proton launch.
-func UsablePrefix(prefix string) bool {
-	return ppath.IsDir(ppath.Join(prefix, "drive_c"))
 }

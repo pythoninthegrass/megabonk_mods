@@ -18,10 +18,7 @@ func winePrefix(t *testing.T) string {
 	return prefix
 }
 
-func TestWineHTTPOverrideNamesTheProxyWineMustLoad(t *testing.T) {
-	if DLLName != "version" {
-		t.Errorf("the MelonLoader shim override uses %q", DLLName)
-	}
+func TestWinHTTPOverrideNamesTheProxyWineMustLoad(t *testing.T) {
 	if WinHTTPDLLName != "winhttp" {
 		t.Errorf("WinHTTPDLLName = %q", WinHTTPDLLName)
 	}
