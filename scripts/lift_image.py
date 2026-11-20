@@ -421,22 +421,39 @@ def score_blockers(baseline: Path, parts: list[list[Fde]], ctx: dict) -> int:
     return int(bool(blocking))
 
 
+def inventory(so: Path, shard_size: int) -> dict:
+    """The pinned image's body inventory: its frame records, frame-less functions, section accounting and shards."""
+    import lift_probe as lp
+
+    sha = lp.sha256(so)
+    if sha not in UNFRAMED:
+        raise SystemExit(f"no recorded frame-less functions for image {sha}")
+    readelf = lp.run_tool([lp.LLVM / "llvm-readelf", "-S", so], text=True, check=True).stdout
+    frames = lp.parse_fdes(lp.run_tool([lp.LLVM / "llvm-dwarfdump", "--eh-frame", so], text=True, check=True).stdout)
+    data = so.read_bytes()
+    empty_frames = [f for f in frames if f.size == 0]
+    nonempty_frames = [f for f in frames if f.size != 0]
+    sections, unframed = build_inventory(lp.parse_exec_sections(readelf), data, nonempty_frames, UNFRAMED[sha])
+    parts = body_shards(sorted(frames + unframed, key=lambda f: f.start), shard_size)
+    return {
+        "sha": sha,
+        "empty_frames": empty_frames,
+        "nonempty_frames": nonempty_frames,
+        "sections": sections,
+        "unframed": unframed,
+        "parts": parts,
+        "bodies": [f for part in parts for f in part],
+    }
+
+
 def build(args) -> int:
     import lift_probe as lp
     import time
 
     started = time.monotonic()
-    sha = lp.sha256(args.so)
-    if sha not in UNFRAMED:
-        raise SystemExit(f"no recorded frame-less functions for image {sha}")
-    readelf = lp.run_tool([lp.LLVM / "llvm-readelf", "-S", args.so], text=True, check=True).stdout
-    frames = lp.parse_fdes(lp.run_tool([lp.LLVM / "llvm-dwarfdump", "--eh-frame", args.so], text=True, check=True).stdout)
-    data = args.so.read_bytes()
-    empty_frames = [f for f in frames if f.size == 0]
-    nonempty_frames = [f for f in frames if f.size != 0]
-    sections, unframed = build_inventory(lp.parse_exec_sections(readelf), data, nonempty_frames, UNFRAMED[sha])
-    parts = body_shards(sorted(frames + unframed, key=lambda f: f.start), args.shard_size)
-    bodies = [f for part in parts for f in part]
+    inv = inventory(args.so, args.shard_size)
+    sha, empty_frames, nonempty_frames = inv["sha"], inv["empty_frames"], inv["nonempty_frames"]
+    sections, unframed, parts, bodies = inv["sections"], inv["unframed"], inv["parts"], inv["bodies"]
     args.out.mkdir(parents=True, exist_ok=True)
     ctx = {
         "so": args.so,

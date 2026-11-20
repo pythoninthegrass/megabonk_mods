@@ -293,6 +293,26 @@ tasks:
     cmds:
       - uv run scripts/lift_image.py "{{.LIFT_SO}}" --build --out "{{.LIFT_OUT}}" --ghidra-jobs 1 --ghidra-timeout 600 {{.CLI_ARGS}}
 
+  lift-link:
+    desc: "Link a scored image's lifted bodies into one arm64 dylib, with holes as logged traps"
+    vars:
+      LIFT_SO: '{{.LIFT_SO | default ".tools/megabonk-linux-native/Megabonk/GameAssembly.so"}}'
+      LIFT_BASELINE: '{{.LIFT_BASELINE | default ".tools/lift-image-full"}}'
+      LIFT_OUT: '{{.LIFT_OUT | default ".tools/lift-link"}}'
+    summary: |
+      Usage: task re:lift-link [LIFT_SO=<GameAssembly.so>] [LIFT_BASELINE=<dir>] [LIFT_OUT=<dir>]
+
+      Reads the pcode shards of a finished task re:lift-image-build run (LIFT_BASELINE), lifts
+      every body with each unresolved jump turned into a logged lift_hole trap, compiles one
+      object per shard plus one for the relocated data sections, and links libgameassembly.dylib
+      into LIFT_OUT. Resumes from objects whose identity still matches. This is a development
+      build: it never changes or claims the baseline's runnable verdict. See scripts/lift_link.py.
+    preconditions:
+      - sh: '[ -f "{{.LIFT_BASELINE}}/summary.json" ]'
+        msg: "No finished build at {{.LIFT_BASELINE}}; run task re:lift-image-build first"
+    cmds:
+      - uv run scripts/lift_link.py "{{.LIFT_SO}}" --baseline "{{.LIFT_BASELINE}}" --out "{{.LIFT_OUT}}" {{.CLI_ARGS}}
+
   lift-names:
     desc: "Name scored lift bodies by joining the Linux dump.cs RVAs to their body starts"
     summary: |
