@@ -1,6 +1,9 @@
 """Per-shard lifted objects and a relocated data object, linked into one arm64 dylib."""
 
 import ctypes
+import lift_abi as abi
+import lift_imports as imports
+import lift_sdk as sdk
 import lift_image as li
 import lift_link as ll
 import lift_probe as lp
@@ -192,3 +195,53 @@ def test_a_second_link_with_unchanged_inputs_reuses_the_dylib(tmp_path):
     stamp = Path(first["dylib"]).stat().st_mtime_ns
     second = ll.link_image(ctx, parts, plan, lambda names: {"data": bytes(16)})
     assert second["dylib"] == first["dylib"] and Path(second["dylib"]).stat().st_mtime_ns == stamp
+
+
+def calls_a_stub():
+    return {
+        **t.body(
+            t.insn(0x2000, 5, t.op("CALL", None, "ram,5000,8")),
+            t.insn(0x2005, 1, t.op("RETURN", None, "register,288,8")),
+            start=0x2000,
+        ),
+        "undecoded": 0,
+    }
+
+
+def stub_host_source(tmp_path):
+    """Host source defining the stub at 0x5000 as a bound call to a host function `twice`, plus that function."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "string.h").write_text("long twice(long a);\n")
+    (tmp_path / "umbrella.c").write_text('#include "string.h"\n')
+    view = sdk.Sdk([sdk._dump(tmp_path / "umbrella.c")])
+    plan = imports.plan_stubs(view, {0x5000: "twice"})
+    return abi.generate([], plan.imports, aliases=plan.aliases) + "long twice(long a) { return a * 2; }\n"
+
+
+def test_a_stub_no_source_defines_stays_undefined_in_the_link(tmp_path):
+    parts = write_baseline(tmp_path, [[calls_a_stub()]])
+    plan = rl.plan_image(rl.Image(SECTIONS, {}, []), frozenset({0x2000}))
+    summary = ll.link_image(context(tmp_path), parts, plan, lambda names: {})
+    assert summary["undefined"]["bodies"] == ["sub_5000"]
+
+
+def test_a_host_source_in_the_context_defines_the_stub_and_the_call_reaches_the_host_function(tmp_path):
+    parts = write_baseline(tmp_path, [[calls_a_stub()]])
+    plan = rl.plan_image(rl.Image(SECTIONS, {}, []), frozenset({0x2000}))
+    ctx = context(tmp_path, host_source=stub_host_source(tmp_path / "hdr"))
+    summary = ll.link_image(ctx, parts, plan, lambda names: {})
+    assert summary["undefined"]["bodies"] == []
+    lib = ctypes.CDLL(summary["dylib"])
+    reg, stack = (ctypes.c_ubyte * 8192)(), (ctypes.c_ubyte * 4096)()
+    ctypes.c_uint64.from_buffer(reg, 32).value = ctypes.addressof(stack) + 2048
+    ctypes.c_uint64.from_buffer(reg, 0x38).value = 21
+    lib.sub_2000(reg)
+    assert ctypes.c_uint64.from_buffer(reg, 0).value == 42
+
+
+def test_a_changed_host_source_relinks_the_dylib(tmp_path):
+    parts = write_baseline(tmp_path, [[returns_seven()]])
+    plan = rl.plan_image(rl.Image(SECTIONS, {}, []), frozenset({0x1000}))
+    first = ll.link_image(context(tmp_path), parts, plan, lambda names: {})
+    second = ll.link_image(context(tmp_path, host_source=abi.generate([], []) + "int marker;\n"), parts, plan, lambda names: {})
+    assert first["reused"] is False and second["reused"] is False

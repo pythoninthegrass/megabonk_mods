@@ -62,60 +62,70 @@ class Slot:
     size: int
 
 
+C_KEYWORDS = frozenset(
+    [
+        "auto",
+        "break",
+        "case",
+        "char",
+        "const",
+        "continue",
+        "default",
+        "do",
+        "double",
+        "else",
+        "enum",
+        "extern",
+        "float",
+        "for",
+        "goto",
+        "if",
+        "inline",
+        "int",
+        "long",
+        "register",
+        "restrict",
+        "return",
+        "short",
+        "signed",
+        "sizeof",
+        "static",
+        "struct",
+        "switch",
+        "typedef",
+        "union",
+        "unsigned",
+        "void",
+        "volatile",
+        "while",
+    ]
+)
+# Host symbols the generated translation unit defines or declares itself.
+RESERVED_NAMES = frozenset(["abort", "memcpy", "lift_dispatch"])
+IDENTIFIER = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
+
+
 @dataclass(frozen=True)
 class Binding:
     address: int
     name: str
     signature: Signature
+    declared_name: str | None = None
 
     def __post_init__(self):
         if type(self.address) is not int or not 0 < self.address < 1 << 64:
             raise AbiError("binding address must be a nonzero uint64")
         if (
-            not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", self.name)
-            or self.name
-            in {
-                "auto",
-                "break",
-                "case",
-                "char",
-                "const",
-                "continue",
-                "default",
-                "do",
-                "double",
-                "else",
-                "enum",
-                "extern",
-                "float",
-                "for",
-                "goto",
-                "if",
-                "inline",
-                "int",
-                "long",
-                "register",
-                "restrict",
-                "return",
-                "short",
-                "signed",
-                "sizeof",
-                "static",
-                "struct",
-                "switch",
-                "typedef",
-                "union",
-                "unsigned",
-                "void",
-                "volatile",
-                "while",
-                "abort",
-                "memcpy",
-                "lift_dispatch",
-            }
+            not IDENTIFIER.fullmatch(self.name)
+            or self.name in C_KEYWORDS
+            or self.name in RESERVED_NAMES
             or self.name.startswith(("sub_", "lift_"))
         ):
             raise AbiError(f"invalid or reserved C identifier: {self.name!r}")
+        if self.declared_name is not None and (
+            not IDENTIFIER.fullmatch(self.declared_name) or self.declared_name in C_KEYWORDS
+        ):
+            raise AbiError(f"invalid host symbol name: {self.declared_name!r}")
 
 
 @dataclass(frozen=True)
@@ -231,6 +241,8 @@ def generate(
     """`aliases` maps an address to the lifted body or binding it forwards to, such as a PLT stub of an image function."""
     raw = list(raw)
     callable_bodies = list(callable_bodies)
+    if any(b.declared_name for b in exports):
+        raise AbiError("only an import can name a host symbol")
     typed = exports + imports
     bindings = typed + raw + ([RawBinding(tls.get_addr, "tls_get_addr")] if tls else [])
     if len({b.address for b in bindings}) != len(bindings) or len({b.name for b in bindings}) != len(bindings):
@@ -261,7 +273,8 @@ def generate(
     for binding in typed:
         sig = binding.signature
         params = ", ".join(f"{TYPES[k][0]} a{i}" for i, k in enumerate(sig.args)) or "void"
-        lines.append(f"{TYPES[sig.result][0]} {binding.name}({params});")
+        label = f' __asm__("_{binding.declared_name}")' if binding.declared_name else ""
+        lines.append(f"{TYPES[sig.result][0]} {binding.name}({params}){label};")
     for binding in raw:
         lines.append(f"extern void {binding.name}(unsigned char *reg);")
     for binding in exports:
