@@ -1484,6 +1484,14 @@ def test_table_bytes_are_refused_when_they_run_past_the_body_too():
     assert result.tables_audited == 0
 
 
+def test_table_bytes_are_refused_when_an_entry_is_not_an_instruction_start():
+    fn = switch_body()
+    fn["jt"] = [{"at": 0x1004, "cases": [0x1006, 0x1008, 0x7000]}]
+    result = pl.lift_body(fn, [RODATA, TEXT], evidence=StubEvidence([0x1006, 0x1009]))
+    assert result.holes == ["JUMPTABLE_TARGET"]
+    assert result.tables_audited == 0
+
+
 def test_table_bytes_are_not_consulted_when_the_case_list_is_already_clean():
     fn = body(
         insn(0x1000, 4, op("COPY", "register,0,8", "cptr,5000,8")),
@@ -1544,6 +1552,16 @@ def test_branchind_on_a_computed_register_with_an_unbalanced_frame_stays_a_hole(
         insn(0x1006, 2, op("BRANCHIND", None, "register,0,8")),
     )
     assert pl.lift_body(fn).holes == ["BRANCHIND"]
+
+
+def test_branchind_on_a_fixed_memory_word_stays_a_hole_even_at_a_proven_frame():
+    # `jmp *[rip+slot]` with the load folded into the operand has no LOAD or slot COPY to trace; relocations are not consulted.
+    fn = body(insn(0x1000, 6, op("BRANCHIND", None, "ram,5353720,8")))
+    result = pl.lift_body(fn)
+    assert result.holes == ["BRANCHIND"]
+    assert result.tail_calls == 0
+    assert result.unproven_branchind[0]["reason"] == "frame proven, handover shape refused"
+    assert result.unproven_branchind[0]["rsp_delta"] == 0
 
 
 def test_refused_branchind_with_a_proven_frame_names_the_handover_shape():
