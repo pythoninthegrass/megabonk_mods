@@ -176,15 +176,15 @@ def test_a_relative_word_into_the_middle_of_a_body_is_rejected_by_address():
     assert plan.rejected == {0x4300: "RELOC_MID_BODY:1235"}
 
 
-def test_a_relative_word_to_a_plt_stub_is_rejected_by_name():
+def test_a_relative_word_to_a_plt_stub_is_left_for_binding():
     plan = plan_of([(0x4300, rl.R_X86_64_RELATIVE, 0, 0x2010)])
-    assert plan.rejected == {0x4300: "RELOC_PLT_TARGET:2010"}
+    assert plan.plt == {0x4300: 0x2010} and plan.rejected == {}
 
 
-def test_a_relative_word_to_a_ghidra_named_plt_stub_is_rejected_by_name():
+def test_a_relative_word_to_a_ghidra_named_plt_stub_is_left_for_binding():
     sections = [s if s["name"] != "plt" else {**s, "name": "_plt"} for s in PLAN_SECTIONS]
     plan = plan_of([(0x4300, rl.R_X86_64_RELATIVE, 0, 0x2010)], sections=sections)
-    assert plan.rejected == {0x4300: "RELOC_PLT_TARGET:2010"}
+    assert plan.plt == {0x4300: 0x2010} and plan.rejected == {}
 
 
 def test_a_64_word_against_a_defined_code_symbol_adds_the_addend_and_names_the_body():
@@ -208,8 +208,8 @@ def test_a_glob_dat_word_against_a_defined_symbol_takes_the_symbol_value():
 
 
 def test_an_unhandled_relocation_type_is_rejected_by_name():
-    plan = plan_of([(0x4300, 16, 0, 0)])
-    assert plan.rejected == {0x4300: "RELOC_TYPE:DTPMOD64"}
+    plan = plan_of([(0x4300, 37, 0, 0)])
+    assert plan.rejected == {0x4300: "RELOC_TYPE:IRELATIVE"}
 
 
 def test_a_word_with_a_second_relocation_is_rejected_as_ambiguous():

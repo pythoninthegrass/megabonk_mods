@@ -1921,16 +1921,17 @@ def lift_body(
     ).run()
 
 
-def section_global(name: str, image: bytes | None, patches: tuple = ()) -> str:
+def section_global(name: str, image: bytes | None, patches: tuple = (), constant: bool = False) -> str:
+    kind = "constant" if constant else "global"
     if image is None:
         if patches:
             raise ValueError(f"section {name} has relocated words but no image")
         return f"@sec_{name} = external global i8"
     if not patches:
         if not any(image):
-            return f"@sec_{name} = global [{len(image)} x i8] zeroinitializer, align 16"
+            return f"@sec_{name} = {kind} [{len(image)} x i8] zeroinitializer, align 16"
         data = "".join(f"\\{b:02X}" for b in image)
-        return f'@sec_{name} = global [{len(image)} x i8] c"{data}", align 16'
+        return f'@sec_{name} = {kind} [{len(image)} x i8] c"{data}", align 16'
     types, fields, cursor = [], [], 0
 
     def bytes_field(chunk: bytes) -> None:
@@ -1953,6 +1954,12 @@ def section_global(name: str, image: bytes | None, patches: tuple = ()) -> str:
         elif patch.function is not None:
             types.append("ptr")
             fields.append(f"ptr @sub_{patch.function:x}")
+        elif patch.literal is not None:
+            types.append("i64")
+            fields.append(f"i64 {patch.literal}")
+        elif patch.host is not None:
+            types.append("ptr")
+            fields.append(f"ptr @{patch.host}")
         else:
             target, offset = patch.target
             types.append("ptr")
@@ -1960,7 +1967,7 @@ def section_global(name: str, image: bytes | None, patches: tuple = ()) -> str:
         cursor = patch.offset + 8
     if cursor < len(image):
         bytes_field(image[cursor:])
-    return f"@sec_{name} = global <{{ {', '.join(types)} }}> <{{ {', '.join(fields)} }}>, align 16"
+    return f"@sec_{name} = {kind} <{{ {', '.join(types)} }}> <{{ {', '.join(fields)} }}>, align 16"
 
 
 def module_for(
@@ -1968,10 +1975,12 @@ def module_for(
     section_images: dict[str, bytes] | None = None,
     patches: list | tuple = (),
     sections: list | tuple = (),
+    readonly: frozenset | set = frozenset(),
 ) -> str:
     """`patches` are relocated words (lift_reloc.Patch); their sections, and any data section they point at, are defined.
 
-    `sections` names further sections to define, for a module that holds the data the bodies' modules leave external.
+    `sections` names further sections to define, for a module that holds the data the bodies' modules leave external,
+    and `readonly` the sections to define as constants.
     """
     defined = {b.start for b in bodies}
     externs = set().union(*(b.externs for b in bodies)) - defined if bodies else set()
@@ -1985,7 +1994,8 @@ def module_for(
         sections.add(patch.section)
         if patch.target:
             sections.add(patch.target[0])
-    parts += [section_global(n, (section_images or {}).get(n), by_section.get(n, ())) for n in sorted(sections)]
+    parts += [section_global(n, (section_images or {}).get(n), by_section.get(n, ()), n in readonly) for n in sorted(sections)]
+    parts += [f"@{h} = external global i8" for h in sorted({p.host for p in patches if p.host})]
     parts += [f"declare void @sub_{a:x}(ptr)" for a in sorted(externs)]
     parts += [b.ir for b in bodies]
     return "\n".join(parts) + "\n"

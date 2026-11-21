@@ -98,3 +98,35 @@ def test_a_requested_section_is_defined_without_a_body_or_patch_naming_it():
 
 def test_a_requested_section_with_no_image_stays_external():
     assert "@sec_tbss = external global i8" in pl.module_for([], {}, sections=["tbss"])
+
+
+def test_a_read_only_section_is_a_constant_global():
+    module = pl.module_for([], IMAGES, sections=["rodata"], readonly={"rodata"})
+    assert "@sec_rodata = constant [16 x i8]" in module
+
+
+def test_a_patched_read_only_section_is_a_constant_global():
+    module = pl.module_for([], IMAGES, [rl.Patch("data", 8, 1, None)], readonly={"data"})
+    assert "@sec_data = constant <{" in module
+
+
+def test_a_section_not_named_read_only_stays_a_writable_global():
+    assert "@sec_data = global" in pl.module_for([], IMAGES, sections=["data"], readonly={"rodata"})
+
+
+def test_a_literal_patch_holds_the_literal_word():
+    module = pl.module_for([], IMAGES, [rl.Patch("data", 8, None, None, literal=1)])
+    assert "i64 1" in module
+
+
+def test_a_host_patch_points_at_a_declared_external_host_variable():
+    module = pl.module_for([], IMAGES, [rl.Patch("data", 8, None, None, host="lift_data_stderr")])
+    assert "ptr @lift_data_stderr" in module and "@lift_data_stderr = external global i8" in module
+
+
+@pytest.mark.skipif(not (LLVM / "opt").exists(), reason="needs LLVM")
+def test_a_module_with_read_only_literal_and_host_patches_verifies(tmp_path):
+    patches = [rl.Patch("data", 0, None, None, literal=0), rl.Patch("data", 8, None, None, host="lift_data_x")]
+    ir = tmp_path / "m.ll"
+    ir.write_text(pl.module_for([], IMAGES, patches, readonly={"data"}))
+    subprocess.run([LLVM / "opt", "-passes=verify", "-disable-output", ir], check=True)

@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import lift_abi
+import lift_bind
 import lift_image as li
 import lift_imports
 import lift_probe as lp
@@ -129,7 +130,8 @@ def data_object(ctx: dict, plan: rl.ImagePlan, records: list[dict], load_images)
     """The object defining every data section the bodies reference or the relocation plan patches, once."""
     names = set().union(*(set(r["sections"]) for r in records)) | {p.section for p in plan.patches}
     names |= {p.target[0] for p in plan.patches if p.target}
-    module = pl.module_for([], load_images(names), plan.patches, sorted(names))
+    readonly = {n for n in names if plan.protection.get(n) in ("ro", "relro")}
+    module = pl.module_for([], load_images(names), plan.patches, sorted(names), readonly)
     identity = hashlib.sha256(f"{ctx['sha']}\0{ctx['link']}\0{ctx['tool_timeout']}\0".encode() + module.encode()).hexdigest()
     out = Path(ctx["out"])
     meta_path, object_path = out / "link-data.json", out / "link-data.o"
@@ -141,6 +143,16 @@ def data_object(ctx: dict, plan: rl.ImagePlan, records: list[dict], load_images)
     record = {"identity": identity, "object": str(object_path), "bytes": len(payload), "sections": sorted(names)}
     meta_path.write_text(json.dumps(record))
     return record
+
+
+def write_relocation_report(out: Path, image: rl.Image, plan: rl.ImagePlan, images: dict, bound, sha: str) -> dict:
+    """Writes the relocation coverage report and the per-site map of original address to rebuilt target; returns the report."""
+    report = lift_bind.report(image, plan, images) | {"binary_sha256": sha}
+    report["bindings"] = bound.rows
+    (out / "link-relocations.json").write_text(json.dumps(report, indent=2) + "\n")
+    with (out / "link-relocation-map.jsonl").open("w") as handle:
+        handle.writelines(json.dumps(row) + "\n" for row in lift_bind.mapping(image, plan))
+    return report
 
 
 def classify_undefined(nm_output: str) -> dict[str, list[str]]:
@@ -163,7 +175,11 @@ def host_object(ctx: dict) -> Path:
 
 
 def link_image(ctx: dict, parts: list[list], plan: rl.ImagePlan, load_images, jobs: int = 1) -> dict:
-    """Compiles every shard and the data sections, then links one dylib; unchanged inputs reuse the previous dylib."""
+    """Compiles every shard and the data sections, then links one dylib; unchanged inputs reuse the previous dylib.
+
+    A plan with a rejected, unbound or PLT-naming word is refused before anything is compiled.
+    """
+    rl.require_complete(plan)
     started = time.monotonic()
     if jobs > 1:
         with ProcessPoolExecutor(jobs) as pool:
@@ -206,6 +222,7 @@ def link_image(ctx: dict, parts: list[list], plan: rl.ImagePlan, load_images, jo
         "bodies": sum(r["bodies"] for r in records),
         "object_bytes": sum(r["bytes"] for r in records),
         "data_object_bytes": data["bytes"],
+        "data_sections": data["sections"],
         "holes": {start: holes for r in records for start, holes in r["holes"].items()},
         "failed": {start: why for r in records for start, why in r["failed"].items()},
         "undefined": linked["undefined"],
@@ -214,14 +231,18 @@ def link_image(ctx: dict, parts: list[list], plan: rl.ImagePlan, load_images, jo
     }
 
 
-def import_stubs(so: Path, image: rl.Image, entries) -> dict:
-    """The host source defining every PLT stub, with the per-stub and per-import report it was built from."""
+def import_stubs(names: dict[int, str], image: rl.Image, entries, aborts=()) -> dict:
+    """The host source defining every PLT stub (`names` maps its address to its import), with the report it was built from.
+
+    `aborts` are further entries a relocated word names that no stub defines, such as the PLT resolver.
+    """
     view = lift_sdk.load()
     defined = {s.name: s.value for s in image.symbols if s.defined and s.name}
-    plan = lift_imports.plan_stubs(view, lift_runtime.plt_names(so), defined, entries)
+    plan = lift_imports.plan_stubs(view, names, defined, entries)
     aliased = sorted(set(plan.aliases.values()) & set(entries))
     source = lift_abi.generate([], plan.imports, callable_bodies=aliased, aliases=plan.aliases)
-    source += "\n" + lift_imports.abort_source(plan.rows) + "\n" + lift_imports.abort_stubs(plan.rows) + "\n"
+    refused = plan.rows + list(aborts)
+    source += "\n" + lift_imports.abort_source(refused) + "\n" + lift_imports.abort_stubs(refused) + "\n"
     return {
         "source": source,
         "counts": lift_imports.counts(plan.rows),
@@ -229,6 +250,7 @@ def import_stubs(so: Path, image: rl.Image, entries) -> dict:
             "counts": lift_imports.counts(plan.rows),
             "stubs": plan.rows,
             "imports": lift_imports.import_report(view, plan.rows),
+            "linker_entries": list(aborts),
         },
     }
 
@@ -267,18 +289,20 @@ def main(argv: list[str] | None = None) -> int:
     raw = args.so.read_bytes()
     elf = elf_shim_probe.parse_elf(args.so)
     image = rl.load_image(elf, raw, sections)
+    image.protection = rl.protection(elf.segments, sections)
     plan = rl.plan_image(image, entries)
-    stubs = import_stubs(args.so, image, entries)
-    ctx["host_source"] = stubs["source"]
-    summary = link_image(ctx, parts, plan, lambda names: section_images(elf, raw, sections, names), args.jobs)
+    names = lift_runtime.plt_names(args.so)
+    bound = lift_bind.bind_words(plan, image, names)
+    stubs = import_stubs(names, image, entries, bound.aborts)
+    ctx["host_source"] = stubs["source"] + bound.source
+    summary = link_image(ctx, parts, plan, lambda wanted: section_images(elf, raw, sections, wanted), args.jobs)
+    written = write_relocation_report(
+        args.out, image, plan, section_images(elf, raw, sections, set(summary["data_sections"])), bound, inv["sha"]
+    )
     summary |= {
         "binary_sha256": inv["sha"],
-        "relocations": {
-            "patches": len(plan.patches),
-            "function": sum(p.function is not None for p in plan.patches),
-            "unbound": len(plan.unbound),
-            "rejected": plan.rejected,
-        },
+        "relocations": written["relocations"]
+        | {"function": sum(p.function is not None for p in plan.patches), "bound": len(bound.rows)},
     }
     summary["stubs"] = stubs["counts"]
     (args.out / "link-imports.json").write_text(json.dumps(stubs["report"], indent=2) + "\n")

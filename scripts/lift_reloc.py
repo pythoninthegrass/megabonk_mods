@@ -13,6 +13,14 @@ import lift_eh as eh
 from dataclasses import dataclass, field
 
 R_X86_64_64, R_X86_64_GLOB_DAT, R_X86_64_JUMP_SLOT, R_X86_64_RELATIVE = 1, 6, 7, 8
+R_X86_64_DTPMOD64, R_X86_64_DTPOFF64 = 16, 17
+PT_LOAD, PT_TLS, PT_GNU_RELRO = 1, 7, 0x6474E552
+PF_W, PF_X = 2, 1
+STB_WEAK, STT_OBJECT = 2, 1
+# Ghidra's block for unresolved imports: not an ELF section and holds no file bytes.
+GHIDRA_EXTERNAL = "EXTERNAL"
+# The image has one TLS module, and the lifted `__tls_get_addr` ignores the module word of its argument.
+TLS_MODULE_ID = 1
 RELOC_NAMES = {
     0: "NONE",
     1: "64",
@@ -53,6 +61,8 @@ class Sym:
     value: int
     size: int
     defined: bool
+    weak: bool = False
+    data: bool = False
 
 
 @dataclass
@@ -64,6 +74,7 @@ class Image:
     symbols: list
     words: dict = field(default_factory=dict)
     duplicates: set = field(default_factory=set)
+    protection: dict = field(default_factory=dict)
 
     def section_of(self, address: int) -> dict | None:
         return next((s for s in self.sections if s["va"] <= address < s["va"] + s["size"]), None)
@@ -77,13 +88,15 @@ class Image:
 
 @dataclass(frozen=True)
 class Patch:
-    """One relocated word: where it lies, and its value as a dispatchable guest code address, a (section, offset) target or the lifted body (`function`) at a guest address."""
+    """One relocated word: where it lies, and its value as a dispatchable guest code address, a (section, offset) target, the lifted body (`function`) at a guest address, a `literal` or the address of a named `host` variable."""
 
     section: str
     offset: int
     code: int | None
     target: tuple | None
     function: int | None = None
+    literal: int | None = None
+    host: str | None = None
 
 
 @dataclass(frozen=True)
@@ -196,11 +209,16 @@ def plan_types(image: Image, table: bytes, base: int, lsdas: list[int], proven: 
 
 @dataclass
 class ImagePlan:
-    """Every relocated word of an image: patches ordered by section and offset, plus what cannot be patched, by site address."""
+    """Every relocated word of an image: patches ordered by section and offset, plus what cannot be patched, by site address.
+
+    `unbound` holds words naming an undefined symbol and `plt` words naming a PLT entry; both wait for `lift_bind.bind_words`.
+    """
 
     patches: list = field(default_factory=list)
     unbound: dict = field(default_factory=dict)
+    plt: dict = field(default_factory=dict)
     rejected: dict = field(default_factory=dict)
+    protection: dict = field(default_factory=dict)
 
 
 def _plan_target(image: Image, reloc: Reloc) -> tuple[int | None, str | None]:
@@ -218,10 +236,10 @@ def _plan_target(image: Image, reloc: Reloc) -> tuple[int | None, str | None]:
 def plan_image(image: Image, bodies: frozenset | set) -> ImagePlan:
     """Plans a patch for every relocated word, pointing code at the lifted body (`bodies`, by start address) and data at its section.
 
-    An undefined symbol is recorded in `unbound` for the embedder to bind. A word that targets the middle of a body,
-    a PLT stub, an unmapped address, or uses a relocation type not handled here is rejected by site address.
+    An undefined symbol is recorded in `unbound` and a PLT entry in `plt`, for `lift_bind.bind_words`. A word that targets
+    the middle of a body, an unmapped address, or uses a relocation type not handled here is rejected by site address.
     """
-    plan = ImagePlan()
+    plan = ImagePlan(protection=image.protection)
     for address, reloc in image.relocs.items():
         try:
             if address in image.duplicates:
@@ -229,6 +247,9 @@ def plan_image(image: Image, bodies: frozenset | set) -> ImagePlan:
             site = image.section_of(address)
             if site is None:
                 raise RelocError(f"RELOC_SITE_UNMAPPED:{address:x}")
+            if reloc.type == R_X86_64_DTPMOD64:
+                plan.patches.append(Patch(site["name"], address - site["va"], None, None, literal=TLS_MODULE_ID))
+                continue
             target, name = _plan_target(image, reloc)
             if name is not None:
                 plan.unbound[address] = name
@@ -244,13 +265,52 @@ def plan_image(image: Image, bodies: frozenset | set) -> ImagePlan:
             elif target in bodies:
                 plan.patches.append(Patch(site["name"], offset, None, None, function=target))
             elif destination["name"].lstrip("._").startswith("plt"):
-                raise RelocError(f"RELOC_PLT_TARGET:{target:x}")
+                plan.plt[address] = target
             else:
                 raise RelocError(f"RELOC_MID_BODY:{target:x}")
         except RelocError as error:
             plan.rejected[address] = str(error)
     plan.patches.sort(key=lambda p: (p.section, p.offset))
     return plan
+
+
+def require_complete(plan: ImagePlan) -> None:
+    """Refuses a plan with a word that was rejected, left unbound or left naming a PLT entry, listing the first sites."""
+    for field_name in ("rejected", "unbound", "plt"):
+        left = getattr(plan, field_name)
+        if left:
+            first = ", ".join(f"{a:x}: {left[a]}" for a in sorted(left)[:5])
+            raise RelocError(f"{field_name.upper()}:{len(left)} relocated words are unaccounted for ({first})")
+
+
+def protection(segments, sections: list) -> dict[str, str]:
+    """Each section's protection after load: `rx`, `ro`, `rw`, `relro` (writable only until relocation is done), `tls` or `external`.
+
+    A `tls` section lies inside the TLS segment, a per-thread template that occupies no loaded memory. Any other section
+    must lie wholly inside one loaded segment and, when it touches the RELRO range, wholly inside that range.
+    """
+    loads = [g for g in segments if g.type == PT_LOAD]
+    relro = next((g for g in segments if g.type == PT_GNU_RELRO), None)
+    tls = [g for g in segments if g.type == PT_TLS]
+    result = {}
+    for section in sections:
+        start, end, name = section["va"], section["va"] + section["size"], section["name"]
+        if name == GHIDRA_EXTERNAL:
+            result[name] = "external"
+            continue
+        if any(g.vaddr <= start and end <= g.vaddr + g.memsz for g in tls):
+            result[name] = "tls"
+            continue
+        segment = next((g for g in loads if g.vaddr <= start and end <= g.vaddr + g.memsz), None)
+        if segment is None:
+            raise RelocError(f"SECTION_UNMAPPED:{name}")
+        if relro and start < relro.vaddr + relro.memsz and end > relro.vaddr:
+            if start < relro.vaddr or end > relro.vaddr + relro.memsz:
+                raise RelocError(f"SECTION_SPLIT_BY_RELRO:{name}")
+            result[name] = "relro"
+        else:
+            result[name] = "rx" if segment.flags & PF_X else "rw" if segment.flags & PF_W else "ro"
+    return result
 
 
 class FileWords:
@@ -280,5 +340,5 @@ def load_image(elf, raw: bytes, sections: list) -> Image:
     symbols = []
     for index, named in enumerate(elf.dynsyms):
         _, _, _, shndx, value, size = struct.unpack_from("<IBBHQQ", raw, dynsym.offset + index * 24)
-        symbols.append(Sym(named.name, value, size, bool(shndx)))
+        symbols.append(Sym(named.name, value, size, bool(shndx), named.bind == STB_WEAK, named.type == STT_OBJECT))
     return Image(sections, relocs, symbols, FileWords(elf, raw), duplicates)

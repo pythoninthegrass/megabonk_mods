@@ -1,7 +1,9 @@
 """Per-shard lifted objects and a relocated data object, linked into one arm64 dylib."""
 
 import ctypes
+import json
 import lift_abi as abi
+import lift_bind as bind
 import lift_image as li
 import lift_imports as imports
 import lift_link as ll
@@ -54,13 +56,13 @@ def jumps_through_a_register():
     return {**t.body(t.insn(0x3000, 2, t.op("BRANCHIND", None, "register,0,8")), start=0x3000), "undecoded": 0}
 
 
-def write_baseline(directory, shards):
+def write_baseline(directory, shards, sections=SECTIONS):
     """Writes one valid pcode shard per list of body rows; returns the Fde parts."""
     parts = []
     for index, rows in enumerate(shards):
         part = [lp.Fde(r["start"], r["size"]) for r in rows]
         identity = li.shard_identity(SHA, FINGERPRINT, GHIDRA, part, "")
-        li.write_shard(directory / f"pcode-{index:04d}.jsonl", identity, [{"kind": "sections", "sections": SECTIONS}, *rows])
+        li.write_shard(directory / f"pcode-{index:04d}.jsonl", identity, [{"kind": "sections", "sections": sections}, *rows])
         parts.append(part)
     return parts
 
@@ -245,3 +247,30 @@ def test_a_changed_host_source_relinks_the_dylib(tmp_path):
     first = ll.link_image(context(tmp_path), parts, plan, lambda names: {})
     second = ll.link_image(context(tmp_path, host_source=abi.generate([], []) + "int marker;\n"), parts, plan, lambda names: {})
     assert first["reused"] is False and second["reused"] is False
+
+
+@pytest.mark.parametrize("field", ["rejected", "unbound", "plt"])
+def test_a_plan_with_an_unaccounted_word_is_refused_before_anything_is_compiled(tmp_path, field):
+    parts = write_baseline(tmp_path, [[returns_seven()]])
+    plan = rl.ImagePlan()
+    getattr(plan, field)[0x4000] = 1
+    with pytest.raises(rl.RelocError):
+        ll.link_image(context(tmp_path), parts, plan, lambda names: {})
+    assert list((tmp_path / "out").iterdir()) == []
+
+
+def test_the_relocation_report_and_the_site_map_are_written_beside_the_dylib(tmp_path):
+    image = rl.Image(SECTIONS, {0x4008: rl.Reloc(rl.R_X86_64_RELATIVE, 0, 0x2000)}, [])
+    plan = rl.plan_image(image, frozenset({0x1000, 0x2000}))
+    summary = ll.write_relocation_report(tmp_path, image, plan, {"data": bytes(16)}, bind.Bound(), "abc")
+    report = json.loads((tmp_path / "link-relocations.json").read_text())
+    assert report["binary_sha256"] == "abc" and report["relocations"] == summary["relocations"]
+    assert report["relocations"] == {"total": 1, "patched": 1, "kinds": {"RELATIVE": 1}}
+    rows = [json.loads(line) for line in (tmp_path / "link-relocation-map.jsonl").read_text().splitlines()]
+    assert rows == [{"site": 0x4008, "kind": "RELATIVE", "target": {"function": 0x2000}}]
+
+
+def test_the_relocation_report_refuses_a_relocation_with_no_patch(tmp_path):
+    image = rl.Image(SECTIONS, {0x4008: rl.Reloc(rl.R_X86_64_RELATIVE, 0, 0x2000)}, [])
+    with pytest.raises(rl.RelocError, match="UNACCOUNTED"):
+        ll.write_relocation_report(tmp_path, image, rl.ImagePlan(), {}, bind.Bound(), "abc")
