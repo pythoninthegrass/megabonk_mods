@@ -2,12 +2,12 @@
 
 import ctypes
 import lift_abi as abi
-import lift_imports as imports
-import lift_sdk as sdk
 import lift_image as li
+import lift_imports as imports
 import lift_link as ll
 import lift_probe as lp
 import lift_reloc as rl
+import lift_sdk as sdk
 import os
 import pytest
 import subprocess
