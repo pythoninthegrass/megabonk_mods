@@ -305,8 +305,11 @@ tasks:
       Reads the pcode shards of a finished task re:lift-image-build run (LIFT_BASELINE), lifts
       every body with each unresolved jump turned into a logged lift_hole trap, compiles one
       object per shard plus one for the relocated data sections, and links libgameassembly.dylib
-      into LIFT_OUT. Resumes from objects whose identity still matches. This is a development
-      build: it never changes or claims the baseline's runnable verdict. See scripts/lift_link.py.
+      into LIFT_OUT. Resumes from objects whose identity still matches. Every PLT stub is
+      defined as an image alias, a host call the macOS SDK clears, or an abort that names the
+      refused import; LIFT_OUT/link-imports.json lists each stub and import with its reason.
+      This is a development build: it never changes or claims the baseline's runnable
+      verdict. See scripts/lift_link.py and scripts/lift_imports.py.
     preconditions:
       - sh: '[ -f "{{.LIFT_BASELINE}}/summary.json" ]'
         msg: "No finished build at {{.LIFT_BASELINE}}; run task re:lift-image-build first"

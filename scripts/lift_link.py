@@ -12,8 +12,11 @@ import hashlib
 import json
 import lift_abi
 import lift_image as li
+import lift_imports
 import lift_probe as lp
 import lift_reloc as rl
+import lift_runtime
+import lift_sdk
 import pcode_lift as pl
 import time
 from concurrent.futures import ProcessPoolExecutor
@@ -154,7 +157,7 @@ def classify_undefined(nm_output: str) -> dict[str, list[str]]:
 def host_object(ctx: dict) -> Path:
     out = Path(ctx["out"])
     source, obj = out / "host.c", out / "host.o"
-    source.write_text(lift_abi.generate([], []))
+    source.write_text(ctx.get("host_source") or lift_abi.generate([], []))
     lp.run_tool([lp.LLVM / "clang", "-arch", "arm64", "-O2", "-c", source, "-o", obj], check=True)
     return obj
 
@@ -211,6 +214,25 @@ def link_image(ctx: dict, parts: list[list], plan: rl.ImagePlan, load_images, jo
     }
 
 
+def import_stubs(so: Path, image: rl.Image, entries) -> dict:
+    """The host source defining every PLT stub, with the per-stub and per-import report it was built from."""
+    view = lift_sdk.load()
+    defined = {s.name: s.value for s in image.symbols if s.defined and s.name}
+    plan = lift_imports.plan_stubs(view, lift_runtime.plt_names(so), defined, entries)
+    aliased = sorted(set(plan.aliases.values()) & set(entries))
+    source = lift_abi.generate([], plan.imports, callable_bodies=aliased, aliases=plan.aliases)
+    source += "\n" + lift_imports.abort_source(plan.rows) + "\n" + lift_imports.abort_stubs(plan.rows) + "\n"
+    return {
+        "source": source,
+        "counts": lift_imports.counts(plan.rows),
+        "report": {
+            "counts": lift_imports.counts(plan.rows),
+            "stubs": plan.rows,
+            "imports": lift_imports.import_report(view, plan.rows),
+        },
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     import elf_shim_probe
@@ -244,7 +266,10 @@ def main(argv: list[str] | None = None) -> int:
     sections = baseline_shard(0, parts[0], ctx)[0]["sections"]
     raw = args.so.read_bytes()
     elf = elf_shim_probe.parse_elf(args.so)
-    plan = rl.plan_image(rl.load_image(elf, raw, sections), entries)
+    image = rl.load_image(elf, raw, sections)
+    plan = rl.plan_image(image, entries)
+    stubs = import_stubs(args.so, image, entries)
+    ctx["host_source"] = stubs["source"]
     summary = link_image(ctx, parts, plan, lambda names: section_images(elf, raw, sections, names), args.jobs)
     summary |= {
         "binary_sha256": inv["sha"],
@@ -255,10 +280,12 @@ def main(argv: list[str] | None = None) -> int:
             "rejected": plan.rejected,
         },
     }
+    summary["stubs"] = stubs["counts"]
+    (args.out / "link-imports.json").write_text(json.dumps(stubs["report"], indent=2) + "\n")
     (args.out / "link-summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps({k: (len(v) if k in ("holes", "failed") else v) for k, v in summary.items() if k != "undefined"}, indent=2))
     print({k: len(v) for k, v in summary["undefined"].items()}, "undefined symbols")
-    return 0 if not summary["failed"] else 1
+    return 0 if not summary["failed"] and not summary["undefined"]["bodies"] else 1
 
 
 if __name__ == "__main__":

@@ -281,3 +281,34 @@ def test_native_lifted_calls_execute_on_arm64(call_executable):
 def test_unregistered_indirect_target_is_not_invoked(call_executable):
     result = subprocess.run([str(call_executable), "unknown"], capture_output=True, timeout=30)
     assert result.returncode == -6
+
+
+def test_an_import_can_bind_to_a_host_symbol_without_redeclaring_its_prototype():
+    binding = abi.Binding(0x2000, "import_strlen", abi.Signature(("ptr",), "u64"), declared_name="strlen")
+    source = abi.generate([], [binding])
+    assert 'import_strlen(' in source and '__asm__("_strlen");' in source
+    assert " strlen(" not in source
+
+
+def test_an_import_without_a_host_symbol_is_declared_as_before():
+    binding = abi.Binding(0x2000, "host_add", abi.Signature(("u64", "u64"), "u64"))
+    source = abi.generate([], [binding])
+    assert "uint64_t host_add(uint64_t a0, uint64_t a1);" in source and "__asm__" not in source
+
+
+@pytest.mark.parametrize("name", ["a b", "1x", "", "int", "x-y"])
+def test_a_host_symbol_name_must_be_a_plain_c_identifier(name):
+    with pytest.raises(abi.AbiError):
+        abi.Binding(0x2000, "import_x", abi.Signature((), "void"), declared_name=name)
+
+
+def test_only_an_import_can_name_a_host_symbol():
+    export = abi.Binding(0x2000, "lifted_x", abi.Signature((), "void"), declared_name="strlen")
+    with pytest.raises(abi.AbiError, match="host symbol"):
+        abi.generate([export], [])
+
+
+@pytest.mark.parametrize("name", ["lift_import_x", "sub_2000", "lift_dispatch"])
+def test_a_binding_name_cannot_take_the_shape_of_a_generated_symbol(name):
+    with pytest.raises(abi.AbiError):
+        abi.Binding(0x2000, name, abi.Signature((), "void"))
