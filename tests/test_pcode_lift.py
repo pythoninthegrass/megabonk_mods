@@ -1730,6 +1730,59 @@ def dispatch_body(extra=(), jt=(), **kw):
 TABLE = {"base": 0x5010, "scale": 4, "count": 2, "cases": [0x1016, 0x1018], "window": 0x1000}
 
 
+ALIAS_BASE, ALIAS_COPY, ALIAS_INDEX = "register,30,8", "register,38,8", "register,10,8"
+
+
+def alias_dispatch_body(copy_source=ALIAS_BASE, after_copy=(), between_copy_and_slot=()):
+    """A dispatch whose final add reads a register copy of the table base, as the shipped switches do.
+
+    Copied from 0x3d44742: `lea table, rsi; mov rsi, rdi; movslq (rsi,rdx,4), rsi; add rdi, rsi; jmp rsi`.
+    The target register is also the base register, so the load overwrites the base before the add.
+    """
+    ops = [
+        op("COPY", ALIAS_BASE, "cptr,5010,8"),
+        op("COPY", ALIAS_COPY, copy_source),
+        *after_copy,
+        op("INT_MULT", "unique,9200,8", ALIAS_INDEX, "const,4,8"),
+        *between_copy_and_slot,
+        op("INT_ADD", "unique,9400,8", ALIAS_BASE, "unique,9200,8"),
+        op("LOAD", "unique,23c00,4", "const,4,4", "unique,9400,8"),
+        op("INT_SEXT", ALIAS_BASE, "unique,23c00,4"),
+        op("INT_ADD", ALIAS_BASE, ALIAS_BASE, ALIAS_COPY),
+    ]
+    fn = body(
+        insn(0x1000, 4, op("COPY", "register,0,4", "const,0,4")),
+        insn(0x1004, 16, *ops),
+        insn(0x1014, 2, op("BRANCHIND", None, ALIAS_BASE)),
+        insn(0x1016, 2, op("COPY", REG_EAX, "const,1,4"), op("RETURN", None, "register,288,8")),
+        insn(0x1018, 2, op("COPY", REG_EAX, "const,2,4"), op("RETURN", None, "register,288,8")),
+    )
+    return {**fn, "jt": []}
+
+
+def test_a_switch_whose_add_reads_a_plain_copy_of_the_table_base_is_driven_by_the_bytes():
+    result = pl.lift_body(alias_dispatch_body(), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert result.holes == []
+    assert result.evidence_switches == 1
+
+
+def test_a_copy_of_the_base_modified_before_the_add_keeps_the_hole():
+    moved = [op("INT_ADD", ALIAS_COPY, ALIAS_COPY, "const,8,8")]
+    result = pl.lift_body(alias_dispatch_body(after_copy=moved), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert result.holes == ["BRANCHIND"]
+
+
+def test_a_copy_of_some_other_register_keeps_the_hole():
+    result = pl.lift_body(alias_dispatch_body(copy_source="register,18,8"), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert result.holes == ["BRANCHIND"]
+
+
+def test_a_base_that_changes_between_the_copy_and_the_load_keeps_the_hole():
+    changed = [op("INT_ADD", ALIAS_BASE, ALIAS_BASE, "const,8,8")]
+    result = pl.lift_body(alias_dispatch_body(between_copy_and_slot=changed), [RODATA, TEXT], evidence=StubTable(TABLE))
+    assert result.holes == ["BRANCHIND"]
+
+
 def test_the_images_table_bytes_drive_a_switch_ghidra_left_without_one():
     result = pl.lift_body(dispatch_body(), [RODATA, TEXT], evidence=StubTable(TABLE))
     assert result.holes == []

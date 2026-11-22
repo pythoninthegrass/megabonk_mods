@@ -1678,19 +1678,41 @@ class BodyLifter:
         if not load or load["op"] != "LOAD" or len(load.get("in") or []) != 2 or parse_varnode(entry)[2] != 4:
             return False
         slot = self.last_write(ops, load["in"][1])
-        if not slot or slot["op"] != "INT_ADD" or len(slot.get("in") or []) != 2 or base not in slot["in"]:
+        if not slot or slot["op"] != "INT_ADD" or len(slot.get("in") or []) != 2:
             return False
-        scaled = next((v for v in slot["in"] if v != base), None)
+        anchor, limit = base, None
+        if base not in slot["in"]:
+            anchor, limit = self.copied_from(ops, base, joined, slot), self.index_of(ops, slot)
+            if anchor is None:
+                return False
+        scaled = next((v for v in slot["in"] if v != anchor), None)
         mult = self.last_write(ops, scaled)
         if not mult or mult["op"] != "INT_MULT" or len(mult.get("in") or []) != 2:
             return False
         if next((const_of(v) for v in mult["in"] if v.startswith("const,")), None) != 4:
             return False
-        copied = self.last_write(ops, base)
+        copied = self.last_write(ops, anchor, limit)
         if not copied or copied["op"] != "COPY" or len(copied.get("in") or []) != 1:
             return False
         source = copied["in"][0]
         return source.startswith("cptr,") and int(source.split(",")[1], 16) == table_base
+
+    def copied_from(self, ops: list[dict], base: str, joined: dict, slot: dict) -> str | None:
+        """The register the slot address adds, when the final add reads a plain copy of it instead.
+
+        The compiler copies the table address aside because the entry load overwrites the register that
+        held it. The copy has to be a whole-register COPY taken before the slot is computed, untouched
+        until the add, of a register nothing wrote between the copy and the slot.
+        """
+        copy = self.last_write(ops, base, self.index_of(ops, joined))
+        if not copy or copy["op"] != "COPY" or len(copy.get("in") or []) != 1:
+            return None
+        source, at, here = copy["in"][0], self.index_of(ops, copy), self.index_of(ops, slot)
+        if source not in slot["in"] or parse_varnode(source)[0] != "register" or at > here:
+            return None
+        if self.last_write(ops, source, here) is not self.last_write(ops, source, at):
+            return None
+        return source
 
     def evidence_switch(self, insn: dict, k: int, target: str) -> tuple[list[int], dict] | None:
         """Cases and bias section for a site Ghidra left without a table, when the image's bytes prove one.
