@@ -1970,6 +1970,91 @@ def test_an_unbalanced_frame_with_an_indirect_call_before_the_jump_stays_a_hole(
     assert result.unproven_branchind[0]["rsp_delta"] == -8
 
 
+REG_RAX, LAZY_SLOT, LAZY_OTHER_SLOT = "register,0,8", "ram,5364538,8", "ram,5364540,8"
+
+
+def lazy_stub(resolve_store=LAZY_SLOT, other_path=None, load_path=True, extra_push=False):
+    """`if (!x) return 0; rax = [slot]; if null { rax = resolve(); [slot] = rax }; jmp rax`.
+
+    A lazily resolved icall stub: the null path calls a resolver and stores its result into the
+    same cache slot the other path reads. The call's push is paired with its return, so rsp stays at
+    its entry value. The early return writes rax between the two jumps, as the shipped stubs do. With
+    `other_path`, a third path rewrites rax and joins the second jump.
+    """
+    resolve = [op("INT_SUB", REG_RSP, REG_RSP, "const,8,8"), op("CALL", None, "ram,2056380,8")]
+    if extra_push:
+        resolve.insert(0, op("INT_SUB", REG_RSP, REG_RSP, "const,8,8"))
+    first = op("COPY", REG_RAX, LAZY_SLOT) if load_path else op("COPY", "register,38,8", "register,10,8")
+    insns = [
+        insn(0x1000, 2, op("CBRANCH", None, "ram,1010,8", "register,200,1")),
+        insn(0x1002, 7, first),
+        insn(0x1009, 2, op("CBRANCH", None, "ram,1020,8", "register,200,1")),
+    ]
+    if other_path:
+        insns += [
+            insn(0x100B, 2, op("CBRANCH", None, "ram,1040,8", "register,200,1")),
+            insn(0x100D, 2, op("BRANCHIND", None, REG_RAX)),
+        ]
+    else:
+        insns.append(insn(0x100B, 2, op("BRANCHIND", None, REG_RAX)))
+    insns += [
+        insn(0x1010, 2, op("COPY", REG_RAX, "const,0,8")),
+        insn(0x1012, 1, op("RETURN", None, REG_RAX)),
+        insn(0x1020, 5, *resolve),
+        insn(0x1025, 7, op("COPY", resolve_store, REG_RAX)),
+        insn(0x102C, 2, op("BRANCHIND", None, REG_RAX)),
+    ]
+    if other_path:
+        insns += [insn(0x1040, 2, other_path), insn(0x1042, 2, op("BRANCH", None, "ram,102c,8"))]
+    return body(*insns)
+
+
+@requires_llvm
+def test_a_lazily_resolved_icall_stub_is_a_tail_call_through_its_cache_slot():
+    """Both paths into the jump read the same fixed word: one loads it, one stores the resolver's result in it.
+
+    A call result stored into the slot the other path loads is a function pointer of the same kind,
+    and with rsp at its entry value `jmp rax` is `call rax; ret`, as it is for a jump through the slot.
+    """
+    result = pl.lift_body(lazy_stub())
+    assert result.holes == []
+    assert result.unproven_branchind == []
+    assert verify(pl.module_for([result])).returncode == 0
+
+
+def test_a_lazy_stub_stays_a_hole_when_the_resolver_result_goes_to_a_different_slot():
+    result = pl.lift_body(lazy_stub(resolve_store=LAZY_OTHER_SLOT))
+    assert result.holes == ["BRANCHIND"]
+    assert result.unproven_branchind[0]["reason"] == "frame proven, handover shape refused"
+
+
+def test_a_lazy_stub_stays_a_hole_when_the_resolver_result_is_never_stored():
+    result = pl.lift_body(lazy_stub(resolve_store="register,10,8"))
+    assert result.holes == ["BRANCHIND"]
+
+
+def test_a_lazy_stub_stays_a_hole_when_another_path_computes_the_target():
+    computed = op("INT_ADD", REG_RAX, REG_RAX, "const,8,8")
+    result = pl.lift_body(lazy_stub(other_path=computed))
+    assert result.holes == ["BRANCHIND"]
+
+
+def test_a_lazy_stub_stays_a_hole_without_a_path_that_reads_the_slot():
+    result = pl.lift_body(lazy_stub(load_path=False))
+    assert result.holes == ["BRANCHIND", "BRANCHIND"]
+
+
+def test_a_lazy_stub_stays_a_hole_when_a_sub_register_write_reaches_the_jump():
+    result = pl.lift_body(lazy_stub(other_path=op("COPY", "register,0,4", "const,1,4")))
+    assert result.holes == ["BRANCHIND"]
+
+
+def test_a_lazy_stub_stays_a_hole_at_an_unbalanced_frame():
+    result = pl.lift_body(lazy_stub(extra_push=True))
+    assert result.holes == ["BRANCHIND"]
+    assert result.unproven_branchind[0]["reason"] == "rsp not at entry value"
+
+
 def test_branchind_on_a_target_written_twice_before_the_jump_stays_a_hole():
     fn = body(
         insn(0x1000, 3, op("COPY", "register,80,8", "register,38,8")),

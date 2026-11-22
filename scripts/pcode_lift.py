@@ -288,6 +288,75 @@ def site_proof(fn: dict) -> dict[int, dict]:
     }
 
 
+RAX = "register,0,8"
+
+
+def overlaps(varnode: str | None, other: str) -> bool:
+    """Whether two register or memory varnodes share a byte."""
+    if not varnode:
+        return False
+    space, offset, size = parse_varnode(varnode)
+    other_space, other_offset, other_size = parse_varnode(other)
+    return space == other_space and offset < other_offset + other_size and other_offset < offset + size
+
+
+def rax_after(origin: tuple, ops: list[dict]) -> tuple:
+    """What rax holds after these ops: a fixed word's value, a call's result (stored or not), or other.
+
+    A CALL leaves the callee's result in rax. Storing rax whole into a fixed word while it holds a
+    call result records where that result now lives, so a later read of the word returns the same value.
+    """
+    kind, slot = origin
+    for op in ops:
+        out, inputs = op.get("out"), op.get("in") or []
+        if op["op"] in ("CALL", "CALLIND"):
+            kind, slot = "called", None
+        elif overlaps(out, RAX):
+            fixed_word = op["op"] == "COPY" and out == RAX and inputs[0].startswith("ram,") and parse_varnode(inputs[0])[2] == 8
+            kind, slot = ("word", inputs[0]) if fixed_word else ("other", None)
+        elif kind == "called" and op["op"] == "COPY" and out and out.startswith("ram,") and inputs[0] == RAX:
+            kind, slot = "stored", out
+    return kind, slot
+
+
+def lazily_resolved_target(fn: dict, site: int, k: int) -> bool:
+    """True when rax at a BRANCHIND is always one cached function pointer, read or freshly resolved.
+
+    Every path into the site has to end rax's history in one of two ways: a read of one fixed word, or a
+    call's result stored into that same word. That is the lazy icall stub: `rax = [slot]; if null
+    { rax = resolve(); [slot] = rax }; jmp rax`. The target is then whatever the slot holds, which is
+    what a jump through the slot is, and at a proven frame it lowers as a call and a return. The body
+    must also read the word into rax somewhere, since that read is what shows the word caches a
+    pointer; any other write to rax on any path, a second word, or a call result that was not stored
+    keeps the hole.
+    """
+    insns = sorted(fn["insns"], key=lambda insn: insn["a"])
+    order = [insn["a"] for insn in insns]
+    by_addr = {insn["a"]: insn for insn in insns}
+    follows = dict(zip(order, order[1:]))
+    if site not in by_addr:
+        return False
+    state: dict[int, set[tuple]] = {order[0]: {("other", None)}}
+    todo = [order[0]]
+    while todo:
+        addr = todo.pop()
+        insn = by_addr[addr]
+        after = {rax_after(origin, insn["ops"]) for origin in state[addr]}
+        for target in successors(insn, order, follows.get(addr)):
+            seen = state.setdefault(target, set())
+            if not after <= seen:
+                seen |= after
+                todo.append(target)
+    if site not in state:
+        return False
+    kinds = {rax_after(origin, by_addr[site]["ops"][:k]) for origin in state[site]}
+    slots = {slot for _, slot in kinds}
+    if len(slots) != 1 or None in slots or any(kind not in ("word", "stored") for kind, _ in kinds):
+        return False
+    slot = next(iter(slots))
+    return any(op["op"] == "COPY" and op.get("out") == RAX and op["in"][0] == slot for insn in insns for op in insn["ops"])
+
+
 def is_packed_lane_op(out: str | None, ins: list[str]) -> bool:
     """The packed SSE ops arrive as destination = destination <op> source, every varnode 16 bytes wide."""
     return (
@@ -1690,7 +1759,9 @@ class BodyLifter:
             fixed_word = target.startswith("ram,")
             balanced = verdict.get("reason") == "" and (fixed_word or self.defined_by_load(insn, k, target, slots=True))
             proven = self.proof.get(insn["a"], {}).get("reason") == ""
-            sibling = proven and self.handed_over_target(insn, k, target)
+            sibling = proven and (
+                self.handed_over_target(insn, k, target) or (target == RAX and lazily_resolved_target(self.fn, insn["a"], k))
+            )
             if not (load_traced or balanced or sibling):
                 switched = self.evidence_switch(insn, k, target)
                 if switched is not None:
