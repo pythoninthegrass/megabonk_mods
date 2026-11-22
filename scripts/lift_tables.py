@@ -103,17 +103,88 @@ def _bounds_index(lines, guard, entry_load, index, operand):
     return tied
 
 
-def parse_table_pattern(text, site):
+CALLEE_SAVED = ("rbx", "rbp", "r12", "r13", "r14", "r15")
+RIP_LEA = r"lea\S*\s+.*\(%rip\),\s*%(\w+)\s+#\s*(0x[0-9a-f]+)\b.*"
+
+
+def _mentions(text, reg):
+    """Whether an instruction names a general-purpose register in any width."""
+    return any(_register(token) == reg for token in re.findall(r"%\w+", re.sub(r"\s+#.*", "", text)))
+
+
+def _writes_register(text, reg):
+    """Whether an instruction stores to a register: its last operand, an exchange, or a one-operand writer."""
+    mnemonic, _, rest = re.sub(r"\s+#.*", "", text).partition(" ")
+    parts = _operands(rest)
+    if mnemonic.startswith(("cmp", "test", "push", "j", "call", "nop", "bt")) or not parts:
+        return False
+    if mnemonic.startswith(("xchg", "xadd")):
+        return any(_register(part) == reg for part in parts)
+    return _register(parts[-1]) == reg
+
+
+def _single_lea_base(body, reg):
+    """The table address a callee-saved register holds when the body writes it once, by a rip-relative lea.
+
+    A push or pop of the register only saves and restores the caller's value. Compiler-generated code
+    that indexes a table through the register has that table's address in it on every path to the
+    switch, so one write in the whole body names the table. Any other write, before or after the
+    site, or a register a call could change, names nothing.
+    """
+    if reg not in CALLEE_SAVED:
+        return None
+    found = []
+    for line in body.splitlines():
+        match = re.match(r"^\s*([0-9a-f]+):\s*(.*)$", line)
+        if not match:
+            continue
+        text = re.sub(r"\s+", " ", match.group(2).strip())
+        lea = re.fullmatch(RIP_LEA, text)
+        if lea and _register(f"%{lea.group(1)}") == reg:
+            found.append(int(lea.group(2), 16))
+        elif re.match(r"(push|pop)q?\s", text) and len(_operands(text.partition(" ")[2])) == 1:
+            continue
+        elif _writes_register(text, reg):
+            return None
+    return found[0] if len(found) == 1 else None
+
+
+def _base_untouched(lines, lea, load, base_reg, alias):
+    """Whether the table base survives from its lea to the indexed load, copied once to `alias` if the add reads a copy.
+
+    Any other mention of the base ends the match. A copy is the base moved whole into a second register
+    that nothing touches, and no call intervenes, before the add reads it.
+    """
+    copied = None
+    for m in range(lea + 1, load):
+        text = lines[m][1]
+        if f"%{base_reg}" not in text:
+            continue
+        copy = re.fullmatch(rf"movq\s+%{base_reg},\s*%(\w+)", text)
+        if alias is None or copied is not None or not copy or copy.group(1) != alias:
+            return False
+        copied = m
+    if alias is None:
+        return True
+    if copied is None or alias == _register(f"%{base_reg}") or _register(f"%{alias}") is None:
+        return False
+    alias_reg = _register(f"%{alias}")
+    return not any(lines[m][1].startswith("call") or _mentions(lines[m][1], alias_reg) for m in range(copied + 1, load + 1))
+
+
+def parse_table_pattern(text, site, body=None):
     """Reads the jump-table base, entry size and case count off the lea/movslq/add/jmp sequence at one site."""
-    pattern = match_table_pattern(text, site)
+    pattern = match_table_pattern(text, site, body)
     return None if pattern is None else {key: value for key, value in pattern.items() if key != "window"}
 
 
-def match_table_pattern(text, site):
+def match_table_pattern(text, site, body=None):
     """The table pattern plus `window`, the address of the earlier of its bound compare and base lea.
 
     A guarded dispatch is only straight-line code from `window` to the jump, so a caller can refuse a
-    site that something else branches into.
+    site that something else branches into. With `body`, the whole body's disassembly, a base held in a
+    callee-saved register that the window never sets is read from the body's one write to it, and the
+    window then starts at the bound compare.
     """
     lines = []
     for line in text.splitlines():
@@ -123,10 +194,10 @@ def match_table_pattern(text, site):
         elif line.strip():
             lines.append((None, re.sub(r"\s+", " ", line.strip())))
     for i in range(len(lines) - 1, -1, -1):
-        addr, body = lines[i]
+        addr, body_line = lines[i]
         if addr != site:
             continue
-        site_match = re.fullmatch(r"jmpq?\s+\*\s*%(\w+)", body)
+        site_match = re.fullmatch(r"jmpq?\s+\*\s*%(\w+)", body_line)
         if not site_match:
             return None
         reg = site_match.group(1)
@@ -137,22 +208,29 @@ def match_table_pattern(text, site):
             base_reg, index_reg, scale = entry.group(2), _register(f"%{entry.group(3)}"), int(entry.group(4))
             if index_reg is None:
                 continue
+            alias = None
             if scale == 4:
                 added = re.fullmatch(r"addq\s+%(\w+),\s*%(\w+)", lines[j + 1][1]) if j + 1 < i else None
-                if not added or added.groups() != (base_reg, reg):
+                if not added or added.group(2) != reg:
                     continue
-            table = None
+                alias = None if added.group(1) == base_reg else added.group(1)
+            table, k = None, None
             for k in range(j - 1, max(j - 14, -1), -1):
-                table = re.fullmatch(r"lea\S*\s+.*\(%rip\),\s*%(\w+)\s+#\s*(0x[0-9a-f]+)\b.*", lines[k][1])
+                table = re.fullmatch(RIP_LEA, lines[k][1])
                 if table and table.group(1) == base_reg:
-                    if any(f"%{base_reg}" in lines[m][1] for m in range(k + 1, j)):
+                    if not _base_untouched(lines, k, j, base_reg, alias):
                         return None
                     break
                 table = None
+            base = int(table.group(2), 16) if table else None
             if not table:
-                continue
+                k = None
+                far = _single_lea_base(body, _register(f"%{base_reg}")) if body is not None and alias is None else None
+                if far is None:
+                    continue
+                base = far
             count, window = None, None
-            for m in range(j - 1, max(k - 10, -1), -1):
+            for m in range(j - 1, max(k - 10, -1) if k is not None else max(j - 24, -1), -1):
                 bound = re.fullmatch(r"cmp[bwlq]?\s+\$(0x[0-9a-f]+),\s*(.+)", lines[m][1])
                 taken = m + 1 < j and re.fullmatch(r"ja(?:e)?\s+\S+.*", lines[m + 1][1])
                 if not (bound and taken):
@@ -162,9 +240,10 @@ def match_table_pattern(text, site):
                     continue
                 entries = int(bound.group(1), 16) + 1
                 count = entries if entries <= MAX_CASES else None
-                window = min(lines[k][0], lines[m][0]) if count is not None else None
+                if count is not None:
+                    window = lines[m][0] if k is None else min(lines[k][0], lines[m][0])
                 break
-            return {"base": int(table.group(2), 16), "scale": scale, "count": count, "window": window}
+            return {"base": base, "scale": scale, "count": count, "window": window}
     return None
 
 
@@ -267,7 +346,10 @@ class TableEvidence:
         if self._read is None:
             self._read = elf_reader(self.so)
             self._disassemble = objdump_disassembler(self.so, self.objdump)
-        pattern = match_table_pattern(self._disassemble(window_for(boundaries, site)), site)
+        text = self._disassemble(window_for(boundaries, site))
+        pattern = match_table_pattern(text, site)
+        if pattern is None and boundaries:
+            pattern = match_table_pattern(text, site, body=self._disassemble((boundaries[0], boundaries[-1] + 15)))
         if pattern is None or pattern["count"] is None:
             return None
         try:

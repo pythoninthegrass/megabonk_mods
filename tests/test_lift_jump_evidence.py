@@ -482,3 +482,128 @@ def test_raw_table_names_the_first_instruction_of_the_guarded_span():
     ev._read = lambda addr, n: blob[addr - 0xFB9E0C : addr - 0xFB9E0C + n]
     ev._disassemble = lambda window: FAR_TABLE_TEXT
     assert ev.raw_table([0x20, 0x40], 0x2159D75)["window"] == 0x2159D43
+
+
+COPIED_BASE_TEXT = """
+ 3d4471d:   \tcmpw\t$0x5, %dx
+ 3d44721:   \tja\t0x3d447b3 <__start_il2cpp+0x1be1e23>
+ 3d44727:   \tmovzwl\t%dx, %edx
+ 3d4472a:   \tleaq\t-0x3155189(%rip), %rsi  # 0xbef5a8
+ 3d44731:   \tmovq\t%rsi, %rdi
+ 3d44734:   \tmovslq\t(%rsi,%rdx,4), %rsi
+ 3d44738:   \taddq\t%rdi, %rsi
+ 3d4473b:   \tmovq\t0x1347f16(%rip), %rdx  # 0x508c658
+ 3d44742:   \tjmpq\t*%rsi
+"""
+
+COPIED_BASE_RELOADS_TEXT = """
+ 219ce52:   \tcmpl\t$0x6, %eax
+ 219ce55:   \tja\t0x219d01b <__start_il2cpp+0x3a68b>
+ 219ce5b:   \tmovl\t%eax, %eax
+ 219ce5d:   \tleaq\t-0x162db0c(%rip), %rcx  # 0xb6f358
+ 219ce64:   \tmovq\t%rcx, %rdx
+ 219ce67:   \tmovslq\t(%rcx,%rax,4), %rcx
+ 219ce6b:   \taddq\t%rdx, %rcx
+ 219ce6e:   \tmovq\t0x80(%rsp), %rax
+ 219ce76:   \tmovq\t0x38(%rsp), %r12
+ 219ce7b:   \tjmpq\t*%rcx
+"""
+
+
+def test_a_table_base_copied_to_a_second_register_is_the_same_base():
+    assert evidence.parse_table_pattern(COPIED_BASE_TEXT, 0x3D44742) == {"base": 0xBEF5A8, "scale": 4, "count": 6}
+    assert evidence.parse_table_pattern(COPIED_BASE_RELOADS_TEXT, 0x219CE7B) == {"base": 0xB6F358, "scale": 4, "count": 7}
+
+
+def test_a_copy_that_is_overwritten_before_the_add_is_not_the_table_base():
+    clobbered = COPIED_BASE_TEXT.replace(
+        " 3d44738:   \taddq\t%rdi, %rsi", " 3d44736:   \tmovq\t0x10(%rsp), %rdi\n 3d44738:   \taddq\t%rdi, %rsi"
+    )
+    assert evidence.parse_table_pattern(clobbered, 0x3D44742) is None
+
+
+def test_a_copy_of_some_other_register_is_not_the_table_base():
+    other = COPIED_BASE_TEXT.replace("movq\t%rsi, %rdi", "movq\t%rbx, %rdi")
+    assert evidence.parse_table_pattern(other, 0x3D44742) is None
+
+
+def test_any_other_use_of_the_base_between_the_lea_and_the_load_still_refuses():
+    used = COPIED_BASE_TEXT.replace(
+        " 3d44731:   \tmovq\t%rsi, %rdi", " 3d44731:   \tmovq\t%rsi, %rdi\n 3d44732:   \taddq\t$0x8, %rsi"
+    )
+    assert evidence.parse_table_pattern(used, 0x3D44742) is None
+
+
+FAR_BASE_NARROW_TEXT = """
+ 451ab15:   \tcmpl\t$0x3, %esi
+ 451ab18:   \tja\t0x451ab66 <__start_il2cpp+0x23b81d6>
+ 451ab1a:   \tmovslq\t(%r15,%rsi,4), %rdx
+ 451ab1e:   \taddq\t%r15, %rdx
+ 451ab21:   \tjmpq\t*%rdx
+"""
+
+FAR_BASE_BODY_TEXT = (
+    """
+ 451a940:   \tpushq\t%rbp
+ 451a941:   \tpushq\t%r15
+ 451a9d3:   \tleaq\t-0x3921f3e(%rip), %r15  # 0xbf8a9c
+ 451aab0:   \tmovq\t0xb8fec9(%rip), %rax  # 0x50aa980
+"""
+    + FAR_BASE_NARROW_TEXT
+    + """
+ 451abc9:   \tpopq\t%r15
+ 451abcb:   \tretq
+"""
+)
+
+
+def test_a_base_register_written_once_by_a_rip_relative_lea_names_the_table():
+    expected = {"base": 0xBF8A9C, "scale": 4, "count": 4}
+    assert evidence.parse_table_pattern(FAR_BASE_NARROW_TEXT, 0x451AB21, body=FAR_BASE_BODY_TEXT) == expected
+
+
+def test_a_far_base_register_needs_the_body_to_name_it():
+    assert evidence.parse_table_pattern(FAR_BASE_NARROW_TEXT, 0x451AB21) is None
+
+
+def test_a_far_base_register_written_a_second_time_refuses():
+    twice = FAR_BASE_BODY_TEXT.replace(
+        " 451aab0:   \tmovq\t0xb8fec9(%rip), %rax  # 0x50aa980",
+        " 451aab0:   \tmovq\t%rbx, %r15",
+    )
+    assert evidence.parse_table_pattern(FAR_BASE_NARROW_TEXT, 0x451AB21, body=twice) is None
+
+
+def test_a_far_base_register_written_by_anything_but_a_rip_relative_lea_refuses():
+    computed = FAR_BASE_BODY_TEXT.replace("leaq\t-0x3921f3e(%rip), %r15  # 0xbf8a9c", "leaq\t0x8(%rbx), %r15")
+    assert evidence.parse_table_pattern(FAR_BASE_NARROW_TEXT, 0x451AB21, body=computed) is None
+
+
+def test_a_far_base_register_written_after_the_site_refuses():
+    later = FAR_BASE_BODY_TEXT.replace(" 451abc9:   \tpopq\t%r15", " 451abc9:   \tmovq\t$0x0, %r15")
+    assert evidence.parse_table_pattern(FAR_BASE_NARROW_TEXT, 0x451AB21, body=later) is None
+
+
+def test_raw_table_reads_the_whole_body_only_when_the_window_names_no_base():
+    ev = tables.TableEvidence(Path("GameAssembly.so"), "llvm-objdump")
+    blob = b"".join(o.to_bytes(4, "little", signed=True) for o in [0x10, 0x20, 0x30, 0x40])
+    boundaries = [0x451A940 + 2 * n for n in range(40)] + [0x451AB15, 0x451AB21]
+    whole = (boundaries[0], 0x451AB21 + 15)
+    asked = []
+
+    def disassemble(window):
+        asked.append(window)
+        return FAR_BASE_BODY_TEXT if window == whole else FAR_BASE_NARROW_TEXT
+
+    ev._disassemble = disassemble
+    ev._read = lambda addr, n: blob[addr - 0xBF8A9C : addr - 0xBF8A9C + n]
+    table = ev.raw_table(boundaries, 0x451AB21)
+    assert table["base"] == 0xBF8A9C and table["count"] == 4 and table["window"] == 0x451AB15
+    assert table["cases"] == [0xBF8A9C + 0x10, 0xBF8A9C + 0x20, 0xBF8A9C + 0x30, 0xBF8A9C + 0x40]
+    assert asked[-1] == whole and whole not in asked[:-1]
+
+    asked.clear()
+    ev._disassemble = lambda window: (asked.append(window), SYMBOL_ANNOTATED_TEXT)[1]
+    ev._read = lambda addr, n: bytes(n)
+    ev.raw_table([0x20, 0x40], 0x2126CFF)
+    assert len(asked) == 1
