@@ -67,6 +67,8 @@ PACKED_DIVISION = {"divps": (4, 4), "divpd": (2, 8)}
 PACKED_MINMAX = {"minps": (4, 4, "olt"), "maxps": (4, 4, "ogt"), "maxpd": (2, 8, "ogt")}
 PACKED_WIDTH = 16
 # Register-file words the guest unwinder and lifted code share: the landing pad to enter (0 when none is pending) and the frame that owns it.
+# Ghidra's load address for the ELF; the dump subtracts it from every constant it marks cptr.
+IMAGE_BASE = 0x100000
 EH_PENDING_PAD = 0x1F00
 EH_PENDING_CFA = 0x1F08
 # Ghidra's unique-space offsets are sparse; a temporary's slot is at least this wide, so it can hold a 256-bit value.
@@ -837,8 +839,12 @@ class BodyLifter:
         name, out, ins = op["op"], op["out"], op.get("in") or []
         sz = lambda t: parse_varnode(t)[2]
         if name == "INT_ADD" and sorted(parse_varnode(t)[0] for t in ins) == ["cptr", "register"]:
-            # The dump marks a LEA constant inside the image as an address and rebases it; added to a register it is an integer displacement.
-            self.holes.append("CPTR_DISPLACEMENT")
+            # The dump rebased a displacement constant that fell inside the image; add the base back.
+            ins = [f"const,{parse_varnode(t)[1] + IMAGE_BASE:x},{sz(t)}" if t.startswith("cptr,") else t for t in ins]
+        folded_address = name == "INT_ADD" and sorted(parse_varnode(t)[0] for t in ins) == ["const", "cptr"]
+        if name not in ("COPY", "ATOMIC") and not folded_address and any(t.startswith("cptr,") for t in ins):
+            # Verified cptr operands: a COPY or constant offset of an address, a register plus displacement, and a rewritten atomic's address.
+            self.holes.append("CPTR_OPERAND")
             self.emit_hole(insn["a"])
             return True
         if name == "COPY":

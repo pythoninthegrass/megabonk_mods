@@ -210,12 +210,37 @@ def cptr_add(*operands):
 
 @pytest.mark.parametrize("operands", [("register,30,8", "cptr,2000,8"), ("cptr,2000,8", "register,30,8")])
 @pytest.mark.parametrize("target", [0x2000, 0x4010])
-def test_a_register_plus_a_cptr_is_a_displacement_hole_not_a_pointer(operands, target):
+def test_a_register_plus_a_cptr_adds_the_displacement_the_instruction_encodes(operands, target):
     fn = cptr_add(*[o.replace("2000", f"{target:x}") for o in operands])
     result = pl.lift_body(fn, DISPLACEMENT_SECTIONS, trap_holes=True)
-    assert result.holes == ["CPTR_DISPLACEMENT"]
+    assert result.holes == []
     assert f"@sub_{target:x}" not in result.ir and "@sec_" not in result.ir
-    assert "call void @lift_hole(i64 4096, i64 4096)" in result.ir
+    assert any("add i64" in line and str(target + pl.IMAGE_BASE) in line for line in result.ir.splitlines())
+
+
+@requires_llvm
+def test_a_displacement_module_verifies():
+    fn = cptr_add("register,30,8", "cptr,2000,8")
+    assert verify(pl.module_for([pl.lift_body(fn, DISPLACEMENT_SECTIONS)])).returncode == 0
+
+
+@pytest.mark.parametrize(
+    "name,operands",
+    [
+        ("INT_SUB", ("register,30,8", "cptr,2000,8")),
+        ("INT_AND", ("register,30,8", "cptr,2000,8")),
+        ("INT_ADD", ("unique,100,8", "cptr,2000,8")),
+        ("INT_EQUAL", ("register,30,8", "cptr,2000,8")),
+    ],
+)
+def test_a_cptr_in_any_other_op_is_a_named_hole(name, operands):
+    fn = body(
+        insn(0x1000, 7, op(name, "register,0,8", *operands)),
+        insn(0x1007, 1, op("RETURN", None, "register,288,8")),
+    )
+    result = pl.lift_body(fn, DISPLACEMENT_SECTIONS, trap_holes=True)
+    assert result.holes == ["CPTR_OPERAND"]
+    assert "@sub_2000" not in result.ir and "@sec_" not in result.ir
 
 
 def test_a_cptr_copy_is_still_an_address():
