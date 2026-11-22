@@ -161,7 +161,7 @@ PACK_ID = "thps"
 PACK_VERSION = "2.0.21"
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "unity" / "pack-authoring" / "packs" / PACK_ID / "manifest.json"
 WAREHOUSE_ASSET = "Warehouse"
-# The default track is the soundtrack AudioClip ThpsPack.cs builds from tools/ost/04 Superman.mp3, named by the file name with each run of other characters made an underscore.
+# The default track is the soundtrack AudioClip ThpsPack.cs builds from tools/thps1/ost/04 Superman.mp3, named by the file name with each run of other characters made an underscore.
 MUSIC = f"bundle:{PACK_ID}/04_Superman"
 TITLE = "Warehouse"
 DESCRIPTION = "I'm trying to sleep"

@@ -93,7 +93,7 @@ Invalid references, missing pack clips or runtime filenames, unreadable/deleted 
 
 ## Audio formats and decoding
 
-Bundle playback uses imported clips. Audio is imported into the pack in the authoring project and ships as a normal `AudioClip` in the bundle (compressed in memory as Vorbis, quality 0.7). Any format the Unity editor imports works as the source, including mp3, ogg and wav. `ThpsPack.SaveSoundtrack` imports every mp3 in `tools/ost` (override the directory with `-musicSource`), naming each clip by its file name with runs of other characters made an underscore; the build skips them with a log line when the directory is absent, so the pack still builds without them. `scripts/transcode.py` can produce an mp3 from a lossless source. Runtime `track:` playback decodes mp3s using the native clip path below, despite failures in the ordinary managed wrappers.
+Bundle playback uses imported clips. Audio is imported into the pack in the authoring project and ships as a normal `AudioClip` in the bundle (compressed in memory as Vorbis, quality 0.7). Any format the Unity editor imports works as the source, including mp3, ogg and wav. `ThpsPack.SaveSoundtrack` imports every mp3 in `tools/thps1/ost` (override the directory with `-musicSource`), naming each clip by its file name with runs of other characters made an underscore; the build skips them with a log line when the directory is absent, so the pack still builds without them. `scripts/transcode.py` can produce an mp3 from a lossless source. Runtime `track:` playback decodes mp3s using the native clip path below, despite failures in the ordinary managed wrappers.
 
 The runtime paths that fail, confirmed in the running game:
 
@@ -103,7 +103,7 @@ The runtime paths that fail, confirmed in the running game:
 
 ## Runtime music catalog
 
-At mod startup, the runtime catalog scans only the top level of `<game>/UserData/CustomMusic/` for `.mp3` files (extension matching is case-insensitive). Create that folder and copy files there before launching; restart after adding or renaming files. `tools/ost/` is a host-side source folder, not a discovery folder. The catalog does not decode files at startup.
+At mod startup, the runtime catalog scans only the top level of `<game>/UserData/CustomMusic/` for `.mp3` files (extension matching is case-insensitive). Create that folder and copy files there before launching; restart after adding or renaming files. `tools/thps1/ost/` is a host-side source folder, not a discovery folder. The catalog does not decode files at startup.
 
 Track names are filenames without the extension, preserving spaces and dots. Lookup is case-insensitive and resolves only discovered entries, never arbitrary paths. Case-colliding names are all excluded with a warning; rename them to distinct names. Linked files and names containing path separators, colons or control characters are excluded. An absent folder yields an empty catalog; an unreadable folder warns without throwing. Discovery does not decode or verify audio contents: playback must handle files that disappear, become unreadable or fail decoding afterward.
 
@@ -200,7 +200,7 @@ The original PlayStation Tony Hawk's Pro Skater soundtrack has 14 tracks. Scream
 
 Two of these are widely misattributed. Cyco Vision is not on *Suicidal for Life* (1994), despite circulating under that album in soundtrack listings; the recording is from *Freedumb*. Committed is not on *Scattered, Smothered & Covered* (1995) either, which does not contain it.
 
-Discogs also lists unofficial vinyl pressings of the game soundtrack, including the three European tracks, as an alternative to buying each release. The mp3s live under `tools/ost/`, which is gitignored along with the rest of `tools/`. Filenames carry the in-game running order (`06.01` and `06.02` are the two halves of the one file the game ships for Screamer / Nothing to Me); the ID3 tags describe the source album instead, holding the artist, album, year and position on that album rather than a soundtrack numbering, so a rip can be checked against its release. Tags are ID3 v2.3 with latin1 text and no comments, lyrics or attached images.
+Discogs also lists unofficial vinyl pressings of the game soundtrack, including the three European tracks, as an alternative to buying each release. The mp3s live under `tools/thps1/ost/`, which is gitignored along with the rest of `tools/`. Filenames carry the in-game running order (`06.01` and `06.02` are the two halves of the one file the game ships for Screamer / Nothing to Me); the ID3 tags describe the source album instead, holding the artist, album, year and position on that album rather than a soundtrack numbering, so a rip can be checked against its release. Tags are ID3 v2.3 with latin1 text and no comments, lyrics or attached images.
 
 ## Open questions
 

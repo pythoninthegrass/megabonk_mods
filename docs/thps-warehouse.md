@@ -33,8 +33,8 @@ Build the Tony Hawk's Pro Skater Warehouse level for Megabonk from your own copy
    ```
 
 4. **Install Unity 2023.2.22f1** (exact version, free Personal license) from [Unity Hub](https://docs.unity.com/en-us/hub/install-hub-win-mac)'s download archive, with the Windows and Linux Build Support (Mono) modules. Sign in to Hub so a license is active.
-5. **Get your disc image:** google the USA *Tony Hawk's Pro Skater* (SLUS_008.60). Save it as `tools/thps1/Tony Hawk's Pro Skater.bin` inside the cloned repo, then run `task thps:verify-disc` to check it. The build rejects other revisions.
-6. **Optional music:** drop your own mp3s in `tools/ost/` (e.g. `04 Superman.mp3`).
+5. **Get your disc image:** google the USA *Tony Hawk's Pro Skater* (SLUS_008.60). Save it as `tools/thps1/disc/Tony Hawk's Pro Skater.bin` inside the cloned repo, then run `task thps:verify-disc` to check it. The build rejects other revisions.
+6. **Optional music:** drop your own mp3s in `tools/thps1/ost/` (e.g. `04 Superman.mp3`).
 7. **Quit Megabonk, then run `task thps`.** It extracts the map from the disc, builds the pack in Unity, and installs it into your Megabonk folder. Every step skips itself when its inputs are unchanged, so running it again is cheap.
 8. **Install [Megabonk Level Editor](https://thunderstore.io/c/megabonk/p/pythoninthegrass/Megabonk_Level_Editor/) from Thunderstore** with your mod manager.
 9. **Launch the modded game from the mod manager.** The Warehouse shows up in Map Selection.
@@ -45,7 +45,7 @@ This is mostly untested outside of macOS, so there be dragons...
 
 The Warehouse workflow requires your own lawfully obtained PS1 THPS1 USA raw MODE2/2352 disc image. Megabonk itself requires a separate Steam copy. No ROM, extracted mesh, texture, soundtrack or generated pack bundle is distributed in this source tree. Extraction outputs remain under gitignored `.tools/`; soundtrack files must also be supplied locally with appropriate rights. Owning a game does not grant permission to redistribute its assets or derivative bundles.
 
-`tools/thps1.sha256` pins the locally verified input image, not a generated pack:
+`tools/thps1/disc.sha256` pins the locally verified input image, not a generated pack:
 
 ```text
 f1398cd15138a947fb3d49e1d31c7fe2aae9436ec09e32df917c658ccac30da9
@@ -61,7 +61,7 @@ Run `task thps:verify-disc` (or set `DISC="path/to/disc.bin"`) to check your ima
 - **The build stops with `No valid Unity Editor license found`.** Sign in to Unity Hub, keep a Personal license active and open any project once, which writes the license file the command line needs.
 - **The pack installs into the wrong folder, or nowhere.** Run `uv run scripts/game_paths.py` to see which Megabonk folder the tasks resolved, and set `MEGABONK_GAME_DIR` in `.env` if it is wrong. The pack lands in `UserData/LevelPacks/thps` and the level in `UserData/Levels`.
 - **The Warehouse is a placeholder box, or `pack 'thps' is not installed` is in the log.** The pack loads once per session, so quit Megabonk completely and launch it again after installing.
-- **There is no music.** The pack builds without music when `tools/ost/` holds no mp3s. Add them and run `task thps` again.
+- **There is no music.** The pack builds without music when `tools/thps1/ost/` holds no mp3s. Add them and run `task thps` again.
 - **You play on a different machine than you build on.** Copy the built pack, manifest and level across instead of rebuilding; see [Loading the THPS level](development.md#loading-the-thps-level). Use the Windows bundle for a Windows game, including under Proton.
 
 ## Reference material
@@ -70,8 +70,8 @@ Everything below is for people editing or rebuilding the level. It records what 
 
 ## Source
 
-- 219 frames at 1 fps, `tools/thps_warehouse_frames/frame_0001.jpg` to `frame_0219.jpg`, 1920x1080, from video time 00:39 to 04:18 of `tools/thps1_100_playthrough.mkv`.
-- Both the frames and the video are gitignored. Regenerate the frames with `ffmpeg -ss 00:39 -to 04:18 -i tools/thps1_100_playthrough.mkv -vf fps=1 -q:v 2 tools/thps_warehouse_frames/frame_%04d.jpg`.
+- 219 frames at 1 fps, `tools/thps1/frames/frame_0001.jpg` to `frame_0219.jpg`, 1920x1080, from video time 00:39 to 04:18 of `tools/thps1/videos/thps1_100_playthrough.mkv`.
+- Both the frames and the video are gitignored. Regenerate the frames with `ffmpeg -ss 00:39 -to 04:18 -i tools/thps1/videos/thps1_100_playthrough.mkv -vf fps=1 -q:v 2 tools/thps1/frames/frame_%04d.jpg`.
 - The footage is the Tony Hawk's Pro Skater 1 + 2 remake, not the 1999 original. The layout follows the original, but materials, lighting, graffiti and some props are remake art. Treat look notes as remake look.
 - A facecam overlay covers roughly x 1520-1900, y 30-310 in every frame, and a HUD sits top left. Ignore both.
 
@@ -86,7 +86,7 @@ Everything below is for people editing or rebuilding the level. It records what 
 
 ### Map and guide
 
-- `tools/thps_warehouse_items_map.png` (with collectible markers) and `tools/thps_warehouse_itemless_map.png` (without), both 973x767, gitignored. Pixel positions below are in that image, x to the right and y down, read from the items map unless stated.
+- `tools/thps1/maps/items_map.png` (with collectible markers) and `tools/thps1/maps/itemless_map.png` (without), both 973x767, gitignored. Pixel positions below are in that image, x to the right and y down, read from the items map unless stated.
 - The [StrategyWiki Warehouse guide](https://strategywiki.org/wiki/Tony_Hawk%27s_Pro_Skater/Warehouse) is the reference for collectible descriptions and gap names; the scraped page is not included here.
 - The maps are an isometric (not top-down) render: floor and the two far walls are visible, the near sides are cut away, and everything raised appears shifted up the screen by its height.
 
@@ -371,14 +371,14 @@ extracted polygon and script-added element to an editable kit piece, including
 ramp profiles, windows and the cross-check against the landmarks above. It is
 additive; the shipped monolithic Warehouse remains unchanged.
 
-The mesh, textures and collectible positions come from the USA PS1 disc (SLUS-00860, raw MODE2/2352 `.bin`, sha256 `f1398cd1...`). Nothing ripped is committed: the disc image lives in `tools/thps1/` and every output in `.tools/thps1/`, both gitignored.
+The mesh, textures and collectible positions come from the USA PS1 disc (SLUS-00860, raw MODE2/2352 `.bin`, sha256 `f1398cd1...`). Nothing ripped is committed: the disc image lives in `tools/thps1/disc/` and every output in `.tools/thps1/`, both gitignored.
 
 ### Rerunning the extraction
 
 `task thps:extract` runs these steps for you; the manual form is:
 
 1. The converters come from JayFoxRox/thps2-tools (MIT), the `tools/thps2-tools` submodule, pinned at commit `e78065a`. The scripts used are `common.py` (sha256 `4932af48...`), `convert-psx.py` (`059ba8c7...`) and `disassemble-trg.py` (`566db4a8...`). Set `THPS2_TOOLS_DIR` in `.env` to use a different checkout.
-2. Run `uv run --with pillow scripts/thps1_extract.py --disc "tools/thps1/Tony Hawk's Pro Skater.bin" --converter-dir tools/thps2-tools`. Pillow 13.0.0 and Python 3.13 were used.
+2. Run `uv run --with pillow scripts/thps1_extract.py --disc "tools/thps1/disc/Tony Hawk's Pro Skater.bin" --converter-dir tools/thps2-tools`. Pillow 13.0.0 and Python 3.13 were used.
 3. The script reads `CD.HED` and `CD.WAD` from the ISO, cuts out `skware.psx` (mesh), `skware_l.psx` (textures) and `skware_t.trg` (nodes), converts them with a patched copy of `convert-psx.py`, and writes `.tools/thps1/warehouse/`: `warehouse.obj`, `warehouse.mtl`, 99 texture PNGs and `warehouse_nodes.json`.
 
 `scripts/thps1_extract.py` is covered by `tests/test_thps1_extract.py`; run it through `task scripts:test`.
@@ -421,7 +421,7 @@ All positions are (x, y, z) in OBJ units. `warehouse_nodes.json` also holds the 
 
 ### Cross-check against the items map
 
-A least-squares affine fit of the five letters, the tape and the three 100s to their pixel positions on `tools/thps_warehouse_items_map.png` leaves 5 to 32 px of error (the map labels sit beside the items). It gives about 255 px per unit along x and 261 along z. The five pile nodes project to (708,167), (810,453), (678,611), (311,612) and (172,380), each 16 to 34 px from a different one of the five red circles at (698,155), (790,457), (695,600), (330,614) and (199,401). The match is one to one with nothing left over. Mismatches: the cluster of three bonus pickups has no marker on the map, and the largest single error is K at 32 px.
+A least-squares affine fit of the five letters, the tape and the three 100s to their pixel positions on `tools/thps1/maps/items_map.png` leaves 5 to 32 px of error (the map labels sit beside the items). It gives about 255 px per unit along x and 261 along z. The five pile nodes project to (708,167), (810,453), (678,611), (311,612) and (172,380), each 16 to 34 px from a different one of the five red circles at (698,155), (790,457), (695,600), (330,614) and (199,401). The match is one to one with nothing left over. Mismatches: the cluster of three bonus pickups has no marker on the map, and the largest single error is K at 32 px.
 
 ### Unit calibration
 

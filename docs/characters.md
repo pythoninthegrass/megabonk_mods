@@ -146,11 +146,11 @@ Measured in the running game with `query_objects`:
 
 ## Authoring the Squeaker model
 
-Squeaker is the original four-legged mouse sketch (`tools/simple_mouse.blend`, left untouched as the source) joined into one skinned mesh and rigged. Four scripts in `scripts/blender/` build it, run in order with `exec(open(path).read())` through the Blender MCP or the Scripting workspace. They rebuild their output on every run; the built scene is `tools/squeaker.blend`.
+Squeaker is the original four-legged mouse sketch (`tools/characters/simple_mouse.blend`, left untouched as the source) joined into one skinned mesh and rigged. Four scripts in `scripts/blender/` build it, run in order with `exec(open(path).read())` through the Blender MCP or the Scripting workspace. They rebuild their output on every run; the built scene is `tools/characters/squeaker.blend`.
 
 | Script | Produces |
 | --- | --- |
-| `squeaker_model.py` | Appends the original parts from a copy of `tools/simple_mouse.blend` (Blender cannot append from the file it has open), bakes the whisker and tail curves to mesh, joins everything into the smooth-shaded mesh `Squeaker` (about 12.7k faces) and builds the armature `SqueakerRig` with vertex weights |
+| `squeaker_model.py` | Appends the original parts from a copy of `tools/characters/simple_mouse.blend` (Blender cannot append from the file it has open), bakes the whisker and tail curves to mesh, joins everything into the smooth-shaded mesh `Squeaker` (about 12.7k faces) and builds the armature `SqueakerRig` with vertex weights |
 | `squeaker_anim.py` | The actions `Idle`, `Run`, `Jump`, `Falling` and `Grind` on the rig (60 fps, fake user set so they survive a save) |
 | `squeaker_cookie.py` | The separate `StaleCookie` object, about 0.64 x 0.68 x 0.12 units (the mouse is about 2.4 units tall), origin at its centre, face along +Z |
 | `squeaker_export.py` | `unity/pack-authoring/Assets/Squeaker/squeaker_icon.png` (32x32, transparent, rendered from the head and ears), `Squeaker.fbx` and `StaleCookie.fbx` |

@@ -105,7 +105,7 @@ The level schema carries an optional top-level `packs` map (`{"<packId>": "<vers
 
 `Assets/Editor/ThpsPack.cs` builds the `thps` pack: the merged `Warehouse`, a
 [canonical construction library](#warehouse-pieces), and one clip per mp3 in
-`tools/ost`. Geometry comes from `.tools/thps1/warehouse` (`warehouse.obj`,
+`tools/thps1/ost`. Geometry comes from `.tools/thps1/warehouse` (`warehouse.obj`,
 `warehouse.mtl`, PNGs; override with `-warehouseSource`). Soundtrack filenames
 become clip names with non-word runs replaced by underscores (`04 Superman.mp3`
 becomes `04_Superman`); `-musicSource` overrides the source directory. Missing

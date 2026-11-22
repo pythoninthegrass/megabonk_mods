@@ -533,9 +533,9 @@ task game:editor -- levels/thps.mblevel.json
 
 `task thps` (`taskfiles/thps.yml`) runs four steps, each of which skips itself when its inputs are unchanged, so a second run takes under a second:
 
-- `thps:extract` cuts the Warehouse mesh, textures and nodes out of the disc image into `.tools/thps1/warehouse/`. It is skipped once `warehouse.obj` exists; otherwise it needs the disc image in `tools/thps1/` and the `tools/thps2-tools` submodule (`git submodule update --init`; `THPS2_TOOLS_DIR` in `.env` overrides it, see [thps-warehouse.md](thps-warehouse.md)).
+- `thps:extract` cuts the Warehouse mesh, textures and nodes out of the disc image into `.tools/thps1/warehouse/`. It is skipped once `warehouse.obj` exists; otherwise it needs the disc image in `tools/thps1/disc/` and the `tools/thps2-tools` submodule (`git submodule update --init`; `THPS2_TOOLS_DIR` in `.env` overrides it, see [thps-warehouse.md](thps-warehouse.md)).
 - `thps:level` regenerates `levels/thps.mblevel.json` with `scripts/build_thps_level.py`. The output is byte-for-byte the same for the same inputs.
-- `thps:pack` builds the bundle for Windows and Linux with Unity from `.tools/thps1/warehouse/` and `tools/ost/*.mp3` (both gitignored; without the mp3s the pack builds with no music).
+- `thps:pack` builds the bundle for Windows and Linux with Unity from `.tools/thps1/warehouse/` and `tools/thps1/ost/*.mp3` (both gitignored; without the mp3s the pack builds with no music).
 - The piece-prefab tests in `tests/test_thps_pack_pieces.py` read `unity/pack-authoring/Assets/Thps` (gitignored, written by `thps:pack`) and skip unless it holds `piece-*.prefab` files. After `pieces.json` or the manifest changes, rerun `task thps:pack --force`.
 - `thps:install` copies the bundle, manifest and attachments into `UserData/LevelPacks/thps` through `task pack:install PACK=thps`, and the level plus its `.png`/`.jpg`/`.jpeg` and `.biome.*` sidecar images into `UserData/Levels`. Sidecars are found by the level's base name (`levels/thps.png`, `levels/thps.biome.png`); see [Level thumbnail](level-format.md#level-thumbnail).
 

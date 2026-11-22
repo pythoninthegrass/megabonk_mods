@@ -3,7 +3,7 @@
 version: "3.0"
 
 vars:
-  DISC: '{{.DISC | default "tools/thps1/Tony Hawk''s Pro Skater.bin"}}'
+  DISC: '{{.DISC | default "tools/thps1/disc/Tony Hawk''s Pro Skater.bin"}}'
   WAREHOUSE_OBJ: '{{.WAREHOUSE_OBJ | default ".tools/thps1/warehouse/warehouse.obj"}}'
   LEVEL: '{{.LEVEL | default "levels/thps.mblevel.json"}}'
 
@@ -40,8 +40,8 @@ tasks:
       Usage: task thps
 
       Runs extract, level, pack and install. Every step skips itself when its inputs are
-      unchanged, so rerunning is cheap. Needs the disc image in tools/thps1/, the soundtrack
-      mp3s in tools/ost/ and Unity 2023.2.22f1; see docs/development.md. A running game only
+      unchanged, so rerunning is cheap. Needs the disc image in tools/thps1/disc/, the soundtrack
+      mp3s in tools/thps1/ost/ and Unity 2023.2.22f1; see docs/development.md. A running game only
       sees the pack and level after a relaunch.
     cmds:
       - task: extract
@@ -66,7 +66,7 @@ tasks:
         uv run --with pillow scripts/thps1_extract.py --disc "{{.DISC}}" --converter-dir "${THPS2_TOOLS_DIR:-tools/thps2-tools}"
 
   verify-disc:
-    desc: "Verify the locally supplied THPS1 disc against tools/thps1.sha256"
+    desc: "Verify the locally supplied THPS1 disc against tools/thps1/disc.sha256"
     cmds:
       - uv run scripts/thps1_extract.py --disc "{{.DISC}}" --verify-only
 
@@ -87,7 +87,7 @@ tasks:
       - unity/pack-authoring/Assets/Editor/*.cs
       - unity/pack-authoring/packs/thps/**/*
       - .tools/thps1/warehouse/**/*
-      - tools/ost/*.mp3
+      - tools/thps1/ost/*.mp3
     generates:
       - .tools/bundles/windows/thps
       - .tools/bundles/linux/thps

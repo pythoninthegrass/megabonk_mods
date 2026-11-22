@@ -1,4 +1,4 @@
-"""Build the Squeaker mesh and armature from tools/simple_mouse.blend in the open Blender scene.
+"""Build the Squeaker mesh and armature from tools/characters/simple_mouse.blend in the open Blender scene.
 
 Run inside Blender: exec(open(path).read()). Appends the original mouse parts, joins them into one
 skinned mesh named "Squeaker" and builds the quadruped rig "SqueakerRig". Rebuilds the collection each run.
@@ -11,7 +11,7 @@ import tempfile
 from mathutils import Matrix, Vector
 
 REPO = globals().get("REPO") or os.path.expanduser("~/git/megabonk_mods")
-SOURCE = os.path.join(REPO, "tools/simple_mouse.blend")
+SOURCE = os.path.join(REPO, "tools/characters/simple_mouse.blend")
 COLLECTION = "Squeaker"
 SCENE_ONLY = {"Backdrop", "Mouse Portrait Camera", "Key Softbox", "Fill Softbox", "Rim Softbox"}
 WHISKERS = [f"{side} Whisker {i}" for side in ("Left", "Right") for i in (1, 2, 3)]

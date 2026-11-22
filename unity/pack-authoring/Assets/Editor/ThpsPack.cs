@@ -31,7 +31,7 @@ public static class ThpsPack
     const string RoofMaterial = "Roof";
     static readonly Color DarkRoof = new Color(0.07f, 0.07f, 0.08f);
     const string DefaultWarehouseSource = ".tools/thps1/warehouse";
-    const string DefaultMusicSource = "tools/ost";
+    const string DefaultMusicSource = "tools/thps1/ost";
     const string DefaultPiecesDoc = "docs/thps-warehouse-pieces.md";
     const string PacksSourceDirectory = "unity/pack-authoring/packs/thps";
 

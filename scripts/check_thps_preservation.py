@@ -39,7 +39,7 @@ def legacy_paths() -> list[str]:
     generated += sorted((ROOT / PACK_ASSETS).glob("Warehouse_*.mat"))
     generated += sorted((ROOT / PACK_ASSETS / "WarehouseTextures").glob("*.png"))
     paths = source + textures + generated + [Path(str(path) + ".meta") for path in generated]
-    paths += [ROOT / "tools/ost/04 Superman.mp3", b.OVERRIDES_PATH]
+    paths += [ROOT / "tools/thps1/ost/04 Superman.mp3", b.OVERRIDES_PATH]
     return sorted({path.relative_to(ROOT).as_posix() for path in paths})
 
 

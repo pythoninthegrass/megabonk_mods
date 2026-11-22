@@ -397,7 +397,7 @@ The player could not ollie off the main half pipe edges near (142, -3, 32). The 
 
 ### Check against the reference frames
 
-The frames in `tools/thps_warehouse_frames/` come from the 2020 remake, so the textures and lighting differ from the PS1 mesh by design. Compared with frames 4, 12 and 138 and the items map:
+The frames in `tools/thps1/frames/` come from the 2020 remake, so the textures and lighting differ from the PS1 mesh by design. Compared with frames 4, 12 and 138 and the items map:
 
 - Present: the walled room, the main half pipe and its hanging box, the banks, decks and ledges, the rail bars, the windows and the boss portal.
 - Roof: the pack adds a flat dark roof (see "Warehouse roof" in asset-bundles.md), so a view from above the room shows the roof and not the interior; the items map and frame 12 are cut-away or interior views.

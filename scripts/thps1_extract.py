@@ -25,7 +25,7 @@ RAW_HEADER = 24
 USER_DATA = 2048
 PVD_LBA = 16
 ROOT_RECORD_OFFSET = 156
-DISC_SHA256 = (Path(__file__).resolve().parents[1] / "tools/thps1.sha256").read_text().split()[0]
+DISC_SHA256 = (Path(__file__).resolve().parents[1] / "tools/thps1/disc.sha256").read_text().split()[0]
 
 WAREHOUSE_FILES = ["skware.psx", "skware_l.psx", "skware_t.trg"]
 MESH_FILE = "skware.psx"
