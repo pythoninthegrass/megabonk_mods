@@ -342,6 +342,31 @@ tasks:
       - uv run scripts/lift_names.py --dump "{{.NAMES_DUMP}}" --bodies "{{.NAMES_BODIES}}"
         --out "{{.NAMES_OUT}}" --blocked-only
 
+  lift-reach:
+    desc: "Write the gdb probe that finds which blocked lift bodies the Linux game executes"
+    summary: |
+      Usage: task re:lift-reach [REACH_BODIES=<bodies.jsonl>] [REACH_SO=<GameAssembly.so>]
+             [REACH_LOG=<hits.log>] [REACH_PROBE=<probe.py>]
+
+      Writes a gdb Python script that plants a one-shot breakpoint on every blocked body
+      and appends HIT lines to REACH_LOG. Attach it on the host that runs the pinned Linux
+      build: sudo gdb -p <pid> -batch -x <probe.py>. Turn the log into hot and cold sets
+      with scripts/lift_reach.py report. See scripts/lift_reach.py.
+    vars:
+      REACH_BODIES: '{{.REACH_BODIES | default ".tools/lift-image-full-v9/bodies.jsonl"}}'
+      REACH_SO: '{{.REACH_SO | default ".tools/megabonk-linux-native/Megabonk/GameAssembly.so"}}'
+      REACH_LOG: '{{.REACH_LOG | default "/tmp/lift-reach-hits.log"}}'
+      REACH_PROBE: '{{.REACH_PROBE | default ".tools/lift-reach/probe.py"}}'
+    preconditions:
+      - sh: '[ -f "{{.REACH_BODIES}}" ]'
+        msg: "No bodies.jsonl at {{.REACH_BODIES}}; run task re:lift-image-build first"
+      - sh: '[ -f "{{.REACH_SO}}" ]'
+        msg: "No GameAssembly.so at {{.REACH_SO}}"
+    cmds:
+      - mkdir -p "$(dirname "{{.REACH_PROBE}}")"
+      - uv run scripts/lift_reach.py script --bodies "{{.REACH_BODIES}}" --so "{{.REACH_SO}}"
+        --log "{{.REACH_LOG}}" > "{{.REACH_PROBE}}"
+
   lift-holes:
     desc: "Classify the unresolved computed jumps (BRANCHIND, JUMPTABLE_TARGET) left in a lift probe sample"
     vars:
