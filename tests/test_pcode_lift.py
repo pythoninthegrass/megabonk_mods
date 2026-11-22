@@ -1554,14 +1554,28 @@ def test_branchind_on_a_computed_register_with_an_unbalanced_frame_stays_a_hole(
     assert pl.lift_body(fn).holes == ["BRANCHIND"]
 
 
-def test_branchind_on_a_fixed_memory_word_stays_a_hole_even_at_a_proven_frame():
-    # `jmp *[rip+slot]` with the load folded into the operand has no LOAD or slot COPY to trace; relocations are not consulted.
+@requires_llvm
+def test_branchind_on_a_fixed_memory_word_at_a_proven_frame_is_an_indirect_tail_call():
+    # `jmp *[rip+slot]` has no index register, so it cannot be a jump table; relocations are not consulted.
     fn = body(insn(0x1000, 6, op("BRANCHIND", None, "ram,5353720,8")))
+    result = pl.lift_body(fn)
+    assert result.holes == []
+    assert result.tail_calls == 1
+    assert result.proven_tail_calls == 1
+    assert result.indirect_calls == 1
+    assert result.unproven_branchind == []
+    assert verify(pl.module_for([result])).returncode == 0
+
+
+def test_branchind_on_a_fixed_memory_word_with_an_unbalanced_frame_stays_a_hole():
+    fn = body(
+        insn(0x1000, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,8,8")),
+        insn(0x1003, 6, op("BRANCHIND", None, "ram,5353720,8")),
+    )
     result = pl.lift_body(fn)
     assert result.holes == ["BRANCHIND"]
     assert result.tail_calls == 0
-    assert result.unproven_branchind[0]["reason"] == "frame proven, handover shape refused"
-    assert result.unproven_branchind[0]["rsp_delta"] == 0
+    assert result.unproven_branchind[0]["reason"] == "rsp not at entry value"
 
 
 def test_refused_branchind_with_a_proven_frame_names_the_handover_shape():

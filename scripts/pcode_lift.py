@@ -1681,7 +1681,8 @@ class BodyLifter:
             # Balance alone never licenses it: a frameless switch also has rsp at entry.
             load_traced = self.defined_by_load(insn, k, target)
             verdict = self.frame.get(insn["a"], {})
-            balanced = verdict.get("reason") == "" and self.defined_by_load(insn, k, target, slots=True)
+            fixed_word = target.startswith("ram,")
+            balanced = verdict.get("reason") == "" and (fixed_word or self.defined_by_load(insn, k, target, slots=True))
             proven = self.proof.get(insn["a"], {}).get("reason") == ""
             sibling = proven and self.handed_over_target(insn, k, target)
             if not (load_traced or balanced or sibling):
