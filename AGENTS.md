@@ -78,6 +78,8 @@ Prefer the steamstub for offline development: with `tools/steamstub/`'s drop-in 
 
 ## Native macOS OpenBonk experiment
 
+The game's last Steam announcement is version 1.0.64 (2026-01-25); no official macOS build is expected. See [Lifting the shipped code to arm64](docs/development.md#lifting-the-shipped-code-to-arm64).
+
 Before continuing desktop upgrade-input work, read [Desktop upgrade-input handoff](docs/development.md#desktop-upgrade-input-handoff) for the private artifacts, reproduction command and unresolved input-module lifecycle. The candidate passes its editor fixture but still fails native selection; do not treat it as a working fix. Preserve the isolated profile and keep game-derived outputs local-only.
 
 ## Reading the game's code
