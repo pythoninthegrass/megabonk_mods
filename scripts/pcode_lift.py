@@ -170,7 +170,7 @@ def successors(insn: dict, order: list[int], follows: int | None) -> list[int]:
 
 
 def rsp_effect(insn: dict) -> int | None:
-    """The net rsp change of one instruction: adds and subs of a constant, plus the 8 a CALL pushes.
+    """The net rsp change of one instruction: adds and subs of a constant, plus the 8 a CALL or CALLIND pushes.
 
     None means the frame cannot be balanced by counting, because rsp is written some other way
     (a POP, `leave`, a copy from a register or a temporary, an add or sub by a computed value).
@@ -178,7 +178,7 @@ def rsp_effect(insn: dict) -> int | None:
     delta = 0
     for op in insn["ops"]:
         if op.get("out") != RSP:
-            if op["op"] == "CALL":
+            if op["op"] in ("CALL", "CALLIND"):
                 delta += 8
             continue
         operands = op.get("in") or []

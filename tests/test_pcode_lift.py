@@ -1934,6 +1934,42 @@ def test_branchind_on_a_handed_over_register_without_a_proven_frame_stays_a_hole
     assert pl.lift_body(fn).holes == ["BRANCHIND"]
 
 
+@requires_llvm
+def test_an_indirect_call_does_not_unbalance_the_frame_before_a_tail_call():
+    """`mov rbx, rdi; call *rcx; mov rdi, rdx; jmp rbx`: the callee's return pops what the call pushed.
+
+    A CALLIND pushes the return address like a CALL and the callee's `ret` takes it back, so the
+    pair is net zero. Counting only the push left rsp 8 below its entry value and refused a tail
+    call whose frame is balanced (the lazy icall stubs the game runs on every frame).
+    """
+    fn = body(
+        insn(0x1000, 3, op("COPY", "register,80,8", "register,38,8")),
+        insn(0x1003, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,8,8"), op("CALLIND", None, "register,8,8")),
+        insn(0x1006, 3, op("COPY", "register,38,8", "register,10,8")),
+        insn(0x1009, 2, op("BRANCHIND", None, "register,80,8")),
+    )
+    result = pl.lift_body(fn)
+    assert result.holes == []
+    assert result.tail_calls == 1
+    assert result.proven_tail_calls == 1
+    assert verify(pl.module_for([result])).returncode == 0
+
+
+def test_an_unbalanced_frame_with_an_indirect_call_before_the_jump_stays_a_hole():
+    """The call is net zero, so the extra push is what leaves rsp off its entry value."""
+    fn = body(
+        insn(0x1000, 3, op("COPY", "register,80,8", "register,38,8")),
+        insn(0x1003, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,8,8")),
+        insn(0x1006, 3, op("INT_SUB", REG_RSP, REG_RSP, "const,8,8"), op("CALLIND", None, "register,8,8")),
+        insn(0x1009, 3, op("COPY", "register,38,8", "register,10,8")),
+        insn(0x100C, 2, op("BRANCHIND", None, "register,80,8")),
+    )
+    result = pl.lift_body(fn)
+    assert result.holes == ["BRANCHIND"]
+    assert result.unproven_branchind[0]["reason"] == "rsp not at entry value"
+    assert result.unproven_branchind[0]["rsp_delta"] == -8
+
+
 def test_branchind_on_a_target_written_twice_before_the_jump_stays_a_hole():
     fn = body(
         insn(0x1000, 3, op("COPY", "register,80,8", "register,38,8")),
