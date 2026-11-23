@@ -2444,6 +2444,40 @@ Not covered: typed catch for any class outside `PROVEN_CLASSES` (rejected above)
 
 `scripts/eh_oracle.py` records what a shipped method throws on the Linux runtime: it runs `scripts/native_bind_probe/host.c` headless over SSH with `--expect-throw`, which treats a throw from `il2cpp_runtime_invoke` as the expected outcome and records the exception class and `il2cpp_format_exception` message instead of failing. `uv run scripts/eh_oracle.py --host <ssh host> --linux-game-dir <dir>` writes `.tools/eh-oracle/oracles.json`. The only oracle so far is `System.ThrowHelper::ThrowInvalidOperationException_InvalidOperation_NoValue` (mscorlib, static, no arguments), which throws `System.InvalidOperationException` with message "Nullable object must have a value.". It is a reference outcome for a throw, not yet a comparison: lifting it needs the il2cpp runtime state that builds the managed exception. No shipped method with a catch, a finally or a rethrow around a throwing call has been identified, so cleanup order, nested propagation and rethrow have no shipped oracle. The host tests run against a stub runtime (`tests/fixtures/bind/il2cpp_stub.c`).
 
+### Headless shipped-runtime gate
+
+`scripts/native_runtime_probe.py` drives the same C host and method invocation code as `native_bind_probe.py`, without starting a Unity player, Steam, or a mod loader. It checks the pinned Linux ELF and metadata hashes and an explicit rebuilt-image hash before launching an arm64 macOS subprocess. The host records its own architecture and `sysctl.proc_translated`, loads the selected image eagerly, and checks that every required public entry belongs to that image. `--exports-only` lists each resolved symbol and its image-relative offset without calling into IL2CPP. Raw `sub_*` symbols do not count as public exports.
+
+The required `il2cpp_` entries are `init`, `shutdown`, `set_data_dir`, `domain_get`, `thread_attach`, `domain_get_assemblies`, `assembly_get_image`, `image_get_name`, `class_from_name`, `class_get_methods`, `method_get_name`, `method_get_param_count`, `method_get_param`, `method_get_return_type`, `type_get_type`, `runtime_invoke`, `object_unbox`, `string_new`, `string_chars`, and `string_length`. The image must have established its guest startup state before the first IL2CPP call. The host then sets the data directory, initializes IL2CPP, gets the domain, attaches the calling thread, lists the assemblies, resolves the requested class and typed method, invokes it, calls `il2cpp_shutdown`, and unloads the image. A fresh process runs each method so a crash cannot leave runtime state for the next case.
+
+Run the following headlessly from the repository root on a native x86-64 Linux machine with Python 3.11 or later and a C compiler. `GAME` must name the pinned Linux install or a copy; the host uses a temporary working directory and temporary `HOME` and XDG directories, not the player's profile. Copy only `report.json` back as `.tools/native-runtime/linux-control.json`.
+
+```sh
+so="$GAME/GameAssembly.so"
+metadata="$GAME/Megabonk_Data/il2cpp_data/Metadata/global-metadata.dat"
+python3 scripts/native_runtime_probe.py --linux-reference \
+  --image "$so" --image-sha256 a86fd434619dafb328ec741b6bc285992ee1f52e69533b2db8f35185c2ed5ba1 \
+  --reference "$so" --metadata "$metadata" --out .tools/native-runtime/linux
+```
+
+The measured Linux control, with metadata SHA-256 `53ca3fd0c07051c949329c03d377efdf7de556f97024cca82748e93ac8bc480e`, finds 72 assemblies, including `mscorlib.dll` and `Assembly-CSharp.dll`. All three runs completed shutdown: `System.Math.Abs(-7)` returned `7` (ELF RVA `0x3c42570`), `System.String.Concat("mega", "bonk")` returned `megabonk` (`0x3a897b0`), and the game-authored `InventoryUtility.GetWeaponMaxLevel()` returned `40` (`0x225b7d0`).
+
+On Apple silicon, use an already linked candidate and its recorded digest. Add `--exports-only` to test resolution without the Linux control. `--verdict` records the lift input directory; the caller supplies that provenance, and the image digest pins the bytes actually tested.
+
+```sh
+game=.tools/megabonk-linux-native/Megabonk
+uv run scripts/native_runtime_probe.py \
+  --image "$IMAGE" --image-sha256 "$IMAGE_SHA256" \
+  --reference "$game/GameAssembly.so" \
+  --metadata "$game/Megabonk_Data/il2cpp_data/Metadata/global-metadata.dat" \
+  --verdict "$VERDICT" --control .tools/native-runtime/linux-control.json \
+  --out .tools/native-runtime/macos
+```
+
+Failures are reported separately: `metadata_missing` and `metadata_mismatch` stop before launch; `image_mismatch` rejects bytes different from the declared digest; `image_load_failed` retains the system loader error; `exports_missing` names the missing entries; `host_signal` and `host_timeout` retain the last startup phase and stderr, including a named import or lift trap when printed. The deadline defaults to 15 seconds per host. A separate process group lets the driver kill any helpers that remain in the group and reap the host even after a timeout. This is a diagnostic deadline, not a sandbox for untrusted libraries. The regression tests use synthetic native images and do not require game files.
+
+In the earlier relocated-data link (`.tools/lift-link-data`, SHA-256 `91949266c5ab5c096cd85cabf27746f0517c33bb07590fd2e00dbd252a2a36bb`), native `dlopen` succeeds with `sysctl.proc_translated=0` but none of the 20 public exports resolve. Scratch-only typed adapters (not part of the candidate) reach `il2cpp_set_data_dir`, which faults in `std::string::assign` because a guest string global has not been initialized by the shipped constructor array. Calling the first guest constructor in isolation reaches the refused `__cxa_atexit` import. Calling `il2cpp_init` separately reaches the refused `setlocale` import before the runtime initializer. These are startup diagnostics, not evidence of a macOS domain, metadata consumption, or a managed result.
+
 ### Cross-checking the lift against an external reconstruction
 
 `~/git/open_bonk` (OpenBonk) reconstructs the same game's managed sources to ship an Android player. Its `README.md` states what it is: "The code is a reconstruction, not a byte-for-byte decompilation." Two of its checks are worth reading against the lift because they pin the binary instead of trusting a build label, and both name the SHA-256 this repository pins, `a86fd434…5ba1`: `analysis/port-inventory/check-original-noimplementation.js` and `analysis/port-inventory/compare-item-factory.js`. The rest of that tree was derived from a Windows `GameAssembly.dll` and an Android APK, so agreement has to be established address by address rather than assumed.
