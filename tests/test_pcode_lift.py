@@ -1783,6 +1783,185 @@ def test_a_base_that_changes_between_the_copy_and_the_load_keeps_the_hole():
     assert result.holes == ["BRANCHIND"]
 
 
+GUARD_BASE, GUARD_IDX, GUARD_SPARE = "register,8,8", "register,10,8", "register,38,8"
+RET = lambda: op("RETURN", None, "register,288,8")  # noqa: E731
+
+
+def guard_case(
+    wide=False,
+    after=(),
+    clobber_base=False,
+    bypass=False,
+    path_b_write=None,
+    width=4,
+    bound=4,
+    edge_a=0x1008,
+    idx="register,10,8",
+    name="rdx",
+    base="register,8,8",
+    base_name="rcx",
+):
+    """Two paths reach one indexed load, each through its own bound check, as the shipped duplicated guards do.
+
+    Path A: `rcx = table; edx = ...; cmp edx, N; ja default` falls through to the load. Path B enters
+    earlier, repeats the write and the compare, and jumps to the load on `jbe`. `after` runs between the
+    guards and the load, where a write or call to the index loses the bound.
+    """
+    write = op("COPY", idx, GUARD_SPARE) if wide else op("INT_ZEXT", idx, idx[:-1] + "4")
+    path_b = [path_b_write or write]
+    if clobber_base:
+        path_b.insert(0, op("COPY", base, GUARD_SPARE))
+    guard_b = op("BRANCH", None, "ram,1008,8") if bypass else op("CBRANCH", None, "ram,1008,8", "register,200,1")
+    fn = body(
+        insn(0x1000, 2, op("COPY", base, "cptr,5010,8")),
+        insn(0x1002, 2, op("CBRANCH", None, "ram,1010,8", "register,200,1")),
+        insn(0x1004, 2, write),
+        insn(0x1006, 2, op("CBRANCH", None, "ram,1030,8", "register,200,1")),
+        insn(0x1008, 2, *after, op("COPY", "unique,100,8", "const,0,8")),
+        insn(0x100A, 2, op("COPY", "register,0,8", "const,0,8")),
+        insn(0x100C, 2, RET()),
+        insn(0x1010, 2, *path_b),
+        insn(0x1012, 2, guard_b),
+        insn(0x1014, 2, RET()),
+        insn(0x1030, 2, RET()),
+    )
+    guards = [
+        {"at": 0x1006, "edge": edge_a, "register": name, "width": width, "bound": bound},
+        {"at": 0x1012, "edge": 0x1008, "register": name, "width": width, "bound": bound},
+    ]
+    return fn, {"load": 0x100A, "base": base_name, "index": name, "guards": guards}
+
+
+def proves(case, count=5, table_base=0x5010):
+    fn, proof = case
+    return pl.guards_prove(fn, proof, count, table_base)
+
+
+def test_a_duplicated_guard_proves_the_bound_and_the_base_on_every_path():
+    assert proves(guard_case())
+
+
+def test_a_path_that_skips_every_guard_refuses():
+    assert not proves(guard_case(bypass=True))
+
+
+def test_a_write_to_the_index_after_the_guard_loses_the_bound():
+    assert not proves(guard_case(after=[op("INT_ADD", GUARD_IDX, GUARD_IDX, "const,1,8")]))
+
+
+def test_a_call_after_the_guard_loses_a_caller_saved_index():
+    assert not proves(guard_case(after=[op("CALL", None, "ram,2056380,8")]))
+
+
+def test_a_guard_on_an_unconditional_branch_is_no_guard():
+    assert not proves(guard_case(bypass=True))
+
+
+def test_a_call_after_the_guard_keeps_a_callee_saved_index():
+    call = [op("CALL", None, "ram,2056380,8")]
+    kept = guard_case(after=call, idx="register,18,8", name="rbx", width=8, wide=True, base="register,28,8", base_name="rbp")
+    assert proves(kept)
+
+
+def test_a_base_overwritten_on_one_path_refuses():
+    assert not proves(guard_case(clobber_base=True))
+
+
+def test_a_base_that_is_another_table_refuses():
+    assert not proves(guard_case(), table_base=0x5020)
+
+
+def test_a_32_bit_compare_of_a_wide_write_refuses():
+    assert not proves(guard_case(wide=True))
+
+
+def test_a_64_bit_compare_needs_no_zero_extension():
+    assert proves(guard_case(wide=True, width=8))
+
+
+def test_a_right_shift_by_32_or_more_zero_extends_even_through_a_masked_count():
+    shift = [op("INT_AND", "unique,d00,4", "const,20,4", "const,3f,4"), op("INT_RIGHT", GUARD_IDX, GUARD_IDX, "unique,d00,4")]
+    fn, proof = guard_case(wide=True)
+    for address in (0x1004, 0x1010):
+        next(i for i in fn["insns"] if i["a"] == address)["ops"] = [op("COPY", GUARD_IDX, GUARD_SPARE), *shift]
+    assert pl.guards_prove(fn, proof, 5, 0x5010)
+    short = [op("INT_AND", "unique,d00,4", "const,10,4", "const,3f,4"), op("INT_RIGHT", GUARD_IDX, GUARD_IDX, "unique,d00,4")]
+    for address in (0x1004, 0x1010):
+        next(i for i in fn["insns"] if i["a"] == address)["ops"] = [op("COPY", GUARD_IDX, GUARD_SPARE), *short]
+    assert not pl.guards_prove(fn, proof, 5, 0x5010)
+
+
+def test_a_bound_past_the_last_case_refuses():
+    assert not proves(guard_case(bound=5))
+    assert proves(guard_case(bound=4))
+
+
+def test_a_compare_narrower_than_32_bits_refuses():
+    assert not proves(guard_case(width=2))
+
+
+def test_a_guard_on_the_edge_it_does_not_bound_refuses():
+    assert not proves(guard_case(edge_a=0x1030))
+
+
+def test_a_load_the_body_never_reaches_or_registers_the_proof_cannot_name_refuse():
+    fn, proof = guard_case()
+    assert not pl.guards_prove(fn, {**proof, "load": 0x2000}, 5, 0x5010)
+    assert not pl.guards_prove(fn, {**proof, "index": "xmm0"}, 5, 0x5010)
+
+
+class ProvingTable(StubTable):
+    def __init__(self, table, proof):
+        super().__init__(table)
+        self.proof = proof
+
+    def guard_proof(self, boundaries, site):
+        return self.proof
+
+
+def duplicated_guard_dispatch(bypass_guard=True):
+    """The evidence dispatch with its bound check duplicated, so a branch lands inside the guarded span."""
+    ops = dispatch_insn()
+    guard_b = op("CBRANCH", None, "ram,100a,8", "register,200,1")
+    fn = body(
+        insn(0x1000, 4, ops[0]),
+        insn(0x1004, 2, op("CBRANCH", None, "ram,1040,8", "register,200,1")),
+        insn(0x1006, 2, op("INT_ZEXT", "register,0,8", "register,0,4")),
+        insn(0x1008, 2, op("CBRANCH", None, "ram,1030,8", "register,200,1")),
+        insn(0x100A, 16, *ops[1:]),
+        insn(0x101A, 2, op("BRANCHIND", None, "register,0,8")),
+        insn(0x101C, 2, op("COPY", REG_EAX, "const,1,4"), RET()),
+        insn(0x101E, 2, op("COPY", REG_EAX, "const,2,4"), RET()),
+        insn(0x1030, 2, RET()),
+        insn(0x1040, 2, op("INT_ZEXT", "register,0,8", "register,0,4")),
+        insn(0x1042, 2, guard_b if bypass_guard else op("BRANCH", None, "ram,100a,8")),
+        insn(0x1044, 2, RET()),
+    )
+    guards = [
+        {"at": 0x1008, "edge": 0x100A, "register": "rax", "width": 4, "bound": 1},
+        {"at": 0x1042, "edge": 0x100A, "register": "rax", "width": 4, "bound": 1},
+    ]
+    return {**fn, "jt": []}, {"load": 0x100A, "base": "rdx", "index": "rax", "guards": guards}
+
+
+DUPLICATED_TABLE = {"base": 0x5010, "scale": 4, "count": 2, "cases": [0x101C, 0x101E], "window": 0x1000}
+
+
+def test_a_switch_the_span_check_refuses_lowers_when_the_guards_prove_it():
+    fn, proof = duplicated_guard_dispatch()
+    result = pl.lift_body(fn, [RODATA, TEXT], evidence=ProvingTable(DUPLICATED_TABLE, proof))
+    assert result.holes == []
+    assert result.evidence_switches == 1
+
+
+def test_the_same_switch_keeps_its_hole_without_a_proof_or_when_a_path_skips_the_guards():
+    fn, proof = duplicated_guard_dispatch()
+    assert pl.lift_body(fn, [RODATA, TEXT], evidence=StubTable(DUPLICATED_TABLE)).holes == ["BRANCHIND"]
+    assert pl.lift_body(fn, [RODATA, TEXT], evidence=ProvingTable(DUPLICATED_TABLE, None)).holes == ["BRANCHIND"]
+    fn, proof = duplicated_guard_dispatch(bypass_guard=False)
+    assert pl.lift_body(fn, [RODATA, TEXT], evidence=ProvingTable(DUPLICATED_TABLE, proof)).holes == ["BRANCHIND"]
+
+
 def test_the_images_table_bytes_drive_a_switch_ghidra_left_without_one():
     result = pl.lift_body(dispatch_body(), [RODATA, TEXT], evidence=StubTable(TABLE))
     assert result.holes == []

@@ -357,6 +357,104 @@ def lazily_resolved_target(fn: dict, site: int, k: int) -> bool:
     return any(op["op"] == "COPY" and op.get("out") == RAX and op["in"][0] == slot for insn in insns for op in insn["ops"])
 
 
+REGISTER_OFFSET = {"rax": 0x0, "rcx": 0x8, "rdx": 0x10, "rbx": 0x18, "rsp": 0x20, "rbp": 0x28, "rsi": 0x30, "rdi": 0x38} | {
+    f"r{n}": 0x80 + 8 * (n - 8) for n in range(8, 16)
+}
+CALLER_SAVED = frozenset(REGISTER_OFFSET[name] for name in ("rax", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11"))
+
+
+def folded_constant(done: list[dict], varnode: str) -> int | None:
+    """A shift count's value when the dump builds it from constants earlier in the same instruction."""
+    value = const_of(varnode)
+    if value is not None:
+        return value
+    for op in reversed(done):
+        if op.get("out") != varnode:
+            continue
+        inputs = op.get("in") or []
+        if op["op"] == "COPY":
+            return const_of(inputs[0])
+        if op["op"] == "INT_AND" and len(inputs) == 2 and None not in (const_of(inputs[0]), const_of(inputs[1])):
+            return const_of(inputs[0]) & const_of(inputs[1])
+        return None
+    return None
+
+
+def facts_after(insn: dict, facts: frozenset, base_offset: int) -> frozenset:
+    """The facts that still hold after one instruction.
+
+    ("zx", reg): the register's upper 32 bits are zero. ("base", reg, address): the register holds that
+    cptr address. A write to a register drops every fact about it, a call drops the caller-saved registers',
+    and only the ops that establish a fact add one: a zero-extending write, a logical right shift by 32 or
+    more, and a whole-register copy of an address constant into the base.
+    """
+    held, done = set(facts), []
+    for op in insn["ops"]:
+        out, inputs = op.get("out"), op.get("in") or []
+        if op["op"] in ("CALL", "CALLIND"):
+            held = {fact for fact in held if fact[1] not in CALLER_SAVED}
+        if out and out.startswith("register,"):
+            held = {fact for fact in held if not overlaps(out, f"register,{fact[1]:x},8")}
+            _, offset, size = parse_varnode(out)
+            widened = op["op"] == "INT_ZEXT" and size == 8 and parse_varnode(inputs[0])[2] in (1, 2, 4)
+            shifted = (
+                op["op"] == "INT_RIGHT"
+                and size == 8
+                and out == inputs[0]
+                and ((folded_constant(done, inputs[1]) or 0) & 0x3F) >= 32
+            )
+            if widened or shifted:
+                held.add(("zx", offset))
+            if op["op"] == "COPY" and out == f"register,{base_offset:x},8" and inputs[0].startswith("cptr,"):
+                held.add(("base", base_offset, int(inputs[0].split(",")[1], 16)))
+        done.append(op)
+    return frozenset(held)
+
+
+def guards_prove(fn: dict, proof: dict, count: int, table_base: int) -> bool:
+    """True when every path into a switch's indexed load passes a bound check and sees the table's base.
+
+    A forward must-analysis over the body's own graph, joined by intersection. A guard edge (a compare and
+    unsigned conditional jump read from the listing) adds ("idx", reg, bound) to the facts on that edge only,
+    and only where the instruction there is a conditional branch, and only when the compare covers the whole
+    register: 64 bits, or 32 bits of a register whose upper half is known to be zero. A write to the index, or a call that clobbers it, drops the bound; the base fact comes
+    from the table's own address constant. The proof stands when, at the load, the index is bounded by the
+    last case and the base is the table, on every path from the entry.
+    """
+    base_offset, index_offset = REGISTER_OFFSET.get(proof["base"]), REGISTER_OFFSET.get(proof["index"])
+    insns = sorted(fn["insns"], key=lambda insn: insn["a"])
+    if base_offset is None or index_offset is None or not insns:
+        return False
+    order = [insn["a"] for insn in insns]
+    by_addr = {insn["a"]: insn for insn in insns}
+    follows = dict(zip(order, order[1:]))
+    guards = {
+        (g["at"], g["edge"]): (REGISTER_OFFSET[g["register"]], g["bound"], g["width"])
+        for g in proof["guards"]
+        if g["register"] in REGISTER_OFFSET and g["width"] in (4, 8) and 0 <= g["bound"] < count
+    }
+    state: dict[int, frozenset] = {order[0]: frozenset()}
+    todo = [order[0]]
+    while todo:
+        addr = todo.pop()
+        insn = by_addr[addr]
+        held = facts_after(insn, state[addr], base_offset)
+        for target in successors(insn, order, follows.get(addr)):
+            gained = held
+            guard = guards.get((addr, target)) if any(op["op"] == "CBRANCH" for op in insn["ops"]) else None
+            if guard and (guard[2] == 8 or ("zx", guard[0]) in held):
+                gained = held | {("idx", guard[0], guard[1])}
+            seen = state.get(target)
+            joined = gained if seen is None else seen & gained
+            if seen is None or joined != seen:
+                state[target] = joined
+                todo.append(target)
+    at_load = state.get(proof["load"])
+    if at_load is None:
+        return False
+    return any(f[0] == "idx" and f[1] == index_offset for f in at_load) and ("base", base_offset, table_base) in at_load
+
+
 def is_packed_lane_op(out: str | None, ins: list[str]) -> bool:
     """The packed SSE ops arrive as destination = destination <op> source, every varnode 16 bytes wide."""
     return (
@@ -1733,11 +1831,27 @@ class BodyLifter:
         if not cases or any(c not in self.addrs for c in cases):
             return None
         sec = self.section_of(table["base"])
-        if sec is None or not self.guard_dominates(table.get("window"), insn["a"]):
+        if sec is None or not (self.guard_dominates(table.get("window"), insn["a"]) or self.proven_by_guards(insn, table)):
             return None
         if not self.table_pointer_chain(self.ops_before(insn, k), target, table["base"]):
             return None
         return sorted(set(cases)), sec
+
+    def proven_by_guards(self, insn: dict, table: dict) -> bool:
+        """Whether bound checks on every path to the indexed load prove the table, where the span test refused.
+
+        The span test wants the guard to dominate by being the only way into a straight-line stretch, which a
+        compiler that duplicated the check, or put the base load far from it, defeats. This asks the control-flow
+        graph instead, with the bound checks the listing holds.
+        """
+        prove = getattr(self.evidence, "guard_proof", None)
+        if prove is None:
+            return False
+        try:
+            proof = prove(sorted(self.addrs), insn["a"])
+        except Exception:
+            return False
+        return bool(proof) and guards_prove(self.fn, proof, table["count"], table["base"])
 
     def guard_dominates(self, window: int | None, site: int) -> bool:
         """Whether nothing enters the span from `window` to the jump except by running it from its first instruction.
