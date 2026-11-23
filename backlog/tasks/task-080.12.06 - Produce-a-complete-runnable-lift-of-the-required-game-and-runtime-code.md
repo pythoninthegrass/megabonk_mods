@@ -4,7 +4,7 @@ title: Produce a complete runnable lift of the required game and runtime code
 status: In Progress
 assignee: []
 created_date: '2026-11-16T19:04:00Z'
-updated_date: '2026-11-23T04:54:00Z'
+updated_date: '2026-11-23T04:55:00Z'
 labels:
   - native-macos
   - arm64
@@ -18,6 +18,11 @@ references:
   - TASK-080.01
   - TASK-080.02
   - TASK-080.06
+  - scripts/lift_reach.py
+  - scripts/lift_tables.py
+  - tests/test_lift_reach.py
+  - tests/test_lift_jump_evidence.py
+  - tests/test_pcode_lift.py
 documentation:
   - docs/development.md
 parent_task_id: TASK-080.12
@@ -42,7 +47,7 @@ The seed-81/82 samples now contain only named control-flow holes, but cover only
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 task check passes
+- [x] #1 task check passes
 - [x] #2 Tests written first for testable logic
 - [x] #3 Docs updated
 - [x] #4 Conventional commit with no attribution
@@ -69,6 +74,8 @@ Add a blocker-only iteration command over a previous full verdict. Validate the 
 Separate targeted jump-table recovery from the existing raw pcode baseline. Pilot a bounded, resumable evidence-only pass using explicit body addresses, compare C-disabled recovery against known shipped tables, and leave existing full-image dump identities untouched.
 
 Compare explicit frame-bounded Ghidra functions against inferred functions on known slow and known-good addresses, then sample actual control-flow blockers if the benchmark preserves known tables. Record out-of-body targets without accepting them automatically.
+
+Where it stands after the v13 rescore: 259,049 of 259,102 bodies hole-free, 53 blocked, none of them executed by the reference build in the traced scenarios. AC2 stays open until (a) the 53 are linked as named trap stubs in the rebuilt image and the reference scenarios (boot, menu, a run, save and reload) are re-run natively against it with no stub firing, which depends on the link, import and runtime-initialization work in TASK-080.12.04 and TASK-080.12.07, and (b) the reach trace is widened, since cold means not hit in what was traced; other maps, bosses, gamepad and audio ran without reaching any of the 53, but a body the traces never ran is not shown never to run. Do not check AC2 on the static counts alone.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
