@@ -48,6 +48,49 @@ public class ConsoleStateTests
         Assert.False(ConsoleState.ShouldUnpauseOnClose(Entry(runActive: false)));
 
     [Fact]
+    public void FreezeWhileOpen_KeepsTheRunFrozenOnClose()
+    {
+        var entry = ConsoleState.AfterFreeze(Entry(paused: false));
+
+        Assert.False(ConsoleState.ShouldUnpauseOnClose(entry));
+    }
+
+    [Fact]
+    public void ResumeWhileOpen_LeavesTheRunRunningOnClose()
+    {
+        var entry = ConsoleState.AfterResume(Entry(paused: false));
+
+        Assert.True(ConsoleState.ShouldUnpauseOnClose(entry));
+    }
+
+    [Fact]
+    public void FreezeAfterResumeWhileOpen_KeepsTheRunFrozenOnClose()
+    {
+        var entry = ConsoleState.AfterFreeze(ConsoleState.AfterResume(Entry(paused: false)));
+
+        Assert.False(ConsoleState.ShouldUnpauseOnClose(entry));
+    }
+
+    [Fact]
+    public void FreezeWhileOpen_KeepsTheCursorPlan()
+    {
+        var before = Entry(cursorVisible: true, cursorLocked: false);
+        var entry = ConsoleState.AfterFreeze(before);
+
+        Assert.Equal(before, entry!.Value with { Paused = before.Paused });
+        Assert.True(ConsoleState.ShouldRestoreCursor(entry));
+    }
+
+    [Fact]
+    public void FreezeWithNoOpenEntry_ChangesNothing()
+    {
+        ConsoleEntryState? none = null;
+
+        Assert.Null(ConsoleState.AfterFreeze(none));
+        Assert.Null(ConsoleState.AfterResume(none));
+    }
+
+    [Fact]
     public void Closing_WithNoOpenEntry_RestoresNothing()
     {
         ConsoleEntryState? none = null;

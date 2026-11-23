@@ -41,6 +41,13 @@ public static class ConsoleState
     // only a run the console itself paused is unpaused on close.
     public static bool ShouldUnpauseOnClose(ConsoleEntryState? entry) => entry is { } state && state.RunActive && !state.Paused;
 
+    // A run.freeze typed while the console is open makes the console the owner of the freeze, so the close leaves it
+    // frozen. Nothing changes when the console is not open (an MCP or run.py freeze has no entry to correct).
+    public static ConsoleEntryState? AfterFreeze(ConsoleEntryState? entry) => entry is { } state ? state with { Paused = true } : null;
+
+    // A run.resume typed while the console is open leaves the run running, so the close leaves it running too.
+    public static ConsoleEntryState? AfterResume(ConsoleEntryState? entry) => entry is { } state ? state with { Paused = false } : null;
+
     public static bool ShouldRestoreCursor(ConsoleEntryState? entry) => entry != null;
 
     // The slide advances on unscaled time so it still animates while MyTime is paused.

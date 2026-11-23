@@ -335,7 +335,28 @@ public static class ConsoleOverlay
     {
         RestorePersistedLog();
         var dev = ConsoleState.DevState(Environment.GetEnvironmentVariable);
-        return ConsoleState.Execute(line, dev, CurrentToggles(), DevHarness.Run, _history.Entries, SafeLevelList());
+        return ConsoleState.Execute(line, dev, CurrentToggles(), RunAndRecord, _history.Entries, SafeLevelList());
+    }
+
+    private static HarnessResult RunAndRecord(HarnessCommand command)
+    {
+        NoteRunFreezeCommand(command);
+        return DevHarness.Run(command);
+    }
+
+    // The console's remembered pause state follows a freeze or resume it ran itself; neither verb pauses anything on
+    // its own, and a run.py or MCP freeze has no console entry to correct.
+    private static void NoteRunFreezeCommand(HarnessCommand command)
+    {
+        if (Open)
+        {
+            _entry = command.Kind switch
+            {
+                HarnessCommandKind.Freeze => ConsoleState.AfterFreeze(_entry),
+                HarnessCommandKind.Resume => ConsoleState.AfterResume(_entry),
+                _ => _entry,
+            };
+        }
     }
 
     private static void ClearScrollbackAndStore()
