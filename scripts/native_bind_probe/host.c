@@ -18,6 +18,7 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <unistd.h>
 
 #if defined(__APPLE__)
@@ -514,7 +515,14 @@ typedef union ValueSnap {
 /* il2cpp_runtime_invoke returns a pointer into its own frame, so the value has to be
    copied before anything else can run on that stack. */
 static void *invoke_snapshot(MethodInfo method, void **params, Il2CppObject **exception,
-                             ValueSnap *snap) {
+                              ValueSnap *snap) {
+  if (strcmp(cfg.leg, "runtime") == 0) {
+    Il2CppObject *boxed = api.runtime_invoke(method, NULL, params, exception);
+    if (!boxed || *exception || strcmp(cfg.invoke_ret, "string") == 0) return boxed;
+    void *value = api.object_unbox(boxed);
+    if (value) memcpy(&snap->i, value, sizeof(snap->i));
+    return value;
+  }
   if (cfg.arg_count > 0)
     ev_num("param0_value", params[0] ? (long long)*(int32_t *)params[0] : -3735928559LL);
   Il2CppObject *returned = api.runtime_invoke(method, NULL, params, exception);
@@ -717,7 +725,7 @@ static MethodInfo lookup_method(Il2CppClass *class_out, char *label, size_t labe
     }
     ev_num("methods_scanned", scanned);
     ev_num("methods_named", named);
-    if (!method && fallback && cfg.type_count == 0) method = fallback;
+    if (!method && fallback && cfg.type_count == 0 && strcmp(cfg.leg, "runtime") != 0) method = fallback;
     if (!method) {
       note("no %s overload matches the requested signature (%d named, %d scanned)",
            cfg.invoke_method, named, scanned);
@@ -955,6 +963,92 @@ static int leg2(void) {
   for (size_t i = 0; i < cfg.state_chain_count; i++) record_state_chain(cfg.state_chains[i], i);
   emit(1, NULL);
   return 0;
+}
+
+#define RUNTIME_EXPORTS(EXPORT) \
+  EXPORT(init) \
+  EXPORT(shutdown) \
+  EXPORT(set_data_dir) \
+  EXPORT(domain_get) \
+  EXPORT(thread_attach) \
+  EXPORT(domain_get_assemblies) \
+  EXPORT(assembly_get_image) \
+  EXPORT(image_get_name) \
+  EXPORT(class_from_name) \
+  EXPORT(class_get_methods) \
+  EXPORT(method_get_name) \
+  EXPORT(method_get_param_count) \
+  EXPORT(method_get_param) \
+  EXPORT(method_get_return_type) \
+  EXPORT(type_get_type) \
+  EXPORT(runtime_invoke) \
+  EXPORT(object_unbox) \
+  EXPORT(string_new) \
+  EXPORT(string_chars) \
+  EXPORT(string_length)
+
+static int runtime_gate(int exports_only) {
+  note("phase=exports");
+  int missing = 0;
+#define EXPORT(name) do { \
+    void *entry = sym("il2cpp_" #name); \
+    Dl_info owner; \
+    if (!entry || !dladdr(entry, &owner) || strcmp(owner.dli_fname, cfg.dylib) != 0) { \
+      note("missing_export=il2cpp_" #name); \
+      missing++; \
+    } else { \
+      note("export=il2cpp_" #name " offset=0x%llx", \
+           (unsigned long long)((uintptr_t)entry - (uintptr_t)owner.dli_fbase)); \
+    } \
+  } while (0);
+  RUNTIME_EXPORTS(EXPORT)
+#undef EXPORT
+  if (missing || exports_only) {
+    emit(!missing, missing ? "required exports missing" : NULL);
+    return missing != 0;
+  }
+  scan_loaded_images();
+  note("phase=il2cpp_set_data_dir");
+  api.set_data_dir(cfg.data_dir);
+  note("phase=il2cpp_init");
+  int initialized = ((int (*)(const char *))sym("il2cpp_init"))("Megabonk");
+  if (!initialized) {
+    emit(0, "il2cpp_init returned false");
+    return 1;
+  }
+  note("phase=il2cpp_domain_get");
+  api.domain = api.domain_get();
+  ev_ptr("domain", api.domain);
+  if (!api.domain) {
+    emit(0, "il2cpp_domain_get returned NULL");
+    return 1;
+  }
+  note("phase=il2cpp_thread_attach");
+  void *thread = api.thread_attach(api.domain);
+  ev_ptr("thread", thread);
+  const char *reason = thread ? NULL : "il2cpp_thread_attach returned NULL";
+  if (thread) {
+    note("phase=assembly inventory");
+    size_t count = 0;
+    void **assemblies = api.domain_get_assemblies(api.domain, &count);
+    ev_num("assembly_count", (long long)count);
+    if (!assemblies || !count) reason = "assembly inventory is empty";
+    for (size_t i = 0; assemblies && i < count; i++) {
+      void *image = api.assembly_get_image(assemblies[i]);
+      const char *name = image ? api.image_get_name(image) : NULL;
+      if (name) note("assembly=%s", name);
+    }
+    if (!reason) {
+      note("phase=managed invocation");
+      char got[256];
+      invoke_candidate(NULL, got, sizeof(got), &reason);
+    }
+  }
+  note("phase=il2cpp_shutdown");
+  ((void (*)(void))sym("il2cpp_shutdown"))();
+  ev_num("shutdown", 1);
+  emit(!reason, reason);
+  return reason != NULL;
 }
 
 /* -------------------------------------------------------------- detouring */
@@ -1319,7 +1413,7 @@ static int need_value(int argc, char **argv, int i, const char **slot) {
 
 static void usage(void) {
   fprintf(stderr,
-          "usage: host --dylib PATH [--data-dir DIR] --leg leg1|leg2|leg3\n"
+          "usage: host --dylib PATH [--data-dir DIR] --leg leg1|leg2|leg3|exports|runtime\n"
           "            [--invoke-image I --invoke-class Ns.Cls --invoke-method M]\n"
           "            [--invoke-ret int|float|bool|string --invoke-expected V]\n"
           "            [--invoke-arg k:v ...] [--invoke-arg-type T ...] [--hook SYMBOL]\n"
@@ -1441,7 +1535,15 @@ int main(int argc, char **argv) {
   ev_str("platform", "linux");
 #endif
 
-  install_fault_guard();
+  int gate = strcmp(cfg.leg, "runtime") == 0 || strcmp(cfg.leg, "exports") == 0;
+  if (gate) {
+    const struct rlimit limit = {0, 0};
+    setrlimit(RLIMIT_CORE, &limit);
+    emit(0, "host started");
+    note("phase=dlopen");
+  } else {
+    install_fault_guard();
+  }
   g_phase = "preload";
   for (size_t i = 0; i < cfg.preload_count; i++) {
     void *lib = dlopen(cfg.preloads[i], RTLD_LAZY | RTLD_GLOBAL);
@@ -1468,8 +1570,12 @@ int main(int argc, char **argv) {
   else if (strcmp(cfg.dlopen_mode, "now") == 0) requested = 0;
   int attempts = 0;
   for (size_t i = 0; i < sizeof(modes) / sizeof(modes[0]) && !api.handle; i++) {
-    if (requested >= 0 && (int)i != requested) continue;
-    api.handle = dlopen(cfg.dylib, modes[i].flags);
+    if (gate ? i != 0 : requested >= 0 && (int)i != requested) continue;
+    int flags = modes[i].flags;
+#if defined(__APPLE__)
+    if (gate) flags |= RTLD_FIRST;
+#endif
+    api.handle = dlopen(cfg.dylib, flags);
     attempts++;
     if (api.handle) {
       ev_str("dlopen_mode", modes[i].name);
@@ -1491,6 +1597,16 @@ int main(int argc, char **argv) {
   }
   note("dlopen %s -> %p mode=%s", cfg.dylib, api.handle, cfg.dlopen_mode);
   resolve_api();
+  if (gate) {
+    int rc = runtime_gate(strcmp(cfg.leg, "exports") == 0);
+    if (!rc) note("phase=dlclose");
+    if (dlclose(api.handle) != 0) {
+      note("dlclose failed: %s", dlerror());
+      return 1;
+    }
+    if (!rc) note("phase=complete");
+    return rc;
+  }
   size_t resolved = 0;
   void *slots[] = {(void *)api.init,        (void *)api.set_data_dir,
                    (void *)api.domain_get,  (void *)api.thread_attach,
