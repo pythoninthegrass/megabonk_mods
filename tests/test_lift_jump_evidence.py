@@ -607,3 +607,80 @@ def test_raw_table_reads_the_whole_body_only_when_the_window_names_no_base():
     ev._read = lambda addr, n: bytes(n)
     ev.raw_table([0x20, 0x40], 0x2126CFF)
     assert len(asked) == 1
+
+
+DUPLICATED_GUARD_TEXT = """
+ 3d2bf5d:   \taddl\t$-0x2, %ebx
+ 3d2bf60:   \tcmpl\t$0x27, %ebx
+ 3d2bf63:   \tja\t0x3d2bfee <__start_il2cpp+0x1bc965e>
+ 3d2bf69:   \tleaq\t-0x313d028(%rip), %rax  # 0xbeef48
+ 3d2bf70:   \tmovslq\t(%rax,%rbx,4), %rcx
+ 3d2bf74:   \taddq\t%rax, %rcx
+ 3d2bf77:   \tjmpq\t*%rcx
+ 3d2bfe2:   \taddl\t$-0x2, %ebx
+ 3d2bfe5:   \tcmpl\t$0x27, %ebx
+ 3d2bfe8:   \tjbe\t0x3d2bf69 <__start_il2cpp+0x1bc95d9>
+ 3d2bfee:   \tmovq\t0x18(%rsp), %rdi
+"""
+
+
+def test_the_guard_proof_names_the_load_its_registers_and_every_bounding_edge():
+    proof = tables.parse_guard_proof(DUPLICATED_GUARD_TEXT, 0x3D2BF77)
+    assert proof["load"] == 0x3D2BF70
+    assert (proof["base"], proof["index"]) == ("rax", "rbx")
+    assert proof["guards"] == [
+        {"at": 0x3D2BF63, "edge": 0x3D2BF69, "register": "rbx", "width": 4, "bound": 0x27},
+        {"at": 0x3D2BFE8, "edge": 0x3D2BF69, "register": "rbx", "width": 4, "bound": 0x27},
+    ]
+
+
+def test_a_guard_edge_is_the_one_the_condition_bounds():
+    # ja and jae bound the register on the fall-through, jbe and jb on the taken edge; jae and jb compare one past the bound.
+    text = """
+ 1000:   \tcmpl\t$0x8, %esi
+ 1003:   \tjae\t0x1100 <x>
+ 1005:   \tcmpl\t$0x8, %edi
+ 1008:   \tjb\t0x1200 <x>
+ 100a:   \tmovslq\t(%rax,%rsi,4), %rcx
+ 100e:   \taddq\t%rax, %rcx
+ 1011:   \tjmpq\t*%rcx
+"""
+    guards = tables.parse_guard_proof(text, 0x1011)["guards"]
+    assert guards == [
+        {"at": 0x1003, "edge": 0x1005, "register": "rsi", "width": 4, "bound": 7},
+        {"at": 0x1008, "edge": 0x1200, "register": "rdi", "width": 4, "bound": 7},
+    ]
+
+
+def test_only_a_register_compare_that_a_jump_consumes_next_is_a_guard():
+    text = DUPLICATED_GUARD_TEXT.replace(
+        " 3d2bf63:   \tja\t0x3d2bfee <__start_il2cpp+0x1bc965e>",
+        " 3d2bf62:   \tnop\n 3d2bf63:   \tja\t0x3d2bfee <__start_il2cpp+0x1bc965e>",
+    )
+    assert [g["at"] for g in tables.parse_guard_proof(text, 0x3D2BF77)["guards"]] == [0x3D2BFE8]
+    memory = DUPLICATED_GUARD_TEXT.replace("cmpl\t$0x27, %ebx\n 3d2bf63", "cmpl\t$0x27, 0x8(%rsp)\n 3d2bf63")
+    assert [g["at"] for g in tables.parse_guard_proof(memory, 0x3D2BF77)["guards"]] == [0x3D2BFE8]
+
+
+def test_a_signed_condition_or_an_oversized_immediate_is_not_a_guard():
+    signed = DUPLICATED_GUARD_TEXT.replace("\tja\t0x3d2bfee", "\tjg\t0x3d2bfee")
+    assert [g["at"] for g in tables.parse_guard_proof(signed, 0x3D2BF77)["guards"]] == [0x3D2BFE8]
+    huge = DUPLICATED_GUARD_TEXT.replace("cmpl\t$0x27, %ebx\n 3d2bf63", "cmpl\t$0xffffffff, %ebx\n 3d2bf63")
+    assert [g["at"] for g in tables.parse_guard_proof(huge, 0x3D2BF77)["guards"]] == [0x3D2BFE8]
+
+
+def test_the_guard_proof_needs_a_jump_through_an_indexed_load():
+    assert tables.parse_guard_proof(DUPLICATED_GUARD_TEXT, 0x3D2BF74) is None
+    no_load = DUPLICATED_GUARD_TEXT.replace("movslq\t(%rax,%rbx,4), %rcx", "movq\t%rax, %rcx")
+    assert tables.parse_guard_proof(no_load, 0x3D2BF77) is None
+
+
+def test_the_evidence_returns_the_guard_proof_from_the_whole_body():
+    ev = tables.TableEvidence(Path("GameAssembly.so"), "llvm-objdump")
+    asked = []
+    ev._disassemble = lambda window: (asked.append(window), DUPLICATED_GUARD_TEXT)[1]
+    boundaries = [0x3D2BF5D, 0x3D2BF60, 0x3D2BF77]
+    proof = ev.guard_proof(boundaries, 0x3D2BF77)
+    assert proof["load"] == 0x3D2BF70 and len(proof["guards"]) == 2
+    assert asked == [(0x3D2BF5D, 0x3D2BF77 + 15)]
+    assert ev.guard_proof([], 0x3D2BF77) is None

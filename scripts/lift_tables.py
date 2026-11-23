@@ -172,6 +172,88 @@ def _base_untouched(lines, lea, load, base_reg, alias):
     return not any(lines[m][1].startswith("call") or _mentions(lines[m][1], alias_reg) for m in range(copied + 1, load + 1))
 
 
+def _parse_lines(text):
+    """Splits an objdump listing into (address, normalized instruction) pairs; a line with no address keeps None."""
+    lines = []
+    for line in text.splitlines():
+        match = re.match(r"^\s*([0-9a-f]+):\s*(.*)$", line)
+        if match and match.group(2).strip():
+            lines.append((int(match.group(1), 16), re.sub(r"\s+", " ", match.group(2).strip())))
+        elif line.strip():
+            lines.append((None, re.sub(r"\s+", " ", line.strip())))
+    return lines
+
+
+def _register_width(name):
+    """The byte width of a general-purpose register name, or None when it is not one."""
+    for reg in _GPR64:
+        for width, names in ((8, _GPR64), (4, _LOW32), (2, _LOW16), (1, _LOW8)):
+            if name == (reg if width == 8 else names[reg]):
+                return width
+    return None
+
+
+# Which edge of a conditional jump bounds the compared register, and how far the immediate overshoots.
+GUARD_JUMPS = {"ja": ("fall", 0), "jbe": ("taken", 0), "jae": ("fall", -1), "jb": ("taken", -1)}
+
+
+def _guards(lines):
+    """Every edge of a `cmp $imm,%reg` plus unsigned conditional jump that bounds the register, in address order.
+
+    The register is bounded as an unsigned value on the edge the condition selects. A compare of memory, a
+    signed condition, a negative or oversized immediate, or a jump whose two edges meet gives no guard.
+    """
+    guards = []
+    for k in range(len(lines) - 1):
+        compare = re.fullmatch(r"cmp[bwlq]?\s+\$(0x[0-9a-f]+),\s*%(\w+)", lines[k][1])
+        jump = re.fullmatch(r"(ja|jbe|jae|jb)\s+(0x[0-9a-f]+)\b.*", lines[k + 1][1]) if compare else None
+        if not (compare and jump and lines[k + 1][0] is not None):
+            continue
+        register, width = _register(f"%{compare.group(2)}"), _register_width(compare.group(2))
+        edge, overshoot = GUARD_JUMPS[jump.group(1)]
+        bound = int(compare.group(1), 16) + overshoot
+        fall = lines[k + 2][0] if k + 2 < len(lines) else None
+        taken = int(jump.group(2), 16)
+        if register is None or width is None or not 0 <= bound <= MAX_CASES or fall is None or fall == taken:
+            continue
+        guards.append(
+            {
+                "at": lines[k + 1][0],
+                "edge": fall if edge == "fall" else taken,
+                "register": register,
+                "width": width,
+                "bound": bound,
+            }
+        )
+    return guards
+
+
+def parse_guard_proof(text, site):
+    """What a dominance proof needs about the switch at `site`: its indexed load, registers and bounding edges.
+
+    `text` is the whole body's disassembly. The load is the base-relative `movslq (%base,%index,4)` whose
+    result the jump goes through; the guards are every bound check on a register in the body, since which of
+    them reach the load is for the control-flow graph to say, not the listing.
+    """
+    lines = _parse_lines(text)
+    for i in range(len(lines) - 1, -1, -1):
+        if lines[i][0] != site:
+            continue
+        jump = re.fullmatch(r"jmpq?\s+\*\s*%(\w+)", lines[i][1])
+        if not jump:
+            return None
+        for j in range(i - 1, max(i - 10, -1), -1):
+            entry = re.fullmatch(r"movslq\s+\(%(\w+),%(\w+),4\),\s*%(\w+)", lines[j][1])
+            if not entry or entry.group(3) != jump.group(1):
+                continue
+            base, index = _register(f"%{entry.group(1)}"), _register(f"%{entry.group(2)}")
+            if base is None or index is None:
+                return None
+            return {"load": lines[j][0], "base": base, "index": index, "guards": _guards(lines)}
+        return None
+    return None
+
+
 def parse_table_pattern(text, site, body=None):
     """Reads the jump-table base, entry size and case count off the lea/movslq/add/jmp sequence at one site."""
     pattern = match_table_pattern(text, site, body)
@@ -186,13 +268,7 @@ def match_table_pattern(text, site, body=None):
     callee-saved register that the window never sets is read from the body's one write to it, and the
     window then starts at the bound compare.
     """
-    lines = []
-    for line in text.splitlines():
-        match = re.match(r"^\s*([0-9a-f]+):\s*(.*)$", line)
-        if match and match.group(2).strip():
-            lines.append((int(match.group(1), 16), re.sub(r"\s+", " ", match.group(2).strip())))
-        elif line.strip():
-            lines.append((None, re.sub(r"\s+", " ", line.strip())))
+    lines = _parse_lines(text)
     for i in range(len(lines) - 1, -1, -1):
         addr, body_line = lines[i]
         if addr != site:
@@ -356,6 +432,14 @@ class TableEvidence:
             return {**pattern, "cases": decode_table(pattern, pattern["count"], self._read)}
         except ValueError:
             return None
+
+    def guard_proof(self, boundaries, site):
+        """The load, registers and bound checks around the switch at `site`, read from the whole body, or None."""
+        if not boundaries:
+            return None
+        if self._disassemble is None:
+            self._disassemble = objdump_disassembler(self.so, self.objdump)
+        return parse_guard_proof(self._disassemble((boundaries[0], boundaries[-1] + 15)), site)
 
     def raw_cases(self, boundaries, site):
         """Case addresses the table at `site` holds, or None unless the pattern and its case bound are both present."""
