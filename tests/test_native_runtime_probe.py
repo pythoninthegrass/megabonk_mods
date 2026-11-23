@@ -128,7 +128,7 @@ int il2cpp_init(const char *name) {
 }
 """,
     )
-    result = run(tmp_path, inputs, image, timeout=1)
+    result = run(tmp_path, inputs, image, timeout=5)
     assert result["status"] == "host_timeout"
     assert result["phase"] == "il2cpp_init"
     child = result["stderr"].split("helper=")[1].splitlines()[0]
