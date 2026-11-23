@@ -141,6 +141,14 @@ def test_a_weak_import_nothing_defines_resolves_to_null():
     assert plan.patches == [rl.Patch("data", 0, None, None, literal=0)] and result.rows[0]["binding"] == "weak null"
 
 
+@pytest.mark.parametrize("kind", [rl.R_X86_64_GLOB_DAT, rl.R_X86_64_JUMP_SLOT])
+def test_unprovided_weak_profiling_hook_is_null_even_with_a_plt_stub(kind):
+    image, plan = plan_for({0x4800: (kind, 0, 0)}, [sym("__gmon_start__", weak=True)])
+    result = bind.bind_words(plan, image, {0x1100: "__gmon_start__"})
+    assert plan.patches == [rl.Patch("data", 0, None, None, literal=0)]
+    assert result.rows[0]["binding"] == "weak null"
+
+
 def test_a_weak_import_with_a_stub_binds_to_the_stub_not_to_null():
     image, plan = plan_for({0x4800: (rl.R_X86_64_GLOB_DAT, 0, 0)}, [sym("malloc", weak=True)])
     bind.bind_words(plan, image, STUBS)

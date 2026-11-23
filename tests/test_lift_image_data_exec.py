@@ -23,21 +23,25 @@ SECTIONS = [
     {"name": "text", "va": 0x1000, "size": 0x2000, "exec": True},
     {"name": "plt", "va": 0x3000, "size": 0x40, "exec": True},
     {"name": "rodata", "va": 0x4000, "size": 0x20, "exec": False},
+    {"name": "relro", "va": 0x4100, "size": 0x20, "exec": False},
     {"name": "data", "va": 0x5000, "size": 0x40, "exec": False},
     {"name": "bss", "va": 0x6000, "size": 0x10, "exec": False},
 ]
 SEGMENTS = [
     elf.Segment(rl.PT_LOAD, 5, 0, 0x1000, 0x2040, 0x2040, 0x1000),
-    elf.Segment(rl.PT_LOAD, 4, 0, 0x4000, 0x20, 0x20, 0x1000),
-    elf.Segment(rl.PT_LOAD, 6, 0, 0x5000, 0x40, 0x1010, 0x1000),
+    elf.Segment(rl.PT_LOAD, 4, 0, 0x4000, 0x120, 0x120, 0x1000),
+    elf.Segment(rl.PT_GNU_RELRO, 4, 0, 0x4100, 0x20, 0x20, 0x1000),
+    elf.Segment(rl.PT_LOAD, 6, 0, 0x5000, 0x40, 0x40, 0x1000),
+    elf.Segment(rl.PT_LOAD, 6, 0, 0x6000, 0x0, 0x10, 0x1000),
 ]
 SEVEN, NINE, SLOT_NINE, SLOT_SEVEN, STORE = 0x1000, 0x1100, 0x2000, 0x2100, 0x2200
-VTABLE, DATA, BSS = 0x4000, 0x5000, 0x6000
+VTABLE, DATA, BSS, RELRO = 0x4000, 0x5000, 0x6000, 0x4100
 STUB, PLT0 = 0x3010, 0x3000
 RELOCS = {
     VTABLE: rl.Reloc(rl.R_X86_64_RELATIVE, 0, SEVEN),
     VTABLE + 8: rl.Reloc(rl.R_X86_64_RELATIVE, 0, NINE),
     VTABLE + 0x10: rl.Reloc(rl.R_X86_64_RELATIVE, 0, DATA + 8),
+    RELRO: rl.Reloc(rl.R_X86_64_RELATIVE, 0, SEVEN),
     DATA: rl.Reloc(rl.R_X86_64_RELATIVE, 0, SEVEN),
     DATA + 0x10: rl.Reloc(rl.R_X86_64_JUMP_SLOT, 0, 0),
     DATA + 0x18: rl.Reloc(rl.R_X86_64_GLOB_DAT, 1, 0),
@@ -187,3 +191,9 @@ def test_a_write_into_the_read_only_section_faults_while_a_writable_section_take
     _, dylib = image
     assert write_to(dylib, "data") == 0
     assert write_to(dylib, "rodata") < 0
+
+
+def test_a_relro_word_is_relocated_then_enforced_read_only_in_the_loaded_image(image):
+    lib, dylib = image
+    assert word(lib, "relro", 0x20, 0).value == pointer(lib, "sub_1000")
+    assert write_to(dylib, "relro") < 0

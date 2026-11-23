@@ -122,9 +122,7 @@ class Binding:
             or self.name.startswith(("sub_", "lift_"))
         ):
             raise AbiError(f"invalid or reserved C identifier: {self.name!r}")
-        if self.declared_name is not None and (
-            not IDENTIFIER.fullmatch(self.declared_name) or self.declared_name in C_KEYWORDS
-        ):
+        if self.declared_name is not None and (not IDENTIFIER.fullmatch(self.declared_name) or self.declared_name in C_KEYWORDS):
             raise AbiError(f"invalid host symbol name: {self.declared_name!r}")
 
 
@@ -145,6 +143,7 @@ class Tls:
 
     get_addr: int
     image: bytes
+    per_thread: bool = False
 
     def __post_init__(self):
         if not self.image:
@@ -269,7 +268,10 @@ def generate(
         lines.append(f"extern void sub_{address:x}(unsigned char *reg);")
     if tls:
         image = ", ".join(str(b) for b in tls.image)
-        lines.append(f"static const unsigned char lift_tls_image[{len(tls.image)}] = {{{image}}};")
+        if tls.per_thread:
+            lines.append(f"_Alignas(16) static _Thread_local unsigned char lift_tls[{len(tls.image)}] = {{{image}}};")
+        else:
+            lines.append(f"static const unsigned char lift_tls_image[{len(tls.image)}] = {{{image}}};")
     for binding in typed:
         sig = binding.signature
         params = ", ".join(f"{TYPES[k][0]} a{i}" for i, k in enumerate(sig.args)) or "void"
@@ -291,7 +293,7 @@ def generate(
             "  uintptr_t rsp = (uintptr_t)sp;",
             "  memcpy(reg + 32, &rsp, 8);",
         ]
-        if tls:
+        if tls and not tls.per_thread:
             lines += [
                 f"  _Alignas(16) unsigned char tls[{len(tls.image)}];",
                 "  memcpy(tls, lift_tls_image, sizeof tls);",
@@ -348,9 +350,25 @@ def generate(
             f"void sub_{tls.get_addr:x}(unsigned char *reg) {{",
             "  uint64_t index, base, offset, rsp;",
             "  memcpy(&index, reg + 0x38, 8);",
-            f"  memcpy(&base, reg + {EH_TLS_BASE}, 8);",
-            "  memcpy(&offset, (const unsigned char *)(uintptr_t)index + 8, 8);",
-            f"  if (!base || offset >= {len(tls.image)}) abort();",
+        ]
+        if tls.per_thread:
+            lines += [
+                "  uint64_t module;",
+                '  if (!index) { fputs("lift_tls: missing TLS index\\n", stderr); abort(); }',
+                "  memcpy(&module, (const unsigned char *)(uintptr_t)index, 8);",
+                '  if (module != 1) { fputs("lift_tls: unsupported TLS module\\n", stderr); abort(); }',
+                "  base = (uintptr_t)lift_tls;",
+            ]
+        else:
+            lines.append(f"  memcpy(&base, reg + {EH_TLS_BASE}, 8);")
+        lines.append("  memcpy(&offset, (const unsigned char *)(uintptr_t)index + 8, 8);")
+        if tls.per_thread:
+            lines.append(
+                f'  if (offset >= {len(tls.image)}) {{ fputs("lift_tls: TLS offset out of bounds\\n", stderr); abort(); }}'
+            )
+        else:
+            lines.append(f"  if (!base || offset >= {len(tls.image)}) abort();")
+        lines += [
             "  base += offset;",
             "  memcpy(reg, &base, 8);",
             "  memcpy(&rsp, reg + 32, 8);",

@@ -312,3 +312,79 @@ def test_only_an_import_can_name_a_host_symbol():
 def test_a_binding_name_cannot_take_the_shape_of_a_generated_symbol(name):
     with pytest.raises(abi.AbiError):
         abi.Binding(0x2000, name, abi.Signature((), "void"))
+
+
+@pytest.mark.skipif(sys.platform != "darwin" or os.uname().machine != "arm64", reason="needs native macOS arm64")
+def test_thread_tls_survives_reentry_and_is_independent_across_threads(tmp_path):
+    exports = [
+        abi.Binding(0x1000, "outer", abi.Signature((), "u64")),
+        abi.Binding(0x2000, "inner", abi.Signature((), "u64")),
+    ]
+    source = tmp_path / "tls.c"
+    source.write_text(
+        abi.generate(exports, [], tls=abi.Tls(0x3000, b"\x09" + bytes(15), per_thread=True))
+        + """
+        #include <pthread.h>
+        #include <stdatomic.h>
+
+        static atomic_int arrived;
+        static uint64_t module = 1, offset;
+        static uint64_t word(unsigned char *reg, size_t offset) {
+            uint64_t value;
+            memcpy(&value, reg + offset, 8);
+            return value;
+        }
+        static void put(unsigned char *reg, size_t offset, uint64_t value) {
+            memcpy(reg + offset, &value, 8);
+        }
+        static unsigned char *tls_byte(unsigned char *reg) {
+            uint64_t index[2] = {module, offset};
+            uint64_t sp = word(reg, 32);
+            put(reg, 32, sp - 8);
+            put(reg, 0x38, (uintptr_t)index);
+            sub_3000(reg);
+            if (word(reg, 32) != sp) abort();
+            return (unsigned char *)(uintptr_t)word(reg, 0);
+        }
+        void sub_2000(unsigned char *reg) {
+            unsigned char *tls = tls_byte(reg);
+            put(reg, 0, (*tls)++);
+            put(reg, 32, word(reg, 32) + 8);
+        }
+        void sub_1000(unsigned char *reg) {
+            unsigned char *tls = tls_byte(reg);
+            if (*tls != 9 || tls[15] != 0) abort();
+            atomic_fetch_add(&arrived, 1);
+            while (atomic_load(&arrived) < 2) {}
+            if (inner() != 9 || *tls != 10) abort();
+            put(reg, 0, (uintptr_t)tls);
+            put(reg, 32, word(reg, 32) + 8);
+        }
+        static void *worker(void *arg) {
+            *(uint64_t *)arg = outer();
+            if (inner() != 10) abort();
+            return NULL;
+        }
+        int main(int argc, char **argv) {
+            if (argc > 1) {
+                if (!strcmp(argv[1], "module")) module = 2;
+                else offset = 16;
+                inner();
+                return 1;
+            }
+            uint64_t a = 0, b = 0;
+            pthread_t first, second;
+            if (pthread_create(&first, NULL, worker, &a) || pthread_create(&second, NULL, worker, &b)) abort();
+            if (pthread_join(first, NULL) || pthread_join(second, NULL)) abort();
+            if (!a || !b || a == b || inner() != 9) abort();
+            return 0;
+        }
+        """
+    )
+    exe = tmp_path / "tls"
+    subprocess.run(["cc", "-arch", "arm64", "-o", exe, source], check=True, timeout=30)
+    run = subprocess.run([exe], capture_output=True, timeout=10)
+    assert run.returncode == 0, run.stderr
+    for argument, reason in [("module", b"unsupported TLS module"), ("offset", b"TLS offset out of bounds")]:
+        run = subprocess.run([exe, argument], capture_output=True, timeout=10)
+        assert run.returncode < 0 and reason in run.stderr

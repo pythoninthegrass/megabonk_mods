@@ -249,6 +249,74 @@ def test_a_changed_host_source_relinks_the_dylib(tmp_path):
     assert first["reused"] is False and second["reused"] is False
 
 
+def test_full_link_defines_the_atexit_compat_stubs_once(monkeypatch):
+    monkeypatch.setattr(ll.lift_sdk, "load", lambda: sdk.Sdk([]))
+    image = rl.Image(SECTIONS, {}, [])
+    names = {0x5000: "__cxa_atexit", 0x5010: "__cxa_atexit", 0x5020: "__cxa_finalize"}
+    result = ll.import_stubs(names, image, set())
+    assert result["counts"]["compat"] == 3 and result["counts"]["abort"] == 0
+    assert (
+        "int32_t import___cxa_atexit(void *a0, void *a1, void *a2) { return lift_atexit_register(a0, a1, a2); }"
+        in result["source"]
+    )
+    assert "void import___cxa_finalize(void *a0) { lift_atexit_drain(a0); }" in result["source"]
+    assert "void sub_5000(unsigned char *reg) {" in result["source"]
+    assert "lift_abort___cxa_atexit" not in result["source"]
+
+
+def test_full_link_defines_the_guest_mutex_family_without_aborts(monkeypatch):
+    monkeypatch.setattr(ll.lift_sdk, "load", lambda: sdk.Sdk([]))
+    image = rl.Image(SECTIONS, {}, [])
+    names = {
+        0x5000: "pthread_mutex_init",
+        0x5010: "pthread_mutex_lock",
+        0x5020: "pthread_mutex_unlock",
+        0x5030: "pthread_mutex_destroy",
+        0x5040: "pthread_mutexattr_init",
+        0x5050: "pthread_mutexattr_settype",
+        0x5060: "pthread_mutexattr_destroy",
+    }
+    result = ll.import_stubs(names, image, set())
+    assert result["counts"]["compat"] == 7 and result["counts"]["abort"] == 0
+    assert "int32_t import_pthread_mutex_init(void *a0, void *a1) { return lift_mutex_init(a0, a1); }" in result["source"]
+    assert "lift_abort_pthread_mutex_lock" not in result["source"]
+
+
+def test_full_link_defines_the_guest_clock_service_without_aborts(monkeypatch):
+    monkeypatch.setattr(ll.lift_sdk, "load", lambda: sdk.Sdk([]))
+    image = rl.Image(SECTIONS, {}, [])
+    result = ll.import_stubs({0x5000: "clock_gettime", 0x5010: "clock_gettime"}, image, set())
+    assert result["counts"]["compat"] == 2 and result["counts"]["abort"] == 0
+    assert "int32_t import_clock_gettime(int32_t a0, void *a1) { return lift_clock_gettime(a0, a1); }" in result["source"]
+    assert "lift_abort_clock_gettime" not in result["source"]
+
+
+def test_full_link_defines_the_guest_thread_key_family_without_aborts(monkeypatch):
+    monkeypatch.setattr(ll.lift_sdk, "load", lambda: sdk.Sdk([]))
+    image = rl.Image(SECTIONS, {}, [])
+    names = {
+        0x5000: "pthread_key_create",
+        0x5010: "pthread_key_delete",
+        0x5020: "pthread_getspecific",
+        0x5030: "pthread_setspecific",
+    }
+    result = ll.import_stubs(names, image, set())
+    assert result["counts"]["compat"] == 4 and result["counts"]["abort"] == 0
+    assert "int32_t import_pthread_setspecific(int32_t a0, void *a1) { return lift_key_set(a0, a1); }" in result["source"]
+    assert "lift_abort_pthread_getspecific" not in result["source"]
+
+
+def test_full_link_uses_the_guest_tls_accessor_for_every_tls_stub(monkeypatch):
+    monkeypatch.setattr(ll.lift_sdk, "load", lambda: sdk.Sdk([]))
+    image = rl.Image(SECTIONS, {}, [])
+    names = {0x5000: "__tls_get_addr", 0x5010: "__tls_get_addr", 0x5020: "unsupported"}
+    result = ll.import_stubs(names, image, set(), tls_image=bytes(16))
+    assert result["counts"]["compat"] == 2 and result["counts"]["abort"] == 1
+    assert "static _Thread_local unsigned char lift_tls[16]" in result["source"]
+    assert "void sub_5010(unsigned char *reg) {\n  sub_5000(reg);\n}" in result["source"]
+    assert "lift_abort___tls_get_addr" not in result["source"]
+
+
 @pytest.mark.parametrize("field", ["rejected", "unbound", "plt"])
 def test_a_plan_with_an_unaccounted_word_is_refused_before_anything_is_compiled(tmp_path, field):
     parts = write_baseline(tmp_path, [[returns_seven()]])

@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 
 NO_HOST_IMPLEMENTATION = "function import with no host implementation"
 PLT_RESOLVER = "PLT0 lazy-binding resolver; reaching it means a stub ran unbound"
+ABSENT_WEAK_IMPORTS = frozenset({"__gmon_start__"})
 # Data imports the host defines, by symbol name: C type, initializer run at load, and the header the initializer needs.
 HOST_DATA = {
     "stderr": ("FILE *", "stderr", "stdio.h"),
@@ -78,7 +79,9 @@ def bind_words(plan: rl.ImagePlan, image: rl.Image, stubs: dict[int, str]) -> Bo
         result.rows.append({"site": address, "name": name, "binding": binding})
 
     for address, name in sorted(plan.unbound.items()):
-        if name in first:
+        if symbols[name].weak and name in ABSENT_WEAK_IMPORTS:
+            patch(address, "weak null", name, literal=0)
+        elif name in first:
             patch(address, "stub", name, function=first[name])
         elif name in HOST_DATA:
             used.add(name)

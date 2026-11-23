@@ -88,6 +88,7 @@ def test_the_stub_report_counts_every_disposition_and_reason(tmp_path):
         "stubs": 4,
         "alias": 1,
         "bind": 1,
+        "compat": 0,
         "abort": 2,
         "reasons": {"variadic": 1, sdk.ABSENT: 1},
     }
@@ -101,10 +102,112 @@ def test_the_import_report_lists_one_row_per_distinct_name_with_its_stub_count(t
     assert report[0]["sdk_prototype"] == "long (long)"
 
 
+def test_guest_atexit_and_finalize_plan_as_one_compat_definition_each(tmp_path):
+    plan = li.plan_stubs(view(tmp_path), {0x4000: "__cxa_atexit", 0x4010: "__cxa_atexit", 0x4020: "__cxa_finalize"})
+    assert [row["disposition"] for row in plan.rows] == ["compat", "compat", "compat"]
+    assert plan.compat == {"__cxa_atexit": 0x4000, "__cxa_finalize": 0x4020}
+    assert plan.aliases == {0x4010: 0x4000}
+    assert plan.imports == [
+        abi.Binding(0x4000, "import___cxa_atexit", abi.Signature(("ptr", "ptr", "ptr"), "i32")),
+        abi.Binding(0x4020, "import___cxa_finalize", abi.Signature(("ptr",), "void")),
+    ]
+    assert li.counts(plan.rows)["compat"] == 3
+
+
+def test_the_guest_mutex_family_plans_as_compat_with_glibc_prototypes(tmp_path):
+    names = {
+        0x4000: "pthread_mutex_init",
+        0x4010: "pthread_mutex_lock",
+        0x4020: "pthread_mutex_unlock",
+        0x4030: "pthread_mutex_destroy",
+        0x4040: "pthread_mutexattr_init",
+        0x4050: "pthread_mutexattr_settype",
+        0x4060: "pthread_mutexattr_destroy",
+    }
+    plan = li.plan_stubs(view(tmp_path), names)
+    assert [row["disposition"] for row in plan.rows] == ["compat"] * 7
+    assert plan.compat == {names[address]: address for address in names}
+    assert {binding.name: binding.signature for binding in plan.imports} == {
+        "import_pthread_mutex_init": abi.Signature(("ptr", "ptr"), "i32"),
+        "import_pthread_mutex_lock": abi.Signature(("ptr",), "i32"),
+        "import_pthread_mutex_unlock": abi.Signature(("ptr",), "i32"),
+        "import_pthread_mutex_destroy": abi.Signature(("ptr",), "i32"),
+        "import_pthread_mutexattr_init": abi.Signature(("ptr",), "i32"),
+        "import_pthread_mutexattr_settype": abi.Signature(("ptr", "i32"), "i32"),
+        "import_pthread_mutexattr_destroy": abi.Signature(("ptr",), "i32"),
+    }
+
+
+def test_compat_source_defines_the_registry_once_and_one_wrapper_per_name(tmp_path):
+    plan = li.plan_stubs(view(tmp_path), {0x4000: "__cxa_atexit", 0x4010: "__cxa_finalize"})
+    source = li.compat_source(plan.compat)
+    assert source.count("static pthread_mutex_t lift_atexit_lock = PTHREAD_MUTEX_INITIALIZER;") == 1
+    assert "int32_t import___cxa_atexit(void *a0, void *a1, void *a2) { return lift_atexit_register(a0, a1, a2); }" in source
+    assert "void import___cxa_finalize(void *a0) { lift_atexit_drain(a0); }" in source
+    assert 'fputs("lift_compat: __cxa_finalize: guest stack imbalance\\n", stderr);' in source
+    assert "pthread_mutex_lock(&lift_atexit_lock);" in source
+    assert li.compat_source({}) == ""
+
+
+def test_compat_source_defines_the_guest_mutex_family_once(tmp_path):
+    plan = li.plan_stubs(
+        view(tmp_path), {0x4000: "pthread_mutex_init", 0x4010: "pthread_mutex_lock", 0x4020: "pthread_mutexattr_settype"}
+    )
+    source = li.compat_source(plan.compat)
+    assert "int32_t import_pthread_mutex_init(void *a0, void *a1) { return lift_mutex_init(a0, a1); }" in source
+    assert "int32_t import_pthread_mutex_lock(void *a0) { return lift_mutex_lock(a0); }" in source
+    assert "int32_t import_pthread_mutexattr_settype(void *a0, int32_t a1) { return lift_mutexattr_settype(a0, a1); }" in source
+    assert "static pthread_mutex_t *lift_mutex_get(void *mutex, int32_t kind)" in source
+
+
+def test_guest_thread_key_family_plans_as_compat_with_glibc_prototypes(tmp_path):
+    names = {
+        0x4000: "pthread_key_create",
+        0x4010: "pthread_key_delete",
+        0x4020: "pthread_getspecific",
+        0x4030: "pthread_setspecific",
+    }
+    plan = li.plan_stubs(view(tmp_path), names)
+    assert [row["disposition"] for row in plan.rows] == ["compat"] * 4
+    assert {binding.name: binding.signature for binding in plan.imports} == {
+        "import_pthread_key_create": abi.Signature(("ptr", "ptr"), "i32"),
+        "import_pthread_key_delete": abi.Signature(("i32",), "i32"),
+        "import_pthread_getspecific": abi.Signature(("i32",), "ptr"),
+        "import_pthread_setspecific": abi.Signature(("i32", "ptr"), "i32"),
+    }
+
+
+def test_compat_source_defines_the_thread_key_registry_only_for_key_names(tmp_path):
+    keys = li.plan_stubs(view(tmp_path), {0x4000: "pthread_key_create", 0x4010: "pthread_getspecific"})
+    source = li.compat_source(keys.compat)
+    assert "static void *lift_key_destructors[LIFT_KEYS_MAX];" in source
+    assert "int32_t import_pthread_key_create(void *a0, void *a1) { return lift_key_create(a0, a1); }" in source
+    assert "void *import_pthread_getspecific(int32_t a0) { return lift_key_get(a0); }" in source
+    assert "static void lift_key_thread_fini(void *state)" in source
+    atexit_only = li.plan_stubs(view(tmp_path), {0x4000: "__cxa_atexit"})
+    assert "lift_key_create" not in li.compat_source(atexit_only.compat)
+
+
+def test_guest_clock_gettime_plans_as_compat_with_the_guest_prototype(tmp_path):
+    plan = li.plan_stubs(view(tmp_path), {0x4000: "clock_gettime", 0x4010: "clock_gettime"})
+    assert [row["disposition"] for row in plan.rows] == ["compat", "compat"]
+    assert plan.imports == [abi.Binding(0x4000, "import_clock_gettime", abi.Signature(("i32", "ptr"), "i32"))]
+    assert plan.aliases == {0x4010: 0x4000}
+
+
+def test_compat_source_defines_the_clock_service_only_when_clock_gettime_is_planned(tmp_path):
+    plan = li.plan_stubs(view(tmp_path), {0x4000: "clock_gettime"})
+    source = li.compat_source(plan.compat)
+    assert "static int32_t lift_clock_gettime(int32_t clock_id, void *guest_timespec)" in source
+    assert "int32_t import_clock_gettime(int32_t a0, void *a1) { return lift_clock_gettime(a0, a1); }" in source
+    atexit_only = li.plan_stubs(view(tmp_path), {0x4000: "__cxa_atexit"})
+    assert "lift_clock_gettime" not in li.compat_source(atexit_only.compat)
+
+
 def test_the_measured_sdk_binds_a_pure_function_and_refuses_one_with_a_layout_the_host_disagrees_on():
     measured = sdk.load()
-    plan = li.plan_stubs(measured, {0x10: "strlen", 0x20: "pthread_mutex_lock", 0x30: "__ctype_b_loc"}, {})
+    plan = li.plan_stubs(measured, {0x10: "strlen", 0x20: "pthread_cond_wait", 0x30: "__ctype_b_loc"}, {})
     by_name = {row["name"]: row for row in plan.rows}
     assert by_name["strlen"]["disposition"] == "bind"
-    assert by_name["pthread_mutex_lock"]["reason"] == sdk.OUTSIDE
+    assert by_name["pthread_cond_wait"]["reason"] == sdk.OUTSIDE
     assert by_name["__ctype_b_loc"]["reason"] == sdk.ABSENT

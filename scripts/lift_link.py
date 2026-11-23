@@ -231,18 +231,21 @@ def link_image(ctx: dict, parts: list[list], plan: rl.ImagePlan, load_images, jo
     }
 
 
-def import_stubs(names: dict[int, str], image: rl.Image, entries, aborts=()) -> dict:
+def import_stubs(names: dict[int, str], image: rl.Image, entries, aborts=(), tls_image: bytes | None = None) -> dict:
     """The host source defining every PLT stub (`names` maps its address to its import), with the report it was built from.
 
     `aborts` are further entries a relocated word names that no stub defines, such as the PLT resolver.
     """
     view = lift_sdk.load()
     defined = {s.name: s.value for s in image.symbols if s.defined and s.name}
-    plan = lift_imports.plan_stubs(view, names, defined, entries)
+    tls_entry = min((a for a, n in names.items() if n == "__tls_get_addr" and n not in defined), default=None)
+    tls = lift_abi.Tls(tls_entry, tls_image, per_thread=True) if tls_entry is not None and tls_image else None
+    plan = lift_imports.plan_stubs(view, names, defined, entries, tls=tls)
     aliased = sorted(set(plan.aliases.values()) & set(entries))
-    source = lift_abi.generate([], plan.imports, callable_bodies=aliased, aliases=plan.aliases)
+    source = lift_abi.generate([], plan.imports, callable_bodies=aliased, aliases=plan.aliases, tls=tls)
     refused = plan.rows + list(aborts)
     source += "\n" + lift_imports.abort_source(refused) + "\n" + lift_imports.abort_stubs(refused) + "\n"
+    source += lift_imports.compat_source(plan.compat)
     return {
         "source": source,
         "counts": lift_imports.counts(plan.rows),
@@ -293,7 +296,7 @@ def main(argv: list[str] | None = None) -> int:
     plan = rl.plan_image(image, entries)
     names = lift_runtime.plt_names(args.so)
     bound = lift_bind.bind_words(plan, image, names)
-    stubs = import_stubs(names, image, entries, bound.aborts)
+    stubs = import_stubs(names, image, entries, bound.aborts, tls_image=lift_abi.tls_image(elf, raw))
     ctx["host_source"] = stubs["source"] + bound.source
     summary = link_image(ctx, parts, plan, lambda wanted: section_images(elf, raw, sections, wanted), args.jobs)
     written = write_relocation_report(
