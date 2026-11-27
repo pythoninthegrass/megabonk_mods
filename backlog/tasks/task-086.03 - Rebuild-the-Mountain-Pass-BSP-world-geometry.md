@@ -1,15 +1,21 @@
 ---
 id: TASK-086.03
 title: Rebuild the Mountain Pass BSP world geometry
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-27 08:20'
-updated_date: '2026-11-27 19:47'
+updated_date: '2026-11-27 21:46'
 labels:
   - level
   - kf1
 dependencies:
   - TASK-086.02
+  - TASK-086.03.03
+  - TASK-086.03.04
+  - TASK-086.03.05
+  - TASK-086.03.06
+  - TASK-086.03.07
+  - TASK-086.03.08
 references:
   - TASK-086.05
 documentation:
@@ -30,6 +36,13 @@ The level's BSP is not in the exported data as a mesh: the T3D holds 462 `Brush`
 - [ ] #1 The additive brush geometry is part of the level mesh and collision, built by the subtasks below
 - [ ] #2 What the BlackTexture brushes are is established and written down in docs/kf1-mountain-pass.md
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. TASK-086.03.01: Test brush parsing, transforms and triangulation first; emit textured additive faces and collision, investigate BlackTexture in context, verify grounded placements and capture a building in game.
+2. TASK-086.03.02: Test ordered brush booleans on a carved box and a doorway, compare the same interior in game, check load time and collision, and retain approximate geometry where booleans fail.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
