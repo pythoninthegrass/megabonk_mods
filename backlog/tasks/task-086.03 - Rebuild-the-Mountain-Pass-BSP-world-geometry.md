@@ -4,12 +4,14 @@ title: Rebuild the Mountain Pass BSP world geometry
 status: To Do
 assignee: []
 created_date: '2026-11-27 08:20'
-updated_date: '2026-11-27 19:42'
+updated_date: '2026-11-27 19:47'
 labels:
   - level
   - kf1
 dependencies:
   - TASK-086.02
+references:
+  - TASK-086.05
 documentation:
   - docs/kf1-mountain-pass.md
 parent_task_id: TASK-086
