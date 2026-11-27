@@ -4,7 +4,7 @@ title: Rebuild the Mountain Pass BSP world geometry
 status: In Progress
 assignee: []
 created_date: '2026-11-27 08:20'
-updated_date: '2026-11-27 21:46'
+updated_date: '2026-11-27 22:00'
 labels:
   - level
   - kf1
@@ -42,6 +42,8 @@ The level's BSP is not in the exported data as a mesh: the T3D holds 462 `Brush`
 <!-- SECTION:PLAN:BEGIN -->
 1. TASK-086.03.01: Test brush parsing, transforms and triangulation first; emit textured additive faces and collision, investigate BlackTexture in context, verify grounded placements and capture a building in game.
 2. TASK-086.03.02: Test ordered brush booleans on a carved box and a doorway, compare the same interior in game, check load time and collision, and retain approximate geometry where booleans fail.
+
+Terrain tasks (agreed with Lance): TASK-086.03.03 owns the terrain layer inventory — parse TerrainInfo1 Layers(0-4,6,7) with their numeric slots (5 is absent and is never synthesized), pair package-qualified Texture and AlphaMap references, resolve each to umodel's export, and record role, dimensions, mask weight channel and UV settings in .tools/kf1/terrain_layers.json plus a docs table; it also recovers the missing source textures (Landscape_T Soil.earth_1051 and Grass.grass_2589, WyreTex Common.MudGround, and the DecoLayers meshes WyreStatics Forest.WyreMiddleFoliage and map-local GUP-GrassLOD), exporting them on the Linux player box where the KF1 packages and umodel live. TASK-086.03.04 starts from that inventory to blend the layers and match the UVs. Order: 03.03 before 03.04; 03.05, 03.06, 03.07 and 03.08 are unaffected.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
