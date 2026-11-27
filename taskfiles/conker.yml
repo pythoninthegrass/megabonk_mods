@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+tasks:
+  default:
+    desc: "Build and install the Conker Colors survival level from a local US ROM"
+    cmds:
+      - task: extract
+      - task: prepare
+      - task: pack
+      - task: install
+
+  verify-rom:
+    desc: "Verify the locally supplied Conker US retail ROM"
+    cmds:
+      - uv run scripts/conker_colors.py verify-rom
+
+  extract:
+    desc: "Extract scene 0x30 from the verified ROM"
+    cmds:
+      - task: verify-rom
+      - task: extract-cached
+
+  extract-cached:
+    internal: true
+    sources:
+      - scripts/conker_colors.py
+    generates:
+      - .tools/conker/export/maps/30/level.gltf
+      - .tools/conker/export/maps/30/level.bin
+      - .tools/conker/export/maps/30/collision.json
+      - .tools/conker/export/maps/30/spawns.json
+      - .tools/conker/export/maps/30/pickups.json
+    cmds:
+      - mise exec rust@1.100.0 -- uv run scripts/conker_colors.py extract
+
+  prepare:
+    desc: "Prepare the Unity import data and local Colors level file"
+    sources:
+      - scripts/conker_colors.py
+      - scripts/warehouse_surface.py
+      - scripts/build_thps_level.py
+      - unity/pack-authoring/packs/conker/manifest.json
+      - .tools/conker/export/maps/30/*.json
+      - .tools/conker/export/maps/30/level.gltf
+      - .tools/conker/export/maps/30/level.bin
+    generates:
+      - .tools/conker/mesh.json
+      - .tools/conker/conker-colors.mblevel.json
+    cmds:
+      - uv run scripts/conker_colors.py prepare
+
+  pack:
+    desc: "Build Colors AssetBundles for Windows and Linux"
+    sources:
+      - unity/pack-authoring/Assets/Editor/ConkerColorsPack.cs
+      - unity/pack-authoring/Assets/Editor/PackBuilder.cs
+      - unity/pack-authoring/Assets/ColorsVertexTint.shader
+      - .tools/conker/mesh.json
+      - .tools/conker/export/maps/30/textures/*.png
+    generates:
+      - .tools/bundles/windows/conker
+      - .tools/bundles/linux/conker
+    cmds:
+      - task: :pack:build
+        vars: {PACK_METHOD: ConkerColorsPack.Build}
+
+  install:
+    desc: "Install the existing Colors pack and level into Megabonk"
+    cmds:
+      - task: :pack:install
+        vars: {PACK: conker}
+      - |
+        dest="$(uv run scripts/game_paths.py | jq -er '.game_dir | select(length > 0)')/UserData/Levels"
+        mkdir -p "$dest"
+        cp .tools/conker/conker-colors.mblevel.json "$dest/"

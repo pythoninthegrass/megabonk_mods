@@ -318,9 +318,11 @@ tools/**
 !tools/**/*.md
 !tools/**/*.blend*
 
-# Generated THPS pack assets in the Unity authoring project
+# Generated game pack assets in the Unity authoring project
 unity/*/Assets/Thps/
 unity/*/Assets/Thps.meta
+unity/*/Assets/ConkerColors/
+unity/*/Assets/ConkerColors.meta
 
 # Audio and video rips outside tools/
 *.flac
