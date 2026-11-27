@@ -3,6 +3,7 @@ import json
 import kf1_mountain_pass as kf1
 import level_geometry as geometry
 import pytest
+import re
 import struct
 from PIL import Image
 
@@ -405,3 +406,211 @@ def test_boss_spawner_is_regular_size_with_only_the_cylinder_hidden():
     assert "scale" not in boss
     assert boss["hiddenChildren"] == geometry.BOSS_PORTAL_HIDDEN_CHILDREN == ["BottomPiece"]
     assert "bossRedirect" not in level
+
+
+TERRAIN_LAYERS = {
+    0: ("Landscape_T.Soil.earth_1051", "KF-MountainPass.Main_Dirt", 2.0, 2.0),
+    1: ("Landscape_T.Grass.grass_2589", "KF-MountainPass.Main_Grass", 2.0, 2.0),
+    2: ("KF-MountainPass.GUP-MountainRock", "KF-MountainPass.Main_Rock", 2.0, 2.0),
+    3: ("KF-MountainPass.GUP-GravelRocks", "KF-MountainPass.Main_Gravel", 1.5, 1.5),
+    4: ("WyreTex.Common.MudGround", "KF-MountainPass.Main_Forest", 2.0, 2.0),
+    6: ("KF-MountainPass.GUP-MountainGrass", "KF-MountainPass.Main_DecoGrass", 1.0, 1.0),
+    7: ("KF-MountainPass.Main_DecoGrass", "KF-MountainPass.Main_DecoFoliage", 1.0, 1.0),
+}
+TERRAIN_DECO = {
+    0: ("WyreStatics.Forest.WyreMiddleFoliage", "KF-MountainPass.Main_DecoFoliage"),
+    1: ("KF-MountainPass.GUP-GrassLOD", "KF-MountainPass.Main_DecoGrass"),
+}
+
+
+def terrain_actor(layers=TERRAIN_LAYERS, deco=TERRAIN_DECO):
+    """A TerrainInfo1 actor as UCC batchexport writes it, with only the given numeric slots."""
+
+    def layer(slot, diffuse, mask, uscale, vscale):
+        return (
+            f"    Layers({slot})=(Texture=Texture'{diffuse}',AlphaMap=Texture'{mask}',"
+            f"UScale={uscale:.6f},VScale={vscale:.6f},TerrainMatrix=("
+            f"XPlane=(X={1 / (64 * uscale):.6f}),YPlane=(Y={1 / (64 * vscale):.6f}),ZPlane=(Z=4.000000),"
+            "WPlane=(W=1.000000,X=0.015625,Y=0.015625,Z=524272.000000)))\n"
+        )
+
+    def deco_layer(slot, mesh, density_map):
+        return (
+            f"    DecoLayers({slot})=(ShowOnTerrain=1,DensityMap=Texture'{density_map}',"
+            f"StaticMesh=StaticMesh'{mesh}',ScaleMultiplier=(X=(Min=0.800000,Max=1.000000),"
+            "Y=(Min=0.800000,Max=1.000000),Z=(Min=0.500000,Max=1.000000),"
+            "FadeoutRadius=(Min=3000.000000,Max=3000.000000),DensityMultiplier=(Min=0.500000,Max=0.750000),"
+            "MaxPerQuad=1,AlignToTerrain=1)\n"
+        )
+
+    return (
+        "Begin Actor Class=TerrainInfo Name=TerrainInfo2\n"
+        "    Layers(5)=(Texture=Texture'Bogus.Other',AlphaMap=Texture'Bogus.Hidden',UScale=1.000000,VScale=1.000000,"
+        "TerrainMatrix=(XPlane=(X=0.015625),YPlane=(Y=0.015625),ZPlane=(Z=4.000000),"
+        "WPlane=(W=1.000000,X=0.031250,Y=0.031250,Z=524272.000000)))\nEnd Actor\n"
+        "Begin Actor Class=TerrainInfo Name=TerrainInfo1\n"
+        "    TerrainMap=Texture'KF-MountainPass.Terrain_Main'\n"
+        + "".join(layer(slot, *layers[slot]) for slot in sorted(layers))
+        + "".join(deco_layer(slot, *deco[slot]) for slot in sorted(deco))
+        + "    DecoLayerOffset=-4.000000\nEnd Actor\n"
+    )
+
+
+def write_tga(meshes, reference, image, folder=None):
+    package, *parts = reference.split(".")
+    path = meshes / package / (folder or parts[0] if len(parts) == 2 else "Texture") / f"{parts[-1]}.tga"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(path)
+    return path
+
+
+def write_mesh(meshes, reference, folder=None):
+    package, *parts = reference.split(".")
+    path = meshes / package / (folder or parts[0] if len(parts) == 2 else "StaticMesh") / f"{parts[-1]}.gltf"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{}")
+    return path
+
+
+def alpha_mask(size=8):
+    """A umodel-exported mask: flat gray colour with the layer weight in the alpha channel."""
+    image = Image.new("RGBA", (size, size))
+    image.putdata([(127, 127, 127, round(255 * i / (size * size - 1))) for i in range(size * size)])
+    return image
+
+
+def export_terrain(meshes, layers=TERRAIN_LAYERS, deco=TERRAIN_DECO, texture_folder=None, skip=()):
+    """Write umodel's exported files for every reference the terrain names, textures in the given folder."""
+    for _, (diffuse, mask, _, _) in layers.items():
+        for reference in (diffuse, mask):
+            if reference not in skip:
+                write_tga(
+                    meshes,
+                    reference,
+                    alpha_mask() if "Main_" in reference else Image.new("RGB", (16, 16)),
+                    texture_folder,
+                )
+    for _, (mesh, density_map) in deco.items():
+        if mesh not in skip:
+            write_mesh(meshes, mesh)
+        if density_map not in skip and density_map not in {layer[1] for layer in layers.values()}:
+            write_tga(meshes, density_map, alpha_mask(), texture_folder)
+
+
+def test_terrain_layers_keep_numeric_slots_and_uv_settings():
+    terrain = kf1.parse_terrain_layers(terrain_actor())
+    assert sorted(terrain["layers"]) == [0, 1, 2, 3, 4, 6, 7]
+    assert terrain["heightmap"] == "KF-MountainPass.Terrain_Main"
+    assert terrain["deco_offset"] == pytest.approx(-4.0)
+    gravel = terrain["layers"][3]
+    assert gravel["diffuse"] == "KF-MountainPass.GUP-GravelRocks"
+    assert gravel["mask"] == "KF-MountainPass.Main_Gravel"
+    assert (gravel["uscale"], gravel["vscale"]) == (1.5, 1.5)
+    assert gravel["matrix"]["u"] == pytest.approx(1 / 96, rel=1e-4)
+    assert gravel["matrix"]["v"] == pytest.approx(1 / 96, rel=1e-4)
+    foliage = terrain["deco_layers"][0]
+    assert foliage["mesh"] == "WyreStatics.Forest.WyreMiddleFoliage"
+    assert foliage["density_map"] == "KF-MountainPass.Main_DecoFoliage"
+    assert foliage["align_to_terrain"] is True
+    assert foliage["density"] == pytest.approx((0.5, 0.75))
+    assert foliage["scale"]["z"] == pytest.approx((0.5, 1.0))
+
+
+def test_terrain_layers_come_only_from_terrain_info1(tmp_path):
+    layers = {slot: TERRAIN_LAYERS[slot] for slot in (0, 7)}
+    terrain = kf1.parse_terrain_layers(terrain_actor(layers=layers, deco={}))
+    assert sorted(terrain["layers"]) == [0, 7]
+
+
+def test_terrain_inventory_keeps_same_named_objects_apart(tmp_path):
+    meshes = tmp_path / "out"
+    layers = {
+        0: ("Landscape_T.Soil.rock", "Landscape_T.Common.MudGround", 2.0, 2.0),
+        1: ("Landscape_T.Grass.rock", "WyreTex.Common.MudGround", 2.0, 2.0),
+    }
+    export_terrain(meshes, layers=layers, deco={})
+    rows = kf1.terrain_inventory(meshes, terrain_actor(layers=layers, deco={}))["layers"]
+    assert [row["diffuse"]["file"] for row in rows] == ["Landscape_T/Soil/rock.tga", "Landscape_T/Grass/rock.tga"]
+    assert [row["mask"]["file"] for row in rows] == ["Landscape_T/Common/MudGround.tga", "WyreTex/Common/MudGround.tga"]
+
+
+def test_terrain_inventory_falls_back_to_umodel_class_folders(tmp_path):
+    meshes = tmp_path / "out"
+    export_terrain(meshes, texture_folder="Texture")
+    rows = kf1.terrain_inventory(meshes, terrain_actor())["layers"]
+    assert rows[0]["diffuse"]["file"] == "Landscape_T/Texture/earth_1051.tga"
+    assert rows[0]["deco_layers"] == []
+
+
+@pytest.mark.parametrize("missing", ["Landscape_T.Soil.earth_1051", "KF-MountainPass.GUP-GrassLOD"])
+def test_terrain_inventory_names_the_missing_qualified_object(tmp_path, missing):
+    meshes = tmp_path / "out"
+    export_terrain(meshes, skip=(missing,))
+    with pytest.raises(ValueError, match=re.escape(missing)):
+        kf1.terrain_inventory(meshes, terrain_actor())
+
+
+def test_terrain_mask_weight_is_the_alpha_channel(tmp_path):
+    summary = kf1.mask_summary(write_tga(tmp_path, "KF-MountainPass.Main_Grass", alpha_mask(16)))
+    assert summary["channel"] == "alpha"
+    assert summary["distinct"] == 256
+    assert summary["mean"] == pytest.approx(0.5, abs=0.01)
+    assert summary["covered"] == pytest.approx(0.5, abs=0.01)
+
+
+def test_terrain_mask_channel_falls_back_to_color_and_reports_a_constant_mask(tmp_path):
+    image = Image.new("RGBA", (4, 4))
+    image.putdata([(i * 17 % 256, 0, 0, 255) for i in range(16)])
+    assert kf1.mask_summary(write_tga(tmp_path, "KF-MountainPass.Main_Painted", image))["channel"] == "red"
+    flat = Image.new("RGBA", (4, 4), (127, 127, 127, 255))
+    assert kf1.mask_summary(write_tga(tmp_path, "KF-MountainPass.Main_Dirt", flat))["channel"] == "constant"
+
+
+def test_terrain_inventory_reports_a_mask_used_as_a_surface(tmp_path):
+    meshes = tmp_path / "out"
+    export_terrain(meshes)
+    rows = {row["slot"]: row for row in kf1.terrain_inventory(meshes, terrain_actor())["layers"]}
+    assert rows[7]["role"] == "mask-as-diffuse"
+    assert rows[0]["role"] == rows[6]["role"] == "ground"
+    assert rows[6]["deco_layers"] == [1]
+    assert rows[7]["deco_layers"] == [0]
+    assert rows[0]["deco_layers"] == []
+    assert rows[2]["diffuse"]["width"] == 16
+    assert rows[2]["mask"]["width"] == 8
+    assert rows[3]["units_per_tile"] == pytest.approx([96.0, 96.0])
+
+
+def test_terrain_table_has_one_row_per_occupied_slot(tmp_path):
+    meshes = tmp_path / "out"
+    export_terrain(meshes)
+    table = kf1.terrain_table(kf1.terrain_inventory(meshes, terrain_actor()))
+    assert table[0].startswith("| slot")
+    assert all(name in table[0] for name in ("role", "weight channel", "units per tile"))
+    assert [line.split("|")[1].strip() for line in table[2:]] == ["0", "1", "2", "3", "4", "6", "7"]
+    assert any("Main_DecoFoliage" in line for line in table)
+
+
+needs_kf1_export = pytest.mark.skipif(
+    not (kf1.WORK / "export/KF-MountainPass.t3d").is_file(), reason="needs the KF1 batchexport under .tools/kf1/export"
+)
+
+
+@needs_kf1_export
+def test_the_exported_terrain_info1_names_the_expected_layers():
+    text = (kf1.WORK / "export/KF-MountainPass.t3d").read_text(encoding="latin-1")
+    terrain = kf1.parse_terrain_layers(text)
+    assert sorted(terrain["layers"]) == [0, 1, 2, 3, 4, 6, 7]
+    assert [terrain["layers"][slot]["diffuse"] for slot in sorted(terrain["layers"])] == [
+        TERRAIN_LAYERS[slot][0] for slot in sorted(TERRAIN_LAYERS)
+    ]
+    assert [terrain["layers"][slot]["uscale"] for slot in sorted(terrain["layers"])] == [2.0, 2.0, 2.0, 1.5, 2.0, 1.0, 1.0]
+    assert terrain["deco_layers"][0]["mesh"] == "WyreStatics.Forest.WyreMiddleFoliage"
+    for layer in terrain["layers"].values():
+        assert layer["matrix"]["u"] == pytest.approx(1 / (kf1.SAMPLE_UNITS * layer["uscale"]), abs=1e-6)
+        assert layer["matrix"]["v"] == pytest.approx(1 / (kf1.SAMPLE_UNITS * layer["vscale"]), abs=1e-6)
+    if not (kf1.WORK / "out/Landscape_T").is_dir():
+        pytest.skip("needs the umodel export of the terrain texture packages")
+    inventory = kf1.terrain_inventory(kf1.WORK / "out", text)
+    assert {row["mask"]["channel"] for row in inventory["layers"]} == {"alpha", "constant"}
+    assert {row["mask"]["width"] for row in inventory["layers"]} == {256}
+    assert {row["role"] for row in inventory["layers"]} == {"ground", "mask-as-diffuse"}

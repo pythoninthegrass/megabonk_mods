@@ -20,7 +20,9 @@ from warehouse_surface import UPRIGHT_PITCH
 
 ROOT = Path(__file__).resolve().parents[1]
 WORK = ROOT / ".tools/kf1"
+T3D_NAME = "KF-MountainPass.t3d"
 T3D_SHA256 = "87acc038e2e67c6176ea2396b7ffa20ce4bc91f6f27bd99a6546013380c5b02c"
+TERRAIN_ACTOR = "TerrainInfo1"
 ORIGIN = (0, 0, 0)
 SCALE = 3.85 / 100  # Match Megabonk's standing capsule to the KFHumanPawn cylinder.
 SAMPLE_UNITS = 64
@@ -327,6 +329,186 @@ def terrain_primitive(heights, material):
     }
 
 
+def parse_qualified(reference):
+    """Split a Package.Group.Object reference; a two-part name has no group."""
+    parts = reference.split(".")
+    if len(parts) == 3:
+        return parts[0], parts[1], parts[2]
+    if len(parts) == 2:
+        return parts[0], "", parts[1]
+    raise ValueError(f"{reference} is not a qualified Unreal object name")
+
+
+def exported_file(meshes, reference, kind="Texture"):
+    """umodel's export for a qualified object, preferring the group folder so same-named objects stay distinct."""
+    package, group, name = parse_qualified(reference)
+    extension = ".gltf" if kind == "StaticMesh" else ".tga"
+    candidates = [meshes / package / group / f"{name}{extension}"] if group else []
+    candidates.append(meshes / package / kind / f"{name}{extension}")
+    return next((path for path in candidates if path.is_file()), None)
+
+
+def exported_asset(meshes, reference, kind="Texture"):
+    """An exported object with its path and, for a texture, its pixel dimensions."""
+    path = exported_file(meshes, reference, kind)
+    if path is None:
+        raise ValueError(f"{reference} is not exported under {meshes}")
+    asset = {"reference": reference, "file": str(path.relative_to(meshes))}
+    if kind == "Texture":
+        with Image.open(path) as image:
+            asset["width"], asset["height"] = image.size
+    return asset
+
+
+def mask_summary(path):
+    """Which exported channel carries the layer weight, with that channel's statistics."""
+    with Image.open(path) as image:
+        red, green, blue, alpha = image.convert("RGBA").split()
+    channels = {"alpha": alpha, "red": red, "green": green, "blue": blue}
+    stats = {}
+    for name, channel in channels.items():
+        histogram = channel.histogram()
+        total = sum(histogram)
+        stats[name] = {
+            "distinct": sum(1 for count in histogram if count),
+            "mean": round(sum(value * count for value, count in enumerate(histogram)) / (255 * total), 3),
+            "covered": round(sum(histogram[129:]) / total, 3),
+        }
+    weight = next((name for name in channels if stats[name]["distinct"] > 1), None)
+    return {"channel": weight or "constant", **(stats[weight or "alpha"])}
+
+
+def search_reference(fields, pattern):
+    """The qualified object a T3D property names, empty when the property is absent."""
+    match = re.search(pattern, fields)
+    return match[1] if match else ""
+
+
+def parse_terrain_layers(text):
+    """TerrainInfo1's terrain and decoration layers, keyed by the numeric slots the export uses."""
+    actor = re.search(rf"^Begin Actor Class=TerrainInfo Name={TERRAIN_ACTOR}\n(.*?)^End Actor\n", text, re.M | re.S)
+    if not actor:
+        raise ValueError(f"{TERRAIN_ACTOR} is missing from {T3D_NAME}")
+    body = actor[1]
+
+    def bounds(fields, pattern):
+        match = re.search(pattern, fields)
+        return [float(match[1]), float(match[2])] if match else [1.0, 1.0]
+
+    layers = {}
+    for slot, fields in re.findall(r"^    Layers\((\d+)\)=(.*)$", body, re.M):
+        matrix = re.search(r"TerrainMatrix=\(XPlane=\(X=([-\d.]+)\),YPlane=\(Y=([-\d.]+)\)", fields)
+        layers[int(slot)] = {
+            "slot": int(slot),
+            "diffuse": search_reference(fields, r"Texture=Texture'([^']+)'"),
+            "mask": search_reference(fields, r"AlphaMap=Texture'([^']+)'"),
+            "uscale": float(re.search(r"UScale=([-\d.]+)", fields)[1]),
+            "vscale": float(re.search(r"VScale=([-\d.]+)", fields)[1]),
+            "matrix": {"u": float(matrix[1]), "v": float(matrix[2])} if matrix else {"u": 0.0, "v": 0.0},
+        }
+    deco_layers = {}
+    for slot, fields in re.findall(r"^    DecoLayers\((\d+)\)=(.*)$", body, re.M):
+        deco_layers[int(slot)] = {
+            "slot": int(slot),
+            "mesh": search_reference(fields, r"StaticMesh=StaticMesh'([^']+)'"),
+            "density_map": search_reference(fields, r"DensityMap=Texture'([^']+)'"),
+            "align_to_terrain": "AlignToTerrain=1" in fields,
+            "density": bounds(fields, r"DensityMultiplier=\(Min=([-\d.]+),Max=([-\d.]+)\)"),
+            "scale": {axis.lower(): bounds(fields, rf"{axis}=\(Min=([-\d.]+),Max=([-\d.]+)\)") for axis in "XYZ"},
+        }
+    heightmap = re.search(r"^    TerrainMap=Texture'([^']+)'$", body, re.M)
+    offset = re.search(r"^    DecoLayerOffset=([-\d.]+)$", body, re.M)
+    return {
+        "heightmap": heightmap[1] if heightmap else "",
+        "deco_offset": float(offset[1]) if offset else 0.0,
+        "layers": layers,
+        "deco_layers": deco_layers,
+    }
+
+
+def terrain_inventory(meshes, text):
+    """One row per occupied terrain slot with its exported sources, mask channel, dimensions and UV settings."""
+    terrain = parse_terrain_layers(text)
+    masks = {layer["mask"] for layer in terrain["layers"].values()} | {
+        layer["density_map"] for layer in terrain["deco_layers"].values()
+    }
+    rows = []
+    for slot, layer in sorted(terrain["layers"].items()):
+        mask = exported_asset(meshes, layer["mask"]) if layer["mask"] else None
+        if mask:
+            mask.update(mask_summary(meshes / mask["file"]))
+        rows.append(
+            {
+                "slot": slot,
+                "role": "mask-as-diffuse" if layer["diffuse"] in masks else "ground",
+                "diffuse": exported_asset(meshes, layer["diffuse"]),
+                "mask": mask,
+                "uscale": layer["uscale"],
+                "vscale": layer["vscale"],
+                "units_per_tile": [SAMPLE_UNITS * layer["uscale"], SAMPLE_UNITS * layer["vscale"]],
+                "deco_layers": [
+                    slot for slot, deco in sorted(terrain["deco_layers"].items()) if deco["density_map"] == layer["mask"]
+                ],
+            }
+        )
+    deco = [
+        {
+            "slot": slot,
+            "mesh": exported_asset(meshes, layer["mesh"], "StaticMesh"),
+            "density_map": exported_asset(meshes, layer["density_map"]),
+            "align_to_terrain": layer["align_to_terrain"],
+            "density": layer["density"],
+            "scale": layer["scale"],
+        }
+        for slot, layer in sorted(terrain["deco_layers"].items())
+    ]
+    return {
+        "heightmap": terrain["heightmap"],
+        "deco_offset": terrain["deco_offset"],
+        "layers": rows,
+        "deco_layers": deco,
+    }
+
+
+def terrain_table(inventory):
+    """The markdown terrain layer table for docs/kf1-mountain-pass.md, one row per occupied slot."""
+    columns = (
+        "slot",
+        "role",
+        "diffuse",
+        "mask",
+        "weight channel",
+        "diffuse size",
+        "mask size",
+        "UScale",
+        "VScale",
+        "units per tile",
+    )
+    lines = ["| " + " | ".join(columns) + " |", "|" + " --- |" * len(columns)]
+    for row in inventory["layers"]:
+        mask = row["mask"] or {}
+        u, v = row["units_per_tile"]
+        lines.append(
+            "| "
+            + " | ".join(
+                (
+                    str(row["slot"]),
+                    row["role"],
+                    row["diffuse"]["reference"],
+                    mask.get("reference", ""),
+                    mask.get("channel", ""),
+                    f'{row["diffuse"]["width"]}x{row["diffuse"]["height"]}',
+                    f'{mask.get("width", 0)}x{mask.get("height", 0)}',
+                    f'{row["uscale"]:g}',
+                    f'{row["vscale"]:g}',
+                    f"{u:g}" if u == v else f"{u:g}x{v:g}",
+                )
+            )
+            + " |"
+        )
+    return lines
+
+
 def parse_brushes(text):
     brushes = []
     for actor in re.finditer(r"^Begin Actor Class=Brush Name=(\S+)(.*?)^End Actor", text, re.M | re.S):
@@ -496,16 +678,29 @@ def prepare(source, meshes, output):
     return level, skipped
 
 
+def terrain_inventory_command(work):
+    """Write the terrain layer inventory and print its table; returns the inventory."""
+    t3d = work / "export" / T3D_NAME
+    verify_export(t3d)
+    inventory = terrain_inventory(work / "out", t3d.read_text(encoding="latin-1"))
+    (work / "terrain_layers.json").write_text(json.dumps(inventory, indent=2) + "\n")
+    return inventory
+
+
 def main():
     parser = argparse.ArgumentParser(description="Prepare the local Killing Floor 1 Mountain Pass survival level")
-    parser.add_argument("command", choices=("verify-export", "prepare"))
+    parser.add_argument("command", choices=("verify-export", "prepare", "terrain-inventory"))
     parser.add_argument("--work", type=Path, default=WORK)
     args = parser.parse_args()
     try:
         source = args.work / "export"
         if args.command == "verify-export":
-            verify_export(source / "KF-MountainPass.t3d")
+            verify_export(source / T3D_NAME)
             print(f"Verified the KF-MountainPass level export: {source}")
+        elif args.command == "terrain-inventory":
+            inventory = terrain_inventory_command(args.work)
+            print("\n".join(terrain_table(inventory)))
+            print(f"{len(inventory['layers'])} terrain layers, {len(inventory['deco_layers'])} decoration layers")
         else:
             level, skipped = prepare(source, args.work / "out", args.work)
             for item in skipped:

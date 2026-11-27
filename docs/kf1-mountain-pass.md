@@ -59,6 +59,64 @@ The prebuilt Linux release is a 32-bit binary that needs `libpng12` and glibc 2.
 
 umodel does not recognize the `.rom` extension, so link the map under a `.upk` name in a scratch folder next to the other packages. Copy `StaticMeshes/*.usx` and the `.utx` files named by the T3D skins from the game folder, then run `umodel -path=<scratch> -export -gltf -out=<dir> <package>` once per package. The level places 157 distinct static meshes: 561 placements from the map's own package, and the rest from `VegetationSM`, `KillingFloorStatics`, `KillingFloorLabStatics`, `KillingFloorManorStatics`, `DetailSM`, `Foundry_SM`, `IndustrySM2`, `OfficeStatics`, `PatchStatics`, `HedgehogSM`, `HemispheresSM`, `IndustrySM`, `22Patch` and `LevelSpecificSM`. Exporting those packages and their textures wrote 573 MB of glTF meshes and TGA textures under `<out>/<package>/StaticMesh/<name>.gltf` and `<out>/<package>/Texture/<name>.tga`, and every `StaticMesh='Package.Group.Name'` reference in the T3D resolves to one of those files (0 missing of 157). The map package itself yields its 70 local static meshes, 46 textures and 13 materials. umodel does not export BSP, terrain or actor placements.
 
+## Terrain layers
+
+`TerrainInfo1` is the level's only terrain actor. Its `TerrainMap` is `Texture'KF-MountainPass.Terrain_Main'` (the heightmap in [Exporting the level with UCC](#exporting-the-level-with-ucc)) and it holds seven terrain layers plus two decoration layers. `uv run scripts/kf1_mountain_pass.py terrain-inventory` reads the actor out of the verified T3D, resolves every package-qualified reference against the umodel export, writes `.tools/kf1/terrain_layers.json` and prints this table:
+
+| slot | role | diffuse | mask | weight channel | diffuse size | mask size | UScale | VScale | units per tile |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | ground | Landscape_T.Soil.earth_1051 | KF-MountainPass.Main_Dirt | constant | 1024x1024 | 256x256 | 2 | 2 | 128 |
+| 1 | ground | Landscape_T.Grass.grass_2589 | KF-MountainPass.Main_Grass | alpha | 1024x1024 | 256x256 | 2 | 2 | 128 |
+| 2 | ground | KF-MountainPass.GUP-MountainRock | KF-MountainPass.Main_Rock | alpha | 1024x1024 | 256x256 | 2 | 2 | 128 |
+| 3 | ground | KF-MountainPass.GUP-GravelRocks | KF-MountainPass.Main_Gravel | alpha | 1024x1024 | 256x256 | 1.5 | 1.5 | 96 |
+| 4 | ground | WyreTex.Common.MudGround | KF-MountainPass.Main_Forest | alpha | 1024x1024 | 256x256 | 2 | 2 | 128 |
+| 6 | ground | KF-MountainPass.GUP-MountainGrass | KF-MountainPass.Main_DecoGrass | alpha | 1024x256 | 256x256 | 1 | 1 | 64 |
+| 7 | mask-as-diffuse | KF-MountainPass.Main_DecoGrass | KF-MountainPass.Main_DecoFoliage | alpha | 256x256 | 256x256 | 1 | 1 | 64 |
+
+`Layers(5)` is absent from the export: the actor jumps from 4 to 6. Nothing is synthesized into it and the slot numbers above are the export's own.
+
+- **UVs.** Every layer's `TerrainMatrix` has `XPlane` and `YPlane` equal to `1 / (64 * UScale)` and `1 / (64 * VScale)`, so the diffuse tiles every `64 * UScale` world units: 128 units for the 2.0 layers, 96 for the gravel's 1.5 and 64 for the two 1.0 layers. `ZPlane` is 4 and `WPlane` is `(W=1, X=1/64, Y=1/64, Z=524272)` in all seven layers, so nothing distinguishes them but `UScale`, `VScale` and their textures.
+- **Masks.** The seven `Main_*` textures are 256 by 256, `TEXF_RGBA8`, `TC_Wrap`, `Detail = None`, and their color channels are a flat `(127, 127, 127)` while the alpha channel runs the full 0 to 255. The layer weight is therefore the alpha channel, which `kf1.mask_summary` determines per texture from the exported TGA rather than assumes. Reading color instead would give every layer the same constant half weight, and the map would show no layering at all.
+- **Weights are not normalized.** Summed over the seven masks the mean is 2.04 and the maximum 5.3, so a blend must renormalize; the minimum is 1.0, which is `Main_Dirt`'s constant contribution where no other layer weights. Mean weight and the share of samples above half: `Main_Dirt` 1.000 / 1.000, `Main_Grass` 0.109 / 0.106, `Main_Rock` 0.088 / 0.087, `Main_Gravel` 0.042 / 0.044, `Main_Forest` 0.089 / 0.076, `Main_DecoGrass` 0.529 / 0.535, `Main_DecoFoliage` 0.182 / 0.190. Each mask maps 1:1 onto the 256 by 256 heightmap grid. Averaging the heightmap under each mask corroborates the channel: `Main_Grass` and `Main_Forest` sit on high, gentle ground (mean height 407 and 411 units against 101 everywhere, mean slope 0.60 and 0.64 against 0.85), `Main_Gravel` on the steepest ground (1.16), and the masks draw as coherent regions, not noise. The row order of the masks against the heightmap is not established; both orientations give plausible statistics, so the blend has to confirm it.
+- **Ground versus decoration.** KF1's `Texture` class carries no ground or decoration flag: every layer texture and every mask is an ordinary `Texture` with `bMasked = false`, `bAlphaTexture = false` and `Detail = None`. The semantics come from how the actor uses them. The five color diffuses (`Landscape_T.Soil.earth_1051`, `Landscape_T.Grass.grass_2589`, `GUP-MountainRock`, `GUP-GravelRocks`, `WyreTex.Common.MudGround`) are `TEXF_DXT1` 1024 by 1024 wrapping color textures used only as layer `Texture`s. The `Main_*` masks are used only as layer `AlphaMap`s and decoration `DensityMap`s, with one exception.
+- **Slot 7 is a mask painted as a surface.** Its `Texture` is `KF-MountainPass.Main_DecoGrass`, the same object that is slot 6's `AlphaMap` and `DecoLayers(1)`'s `DensityMap`. That object's color is a flat 127 gray, so wherever `Main_DecoFoliage` weights it (19% of the grid) the layer paints uniform mid-gray. KF1's properties give no intent: every mask here is an ordinary `Texture`, so this is either a deliberate flat tint or a reference to the wrong object. Nothing else in the map paints a flat gray ground, so treat it as a mistake to settle in the blend, which can drop the slot or substitute a real surface.
+- **Slot 6 is the decoration grass layer itself.** `KF-MountainPass.GUP-MountainGrass` is `TEXF_DXT3`, 1024 by 256, `TC_Clamp` on both axes and `bMasked = true`: a clamped masked strip rather than a tiling ground texture, which fits a grass thicket rather than soil.
+
+### Decoration layers
+
+| slot | mesh | density map | scale | density | fadeout | align |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | WyreStatics.Forest.WyreMiddleFoliage | KF-MountainPass.Main_DecoFoliage | 0.2-0.3 xyz | 0.04-0.09 | 3000 | yes |
+| 1 | KF-MountainPass.GUP-GrassLOD | KF-MountainPass.Main_DecoGrass | 0.8-1.0 xy, 0.5-1.0 z | 0.5-0.75 | 3000 | yes |
+
+`DecoLayerOffset` is -4. The inventory resolves both meshes and both density maps; `GUP-GrassLOD` came with the map package and `WyreMiddleFoliage` is recovered from `WyreStatics.usx`. Its two shader slots are `Static.WyreMiddleFoliage_shdr` and `Statics.FoliageB_shdr`, whose diffuse textures are `WyreTex.Static.WyreFoliageTex` and `WyreTex.Statics.FoliageBTex`, both exported. Note the two adjacent group names, `Static` and `Statics`: resolution goes through `package/group/object`, never the bare object name, which is also what keeps `Landscape_T.Soil.*` and `Landscape_T.Grass.*` apart.
+
+### Recovering the layer textures
+
+The map package exports with the level (see [Exporting meshes and textures with umodel](#exporting-meshes-and-textures-with-umodel)); the five third-party textures below do not, and neither does the decoration mesh from `WyreStatics`. Run these on the box that holds the KF1 install and the source-built umodel, from `.tools/kf1`, with the packages under `game/` and the export tree in `out/`:
+
+```sh
+# textures: -groups writes <package>/<Group>/<object>.tga, which the group-qualified names need
+./umodel-kf1.sh -export -groups -out=/out /game/Textures/Landscape_T.utx earth_1051 Texture
+./umodel-kf1.sh -export -groups -out=/out /game/Textures/Landscape_T.utx grass_2589 Texture
+./umodel-kf1.sh -export -groups -out=/out /game/Textures/WyreTex.utx MudGround Texture
+./umodel-kf1.sh -export -groups -out=/out /game/Textures/WyreTex.utx WyreFoliageTex Texture
+./umodel-kf1.sh -export -groups -out=/out /game/Textures/WyreTex.utx FoliageBTex Texture
+# the decoration mesh
+./umodel-kf1.sh -export -groups -out=/out -gltf /game/StaticMeshes/WyreStatics.usx WyreMiddleFoliage StaticMesh
+# umodel runs as root inside the container, so hand the new trees back to the user
+docker run --rm -v "$PWD/out:/out" ubuntu:24.04 chown -R "$(id -u):$(id -g)" /out/Landscape_T /out/WyreTex /out/WyreStatics
+```
+
+The container writes outside the mounted directory unless `-out=/out` is passed, and without `-groups` it flattens every texture into `<package>/Texture/`, where `Landscape_T.Soil.earth_1051` and a same-named object in another group would overwrite each other. `umodel -dump <package> <object> Texture` prints the UE2 properties quoted above (`Format`, `USize`, `VSize`, `UClampMode`, `VClampMode`, `bMasked`, `Detail`) without needing `UCC.exe`, and `-list <package>` shows each object's index and name. Then copy the new trees to the authoring box and check them:
+
+```sh
+rsync -a <box>:git/megabonk_mods/.tools/kf1/out/{Landscape_T,WyreTex,WyreStatics} .tools/kf1/out/
+uv run scripts/kf1_mountain_pass.py terrain-inventory
+```
+
+The inventory needs every object the actor names: the four third-party textures, the map-local rock, gravel, grass and the seven `Main_*` masks, and both decoration meshes. Anything missing fails with its qualified name, for example `Landscape_T.Soil.earth_1051 is not exported under .../out`, rather than substituting gray. Only the heightmap is exempt, because umodel cannot read its `TEXF_G16` format and `UCC.exe` writes it instead.
+
 ## The BSP
 
 The T3D exports construction brushes rather than the compiled BSP mesh. Counting explicit actor-level `CsgOper` values gives 367 additive brushes (2,431 polygons), 94 subtractive brushes (566 polygons) and one brush without an operation. Vertices are brush-local: subtract `PrePivot`, add `Location`, then convert the axes and scale. The additive pass triangulates each polygon in vertex order, groups faces by their `Texture` reference and appends the same triangles to collision. It adds 4,784 triangles across 345 brushes. Rooms and doorways carved by later subtractions are still approximate.
@@ -230,7 +288,7 @@ Open questions:
 
 ## Converting the export
 
-`uv run scripts/kf1_mountain_pass.py prepare` checks the T3D hash and writes `.tools/kf1/mesh.json` (terrain, static meshes, additive brush faces, perimeter walls and combined terrain/brush collision) and `.tools/kf1/kf1-mountain-pass.mblevel.json`, in about five seconds. `verify-export` only checks the hash. The walkable outline, perimeter walls, floor lookup, glTF accessor reader and the `object.place` edit builder live in `scripts/level_geometry.py`, shared with `scripts/conker_colors.py`; the Conker script keeps thin wrappers that bind its own kill floor, pit floor and anchors.
+`uv run scripts/kf1_mountain_pass.py prepare` checks the T3D hash and writes `.tools/kf1/mesh.json` (terrain, static meshes, additive brush faces, perimeter walls and combined terrain/brush collision) and `.tools/kf1/kf1-mountain-pass.mblevel.json`, in about five seconds. `verify-export` only checks the hash. `terrain-inventory` writes `.tools/kf1/terrain_layers.json` and prints the table in [Terrain layers](#terrain-layers). The walkable outline, perimeter walls, floor lookup, glTF accessor reader and the `object.place` edit builder live in `scripts/level_geometry.py`, shared with `scripts/conker_colors.py`; the Conker script keeps thin wrappers that bind its own kill floor, pit floor and anchors.
 
 - **Coordinates.** `world_point()` maps Unreal X, Y, Z to Megabonk Z, X, Y without reversing winding. The [KF1 human pawn](https://github.com/InsultingPros/KillingFloor/blob/HEAD/KFMod/Classes/KFHumanPawn.uc) has a standing collision half-height of 50 Unreal units. Matching its full height to the [3.85-unit Megabonk player capsule](thps-warehouse-layout.md) gives 0.0385 Megabonk units per Unreal unit. At the center of the tarmac face on `Brush29` the road is 401 Unreal units above the heightmap, or four standing players high. This measures deck to terrain, not clear headroom under the deck.
 - **Rotation.** Rotators are 65536 units per turn, applied as roll about X, then pitch about Y, then yaw about Z. The roll sign is unverified; it only matters for the few tilted props.
@@ -243,5 +301,5 @@ Open questions:
 ## TODO
 
 - Apply ordered brush operations and check the five black solids and remaining ungrounded placements against the resulting collision.
-- Resolve remaining placeholder materials and texture the terrain from its layer alpha maps.
+- Blend the terrain layer alpha maps into the terrain material: renormalize the weights, decide what to do with the slot that paints a mask as a surface, and confirm the mask row order against the heightmap.
 - Confirm the roll sign on tilted props.
