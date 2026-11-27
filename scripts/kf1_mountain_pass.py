@@ -21,6 +21,11 @@ from warehouse_surface import UPRIGHT_PITCH
 ROOT = Path(__file__).resolve().parents[1]
 WORK = ROOT / ".tools/kf1"
 T3D_NAME = "KF-MountainPass.t3d"
+LEVEL_NAME = "kf1-mountain-pass.mblevel.json"
+PREVIEW_LEVEL_NAME = "bsp-preview.mblevel.json"
+PREVIEW_PACK = "kf1preview"
+PREVIEW_ASSET = "MountainPass"
+PREVIEW_PACK_VERSION = "1.0.0"
 T3D_SHA256 = "87acc038e2e67c6176ea2396b7ffa20ce4bc91f6f27bd99a6546013380c5b02c"
 TERRAIN_ACTOR = "TerrainInfo1"
 ORIGIN = (0, 0, 0)
@@ -663,6 +668,28 @@ def unpack_map(meshes, actors, heights, terrain, brushes=()):
     }
 
 
+def preview_level(level):
+    """The generated level plus the preview pack and the placement of its one bundle asset."""
+    placement = {
+        "catalogId": f"bundle:{PREVIEW_PACK}/{PREVIEW_ASSET}",
+        "position": {"x": 0, "y": 0, "z": 0},
+        "rotation": {"x": 0, "y": 0, "z": 0},
+        "scale": {"x": 1, "y": 1, "z": 1},
+    }
+    edit = {"opType": "object.place", "target": "", "payload": json.dumps(placement, separators=(",", ":"))}
+    edits = list(level.get("edits", ()))
+    if edit["payload"] not in {item.get("payload") for item in edits}:
+        edits.insert(0, edit)
+    return {**level, "packs": {PREVIEW_PACK: PREVIEW_PACK_VERSION}, "edits": edits}
+
+
+def preview_level_command(work):
+    """Write the level that places the map bundle, beside the generated one; returns it."""
+    preview = preview_level(json.loads((work / LEVEL_NAME).read_text()))
+    (work / PREVIEW_LEVEL_NAME).write_text(json.dumps(preview))
+    return preview
+
+
 def prepare(source, meshes, output):
     t3d = source / "KF-MountainPass.t3d"
     verify_export(t3d)
@@ -674,7 +701,8 @@ def prepare(source, meshes, output):
     mesh = unpack_map(meshes, actors, heights, terrain, parse_brushes(text))
     level = make_level(collision_triangles(mesh["collision"]), actors, skipped)
     (output / "mesh.json").write_text(json.dumps(mesh, separators=(",", ":")))
-    (output / "kf1-mountain-pass.mblevel.json").write_text(json.dumps(level, indent=2) + "\n")
+    (output / LEVEL_NAME).write_text(json.dumps(level, indent=2) + "\n")
+    (output / PREVIEW_LEVEL_NAME).write_text(json.dumps(preview_level(level)))
     return level, skipped
 
 
@@ -689,7 +717,7 @@ def terrain_inventory_command(work):
 
 def main():
     parser = argparse.ArgumentParser(description="Prepare the local Killing Floor 1 Mountain Pass survival level")
-    parser.add_argument("command", choices=("verify-export", "prepare", "terrain-inventory"))
+    parser.add_argument("command", choices=("verify-export", "prepare", "terrain-inventory", "preview-level"))
     parser.add_argument("--work", type=Path, default=WORK)
     args = parser.parse_args()
     try:
@@ -701,6 +729,9 @@ def main():
             inventory = terrain_inventory_command(args.work)
             print("\n".join(terrain_table(inventory)))
             print(f"{len(inventory['layers'])} terrain layers, {len(inventory['deco_layers'])} decoration layers")
+        elif args.command == "preview-level":
+            preview_level_command(args.work)
+            print(f"Wrote {args.work / PREVIEW_LEVEL_NAME}: pack {PREVIEW_PACK}, asset {PREVIEW_ASSET}")
         else:
             level, skipped = prepare(source, args.work / "out", args.work)
             for item in skipped:

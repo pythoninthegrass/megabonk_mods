@@ -288,7 +288,7 @@ Open questions:
 
 ## Converting the export
 
-`uv run scripts/kf1_mountain_pass.py prepare` checks the T3D hash and writes `.tools/kf1/mesh.json` (terrain, static meshes, additive brush faces, perimeter walls and combined terrain/brush collision) and `.tools/kf1/kf1-mountain-pass.mblevel.json`, in about five seconds. `verify-export` only checks the hash. `terrain-inventory` writes `.tools/kf1/terrain_layers.json` and prints the table in [Terrain layers](#terrain-layers). The walkable outline, perimeter walls, floor lookup, glTF accessor reader and the `object.place` edit builder live in `scripts/level_geometry.py`, shared with `scripts/conker_colors.py`; the Conker script keeps thin wrappers that bind its own kill floor, pit floor and anchors.
+`uv run scripts/kf1_mountain_pass.py prepare` checks the T3D hash and writes `.tools/kf1/mesh.json` (terrain, static meshes, additive brush faces, perimeter walls and combined terrain/brush collision), `.tools/kf1/kf1-mountain-pass.mblevel.json` and, derived from it, the preview level described in [Previewing the level in game](#previewing-the-level-in-game), in about five seconds. `verify-export` only checks the hash. `terrain-inventory` writes `.tools/kf1/terrain_layers.json` and prints the table in [Terrain layers](#terrain-layers). The walkable outline, perimeter walls, floor lookup, glTF accessor reader and the `object.place` edit builder live in `scripts/level_geometry.py`, shared with `scripts/conker_colors.py`; the Conker script keeps thin wrappers that bind its own kill floor, pit floor and anchors.
 
 - **Coordinates.** `world_point()` maps Unreal X, Y, Z to Megabonk Z, X, Y without reversing winding. The [KF1 human pawn](https://github.com/InsultingPros/KillingFloor/blob/HEAD/KFMod/Classes/KFHumanPawn.uc) has a standing collision half-height of 50 Unreal units. Matching its full height to the [3.85-unit Megabonk player capsule](thps-warehouse-layout.md) gives 0.0385 Megabonk units per Unreal unit. At the center of the tarmac face on `Brush29` the road is 401 Unreal units above the heightmap, or four standing players high. This measures deck to terrain, not clear headroom under the deck.
 - **Rotation.** Rotators are 65536 units per turn, applied as roll about X, then pitch about Y, then yaw about Z. The roll sign is unverified; it only matters for the few tilted props.
@@ -300,27 +300,19 @@ Open questions:
 
 ## Previewing the level in game
 
-The game never reads `mesh.json`. Its one terrain mesh, 1,810 static mesh placements and 345 brush meshes live there only until something packs them into an AssetBundle, so `.tools/kf1/kf1-mountain-pass.mblevel.json` loads as the stock map named by `map` (1 is Forest) with the chests placed and nothing wrong logged. Launch the hand-made `.tools/kf1/bsp-preview.mblevel.json` instead:
+The game never reads `mesh.json`. Its one terrain mesh, 1,810 static mesh placements and 345 brush meshes live there only until something packs them into an AssetBundle, so `.tools/kf1/kf1-mountain-pass.mblevel.json` loads as the stock map named by `map` (1 is Forest) with the chests placed and nothing wrong logged. Launch the preview level instead:
 
 ```sh
 task game:editor -- .tools/kf1/bsp-preview.mblevel.json
 ```
 
-`DevHarness: load-level` in `BepInEx/LogOutput.log` names the file that actually loaded. The preview level is the generated one plus exactly two things: a `"packs": {"kf1preview": "1.0.0"}` entry, and one extra `edits` entry of `opType` `object.place` whose payload places `bundle:kf1preview/MountainPass` at the origin with unit scale. Nothing else differs, so regenerate it after any `prepare` run that moves spawns or spots, or it drifts from the generated level:
+`DevHarness: load-level` in `BepInEx/LogOutput.log` names the file that actually loaded. The preview level is the generated one plus exactly two things: a `"packs": {"kf1preview": "1.0.0"}` entry, and one extra `edits` entry of `opType` `object.place` whose payload places `bundle:kf1preview/MountainPass` at the origin with unit scale. Nothing else differs, so it is derived rather than hand-maintained: `prepare` writes it beside the generated level, and this rewrites it from the generated level alone:
 
 ```sh
-uv run python - <<'PY'
-import json
-from pathlib import Path
-level = json.loads(Path(".tools/kf1/kf1-mountain-pass.mblevel.json").read_text())
-level["packs"] = {"kf1preview": "1.0.0"}
-placement = {"catalogId": "bundle:kf1preview/MountainPass", "position": {"x": 0, "y": 0, "z": 0},
-             "rotation": {"x": 0, "y": 0, "z": 0}, "scale": {"x": 1, "y": 1, "z": 1}}
-edit = {"opType": "object.place", "target": "", "payload": json.dumps(placement, separators=(",", ":"))}
-level["edits"].insert(0, edit)
-Path(".tools/kf1/bsp-preview.mblevel.json").write_text(json.dumps(level))
-PY
+uv run scripts/kf1_mountain_pass.py preview-level
 ```
+
+`kf1.preview_level` holds those two additions. `tests/test_kf1_mountain_pass.py` pins them and compares the regenerated file with the one on disk byte for byte, so an edit made only to the preview file fails the suite and the verb puts it back.
 
 ### The kf1preview pack
 
@@ -337,13 +329,13 @@ cp .tools/kf1/preview-manifest.json "$dest/manifest.json"
 
 - A missing `kf1preview` under `UserData/LevelPacks` cannot be regenerated, and the map is then invisible. The load does not fail: the placement becomes a placeholder cube and `Packs: 'bundle:kf1preview/MountainPass': pack 'kf1preview' is not installed; using a placeholder` is the line to look for.
 - A converter change is invisible in game until something rebuilds the bundle from the new `mesh.json`; compare the bundle's mtime against `.tools/kf1/mesh.json` before concluding a converter change did nothing.
-- `ConkerColorsPack.cs` is the shape to copy: it reads `mesh.json` from a fixed source directory and calls `PackBuilder.BuildNamedBundle` for both target platforms. A KF1 builder needs the source pointed at `.tools/kf1`, the bundle named `kf1preview`, and then `prepare` can write the `packs` entry and the bundle placement itself, retiring the preview level.
+- `ConkerColorsPack.cs` is the shape to copy: it reads `mesh.json` from a fixed source directory and calls `PackBuilder.BuildNamedBundle` for both target platforms. A KF1 builder needs the source pointed at `.tools/kf1` and the bundle named `kf1preview`, after which the two additions can move into the generated level and the preview file goes away.
 
 What is expected to look unfinished once the map renders: the terrain is one flat untinted surface until the layer masks are blended, some static meshes carry no texture, and BSP faces fall back to their base color.
 
 ## TODO
 
-- Build the `kf1preview` AssetBundle from `mesh.json` with a committed `unity/pack-authoring/Assets/Editor` builder and a taskfile verb, then have `prepare` write the `packs` entry and the bundle placement itself. Until then the bundle in `.tools/kf1/` is the only copy and cannot be rebuilt.
+- Build the `kf1preview` AssetBundle from `mesh.json` with a committed `unity/pack-authoring/Assets/Editor` builder and a taskfile verb, then fold the pack entry and the bundle placement into the generated level itself so the preview file is no longer a separate artifact. Until the builder exists the bundle in `.tools/kf1/` is the only copy and cannot be rebuilt.
 - Apply ordered brush operations and check the five black solids and remaining ungrounded placements against the resulting collision.
 - Blend the terrain layer alpha maps into the terrain material: renormalize the weights, decide what to do with the slot that paints a mask as a surface, and confirm the mask row order against the heightmap.
 - Confirm the roll sign on tilted props.

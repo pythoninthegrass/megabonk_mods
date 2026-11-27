@@ -473,7 +473,7 @@ def write_mesh(meshes, reference, folder=None):
 
 
 def alpha_mask(size=8):
-    """A umodel-exported mask: flat gray colour with the layer weight in the alpha channel."""
+    """A umodel-exported mask: flat gray color with the layer weight in the alpha channel."""
     image = Image.new("RGBA", (size, size))
     image.putdata([(127, 127, 127, round(255 * i / (size * size - 1))) for i in range(size * size)])
     return image
@@ -614,3 +614,53 @@ def test_the_exported_terrain_info1_names_the_expected_layers():
     assert {row["mask"]["channel"] for row in inventory["layers"]} == {"alpha", "constant"}
     assert {row["mask"]["width"] for row in inventory["layers"]} == {256}
     assert {row["role"] for row in inventory["layers"]} == {"ground", "mask-as-diffuse"}
+
+
+def sample_level():
+    return {
+        "schemaVersion": 4,
+        "map": 1,
+        "title": "Killing Floor: Mountain Pass",
+        "edits": [{"opType": "object.place", "target": "", "payload": '{"catalogId":"interactable/chest"}'}],
+    }
+
+
+def test_preview_level_adds_the_pack_and_places_the_bundle_asset():
+    preview = kf1.preview_level(sample_level())
+    assert preview["packs"] == {kf1.PREVIEW_PACK: kf1.PREVIEW_PACK_VERSION}
+    assert preview["edits"][0] == {
+        "opType": "object.place",
+        "target": "",
+        "payload": (
+            '{"catalogId":"bundle:kf1preview/MountainPass","position":{"x":0,"y":0,"z":0},'
+            '"rotation":{"x":0,"y":0,"z":0},"scale":{"x":1,"y":1,"z":1}}'
+        ),
+    }
+    assert preview["edits"][1:] == sample_level()["edits"]
+    assert sample_level()["edits"][0]["payload"] == '{"catalogId":"interactable/chest"}'
+
+
+def test_preview_level_leaves_the_generated_level_untouched():
+    level = sample_level()
+    kf1.preview_level(level)
+    assert level == sample_level()
+
+
+def test_preview_level_does_not_place_the_bundle_twice():
+    once = kf1.preview_level(sample_level())
+    assert kf1.preview_level(once) == once
+
+
+def test_preview_level_command_writes_the_compact_file(tmp_path):
+    (tmp_path / kf1.LEVEL_NAME).write_text(json.dumps(sample_level(), indent=2) + "\n")
+    written = kf1.preview_level_command(tmp_path)
+    text = (tmp_path / kf1.PREVIEW_LEVEL_NAME).read_text()
+    assert json.loads(text) == written == kf1.preview_level(sample_level())
+    assert text == json.dumps(written)
+
+
+@needs_kf1_export
+def test_the_preview_level_on_disk_matches_the_generated_one():
+    generated = json.loads((kf1.WORK / kf1.LEVEL_NAME).read_text())
+    preview = (kf1.WORK / kf1.PREVIEW_LEVEL_NAME).read_text()
+    assert preview == json.dumps(kf1.preview_level(generated))
