@@ -296,7 +296,7 @@ Open questions:
 - **Terrain.** 256 by 256 samples, 64 units apart, centered on the origin (sample 128 at 0), height `(value - 32768) / 256 * 64`. The 12 `PlayerStart` actors rest 34 to 43 units above this surface, which confirms the fitted scale.
 - **Anchors.** The first `PlayerStart` is the spawn. The `ZombieVolume` farthest from it that has a floor is the boss spawner, which is a stand-in until the boss area is chosen by hand. `ShopVolume` actors become shrine spots, `KFAmmoPickup` actors power-up spots and `KFRandomItemSpawn` actors chests. Every anchor needs a terrain or brush floor within 100 Unreal units.
 - **Grounded spots.** Combined collision leaves 5 of 157 zombie volumes, 1 of 4 shop volumes, 2 of 14 ammo pickups and 3 of 14 item spawns without a floor in reach. Those anchors are reported and skipped. The three grounded shop spots are supplemented with grounded navigation nodes, selecting the most distant from the spawn, boss and already selected spots until there are eight candidates for up to seven shrines.
-- **Level fields.** Only fields the Conker level already writes are used: no `packs` and no bundle placement until the pack exists, and the placeholder one-cell `grid` that a from-scratch level requires. That is why `prepare`'s own level file cannot show the map; see [Previewing the level in game](#previewing-the-level-in-game).
+- **Level fields.** Only fields the Conker level already writes are used: the placeholder one-cell `grid` that a from-scratch level requires, and no `packs` entry or bundle placement, which the preview level adds instead. That is why `prepare`'s own level file cannot show the map; see [Previewing the level in game](#previewing-the-level-in-game).
 
 ## Previewing the level in game
 
@@ -316,26 +316,28 @@ uv run scripts/kf1_mountain_pass.py preview-level
 
 ### The kf1preview pack
 
-`kf1preview` is a 55 MB bundle holding the whole map as the single asset `MountainPass`. Its two surviving copies are `.tools/kf1/kf1preview` with its manifest `.tools/kf1/preview-manifest.json`, and the installed pair under `<game dir>/UserData/LevelPacks/kf1preview/`. Reinstalling the latter is the layout `task pack:install` uses:
+`kf1preview` is a 55 MB bundle holding the whole map as the single asset `MountainPass`. `unity/pack-authoring/Assets/Editor/Kf1MountainPassPack.cs` builds it from `.tools/kf1/mesh.json`, reusing `PackBuilder.cs` and `ColorsVertexTint.shader` the way `ConkerColorsPack.cs` does, and `unity/pack-authoring/packs/kf1preview/manifest.json` is its manifest. Textures are read from their `mesh.json` paths relative to `.tools/kf1` and imported directly, so the umodel export described in [Recovering the layer textures](#recovering-the-layer-textures) has to be on the building box too.
 
 ```sh
-dest="$(uv run scripts/game_paths.py | jq -r .game_dir)/UserData/LevelPacks/kf1preview"
-mkdir -p "$dest"
-cp .tools/kf1/kf1preview "$dest/"
-cp .tools/kf1/preview-manifest.json "$dest/manifest.json"
+task kf1:pack                                  # Unity 2023.2.22f1 on this box
+task kf1:pack-host KF1_UNITY_HOST=<host>       # build on the box that has Unity
+task kf1:install                               # bundle for this game runtime + manifest
 ```
 
-**Nothing in the repository builds this bundle.** It came from a scratch Unity editor script that no longer exists: there is no `task kf1:pack`, no `unity/pack-authoring/packs/kf1preview`, and no committed `Assets/Editor` builder that reads `.tools/kf1/mesh.json`. So:
+`kf1:pack` needs Unity on the machine that runs it, which is a build-time dependency only ([asset bundles](asset-bundles.md)); `UNITY_EDITOR` in `.env` overrides the default Hub path, and it says so and points at `kf1:pack-host` when Unity is not there. `kf1:pack-host` pushes the pack-authoring project, without its Unity import caches, plus `mesh.json` and `out/` to `<host>:~/git/megabonk_mods`, builds there with `KF1_UNITY_BIN` (default the Hub path) and pulls both bundles back. Both verbs build `windows` and `linux` into `.tools/bundles/<platform>/kf1preview`, and `kf1:install` picks the one the game's runtime wants: windows under CrossOver and Wine, linux for the native build.
 
-- A missing `kf1preview` under `UserData/LevelPacks` cannot be regenerated, and the map is then invisible. The load does not fail: the placement becomes a placeholder cube and `Packs: 'bundle:kf1preview/MountainPass': pack 'kf1preview' is not installed; using a placeholder` is the line to look for.
-- A converter change is invisible in game until something rebuilds the bundle from the new `mesh.json`; compare the bundle's mtime against `.tools/kf1/mesh.json` before concluding a converter change did nothing.
-- `ConkerColorsPack.cs` is the shape to copy: it reads `mesh.json` from a fixed source directory and calls `PackBuilder.BuildNamedBundle` for both target platforms. A KF1 builder needs the source pointed at `.tools/kf1` and the bundle named `kf1preview`, after which the two additions can move into the generated level and the preview file goes away.
+Both are idempotent. Task gates them on a content checksum of the builder, `PackBuilder.cs`, the shader, the manifest, the converter, `mesh.json` and every `.tga` under `.tools/kf1/out`; a repeat run prints `task: Task "kf1:pack" is up to date` and `--force` rebuilds. The checksums live in `.task/checksum/`, and a build that fails records nothing, so a failing verb runs again rather than settling for a stale bundle. `uv run scripts/kf1_mountain_pass.py verify-pack` runs first and names the offender rather than building a pack with holes in it: `material KillingFloorStatics.TruckShader needs texture out/T/TruckOneCanvasDiffuseTGA.tga, which is not under .tools/kf1`. `tests/test_kf1_pack.py` pins the manifest to the pack and asset the level places, pins the builder to the same names, and fails if any source pattern stops matching a file, which would otherwise mean a silent rebuild on every run.
+
+What the build does guarantee is the same result in game, not the same bytes. Two forced builds of unchanged inputs produce bundles with different hashes, because the builder recreates `Assets/Kf1MountainPass/` and Unity re-imports the generated meshes, materials and textures with fresh GUIDs each run; comparing two builds by hash will always look like a change. Compare them in game instead: the committed builder, a rebuild of it, and the original hand-built bundle at `.tools/kf1/kf1preview` (which took its textures through a PNG conversion rather than importing the umodel `.tga` files directly) render the same frame, each pair differing by a mean luma of 0.43 of 255 with under 0.06 per cent of pixels differing by more than 15, all of them the animated editor overlay.
+
+A missing pack does not fail the load: the placement becomes a placeholder cube and `Packs: 'bundle:kf1preview/MountainPass': pack 'kf1preview' is not installed; using a placeholder` is the line to look for. A box that only plays can be given the bundle with `rsync .tools/bundles/<platform>/kf1preview` and `task kf1:install` there, the same transfer pattern [gamepadui](gamepadui.md#transfer-thps-content-and-test-the-player-menus) uses for THPS.
 
 What is expected to look unfinished once the map renders: the terrain is one flat untinted surface until the layer masks are blended, some static meshes carry no texture, and BSP faces fall back to their base color.
 
 ## TODO
 
-- Build the `kf1preview` AssetBundle from `mesh.json` with a committed `unity/pack-authoring/Assets/Editor` builder and a taskfile verb, then fold the pack entry and the bundle placement into the generated level itself so the preview file is no longer a separate artifact. Until the builder exists the bundle in `.tools/kf1/` is the only copy and cannot be rebuilt.
+- Fold the `packs` entry and the `bundle:kf1preview/MountainPass` placement into the generated level so the preview level is no longer a separate artifact, now that `task kf1:pack` can rebuild the bundle.
+- Run the `linux` bundle against the native player build; `kf1:pack` produces it, but only the `windows` bundle has been played.
 - Apply ordered brush operations and check the five black solids and remaining ungrounded placements against the resulting collision.
 - Blend the terrain layer alpha maps into the terrain material: renormalize the weights, decide what to do with the slot that paints a mask as a surface, and confirm the mask row order against the heightmap.
 - Confirm the roll sign on tilted props.

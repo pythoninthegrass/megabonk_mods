@@ -5,7 +5,7 @@ This file provides guidance to AI agents when working with code in this reposito
 ## Quickstart
 
 - Launch the Warehouse level as Tony McZoom in editor mode: `task game:editor -- levels/thps.mblevel.json`. It needs `MEGABONK_DEV=true` in `.env` and the `thps` pack installed in the game; run `task mod:build` first after a code change. Generate the local-only piece-assembled variant with `task thps:editable-level`. See [Loading the THPS level](#loading-the-thps-level).
-- Preview the Killing Floor 1 Mountain Pass level with `task game:editor -- .tools/kf1/bsp-preview.mblevel.json`, not the generated `.tools/kf1/kf1-mountain-pass.mblevel.json`: the generated file has no `packs` entry, so it silently loads the stock Forest map while still placing its chests. The map geometry reaches the game only as the `kf1preview` AssetBundle, which nothing in the repository can rebuild yet. See [Previewing the level in game](docs/kf1-mountain-pass.md#previewing-the-level-in-game).
+- Preview the Killing Floor 1 Mountain Pass level with `task game:editor -- .tools/kf1/bsp-preview.mblevel.json`, not the generated `.tools/kf1/kf1-mountain-pass.mblevel.json`: the generated file has no `packs` entry, so it silently loads the stock Forest map while still placing its chests. The map geometry reaches the game only as the `kf1preview` AssetBundle, which `task kf1:pack` builds where Unity 2023.2.22f1 is installed and `task kf1:pack-host KF1_UNITY_HOST=<host>` builds on the box that has it; both are incremental, and `task kf1:install` puts the bundle for the game's runtime into the install. See [Previewing the level in game](docs/kf1-mountain-pass.md#previewing-the-level-in-game).
 
 ## Website
 
