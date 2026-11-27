@@ -296,10 +296,54 @@ Open questions:
 - **Terrain.** 256 by 256 samples, 64 units apart, centered on the origin (sample 128 at 0), height `(value - 32768) / 256 * 64`. The 12 `PlayerStart` actors rest 34 to 43 units above this surface, which confirms the fitted scale.
 - **Anchors.** The first `PlayerStart` is the spawn. The `ZombieVolume` farthest from it that has a floor is the boss spawner, which is a stand-in until the boss area is chosen by hand. `ShopVolume` actors become shrine spots, `KFAmmoPickup` actors power-up spots and `KFRandomItemSpawn` actors chests. Every anchor needs a terrain or brush floor within 100 Unreal units.
 - **Grounded spots.** Combined collision leaves 5 of 157 zombie volumes, 1 of 4 shop volumes, 2 of 14 ammo pickups and 3 of 14 item spawns without a floor in reach. Those anchors are reported and skipped. The three grounded shop spots are supplemented with grounded navigation nodes, selecting the most distant from the spawn, boss and already selected spots until there are eight candidates for up to seven shrines.
-- **Level fields.** Only fields the Conker level already writes are used: no `packs` and no bundle placement until the pack exists, and the placeholder one-cell `grid` that a from-scratch level requires.
+- **Level fields.** Only fields the Conker level already writes are used: no `packs` and no bundle placement until the pack exists, and the placeholder one-cell `grid` that a from-scratch level requires. That is why `prepare`'s own level file cannot show the map; see [Previewing the level in game](#previewing-the-level-in-game).
+
+## Previewing the level in game
+
+The game never reads `mesh.json`. Its one terrain mesh, 1,810 static mesh placements and 345 brush meshes live there only until something packs them into an AssetBundle, so `.tools/kf1/kf1-mountain-pass.mblevel.json` loads as the stock map named by `map` (1 is Forest) with the chests placed and nothing wrong logged. Launch the hand-made `.tools/kf1/bsp-preview.mblevel.json` instead:
+
+```sh
+task game:editor -- .tools/kf1/bsp-preview.mblevel.json
+```
+
+`DevHarness: load-level` in `BepInEx/LogOutput.log` names the file that actually loaded. The preview level is the generated one plus exactly two things: a `"packs": {"kf1preview": "1.0.0"}` entry, and one extra `edits` entry of `opType` `object.place` whose payload places `bundle:kf1preview/MountainPass` at the origin with unit scale. Nothing else differs, so regenerate it after any `prepare` run that moves spawns or spots, or it drifts from the generated level:
+
+```sh
+uv run python - <<'PY'
+import json
+from pathlib import Path
+level = json.loads(Path(".tools/kf1/kf1-mountain-pass.mblevel.json").read_text())
+level["packs"] = {"kf1preview": "1.0.0"}
+placement = {"catalogId": "bundle:kf1preview/MountainPass", "position": {"x": 0, "y": 0, "z": 0},
+             "rotation": {"x": 0, "y": 0, "z": 0}, "scale": {"x": 1, "y": 1, "z": 1}}
+edit = {"opType": "object.place", "target": "", "payload": json.dumps(placement, separators=(",", ":"))}
+level["edits"].insert(0, edit)
+Path(".tools/kf1/bsp-preview.mblevel.json").write_text(json.dumps(level))
+PY
+```
+
+### The kf1preview pack
+
+`kf1preview` is a 55 MB bundle holding the whole map as the single asset `MountainPass`. Its two surviving copies are `.tools/kf1/kf1preview` with its manifest `.tools/kf1/preview-manifest.json`, and the installed pair under `<game dir>/UserData/LevelPacks/kf1preview/`. Reinstalling the latter is the layout `task pack:install` uses:
+
+```sh
+dest="$(uv run scripts/game_paths.py | jq -r .game_dir)/UserData/LevelPacks/kf1preview"
+mkdir -p "$dest"
+cp .tools/kf1/kf1preview "$dest/"
+cp .tools/kf1/preview-manifest.json "$dest/manifest.json"
+```
+
+**Nothing in the repository builds this bundle.** It came from a scratch Unity editor script that no longer exists: there is no `task kf1:pack`, no `unity/pack-authoring/packs/kf1preview`, and no committed `Assets/Editor` builder that reads `.tools/kf1/mesh.json`. So:
+
+- A missing `kf1preview` under `UserData/LevelPacks` cannot be regenerated, and the map is then invisible. The load does not fail: the placement becomes a placeholder cube and `Packs: 'bundle:kf1preview/MountainPass': pack 'kf1preview' is not installed; using a placeholder` is the line to look for.
+- A converter change is invisible in game until something rebuilds the bundle from the new `mesh.json`; compare the bundle's mtime against `.tools/kf1/mesh.json` before concluding a converter change did nothing.
+- `ConkerColorsPack.cs` is the shape to copy: it reads `mesh.json` from a fixed source directory and calls `PackBuilder.BuildNamedBundle` for both target platforms. A KF1 builder needs the source pointed at `.tools/kf1`, the bundle named `kf1preview`, and then `prepare` can write the `packs` entry and the bundle placement itself, retiring the preview level.
+
+What is expected to look unfinished once the map renders: the terrain is one flat untinted surface until the layer masks are blended, some static meshes carry no texture, and BSP faces fall back to their base color.
 
 ## TODO
 
+- Build the `kf1preview` AssetBundle from `mesh.json` with a committed `unity/pack-authoring/Assets/Editor` builder and a taskfile verb, then have `prepare` write the `packs` entry and the bundle placement itself. Until then the bundle in `.tools/kf1/` is the only copy and cannot be rebuilt.
 - Apply ordered brush operations and check the five black solids and remaining ungrounded placements against the resulting collision.
 - Blend the terrain layer alpha maps into the terrain material: renormalize the weights, decide what to do with the slot that paints a mask as a surface, and confirm the mask row order against the heightmap.
 - Confirm the roll sign on tilted props.
