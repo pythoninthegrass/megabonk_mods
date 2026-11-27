@@ -6,7 +6,14 @@ import level_geometry as geometry
 import math
 import re
 import struct
-from build_thps_level import CHEST_LUCK_RANGE, GUARANTEED_SHRINE_KINDS, SHRINE_COUNT, SHRINE_KINDS
+from build_thps_level import (
+    BOSS_HIDDEN_CHILDREN,
+    BOSS_SPAWN_SCALE,
+    CHEST_LUCK_RANGE,
+    GUARANTEED_SHRINE_KINDS,
+    SHRINE_COUNT,
+    SHRINE_KINDS,
+)
 from pathlib import Path
 from warehouse_surface import UPRIGHT_PITCH
 
@@ -224,7 +231,12 @@ def make_level(terrain, actors, skipped=None):
         "mapDescription": "Hold the valley between the trader pods.",
         "grid": {"width": 15, "depth": 15, "cells": [{"x": 7, "z": 7, "height": -3}]},
         "spawn": {"position": spawn, "rotation": [0, (start["rotation"][1] * 360 / 65536) % 360, 0]},
-        "bossSpawner": {"position": max(grounded)[1], "rotation": [0, 0, 0]},
+        "bossSpawner": {
+            "position": max(grounded)[1],
+            "rotation": [0, 0, 0],
+            "scale": [BOSS_SPAWN_SCALE] * 3,
+            "hiddenChildren": list(BOSS_HIDDEN_CHILDREN),
+        },
         "killFloorY": KILL_FLOOR_Y,
         "noGrass": True,
         "extraShrines": SHRINE_COUNT[0],
