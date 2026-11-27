@@ -18,12 +18,13 @@ The Killing Floor 1 original avoids all of this: it is the same author's map, it
 
 `tools/videos/KF2_Mountain_Pass.webm` (1,346,697,421 bytes, sha256 `bade7b0330b38447180287296ab0837be21b92879f1eee17ee8ba10cbe972d42`, 2560x1440, 60 fps VP9 with Opus audio, 16:25) is one complete Killing Floor 2 survival run of the Mountain Pass rework. The T3D, brush and umodel exports say what the map contains but never how it reads while moving through it, so this footage is the oracle for the terrain silhouette, where the road, buildings and treelines sit, and the direction waves come from. The KF2 rework is Tripwire's Unreal Engine 3 rebuild, not the KF1 map: meshes, materials, lighting and vegetation are its own. Use the frames for layout, scale and pacing, and the KF1 export for anything built.
 
-Frames are extracted in the same manner as `tools/thps_warehouse_frames/`, as an untriaged dump for a later agent to decide what to keep: 910 frames at 1 fps with `-q:v 2` at native 2560x1440, covering video time 00:20 to 15:30, `tools/kf2_mountain_pass_frames/frame_0001.jpg` to `frame_0910.jpg`. Frame N sits at video time 20 + (N-1) seconds, so `frame_0455.jpg` is 07:54. Both the frames and the video are gitignored. Regenerate with:
+Frames are extracted in the same manner as `tools/thps_warehouse_frames/`, as an untriaged dump for a later agent to decide what to keep: 910 frames at 1 fps with `-q:v 2` at native 2560x1440, covering video time 00:20 to 15:30, `tools/kf2_mountain_pass_frames/frame_0001.jpg` to `frame_0910.jpg`. Both the frames and the video are gitignored. Regenerate with:
 
 ```sh
 ffmpeg -ss 00:00:20 -to 00:15:30 -i tools/videos/KF2_Mountain_Pass.webm -vf fps=1 -q:v 2 tools/kf2_mountain_pass_frames/frame_%04d.jpg
 ```
 
+- Frame N is the source frame at video time 20.483 + (N-1) seconds: the extraction lands 29 frames after the requested start, so `frame_0455.jpg` is 07:54.48 rather than 07:54.00. The offset was measured by MD5-matching extracted frames to the source's own frame timestamps at six points across the run, and is constant. A video time T lands in frame `round(T - 20.483) + 1`.
 - The window is a single run. `frame_0001` still carries the loadout selection overlay and `frame_0910` is the VICTORY screen after the final boss, so every frame is in-level; there is no facecam, letterbox or black frame (the smallest frame is 73 KB).
 - The HUD is fixed in every frame: Trader distance and wave counter top left, XP and health/armor bottom left, ammo, cash and inventory bottom right, weapon-pickup banners top center. Ignore all of it when reading geometry.
 - Nothing else has been done to the frames. Which frames show which area, which are shop or pause screens, and which are the best overviews are all unresolved and left to the analysis pass.
