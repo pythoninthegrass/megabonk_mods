@@ -44,12 +44,54 @@ End Actor
     (primitive,) = floor["primitives"]
     assert floor["name"] == "Floor"
     assert primitive["indices"] == [0, 1, 2, 0, 2, 3]
-    assert primitive["positions"][:3] == [0, 1.4, 0.28]
+    assert primitive["positions"][:3] == pytest.approx([0, 50 * kf1.SCALE, 10 * kf1.SCALE])
     assert primitive["uv"] == [0, 1, 1, 1, 1, 0, 0, 0]
     assert (tmp_path / mesh["materials"][primitive["material"]]["texture"]).samefile(path)
     assert mesh["collision"]["indices"][6:] == [4, 5, 6, 4, 6, 7]
     assert mesh["collision"]["positions"][12:] == primitive["positions"]
-    assert kf1.floor_placement(kf1.collision_triangles(mesh["collision"]), (12, 4, 55), kf1.ORIGIN, kf1.SCALE)[1] == 1.4
+    assert kf1.floor_placement(kf1.collision_triangles(mesh["collision"]), (12, 4, 55), kf1.ORIGIN, kf1.SCALE)[
+        1
+    ] == pytest.approx(50 * kf1.SCALE)
+    path.unlink()
+    missing = kf1.unpack_map(tmp_path / "out", [], heights, terrain, brushes)
+    rgba = missing["meshes"][1]["primitives"][0]["rgba"]
+    assert len(rgba) == 16
+    assert max(rgba[:3]) < 180 and rgba[3] == 255
+
+
+def test_standing_kf_human_matches_player_capsule():
+    assert pytest.approx(3.85) == 2 * 50 * kf1.SCALE
+
+
+def test_actor_scalar_scale_and_skin_slot():
+    actor = kf1.parse_actors(SAMPLE.replace('    Tag="StaticMeshActor"', '    DrawScale=3.0'))[0]
+    assert actor["scale"] == pytest.approx((2.7, 2.7, 2.7))
+    assert actor["skins"][0] == "KF-MountainPass.GUP-MountainSky"
+
+
+def test_exported_shader_finds_diffuse_in_named_package_with_cutout_alpha(tmp_path):
+    meshes = tmp_path / "out"
+    mat = meshes / "Foliage/Shader/Needles.mat"
+    mat.parent.mkdir(parents=True)
+    mat.write_text("Diffuse=Branch\n")
+    texture = meshes / "Foliage/Texture/Branch.tga"
+    texture.parent.mkdir()
+    image = Image.new("RGBA", (2, 1), (40, 60, 20, 255))
+    image.putpixel((0, 0), (0, 0, 0, 0))
+    image.save(texture)
+    material = kf1.static_material(kf1.material_index(meshes), meshes, "Foliage.Trees.Needles", {})
+    assert material["texture"] == "out/Foliage/Texture/Branch.tga"
+    assert material["alphaMode"] == "MASK"
+
+
+def test_explicit_skin_does_not_borrow_a_same_named_texture_from_another_package(tmp_path):
+    texture = tmp_path / "out/Other/Texture/Floor.tga"
+    texture.parent.mkdir(parents=True)
+    Image.new("RGB", (1, 1)).save(texture)
+    meshes = tmp_path / "out"
+    material = kf1.static_material(kf1.material_index(meshes), meshes, "Missing.Room.Floor", {}, explicit_skin=True)
+    assert "texture" not in material
+    assert material["baseColor"] == [0.3, 0.3, 0.3, 1]
 
 
 SAMPLE = """Begin Map

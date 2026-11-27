@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORK = ROOT / ".tools/kf1"
 T3D_SHA256 = "87acc038e2e67c6176ea2396b7ffa20ce4bc91f6f27bd99a6546013380c5b02c"
 ORIGIN = (0, 0, 0)
-SCALE = 0.028
+SCALE = 3.85 / 100  # Match Megabonk's standing capsule to the KFHumanPawn cylinder.
 SAMPLE_UNITS = 64
 FLAT_HEIGHT = 32768
 KILL_FLOOR_Y = -200.0
@@ -68,7 +68,7 @@ LEVEL_FIELDS = frozenset(
     }
 )
 ACTOR_START = re.compile(r"^Begin Actor Class=(\w+) Name=(\S+)")
-ACTOR_PROPERTY = re.compile(r"^    (Location|Rotation|DrawScale3D|StaticMesh)=(.*)$")
+ACTOR_PROPERTY = re.compile(r"^    (Location|Rotation|DrawScale3D|DrawScale|StaticMesh|Skins\(\d+\))=(.*)$")
 ACTOR_MESH = re.compile(r"StaticMesh'([^']+)'")
 
 
@@ -95,9 +95,12 @@ def parse_actors(text, classes=ACTOR_CLASSES):
                 "rotation": (0, 0, 0),
                 "scale": (1, 1, 1),
                 "mesh": None,
+                "skins": {},
             }
+            scalar = 1.0
         elif line.startswith("End Actor"):
             if current is not None and current["class"] in classes:
+                current["scale"] = tuple(scalar * component for component in current["scale"])
                 actors.append(current)
             current = None
         elif current is not None and (match := ACTOR_PROPERTY.match(line)) is not None:
@@ -108,6 +111,11 @@ def parse_actors(text, classes=ACTOR_CLASSES):
                 current["rotation"] = tuple(int(n) for n in _vector(value, ("Pitch", "Yaw", "Roll"), (0, 0, 0)))
             elif key == "DrawScale3D":
                 current["scale"] = _vector(value, "XYZ", (1, 1, 1))
+            elif key == "DrawScale":
+                scalar = float(value)
+            elif key.startswith("Skins"):
+                if skin := re.fullmatch(r"\w+'([^']+)'", value):
+                    current["skins"][int(key[6:-1])] = skin[1]
             elif (mesh := ACTOR_MESH.search(value)) is not None:
                 current["mesh"] = mesh[1]
     return actors
@@ -357,6 +365,9 @@ def brush_material(meshes, reference):
         material.update(texture=str(texture.relative_to(meshes.parent)), wrapS=10497, wrapT=10497)
     else:
         size = (1, 1)
+        material["baseColor"] = [0.32, 0.31, 0.29, 1]
+        if reference.endswith(".LondonStreetTarmac"):
+            material["baseColor"] = [0.16, 0.15, 0.14, 1]
         if reference == "Engine.BlackTexture":
             material["baseColor"] = [0, 0, 0, 1]
     return material, size
@@ -383,6 +394,8 @@ def append_brushes(meshes, brushes, materials, rendered, positions, indices):
                 point = [round(n, 4) for n in world_point(world, ORIGIN, SCALE)]
                 positions.extend(point)
                 primitive["positions"].extend(point)
+                if color := materials[index].get("baseColor"):
+                    primitive["rgba"].extend(round(v * 255) for v in color)
                 delta = [a - b for a, b in zip(vertex, face["Origin"], strict=True)]
                 primitive["uv"].extend(
                     (math.sumprod(delta, face["TextureU"]) / width, 1 - math.sumprod(delta, face["TextureV"]) / height)
@@ -393,8 +406,42 @@ def append_brushes(meshes, brushes, materials, rendered, positions, indices):
         rendered.append({"name": name, "primitives": list(primitives.values())})
 
 
+def material_index(meshes):
+    index = {}
+    for pattern in ("*/*/*.tga", "*/*/*.mat"):
+        for path in meshes.glob(pattern):
+            index.setdefault(path.stem.casefold(), []).append(path)
+    return index
+
+
+def static_material(index, meshes, reference, source, explicit_skin=False):
+    package, *_, name = reference.split(".")
+    material = {"name": reference, "doubleSided": True, "alphaMode": "OPAQUE"}
+    visited = set()
+    while name.casefold() not in visited:
+        visited.add(name.casefold())
+        candidates = index.get(name.casefold(), [])
+        local = [p for p in candidates if p.parents[1].name.casefold() == package.casefold()]
+        if not local and (explicit_skin or len(candidates) != 1):
+            break
+        path = (local or candidates)[0]
+        if path.suffix == ".tga":
+            material.update(texture=str(path.relative_to(meshes.parent)), wrapS=10497, wrapT=10497)
+            with Image.open(path) as image:
+                if "A" in image.getbands() and image.getextrema()[-1][0] < 128 <= image.getextrema()[-1][1]:
+                    material.update(alphaMode="MASK", alphaCutoff=0.5)
+            return material
+        diffuse = re.search(r"^Diffuse=(.+)$", path.read_text(errors="replace"), re.M)
+        if not diffuse:
+            break
+        package, name = path.parents[1].name, diffuse[1].strip()
+    material["baseColor"] = source.get("pbrMetallicRoughness", {}).get("baseColorFactor", [0.3, 0.3, 0.3, 1])
+    return material
+
+
 def unpack_map(meshes, actors, heights, terrain, brushes=()):
     materials = [{"alphaMode": "OPAQUE", "doubleSided": False}]
+    index = material_index(meshes)
     lookup, loaded, rendered = {}, {}, [{"name": "Terrain", "primitives": [terrain_primitive(heights, 0)]}]
     for actor in actors:
         if actor["mesh"] is None:
@@ -406,17 +453,23 @@ def unpack_map(meshes, actors, heights, terrain, brushes=()):
         gltf, data = loaded[path]
         primitives = []
         for primitive in gltf["meshes"][0]["primitives"]:
-            key = path, primitive.get("material")
+            slot = primitive.get("material", 0)
+            source = gltf.get("materials", [{}])[slot]
+            skins = actor.get("skins", {})
+            reference = skins.get(slot, f"{path.parents[1].name}.{source.get('name', '')}")
+            key = path, slot, reference
             if key not in lookup:
-                source = gltf.get("materials", [{}])[key[1] or 0]
-                color = source.get("pbrMetallicRoughness", {}).get("baseColorFactor", [1, 1, 1, 1])
                 lookup[key] = len(materials)
-                materials.append({"name": source.get("name", ""), "alphaMode": "OPAQUE", "doubleSided": True, "baseColor": color})
+                materials.append(static_material(index, meshes, reference, source, explicit_skin=slot in skins))
             primitives.append(
                 render_primitive(
                     gltf, data, primitive, actor["rotation"], actor["scale"], actor["location"], ORIGIN, SCALE, lookup[key]
                 )
             )
+            converted = primitives[-1]
+            color = materials[lookup[key]].get("baseColor")
+            if color and not converted["rgba"]:
+                converted["rgba"] = [round(v * 255) for v in color] * (len(converted["positions"]) // 3)
         rendered.append({"name": actor["name"], "primitives": primitives})
     positions, indices = terrain_mesh(heights, ORIGIN, SCALE)
     append_brushes(meshes, brushes, materials, rendered, positions, indices)
