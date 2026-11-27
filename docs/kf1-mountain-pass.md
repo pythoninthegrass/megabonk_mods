@@ -61,11 +61,14 @@ umodel does not recognize the `.rom` extension, so link the map under a `.upk` n
 
 ## The BSP
 
-The T3D holds the brushes that make up the BSP, not the compiled BSP. Of 462 `Brush` actors, 432 carry geometry (none rotated; vertices are brush-local, so world position is vertex minus `PrePivot` plus `Location`): 337 additive (2,053 polygons, median bounding box 144 by 56 by 32 units, 146 smaller than 256 units, mostly walls, ledges and stairs) and 94 subtractive (566 polygons; the largest span the whole world and are the void). The additive brushes use building, road and tunnel textures (`concreteroof`, `Half_Light_Hotel_Stone`, `House3_Concrete`, `LondonStreetTarmac`, `Car_Tunnel_Metal`). Their X range is -5,856 to 9,536 and Y range is -12,288 to 4,032, but they cluster in a few building complexes; one group lies far south of the terrain at Y around -10,000 to -12,000. Measured against the terrain, 68 textured additive brushes are fully above it, 117 intersect it and 117 are fully below it.
+The T3D exports construction brushes rather than the compiled BSP mesh. Counting explicit actor-level `CsgOper` values gives 367 additive brushes (2,431 polygons), 94 subtractive brushes (566 polygons) and one brush without an operation. Vertices are brush-local: subtract `PrePivot`, add `Location`, then convert the axes and scale. The additive pass triangulates each polygon in vertex order, groups faces by their `Texture` reference and appends the same triangles to collision. It adds 4,784 triangles across 345 brushes. Rooms and doorways carved by later subtractions are still approximate.
 
-Twenty-nine additive brushes use `Engine.BlackTexture` (256 polygons, six-sided boxes) and include the largest volumes in the level (one spans 9,120 by 3,424 by 1,120 units); 26 of them intersect the terrain. What they are for, invisible collision or zone filler, is not established and needs a render or an in-editor look before deciding whether to build collision from them.
+`Engine.BlackTexture` is a surface material, not a collision flag. There are 142 mixed-material additive brushes; dropping a whole brush for one black face would remove walls and floors. The 22 entirely black additive brushes fall into two groups:
 
-Drawing the polygons of the additive brushes (skipping `BlackTexture` and the world-size subtractive brushes) gives an approximate visible result without a boolean operation; a faithful result needs the additive and subtractive operations applied in level order.
+- **17 zone portals.** Each is a single sheet with actor `PolyFlags=67108873` (`0x04000009`: portal, not solid, invisible). In a top-down render of terrain, props and brush faces these appear as short cross-sections at the buildings. They belong in neither the render mesh nor collision.
+- **Five solids.** These have six faces and no portal flag. `Brush173` and `Brush186` span most of the valley length; their outlines cover terrain and cross the road. `Brush245` is a building-sized box intersected by later subtractive brushes. `Brush23` and `Brush39` are smaller closed solids. The overlay establishes that these are construction volumes rather than portal sheets; it does not establish which of their faces survive in the compiled map. The additive pass omits all five instead of creating uncarved walls or floors across playable space. Reevaluate them after ordered subtraction.
+
+UVs come from the polygon's local `Origin`, `TextureU` and `TextureV` and the dimensions of the exported TGA. When a shader exports a diffuse texture, the converter uses that texture. A missing texture leaves the material named but untextured. The standalone mesh JSON references textures relative to `.tools/kf1/`.
 
 ## Layout
 
@@ -91,7 +94,7 @@ The playable area is one enclosed valley bowl: a road and building complex on th
 - The spawn is a grassy pine clearing on a slope, with worn dirt in the grass and a tan building visible through the trees downslope (`f0003`). This is where `WAVE INCOMING` fires at the start (`f0001`-`f0006`).
 - From the clearing the ground drops to the road and rises behind it to a rock ledge; descending that ledge onto the highway is the run's best single overview, with the road winding away below, a metal guardrail and a streetlamp, and the hazy lake and mountain ring beyond (`f0132`).
 - The hillsides are grass over rock, with large rounded weathered boulder outcrops rather than sheer faces (`f0116`, `f0132`). Green grass on the upper slopes, dry yellow grass on the valley floor (`f0144`, `f0519`).
-- One area is a burnt pine stand: blackened silhouetted trees with glowing embers in the trunks, ash-white ground cover and yellow dead grass (`f0091`). This is the only bleached ground in the run.
+- One area is a burned pine stand: blackened silhouetted trees with glowing embers in the trunks, ash-white ground cover and yellow dead grass (`f0091`). This is the only bleached ground in the run.
 - There is no snow. Ground that reads white at thumbnail scale is haze, ash or a transient whiteout: `f0896` is white-flooded where `f0891` a few seconds earlier shows green grass in the same place, and `f0116` is green grass under a pale hazy sky.
 
 ## The road, its tunnels and its bridges
@@ -137,7 +140,7 @@ Small outbuildings sit at the base of the cliffs: a brick-and-corrugated storage
 
 - Conifers throughout: tall spruce or fir on the slopes and scattered specimens on the valley floor (`f0003`, `f0322`, `f0628`).
 - Grass is the ground cover everywhere the road and buildings are not, green on the slopes and dry yellow on the floor (`f0116`, `f0519`).
-- One burnt stand of blackened pines (`f0091`).
+- One burned stand of blackened pines (`f0091`).
 - At least one deciduous tree among the conifers, at the cliff-base shed (`f0525`).
 - Fallen logs lie on the forest floor and across the hillsides above the road (`f0502`-`f0510`, `f0701`-`f0702`, unverified at full resolution).
 
@@ -147,7 +150,7 @@ The road is dressed as a disaster scene rather than a clean highway.
 
 - A landmark cluster on the grass beside the road: a rearing-horse equestrian statue on a tall stone pedestal, a white `SAMU de PARIS` / `MEDECIN` ambulance with a blue lightbar, a police car, and a tan-camo six-wheeled armored personnel carrier (`f0378`, `f0466`).
 - Parked and abandoned vehicles: police cars with blue lights (`f0382`, `f0276`-`f0291`), a box truck or box trailer (`f0017`-`f0019`, `f0382`), sedans and hatchbacks, a pickup at the tunnel mouth (`f0891`).
-- Wreck clusters: burnt-out sedans and an overturned white cylindrical tanker trailer with a red stripe, among pines on a slope (`f0486`, `f0482`-`f0491`); a red hatchback on a concrete pad at the bridge (`f0744`); a green hatchback on the verge at the lay-by (`f0628`); a red car wreck at the tunnel portal (`f0013`).
+- Wreck clusters: burned-out sedans and an overturned white cylindrical tanker trailer with a red stripe, among pines on a slope (`f0486`, `f0482`-`f0491`); a red hatchback on a concrete pad at the bridge (`f0744`); a green hatchback on the verge at the lay-by (`f0628`); a red car wreck at the tunnel portal (`f0013`).
 - Camp props on the grass near the cliff base: a plank bonfire built inside a ring of large boulders, giving off black smoke, with two wooden picnic tables beside it and the yellow hatchback beyond (`f0519`).
 - Green waste dumpsters by the road and at the built end (`f0013`, `f0015`, `f0718`-`f0750`).
 - A crashed aircraft lies on the pine hillside: a dark fuselage with its tail fin among the trees, beside a worn dirt footpath (`f0322`).
@@ -177,7 +180,7 @@ The valley reads as closed on every side, which is what keeps a wave from runnin
 
 One run, four waves then the boss, with the wave counter read directly from the HUD:
 
-- Wave 1 of 4: `f0027` (32 left, in the brick interior), `f0091` (7 left, burnt stand), `f0116` (0:56 inter-wave timer at the overlook).
+- Wave 1 of 4: `f0027` (32 left, in the brick interior), `f0091` (7 left, burned stand), `f0116` (0:56 inter-wave timer at the overlook).
 - Wave 2 of 4: `f0322` (0:39, plane hillside), `f0351` (0:10, `STOP CLONING` room).
 - Wave 3 of 4: `f0519` (0:50, bonfire camp).
 - Wave 4 of 4: `f0628` (32 left, the lay-by), `f0729` (score overlay open, `WAVE 4/4`).
@@ -203,7 +206,7 @@ The KF1 export is authoritative and the footage loses every argument here; the d
 - Brush X and Y range. Brushes span X -5,856 to 9,536 and Y -12,288 to 4,032, an asymmetric extent, while the frames show one enclosed bowl with no second district off to one side. The frames cannot see underground or indoors systematically, so the export's range stands.
 - Spawn. The export has 12 `PlayerStart` actors in a ring near (0, -1,500); KF2 has a single spawn point in the pine clearing (`f0003`). The footage shows one spawn because one player spawned once, so it cannot confirm or deny the ring. Build the ring from the export.
 - Enemy spawns and shops. The footage corroborates the shape of the export's intent (waves from the valley rim, four trader sites) without confirming either count.
-- The `BlackTexture` brushes. The footage gives no evidence about the 29 `BlackTexture` brushes at all, so their purpose stays open in [TODO](#todo).
+- The `BlackTexture` brushes. The footage gives no evidence about the `BlackTexture` brushes; their classification comes from the KF1 export (see [The BSP](#the-bsp)).
 
 ## Unresolved
 
@@ -216,7 +219,7 @@ Claims that survived only at contact-sheet scale, so they are recorded as open r
 
 Open questions:
 
-- Whether the KF1 map has the burnt pine stand, the lake boardwalk complex, the crashed plane, the statue-and-ambulance memorial and the armored personnel carrier, or whether those are KF2 additions. Resolving it needs the KF1 static mesh and skin lists matched to the frames, which is the texture-mapping TODO below.
+- Whether the KF1 map has the burned pine stand, the lake boardwalk complex, the crashed plane, the statue-and-ambulance memorial and the armored personnel carrier, or whether those are KF2 additions. Resolving it needs the KF1 static mesh and skin lists matched to the frames, which is the texture-mapping TODO below.
 - The relative arrangement of the road complex and the lake: the frames show both on the valley floor and both near the spawn, but the run never shows them in one view, so which side of the bowl each is on is not established. The export's brush and mesh positions are the only way to settle it.
 - Whether the brick complex is one building or several, and how its interior levels stack. The frames show corridors, stairwells and a sunken terrace but never the building from outside as a whole. Resolved by the KF1 brush geometry, which has the wall and floor slabs, or by a second video angle.
 - How many trader sites the map actually has. The pod appears at four distinct-looking places, which matches the export's 4 `ShopVolume` actors, but the cyan trader unit inside the brick complex (`f0031`) and the reported wall kiosks (`f0339`, `f0527`) may be a fifth and sixth, or may be decorations at the four. Resolved by comparing pod and kiosk positions with the `ShopVolume` locations once the level is placed.
@@ -227,19 +230,18 @@ Open questions:
 
 ## Converting the export
 
-`uv run scripts/kf1_mountain_pass.py prepare` checks the T3D hash and writes `.tools/kf1/mesh.json` (40 MB: terrain, 1,810 placed meshes, the perimeter walls and the terrain collision) and `.tools/kf1/kf1-mountain-pass.mblevel.json`, in about five seconds. `verify-export` only checks the hash. The walkable outline, perimeter walls, floor lookup, glTF accessor reader and the `object.place` edit builder live in `scripts/level_geometry.py`, shared with `scripts/conker_colors.py`; the Conker script keeps thin wrappers that bind its own kill floor, pit floor and anchors.
+`uv run scripts/kf1_mountain_pass.py prepare` checks the T3D hash and writes `.tools/kf1/mesh.json` (terrain, static meshes, additive brush faces, perimeter walls and combined terrain/brush collision) and `.tools/kf1/kf1-mountain-pass.mblevel.json`, in about five seconds. `verify-export` only checks the hash. The walkable outline, perimeter walls, floor lookup, glTF accessor reader and the `object.place` edit builder live in `scripts/level_geometry.py`, shared with `scripts/conker_colors.py`; the Conker script keeps thin wrappers that bind its own kill floor, pit floor and anchors.
 
 - **Coordinates.** Unreal Engine 2 is left-handed with Z up, as Unity is left-handed with Y up, so `world_point()` is a cyclic permutation (Unreal X, Y, Z become Megabonk Z, X, Y) and needs no winding flip for terrain. The scale is 0.028 world units per Unreal unit, the Conker value, and has not been tuned in game.
 - **Rotation.** Rotators are 65536 units per turn, applied as roll about X, then pitch about Y, then yaw about Z. The roll sign is unverified; it only matters for the few tilted props.
 - **Meshes.** umodel writes glTF as Y up, meters, with Unreal Y and Z swapped (`ExportGLTF.cpp`, `TransformPosition`), so a vertex returns to Unreal units as `(x, z, y) * 100` before `DrawScale3D`, rotation and `Location` apply. That composite is a reflection, so triangle winding is reversed, as Conker does. umodel writes unsigned 16-bit indices. Its materials carry only a base color factor and no textures, so `mesh.json` materials hold the name and color until the texture mapping is built.
 - **Terrain.** 256 by 256 samples, 64 units apart, centered on the origin (sample 128 at 0), height `(value - 32768) / 256 * 64`. The 12 `PlayerStart` actors rest 34 to 43 units above this surface, which confirms the fitted scale.
-- **Anchors.** The first `PlayerStart` is the spawn. The `ZombieVolume` farthest from it that has a floor is the boss spawner, which is a stand-in until the boss area is chosen by hand. `ShopVolume` actors become shrine spots, `KFAmmoPickup` actors power-up spots and `KFRandomItemSpawn` actors chests. Every anchor is dropped onto the terrain within 100 units.
-- **Anchors on BSP.** 17 of 157 zombie volumes, 3 of 4 shop volumes, 4 of 14 ammo pickups and 6 of 14 item spawns stand on BSP floors well off the heightmap, so there is no terrain floor within reach. The converter skips and lists them instead of failing, and the spawn alone must succeed. They return once the BSP geometry exists. Until then the level has one shrine spot, and the runtime needs more spots than shrines (see `shrineSpots` in [level-format.md](level-format.md)).
+- **Anchors.** The first `PlayerStart` is the spawn. The `ZombieVolume` farthest from it that has a floor is the boss spawner, which is a stand-in until the boss area is chosen by hand. `ShopVolume` actors become shrine spots, `KFAmmoPickup` actors power-up spots and `KFRandomItemSpawn` actors chests. Every anchor needs a terrain or brush floor within 100 Unreal units.
+- **Grounded spots.** Combined collision leaves 5 of 157 zombie volumes, 1 of 4 shop volumes, 2 of 14 ammo pickups and 3 of 14 item spawns without a floor in reach. Those anchors are reported and skipped. The three grounded shop spots are supplemented with grounded navigation nodes, selecting the most distant from the spawn, boss and already selected spots until there are eight candidates for up to seven shrines.
 - **Level fields.** Only fields the Conker level already writes are used: no `packs` and no bundle placement until the pack exists, and the placeholder one-cell `grid` that a from-scratch level requires.
 
 ## TODO
 
-- Establish what the `BlackTexture` brushes are (a render of terrain, meshes and brushes would settle it).
-- Rebuild the BSP so the skipped anchors have a floor, and add more shrine spots.
+- Apply ordered brush operations and check the five black solids and remaining ungrounded placements against the resulting collision.
 - Map `StaticMesh`, `Skins` and material references (Shader, Combiner and TexPanner objects exported as `.mat` by umodel) onto textures for the Unity pack, and texture the terrain from its layer alpha maps.
 - Tune `SCALE` against the player in game and confirm the roll sign.

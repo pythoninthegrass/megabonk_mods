@@ -15,6 +15,7 @@ from build_thps_level import (
     SHRINE_KINDS,
 )
 from pathlib import Path
+from PIL import Image
 from warehouse_surface import UPRIGHT_PITCH
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,7 +32,15 @@ REACH = 100
 TERRAIN_RGBA = (96, 110, 70, 255)
 MESH_UNITS = 100
 ACTOR_CLASSES = frozenset(
-    {"StaticMeshActor", "PlayerStart", "ZombieVolume", "ShopVolume", "KFRandomItemSpawn", "KFAmmoPickup", "BlockingVolume"}
+    {
+        "StaticMeshActor",
+        "PlayerStart",
+        "ZombieVolume",
+        "ShopVolume",
+        "KFRandomItemSpawn",
+        "KFAmmoPickup",
+        "BlockingVolume",
+    }
 )
 LEVEL_FIELDS = frozenset(
     {
@@ -121,7 +130,7 @@ def rotation_matrix(pitch, yaw, roll):
 
 
 def mesh_point(vertex, rotation, scale, location):
-    """A umodel glTF vertex (Y up, metres, Y and Z swapped) back in Unreal units, then scaled, rotated and moved."""
+    """A umodel glTF vertex (Y up, meters, Y and Z swapped) back in Unreal units, then scaled, rotated and moved."""
     x, y, z = vertex
     local = (x * MESH_UNITS * scale[0], z * MESH_UNITS * scale[1], y * MESH_UNITS * scale[2])
     matrix = rotation_matrix(*rotation)
@@ -170,6 +179,11 @@ def terrain_mesh(heights, origin, scale):
 
 def terrain_triangles(heights, origin, scale):
     positions, indices = terrain_mesh(heights, origin, scale)
+    return collision_triangles({"positions": positions, "indices": indices})
+
+
+def collision_triangles(collision):
+    positions, indices = collision["positions"], collision["indices"]
     vertex = [positions[i : i + 3] for i in range(0, len(positions), 3)]
     return [(tuple(vertex[i] for i in indices[start : start + 3]), None) for start in range(0, len(indices), 3)]
 
@@ -188,7 +202,7 @@ def walls(terrain):
 
 
 def make_level(terrain, actors, skipped=None):
-    """The level JSON; anchors with no terrain floor (BSP floors) are left out and described in `skipped`."""
+    """Build level JSON from grounded anchors and report placements with no floor within reach."""
     skipped = [] if skipped is None else skipped
 
     def named(cls):
@@ -220,6 +234,24 @@ def make_level(terrain, actors, skipped=None):
             skipped.append(f"ZombieVolume {volume['name']}: {error}")
     if not grounded:
         raise ValueError("No ZombieVolume has a terrain floor for the boss spawner")
+    shrine_spots = place_each("ShopVolume")
+    nodes = named("PathNode")
+    occupied = [spawn, max(grounded)[1], *shrine_spots]
+    while nodes and len(shrine_spots) <= SHRINE_COUNT[1] + len(GUARANTEED_SHRINE_KINDS):
+
+        def spacing(node):
+            x, _, z = world_point(node["location"], ORIGIN, SCALE)
+            return min(math.hypot(x - px, z - pz) for px, _, pz in occupied)
+
+        node = max(nodes, key=spacing)
+        nodes.remove(node)
+        try:
+            spot = place(node)
+        except ValueError:
+            continue
+        if spot not in occupied:
+            shrine_spots.append(spot)
+            occupied.append(spot)
     return {
         "schemaVersion": 4,
         "baseline": "none",
@@ -243,7 +275,7 @@ def make_level(terrain, actors, skipped=None):
         "extraShrineKinds": SHRINE_KINDS,
         "guaranteedShrineKinds": list(GUARANTEED_SHRINE_KINDS),
         "chestLuckRange": list(CHEST_LUCK_RANGE),
-        "shrineSpots": place_each("ShopVolume"),
+        "shrineSpots": shrine_spots,
         "powerupSpots": place_each("KFAmmoPickup"),
         "edits": [
             geometry.object_edit("interactable/chest", spot, UPRIGHT_PITCH)
@@ -287,7 +319,81 @@ def terrain_primitive(heights, material):
     }
 
 
-def unpack_map(meshes, actors, heights, terrain):
+def parse_brushes(text):
+    brushes = []
+    for actor in re.finditer(r"^Begin Actor Class=Brush Name=(\S+)(.*?)^End Actor", text, re.M | re.S):
+        name, body = actor.groups()
+        if "    CsgOper=CSG_Add\n" not in body:
+            continue
+        vectors = {key: _vector(value, "XYZ", ORIGIN) for key, value in re.findall(r"^    (Location|PrePivot)=(.*)$", body, re.M)}
+        offset = tuple(a - b for a, b in zip(vectors.get("Location", ORIGIN), vectors.get("PrePivot", ORIGIN), strict=True))
+        faces = []
+        for header, lines in re.findall(r"Begin Polygon([^\n]*)\n(.*?)End Polygon", body, re.S):
+            reference = re.search(r"\bTexture=(\S+)", header)
+            face = {"texture": reference[1] if reference else "", "Vertex": []}
+            for key, value in re.findall(r"^\s*(Origin|TextureU|TextureV|Vertex)\s+([^\n]+)", lines, re.M):
+                vector = tuple(map(float, value.split(",")))
+                if key == "Vertex":
+                    face[key].append(vector)
+                else:
+                    face[key] = vector
+            faces.append(face)
+        if faces:
+            brushes.append((name, offset, faces))
+    return brushes
+
+
+def brush_material(meshes, reference):
+    package, *_, name = reference.split(".") if reference else ("", "")
+    folder = meshes / package
+    shader = folder / "Shader" / f"{name}.mat"
+    if shader.exists() and (diffuse := re.search(r"^Diffuse=(.+)$", shader.read_text(), re.M)):
+        name = diffuse[1]
+    texture = folder / "Texture" / f"{name}.tga"
+    material = {"name": reference, "alphaMode": "OPAQUE", "doubleSided": False}
+    if texture.is_file():
+        with Image.open(texture) as image:
+            size = image.size
+        material.update(texture=str(texture.relative_to(meshes.parent)), wrapS=10497, wrapT=10497)
+    else:
+        size = (1, 1)
+        if reference == "Engine.BlackTexture":
+            material["baseColor"] = [0, 0, 0, 1]
+    return material, size
+
+
+def append_brushes(meshes, brushes, materials, rendered, positions, indices):
+    lookup = {}
+    for name, offset, faces in brushes:
+        if all(face["texture"] == "Engine.BlackTexture" for face in faces):
+            continue
+        primitives = {}
+        for face in faces:
+            reference = face["texture"]
+            if reference not in lookup:
+                material, size = brush_material(meshes, reference)
+                lookup[reference] = len(materials), size
+                materials.append(material)
+            index, (width, height) = lookup[reference]
+            primitive = primitives.setdefault(index, {"positions": [], "indices": [], "uv": [], "rgba": [], "material": index})
+            first = len(primitive["positions"]) // 3
+            collision_start = len(positions) // 3
+            for vertex in face["Vertex"]:
+                world = [a + b for a, b in zip(vertex, offset, strict=True)]
+                point = [round(n, 4) for n in world_point(world, ORIGIN, SCALE)]
+                positions.extend(point)
+                primitive["positions"].extend(point)
+                delta = [a - b for a, b in zip(vertex, face["Origin"], strict=True)]
+                primitive["uv"].extend(
+                    (math.sumprod(delta, face["TextureU"]) / width, 1 - math.sumprod(delta, face["TextureV"]) / height)
+                )
+            for i in range(1, len(face["Vertex"]) - 1):
+                indices.extend((collision_start, collision_start + i, collision_start + i + 1))
+                primitive["indices"].extend((first, first + i, first + i + 1))
+        rendered.append({"name": name, "primitives": list(primitives.values())})
+
+
+def unpack_map(meshes, actors, heights, terrain, brushes=()):
     materials = [{"alphaMode": "OPAQUE", "doubleSided": False}]
     lookup, loaded, rendered = {}, {}, [{"name": "Terrain", "primitives": [terrain_primitive(heights, 0)]}]
     for actor in actors:
@@ -313,6 +419,7 @@ def unpack_map(meshes, actors, heights, terrain):
             )
         rendered.append({"name": actor["name"], "primitives": primitives})
     positions, indices = terrain_mesh(heights, ORIGIN, SCALE)
+    append_brushes(meshes, brushes, materials, rendered, positions, indices)
     return {
         "meshes": rendered,
         "materials": materials,
@@ -324,12 +431,14 @@ def unpack_map(meshes, actors, heights, terrain):
 def prepare(source, meshes, output):
     t3d = source / "KF-MountainPass.t3d"
     verify_export(t3d)
-    actors = parse_actors(t3d.read_text(encoding="latin-1"))
+    text = t3d.read_text(encoding="latin-1")
+    actors = parse_actors(text, ACTOR_CLASSES | {"PathNode"})
     heights = read_heightmap((source / "Terrain_Main.bmp").read_bytes())
     terrain = terrain_triangles(heights, ORIGIN, SCALE)
     skipped = []
-    level = make_level(terrain, actors, skipped)
-    (output / "mesh.json").write_text(json.dumps(unpack_map(meshes, actors, heights, terrain), separators=(",", ":")))
+    mesh = unpack_map(meshes, actors, heights, terrain, parse_brushes(text))
+    level = make_level(collision_triangles(mesh["collision"]), actors, skipped)
+    (output / "mesh.json").write_text(json.dumps(mesh, separators=(",", ":")))
     (output / "kf1-mountain-pass.mblevel.json").write_text(json.dumps(level, indent=2) + "\n")
     return level, skipped
 

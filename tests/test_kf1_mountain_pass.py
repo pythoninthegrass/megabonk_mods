@@ -4,6 +4,53 @@ import kf1_mountain_pass as kf1
 import level_geometry as geometry
 import pytest
 import struct
+from PIL import Image
+
+
+def test_additive_brush_render_collision_and_floor(tmp_path):
+    brush = """Begin Actor Class=Brush Name=Floor
+    CsgOper=CSG_Add
+    PrePivot=(X=2)
+    Location=(X=12,Z=50)
+    Begin Brush Name=Model1
+       Begin PolyList
+          Begin Polygon Texture=Test.Floors.Stone Link=0
+             Origin   +0,+0,+0
+             TextureU +1,+0,+0
+             TextureV +0,+1,+0
+             Vertex   +0,+0,+0
+             Vertex   +16,+0,+0
+             Vertex   +16,+8,+0
+             Vertex   +0,+8,+0
+          End Polygon
+       End PolyList
+    End Brush
+End Actor
+"""
+    path = tmp_path / "out/Test/Texture/Stone.tga"
+    path.parent.mkdir(parents=True)
+    Image.new("RGB", (16, 8)).save(path)
+    excluded = [
+        brush.replace("CSG_Add", "CSG_Subtract"),
+        brush.replace("Class=Brush", "Class=ShopVolume"),
+        brush.replace("Test.Floors.Stone", "Engine.BlackTexture"),
+        brush.replace("    CsgOper=CSG_Add\n", ""),
+    ]
+    brushes = kf1.parse_brushes(brush + "".join(excluded))
+    heights = [[32768] * 2 for _ in range(2)]
+    terrain = kf1.terrain_triangles(heights, kf1.ORIGIN, kf1.SCALE)
+    mesh = kf1.unpack_map(tmp_path / "out", [], heights, terrain, brushes)
+    (floor,) = mesh["meshes"][1:]
+    (primitive,) = floor["primitives"]
+    assert floor["name"] == "Floor"
+    assert primitive["indices"] == [0, 1, 2, 0, 2, 3]
+    assert primitive["positions"][:3] == [0, 1.4, 0.28]
+    assert primitive["uv"] == [0, 1, 1, 1, 1, 0, 0, 0]
+    assert (tmp_path / mesh["materials"][primitive["material"]]["texture"]).samefile(path)
+    assert mesh["collision"]["indices"][6:] == [4, 5, 6, 4, 6, 7]
+    assert mesh["collision"]["positions"][12:] == primitive["positions"]
+    assert kf1.floor_placement(kf1.collision_triangles(mesh["collision"]), (12, 4, 55), kf1.ORIGIN, kf1.SCALE)[1] == 1.4
+
 
 SAMPLE = """Begin Map
 Begin Actor Class=StaticMeshActor Name=StaticMeshActor589
@@ -155,7 +202,8 @@ def level_actors(*specs):
         "\n".join(
             f"Begin Actor Class={cls} Name={cls}{i}\n    Location=(X={x},Y={y},Z=10)\n    Rotation=(Yaw={yaw})\nEnd Actor"
             for i, (cls, x, y, yaw) in enumerate(specs)
-        )
+        ),
+        classes=kf1.ACTOR_CLASSES | {"PathNode"},
     )
 
 
@@ -194,6 +242,20 @@ def test_make_level_only_emits_fields_the_runtime_already_reads():
     assert level["schemaVersion"] == 4
     assert level["baseline"] == "none"
     assert {"grid", "spawn", "bossSpawner"} <= set(level)
+
+
+def test_shrine_spots_include_grounded_path_nodes_beyond_the_maximum_shrine_count():
+    actors = level_actors(
+        ("PlayerStart", 0, 0, 0),
+        ("ZombieVolume", 64, 0, 0),
+        ("ShopVolume", -64, 0, 0),
+        ("PathNode", 8000, 0, 0),
+        *(("PathNode", x, 128, 0) for x in range(-192, 193, 32)),
+    )
+    level = kf1.make_level(level_terrain(), actors)
+    spots = level["shrineSpots"]
+    assert len({tuple(spot) for spot in spots}) == level["extraShrinesMax"] + len(level["guaranteedShrineKinds"]) + 1
+    assert all(y == 0 for _, y, _ in spots)
 
 
 def test_make_level_skips_and_reports_anchors_with_no_terrain_floor():
