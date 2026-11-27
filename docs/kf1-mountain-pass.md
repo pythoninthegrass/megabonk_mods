@@ -27,7 +27,9 @@ ffmpeg -ss 00:00:20 -to 00:15:30 -i tools/videos/KF2_Mountain_Pass.webm -vf fps=
 - Frame N is the source frame at video time 20.483 + (N-1) seconds: the extraction lands 29 frames after the requested start, so `frame_0455.jpg` is 07:54.48 rather than 07:54.00. The offset was measured by MD5-matching extracted frames to the source's own frame timestamps at six points across the run, and is constant. A video time T lands in frame `round(T - 20.483) + 1`.
 - The window is a single run. `frame_0001` still carries the loadout selection overlay and `frame_0910` is the VICTORY screen after the final boss, so every frame is in-level; there is no facecam, letterbox or black frame (the smallest frame is 73 KB).
 - The HUD is fixed in every frame: Trader distance and wave counter top left, XP and health/armor bottom left, ammo, cash and inventory bottom right, weapon-pickup banners top center. Ignore all of it when reading geometry.
-- Nothing else has been done to the frames. Which frames show which area, which are shop or pause screens, and which are the best overviews are all unresolved and left to the analysis pass.
+- The frames have been triaged. Contact sheets of 30 frames each were read for area coverage, then every frame cited below was re-read at full resolution. No frames were deleted: the dump is still complete, and the triage produced the index in [Reading the footage](#reading-the-footage) rather than a curated subset. Frames not cited there are unverified.
+- The run is a solo `Survival - Suicidal` game of four waves plus a boss, on the map the score overlay names `kf-mountainpass_zfix` (`frame_0729`, in-game clock 11:31), which is the same package as `KF-MountainPass_zfix` in [Why not the Killing Floor 2 version](#why-not-the-killing-floor-2-version). The top-left HUD box shows the wave as `n/4` and beside it either the zombies left in the wave (`frame_0027` shows 32) or the inter-wave countdown (`frame_0116` shows 0:56), so the large number is not a wave index.
+- Full-screen shop, inventory, score and loadout overlays hide all geometry. Re-read at full resolution and confirmed are `f0153` and `f0340` (the `INVENTORY` / `PURCHASE GEAR` shop, whose top-center header also reads `WAVE n/4`), `f0729` (the score overlay) and `f0905` (the loadout wheel). Contact sheets show further shop and overlay screens around `f0149`-`f0158`, `f0340`-`f0347`, `f0529`-`f0538`, `f0734`, `f0756`-`f0759` and `f0771`-`f0772`, none of them re-read frame by frame.
 - The footage is overcast and hazy. The KF1 level title is `KF-MountainPass_Day` and the map package ships a `GUP-MountainSky.tga`, so the KF1 sky and lighting may read brighter than this run; do not copy the KF2 mood without checking the KF1 sky and layer textures.
 
 ## Getting the game and tools
@@ -68,6 +70,160 @@ Drawing the polygons of the additive brushes (skipping `BlackTexture` and the wo
 ## Layout
 
 The terrain is a bowl about 12,000 units across. The 12 `PlayerStart` actors form a ring near the center around (0, -1,500), the 157 `ZombieVolume` actors ring the valley edge and the 4 `ShopVolume` actors sit at the sides.
+
+## Reading the footage
+
+Everything from here to [Where the footage and the KF1 export disagree](#where-the-footage-and-the-kf1-export-disagree) is the KF2 rebuild, read from the playthrough frames. It records how the valley reads and what sits where; it is not a spec, and the KF1 export above is what gets built. Frame numbers are `tools/kf2_mountain_pass_frames/frame_NNNN.jpg` shortened to `f0NNNN`. A frame named individually was re-read at full resolution. A range was read at contact-sheet scale only: it means the feature recurs across that stretch, and any single frame inside it is unverified. Several claims that looked solid at contact-sheet scale did not survive full resolution, and they are called out where that happened so nobody re-adds them.
+
+### Scale
+
+The frames cannot give heights, so heights come from the export and the footage only gives a sense of scale.
+
+- The one metric in the frames is the HUD's top-left `TRADER` readout: the straight-line distance to the Trader Pod in meters. Across the frames read at full resolution it runs from 5 m inside the pod (`f0736`) to 147 m deep in the brick building (`f0027`), with open ground in between (`f0525` 13, `f0168` 17, `f0744` 21, `f0486` 22, `f0357` 30, `f0519` 34, `f0132` 52, `f0378` 54, `f0322` 56, `f0331` 61, `f0060` 92, `f0891` 98, `f0628` 103, `f0003` 114).
+- That is a bound, not a survey, because KF2 relocates the pod between waves. It is consistent with the export: the bowl is about 12,000 Unreal units across and `SCALE` is 0.028 Megabonk units per Unreal unit, so the bowl is about 336 m and a pod near the middle puts the far side about 170 m away.
+- For terrain work the export's own grid is the ruler: one heightmap sample is 64 Unreal units apart, 1.79 m at `SCALE`, and the heightmap's raw range of 13,148 to 39,055 is 6,477 units of relief, about 181 m. A valley that tall against a 336 m bowl is what the frames show: the climb from the road to the overlook ridge is the bulk of the run's vertical travel.
+- Where a prop height is quoted below it is a ratio against the player, taken as 1.8 m, and the player is only visible in third person at the end of the run (`f0905`, in a `POLICE` vest), so every such number is rough.
+
+## Terrain and the valley
+
+The playable area is one enclosed valley bowl: a road and building complex on the valley floor, open grassy pine hillsides climbing off it, and a rocky ridge enclosing the whole thing.
+
+- The spawn is a grassy pine clearing on a slope, with worn dirt in the grass and a tan building visible through the trees downslope (`f0003`). This is where `WAVE INCOMING` fires at the start (`f0001`-`f0006`).
+- From the clearing the ground drops to the road and rises behind it to a rock ledge; descending that ledge onto the highway is the run's best single overview, with the road winding away below, a metal guardrail and a streetlamp, and the hazy lake and mountain ring beyond (`f0132`).
+- The hillsides are grass over rock, with large rounded weathered boulder outcrops rather than sheer faces (`f0116`, `f0132`). Green grass on the upper slopes, dry yellow grass on the valley floor (`f0144`, `f0519`).
+- One area is a burnt pine stand: blackened silhouetted trees with glowing embers in the trunks, ash-white ground cover and yellow dead grass (`f0091`). This is the only bleached ground in the run.
+- There is no snow. Ground that reads white at thumbnail scale is haze, ash or a transient whiteout: `f0896` is white-flooded where `f0891` a few seconds earlier shows green grass in the same place, and `f0116` is green grass under a pale hazy sky.
+
+## The road, its tunnels and its bridges
+
+An asphalt two-lane road is the spine of the valley floor, the only paved surface the run shows, and the built complex sits along it.
+
+- The road's reference shot: two parallel yellow center lines and solid yellow edge lines, the rectangular tunnel portal ahead, a dark SUV with a roof rack on the verge, a green dumpster, a red hatchback, a bent-arm streetlamp, a low X-braced metal railing, and a brick perimeter wall topped with spiked anti-climb fence against the rock cliff (`f0015`).
+- W-beam metal guardrail runs along the road edges (`f0132`, `f0241`), with wooden rail fencing on the verge at the lay-by (`f0628`).
+- Tall tan concrete retaining walls hold the road against the cliffs, and their crests carry large boulders and panels of fence (`f0013`, `f0015`). Hay bales are only verified stacked at the road edge at the tunnel end (`f0891`); the hay-bale-topped walls logged from contact sheets do not exist, see [Unresolved](#unresolved).
+- The road runs through a rectangular concrete tunnel portal set in a tan wall built into a rock cliff (`f0013`, `f0015`), and through a wider box-section underpass: square tan columns, low concrete median blocks with lit base strips, an internal ramp, and parked and wrecked cars inside (`f0357`, `f0382`). Both openings are rectangular; neither is arched.
+- Large cylindrical outfall pipes are set in a tan retaining wall above a concrete drainage flume: a stepped concrete channel with metal handrails running alongside the road between rock outcrops (`f0053`-`f0065`, best `f0060`).
+- Where the road crosses the drain it has a black metal bridge railing with an X-truss pattern, beside a brick boundary wall topped with spiked anti-climb fence (`f0744`).
+- A tall tan concrete wall carrying the tunnel portal and a small lit doorway closes the built end of the road, with boulders above it and the rock cliff behind (`f0015`, `f0891`).
+- The road's other end is a lay-by against a tan cliff: a low flat-roof building, a shipping container, a streetlamp, parked and wrecked cars and picnic tables on the verge, all in one view at 103 m (`f0628`).
+
+## Buildings and interiors
+
+Two built groups: a brick complex against the hillsides, and the wooden lake complex.
+
+The brick complex, entered from the road side:
+
+- A sunken concrete terrace or plaza with low retaining walls, steps and ramps sits at the base of the brick buildings (`f0331`).
+- Interiors are brick and painted brick with bare concrete floors and ceiling fluorescent tubes: corridors, gray steel double doors, and wooden stairs with yellow nosing strips (`f0027`, `f0021`-`f0052`).
+- Signage is stenciled and neon, and mixes French and English: a red neon `<SORTIE>` exit sign over a doorway (`f0027`, `f0736`), a `STOP CLONING` stencil whose `O` is a red bullseye (`f0351`), a red-and-black `DANGER HIGH VOLTAGE KEEP OUT` board and a `NO SMOKING` board reading "violators are subject to termination" on the stairwell brick (`f0031`, `f0042`). The contact-sheet reading of the second sign as `NO DISCARDING` was wrong.
+- Room details: a red-and-white striped fire-equipment cabinet (`f0351`), stacked wooden pallets against a wall (`f0031`), scattered newspapers on the floor (`f0027`), red light wash on ceilings, and a small tiled room holding a red flesh mass (`f0157`, contact-sheet only).
+- A cyan-glowing trader unit stands inside the brick complex, set against the brick in an open court (`f0031`), so the complex holds its own shop point as well as the pod sites outside it.
+- Doors are weldable KF2 doors, which is why an `[E] TAP OPEN/CLOSE, HOLD EQUIP WELDER` prompt appears (`f0351`).
+
+The lake complex, on the valley floor:
+
+- A raised wooden boardwalk and observation-deck network over a hazy lake: plank walkways, post-and-rail balustrades, stairs, with mountains beyond (`f0168`); picnic tables, a lamppost and a graffiti'd shed appear across the surrounding stretch (`f0160`-`f0196`).
+- The Trader's outdoor vendor spot is next to it: a rusty two-tone VW camper van, a red-and-white striped patio umbrella, bistro chairs and a cafe table on dry grass against a graffiti'd brick wall (`f0144`).
+
+Small outbuildings sit at the base of the cliffs: a brick-and-corrugated storage shed with a lit interior and a concrete threshold ramp, a yellow hatchback beside it (`f0525`), and a dark corrugated shed nearby (`f0526`, contact-sheet only).
+
+## Walls, fences and gates
+
+- A brick perimeter wall runs along the highway, with chain-link and spiked anti-climb fencing above it in places (`f0013`, `f0015`, `f0744`).
+- Fence panels also stand on the crest of the tan road retaining wall, and anti-climb fence caps the cliff-side wall at the lay-by (`f0015`, `f0628`).
+- The only gates are the weldable steel doors in the brick complex, not gates in the fence line (`f0351`).
+
+## Vegetation
+
+- Conifers throughout: tall spruce or fir on the slopes and scattered specimens on the valley floor (`f0003`, `f0322`, `f0628`).
+- Grass is the ground cover everywhere the road and buildings are not, green on the slopes and dry yellow on the floor (`f0116`, `f0519`).
+- One burnt stand of blackened pines (`f0091`).
+- At least one deciduous tree among the conifers, at the cliff-base shed (`f0525`).
+- Fallen logs lie on the forest floor and across the hillsides above the road (`f0502`-`f0510`, `f0701`-`f0702`, unverified at full resolution).
+
+## Vehicles, debris and camp props
+
+The road is dressed as a disaster scene rather than a clean highway.
+
+- A landmark cluster on the grass beside the road: a rearing-horse equestrian statue on a tall stone pedestal, a white `SAMU de PARIS` / `MEDECIN` ambulance with a blue lightbar, a police car, and a tan-camo six-wheeled armored personnel carrier (`f0378`, `f0466`).
+- Parked and abandoned vehicles: police cars with blue lights (`f0382`, `f0276`-`f0291`), a box truck or box trailer (`f0017`-`f0019`, `f0382`), sedans and hatchbacks, a pickup at the tunnel mouth (`f0891`).
+- Wreck clusters: burnt-out sedans and an overturned white cylindrical tanker trailer with a red stripe, among pines on a slope (`f0486`, `f0482`-`f0491`); a red hatchback on a concrete pad at the bridge (`f0744`); a green hatchback on the verge at the lay-by (`f0628`); a red car wreck at the tunnel portal (`f0013`).
+- Camp props on the grass near the cliff base: a plank bonfire built inside a ring of large boulders, giving off black smoke, with two wooden picnic tables beside it and the yellow hatchback beyond (`f0519`).
+- Green waste dumpsters by the road and at the built end (`f0013`, `f0015`, `f0718`-`f0750`).
+- A crashed aircraft lies on the pine hillside: a dark fuselage with its tail fin among the trees, beside a worn dirt footpath (`f0322`).
+- A crashed plane, a statue and an ambulance together mean the valley reads as a disaster site, not empty wilderness; the prop density along the road is what makes the map read as a pass rather than a field.
+
+## Trader spots
+
+KF2 drops the Trader Pod at a different site each wave, and four distinct ones appear, which is the closest the footage comes to corroborating the export's 4 `ShopVolume` actors:
+
+- A rocky hilltop overlook above the lake: a weathered dark rock ledge with grass, hazy peaks beyond, the pod marked by a teal beacon beam (`f0116`, `f0124`). Chain-link fence is reported across this stretch (`f0116`-`f0150`) but not confirmed at full resolution.
+- The outdoor vendor spot with the VW van and umbrella (`f0144`).
+- An enclosed pod interior: gray block-wall corridors with glowing cyan guide lights, concrete counters and benches, red-lit doorways, a blue glowing trader door unit and a red neon `<SORTIE>` over the exit (`f0730`-`f0739`, `f0752`-`f0760`, best `f0736` and `f0729`).
+- The low flat-roof building at the road's lay-by, its trader door glowing cyan (`f0628`).
+
+Two further indoor cyan `USE TRADER` wall kiosks are reported at contact-sheet scale (`f0339`, `f0527`), alongside the verified unit at `f0031`.
+
+## Map edges
+
+The valley reads as closed on every side, which is what keeps a wave from running off the map:
+
+- A hazy ring of mountains and ridgelines sits behind everything at eye level from the high ground (`f0116`, `f0132`, `f0628`).
+- A lake fills one side of the valley floor, with the boardwalk complex out over it (`f0168`, `f0132`).
+- Tan rock cliffs pinch the road into passes, and fencing closes those passes (`f0013`, `f0628`, `f0744`).
+- Nothing in the run shows a visible wall or skybox seam; the edges read as terrain and haze rather than geometry.
+
+## Waves, spawns and the boss
+
+One run, four waves then the boss, with the wave counter read directly from the HUD:
+
+- Wave 1 of 4: `f0027` (32 left, in the brick interior), `f0091` (7 left, burnt stand), `f0116` (0:56 inter-wave timer at the overlook).
+- Wave 2 of 4: `f0322` (0:39, plane hillside), `f0351` (0:10, `STOP CLONING` room).
+- Wave 3 of 4: `f0519` (0:50, bonfire camp).
+- Wave 4 of 4: `f0628` (32 left, the lay-by), `f0729` (score overlay open, `WAVE 4/4`).
+- Boss wave: the intro card names `The Patriarch`, "once a brilliant scientist, until he became his own greatest creation" (`f0793`), the HUD reads `WAVE FINAL / BOSS` with his health bar top-center (`f0891`), and the `VICTORY` banner is up by `f0896` and still up at `f0905`, persisting to the last frame `f0910`.
+- The boss fight is on the open highway at the tunnel-portal end, around the rectangular portal, the hay bales, the boulders and the parked vehicles (`f0796`-`f0891`, best `f0891`). It is not an enclosed arena, and no gated fight space exists anywhere in the run.
+- Waves arrive across open ground from every direction rather than through fixed corridors: enemies come up the hillside to the player (`f0071`-`f0083`) and out along the road, consistent with the 157 `ZombieVolume` actors ringing the valley edge, though the footage cannot verify that count or their positions.
+
+## KF2 look
+
+Treat all of this as KF2's look, not KF1's, per the caveat in [Playthrough reference footage](#playthrough-reference-footage).
+
+- Warm low sun, either dawn or dusk, with the valley filled by a strong ground haze that flattens distance and turns the far mountains into flat silhouettes.
+- Pale, nearly white overcast sky on the high ground; the sky carries almost no shape and is not a reliable reference for the KF1 sky.
+- Palette is muted tan and ochre rock, desaturated green grass, dry yellow grass on the floor, gray concrete, red brick, dark green conifers. The only saturated notes are the red neon and the cyan Trader beacon.
+- Textures are worn and stained throughout: graffiti on brick, wood and trailers, rust on vehicles, blood and scorch on floors.
+- Signage mixes French and English: `SAMU de PARIS`, `MEDECIN` and `SORTIE` sit alongside `STOP CLONING`, `NO SMOKING` and `DANGER HIGH VOLTAGE KEEP OUT`, so the valley reads as a French or Swiss alpine pass. KF1 gives no such signal and the KF1 build should not import it.
+
+## Where the footage and the KF1 export disagree
+
+The KF1 export is authoritative and the footage loses every argument here; the disagreements are recorded rather than resolved.
+
+- Far-south brushes. The export has an additive-brush group at Y about -10,000 to -12,000, far south of the terrain, and brush Y reaches -12,288. Nothing in a full 16-minute run leaves the bowl, so the footage neither shows nor contradicts that group. It stays in the export as out-of-bounds or filler geometry and should not be rebuilt from a frame.
+- Brush X and Y range. Brushes span X -5,856 to 9,536 and Y -12,288 to 4,032, an asymmetric extent, while the frames show one enclosed bowl with no second district off to one side. The frames cannot see underground or indoors systematically, so the export's range stands.
+- Spawn. The export has 12 `PlayerStart` actors in a ring near (0, -1,500); KF2 has a single spawn point in the pine clearing (`f0003`). The footage shows one spawn because one player spawned once, so it cannot confirm or deny the ring. Build the ring from the export.
+- Enemy spawns and shops. The footage corroborates the shape of the export's intent (waves from the valley rim, four trader sites) without confirming either count.
+- The `BlackTexture` brushes. The footage gives no evidence about the 29 `BlackTexture` brushes at all, so their purpose stays open in [TODO](#todo).
+
+## Unresolved
+
+Claims that survived only at contact-sheet scale, so they are recorded as open rather than as fact:
+
+- Whether the road's built end is a warehouse with garage-door openings. `f0241`, `f0261`, `f0296` and `f0300`, logged from contact sheets as showing it, at full resolution show a Siren beside the guardrail, and grassy slopes with boulders. What is verified there is the tall tan retaining wall with the rectangular portal (`f0015`, `f0891`). Resolved by a full-resolution read of `f0235`-`f0300`.
+- Whether the road's retaining walls are topped with stacked hay bales. The crests at `f0013` and `f0015` carry boulders and fence panels. Hay bales are verified only at the tunnel end (`f0891`). Resolved by the same full-resolution read.
+- Whether chain-link fence runs up the rock cliffs to close the passes, and whether the overlook ridge is fenced. Both are contact-sheet observations only, at `f0116`-`f0150` and around `f0218`. Resolved by reading those frames at full resolution.
+- Whether the brick complex is roofed or open to the sky. `f0031` lights a walled brick court with hanging fluorescent tubes under a black void, which could be a ceiling in shadow or open sky at this hour. Resolved by a frame where the sun is on that volume, or by the KF1 brushes for the same rooms.
+
+Open questions:
+
+- Whether the KF1 map has the burnt pine stand, the lake boardwalk complex, the crashed plane, the statue-and-ambulance memorial and the armored personnel carrier, or whether those are KF2 additions. Resolving it needs the KF1 static mesh and skin lists matched to the frames, which is the texture-mapping TODO below.
+- The relative arrangement of the road complex and the lake: the frames show both on the valley floor and both near the spawn, but the run never shows them in one view, so which side of the bowl each is on is not established. The export's brush and mesh positions are the only way to settle it.
+- Whether the brick complex is one building or several, and how its interior levels stack. The frames show corridors, stairwells and a sunken terrace but never the building from outside as a whole. Resolved by the KF1 brush geometry, which has the wall and floor slabs, or by a second video angle.
+- How many trader sites the map actually has. The pod appears at four distinct-looking places, which matches the export's 4 `ShopVolume` actors, but the cyan trader unit inside the brick complex (`f0031`) and the reported wall kiosks (`f0339`, `f0527`) may be a fifth and sixth, or may be decorations at the four. Resolved by comparing pod and kiosk positions with the `ShopVolume` locations once the level is placed.
+- Whether those KF2 trader sites sit where the four `ShopVolume` actors are. Comparing them would say whether the KF2 shop spots still match the KF1 shop rooms.
+- Whether the trader pod sits on the rocky overlook because that is high ground or because it is a defined shop zone; the frames cannot tell, and it matters for where to put shrine spots. The KF1 `ShopVolume` placements answer it directly.
+- The height of the retaining walls and the boardwalk above the ground. No frame gives a clean side elevation against a known reference. Resolved by the heightmap plus the BSP floors once the BSP is rebuilt.
+- The fallen logs at `f0502`-`f0510` and `f0701`-`f0702`, and the horizon crane at `f0376` and the overhead girder at `f0428`-`f0429`, which were reported from contact sheets and are uncertain even at that scale. Resolved by a full-resolution read of those ranges.
 
 ## Converting the export
 
