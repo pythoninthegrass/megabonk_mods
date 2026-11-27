@@ -2,7 +2,7 @@ bun         1.4.4
 deno        2.9.8
 dotnet      10.0.108
 golang      1.27.3
-jactionlint 2.5.0
+actionlint 1.7.12
 java        temurin-21.0.12+101.0.LTS
 jq          1.8.2
 python      3.13.16
