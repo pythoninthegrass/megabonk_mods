@@ -7,6 +7,7 @@ CELL_SIZE = 2.0
 WALL_HEADROOM = 1000.0
 WALL_DROP = 28.0
 STEP_TOLERANCE = 12.0
+BOSS_PORTAL_HIDDEN_CHILDREN = ["BottomPiece"]
 
 
 def reverse_winding(indices):

@@ -295,11 +295,9 @@ def test_read_accessor_reads_unsigned_short_indices_that_umodel_writes():
     assert geometry.read_accessor(gltf, data, 0) == [(0,), (2,), (65535,)]
 
 
-def test_boss_spawner_reuses_the_warehouse_portal_scale_and_hidden_parts():
-    import build_thps_level
-
+def test_boss_spawner_is_regular_size_with_only_the_cylinder_hidden():
     level = kf1.make_level(level_terrain(), level_actors(("PlayerStart", 0, 0, 0), ("ZombieVolume", 64, 0, 0)))
     boss = level["bossSpawner"]
-    assert boss["scale"] == [build_thps_level.BOSS_SPAWN_SCALE] * 3
-    assert boss["hiddenChildren"] == build_thps_level.BOSS_HIDDEN_CHILDREN
+    assert "scale" not in boss
+    assert boss["hiddenChildren"] == geometry.BOSS_PORTAL_HIDDEN_CHILDREN == ["BottomPiece"]
     assert "bossRedirect" not in level

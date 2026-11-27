@@ -211,7 +211,7 @@ def make_level(runs, spawns, manifest):
     edits = [geometry.object_edit("bundle:conker/Colors", (0, 0, 0))]
     edits.extend(geometry.object_edit(asset, placement(point, 0, 0.5)["position"], UPRIGHT_PITCH) for asset, point in CHESTS)
     boss = placement((0, -1399, -3450), 0, 0)
-    boss["hiddenChildren"] = ["BottomPiece"]
+    boss["hiddenChildren"] = geometry.BOSS_PORTAL_HIDDEN_CHILDREN
     return {
         "schemaVersion": 4,
         "baseline": "none",

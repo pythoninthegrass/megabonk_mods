@@ -234,8 +234,7 @@ def make_level(terrain, actors, skipped=None):
         "bossSpawner": {
             "position": max(grounded)[1],
             "rotation": [0, 0, 0],
-            "scale": [BOSS_SPAWN_SCALE] * 3,
-            "hiddenChildren": list(BOSS_HIDDEN_CHILDREN),
+            "hiddenChildren": geometry.BOSS_PORTAL_HIDDEN_CHILDREN,
         },
         "killFloorY": KILL_FLOOR_Y,
         "noGrass": True,
