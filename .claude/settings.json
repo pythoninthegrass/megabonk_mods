@@ -35,6 +35,7 @@
       "Bash(rg:*)",
       "Bash(ruff:*)",
       "Bash(sqlite3:*)",
+      "Bash(ssh:*)",
       "Bash(task:*)",
       "Bash(tee:*)",
       "Bash(timeout:*)",
