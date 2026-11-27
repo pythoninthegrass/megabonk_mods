@@ -7,9 +7,28 @@ import subprocess
 import sys
 from pathlib import Path
 
+
+def _is_gitignored(path: str) -> bool:
+    return subprocess.run(["git", "check-ignore", "-q", path], cwd=p.ROOT).returncode == 0
+
+
+def missing_ignored_assets(root: Path, assets: list[str], is_ignored=_is_gitignored) -> list[str]:
+    return [asset for asset in assets if not (root / asset).exists() and is_ignored(asset)]
+
+
+_missing_inputs = missing_ignored_assets(p.ROOT, list(json.loads(p.BASELINE_PATH.read_text())["assets"]))
+
 needs_extract = pytest.mark.skipif(
-    not (b.NODES_PATH.exists() and b.OBJ_PATH.exists()), reason="needs the extraction under .tools/thps1/warehouse"
+    not (b.NODES_PATH.exists() and b.OBJ_PATH.exists()) or bool(_missing_inputs),
+    reason=f"needs the extraction under .tools/thps1/warehouse and gitignored baseline assets (missing: {_missing_inputs[:3]})",
 )
+
+
+def test_missing_gitignored_assets_are_separated_from_missing_tracked_ones(tmp_path: Path) -> None:
+    (tmp_path / "present").write_bytes(b"x")
+    ignored = {"tools/a.mp3", "tools/b.mp3"}
+    missing = missing_ignored_assets(tmp_path, ["present", "tools/a.mp3", "tracked/gone"], ignored.__contains__)
+    assert missing == ["tools/a.mp3"]
 
 
 @needs_extract

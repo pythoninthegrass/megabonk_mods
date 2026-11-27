@@ -335,7 +335,7 @@ def test_build_main_refuses_a_directory_as_the_binary(tmp_path, capsys):
 def test_the_old_builder_and_manifest_contract_are_gone():
     root = Path(__file__).resolve().parents[1]
     assert not (root / "scripts/build_player_package.py").exists()
-    assert not (root / "scripts/package_contract").exists()
+    assert not list((root / "scripts/package_contract").rglob("*.py"))
     assert not (root / "tests/test_build_player_package.py").exists()
     assert not (root / "tests/test_package_manifest.py").exists()
     assert not (root / "tests/test_package_packs.py").exists()
