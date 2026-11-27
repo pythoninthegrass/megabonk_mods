@@ -4,7 +4,7 @@ title: Build the kf1 asset pack and wire the task chain and docs
 status: To Do
 assignee: []
 created_date: '2026-11-27 08:20'
-updated_date: '2026-11-27 19:42'
+updated_date: '2026-11-27 23:08'
 labels:
   - level
   - kf1
@@ -41,6 +41,8 @@ Add `unity/pack-authoring/Assets/Editor/Kf1MountainPassPack.cs` (reusing `PackBu
 From TASK-086.02: the stock Forest backdrop (a 960 by 960 Mesh at the origin, Water planes at y=-129 and y=6) appears in the KF1 level exactly as in the Warehouse, so the map shows a patch of land and sea until the terrain exists. Whether to hide or cover it is deferred until the map is filled out.
 
 From TASK-086.02: the runtime raised killFloorY from -200 to -72, and 0.1% of the terrain (min -137) is below that; set KILL_FLOOR_Y to -72 or shift the world up when the terrain is built. The level JSON has no packs entry or bundle placement yet; mesh.json materials hold only a name and base color.
+
+Shipped as built: the pack id is `kf1preview` with asset `MountainPass`, not the `kf1` in the description, because that pair is what the installed bundle and the preview level's placement already use. Renaming means rebuilding and reinstalling the bundle and regenerating the preview level, so decide to rename or amend the criteria when closing this. `taskfiles/kf1.yml` carries `pack` and `install` only: verify is the `verify-pack` verb of scripts/kf1_mountain_pass.py, convert is `prepare`, and export stays the umodel steps in the doc, which run on the box that holds the KF1 install. The pack builds on the box that has Unity 2023.2.22f1 and reads its `.tools/kf1` inputs off disk, so there is no remote build leg and no KF1_UNITY_HOST; criteria #1 cannot pass end to end on a build box, which has neither the KF1 install nor umodel.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
