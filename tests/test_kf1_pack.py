@@ -114,9 +114,17 @@ def test_pack_builds_both_platforms_from_the_converter_inputs(tmp_path):
 
 def test_pack_rebuilds_only_when_a_pack_input_changes():
     tasks = yaml.safe_load(TASKFILE.read_text())["tasks"]
-    for name in ("pack", "pack-host"):
-        assert tasks[name]["sources"] == PACK_SOURCES, name
-        assert tasks[name]["generates"] == PACK_GENERATES, name
+    assert tasks["pack"]["sources"] == PACK_SOURCES
+    assert tasks["pack"]["generates"] == PACK_GENERATES
+
+
+def test_the_pack_builds_on_the_box_that_runs_it():
+    """Both build boxes keep their own KF1 assets current, so there is no remote build leg."""
+    tasks = yaml.safe_load(TASKFILE.read_text())["tasks"]
+    assert set(tasks) == {"pack", "install"}
+    text = TASKFILE.read_text()
+    for gone in ("KF1_UNITY_HOST", "KF1_UNITY_BIN", "REMOTE_REPO", "rsync", "/usr/bin/ssh"):
+        assert gone not in text, gone
 
 
 def test_every_pack_source_pattern_matches_a_real_file():
@@ -125,14 +133,6 @@ def test_every_pack_source_pattern_matches_a_real_file():
         pytest.skip("prepare has not run on this box")
     for pattern in PACK_SOURCES:
         assert glob.glob(str(ROOT / pattern), recursive=True), pattern
-
-
-def test_pack_host_pushes_inputs_and_pulls_bundles(tmp_path):
-    commands = _dry_run(tmp_path, "kf1:pack-host", "KF1_UNITY_HOST=buildbox")
-    assert "buildbox" in commands
-    assert "rsync" in commands
-    assert "-executeMethod Kf1MountainPassPack.Build" in commands
-    assert "uv run scripts/kf1_mountain_pass.py verify-pack" in commands
 
 
 def test_the_pack_inputs_on_disk_are_complete():

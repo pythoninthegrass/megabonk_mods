@@ -4,8 +4,6 @@ version: "3.0"
 
 vars:
   UNITY_BIN: '{{.UNITY_EDITOR | default "/Applications/Unity/Hub/Editor/2023.2.22f1/Unity.app/Contents/MacOS/Unity"}}'
-  REMOTE_UNITY: '{{.KF1_UNITY_BIN | default "/Applications/Unity/Hub/Editor/2023.2.22f1/Unity.app/Contents/MacOS/Unity"}}'
-  REMOTE_REPO: ~/git/megabonk_mods
 
 tasks:
   pack:
@@ -13,13 +11,15 @@ tasks:
     summary: |
       Usage: task kf1:pack
 
-      Needs Unity 2023.2.22f1 on this box (UNITY_EDITOR in .env overrides the Hub path) and the KF1
-      converter outputs under .tools/kf1: mesh.json plus out/**/*.tga. verify-pack names the material
-      whose texture is missing instead of building a pack with holes in it. The build is incremental:
-      a repeat run reports "up to date" until a builder, manifest or asset changes, and
-      task kf1:pack --force rebuilds. On a box without Unity, build where it lives with
-      task kf1:pack-host KF1_UNITY_HOST=<host>. See docs/kf1-mountain-pass.md.
-    sources: &kf1-pack-sources
+      Run it on a box that has Unity 2023.2.22f1; UNITY_EDITOR in .env overrides the default Hub path
+      and the task names the editor it looked for when there is none. It builds the bundle from the
+      converter outputs under .tools/kf1, mesh.json plus out/**/*.tga, so those have to be present and
+      current on the building box. verify-pack runs first and names the material whose texture is
+      missing instead of building a pack with holes in it. The build is incremental: a repeat run
+      reports "up to date" until a builder, manifest or asset changes, and task kf1:pack --force
+      rebuilds. A box without Unity gets the bundle from a build box and installs it with
+      task kf1:install. See docs/kf1-mountain-pass.md.
+    sources:
       - unity/pack-authoring/Assets/Editor/Kf1MountainPassPack.cs
       - unity/pack-authoring/Assets/Editor/PackBuilder.cs
       - unity/pack-authoring/Assets/ColorsVertexTint.shader
@@ -27,49 +27,16 @@ tasks:
       - scripts/kf1_mountain_pass.py
       - .tools/kf1/mesh.json
       - .tools/kf1/out/**/*.tga
-    generates: &kf1-pack-generates
+    generates:
       - .tools/bundles/windows/kf1preview
       - .tools/bundles/linux/kf1preview
     cmds:
       - uv run scripts/kf1_mountain_pass.py verify-pack
       - |
         bin="{{.UNITY_BIN}}"
-        [ -x "$bin" ] || { echo "task kf1:pack: Unity 2023.2.22f1 is not at $bin; set UNITY_EDITOR in .env or build on the Unity box with task kf1:pack-host KF1_UNITY_HOST=<host>" >&2; exit 1; }
+        [ -x "$bin" ] || { echo "task kf1:pack: Unity 2023.2.22f1 is not at $bin; install it (unity install 2023.2.22f1 or the Hub), point UNITY_EDITOR in .env at the editor, or build on the box that has it and bring .tools/bundles/<platform>/kf1preview back" >&2; exit 1; }
       - task: :pack:build
         vars: {PACK_METHOD: Kf1MountainPassPack.Build}
-
-  pack-host:
-    desc: "Build kf1preview on the box that has Unity and bring both bundles back (KF1_UNITY_HOST)"
-    summary: |
-      Usage: task kf1:pack-host KF1_UNITY_HOST=<host>
-
-      Pushes the pack-authoring project, without its Unity import caches, and the KF1 inputs to
-      <host>:~/git/megabonk_mods, runs the same Kf1MountainPassPack.Build there with
-      KF1_UNITY_BIN (default the Hub 2023.2.22f1 path), and pulls
-      .tools/bundles/{windows,linux}/kf1preview back. Same sources and generates as kf1:pack, so a
-      repeat run is a no-op until an input changes. Needs passwordless SSH and a checkout at
-      ~/git/megabonk_mods on the host.
-    vars:
-      HOST: '{{.KF1_UNITY_HOST}}'
-    sources: *kf1-pack-sources
-    generates: *kf1-pack-generates
-    cmds:
-      - uv run scripts/kf1_mountain_pass.py verify-pack
-      - |
-        host="{{.HOST}}"
-        [ -n "$host" ] || { echo "task kf1:pack-host: KF1_UNITY_HOST is empty; set it in .env to the box with Unity 2023.2.22f1" >&2; exit 1; }
-        repo="{{.REMOTE_REPO}}"
-        /usr/bin/ssh "$host" "mkdir -p $repo/.tools/bundles/windows $repo/.tools/bundles/linux"
-        rsync -aq -e /usr/bin/ssh --exclude Library/ --exclude Temp/ --exclude Logs/ --exclude UserSettings/ \
-          --exclude Assets/Kf1MountainPass/ --exclude Assets/ConkerColors/ --exclude Assets/Thps/ \
-          unity/pack-authoring/ "$host:$repo/unity/pack-authoring/"
-        rsync -aq -e /usr/bin/ssh .tools/kf1/mesh.json .tools/kf1/out "$host:$repo/.tools/kf1/"
-        /usr/bin/ssh "$host" "\"{{.REMOTE_UNITY}}\" -batchmode -nographics -quit \
-          -projectPath $repo/unity/pack-authoring -executeMethod Kf1MountainPassPack.Build \
-          -packOutput $repo/.tools/bundles -logFile -"
-        rsync -aq -e /usr/bin/ssh "$host:$repo/.tools/bundles/windows/kf1preview" .tools/bundles/windows/
-        rsync -aq -e /usr/bin/ssh "$host:$repo/.tools/bundles/linux/kf1preview" .tools/bundles/linux/
-        echo "built kf1preview on $host into .tools/bundles/{windows,linux}"
 
   install:
     desc: "Install the built kf1preview pack and its manifest into the game's UserData/LevelPacks"
@@ -77,7 +44,8 @@ tasks:
       Usage: task kf1:install
 
       Copies the bundle for the game's runtime (windows under CrossOver and Wine, linux natively)
-      and unity/pack-authoring/packs/kf1preview/manifest.json into
+      from .tools/bundles/<platform>/kf1preview, with
+      unity/pack-authoring/packs/kf1preview/manifest.json, into
       <game dir>/UserData/LevelPacks/kf1preview. A running game only sees the pack after a relaunch.
     cmds:
       - task: :pack:install

@@ -119,7 +119,7 @@ task pack:thps
 
 The task builds the bundle (`task pack:build PACK_METHOD=ThpsPack.Build`) and runs `task pack:install`, which copies `.tools/bundles/<platform>/thps` and the manifest into `<game dir>/UserData/LevelPacks/thps/` (the `windows` bundle everywhere except Linux). `task pack:install PACK=<id>` installs any other pack the same way. Relaunch the game afterwards, because packs load once per session.
 
-The other packs follow the same shape: `ConkerColorsPack.cs` with `task conker:pack`, `SqueakerPack.cs` with `task squeaker:pack`, and `Kf1MountainPassPack.cs` with `task kf1:pack`, which builds the whole Mountain Pass map from `.tools/kf1/mesh.json` and can run on the box that has Unity with `task kf1:pack-host KF1_UNITY_HOST=<host>` ([Killing Floor: Mountain Pass](kf1-mountain-pass.md#the-kf1preview-pack)).
+The other packs follow the same shape: `ConkerColorsPack.cs` with `task conker:pack`, `SqueakerPack.cs` with `task squeaker:pack`, and `Kf1MountainPassPack.cs` with `task kf1:pack`, which builds the whole Mountain Pass map from `.tools/kf1/mesh.json` on whichever box has Unity 2023.2.22f1 ([Killing Floor: Mountain Pass](kf1-mountain-pass.md#the-kf1preview-pack)).
 
 | asset | shape | collider |
 | --- | --- | --- |
