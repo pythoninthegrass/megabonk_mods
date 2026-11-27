@@ -39,6 +39,7 @@ tasks:
     desc: "Prepare the Unity import data and local Colors level file"
     sources:
       - scripts/conker_colors.py
+      - scripts/level_geometry.py
       - scripts/warehouse_surface.py
       - scripts/build_thps_level.py
       - unity/pack-authoring/packs/conker/manifest.json
