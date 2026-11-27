@@ -23,10 +23,9 @@ WORK = ROOT / ".tools/kf1"
 T3D_NAME = "KF-MountainPass.t3d"
 MESH_NAME = "mesh.json"
 LEVEL_NAME = "kf1-mountain-pass.mblevel.json"
-PREVIEW_LEVEL_NAME = "bsp-preview.mblevel.json"
-PREVIEW_PACK = "kf1"
-PREVIEW_ASSET = "MountainPass"
-PREVIEW_PACK_VERSION = "1.0.0"
+PACK_ID = "kf1"
+PACK_ASSET = "MountainPass"
+PACK_VERSION = "1.0.0"
 T3D_SHA256 = "87acc038e2e67c6176ea2396b7ffa20ce4bc91f6f27bd99a6546013380c5b02c"
 TERRAIN_ACTOR = "TerrainInfo1"
 ORIGIN = (0, 0, 0)
@@ -72,6 +71,7 @@ LEVEL_FIELDS = frozenset(
         "chestLuckRange",
         "shrineSpots",
         "powerupSpots",
+        "packs",
         "edits",
     }
 )
@@ -217,6 +217,17 @@ def walls(terrain):
     return geometry.perimeter([points for points, _surface in terrain], kill_floor=KILL_FLOOR_Y)
 
 
+def bundle_placement_edit():
+    """The edit that places the pack's one bundle asset, the whole map, at the origin."""
+    placement = {
+        "catalogId": f"bundle:{PACK_ID}/{PACK_ASSET}",
+        "position": {"x": 0, "y": 0, "z": 0},
+        "rotation": {"x": 0, "y": 0, "z": 0},
+        "scale": {"x": 1, "y": 1, "z": 1},
+    }
+    return {"opType": "object.place", "target": "", "payload": json.dumps(placement, separators=(",", ":"))}
+
+
 def make_level(terrain, actors, skipped=None):
     """Build level JSON from grounded anchors and report placements with no floor within reach."""
     skipped = [] if skipped is None else skipped
@@ -293,9 +304,13 @@ def make_level(terrain, actors, skipped=None):
         "chestLuckRange": list(CHEST_LUCK_RANGE),
         "shrineSpots": shrine_spots,
         "powerupSpots": place_each("KFAmmoPickup"),
+        "packs": {PACK_ID: PACK_VERSION},
         "edits": [
-            geometry.object_edit("interactable/chest", spot, UPRIGHT_PITCH)
-            for spot in place_each("KFRandomItemSpawn", CHEST_CLEARANCE)
+            bundle_placement_edit(),
+            *(
+                geometry.object_edit("interactable/chest", spot, UPRIGHT_PITCH)
+                for spot in place_each("KFRandomItemSpawn", CHEST_CLEARANCE)
+            ),
         ],
     }
 
@@ -687,28 +702,6 @@ def pack_textures(work):
     return [Path(texture) for texture in found]
 
 
-def preview_level(level):
-    """The generated level plus the preview pack and the placement of its one bundle asset."""
-    placement = {
-        "catalogId": f"bundle:{PREVIEW_PACK}/{PREVIEW_ASSET}",
-        "position": {"x": 0, "y": 0, "z": 0},
-        "rotation": {"x": 0, "y": 0, "z": 0},
-        "scale": {"x": 1, "y": 1, "z": 1},
-    }
-    edit = {"opType": "object.place", "target": "", "payload": json.dumps(placement, separators=(",", ":"))}
-    edits = list(level.get("edits", ()))
-    if edit["payload"] not in {item.get("payload") for item in edits}:
-        edits.insert(0, edit)
-    return {**level, "packs": {PREVIEW_PACK: PREVIEW_PACK_VERSION}, "edits": edits}
-
-
-def preview_level_command(work):
-    """Write the level that places the map bundle, beside the generated one; returns it."""
-    preview = preview_level(json.loads((work / LEVEL_NAME).read_text()))
-    (work / PREVIEW_LEVEL_NAME).write_text(json.dumps(preview))
-    return preview
-
-
 def prepare(source, meshes, output):
     t3d = source / "KF-MountainPass.t3d"
     verify_export(t3d)
@@ -721,7 +714,6 @@ def prepare(source, meshes, output):
     level = make_level(collision_triangles(mesh["collision"]), actors, skipped)
     (output / MESH_NAME).write_text(json.dumps(mesh, separators=(",", ":")))
     (output / LEVEL_NAME).write_text(json.dumps(level, indent=2) + "\n")
-    (output / PREVIEW_LEVEL_NAME).write_text(json.dumps(preview_level(level)))
     return level, skipped
 
 
@@ -736,7 +728,7 @@ def terrain_inventory_command(work):
 
 def main():
     parser = argparse.ArgumentParser(description="Prepare the local Killing Floor 1 Mountain Pass survival level")
-    parser.add_argument("command", choices=("verify-export", "prepare", "terrain-inventory", "preview-level", "verify-pack"))
+    parser.add_argument("command", choices=("verify-export", "prepare", "terrain-inventory", "verify-pack"))
     parser.add_argument("--work", type=Path, default=WORK)
     args = parser.parse_args()
     try:
@@ -748,9 +740,6 @@ def main():
             inventory = terrain_inventory_command(args.work)
             print("\n".join(terrain_table(inventory)))
             print(f"{len(inventory['layers'])} terrain layers, {len(inventory['deco_layers'])} decoration layers")
-        elif args.command == "preview-level":
-            preview_level_command(args.work)
-            print(f"Wrote {args.work / PREVIEW_LEVEL_NAME}: pack {PREVIEW_PACK}, asset {PREVIEW_ASSET}")
         elif args.command == "verify-pack":
             textures = pack_textures(args.work)
             print(f"Pack inputs ready: {args.work / MESH_NAME} with {len(textures)} textures")

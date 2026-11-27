@@ -288,7 +288,7 @@ Open questions:
 
 ## Converting the export
 
-`uv run scripts/kf1_mountain_pass.py prepare` checks the T3D hash and writes `.tools/kf1/mesh.json` (terrain, static meshes, additive brush faces, perimeter walls and combined terrain/brush collision), `.tools/kf1/kf1-mountain-pass.mblevel.json` and, derived from it, the preview level described in [Previewing the level in game](#previewing-the-level-in-game), in about five seconds. `verify-export` only checks the hash. `terrain-inventory` writes `.tools/kf1/terrain_layers.json` and prints the table in [Terrain layers](#terrain-layers). The walkable outline, perimeter walls, floor lookup, glTF accessor reader and the `object.place` edit builder live in `scripts/level_geometry.py`, shared with `scripts/conker_colors.py`; the Conker script keeps thin wrappers that bind its own kill floor, pit floor and anchors.
+`uv run scripts/kf1_mountain_pass.py prepare` checks the T3D hash and writes `.tools/kf1/mesh.json` (terrain, static meshes, additive brush faces, perimeter walls and combined terrain/brush collision) and `.tools/kf1/kf1-mountain-pass.mblevel.json`, the level that loads the map as described in [Previewing the level in game](#previewing-the-level-in-game), in about five seconds. `verify-export` only checks the hash. `terrain-inventory` writes `.tools/kf1/terrain_layers.json` and prints the table in [Terrain layers](#terrain-layers). The walkable outline, perimeter walls, floor lookup, glTF accessor reader and the `object.place` edit builder live in `scripts/level_geometry.py`, shared with `scripts/conker_colors.py`; the Conker script keeps thin wrappers that bind its own kill floor, pit floor and anchors.
 
 - **Coordinates.** `world_point()` maps Unreal X, Y, Z to Megabonk Z, X, Y without reversing winding. The [KF1 human pawn](https://github.com/InsultingPros/KillingFloor/blob/HEAD/KFMod/Classes/KFHumanPawn.uc) has a standing collision half-height of 50 Unreal units. Matching its full height to the [3.85-unit Megabonk player capsule](thps-warehouse-layout.md) gives 0.0385 Megabonk units per Unreal unit. At the center of the tarmac face on `Brush29` the road is 401 Unreal units above the heightmap, or four standing players high. This measures deck to terrain, not clear headroom under the deck.
 - **Rotation.** Rotators are 65536 units per turn, applied as roll about X, then pitch about Y, then yaw about Z. The roll sign is unverified; it only matters for the few tilted props.
@@ -296,23 +296,17 @@ Open questions:
 - **Terrain.** 256 by 256 samples, 64 units apart, centered on the origin (sample 128 at 0), height `(value - 32768) / 256 * 64`. The 12 `PlayerStart` actors rest 34 to 43 units above this surface, which confirms the fitted scale.
 - **Anchors.** The first `PlayerStart` is the spawn. The `ZombieVolume` farthest from it that has a floor is the boss spawner, which is a stand-in until the boss area is chosen by hand. `ShopVolume` actors become shrine spots, `KFAmmoPickup` actors power-up spots and `KFRandomItemSpawn` actors chests. Every anchor needs a terrain or brush floor within 100 Unreal units.
 - **Grounded spots.** Combined collision leaves 5 of 157 zombie volumes, 1 of 4 shop volumes, 2 of 14 ammo pickups and 3 of 14 item spawns without a floor in reach. Those anchors are reported and skipped. The three grounded shop spots are supplemented with grounded navigation nodes, selecting the most distant from the spawn, boss and already selected spots until there are eight candidates for up to seven shrines.
-- **Level fields.** Only fields the Conker level already writes are used: the placeholder one-cell `grid` that a from-scratch level requires, and no `packs` entry or bundle placement, which the preview level adds instead. That is why `prepare`'s own level file cannot show the map; see [Previewing the level in game](#previewing-the-level-in-game).
+- **Level fields.** Only fields the Conker level already writes are used: the placeholder one-cell `grid` that a from-scratch level requires, plus the `packs` entry and the `bundle:kf1/MountainPass` placement that load the map; see [Previewing the level in game](#previewing-the-level-in-game).
 
 ## Previewing the level in game
 
-The game never reads `mesh.json`. Its one terrain mesh, 1,810 static mesh placements and 345 brush meshes live there only until something packs them into an AssetBundle, so `.tools/kf1/kf1-mountain-pass.mblevel.json` loads as the stock map named by `map` (1 is Forest) with the chests placed and nothing wrong logged. Launch the preview level instead:
+The game never reads `mesh.json`. Its one terrain mesh, 1,810 static mesh placements and 345 brush meshes live there only until `task kf1:pack` packs them into the `kf1` AssetBundle, so the map shows only with that pack installed (`task kf1:install`). The generated level declares `"packs": {"kf1": "1.0.0"}` and starts its `edits` with one `object.place` whose payload places `bundle:kf1/MountainPass` at the origin with unit scale, so it is the file to launch:
 
 ```sh
-task game:editor -- .tools/kf1/bsp-preview.mblevel.json
+task game:editor -- .tools/kf1/kf1-mountain-pass.mblevel.json
 ```
 
-`DevHarness: load-level` in `BepInEx/LogOutput.log` names the file that actually loaded. The preview level is the generated one plus exactly two things: a `"packs": {"kf1": "1.0.0"}` entry, and one extra `edits` entry of `opType` `object.place` whose payload places `bundle:kf1/MountainPass` at the origin with unit scale. Nothing else differs, so it is derived rather than hand-maintained: `prepare` writes it beside the generated level, and this rewrites it from the generated level alone:
-
-```sh
-uv run scripts/kf1_mountain_pass.py preview-level
-```
-
-`kf1.preview_level` holds those two additions. `tests/test_kf1_mountain_pass.py` pins them and compares the regenerated file with the one on disk byte for byte, so an edit made only to the preview file fails the suite and the verb puts it back.
+`DevHarness: load-level` in `BepInEx/LogOutput.log` names the file that actually loaded. `kf1.bundle_placement_edit` builds the placement and `kf1.make_level` writes both additions; `tests/test_kf1_mountain_pass.py` pins them, so no second level file has to be carried between boxes.
 
 ### The kf1 pack
 
@@ -337,7 +331,6 @@ What is expected to look unfinished once the map renders: the terrain is one fla
 
 ## TODO
 
-- Fold the `packs` entry and the `bundle:kf1/MountainPass` placement into the generated level so the preview level is no longer a separate artifact, now that `task kf1:pack` can rebuild the bundle.
 - Try the `linux` bundle against the native player build if that target ever matters; `kf1:pack` produces it as a byproduct and only the `windows` bundle has been played.
 - Apply ordered brush operations and check the five black solids and remaining ungrounded placements against the resulting collision.
 - Blend the terrain layer alpha maps into the terrain material: renormalize the weights, decide what to do with the slot that paints a mask as a surface, and confirm the mask row order against the heightmap.

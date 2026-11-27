@@ -272,7 +272,7 @@ def test_make_level_anchors_spawn_boss_shrines_chests_and_powerups_on_the_floor(
     assert len(level["shrineSpots"]) == 1
     assert len(level["powerupSpots"]) == 1
     assert all(spot[1] == pytest.approx(0, abs=0.01) for spot in level["shrineSpots"] + level["powerupSpots"])
-    chests = [json.loads(edit["payload"]) for edit in level["edits"]]
+    chests = [json.loads(edit["payload"]) for edit in level["edits"][1:]]
     assert [chest["catalogId"] for chest in chests] == ["interactable/chest"] * 2
     assert all(chest["position"]["y"] == pytest.approx(0.5, abs=0.01) for chest in chests)
     assert level["killFloorY"] < 0
@@ -312,7 +312,8 @@ def test_make_level_skips_and_reports_anchors_with_no_terrain_floor():
     skipped = []
     level = kf1.make_level(level_terrain(), actors, skipped)
     assert sorted(item.split()[0] for item in skipped) == ["KFAmmoPickup", "KFRandomItemSpawn", "ShopVolume"]
-    assert level["shrineSpots"] == level["powerupSpots"] == level["edits"] == []
+    assert level["shrineSpots"] == level["powerupSpots"] == []
+    assert level["edits"] == [kf1.bundle_placement_edit()]
 
 
 def test_make_level_picks_the_farthest_boss_volume_that_has_a_floor():
@@ -616,19 +617,10 @@ def test_the_exported_terrain_info1_names_the_expected_layers():
     assert {row["role"] for row in inventory["layers"]} == {"ground", "mask-as-diffuse"}
 
 
-def sample_level():
-    return {
-        "schemaVersion": 4,
-        "map": 1,
-        "title": "Killing Floor: Mountain Pass",
-        "edits": [{"opType": "object.place", "target": "", "payload": '{"catalogId":"interactable/chest"}'}],
-    }
-
-
-def test_preview_level_adds_the_pack_and_places_the_bundle_asset():
-    preview = kf1.preview_level(sample_level())
-    assert preview["packs"] == {kf1.PREVIEW_PACK: kf1.PREVIEW_PACK_VERSION}
-    assert preview["edits"][0] == {
+def test_make_level_declares_the_pack_and_places_the_bundle_asset_first():
+    level = kf1.make_level(level_terrain(), level_actors(("PlayerStart", 0, 0, 0), ("ZombieVolume", 64, 0, 0)))
+    assert level["packs"] == {kf1.PACK_ID: kf1.PACK_VERSION}
+    assert level["edits"][0] == {
         "opType": "object.place",
         "target": "",
         "payload": (
@@ -636,31 +628,15 @@ def test_preview_level_adds_the_pack_and_places_the_bundle_asset():
             '"rotation":{"x":0,"y":0,"z":0},"scale":{"x":1,"y":1,"z":1}}'
         ),
     }
-    assert preview["edits"][1:] == sample_level()["edits"]
-    assert sample_level()["edits"][0]["payload"] == '{"catalogId":"interactable/chest"}'
 
 
-def test_preview_level_leaves_the_generated_level_untouched():
-    level = sample_level()
-    kf1.preview_level(level)
-    assert level == sample_level()
-
-
-def test_preview_level_does_not_place_the_bundle_twice():
-    once = kf1.preview_level(sample_level())
-    assert kf1.preview_level(once) == once
-
-
-def test_preview_level_command_writes_the_compact_file(tmp_path):
-    (tmp_path / kf1.LEVEL_NAME).write_text(json.dumps(sample_level(), indent=2) + "\n")
-    written = kf1.preview_level_command(tmp_path)
-    text = (tmp_path / kf1.PREVIEW_LEVEL_NAME).read_text()
-    assert json.loads(text) == written == kf1.preview_level(sample_level())
-    assert text == json.dumps(written)
+def test_prepare_writes_no_separate_preview_level():
+    assert not hasattr(kf1, "preview_level")
+    assert not hasattr(kf1, "PREVIEW_LEVEL_NAME")
 
 
 @needs_kf1_export
-def test_the_preview_level_on_disk_matches_the_generated_one():
-    generated = json.loads((kf1.WORK / kf1.LEVEL_NAME).read_text())
-    preview = (kf1.WORK / kf1.PREVIEW_LEVEL_NAME).read_text()
-    assert preview == json.dumps(kf1.preview_level(generated))
+def test_the_generated_level_on_disk_loads_the_pack():
+    level = json.loads((kf1.WORK / kf1.LEVEL_NAME).read_text())
+    assert level["packs"] == {kf1.PACK_ID: kf1.PACK_VERSION}
+    assert f"bundle:{kf1.PACK_ID}/{kf1.PACK_ASSET}" in level["edits"][0]["payload"]

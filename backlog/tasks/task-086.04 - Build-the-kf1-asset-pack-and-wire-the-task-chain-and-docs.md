@@ -4,7 +4,7 @@ title: Build the kf1 asset pack and wire the task chain and docs
 status: In Progress
 assignee: []
 created_date: '2026-11-27 08:20'
-updated_date: '2026-11-27 23:50'
+updated_date: '2026-11-27 23:56'
 labels:
   - level
   - kf1
@@ -35,6 +35,15 @@ Add `unity/pack-authoring/Assets/Editor/Kf1MountainPassPack.cs` (reusing `PackBu
 - [x] #5 docs/kf1-mountain-pass.md documents the full chain
 - [ ] #6 The generated level carries the packs entry and the bundle:kf1/MountainPass placement, so .tools/kf1/bsp-preview.mblevel.json is no longer a separate file to carry
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. In-game verification first (AC #3, #4), no code: clear_console_log, relaunch with .tools/kf1/bsp-preview.mblevel.json, wait for editor and killFloorArmed, spawns off; confirm the log shows pack 'kf1' loaded; teleport to spawn, boss spawner, shrines and chests and screenshot into .tools/evidence/; teleport past the map edge at high y and record whether walls or the kill floor stop the player. Tick AC #3/#4 only on evidence.
+2. AC #6 (TDD): write failing tests in tests/test_kf1_mountain_pass.py that the generated level carries the packs entry and the bundle:kf1/MountainPass placement; confirm they fail; move the two preview_level() additions into the main generation; remove the preview-level verb (approved) and the bsp-preview file pin; update AGENTS.md, docs/kf1-mountain-pass.md and taskfiles/kf1.yml references; run task scripts:test.
+3. Close: notes, task check, conventional commit with no attribution; .serena changes in a separate commit; leave the maintainer's task-062.01 and task-086.05 edits out.
+4. Pending scope decision: maintainer reports Tony looks too tall relative to vehicles (likely a map-wide scale issue). Needs a decision on AC vs follow-up task before any change.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 

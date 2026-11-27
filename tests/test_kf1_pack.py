@@ -65,18 +65,18 @@ def test_pack_textures_names_mesh_json_when_it_is_absent(tmp_path):
 
 def test_manifest_matches_the_level_the_converter_writes():
     """The id is baked into saved levels' packs map and bundle catalogIds, so it is pinned, not derived."""
-    assert kf1.PREVIEW_PACK == "kf1"
-    assert kf1.PREVIEW_ASSET == "MountainPass"
+    assert kf1.PACK_ID == "kf1"
+    assert kf1.PACK_ASSET == "MountainPass"
     manifest = json.loads(MANIFEST_PATH.read_text())
-    assert manifest["id"] == kf1.PREVIEW_PACK
-    assert manifest["assets"] == [kf1.PREVIEW_ASSET]
-    assert manifest["version"] == kf1.PREVIEW_PACK_VERSION
+    assert manifest["id"] == kf1.PACK_ID
+    assert manifest["assets"] == [kf1.PACK_ASSET]
+    assert manifest["version"] == kf1.PACK_VERSION
 
 
 def test_the_builder_builds_the_pack_and_asset_the_level_places():
     text = BUILDER_PATH.read_text()
-    assert f'const string BundleName = "{kf1.PREVIEW_PACK}";' in text
-    assert f'const string AssetName = "{kf1.PREVIEW_ASSET}";' in text
+    assert f'const string BundleName = "{kf1.PACK_ID}";' in text
+    assert f'const string AssetName = "{kf1.PACK_ASSET}";' in text
     assert '"../../../.tools/kf1"' in text
     assert "Path.Combine(source, spec.texture)" in text
     assert "BuildTarget.StandaloneWindows64" in text
