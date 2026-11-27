@@ -21,6 +21,7 @@ from warehouse_surface import UPRIGHT_PITCH
 ROOT = Path(__file__).resolve().parents[1]
 WORK = ROOT / ".tools/kf1"
 T3D_NAME = "KF-MountainPass.t3d"
+MESH_NAME = "mesh.json"
 LEVEL_NAME = "kf1-mountain-pass.mblevel.json"
 PREVIEW_LEVEL_NAME = "bsp-preview.mblevel.json"
 PREVIEW_PACK = "kf1preview"
@@ -668,6 +669,24 @@ def unpack_map(meshes, actors, heights, terrain, brushes=()):
     }
 
 
+def pack_textures(work):
+    """The textures the pack build reads, deduplicated; names the material when one is missing."""
+    path = work / MESH_NAME
+    if not path.is_file():
+        raise ValueError(f"{path} is missing: run uv run scripts/kf1_mountain_pass.py prepare first")
+    found = []
+    for material in json.loads(path.read_text()).get("materials", ()):
+        texture = material.get("texture")
+        if not texture:
+            continue
+        if not (work / texture).is_file():
+            name = material.get("name") or "<unnamed material>"
+            raise ValueError(f"material {name} needs texture {texture}, which is not under {work}")
+        if texture not in found:
+            found.append(texture)
+    return [Path(texture) for texture in found]
+
+
 def preview_level(level):
     """The generated level plus the preview pack and the placement of its one bundle asset."""
     placement = {
@@ -700,7 +719,7 @@ def prepare(source, meshes, output):
     skipped = []
     mesh = unpack_map(meshes, actors, heights, terrain, parse_brushes(text))
     level = make_level(collision_triangles(mesh["collision"]), actors, skipped)
-    (output / "mesh.json").write_text(json.dumps(mesh, separators=(",", ":")))
+    (output / MESH_NAME).write_text(json.dumps(mesh, separators=(",", ":")))
     (output / LEVEL_NAME).write_text(json.dumps(level, indent=2) + "\n")
     (output / PREVIEW_LEVEL_NAME).write_text(json.dumps(preview_level(level)))
     return level, skipped
@@ -717,7 +736,7 @@ def terrain_inventory_command(work):
 
 def main():
     parser = argparse.ArgumentParser(description="Prepare the local Killing Floor 1 Mountain Pass survival level")
-    parser.add_argument("command", choices=("verify-export", "prepare", "terrain-inventory", "preview-level"))
+    parser.add_argument("command", choices=("verify-export", "prepare", "terrain-inventory", "preview-level", "verify-pack"))
     parser.add_argument("--work", type=Path, default=WORK)
     args = parser.parse_args()
     try:
@@ -732,6 +751,9 @@ def main():
         elif args.command == "preview-level":
             preview_level_command(args.work)
             print(f"Wrote {args.work / PREVIEW_LEVEL_NAME}: pack {PREVIEW_PACK}, asset {PREVIEW_ASSET}")
+        elif args.command == "verify-pack":
+            textures = pack_textures(args.work)
+            print(f"Pack inputs ready: {args.work / MESH_NAME} with {len(textures)} textures")
         else:
             level, skipped = prepare(source, args.work / "out", args.work)
             for item in skipped:

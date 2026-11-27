@@ -323,6 +323,8 @@ unity/*/Assets/Thps/
 unity/*/Assets/Thps.meta
 unity/*/Assets/ConkerColors/
 unity/*/Assets/ConkerColors.meta
+unity/*/Assets/Kf1MountainPass/
+unity/*/Assets/Kf1MountainPass.meta
 
 # Audio and video rips outside tools/
 *.flac

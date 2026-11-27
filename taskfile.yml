@@ -23,6 +23,7 @@ includes:
   thps: taskfiles/thps.yml
   conker: taskfiles/conker.yml
   squeaker: taskfiles/squeaker.yml
+  kf1: taskfiles/kf1.yml
   re: taskfiles/re.yml
   ghidra: taskfiles/ghidra.yml
   pocketbase: taskfiles/pocketbase.yml
