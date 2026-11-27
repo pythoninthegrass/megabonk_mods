@@ -7,7 +7,7 @@ vars:
 
 tasks:
   pack:
-    desc: "Build the kf1preview Mountain Pass bundles for Windows and Linux with Unity"
+    desc: "Build the kf1 Mountain Pass bundles for Windows and Linux with Unity"
     summary: |
       Usage: task kf1:pack
 
@@ -23,30 +23,30 @@ tasks:
       - unity/pack-authoring/Assets/Editor/Kf1MountainPassPack.cs
       - unity/pack-authoring/Assets/Editor/PackBuilder.cs
       - unity/pack-authoring/Assets/ColorsVertexTint.shader
-      - unity/pack-authoring/packs/kf1preview/manifest.json
+      - unity/pack-authoring/packs/kf1/manifest.json
       - scripts/kf1_mountain_pass.py
       - .tools/kf1/mesh.json
       - .tools/kf1/out/**/*.tga
     generates:
-      - .tools/bundles/windows/kf1preview
-      - .tools/bundles/linux/kf1preview
+      - .tools/bundles/windows/kf1
+      - .tools/bundles/linux/kf1
     cmds:
       - uv run scripts/kf1_mountain_pass.py verify-pack
       - |
         bin="{{.UNITY_BIN}}"
-        [ -x "$bin" ] || { echo "task kf1:pack: Unity 2023.2.22f1 is not at $bin; install it (unity install 2023.2.22f1 or the Hub), point UNITY_EDITOR in .env at the editor, or build on the box that has it and bring .tools/bundles/<platform>/kf1preview back" >&2; exit 1; }
+        [ -x "$bin" ] || { echo "task kf1:pack: Unity 2023.2.22f1 is not at $bin; install it (unity install 2023.2.22f1 or the Hub), point UNITY_EDITOR in .env at the editor, or build on the box that has it and bring .tools/bundles/<platform>/kf1 back" >&2; exit 1; }
       - task: :pack:build
         vars: {PACK_METHOD: Kf1MountainPassPack.Build}
 
   install:
-    desc: "Install the built kf1preview pack and its manifest into the game's UserData/LevelPacks"
+    desc: "Install the built kf1 pack and its manifest into the game's UserData/LevelPacks"
     summary: |
       Usage: task kf1:install
 
       Copies the bundle for the game's runtime (windows under CrossOver and Wine, linux natively)
-      from .tools/bundles/<platform>/kf1preview, with
-      unity/pack-authoring/packs/kf1preview/manifest.json, into
-      <game dir>/UserData/LevelPacks/kf1preview. A running game only sees the pack after a relaunch.
+      from .tools/bundles/<platform>/kf1, with
+      unity/pack-authoring/packs/kf1/manifest.json, into
+      <game dir>/UserData/LevelPacks/kf1. A running game only sees the pack after a relaunch.
     cmds:
       - task: :pack:install
-        vars: {PACK: kf1preview}
+        vars: {PACK: kf1}

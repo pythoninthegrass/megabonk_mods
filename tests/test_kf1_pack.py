@@ -10,19 +10,19 @@ import yaml
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST_PATH = ROOT / "unity/pack-authoring/packs/kf1preview/manifest.json"
+MANIFEST_PATH = ROOT / "unity/pack-authoring/packs/kf1/manifest.json"
 BUILDER_PATH = ROOT / "unity/pack-authoring/Assets/Editor/Kf1MountainPassPack.cs"
 TASKFILE = ROOT / "taskfiles/kf1.yml"
 PACK_SOURCES = [
     "unity/pack-authoring/Assets/Editor/Kf1MountainPassPack.cs",
     "unity/pack-authoring/Assets/Editor/PackBuilder.cs",
     "unity/pack-authoring/Assets/ColorsVertexTint.shader",
-    "unity/pack-authoring/packs/kf1preview/manifest.json",
+    "unity/pack-authoring/packs/kf1/manifest.json",
     "scripts/kf1_mountain_pass.py",
     ".tools/kf1/mesh.json",
     ".tools/kf1/out/**/*.tga",
 ]
-PACK_GENERATES = [".tools/bundles/windows/kf1preview", ".tools/bundles/linux/kf1preview"]
+PACK_GENERATES = [".tools/bundles/windows/kf1", ".tools/bundles/linux/kf1"]
 
 
 def write_mesh(work: Path, materials: list[dict]) -> None:
@@ -64,6 +64,9 @@ def test_pack_textures_names_mesh_json_when_it_is_absent(tmp_path):
 
 
 def test_manifest_matches_the_level_the_converter_writes():
+    """The id is baked into saved levels' packs map and bundle catalogIds, so it is pinned, not derived."""
+    assert kf1.PREVIEW_PACK == "kf1"
+    assert kf1.PREVIEW_ASSET == "MountainPass"
     manifest = json.loads(MANIFEST_PATH.read_text())
     assert manifest["id"] == kf1.PREVIEW_PACK
     assert manifest["assets"] == [kf1.PREVIEW_ASSET]

@@ -632,7 +632,7 @@ def test_preview_level_adds_the_pack_and_places_the_bundle_asset():
         "opType": "object.place",
         "target": "",
         "payload": (
-            '{"catalogId":"bundle:kf1preview/MountainPass","position":{"x":0,"y":0,"z":0},'
+            '{"catalogId":"bundle:kf1/MountainPass","position":{"x":0,"y":0,"z":0},'
             '"rotation":{"x":0,"y":0,"z":0},"scale":{"x":1,"y":1,"z":1}}'
         ),
     }

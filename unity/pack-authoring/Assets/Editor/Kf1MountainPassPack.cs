@@ -8,7 +8,7 @@ using UnityEngine.Rendering;
 public static class Kf1MountainPassPack
 {
     const string PackDirectory = "Assets/Kf1MountainPass";
-    const string BundleName = "kf1preview";
+    const string BundleName = "kf1";
     const string AssetName = "MountainPass";
     const int GroundLayer = 8;
 
