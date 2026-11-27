@@ -1,10 +1,10 @@
 ---
 id: TASK-086.02
 title: 'Convert the KF1 export into terrain, meshes and placements'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-27 08:20'
-updated_date: '2026-11-27 19:33'
+updated_date: '2026-11-27 19:42'
 labels:
   - level
   - kf1
@@ -29,7 +29,7 @@ Add `scripts/kf1_mountain_pass.py` and `tests/test_kf1_mountain_pass.py`, mirror
 <!-- AC:BEGIN -->
 - [x] #1 Unit tests cover the T3D parser, the coordinate transform, the heightmap-to-mesh conversion and placement floor-dropping, and pass
 - [x] #2 Walkable-outline and wall code is shared with Conker, not duplicated, and the Conker tests still pass
-- [ ] #3 Running the script writes mesh.json and a level JSON that validates against docs/level-format.md
+- [x] #3 Running the script writes mesh.json and a level JSON that validates against docs/level-format.md
 - [x] #4 No new level-JSON field is added without a matching runtime setting
 <!-- AC:END -->
 
@@ -46,18 +46,20 @@ Add `scripts/kf1_mountain_pass.py` and `tests/test_kf1_mountain_pass.py`, mirror
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Shared module is scripts/level_geometry.py (outline, perimeter walls, floor_height, accessor reader, object_edit); conker_colors keeps wrappers binding its kill floor, pit floor and anchors. Conker tests: 6 pass, 6 skip before and after; the skips need the local ROM fixture, which is not on this box, so the pit-floor and kill-floor wall tests did not run against the refactor.
+Shared module is scripts/level_geometry.py; conker_colors keeps wrappers binding its kill floor, pit floor and anchors. With the Conker ROM and extractor in place all 12 Conker tests pass, and the Conker mesh.json and level JSON built by the pre-refactor script are byte-identical to the current output.
 
-AC 3 left open: prepare writes mesh.json (40 MB) and the level JSON from the real export in about 5 s, uses only fields the Conker level already writes, and has the from-scratch required fields, but nothing here can run the C# loader, so it is unconfirmed until the level loads in game.
+AC 3: prepare writes mesh.json (40 MB) and the level JSON from the real export in about 5 s. It uses only fields the Conker level already writes and has the from-scratch required fields. The mod's loader accepted the level on every load with no validation errors; the editor's Validate button was not pressed.
 
-Anchors on BSP floors have no terrain floor and are skipped and listed: 17/157 ZombieVolume, 3/4 ShopVolume, 4/14 KFAmmoPickup, 6/14 KFRandomItemSpawn. The level therefore has one shrine spot, and the runtime needs more spots than shrines; this needs the BSP task or extra spots. Boss spawner is the farthest grounded ZombieVolume, a stand-in. SCALE 0.028 and the rotator roll sign are untuned.
+Smoke test (relaunch into .tools/kf1/kf1-mountain-pass.mblevel.json, editor mode, CrossOver build): the level loads, the placeholder tile builds, the spawn and boss spawner place, all 8 chests spawn and the kill floor arms. The boss portal is regular size with only BottomPiece hidden (the Warehouse shrank its portal for the glass box and hides Collider). ExtraShrines spawns 0 of 6: one authored spot, and no terrain collision without the pack. The screenshot tool returned an unreadable image, so the portal was judged from the log and by eye in the user's own screenshot.
 
-No packs entry or bundle placement: those wait for the pack task. glTF materials are name and base color only.
-
-Correction: with the Conker ROM and extractor available, all 12 Conker tests pass (the 6 that skipped earlier now run), and the Conker mesh.json and level JSON built by the pre-refactor script are byte-identical to the current output.
-
-Smoke test (relaunch into .tools/kf1/kf1-mountain-pass.mblevel.json, editor mode, CrossOver build): the level loads, FromScratch builds the placeholder tile, the spawn and boss spawner place, all 8 chests spawn, the kill floor arms. ExtraShrines spawns 0 of 6 planned: the one authored spot finds no floor because there is no terrain collision without the pack, and only 1 spot exists. The runtime raised killFloorY from -200 to -72 (catch floor -80 plus clearance); 0.1% of terrain samples (min -137) lie below that, so KILL_FLOOR_Y should become -72 or the world should be shifted up. The screenshot tool returned an unreadable image, so nothing was inspected visually. The level shows no terrain or props until the pack task builds the bundle.
+Anchors on BSP floors are skipped and listed: 17/157 ZombieVolume, 3/4 ShopVolume, 4/14 KFAmmoPickup, 6/14 KFRandomItemSpawn. Boss spawner is the farthest grounded ZombieVolume, a stand-in. SCALE 0.028 and the rotator roll sign are untuned. The runtime raised killFloorY from -200 to -72. The stock Forest backdrop (960 by 960 Mesh, Water planes) appears here exactly as in the Warehouse. Follow-ups are recorded in TASK-086.03 and TASK-086.04.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added scripts/level_geometry.py, shared by the Conker and KF1 converters (walkable outline, perimeter walls, floor lookup, glTF accessor reader, object.place edit builder, boss portal hidden parts), and scripts/kf1_mountain_pass.py with 27 tests written first. `prepare` reads the T3D actors, the 16-bit heightmap and the umodel glTF meshes and writes .tools/kf1/mesh.json and kf1-mountain-pass.mblevel.json in about five seconds, using only level fields the Conker level already writes. Conker is unchanged: all 12 of its tests pass and its output is byte-identical to the pre-refactor script. The level loads in game with the spawn, boss portal (regular size, BottomPiece hidden) and 8 chests placed. Known gaps that belong to later tasks: anchors on BSP floors are skipped (one shrine spot remains), the level shows no terrain or props until the pack exists, and SCALE, the rotator roll sign and KILL_FLOOR_Y are untuned.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

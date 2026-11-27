@@ -4,7 +4,7 @@ title: Build the kf1 asset pack and wire the task chain and docs
 status: To Do
 assignee: []
 created_date: '2026-11-27 08:20'
-updated_date: '2026-11-27 18:27'
+updated_date: '2026-11-27 19:42'
 labels:
   - level
   - kf1
@@ -35,7 +35,13 @@ Add `unity/pack-authoring/Assets/Editor/Kf1MountainPassPack.cs` (reusing `PackBu
 - [ ] #5 docs/kf1-mountain-pass.md documents the full chain
 <!-- AC:END -->
 
+## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
+From TASK-086.02: the stock Forest backdrop (a 960 by 960 Mesh at the origin, Water planes at y=-129 and y=6) appears in the KF1 level exactly as in the Warehouse, so the map shows a patch of land and sea until the terrain exists. Whether to hide or cover it is deferred until the map is filled out.
+
+From TASK-086.02: the runtime raised killFloorY from -200 to -72, and 0.1% of the terrain (min -137) is below that; set KILL_FLOOR_Y to -72 or shift the world up when the terrain is built. The level JSON has no packs entry or bundle placement yet; mesh.json materials hold only a name and base color.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

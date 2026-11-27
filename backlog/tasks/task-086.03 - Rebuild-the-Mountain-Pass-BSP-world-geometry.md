@@ -4,7 +4,7 @@ title: Rebuild the Mountain Pass BSP world geometry
 status: To Do
 assignee: []
 created_date: '2026-11-27 08:20'
-updated_date: '2026-11-27 18:27'
+updated_date: '2026-11-27 19:42'
 labels:
   - level
   - kf1
@@ -29,7 +29,11 @@ The level's BSP is not in the exported data as a mesh: the T3D holds 462 `Brush`
 - [ ] #2 What the BlackTexture brushes are is established and written down in docs/kf1-mountain-pass.md
 <!-- AC:END -->
 
+## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
+From TASK-086.02: anchors on BSP floors have no terrain floor and are skipped: 17/157 ZombieVolume, 3/4 ShopVolume, 4/14 KFAmmoPickup, 6/14 KFRandomItemSpawn. The level has one shrine spot and the runtime needs more spots than shrines, so shrine spots need adding once the BSP gives those anchors a floor (converter: scripts/kf1_mountain_pass.py, make_level).
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
