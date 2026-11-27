@@ -4,11 +4,28 @@ namespace MegabonkLevels.Tests;
 
 public class ExtraShrinesTests
 {
+    [Fact]
+    public void StrictSpotPlanGivesGuaranteedMerchantFirstPick()
+    {
+        var settings = Level() with
+        {
+            StrictShrineSpots = true,
+            GuaranteedShrineKinds = new[] { "shadyGuy" },
+            ExtraShrines = 4,
+        };
+        for (var seed = 0; seed < 20; seed++)
+        {
+            var plan = ExtraShrines.Plan(settings, new[] { ExtraShrineKind.Greed }, new Random(seed));
+            Assert.Equal(ExtraShrineKind.ShadyGuy, plan[0]);
+        }
+    }
+
     private static LevelFile Level() => LevelFileSerializer.Deserialize("""{"schemaVersion":3,"map":1,"seed":20261007,"packs":{},"edits":[]}""");
 
     [Theory]
     [InlineData(ExtraShrineKind.Charge, 0, 1, 0)]
     [InlineData(ExtraShrineKind.ShadyGuy, 0, 1, 0)]
+    [InlineData(ExtraShrineKind.Microwave, 0, 0, 1)]
     [InlineData(ExtraShrineKind.Greed, 0, 0, 1)]
     [InlineData(ExtraShrineKind.Magnet, 0, 0, 1)]
     [InlineData(ExtraShrineKind.Challenge, 0, 0, 1)]

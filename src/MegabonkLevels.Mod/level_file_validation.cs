@@ -12,6 +12,13 @@ public static class LevelFileValidator
 
     public static void Validate(LevelFile level)
     {
+        if (level.PitRecoveryDamage is { } damage && (!float.IsFinite(damage) || damage <= 0 || !level.IsFromScratch))
+            throw new ArgumentException("pitRecoveryDamage requires a from-scratch level and positive finite damage.");
+        if (level.PowerupSpots is { } powerups && powerups.Any(point => point == null || point.Count != 3 || point.Any(n => !float.IsFinite(n))))
+            throw new ArgumentException("powerupSpots requires three finite coordinates per spot.");
+        if (level.MinibossGroundSpots is { } spots && spots.Any(point => point == null || point.Count != 3 || point.Any(n => !float.IsFinite(n))))
+            throw new ArgumentException("minibossGroundSpots requires three finite coordinates per spot.");
+
         if (level.Baseline is not (null or LevelFile.GeneratedBaseline or LevelFile.NoBaseline))
         {
             throw new ArgumentException($"Unknown baseline '{level.Baseline}': expected 'generated' or 'none'.");

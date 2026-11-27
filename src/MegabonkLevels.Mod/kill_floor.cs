@@ -37,6 +37,9 @@ public static class KillFloor
 
     public static bool ShouldKill(float y, float floorY) => y < floorY;
 
+    public static bool ShouldKillEnemy(ActorKind kind, bool listedAsStageBoss, bool recoveryEnabled) =>
+        !recoveryEnabled || !listedAsStageBoss && !ActorKinds.IsBossTier(kind);
+
     // How far above the kill floor an actor's pivot can sit and still have its collider reach it, so a watcher can skip
     // the collider bounds query for everyone standing well above it. Bounds are read lazily in Unity, so asking for one
     // on a freshly spawned collider rebuilds it; with a large population that per-actor cost is what shows up in the
@@ -52,4 +55,21 @@ public static class KillFloor
         colliderMinY.HasValue ? Math.Min(pivotY, colliderMinY.Value) : pivotY;
 
     private const float CatchFloorClearance = 8f;
+}
+
+public sealed class PitRecovery
+{
+    private const float SafeMargin = 2f;
+    public Vector3Data? SafeFeet { get; private set; }
+
+    public void Reset(Vector3Data? spawn) => SafeFeet = spawn;
+
+    public Vector3Data? RecoveryTarget(Vector3Data at, float floorY) =>
+        KillFloor.ShouldKill(at.Y, floorY) ? SafeFeet : null;
+
+    public void Observe(Vector3Data feet, float floorY, bool groundedAndSupported)
+    {
+        if (groundedAndSupported && feet.Y >= floorY + SafeMargin)
+            SafeFeet = feet;
+    }
 }

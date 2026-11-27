@@ -18,6 +18,7 @@ public class CustomRunRandomTests
         {
             Assert.Equal(a.ShrinePlan.Next(), b.ShrinePlan.Next());
             Assert.Equal(a.ShrinePlacement.Next(), b.ShrinePlacement.Next());
+            Assert.Equal(a.PowerupPlacement.Next(), b.PowerupPlacement.Next());
             Assert.Equal(a.PickBoss(Pool), b.PickBoss(Pool));
         }
     }
@@ -31,6 +32,7 @@ public class CustomRunRandomTests
         {
             a.ShrinePlan.Next();
             a.ShrinePlacement.Next();
+            a.PowerupPlacement.Next();
         }
         Assert.Equal(a.PickBoss(Pool), b.PickBoss(Pool));
         a.Reset(0);

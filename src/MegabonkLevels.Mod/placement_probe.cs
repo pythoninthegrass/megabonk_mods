@@ -135,7 +135,7 @@ internal static class PlacementProbe
     public static bool Unoccupied(Bounds bounds, float floorY, Transform self) => FirstOccupant(bounds, floorY, self) == null;
 
     // The first collider other than the object itself inside the footprint's box above the floor, or null.
-    public static Collider FirstOccupant(Bounds bounds, float floorY, Transform self)
+    public static Collider FirstOccupant(Bounds bounds, float floorY, Transform self, Collider supportingMesh = null)
     {
         var bottom = Mathf.Max(bounds.min.y, floorY) + 0.15f;
         var top = Mathf.Max(bounds.max.y, bottom + 2);
@@ -143,7 +143,7 @@ internal static class PlacementProbe
         var half = new Vector3(bounds.extents.x + Clearance, (top - bottom) * 0.5f, bounds.extents.z + Clearance);
         foreach (var collider in Physics.OverlapBox(center, half, Quaternion.identity, ~0, QueryTriggerInteraction.Ignore))
         {
-            if (collider != null && !collider.transform.IsChildOf(self)) return collider;
+            if (collider != null && collider != supportingMesh && !collider.transform.IsChildOf(self)) return collider;
         }
         return null;
     }

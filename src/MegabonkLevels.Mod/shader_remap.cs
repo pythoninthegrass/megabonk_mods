@@ -76,7 +76,7 @@ public static class ShaderRemap
             return new ShaderRemapPlan(TargetShader, BuiltInCopies, BaseKeywords, false);
         }
 
-        if (StartsWithAny(authoringShader, GameShaderPrefixes))
+        if (authoringShader == "MegabonkLevels/Colors Vertex Tint" || StartsWithAny(authoringShader, GameShaderPrefixes))
         {
             return null;
         }

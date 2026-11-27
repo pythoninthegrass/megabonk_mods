@@ -51,6 +51,8 @@ public static class CharacterOverride
 // With the dev flag on, a mod-loaded run skips the character screen and uses this character.
 public static class DevCharacter
 {
+    private const int OgreId = 5;
+
     // Returns null when the flag is off so the player goes through the screen.
     public static int? Resolve(bool devEnabled, string name)
     {
@@ -64,8 +66,9 @@ public static class DevCharacter
             return CharacterOverride.TonyMcZoomId;
         }
 
+        if (string.Equals(name.Trim(), "ogre", StringComparison.OrdinalIgnoreCase)) return OgreId;
         return CharacterOverride.TryParseName(name)
-            ?? throw new ArgumentException($"'{name}' is not an allowed character (calcium, tonymczoom, squeaker)");
+            ?? throw new ArgumentException($"'{name}' is not an allowed character (calcium, tonymczoom, squeaker, ogre)");
     }
 }
 

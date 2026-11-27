@@ -2,6 +2,36 @@ namespace MegabonkLevels.Tests;
 
 public class KillFloorTests
 {
+    [Theory]
+    [InlineData(ActorKind.Enemy, false, true)]
+    [InlineData(ActorKind.Elite, false, true)]
+    [InlineData(ActorKind.Miniboss, false, false)]
+    [InlineData(ActorKind.StageBoss, true, false)]
+    [InlineData(ActorKind.FinalBoss, false, false)]
+    [InlineData(ActorKind.Enemy, true, false)]
+    public void RecoveryFloorLeavesBossTiersAlone(ActorKind kind, bool listedAsStageBoss, bool expected)
+    {
+        Assert.Equal(expected, KillFloor.ShouldKillEnemy(kind, listedAsStageBoss, recoveryEnabled: true));
+        Assert.True(KillFloor.ShouldKillEnemy(kind, listedAsStageBoss, recoveryEnabled: false));
+    }
+
+    [Fact]
+    public void RecoveryKeepsLastGroundedPointAcrossAJumpAndIgnoresPitBottom()
+    {
+        var recover = new PitRecovery();
+        var spawn = new Vector3Data(1, 0, 3);
+        var ledge = new Vector3Data(15, -5, 18);
+        recover.Reset(spawn);
+        recover.Observe(ledge, -30, groundedAndSupported: true);
+        recover.Observe(new Vector3Data(20, 0, 18), -30, groundedAndSupported: false);
+        recover.Observe(new Vector3Data(25, -34, 20), -30, groundedAndSupported: true);
+        Assert.Equal(ledge, recover.SafeFeet);
+        Assert.Equal(ledge, recover.RecoveryTarget(new Vector3Data(5, -36, 10), -35));
+        Assert.Null(recover.RecoveryTarget(ledge, -35));
+        recover.Reset(spawn);
+        Assert.Equal(spawn, recover.SafeFeet);
+    }
+
     [Fact]
     public void FloorY_IsLowestLevelTimesHeightMinusMargin()
     {

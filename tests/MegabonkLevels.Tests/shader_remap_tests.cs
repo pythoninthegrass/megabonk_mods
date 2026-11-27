@@ -2,6 +2,10 @@ namespace MegabonkLevels.Tests;
 
 public class ShaderRemapTests
 {
+    [Fact]
+    public void KeepsColorsVertexTintShader() =>
+        Assert.Null(ShaderRemap.PlanFor("MegabonkLevels/Colors Vertex Tint"));
+
     private const string Target = "MK/Toon/Built-in/Standard/Simple + Outline";
 
     private static PropertyCopy Copy(ShaderRemapPlan plan, string from) => plan.Copies.Single(c => c.From == from);

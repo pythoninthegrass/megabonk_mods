@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Assets.Scripts.Actors.Enemies;
 using Assets.Scripts.Actors.Player;
+using Assets.Scripts.Inventory__Items__Pickups.Chests;
 using Assets.Scripts.Managers;
+using Assets.Scripts.Utility;
 using UnityEngine;
 
 namespace MegabonkLevels;
@@ -23,6 +25,9 @@ public static class KillFloorWatcher
     private static float _floorY;
     private static float _nextCheck;
     private static bool _playerKilled;
+    private static float? _recoveryDamage;
+    private static readonly PitRecovery _recovery = new();
+    private static readonly List<(InteractableChest Chest, PitRecovery Recovery, Quaternion Rotation)> _chests = new();
     private static bool _heartbeatEnabled = EnvFlag.IsSet(HeartbeatVariable);
     private static float _nextHeartbeat;
     private static float _lowestEnemyY = float.PositiveInfinity;
@@ -35,7 +40,7 @@ public static class KillFloorWatcher
 
     public static float FloorY => _armed ? _floorY : float.NegativeInfinity;
 
-    public static void Arm(ProceduralTileGeneration tileGen, ModLogger logger, float? killFloorY = null)
+    public static void Arm(ProceduralTileGeneration tileGen, ModLogger logger, float? killFloorY = null, LevelFile settings = default)
     {
         var mapParameters = tileGen.currentMapParameters ?? tileGen.currentStage?.mapParameters;
         var catchFloorY = CatchFloorY();
@@ -45,6 +50,21 @@ public static class KillFloorWatcher
             : KillFloor.FloorY(LiveLevels(tileGen), mapParameters.scaledTileHeight, MarginBelowLowestTile, catchFloorY);
         _logger = logger;
         _playerKilled = false;
+        _recoveryDamage = settings.PitRecoveryDamage;
+        var spawn = settings.PlayerStart ?? settings.Spawn?.Position;
+        _recovery.Reset(spawn is { Count: 3 } ? new Vector3Data(spawn[0], spawn[1] - TeleportTarget.PlayerBodyOffsetY, spawn[2]) : null);
+        _chests.Clear();
+        if (_recoveryDamage.HasValue)
+        {
+            foreach (var chest in UnityEngine.Object.FindObjectsOfType<InteractableChest>())
+            {
+                if (chest == null) continue;
+                var at = chest.transform.position;
+                var recovery = new PitRecovery();
+                recovery.Observe(new Vector3Data(at.x, at.y, at.z), _floorY, groundedAndSupported: true);
+                _chests.Add((chest, recovery, chest.transform.rotation));
+            }
+        }
         _armed = !float.IsNegativeInfinity(_floorY);
         if (_armed)
         {
@@ -73,6 +93,9 @@ public static class KillFloorWatcher
         _floorY = KillFloor.FloorYForTerrain(lowestTerrainY, MarginBelowLowestTile, catchFloorY);
         _logger = logger;
         _playerKilled = false;
+        _recoveryDamage = null;
+        _recovery.Reset(null);
+        _chests.Clear();
         _armed = !float.IsNegativeInfinity(_floorY);
         PositionLabel.Disarm();
         logger.Msg(_armed ? $"KillFloor: armed at y={_floorY} (terrain low y={lowestTerrainY}, catch floor y={catchFloorY})" : "KillFloor: no terrain, not armed");
@@ -89,6 +112,9 @@ public static class KillFloorWatcher
     public static void Disarm()
     {
         _armed = false;
+        _recoveryDamage = null;
+        _recovery.Reset(null);
+        _chests.Clear();
         PositionLabel.Disarm();
     }
 
@@ -98,23 +124,88 @@ public static class KillFloorWatcher
         {
             return;
         }
+        if (_recoveryDamage.HasValue && (MyTime.paused || EditorMode.Active)) return;
 
         _nextCheck = Time.unscaledTime + CheckIntervalSeconds;
         KillFallenPlayer();
         KillFallenEnemies();
+        RecoverChests();
     }
 
     private static void KillFallenPlayer()
     {
         var player = MyPlayer.Instance;
-        if (_playerKilled || player == null || !KillFloor.ShouldKill(player.transform.position.y, _floorY))
+        if (_playerKilled || player == null)
         {
             return;
         }
 
+        var bodyY = player.transform.position.y;
+        if (_recoveryDamage is { } damage && player.playerMovement is { } movement && movement.feet != null)
+        {
+            var feet = movement.feet.position;
+            if (KillFloor.ShouldKill(feet.y, _floorY))
+            {
+                if (_recovery.RecoveryTarget(new Vector3Data(feet.x, feet.y, feet.z), _floorY) is { } safe)
+                {
+                    var facing = player.transform.forward;
+                    player.TeleportPlayerImmediate(new Vector3(safe.X, safe.Y + 0.15f, safe.Z), facing, facing, 20f);
+                    movement.rb.velocity = Vector3.zero;
+                    FallDamagePatch.ResetTracking();
+                    var health = player.inventory.playerHealth;
+                    if (health.CanTakeDamage())
+                        health.DamagePlayerExternal(damage, 0f, Vector3.zero, true, DamageSource, 0, 0, null);
+                    _logger.Msg($"KillFloor: recovered player at ({safe.X:F2}, {safe.Y:F2}, {safe.Z:F2}) after falling to y={feet.y:F2}");
+                    return;
+                }
+            }
+            else
+            {
+                if (movement.grounded && SafeSupport(feet, movement.whatIsGroundOnly))
+                    _recovery.Observe(new Vector3Data(feet.x, feet.y, feet.z), _floorY, groundedAndSupported: true);
+                return;
+            }
+        }
+        if (!KillFloor.ShouldKill(bodyY, _floorY)) return;
         _playerKilled = true;
         _logger.Msg($"KillFloor: player fell to y={player.transform.position.y}, killing");
         player.inventory.playerHealth.KillPlayer();
+    }
+
+    private static void RecoverChests()
+    {
+        foreach (var (chest, recovery, rotation) in _chests)
+        {
+            if (chest == null || !chest.gameObject.activeInHierarchy) continue;
+            var at = chest.transform.position;
+            if (recovery.RecoveryTarget(new Vector3Data(at.x, at.y, at.z), _floorY) is not { } safe) continue;
+            var target = new Vector3(safe.X, safe.Y, safe.Z);
+            chest.transform.SetPositionAndRotation(target, rotation);
+            var body = chest.GetComponent<Rigidbody>();
+            if (body != null && !body.isKinematic)
+            {
+                body.position = target;
+                body.rotation = rotation;
+                body.velocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+            _logger.Msg($"KillFloor: recovered chest at {target:F2}");
+        }
+    }
+
+    private static readonly Vector3[] SupportOffsets =
+        { Vector3.zero, Vector3.right, Vector3.left, Vector3.forward, Vector3.back };
+
+    private static bool SafeSupport(Vector3 feet, LayerMask ground)
+    {
+        if (feet.y < _floorY + 2f) return false;
+        foreach (var offset in SupportOffsets)
+        {
+            if (!Physics.Raycast(feet + offset + Vector3.up * 0.75f, Vector3.down,
+                    out var hit, 2f, ground, QueryTriggerInteraction.Ignore) || hit.normal.y < 0.7f || hit.point.y < _floorY + 2f)
+                return false;
+        }
+        return true;
     }
 
     private static void KillFallenEnemies()
@@ -170,8 +261,19 @@ public static class KillFloorWatcher
         var collider = KillFloor.ShouldProbeCollider(pivotY, _floorY) ? enemy.collider : null;
         var colliderMinY = collider != null && collider.enabled ? collider.bounds.min.y : (float?)null;
         var id = enemy.id;
-        _actors[id] = enemy;
-        _lowestById[id] = KillFloor.LowestPoint(pivotY, colliderMinY);
+        var kind = _recoveryDamage.HasValue
+            ? ActorKinds.Of((int)enemy.enemyFlag)
+            : ActorKind.Enemy;
+        if (KillFloor.ShouldKillEnemy(kind, isBoss, _recoveryDamage.HasValue))
+        {
+            _actors[id] = enemy;
+            _lowestById[id] = KillFloor.LowestPoint(pivotY, colliderMinY);
+        }
+        else
+        {
+            _actors.Remove(id);
+            _lowestById.Remove(id);
+        }
         if (!_heartbeatEnabled)
         {
             return;

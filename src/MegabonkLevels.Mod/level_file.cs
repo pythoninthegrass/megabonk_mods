@@ -74,7 +74,12 @@ public readonly record struct LevelFile(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SpawnPoint? BossSpawner = null,
     // From-scratch only: keeps the boss spawn redirect on for a level whose boss spawner stands in a closed room.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool BossRedirect = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] float? FallDamageFreeHeight = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] float? FallDamageFreeHeight = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] float? PitRecoveryDamage = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool StrictShrineSpots = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<IReadOnlyList<float>> PowerupSpots = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool RandomizePlacementsEachRun = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<IReadOnlyList<float>> MinibossGroundSpots = null)
 {
     public const int CurrentSchemaVersion = 4;
 
@@ -99,13 +104,18 @@ public readonly record struct LevelFile(
         && GrindRequiresSlide == other.GrindRequiresSlide
         && FallDamageCharacter == other.FallDamageCharacter
         && FallDamageFreeHeight == other.FallDamageFreeHeight
+        && PitRecoveryDamage == other.PitRecoveryDamage
+        && StrictShrineSpots == other.StrictShrineSpots
+        && RandomizePlacementsEachRun == other.RandomizePlacementsEachRun
+        && PointsEqual(PowerupSpots, other.PowerupSpots)
+        && PointsEqual(MinibossGroundSpots, other.MinibossGroundSpots)
         && RandomizeShadyGuy == other.RandomizeShadyGuy
         && RandomizeChests == other.RandomizeChests
         && RandomizeMoai == other.RandomizeMoai
         && ExtraShrines == other.ExtraShrines
         && ListEquals(ExtraShrineKinds, other.ExtraShrineKinds)
         && ExtraShrinesMax == other.ExtraShrinesMax
-        && (ShrineSpots == null ? other.ShrineSpots == null : other.ShrineSpots != null && ShrineSpots.Count == other.ShrineSpots.Count && ShrineSpots.Zip(other.ShrineSpots).All(pair => ListEquals(pair.First, pair.Second)))
+        && PointsEqual(ShrineSpots, other.ShrineSpots)
         && ListEquals(GuaranteedShrineKinds, other.GuaranteedShrineKinds)
         && (ShrineKindRanges == null ? other.ShrineKindRanges == null : other.ShrineKindRanges != null && ShrineKindRanges.Count == other.ShrineKindRanges.Count && ShrineKindRanges.All(pair => other.ShrineKindRanges.TryGetValue(pair.Key, out var range) && ListEquals(pair.Value, range)))
         && ListEquals(ShrineGuarantees, other.ShrineGuarantees)
@@ -133,6 +143,9 @@ public readonly record struct LevelFile(
 
     private static bool ListEquals<T>(IReadOnlyList<T> a, IReadOnlyList<T> b) =>
         a == null ? b == null : b != null && a.SequenceEqual(b);
+
+    private static bool PointsEqual(IReadOnlyList<IReadOnlyList<float>> a, IReadOnlyList<IReadOnlyList<float>> b) =>
+        a == null ? b == null : b != null && a.Count == b.Count && a.Zip(b).All(pair => ListEquals(pair.First, pair.Second));
 
     private static bool PacksDictionaryEquals(IReadOnlyDictionary<string, string> a, IReadOnlyDictionary<string, string> b) =>
         a.Count == b.Count && a.All(kvp => b.TryGetValue(kvp.Key, out var value) && value == kvp.Value);

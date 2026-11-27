@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace MegabonkLevels;
 
-public enum ExtraShrineKind { Challenge, Magnet, Cursed, Greed, Balance, Moai, Charge, ShadyGuy }
+public enum ExtraShrineKind { Challenge, Magnet, Cursed, Greed, Balance, Moai, Charge, ShadyGuy, Microwave }
 
 // Placement policy for the extra shrines a level spawns each run: which kinds exist, and the
 // keep-clear rules that keep a shrine's 12.5-unit charge sphere off other shrines and off the
@@ -35,6 +35,7 @@ public static class ExtraShrines
         ["InteractableShrineMoai"] = ExtraShrineKind.Moai,
         ["ChargeShrine"] = ExtraShrineKind.Charge,
         ["InteractableShadyGuy"] = ExtraShrineKind.ShadyGuy,
+        ["InteractableMicrowave"] = ExtraShrineKind.Microwave,
     };
 
     // Charge Shrine and merchant models are authored Y-up; every other kind is authored Z-up (prefab euler X of 270).
@@ -45,10 +46,14 @@ public static class ExtraShrines
     public static List<ExtraShrineKind> Plan(LevelFile settings, IReadOnlyList<ExtraShrineKind> randomKinds, Random random)
     {
         var kinds = ParseKinds(settings.GuaranteedShrineKinds);
+        var guaranteedCount = kinds.Count;
         kinds.AddRange(RangedKinds(settings.ShrineKindRanges, random));
         var requested = ShrineCount(settings.ExtraShrines, settings.ExtraShrinesMax, random);
         for (var i = 0; i < requested && randomKinds.Count > 0; i++)
             kinds.Add(randomKinds[random.Next(randomKinds.Count)]);
+        if (settings.StrictShrineSpots)
+            return Shuffled(kinds.Take(guaranteedCount).ToList(), random)
+                .Concat(Shuffled(kinds.Skip(guaranteedCount).ToList(), random)).ToList();
         return Shuffled(kinds, random);
     }
 

@@ -89,7 +89,7 @@ public static class LiveEditPatch
         if (LiveSession is { } session)
         {
             if (session.Controller.grassRenderer != null) session.Controller.grassRenderer.enabled = !_noGrass;
-            if (session.TileGen != null) KillFloorWatcher.Arm(session.TileGen, logger, _killFloorY);
+            if (session.TileGen != null) KillFloorWatcher.Arm(session.TileGen, logger, _killFloorY, settings);
         }
         TickMaxSlopeAngle(logger);
     }
@@ -135,6 +135,9 @@ public static class LiveEditPatch
         MapGenerationController.A_PreGeneration += (Il2CppSystem.Action)(() =>
         {
             RunRandom.Reset(_randomizationSettings.Seed);
+            if (_randomizationSettings.RandomizePlacementsEachRun)
+                RunRandom.ResetPlacements(System.Guid.NewGuid().GetHashCode());
+            PowerupPlacement.Reset();
             FallDamagePatch.ResetTracking();
             GroundSkin.ClearSurfaces();
             if (CustomLevelState.IsActive)
@@ -298,6 +301,11 @@ public static class LiveEditPatch
             GrindRequiresSlide: _grindRequiresSlide,
             FallDamageCharacter: _fallDamageCharacter,
             FallDamageFreeHeight: _randomizationSettings.FallDamageFreeHeight,
+            PitRecoveryDamage: _randomizationSettings.PitRecoveryDamage,
+            StrictShrineSpots: _randomizationSettings.StrictShrineSpots,
+            PowerupSpots: _randomizationSettings.PowerupSpots,
+            RandomizePlacementsEachRun: _randomizationSettings.RandomizePlacementsEachRun,
+            MinibossGroundSpots: _randomizationSettings.MinibossGroundSpots,
             Music: LevelMusic.Reference,
             Title: LevelTitle.Title,
             Description: LevelTitle.Description,
@@ -577,7 +585,7 @@ public static class LiveEditPatch
         }
 
         _session = session;
-        if (edits != null && (InteractableRandomization.Enabled(_randomizationSettings) || ExtraShrines.Enabled(_randomizationSettings)))
+        if (edits != null && (InteractableRandomization.Enabled(_randomizationSettings) || ExtraShrines.Enabled(_randomizationSettings) || _randomizationSettings.PowerupSpots is { Count: > 0 }))
         {
             ModTick.Run(FinishRandomizedGeneration(session, index, edits, _randomizationSettings));
             return;
@@ -591,7 +599,7 @@ public static class LiveEditPatch
             return;
         }
 
-        KillFloorWatcher.Arm(tileGen, logger, _killFloorY);
+        KillFloorWatcher.Arm(tileGen, logger, _killFloorY, _randomizationSettings);
     }
 
     // Chest.Start adds random tilt, so relocate after native Start callbacks but before releasing the startup cover.
@@ -604,8 +612,9 @@ public static class LiveEditPatch
         InteractableRandomizationPatch.Apply(settings, index, edits, session.Planner.State,
             session.TileGen, ground, settings.PlayerStart, session.Logger);
         ExtraShrinesPatch.Spawn(settings, index, session.Planner.State, session.TileGen, ground, session.Controller, session.Logger);
+        PowerupPlacement.SpawnInitial(settings.PowerupSpots, session.Logger);
         StartupCover.OnContentReady();
-        KillFloorWatcher.Arm(session.TileGen, session.Logger, settings.KillFloorY);
+        KillFloorWatcher.Arm(session.TileGen, session.Logger, settings.KillFloorY, settings);
     }
 
     // The grass manager raycasts onto the ground layer, so it would grow through a level's placed floor meshes.

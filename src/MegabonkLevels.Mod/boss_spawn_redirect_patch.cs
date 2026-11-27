@@ -31,6 +31,8 @@ public static class BossSpawnRedirectPatch
     // SpawnBoss summons through the positional SpawnEnemy, so both postfixes see one spawn; the pointer set stops the
     // outer call from moving an enemy the inner call already placed.
     private static readonly HashSet<IntPtr> _movedBosses = new();
+    private static readonly HashSet<IntPtr> _groundedMinibosses = new();
+    private static int _groundedFrame = -1;
 
     public static void Install(ModLogger logger)
     {
@@ -91,6 +93,7 @@ public static class BossSpawnRedirectPatch
     {
         if (!_armedFrame.HasValue)
         {
+            if (GroundMiniboss(boss, requested)) return;
             MoveMinibossOutOfTheBox(boss, requested, via);
             return;
         }
@@ -104,6 +107,7 @@ public static class BossSpawnRedirectPatch
                 _logger?.Msg($"BossSpawnRedirect: window expired at frame {frame} after {_moveCount}/{_expectedMoves} moves.");
             }
             _armedFrame = null;
+            GroundMiniboss(boss, requested);
             return;
         }
 
@@ -148,6 +152,44 @@ public static class BossSpawnRedirectPatch
         {
             _armedFrame = null;
         }
+    }
+
+    private static bool GroundMiniboss(Enemy enemy, Vector3 requested)
+    {
+        if (!CustomLevelState.IsActive || LiveEditPatch.CurrentSettings.MinibossGroundSpots is not { Count: > 0 } spots ||
+            enemy == null || !enemy.IsBoss() || enemy.IsStageBoss() || enemy.IsFinalBoss()) return false;
+        if (_groundedFrame != Time.frameCount)
+        {
+            _groundedMinibosses.Clear();
+            _groundedFrame = Time.frameCount;
+        }
+        if (!_groundedMinibosses.Add(enemy.Pointer)) return true;
+
+        var bestDistance = float.PositiveInfinity;
+        Vector3? best = null;
+        foreach (var spot in spots)
+        {
+            var dx = spot[0] - requested.x;
+            var dz = spot[2] - requested.z;
+            var distance = dx * dx + dz * dz;
+            if (distance >= bestDistance ||
+                !PlacementProbe.HighestFloor(spot[0], spot[2], spot[1] + 1f, spot[1] - 1f, enemy.transform, out var surface) ||
+                surface.y <= KillFloorWatcher.FloorY) continue;
+            bestDistance = distance;
+            best = surface;
+        }
+        if (best is not { } floor) return true;
+        var at = enemy.transform.position;
+        var lift = enemy.collider == null ? Mathf.Max(0, at.y - requested.y) : Mathf.Max(0, at.y - enemy.collider.bounds.min.y);
+        var target = floor + Vector3.up * (lift + 0.25f);
+        enemy.transform.position = target;
+        if (enemy.rb != null)
+        {
+            enemy.rb.position = target;
+            enemy.rb.velocity = Vector3.zero;
+        }
+        _logger?.Msg($"BossSpawnRedirect: grounded miniboss '{enemy.enemyData?.enemyName}' at {target:F2} (floor {floor.y:F2}).");
+        return true;
     }
 
     // Timeline minibosses spawn on a ring around the player, so one that lands in the glass box while the player is near

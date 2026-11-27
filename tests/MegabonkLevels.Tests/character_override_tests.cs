@@ -84,6 +84,13 @@ public class CharacterAllowListTests
 public class DevCharacterTests
 {
     [Fact]
+    public void Resolve_AllowsOgreForClearanceTestingButDoesNotPinItInTheMenu()
+    {
+        Assert.Equal(5, DevCharacter.Resolve(true, "ogre"));
+        Assert.False(CharacterOverride.IsAllowed(5));
+    }
+
+    [Fact]
     public void FlagOff_ReturnsNull_SoTheScreenIsShown()
     {
         Assert.Null(DevCharacter.Resolve(false, "calcium"));

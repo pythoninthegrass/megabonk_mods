@@ -113,7 +113,9 @@ public static class ExtraShrinesPatch
     private static int SpawnAtAuthoredSpots(LevelFile settings, IReadOnlyDictionary<string, GameObject> index, List<PoolEntry> pool,
         IReadOnlyList<ExtraShrineKind> plan, System.Random random, ModLogger logger)
     {
-        var offsets = ExtraShrines.NudgeOffsets(ExtraShrines.NudgeStep, ExtraShrines.NudgeRings, ExtraShrines.NudgeDirections);
+        IReadOnlyList<(float X, float Z)> offsets = settings.StrictShrineSpots
+            ? new[] { (X: 0f, Z: 0f) }
+            : ExtraShrines.NudgeOffsets(ExtraShrines.NudgeStep, ExtraShrines.NudgeRings, ExtraShrines.NudgeDirections);
         var remaining = settings.ShrineSpots.Select(spot => new Vector3Data(spot[0], spot[1], spot[2])).ToList();
         var taken = new List<Vector3Data>();
         var placed = new List<(ExtraShrineKind Kind, Vector3Data Position)>();
@@ -128,11 +130,12 @@ public static class ExtraShrinesPatch
             }
 
             var restrict = true;
+            var tried = new HashSet<int>();
             while (true)
             {
                 var guaranteed = restrict ? ShrineGuarantees.CandidateIndexes(settings.ShrineGuarantees, kind, remaining, placed) : null;
                 var allowed = (guaranteed ?? Enumerable.Range(0, remaining.Count).ToList())
-                    .Where(i => ExtraShrines.SpotClear(kind, remaining[i], placed, settings.ShrineKindSpacing)).ToList();
+                    .Where(i => !tried.Contains(i) && ExtraShrines.SpotClear(kind, remaining[i], placed, settings.ShrineKindSpacing)).ToList();
                 var pick = PickAmong(allowed, remaining, taken, random);
                 if (pick < 0 && guaranteed != null)
                 {
@@ -148,15 +151,17 @@ public static class ExtraShrinesPatch
                 }
 
                 var spot = remaining[pick];
-                remaining.RemoveAt(pick);
                 if (TryPlaceAtSpot(ofKind[random.Next(ofKind.Count)], spot, offsets, index, random, logger,
-                    point => ExtraShrines.SpotClear(kind, point, placed, settings.ShrineKindSpacing), out var at))
+                    point => ExtraShrines.SpotClear(kind, point, placed, settings.ShrineKindSpacing), out var at, settings.StrictShrineSpots))
                 {
+                    remaining.RemoveAt(pick);
                     taken.Add(new Vector3Data(at.x, at.y, at.z));
                     placed.Add((kind, new Vector3Data(at.x, at.y, at.z)));
                     spawned++;
                     break;
                 }
+                if (settings.StrictShrineSpots) tried.Add(pick);
+                else remaining.RemoveAt(pick);
             }
         }
 
@@ -178,7 +183,7 @@ public static class ExtraShrinesPatch
     // Looks for a place for the shrine at an authored spot: the spot itself and then rings around it, each needing clear space, and failing that the nearest floor regardless.
     private static bool TryPlaceAtSpot(PoolEntry entry, Vector3Data spot, IReadOnlyList<(float X, float Z)> offsets,
         IReadOnlyDictionary<string, GameObject> index, System.Random random, ModLogger logger,
-        System.Func<Vector3Data, bool> spacingClear, out Vector3 placedAt)
+        System.Func<Vector3Data, bool> spacingClear, out Vector3 placedAt, bool strict)
     {
         placedAt = default;
         var (top, bottom) = ExtraShrines.SpotFloorWindow(spot.Y);
@@ -193,7 +198,9 @@ public static class ExtraShrinesPatch
             if (!PlacementProbe.HighestFloor(spot.X + dx, spot.Z + dz, top, bottom, null, out var floor)) continue;
             withFloor++;
             nearestFloor ??= floor;
-            if (TryPlace(entry, floor, null, index, out position, out rejection, out shrine, spacingClear: spacingClear))
+            var supportingMesh = strict && Physics.Raycast(floor + Vector3.up * 0.2f, Vector3.down,
+                out var contact, 0.4f, 1 << 8, QueryTriggerInteraction.Ignore) ? contact.collider.TryCast<MeshCollider>() : null;
+            if (TryPlace(entry, floor, null, index, out position, out rejection, out shrine, spacingClear: spacingClear, supportingMesh: supportingMesh))
             {
                 placed = true;
                 break;
@@ -201,7 +208,7 @@ public static class ExtraShrinesPatch
         }
 
         // The spot is authored, so when nothing fits cleanly (a corner at the top of a quarter pipe leaves a strip narrower than the shrine) it goes on the nearest floor regardless.
-        if (!placed && nearestFloor is { } tight && TryPlace(entry, tight, null, index, out position, out rejection, out shrine, requireClear: false, spacingClear: spacingClear))
+        if (!strict && !placed && nearestFloor is { } tight && TryPlace(entry, tight, null, index, out position, out rejection, out shrine, requireClear: false, spacingClear: spacingClear))
         {
             placed = true;
             logger.Msg($"ExtraShrines: authored spot ({spot.X:F1}, {spot.Y:F1}, {spot.Z:F1}) is tight; placed without clearance at {position.ToString("F3")}");
@@ -231,7 +238,7 @@ public static class ExtraShrinesPatch
 
     // Instantiates a trial shrine on the floor point and keeps it only when nothing overlaps it; a tile ground also has to support its footprint. A rejection names the check that failed.
     private static bool TryPlace(PoolEntry entry, Vector3 floor, MeshCollider ground, IReadOnlyDictionary<string, GameObject> index, out Vector3 position, out string rejection, out GameObject placed, bool requireClear = true,
-        System.Func<Vector3Data, bool> spacingClear = null)
+        System.Func<Vector3Data, bool> spacingClear = null, Collider supportingMesh = null)
     {
         position = default;
         rejection = null;
@@ -249,7 +256,7 @@ public static class ExtraShrinesPatch
         if (!boundsFound) rejection = "noBounds";
         else if (spacingClear != null && !spacingClear(new Vector3Data(at.x, at.y, at.z))) rejection = "spacing";
         else if (ground != null && !PlacementProbe.Supported(ground, ShiftedDown(bounds, floor.y), floor.y)) rejection = "unsupported";
-        else if (requireClear && PlacementProbe.FirstOccupant(ShiftedDown(bounds, floor.y), floor.y, trial.transform) is { } occupant)
+        else if (requireClear && PlacementProbe.FirstOccupant(ShiftedDown(bounds, floor.y), floor.y, trial.transform, supportingMesh) is { } occupant)
             rejection = $"occupied by {occupant.name} at {occupant.bounds.center.ToString("F1")}";
         else if (requireClear && PlacementProbe.OverlapsObjects(ShiftedDown(bounds, floor.y), trial, index, _spawned, levelObjects: ground != null)) rejection = "overlapsObject";
         if (rejection != null)
@@ -303,6 +310,12 @@ public static class ExtraShrinesPatch
         foreach (var channel in new[] { placer?.chargeShrineSpawns, placer?.greedShrineSpawns })
         {
             if (channel?.prefabs != null) prefabs.AddRange(channel.prefabs.Where(p => p != null));
+        }
+        if (allowed?.Contains(ExtraShrineKind.Microwave) == true && placer?.randomObjects != null)
+        {
+            foreach (var group in placer.randomObjects)
+                if (group?.prefabs != null)
+                    prefabs.AddRange(group.prefabs.Where(p => p != null && Kind(p) == ExtraShrineKind.Microwave));
         }
 
         var live = SceneShrines().ToList();
@@ -394,6 +407,7 @@ public static class ExtraShrinesPatch
         if (go.GetComponentInChildren<InteractableShrineMoai>() != null) return ExtraShrineKind.Moai;
         if (go.GetComponentInChildren<ChargeShrine>() != null) return ExtraShrineKind.Charge;
         if (go.GetComponentInChildren<InteractableShadyGuy>() != null) return ExtraShrineKind.ShadyGuy;
+        if (go.GetComponentInChildren<InteractableMicrowave>() != null) return ExtraShrineKind.Microwave;
         return null;
     }
 }
