@@ -4,7 +4,7 @@ title: 'Convert the KF1 export into terrain, meshes and placements'
 status: In Progress
 assignee: []
 created_date: '2026-11-27 08:20'
-updated_date: '2026-11-27 19:18'
+updated_date: '2026-11-27 19:33'
 labels:
   - level
   - kf1
@@ -53,6 +53,10 @@ AC 3 left open: prepare writes mesh.json (40 MB) and the level JSON from the rea
 Anchors on BSP floors have no terrain floor and are skipped and listed: 17/157 ZombieVolume, 3/4 ShopVolume, 4/14 KFAmmoPickup, 6/14 KFRandomItemSpawn. The level therefore has one shrine spot, and the runtime needs more spots than shrines; this needs the BSP task or extra spots. Boss spawner is the farthest grounded ZombieVolume, a stand-in. SCALE 0.028 and the rotator roll sign are untuned.
 
 No packs entry or bundle placement: those wait for the pack task. glTF materials are name and base color only.
+
+Correction: with the Conker ROM and extractor available, all 12 Conker tests pass (the 6 that skipped earlier now run), and the Conker mesh.json and level JSON built by the pre-refactor script are byte-identical to the current output.
+
+Smoke test (relaunch into .tools/kf1/kf1-mountain-pass.mblevel.json, editor mode, CrossOver build): the level loads, FromScratch builds the placeholder tile, the spawn and boss spawner place, all 8 chests spawn, the kill floor arms. ExtraShrines spawns 0 of 6 planned: the one authored spot finds no floor because there is no terrain collision without the pack, and only 1 spot exists. The runtime raised killFloorY from -200 to -72 (catch floor -80 plus clearance); 0.1% of terrain samples (min -137) lie below that, so KILL_FLOOR_Y should become -72 or the world should be shifted up. The screenshot tool returned an unreadable image, so nothing was inspected visually. The level shows no terrain or props until the pack task builds the bundle.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
