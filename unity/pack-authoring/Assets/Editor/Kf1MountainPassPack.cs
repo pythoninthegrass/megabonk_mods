@@ -128,7 +128,9 @@ public static class Kf1MountainPassPack
         var vertices = new Vector3[data.positions.Length / 3];
         for (var i = 0; i < vertices.Length; i++)
             vertices[i] = new Vector3(data.positions[3 * i], data.positions[3 * i + 1], data.positions[3 * i + 2]);
-        var mesh = new Mesh { name = name, vertices = vertices, triangles = data.indices };
+        var mesh = new Mesh { name = name, indexFormat = vertices.Length > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
+        mesh.vertices = vertices;
+        mesh.triangles = data.indices;
         if (data.uv?.Length > 0)
         {
             var uv = new Vector2[vertices.Length];
