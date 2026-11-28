@@ -4,7 +4,7 @@ title: Rebuild the BSP faithfully with ordered additive and subtractive operatio
 status: In Progress
 assignee: []
 created_date: '2026-11-27 18:27'
-updated_date: '2026-11-28T05:32:00Z'
+updated_date: '2026-11-28T06:28:00Z'
 labels:
   - level
   - kf1
@@ -27,7 +27,7 @@ Second, faithful version of the BSP: apply the additive and subtractive `Brush` 
 <!-- AC:BEGIN -->
 - [x] #1 Subtractive brushes carve the additive geometry in level order, and unit tests cover a carved box and a doorway
 - [x] #2 Interior faces hidden by the boolean operations are removed from the render mesh
-- [x] #3 A before-and-after screenshot of a building interior from the running game shows the difference from the approximate version
+- [ ] #3 A before-and-after screenshot of a building interior from the running game shows the difference from the approximate version
 - [ ] #4 Load time and collision behavior are checked and any brush that fails falls back to the approximate geometry
 - [x] #5 The five all-black six-face solids (Brush23, Brush39, Brush173, Brush186, Brush245) are resolved against the compiled map: faces that survive ordered subtraction are restored to the render mesh and collision, or their omission is justified in docs/kf1-mountain-pass.md
 <!-- AC:END -->
@@ -97,4 +97,11 @@ Handed off mid-task: implementation done, unit-tested, run against the real expo
 - The license error was Unity Hub not running; `open -a "Unity Hub"` cleared it (documented in docs/development.md).
 - AC3 done: Brush9 corridor screenshots in `.tools/evidence/kf1-interior-csg-3.png` and `kf1-interior-approx.png`.
 - AC4 partial: the player settles on the compiled floor; in-game load time and wall collision across other rooms are not measured. `prepare` default stays approximate; `.tools/kf1/mesh.json` holds the compiled map.
+
+Update 2026-11-28
+- Fixed since the handoff: the collision mesh used 16-bit indices with about 90,000 vertices, so brush floors past vertex 65535 were missing from the collider and the player fell through them (Kf1MountainPassPack.cs now uses 32-bit indices); brush textures exported into group folders are found; hand-picked vertex colors are stored linear because the vertex tint shader writes them unconverted (the terrain rendered pale before).
+- AC3 is unchecked: the Brush9 screenshots were taken near the road end, not in a building interior, and predate the fixes above. Redo the comparison in a real interior with the current build.
+- AC4 is partial: the player lands on the compiled floor at the first shop volume; in-game load time, walking the other carved rooms, the Brush10 no-op and the 38 fallback brushes are not checked.
+- The first shop volume is a sealed room with no exit (door movers are not in the BSP export). The fidelity gaps and reachable-spot work moved to a follow-up task.
+- `prepare` still defaults to the approximate map; flipping it to --csg is not done.
 <!-- SECTION:NOTES:END -->
