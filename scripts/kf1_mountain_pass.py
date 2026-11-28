@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import kf1_bsp
 import level_geometry as geometry
 import math
 import re
@@ -563,10 +564,12 @@ def terrain_table(inventory):
 
 
 def parse_brushes(text):
+    """Every CSG brush in level order, with the polygon data the boolean pass needs."""
     brushes = []
     for actor in re.finditer(r"^Begin Actor Class=Brush Name=(\S+)(.*?)^End Actor", text, re.M | re.S):
         name, body = actor.groups()
-        if "    CsgOper=CSG_Add\n" not in body:
+        operation = re.search(r"^    CsgOper=(CSG_Add|CSG_Subtract)$", body, re.M)
+        if not operation:
             continue
         vectors = {key: _vector(value, "XYZ", ORIGIN) for key, value in re.findall(r"^    (Location|PrePivot)=(.*)$", body, re.M)}
         offset = tuple(a - b for a, b in zip(vectors.get("Location", ORIGIN), vectors.get("PrePivot", ORIGIN), strict=True))
@@ -574,7 +577,7 @@ def parse_brushes(text):
         for header, lines in re.findall(r"Begin Polygon([^\n]*)\n(.*?)End Polygon", body, re.S):
             reference = re.search(r"\bTexture=(\S+)", header)
             face = {"texture": reference[1] if reference else "", "Vertex": []}
-            for key, value in re.findall(r"^\s*(Origin|TextureU|TextureV|Vertex)\s+([^\n]+)", lines, re.M):
+            for key, value in re.findall(r"^\s*(Origin|TextureU|TextureV|Vertex|Normal)\s+([^\n]+)", lines, re.M):
                 vector = tuple(map(float, value.split(",")))
                 if key == "Vertex":
                     face[key].append(vector)
@@ -582,7 +585,7 @@ def parse_brushes(text):
                     face[key] = vector
             faces.append(face)
         if faces:
-            brushes.append((name, offset, faces))
+            brushes.append({"name": name, "op": operation[1], "offset": offset, "faces": faces})
     return brushes
 
 
@@ -609,8 +612,12 @@ def brush_material(meshes, reference):
 
 
 def append_brushes(meshes, brushes, materials, rendered, positions, indices):
+    """The approximate pass: every additive brush as its own shell of polygons."""
     lookup = {}
-    for name, offset, faces in brushes:
+    for brush in brushes:
+        name, offset, faces = brush["name"], brush["offset"], brush["faces"]
+        if brush["op"] != kf1_bsp.ADD:
+            continue
         if all(face["texture"] == "Engine.BlackTexture" for face in faces):
             continue
         primitives = {}
@@ -638,6 +645,41 @@ def append_brushes(meshes, brushes, materials, rendered, positions, indices):
             for i in range(1, len(face["Vertex"]) - 1):
                 indices.extend((collision_start, collision_start + i, collision_start + i + 1))
                 primitive["indices"].extend((first, first + i, first + i + 1))
+        rendered.append({"name": name, "primitives": list(primitives.values())})
+
+
+def append_compiled(meshes, compiled, sources, materials, rendered, positions, indices):
+    """The boolean skin: each triangle keeps the texture and UV basis of the brush face it came from."""
+    lookup, hidden, groups = {}, {}, {}
+    for name, face_index, triangle in compiled.triangles:
+        if name not in hidden:
+            hidden[name] = all(face["texture"] == "Engine.BlackTexture" for face in sources[name]["faces"])
+        if hidden[name]:
+            continue
+        face = sources[name]["faces"][face_index] if face_index is not None else None
+        reference = face["texture"] if face else ""
+        if reference not in lookup:
+            material, size = brush_material(meshes, reference)
+            lookup[reference] = len(materials), size
+            materials.append(material)
+        index, (width, height) = lookup[reference]
+        group = groups.setdefault(name, {})
+        primitive = group.setdefault(index, {"positions": [], "indices": [], "uv": [], "rgba": [], "material": index})
+        first = len(primitive["positions"]) // 3
+        collision_start = len(positions) // 3
+        origin = [a + b for a, b in zip(face["Origin"], sources[name]["offset"], strict=True)] if face else (0, 0, 0)
+        axis_u, axis_v = (face["TextureU"], face["TextureV"]) if face else ((1, 0, 0), (0, 1, 0))
+        for vertex in triangle:
+            point = [round(n, 4) for n in world_point(vertex, ORIGIN, SCALE)]
+            positions.extend(point)
+            primitive["positions"].extend(point)
+            if color := materials[index].get("baseColor"):
+                primitive["rgba"].extend(round(v * 255) for v in color)
+            delta = [a - b for a, b in zip(vertex, origin, strict=True)]
+            primitive["uv"].extend((math.sumprod(delta, axis_u) / width, 1 - math.sumprod(delta, axis_v) / height))
+        indices.extend((collision_start, collision_start + 1, collision_start + 2))
+        primitive["indices"].extend((first, first + 1, first + 2))
+    for name, primitives in groups.items():
         rendered.append({"name": name, "primitives": list(primitives.values())})
 
 
@@ -674,7 +716,10 @@ def static_material(index, meshes, reference, source, explicit_skin=False):
     return material
 
 
-def unpack_map(meshes, actors, heights, terrain, brushes=()):
+def unpack_map(meshes, actors, heights, terrain, brushes=(), csg=False, compiled=None):
+    """The survival level's mesh document: terrain, static meshes and the brush world."""
+    if compiled is None and csg:
+        compiled = kf1_bsp.compile_brushes(brushes)
     materials = [{"alphaMode": "OPAQUE", "doubleSided": False}]
     index = material_index(meshes)
     lookup, loaded, rendered = {}, {}, [{"name": "Terrain", "primitives": [terrain_primitive(heights, 0)]}]
@@ -707,7 +752,9 @@ def unpack_map(meshes, actors, heights, terrain, brushes=()):
                 converted["rgba"] = [round(v * 255) for v in color] * (len(converted["positions"]) // 3)
         rendered.append({"name": actor["name"], "primitives": primitives})
     positions, indices = terrain_mesh(heights, ORIGIN, SCALE)
-    append_brushes(meshes, brushes, materials, rendered, positions, indices)
+    if compiled is not None:
+        append_compiled(meshes, compiled, {brush["name"]: brush for brush in brushes}, materials, rendered, positions, indices)
+    append_brushes(meshes, compiled.uncarved if compiled is not None else brushes, materials, rendered, positions, indices)
     return {
         "meshes": rendered,
         "materials": materials,
@@ -734,7 +781,7 @@ def pack_textures(work):
     return [Path(texture) for texture in found]
 
 
-def prepare(source, meshes, output):
+def prepare(source, meshes, output, csg=False):
     t3d = source / "KF-MountainPass.t3d"
     verify_export(t3d)
     text = t3d.read_text(encoding="latin-1")
@@ -742,11 +789,13 @@ def prepare(source, meshes, output):
     heights = read_heightmap((source / "Terrain_Main.bmp").read_bytes())
     terrain = terrain_triangles(heights, ORIGIN, SCALE)
     skipped = []
-    mesh = unpack_map(meshes, enlarge_vehicles(actors), heights, terrain, parse_brushes(text))
+    brushes = parse_brushes(text)
+    compiled = kf1_bsp.compile_brushes(brushes) if csg else None
+    mesh = unpack_map(meshes, enlarge_vehicles(actors), heights, terrain, brushes, compiled=compiled)
     level = make_level(collision_triangles(mesh["collision"]), actors, skipped)
     (output / MESH_NAME).write_text(json.dumps(mesh, separators=(",", ":")))
     (output / LEVEL_NAME).write_text(json.dumps(level, indent=2) + "\n")
-    return level, skipped
+    return level, skipped, compiled
 
 
 def terrain_inventory_command(work):
@@ -762,6 +811,7 @@ def main():
     parser = argparse.ArgumentParser(description="Prepare the local Killing Floor 1 Mountain Pass survival level")
     parser.add_argument("command", choices=("verify-export", "prepare", "terrain-inventory", "verify-pack"))
     parser.add_argument("--work", type=Path, default=WORK)
+    parser.add_argument("--csg", action="store_true", help="build the brush world with ordered additive and subtractive CSG")
     args = parser.parse_args()
     try:
         source = args.work / "export"
@@ -776,9 +826,14 @@ def main():
             textures = pack_textures(args.work)
             print(f"Pack inputs ready: {args.work / MESH_NAME} with {len(textures)} textures")
         else:
-            level, skipped = prepare(source, args.work / "out", args.work)
+            level, skipped, compiled = prepare(source, args.work / "out", args.work, csg=args.csg)
             for item in skipped:
                 print(f"Skipped {item}")
+            if compiled is not None:
+                print(
+                    f"Compiled BSP: {len(compiled.triangles)} triangles, {compiled.estimated} matched by the nearest face, "
+                    f"{len(compiled.uncarved)} brushes approximate, {len(compiled.cutters)} cutters dropped"
+                )
             print(f"Prepared Mountain Pass: spawn {level['spawn']['position']}, boss spawner {level['bossSpawner']['position']}")
     except (OSError, ValueError) as error:
         parser.exit(1, f"{error}\n")
