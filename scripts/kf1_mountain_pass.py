@@ -590,12 +590,14 @@ def parse_brushes(text):
 
 
 def brush_material(meshes, reference):
-    package, *_, name = reference.split(".") if reference else ("", "")
+    package, *groups, name = reference.split(".") if reference else ("", "")
     folder = meshes / package
     shader = folder / "Shader" / f"{name}.mat"
     if shader.exists() and (diffuse := re.search(r"^Diffuse=(.+)$", shader.read_text(), re.M)):
         name = diffuse[1]
     texture = folder / "Texture" / f"{name}.tga"
+    if groups and (grouped := folder / groups[-1] / f"{name}.tga").is_file():
+        texture = grouped
     material = {"name": reference, "alphaMode": "OPAQUE", "doubleSided": False}
     if texture.is_file():
         with Image.open(texture) as image:

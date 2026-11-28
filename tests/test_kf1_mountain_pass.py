@@ -60,6 +60,17 @@ End Actor
     assert max(rgba[:3]) < 180 and rgba[3] == 255
 
 
+def test_brush_material_finds_a_group_exported_texture(tmp_path):
+    meshes = tmp_path / "out"
+    path = meshes / "Pkg/Common/Floor.tga"
+    path.parent.mkdir(parents=True)
+    Image.new("RGB", (4, 2)).save(path)
+    material, size = kf1.brush_material(meshes, "Pkg.Common.Floor")
+    assert (tmp_path / material["texture"]).samefile(path)
+    assert size == (4, 2)
+    assert "baseColor" not in material
+
+
 def test_standing_kf_human_matches_player_capsule():
     assert pytest.approx(3.85) == 2 * 50 * kf1.SCALE
 
