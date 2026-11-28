@@ -70,6 +70,90 @@ def test_actor_scalar_scale_and_skin_slot():
     assert actor["skins"][0] == "KF-MountainPass.GUP-MountainSky"
 
 
+VEHICLE_MESHES = (
+    "KillingFloorStatics.London_police_car",
+    "KillingFloorStatics.LanciaStatic1",
+    "KillingFloorStatics.LondonCabASE",
+    "KillingFloorStatics.ArmyTruck",
+    "KF-MountainPass.GUP-Lorry1",
+)
+LORRY_PARTS = (
+    "KF-MountainPass.GUP-LorryDoorLeft",
+    "KF-MountainPass.GUP-LorryDoorRight",
+    "KF-MountainPass.GUP-LorryCargoDoor",
+)
+
+
+def vehicle_actor(name, mesh, location=(0, 0, 0), scale=(1, 1, 1)):
+    return {"name": name, "mesh": mesh, "location": location, "rotation": (0, 0, 0), "scale": scale}
+
+
+def test_cars_and_trucks_are_enlarged_and_nothing_else():
+    assert pytest.approx(1.2) == kf1.VEHICLE_SCALE
+    assert frozenset(VEHICLE_MESHES) == kf1.VEHICLE_MESHES
+    assert frozenset(LORRY_PARTS) == kf1.LORRY_PART_MESHES
+    for mesh in VEHICLE_MESHES:
+        (enlarged,) = kf1.enlarge_vehicles([vehicle_actor("V", mesh, (100, 0, 50), (3.5, -3.5, 2.0))])
+        assert enlarged["scale"] == pytest.approx((4.2, -4.2, 2.4))
+        assert enlarged["location"] == (100, 0, 50)
+    for mesh in ("KillingFloorStatics.TWBus", "KillingFloorStatics.Ambulance", "22Patch.ChopperBroken", None):
+        actor = vehicle_actor("O", mesh, (100, 0, 50), (3.5, 3.5, 3.5))
+        assert kf1.enlarge_vehicles([actor]) == [actor]
+
+
+def test_lorry_parts_grow_about_the_nearest_lorry_so_they_stay_attached():
+    near, far = (1000, 0, 0), (-9000, 0, 0)
+    actors = [
+        vehicle_actor("LorryNear", "KF-MountainPass.GUP-Lorry1", near),
+        vehicle_actor("LorryFar", "KF-MountainPass.GUP-Lorry1", far),
+        vehicle_actor("Door", "KF-MountainPass.GUP-LorryDoorLeft", (1100, 50, 20)),
+    ]
+    door = kf1.enlarge_vehicles(actors)[2]
+    assert door["scale"] == pytest.approx((1.2, 1.2, 1.2))
+    assert door["location"] == pytest.approx((1120, 60, 24))
+
+
+def test_enlarge_vehicles_does_not_mutate_its_input():
+    actors = [vehicle_actor("V", VEHICLE_MESHES[0], scale=(1, 1, 1))]
+    kf1.enlarge_vehicles(actors)
+    assert actors[0]["scale"] == (1, 1, 1)
+
+
+def write_unit_triangle(meshes, package, name):
+    folder = meshes / package / "StaticMesh"
+    folder.mkdir(parents=True, exist_ok=True)
+    data = struct.pack("<9f3H2x", 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 2)
+    (folder / f"{name}.bin").write_bytes(data)
+    gltf = {
+        "buffers": [{"uri": f"{name}.bin", "byteLength": len(data)}],
+        "bufferViews": [
+            {"buffer": 0, "byteOffset": 0, "byteLength": 36},
+            {"buffer": 0, "byteOffset": 36, "byteLength": 6},
+        ],
+        "accessors": [
+            {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0]},
+            {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"},
+        ],
+        "meshes": [{"primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]}],
+    }
+    (folder / f"{name}.gltf").write_text(json.dumps(gltf))
+
+
+def test_unpack_map_renders_an_enlarged_car_larger_than_a_bus(tmp_path):
+    meshes = tmp_path / "out"
+    write_unit_triangle(meshes, "KillingFloorStatics", "LanciaStatic1")
+    write_unit_triangle(meshes, "KillingFloorStatics", "TWBus")
+    heights = [[32768] * 2 for _ in range(2)]
+    terrain = kf1.terrain_triangles(heights, kf1.ORIGIN, kf1.SCALE)
+    actors = [
+        vehicle_actor("Car", "KillingFloorStatics.LanciaStatic1"),
+        vehicle_actor("Bus", "KillingFloorStatics.TWBus"),
+    ]
+    mesh = kf1.unpack_map(meshes, kf1.enlarge_vehicles(actors), heights, terrain)
+    rendered = {m["name"]: m["primitives"][0]["positions"] for m in mesh["meshes"][1:]}
+    assert max(rendered["Car"]) == pytest.approx(1.2 * max(rendered["Bus"]))
+
+
 def test_exported_shader_finds_diffuse_in_named_package_with_cutout_alpha(tmp_path):
     meshes = tmp_path / "out"
     mat = meshes / "Foliage/Shader/Needles.mat"

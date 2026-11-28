@@ -31,6 +31,19 @@ TERRAIN_ACTOR = "TerrainInfo1"
 ORIGIN = (0, 0, 0)
 SCALE = 3.85 / 100  # Match Megabonk's standing capsule to the KFHumanPawn cylinder.
 SAMPLE_UNITS = 64
+VEHICLE_SCALE = 1.2  # KF1's cars and trucks read too small against Megabonk's player.
+VEHICLE_MESHES = frozenset(
+    {
+        "KillingFloorStatics.London_police_car",
+        "KillingFloorStatics.LanciaStatic1",
+        "KillingFloorStatics.LondonCabASE",
+        "KillingFloorStatics.ArmyTruck",
+        "KF-MountainPass.GUP-Lorry1",
+    }
+)
+LORRY_PART_MESHES = frozenset(
+    {"KF-MountainPass.GUP-LorryDoorLeft", "KF-MountainPass.GUP-LorryDoorRight", "KF-MountainPass.GUP-LorryCargoDoor"}
+)
 FLAT_HEIGHT = 32768
 KILL_FLOOR_Y = -200.0
 SPAWN_CLEARANCE = 2.0
@@ -313,6 +326,22 @@ def make_level(terrain, actors, skipped=None):
             ),
         ],
     }
+
+
+def enlarge_vehicles(actors):
+    """Copies of the actors with every car and truck scaled by VEHICLE_SCALE; lorry doors also move out from their lorry."""
+    lorries = [actor["location"] for actor in actors if actor["mesh"] == "KF-MountainPass.GUP-Lorry1"]
+    enlarged = []
+    for actor in actors:
+        if actor["mesh"] not in VEHICLE_MESHES | LORRY_PART_MESHES:
+            enlarged.append(actor)
+            continue
+        location = actor["location"]
+        if actor["mesh"] in LORRY_PART_MESHES and lorries:
+            pivot = min(lorries, key=lambda lorry: math.dist(lorry, location))
+            location = tuple(p + VEHICLE_SCALE * (c - p) for p, c in zip(pivot, location, strict=True))
+        enlarged.append({**actor, "location": location, "scale": tuple(VEHICLE_SCALE * n for n in actor["scale"])})
+    return enlarged
 
 
 def mesh_path(meshes, reference):
@@ -710,7 +739,7 @@ def prepare(source, meshes, output):
     heights = read_heightmap((source / "Terrain_Main.bmp").read_bytes())
     terrain = terrain_triangles(heights, ORIGIN, SCALE)
     skipped = []
-    mesh = unpack_map(meshes, actors, heights, terrain, parse_brushes(text))
+    mesh = unpack_map(meshes, enlarge_vehicles(actors), heights, terrain, parse_brushes(text))
     level = make_level(collision_triangles(mesh["collision"]), actors, skipped)
     (output / MESH_NAME).write_text(json.dumps(mesh, separators=(",", ":")))
     (output / LEVEL_NAME).write_text(json.dumps(level, indent=2) + "\n")

@@ -4,7 +4,7 @@ title: Build the kf1 asset pack and wire the task chain and docs
 status: In Progress
 assignee: []
 created_date: '2026-11-27 08:20'
-updated_date: '2026-11-27 23:56'
+updated_date: '2026-11-28 01:48'
 labels:
   - level
   - kf1
@@ -33,8 +33,11 @@ Add `unity/pack-authoring/Assets/Editor/Kf1MountainPassPack.cs` (reusing `PackBu
 - [ ] #3 Screenshots show the player, shrines, chests and boss spawner on the ground
 - [ ] #4 A drop past the map edge is stopped by walls or the kill floor
 - [x] #5 docs/kf1-mountain-pass.md documents the full chain
-- [ ] #6 The generated level carries the packs entry and the bundle:kf1/MountainPass placement, so .tools/kf1/bsp-preview.mblevel.json is no longer a separate file to carry
+- [x] #6 The generated level carries the packs entry and the bundle:kf1/MountainPass placement, so .tools/kf1/bsp-preview.mblevel.json is no longer a separate file to carry
+- [ ] #7 Every car and truck (not the helicopter, bus or ambulance) renders 1.2 times larger with the rest of the map at the existing scale, the pack rebuilt, and tests pinned to it (maintainer-confirmed in game)
 <!-- AC:END -->
+
+
 
 ## Implementation Plan
 
@@ -43,6 +46,8 @@ Add `unity/pack-authoring/Assets/Editor/Kf1MountainPassPack.cs` (reusing `PackBu
 2. AC #6 (TDD): write failing tests in tests/test_kf1_mountain_pass.py that the generated level carries the packs entry and the bundle:kf1/MountainPass placement; confirm they fail; move the two preview_level() additions into the main generation; remove the preview-level verb (approved) and the bsp-preview file pin; update AGENTS.md, docs/kf1-mountain-pass.md and taskfiles/kf1.yml references; run task scripts:test.
 3. Close: notes, task check, conventional commit with no attribution; .serena changes in a separate commit; leave the maintainer's task-062.01 and task-086.05 edits out.
 4. Pending scope decision: maintainer reports Tony looks too tall relative to vehicles (likely a map-wide scale issue). Needs a decision on AC vs follow-up task before any change.
+
+Scale (approved as AC #7): measure vehicle mesh heights in the umodel export against Tony's capsule height, choose a SCALE factor, change SCALE in scripts/kf1_mountain_pass.py test-first, run prepare, task kf1:pack and task kf1:install, then run the AC #3/#4 in-game verification once at the new scale.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -69,6 +74,10 @@ Definition of Done is left unticked deliberately: those gates describe the state
 Dependency reality: this task depends on TASK-086.03.01, which is In Progress with AC #3 open on the five all-black six-face solids whose surviving collision is unknown (the 17 portal sheets are identified). That plus TASK-086.03.04, HIGH, terrain layer blending, gates what the map actually looks like. The doc's TODO list and these criteria are kept in step.
 
 Housekeeping: 29 unpushed commits include this work and nothing here has been pushed. Two backlog files, task-062.01 and task-086.05, carry the maintainer's own uncommitted edits and are not part of this task. Whether docs/kf1-mountain-pass.md joins the public wiki allowlist is the maintainer's call and it is not on it now.
+
+AC #6 done: make_level writes the packs entry and the bundle:kf1/MountainPass placement (first in edits); preview-level verb, bsp-preview file and PREVIEW_* names removed; AGENTS.md and docs/kf1-mountain-pass.md updated. Tests written first and failed before the change; task scripts:test and task check pass. In-game verification for AC #3/#4 is paused pending a scale decision: the maintainer reports Tony is too tall relative to vehicles, and SCALE (3.85/100 in scripts/kf1_mountain_pass.py) moves every coordinate, so evidence taken now would be redone.
+
+Scale decision: measured Tony against a police car at equal depth (.tools/evidence/scale-tony-vs-police-car-3.png): Tony renders about 3.2 units, the car about 4.39, so a global SCALE increase is not supported. Maintainer instead asked for every car and truck 20 percent larger, helicopter excluded, map scale unchanged. Implemented as enlarge_vehicles() in scripts/kf1_mountain_pass.py (VEHICLE_SCALE 1.2) over police car, Lancia, cab, ArmyTruck and GUP-Lorry1; the lorry's cab and cargo doors move out from their nearest lorry so they stay attached. Bus, ambulance, camper trailer and the helicopter are untouched; add them to VEHICLE_MESHES if wanted. AC #7 reworded to match; the ACs previously checked (#1, #2, #5, #6) are unchanged.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
