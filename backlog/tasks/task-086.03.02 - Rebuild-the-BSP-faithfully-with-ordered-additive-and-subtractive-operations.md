@@ -4,6 +4,7 @@ title: Rebuild the BSP faithfully with ordered additive and subtractive operatio
 status: To Do
 assignee: []
 created_date: '2026-11-27 18:27'
+updated_date: '2026-11-28T04:19:00Z'
 labels:
   - level
   - kf1
@@ -28,6 +29,7 @@ Second, faithful version of the BSP: apply the additive and subtractive `Brush` 
 - [ ] #2 Interior faces hidden by the boolean operations are removed from the render mesh
 - [ ] #3 A before-and-after screenshot of a building interior from the running game shows the difference from the approximate version
 - [ ] #4 Load time and collision behavior are checked and any brush that fails falls back to the approximate geometry
+- [ ] #5 The five all-black six-face solids (Brush23, Brush39, Brush173, Brush186, Brush245) are resolved against the compiled map: faces that survive ordered subtraction are restored to the render mesh and collision, or their omission is justified in docs/kf1-mountain-pass.md
 <!-- AC:END -->
 
 ## Definition of Done
