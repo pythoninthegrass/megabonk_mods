@@ -521,6 +521,10 @@ task game:editor -- levels/other.mblevel.json     # a different level
 
 Process detection uses the standard library only: `/proc/<pid>/cmdline` and `/proc/<pid>/environ` on Linux, one `ps -axo pid=,args=` with `LC_ALL=C` on macOS and any host without `/proc`, and `tasklist` on Windows (not exercised on a Windows host); see the process enumeration under "Commands". A process counts as the game only when its argv is the game executable itself, `...\Megabonk.exe` under Wine or `Megabonk.x86_64` natively. Helpers that only mention the executable, such as `winewrapper.exe` and a shell running the launch command, are ignored — `UnityCrashHandler64.exe` and `winemenubuilder.exe` are reaped as leftovers instead. If `quit` times out because the game is hung, it force-kills every process running out of the game directory.
 
+### Unity license errors during pack builds
+
+`task thps:pack`, `task kf1:pack` and the other pack builds run the Unity editor headless. When it prints `No valid Unity Editor license found` (or `License is not active`), the cause is a Unity Hub that is not running, not a missing license: open it with `open -a "Unity Hub"`, wait about 20 seconds for it to refresh the license, then rerun the task. No login or activation is needed.
+
 ### Loading the THPS level
 
 `levels/thps.mblevel.json` is generated, and its Warehouse mesh and soundtrack clip live in the `thps` pack, so a launch needs both. The level's `music` field names the clip (`bundle:thps/04_Superman`); see [music.md](music.md).
