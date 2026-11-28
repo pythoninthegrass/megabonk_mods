@@ -75,7 +75,10 @@ VEHICLE_MESHES = (
     "KillingFloorStatics.LanciaStatic1",
     "KillingFloorStatics.LondonCabASE",
     "KillingFloorStatics.ArmyTruck",
+    "KillingFloorStatics.TWBus",
+    "KillingFloorStatics.Ambulance",
     "KF-MountainPass.GUP-Lorry1",
+    "KF-MountainPass.GUP-CamperTrailer",
 )
 LORRY_PARTS = (
     "KF-MountainPass.GUP-LorryDoorLeft",
@@ -96,7 +99,7 @@ def test_cars_and_trucks_are_enlarged_and_nothing_else():
         (enlarged,) = kf1.enlarge_vehicles([vehicle_actor("V", mesh, (100, 0, 50), (3.5, -3.5, 2.0))])
         assert enlarged["scale"] == pytest.approx((4.2, -4.2, 2.4))
         assert enlarged["location"] == (100, 0, 50)
-    for mesh in ("KillingFloorStatics.TWBus", "KillingFloorStatics.Ambulance", "22Patch.ChopperBroken", None):
+    for mesh in ("22Patch.ChopperBroken", "KillingFloorStatics.StreeLamp", "KillingFloorStatics.Oil_Drum", None):
         actor = vehicle_actor("O", mesh, (100, 0, 50), (3.5, 3.5, 3.5))
         assert kf1.enlarge_vehicles([actor]) == [actor]
 
@@ -139,19 +142,19 @@ def write_unit_triangle(meshes, package, name):
     (folder / f"{name}.gltf").write_text(json.dumps(gltf))
 
 
-def test_unpack_map_renders_an_enlarged_car_larger_than_a_bus(tmp_path):
+def test_unpack_map_renders_an_enlarged_car_larger_than_a_street_lamp(tmp_path):
     meshes = tmp_path / "out"
     write_unit_triangle(meshes, "KillingFloorStatics", "LanciaStatic1")
-    write_unit_triangle(meshes, "KillingFloorStatics", "TWBus")
+    write_unit_triangle(meshes, "KillingFloorStatics", "StreeLamp")
     heights = [[32768] * 2 for _ in range(2)]
     terrain = kf1.terrain_triangles(heights, kf1.ORIGIN, kf1.SCALE)
     actors = [
         vehicle_actor("Car", "KillingFloorStatics.LanciaStatic1"),
-        vehicle_actor("Bus", "KillingFloorStatics.TWBus"),
+        vehicle_actor("Lamp", "KillingFloorStatics.StreeLamp"),
     ]
     mesh = kf1.unpack_map(meshes, kf1.enlarge_vehicles(actors), heights, terrain)
     rendered = {m["name"]: m["primitives"][0]["positions"] for m in mesh["meshes"][1:]}
-    assert max(rendered["Car"]) == pytest.approx(1.2 * max(rendered["Bus"]))
+    assert max(rendered["Car"]) == pytest.approx(1.2 * max(rendered["Lamp"]))
 
 
 def test_exported_shader_finds_diffuse_in_named_package_with_cutout_alpha(tmp_path):

@@ -31,14 +31,17 @@ TERRAIN_ACTOR = "TerrainInfo1"
 ORIGIN = (0, 0, 0)
 SCALE = 3.85 / 100  # Match Megabonk's standing capsule to the KFHumanPawn cylinder.
 SAMPLE_UNITS = 64
-VEHICLE_SCALE = 1.2  # KF1's cars and trucks read too small against Megabonk's player.
+VEHICLE_SCALE = 1.2  # KF1's vehicles read too small against Megabonk's player.
 VEHICLE_MESHES = frozenset(
     {
         "KillingFloorStatics.London_police_car",
         "KillingFloorStatics.LanciaStatic1",
         "KillingFloorStatics.LondonCabASE",
         "KillingFloorStatics.ArmyTruck",
+        "KillingFloorStatics.TWBus",
+        "KillingFloorStatics.Ambulance",
         "KF-MountainPass.GUP-Lorry1",
+        "KF-MountainPass.GUP-CamperTrailer",
     }
 )
 LORRY_PART_MESHES = frozenset(

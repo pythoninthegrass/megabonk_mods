@@ -4,7 +4,7 @@ title: Build the kf1 asset pack and wire the task chain and docs
 status: In Progress
 assignee: []
 created_date: '2026-11-27 08:20'
-updated_date: '2026-11-28 01:48'
+updated_date: '2026-11-28 02:56'
 labels:
   - level
   - kf1
@@ -34,10 +34,8 @@ Add `unity/pack-authoring/Assets/Editor/Kf1MountainPassPack.cs` (reusing `PackBu
 - [ ] #4 A drop past the map edge is stopped by walls or the kill floor
 - [x] #5 docs/kf1-mountain-pass.md documents the full chain
 - [x] #6 The generated level carries the packs entry and the bundle:kf1/MountainPass placement, so .tools/kf1/bsp-preview.mblevel.json is no longer a separate file to carry
-- [ ] #7 Every car and truck (not the helicopter, bus or ambulance) renders 1.2 times larger with the rest of the map at the existing scale, the pack rebuilt, and tests pinned to it (maintainer-confirmed in game)
+- [ ] #7 Every car, truck, bus, ambulance and camper trailer (not the helicopter) renders 1.2 times larger with the rest of the map at the existing scale, the pack rebuilt, and tests pinned to it (maintainer-confirmed in game)
 <!-- AC:END -->
-
-
 
 ## Implementation Plan
 
@@ -78,6 +76,14 @@ Housekeeping: 29 unpushed commits include this work and nothing here has been pu
 AC #6 done: make_level writes the packs entry and the bundle:kf1/MountainPass placement (first in edits); preview-level verb, bsp-preview file and PREVIEW_* names removed; AGENTS.md and docs/kf1-mountain-pass.md updated. Tests written first and failed before the change; task scripts:test and task check pass. In-game verification for AC #3/#4 is paused pending a scale decision: the maintainer reports Tony is too tall relative to vehicles, and SCALE (3.85/100 in scripts/kf1_mountain_pass.py) moves every coordinate, so evidence taken now would be redone.
 
 Scale decision: measured Tony against a police car at equal depth (.tools/evidence/scale-tony-vs-police-car-3.png): Tony renders about 3.2 units, the car about 4.39, so a global SCALE increase is not supported. Maintainer instead asked for every car and truck 20 percent larger, helicopter excluded, map scale unchanged. Implemented as enlarge_vehicles() in scripts/kf1_mountain_pass.py (VEHICLE_SCALE 1.2) over police car, Lancia, cab, ArmyTruck and GUP-Lorry1; the lorry's cab and cargo doors move out from their nearest lorry so they stay attached. Bus, ambulance, camper trailer and the helicopter are untouched; add them to VEHICLE_MESHES if wanted. AC #7 reworded to match; the ACs previously checked (#1, #2, #5, #6) are unchanged.
+
+Vehicles enlarged (67660f3); pack rebuilt and installed; relaunch with the generated level logs loaded pack 'kf1' with 1 prefab(s) and spawned bundle:kf1/MountainPass, no not-installed line. Police car measured about 1.18 times its earlier pixel height at the same framing (scale-vehicles-1p2-police-car.png); lorry body, cab and rear doors stay attached (scale-vehicles-1p2-lorry.png, ac3-chest-open-ground.png). AC #7 awaits maintainer confirmation.
+
+AC #3 evidence in .tools/evidence/: ac3-boss-spawner.png (spawner platform, player on it), ac3-chest-open-ground.png (chest on the ground), ac3-shrine-2.png (shrine at [67.5,16.6,176.2] charges, standing in a rock alcove). Not yet clean: the chest at [-48.8,37.2,22.2] is hidden behind the grey untextured ChopperBroken mesh, and the shrine at [93.8,9.2,-188.5] sits under a corrugated roof: a player teleported to y 14.9 there fell to y 2.16, so the 9.2 surface the converter treated as floor held nobody. That anchor may rest on brush collision the bundle does not give the player.
+
+AC #4 partial: a player teleported to [-340, 80, 0], 25 units past the west terrain edge, ended resting at [-317.6, 5.72, 20.5] and was not killed; x was clamped to -317.6, about 2 units beyond the terrain edge, so something solid stopped the lateral drift. What it is (perimeter wall or the stock Forest backdrop) and whether a walking player can leave the map is not established; one edge was tried.
+
+Maintainer widened the vehicle set: TWBus, Ambulance and GUP-CamperTrailer now get the same 1.2 scale (the helicopter still does not). Follow-ups split out as TASK-086.04.01 (roofed shrine) and TASK-086.04.02 (edge verification); AC #3 and #4 here stay open until those close or the maintainer decides otherwise.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
