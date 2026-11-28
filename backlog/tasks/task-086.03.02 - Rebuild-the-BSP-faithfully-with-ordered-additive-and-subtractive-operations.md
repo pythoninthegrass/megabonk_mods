@@ -27,7 +27,7 @@ Second, faithful version of the BSP: apply the additive and subtractive `Brush` 
 <!-- AC:BEGIN -->
 - [x] #1 Subtractive brushes carve the additive geometry in level order, and unit tests cover a carved box and a doorway
 - [x] #2 Interior faces hidden by the boolean operations are removed from the render mesh
-- [ ] #3 A before-and-after screenshot of a building interior from the running game shows the difference from the approximate version
+- [x] #3 A before-and-after screenshot of a building interior from the running game shows the difference from the approximate version
 - [ ] #4 Load time and collision behavior are checked and any brush that fails falls back to the approximate geometry
 - [x] #5 The five all-black six-face solids (Brush23, Brush39, Brush173, Brush186, Brush245) are resolved against the compiled map: faces that survive ordered subtraction are restored to the render mesh and collision, or their omission is justified in docs/kf1-mountain-pass.md
 <!-- AC:END -->
@@ -94,5 +94,7 @@ Handed off mid-task: implementation done, unit-tested, run against the real expo
 
 **Update 2026-11-27**
 - `ruff format` applied; `task check` passes (3,076 tests).
-- `task kf1:pack` fails on the authoring box: the Unity 2023.2.22f1 headless editor reports `No valid Unity Editor license found`. AC3 and AC4 stay open until the editor is activated (needs an interactive Unity login) or the pack is built on a licensed box.
+- The license error was Unity Hub not running; `open -a "Unity Hub"` cleared it (documented in docs/development.md).
+- AC3 done: Brush9 corridor screenshots in `.tools/evidence/kf1-interior-csg-3.png` and `kf1-interior-approx.png`.
+- AC4 partial: the player settles on the compiled floor; in-game load time and wall collision across other rooms are not measured. `prepare` default stays approximate; `.tools/kf1/mesh.json` holds the compiled map.
 <!-- SECTION:NOTES:END -->
