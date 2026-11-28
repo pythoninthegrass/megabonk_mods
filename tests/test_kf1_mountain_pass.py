@@ -71,6 +71,13 @@ def test_brush_material_finds_a_group_exported_texture(tmp_path):
     assert "baseColor" not in material
 
 
+def test_hand_picked_colors_are_stored_linear_for_the_vertex_tint_shader(tmp_path):
+    assert kf1.srgb_to_linear(0.5) == pytest.approx(0.214, abs=1e-3)
+    material, _ = kf1.brush_material(tmp_path, "Pkg.Group.Missing")
+    assert material["baseColor"][0] == pytest.approx(kf1.srgb_to_linear(0.32))
+    assert kf1.TERRAIN_RGBA[1] == round(255 * kf1.srgb_to_linear(110 / 255))
+
+
 def test_standing_kf_human_matches_player_capsule():
     assert pytest.approx(3.85) == 2 * 50 * kf1.SCALE
 

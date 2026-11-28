@@ -53,7 +53,14 @@ KILL_FLOOR_Y = -200.0
 SPAWN_CLEARANCE = 2.0
 CHEST_CLEARANCE = 0.5
 REACH = 100
-TERRAIN_RGBA = (96, 110, 70, 255)
+
+
+def srgb_to_linear(value):
+    return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+
+
+# The vertex tint shader writes vertex colors unconverted, so display colors are stored linear.
+TERRAIN_RGBA = (*(round(255 * srgb_to_linear(n / 255)) for n in (96, 110, 70)), 255)
 MESH_UNITS = 100
 ACTOR_CLASSES = frozenset(
     {
@@ -605,9 +612,9 @@ def brush_material(meshes, reference):
         material.update(texture=str(texture.relative_to(meshes.parent)), wrapS=10497, wrapT=10497)
     else:
         size = (1, 1)
-        material["baseColor"] = [0.32, 0.31, 0.29, 1]
+        material["baseColor"] = [*(srgb_to_linear(n) for n in (0.32, 0.31, 0.29)), 1]
         if reference.endswith(".LondonStreetTarmac"):
-            material["baseColor"] = [0.16, 0.15, 0.14, 1]
+            material["baseColor"] = [*(srgb_to_linear(n) for n in (0.16, 0.15, 0.14)), 1]
         if reference == "Engine.BlackTexture":
             material["baseColor"] = [0, 0, 0, 1]
     return material, size
